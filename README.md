@@ -58,7 +58,7 @@ cargo install cargo-bylaw --version 0.1.0 --locked
 ```
 
 `cargo-bylaw` 0.1.0 requires Rust 1.95 or newer, so install and run these tools
-with a current toolchain even though the library workspace supports Rust 1.85.
+with a current toolchain even though the library workspace supports Rust 1.88.
 
 Run the checks from the workspace root:
 

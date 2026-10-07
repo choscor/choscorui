@@ -26,10 +26,10 @@ fn schema() -> SettingsSchema {
             values.remove("legacy");
         })
         .with_migration(1, |values: &mut BTreeMap<String, SettingValue>| {
-            if let Some(SettingValue::Text(size)) = values.remove("editor.size") {
-                if let Ok(size) = size.parse() {
-                    values.insert("editor.size".into(), SettingValue::Float(size));
-                }
+            if let Some(SettingValue::Text(size)) = values.remove("editor.size")
+                && let Ok(size) = size.parse()
+            {
+                values.insert("editor.size".into(), SettingValue::Float(size));
             }
         })
 }

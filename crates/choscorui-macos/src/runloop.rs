@@ -65,10 +65,10 @@ pub(crate) unsafe extern "C" fn perform_posted(info: *mut c_void) {
             let Some(task) = task else {
                 return;
             };
-            if catch_unwind(AssertUnwindSafe(task)).is_err() {
-                if let Ok(mut state) = inner.state.lock() {
-                    state.panics += 1;
-                }
+            if catch_unwind(AssertUnwindSafe(task)).is_err()
+                && let Ok(mut state) = inner.state.lock()
+            {
+                state.panics += 1;
             }
         }
     }));

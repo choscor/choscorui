@@ -265,14 +265,14 @@ fn main() {
                     document_width,
                 );
                 redraw = true;
-            } else if request.node == text_field_node && request.action == SemanticAction::SetValue
+            } else if request.node == text_field_node
+                && request.action == SemanticAction::SetValue
+                && let Some(value) = request.value
             {
-                if let Some(value) = request.value {
-                    text_field
-                        .handle(&mut tree, text_field_node, TextFieldInput::SetValue(value))
-                        .unwrap();
-                    redraw = true;
-                }
+                text_field
+                    .handle(&mut tree, text_field_node, TextFieldInput::SetValue(value))
+                    .unwrap();
+                redraw = true;
             }
         }
         for event in window.take_events() {

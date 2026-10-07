@@ -118,16 +118,15 @@ fn split_scale(name: &str) -> (String, u8) {
         Some((stem, ext)) if !ext.contains('/') => (stem, Some(ext)),
         _ => (name, None),
     };
-    if let Some((base, scale)) = stem.rsplit_once('@') {
-        if let Some(scale) = scale.strip_suffix('x').and_then(|s| s.parse::<u8>().ok()) {
-            if scale > 0 {
-                let base = match extension {
-                    Some(ext) => format!("{base}.{ext}"),
-                    None => base.to_owned(),
-                };
-                return (base, scale);
-            }
-        }
+    if let Some((base, scale)) = stem.rsplit_once('@')
+        && let Some(scale) = scale.strip_suffix('x').and_then(|s| s.parse::<u8>().ok())
+        && scale > 0
+    {
+        let base = match extension {
+            Some(ext) => format!("{base}.{ext}"),
+            None => base.to_owned(),
+        };
+        return (base, scale);
     }
     (name.to_owned(), 1)
 }

@@ -265,10 +265,10 @@ impl StateMachine {
     pub fn advance(&mut self, tree: &mut Tree, now: Duration) -> Result<bool, StateError> {
         let frame = self.clock.advance(tree, now)?;
         for update in frame.updates {
-            if let Some(property) = self.properties.get(&update.key) {
-                if let AssignmentBehavior::Animated { set, .. } = &property.behavior {
-                    set(update.value);
-                }
+            if let Some(property) = self.properties.get(&update.key)
+                && let AssignmentBehavior::Animated { set, .. } = &property.behavior
+            {
+                set(update.value);
             }
         }
         Ok(frame.needs_frame)

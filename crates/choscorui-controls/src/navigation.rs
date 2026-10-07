@@ -411,10 +411,10 @@ impl ScrollArea {
             };
             let _ = list.fill_rounded_rect(geometry.thumb.inset(2.0), 3.0, color);
         }
-        if state.focused {
-            if let Some(bounds) = tree.bounds(self.node()) {
-                let _ = list.stroke_rect(bounds.inset(1.0), style.focus, 2.0);
-            }
+        if state.focused
+            && let Some(bounds) = tree.bounds(self.node())
+        {
+            let _ = list.stroke_rect(bounds.inset(1.0), style.focus, 2.0);
         }
     }
 }

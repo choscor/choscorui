@@ -138,7 +138,7 @@ impl Raster {
 /// ignoring color where both pixels are nearly transparent, and the share
 /// of pixels that differ by more than `tolerance`.
 pub fn compare(a: &[u8], b: &[u8], tolerance: u8) -> Option<(u8, f64)> {
-    if a.len() != b.len() || a.len() % 4 != 0 {
+    if a.len() != b.len() || !a.len().is_multiple_of(4) {
         return None;
     }
     let mut worst = 0u8;

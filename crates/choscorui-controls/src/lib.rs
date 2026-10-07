@@ -553,16 +553,17 @@ impl ButtonStyle {
             self.normal
         };
         list.fill_rect(bounds, color);
-        if let ButtonDecoration::LeadingRail { width, color } = self.decoration {
-            if width.is_finite() && width > 0.0 {
-                list.fill_rect(
-                    Rect::new(
-                        bounds.origin,
-                        choscorui_core::Size::new(width.min(bounds.size.width), bounds.size.height),
-                    ),
-                    color,
-                );
-            }
+        if let ButtonDecoration::LeadingRail { width, color } = self.decoration
+            && width.is_finite()
+            && width > 0.0
+        {
+            list.fill_rect(
+                Rect::new(
+                    bounds.origin,
+                    choscorui_core::Size::new(width.min(bounds.size.width), bounds.size.height),
+                ),
+                color,
+            );
         }
         if state.focused {
             let t = 2.0;

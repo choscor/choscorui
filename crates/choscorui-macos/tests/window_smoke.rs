@@ -399,10 +399,10 @@ fn main() {
     let repeating = app
         .schedule_repeating(Duration::from_millis(5), move || {
             tick_count.set(tick_count.get() + 1);
-            if tick_count.get() == 3 {
-                if let Some(timer) = cancel_slot.borrow().as_ref() {
-                    timer.cancel();
-                }
+            if tick_count.get() == 3
+                && let Some(timer) = cancel_slot.borrow().as_ref()
+            {
+                timer.cancel();
             }
         })
         .unwrap();

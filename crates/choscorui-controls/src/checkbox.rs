@@ -227,13 +227,13 @@ impl Checkbox {
             }
             _ => {}
         }
-        if let Some(value) = next {
-            if value != self.checked {
-                self.checked = value;
-                tree.invalidate(id, Dirty::PAINT)?;
-                tree.invalidate(id, Dirty::SEMANTICS)?;
-                return Ok(Some(value));
-            }
+        if let Some(value) = next
+            && value != self.checked
+        {
+            self.checked = value;
+            tree.invalidate(id, Dirty::PAINT)?;
+            tree.invalidate(id, Dirty::SEMANTICS)?;
+            return Ok(Some(value));
         }
         if self.visual_state(tree, id) != previous_visual {
             tree.invalidate(id, Dirty::PAINT)?;
