@@ -106,6 +106,7 @@ fn main() {
     assert_eq!(accessibility_actions[2].node, accessible_field);
     assert_eq!(accessibility_actions[2].action, SemanticAction::Focus);
     assert_eq!(accessibility_actions[2].value, None);
+    check_accessibility_collections_and_announcements(&window, &mut retained, &mut semantic_tree);
     let mut paint = DisplayList::new();
     paint.fill_rect(
         Rect::new(Point::new(0.0, 0.0), Size::new(320.0, 240.0)),
@@ -666,6 +667,127 @@ fn check_drop_target(window: &mut choscorui_macos::Window) {
         window.begin_drag(&[], DragOperations::ALL, at, None),
         Err(Error::UnsupportedFormat)
     ));
+}
+
+#[cfg(target_os = "macos")]
+fn check_accessibility_collections_and_announcements(
+    window: &choscorui_macos::Window,
+    tree: &mut Tree,
+    semantics: &mut SemanticTree,
+) {
+    use choscorui_core::{AnnouncementPriority, SemanticCollection, SemanticText};
+    use std::ffi::{CStr, c_void};
+    type Id = *mut c_void;
+    type Sel = *mut c_void;
+    let node = |role, name: &str, text| SemanticNode {
+        role,
+        name: name.into(),
+        description: String::new(),
+        value: None,
+        state: SemanticState::default(),
+        relations: Vec::new(),
+        actions: Vec::new(),
+        text,
+    };
+    let list = tree
+        .attach(
+            tree.root(),
+            Rect::new(Point::new(10.0, 50.0), Size::new(200.0, 100.0)),
+        )
+        .unwrap();
+    let item = tree
+        .attach(
+            list,
+            Rect::new(Point::new(10.0, 50.0), Size::new(200.0, 20.0)),
+        )
+        .unwrap();
+    let notes = tree
+        .attach(
+            tree.root(),
+            Rect::new(Point::new(10.0, 160.0), Size::new(200.0, 60.0)),
+        )
+        .unwrap();
+    semantics
+        .set(list, node(SemanticRole::List, "Tin nhắn", None), tree)
+        .unwrap();
+    semantics
+        .set(item, node(SemanticRole::ListItem, "Row 40", None), tree)
+        .unwrap();
+    semantics
+        .set(
+            notes,
+            node(
+                SemanticRole::TextField,
+                "Notes",
+                Some(SemanticText {
+                    character_count_utf16: 0,
+                    selection_utf16: 0..0,
+                    multiline: true,
+                }),
+            ),
+            tree,
+        )
+        .unwrap();
+    // A virtualized list: one realized row standing for row 40 of 10,000.
+    semantics
+        .set_collection(
+            list,
+            Some(SemanticCollection {
+                item_count: 10_000,
+                column_count: None,
+            }),
+        )
+        .unwrap();
+    semantics.set_item_index(item, Some(39)).unwrap();
+    window
+        .set_accessibility(&semantics.snapshot(tree), &[SemanticChange::Tree])
+        .unwrap();
+    unsafe {
+        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let send_isize: unsafe extern "C" fn(Id, Sel) -> isize =
+            std::mem::transmute(objc_msgSend as *const ());
+        let send_cstr: unsafe extern "C" fn(Id, Sel) -> *const i8 =
+            std::mem::transmute(objc_msgSend as *const ());
+        let selector = |name: &CStr| sel_registerName(name.as_ptr());
+        let application = send_id(
+            objc_getClass(c"NSApplication".as_ptr()),
+            selector(c"sharedApplication"),
+        );
+        let windows = send_id(application, selector(c"windows"));
+        let native_window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
+        let view = send_id(native_window, selector(c"contentView"));
+        let children = send_id(view, selector(c"accessibilityChildren"));
+        assert_eq!(send_isize(children, selector(c"count")), 4);
+        let native_list = send_id_usize(children, selector(c"objectAtIndex:"), 2);
+        let native_notes = send_id_usize(children, selector(c"objectAtIndex:"), 3);
+        let role = |object: Id| {
+            let value = send_id(object, selector(c"accessibilityRole"));
+            CStr::from_ptr(send_cstr(value, selector(c"UTF8String")))
+                .to_str()
+                .unwrap()
+                .to_owned()
+        };
+        assert_eq!(role(native_list), "AXList");
+        assert_eq!(
+            send_isize(native_list, selector(c"accessibilityRowCount")),
+            10_000
+        );
+        let rows = send_id(native_list, selector(c"accessibilityChildren"));
+        let row = send_id_usize(rows, selector(c"objectAtIndex:"), 0);
+        assert_eq!(send_isize(row, selector(c"accessibilityIndex")), 39);
+        assert_eq!(role(native_notes), "AXTextArea");
+    }
+    window
+        .announce("Đã lưu", AnnouncementPriority::High)
+        .unwrap();
+    window.announce("  ", AnnouncementPriority::Low).unwrap();
+    assert_eq!(
+        window.last_announcement(),
+        Some(("Đã lưu".to_owned(), AnnouncementPriority::High))
+    );
 }
 
 #[cfg(target_os = "macos")]

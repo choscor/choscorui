@@ -110,3 +110,14 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Two structurally distinct gallery themes | Done | Dark is a flat square button with leading rail and label; light is an elevated pill with badge, centered label, and focus ring (`examples/gallery` `display_list`) |
 | Native-looking themes documented as emulation; system UI listed | Done | [THEMING.md](THEMING.md) "Native look and system UI" |
 | Gate: runtime theme switch replaces button visuals without replacing behavior | Done (automated) + Manual | `swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantics` swaps recipe and tokens while Space is held. Manual: in the gallery, press Control-Return or click the button, then confirm Tab focus, Space activation, and VoiceOver name are unchanged. |
+
+## Phase 9 — accessibility foundation
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Role, name, value, description, state, bounds, relations, actions per node | Done | `SemanticNode`, `SemanticEntry`; per-control contracts in [ACCESSIBILITY.md](ACCESSIBILITY.md) |
+| Stable macOS accessibility tree with focus/value/tree notifications | Done | `AccessibilityProjection` (stable identities, retirement), `Window::set_accessibility`; `macos/tests/accessibility.rs`; selected-text notification for editable text |
+| Semantics linked to layout coordinates and action dispatch; virtualized representation | Done | Screen frames from retained bounds; `take_accessibility_actions`; `SemanticCollection` + `set_item_index` → `accessibilityRowCount`/`accessibilityIndex`; `virtualized_collections_report_total_size_and_absolute_item_index`, `window_smoke` |
+| High contrast, reduced motion, larger text | Done | `system_accessibility_preferences` → `ThemeResolver::set_accessibility_preferences`; `accessibility_preferences_link_contrast_motion_and_text_scale` |
+| Localized names, RTL reading order, live updates, accessible actions | Done | Vietnamese/Arabic labels in tests; `rtl_snapshot_keeps_logical_reading_order_after_mirrored_layout`; `Window::announce` (gallery announces validation errors); press/set value/focus through native elements in `window_smoke`. Menus, dialogs, and virtualized data controls are checked again as phase 12 adds them. |
+| Gate: gallery core controls operable with VoiceOver with correct roles, labels, states, focus, values | Done (automated) + Manual | `window_smoke` reads AX role/label/value/selection/row count/index from the real `NSAccessibilityElement`s and performs press, set value, and focus; the gallery exposes button, checkbox, text field, multiline document (AXTextArea), and rows. Manual: the VoiceOver checklist in [ACCESSIBILITY.md](ACCESSIBILITY.md). |

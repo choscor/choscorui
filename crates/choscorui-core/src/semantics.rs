@@ -79,6 +79,24 @@ pub struct SemanticText {
     pub multiline: bool,
 }
 
+/// Full size of a collection whose items may be virtualized. Only realized
+/// items exist as semantic nodes; the container reports the total so
+/// assistive technology can say "row 40 of 10,000".
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SemanticCollection {
+    pub item_count: usize,
+    pub column_count: Option<usize>,
+}
+
+/// Urgency of a spoken announcement. `High` interrupts current speech.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AnnouncementPriority {
+    Low,
+    #[default]
+    Medium,
+    High,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct SemanticEntry {
     pub id: NodeId,
@@ -86,6 +104,9 @@ pub struct SemanticEntry {
     pub bounds: Rect,
     pub focused: bool,
     pub node: SemanticNode,
+    pub collection: Option<SemanticCollection>,
+    /// Absolute position of a realized item inside its collection.
+    pub item_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,6 +132,8 @@ pub enum SemanticError {
 #[derive(Default)]
 pub struct SemanticTree {
     nodes: HashMap<NodeId, SemanticNode>,
+    collections: HashMap<NodeId, SemanticCollection>,
+    item_indices: HashMap<NodeId, usize>,
     focus: Option<NodeId>,
 }
 
@@ -168,6 +191,47 @@ impl SemanticTree {
         Ok(change)
     }
 
+    /// Declares `id` a collection of `collection.item_count` items, of which
+    /// only the realized ones are semantic nodes. `None` clears it.
+    pub fn set_collection(
+        &mut self,
+        id: NodeId,
+        collection: Option<SemanticCollection>,
+    ) -> Result<SemanticChange, SemanticError> {
+        if !self.nodes.contains_key(&id) {
+            return Err(SemanticError::MissingNode);
+        }
+        let old = match collection {
+            Some(collection) => self.collections.insert(id, collection),
+            None => self.collections.remove(&id),
+        };
+        Ok(if old == collection {
+            SemanticChange::None
+        } else {
+            SemanticChange::Tree
+        })
+    }
+
+    /// Sets the absolute index of a realized collection item.
+    pub fn set_item_index(
+        &mut self,
+        id: NodeId,
+        index: Option<usize>,
+    ) -> Result<SemanticChange, SemanticError> {
+        if !self.nodes.contains_key(&id) {
+            return Err(SemanticError::MissingNode);
+        }
+        let old = match index {
+            Some(index) => self.item_indices.insert(id, index),
+            None => self.item_indices.remove(&id),
+        };
+        Ok(if old == index {
+            SemanticChange::None
+        } else {
+            SemanticChange::Tree
+        })
+    }
+
     pub fn supports(&self, id: NodeId, action: SemanticAction) -> bool {
         self.nodes
             .get(&id)
@@ -209,6 +273,8 @@ impl SemanticTree {
         removed.sort_by_key(|id| id.0);
         for id in &removed {
             self.nodes.remove(id);
+            self.collections.remove(id);
+            self.item_indices.remove(id);
         }
         if self.focus.is_some_and(|id| !tree.contains(id)) {
             self.focus = None;
@@ -230,6 +296,8 @@ impl SemanticTree {
                     bounds: retained.bounds,
                     focused: tree.focus == Some(id),
                     node: node.clone(),
+                    collection: self.collections.get(&id).copied(),
+                    item_index: self.item_indices.get(&id).copied(),
                 });
                 Some(id)
             } else {

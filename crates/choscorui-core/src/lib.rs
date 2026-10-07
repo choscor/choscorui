@@ -31,8 +31,9 @@ mod scroll;
 pub use scroll::ScrollViewport;
 mod semantics;
 pub use semantics::{
-    SemanticAction, SemanticChange, SemanticEntry, SemanticError, SemanticNode, SemanticRelation,
-    SemanticRole, SemanticState, SemanticText, SemanticTree,
+    AnnouncementPriority, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry,
+    SemanticError, SemanticNode, SemanticRelation, SemanticRole, SemanticState, SemanticText,
+    SemanticTree,
 };
 mod text;
 pub use text::{TextBuffer, TextError, TextMotion, grapheme_boundaries};

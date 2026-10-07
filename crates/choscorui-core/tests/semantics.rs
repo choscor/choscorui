@@ -223,3 +223,61 @@ fn localized_name_update_preserves_identity_and_reports_label_change() {
         SemanticChange::Label(button)
     );
 }
+
+#[test]
+fn virtualized_collections_report_total_size_and_absolute_item_index() {
+    use choscorui_core::{SemanticCollection, SemanticError};
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 200.0));
+    let list = tree
+        .attach(tree.root(), rect(0.0, 0.0, 200.0, 200.0))
+        .unwrap();
+    let row = tree.attach(list, rect(0.0, 0.0, 200.0, 20.0)).unwrap();
+    let mut semantics = SemanticTree::new();
+    let collection = Some(SemanticCollection {
+        item_count: 10_000,
+        column_count: Some(3),
+    });
+    assert_eq!(
+        semantics.set_collection(list, collection),
+        Err(SemanticError::MissingNode)
+    );
+    semantics
+        .set(list, node(SemanticRole::List, "Messages"), &tree)
+        .unwrap();
+    semantics
+        .set(row, node(SemanticRole::ListItem, "Row 4,001"), &tree)
+        .unwrap();
+    assert_eq!(
+        semantics.set_collection(list, collection).unwrap(),
+        SemanticChange::Tree
+    );
+    assert_eq!(
+        semantics.set_collection(list, collection).unwrap(),
+        SemanticChange::None
+    );
+    assert_eq!(
+        semantics.set_item_index(row, Some(4_000)).unwrap(),
+        SemanticChange::Tree
+    );
+    let snapshot = semantics.snapshot(&tree);
+    assert_eq!(snapshot[0].collection, collection);
+    assert_eq!(snapshot[0].item_index, None);
+    assert_eq!(snapshot[1].item_index, Some(4_000));
+    assert_eq!(snapshot[1].parent, Some(list));
+
+    // Scrolling recycles the realized row for another absolute index.
+    semantics.set_item_index(row, Some(4_020)).unwrap();
+    assert_eq!(semantics.snapshot(&tree)[1].item_index, Some(4_020));
+
+    tree.detach(row).unwrap();
+    assert_eq!(semantics.prune(&tree), vec![row]);
+    let row = tree.attach(list, rect(0.0, 0.0, 200.0, 20.0)).unwrap();
+    semantics
+        .set(row, node(SemanticRole::ListItem, "Row 1"), &tree)
+        .unwrap();
+    assert_eq!(
+        semantics.snapshot(&tree)[1].item_index,
+        None,
+        "pruned index"
+    );
+}

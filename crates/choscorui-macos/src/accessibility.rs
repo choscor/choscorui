@@ -1,4 +1,6 @@
-use choscorui_core::{NodeId, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticNode};
+use choscorui_core::{
+    NodeId, Rect, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry, SemanticNode,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -12,6 +14,8 @@ pub struct AccessibilityElement {
     pub bounds: Rect,
     pub focused: bool,
     pub semantic: SemanticNode,
+    pub collection: Option<SemanticCollection>,
+    pub item_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -100,6 +104,8 @@ impl AccessibilityProjection {
                 bounds: entry.bounds,
                 focused: entry.focused,
                 semantic: entry.node.clone(),
+                collection: entry.collection,
+                item_index: entry.item_index,
             };
             self.elements.insert(identity, element.clone());
             elements.push(element);

@@ -38,6 +38,7 @@ use runloop::{
 };
 mod imaging;
 pub use imaging::{decode_image, encode_png};
+mod announce;
 mod dnd;
 mod pasteboard;
 mod preferences;
@@ -53,7 +54,7 @@ pub use accessibility::{
 use shaping::draw_text_run;
 pub use shaping::*;
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -116,6 +117,8 @@ unsafe extern "C" {
     static NSAccessibilitySliderRole: Id;
     static NSAccessibilityStaticTextRole: Id;
     static NSAccessibilityTextFieldRole: Id;
+    static NSAccessibilityTextAreaRole: Id;
+    static NSAccessibilitySelectedTextChangedNotification: Id;
     static NSAccessibilitySecureTextFieldSubrole: Id;
     static NSAccessibilityWindowRole: Id;
     static NSAccessibilityLayoutChangedNotification: Id;
@@ -377,6 +380,7 @@ struct PaintState {
 struct NativeAccessibilityState {
     projection: AccessibilityProjection,
     elements: HashMap<AccessibilityIdentity, NonNull<c_void>>,
+    last_announcement: Option<(String, choscorui_core::AnnouncementPriority)>,
 }
 
 impl NativeAccessibilityState {
@@ -384,6 +388,7 @@ impl NativeAccessibilityState {
         Self {
             projection: AccessibilityProjection::new(),
             elements: HashMap::new(),
+            last_announcement: None,
         }
     }
 }
@@ -1597,10 +1602,19 @@ impl Window {
             let frame =
                 unsafe { accessibility_screen_rect(view, self.raw.as_ptr(), element.bounds) };
             unsafe {
+                let multiline = element
+                    .semantic
+                    .text
+                    .as_ref()
+                    .is_some_and(|text| text.multiline);
                 send_void_id(
                     raw,
                     c"setAccessibilityRole:",
-                    native_accessibility_role(element.semantic.role),
+                    if multiline && element.semantic.role == SemanticRole::TextField {
+                        NSAccessibilityTextAreaRole
+                    } else {
+                        native_accessibility_role(element.semantic.role)
+                    },
                 );
                 send_void_id(
                     raw,
@@ -1644,6 +1658,29 @@ impl Window {
                             location: text.selection_utf16.start,
                             length: text.selection_utf16.end - text.selection_utf16.start,
                         },
+                    );
+                }
+                // Virtualized collections report their full size; realized
+                // items report their absolute index.
+                if let Some(collection) = element.collection {
+                    send_void_isize(
+                        raw,
+                        c"setAccessibilityRowCount:",
+                        isize::try_from(collection.item_count).unwrap_or(isize::MAX),
+                    );
+                    if let Some(columns) = collection.column_count {
+                        send_void_isize(
+                            raw,
+                            c"setAccessibilityColumnCount:",
+                            isize::try_from(columns).unwrap_or(isize::MAX),
+                        );
+                    }
+                }
+                if let Some(index) = element.item_index {
+                    send_void_isize(
+                        raw,
+                        c"setAccessibilityIndex:",
+                        isize::try_from(index).unwrap_or(isize::MAX),
                     );
                 }
             }
@@ -1706,6 +1743,12 @@ impl Window {
         }
         let roots = children.get(&None).map(Vec::as_slice).unwrap_or(&[]);
         unsafe { send_void_id(view, c"setAccessibilityChildren:", ns_array(roots)?) };
+        let text_elements: HashSet<_> = update
+            .elements
+            .iter()
+            .filter(|element| element.semantic.text.is_some())
+            .map(|element| element.identity)
+            .collect();
         for notification in update.notifications {
             unsafe {
                 match notification {
@@ -1720,6 +1763,12 @@ impl Window {
                                 element.as_ptr(),
                                 NSAccessibilityValueChangedNotification,
                             );
+                            if text_elements.contains(&identity) {
+                                NSAccessibilityPostNotification(
+                                    element.as_ptr(),
+                                    NSAccessibilitySelectedTextChangedNotification,
+                                );
+                            }
                         }
                     }
                     AccessibilityNotification::LabelChanged(identity) => {
@@ -2159,6 +2208,11 @@ unsafe fn send_super_void_bool(receiver: Id, name: &CStr, value: i8) {
     let f: unsafe extern "C" fn(*mut ObjcSuper, Sel, i8) =
         unsafe { std::mem::transmute(objc_msgSendSuper as *const ()) };
     unsafe { f(&mut target, selector(name), value) }
+}
+unsafe fn send_void_isize(receiver: Id, name: &CStr, value: isize) {
+    let f: unsafe extern "C" fn(Id, Sel, isize) =
+        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
+    unsafe { f(receiver, selector(name), value) }
 }
 unsafe fn send_void_bool(receiver: Id, name: &CStr, value: i8) {
     let f: unsafe extern "C" fn(Id, Sel, i8) =

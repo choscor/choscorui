@@ -164,6 +164,7 @@ fn main() {
             text_field_node,
             text_field: &text_field,
             document_node,
+            document: &document_editor,
             rows: &rows,
         },
     );
@@ -234,6 +235,22 @@ fn main() {
                         CheckboxInput::Semantic(ControlSemanticAction::Activate),
                     )
                     .unwrap();
+                redraw = true;
+            } else if request.node == document_node && request.action == SemanticAction::SetValue {
+                document_editor
+                    .handle(
+                        &mut tree,
+                        document_node,
+                        &document,
+                        TextEditorInput::Semantic(SemanticAction::SetValue, request.value),
+                    )
+                    .unwrap();
+                document = shape_document(
+                    &mut text_cache,
+                    &document_editor,
+                    &document_style,
+                    document_width,
+                );
                 redraw = true;
             } else if request.node == text_field_node && request.action == SemanticAction::SetValue
             {
@@ -840,6 +857,7 @@ fn main() {
                     text_field_node,
                     text_field: &text_field,
                     document_node,
+                    document: &document_editor,
                     rows: &rows,
                 },
             );
@@ -950,6 +968,7 @@ struct GalleryAccessibility<'a> {
     text_field_node: choscorui_core::NodeId,
     text_field: &'a choscorui_controls::TextField,
     document_node: choscorui_core::NodeId,
+    document: &'a choscorui_controls::TextEditor,
     rows: &'a [choscorui_core::NodeId],
 }
 
@@ -960,7 +979,19 @@ fn sync_gallery_accessibility(
     semantics: &mut choscorui_core::SemanticTree,
     controls: GalleryAccessibility<'_>,
 ) {
-    use choscorui_core::{SemanticChange, SemanticNode, SemanticRole, SemanticState};
+    use choscorui_core::{
+        AnnouncementPriority, SemanticChange, SemanticNode, SemanticRole, SemanticState,
+    };
+    // Validation errors are spoken once when they appear, even if focus is
+    // elsewhere.
+    if let Some(message) = controls
+        .text_field
+        .semantics(tree, controls.text_field_node)
+        .announcement
+        && window.last_announcement().map(|(last, _)| last) != Some(message.clone())
+    {
+        let _ = window.announce(&message, AnnouncementPriority::High);
+    }
     let mut changes = Vec::new();
     for (id, node) in [
         (
@@ -987,14 +1018,9 @@ fn sync_gallery_accessibility(
         (
             controls.document_node,
             SemanticNode {
-                role: SemanticRole::StaticText,
-                name: "Multilingual document".into(),
-                description: "Scrollable Vietnamese, Japanese, Chinese, and emoji text".into(),
-                value: Some(GALLERY_DOCUMENT.into()),
-                state: SemanticState::default(),
-                relations: Vec::new(),
-                actions: Vec::new(),
-                text: None,
+                description: "Editable Vietnamese, Japanese, Chinese, Hebrew, and emoji text"
+                    .into(),
+                ..controls.document.semantics()
             },
         ),
     ] {
