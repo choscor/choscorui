@@ -34,6 +34,7 @@ unsafe extern "C" {
     static kCTParagraphStyleAttributeName: Id;
     static kCTFontCascadeListAttribute: Id;
     static kCTFontFamilyNameAttribute: Id;
+    fn CTFontManagerCopyAvailableFontFamilyNames() -> Id;
     fn CTFontCreateCopyWithSymbolicTraits(
         font: Id,
         size: f64,
@@ -130,6 +131,22 @@ unsafe fn cf_dictionary(keys: &[Id], values: &[Id]) -> Option<CfOwned> {
             &raw const kCFTypeDictionaryKeyCallBacks as Id,
             &raw const kCFTypeDictionaryValueCallBacks as Id,
         ))
+    }
+}
+
+/// Installed font family names, sorted by the system for display. Hidden
+/// system families (names starting with `.`) are omitted.
+pub fn available_font_families() -> Vec<String> {
+    // SAFETY: The Copy function returns a +1 CFArray of CFStrings owned by
+    // `CfOwned`; each element is borrowed only while the array lives.
+    unsafe {
+        let Some(array) = CfOwned::new(CTFontManagerCopyAvailableFontFamilyNames()) else {
+            return Vec::new();
+        };
+        (0..CFArrayGetCount(array.as_ptr()))
+            .filter_map(|index| rust_string(CFArrayGetValueAtIndex(array.as_ptr(), index)))
+            .filter(|name| !name.starts_with('.'))
+            .collect()
     }
 }
 

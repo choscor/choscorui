@@ -49,6 +49,15 @@ pub use model_widgets::{
     HeaderColumn, HeaderInput, HeaderResponse, HeaderStyle, HeaderView, UndoHistoryRow,
     undo_history, undo_steps_to,
 };
+mod popup;
+pub use popup::{
+    MenuItem, MenuResponse, MenuStyle, Placement, PopupId, PopupMenu, PopupPlacement, PopupPress,
+    PopupStack, TOOLTIP_DELAY, TOOLTIP_GRACE, TooltipController, VisibleTooltip, place_popup,
+};
+mod combo;
+pub use combo::{
+    ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, text_key,
+};
 mod recipe;
 pub use recipe::{
     ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,

@@ -273,3 +273,10 @@ fn cache_reuses_core_text_layouts_and_long_documents_shape_quickly() {
         layout.grapheme_count()
     );
 }
+
+#[test]
+fn installed_font_families_include_system_faces() {
+    let families = choscorui_macos::available_font_families();
+    assert!(families.iter().any(|family| family == "Helvetica"));
+    assert!(families.iter().all(|family| !family.starts_with('.')));
+}

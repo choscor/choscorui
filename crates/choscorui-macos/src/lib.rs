@@ -63,7 +63,7 @@ use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::Duration;
-pub use text_layout::CoreTextShaper;
+pub use text_layout::{CoreTextShaper, available_font_families};
 
 type Id = *mut c_void;
 type Sel = *mut c_void;
