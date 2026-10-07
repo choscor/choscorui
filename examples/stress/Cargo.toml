@@ -1,0 +1,10 @@
+[package]
+name = "choscorui-stress"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+choscorui-core = { path = "../../crates/choscorui-core" }
+choscorui-controls = { path = "../../crates/choscorui-controls" }
+choscorui-macos = { path = "../../crates/choscorui-macos" }

@@ -62,6 +62,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "choscorui-stress"
+version = "0.0.1"
+dependencies = [
+ "choscorui-controls",
+ "choscorui-core",
+ "choscorui-macos",
+]
+
+[[package]]
 name = "choscorui-windows"
 version = "0.0.1"
 dependencies = [
