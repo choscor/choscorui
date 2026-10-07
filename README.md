@@ -42,6 +42,8 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke
 ```
 
+The [notes sample](samples/notes/README.md) is a standalone app that uses only the safe `choscorui` facade. It shows a themed, localized, multi-window UI. Run its scripted check with `cd samples/notes && NOTES_AUTOPILOT=1 cargo run`.
+
 Run the native smoke test and gallery separately. Both create foreground AppKit windows, so concurrent runs can change focus and make input assertions unreliable.
 
 Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. See the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), [theming guide](docs/THEMING.md), [accessibility contract](docs/ACCESSIBILITY.md), [dialogs](docs/DIALOGS.md), [settings](docs/SETTINGS.md), [desktop integration](docs/DESKTOP.md), [canvas](docs/CANVAS.md), [rich text](docs/RICH_TEXT.md), [custom controls](docs/CUSTOM_CONTROLS.md), [benchmarks](docs/BENCHMARKS.md) with [release budgets](docs/BUDGETS.md), [reliability checks](docs/RELIABILITY.md), and the [versioning policy](docs/VERSIONING.md) for scope and current limits.

@@ -1,0 +1,14 @@
+[package]
+name = "choscorui-notes-sample"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+description = "External sample app: a themed, localized, multi-window notes UI built on the safe choscorui facade alone"
+
+# A workspace of its own, so this sample builds exactly like a third-party
+# application that depends on choscorui.
+[workspace]
+
+[dependencies]
+choscorui = { path = "../../crates/choscorui" }

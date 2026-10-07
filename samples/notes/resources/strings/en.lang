@@ -1,0 +1,17 @@
+# English (reference locale). `id = text`; plural variants use `id[category]`.
+app.name = Notes
+window.title = Note {number}
+button.new = New Window
+button.theme = Switch Theme
+button.language = Language: {language}
+language.name = English
+field.name = Note text
+field.placeholder = Write something…
+status.windows[one] = {count} window open
+status.windows[other] = {count} windows open
+status.characters[one] = {count} character
+status.characters[other] = {count} characters
+menu.file = File
+menu.view = View
+menu.close = Close Window
+menu.quit = Quit Notes
