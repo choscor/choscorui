@@ -1,0 +1,23 @@
+[package]
+name = "choscorui-macos"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+choscorui-core = { path = "../choscorui-core" }
+
+[[test]]
+name = "window_smoke"
+path = "tests/window_smoke.rs"
+harness = false
+
+[[test]]
+name = "clipboard_smoke"
+path = "tests/clipboard_smoke.rs"
+harness = false
+
+[[test]]
+name = "menu_smoke"
+path = "tests/menu_smoke.rs"
+harness = false

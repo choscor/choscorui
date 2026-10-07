@@ -1,0 +1,3 @@
+/target/
+/quality/*
+!/quality/baseline.json

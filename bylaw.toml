@@ -1,0 +1,93 @@
+version = 1
+
+[analysis]
+manifest_path = "Cargo.toml"
+packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery"]
+incomplete = "deny"
+
+[selectors.core]
+packages = ["choscorui-core"]
+[selectors.controls]
+packages = ["choscorui-controls"]
+[selectors.compose]
+packages = ["choscorui-compose"]
+[selectors.render]
+packages = ["choscorui-render"]
+[selectors.macos]
+packages = ["choscorui-macos"]
+[selectors.windows]
+packages = ["choscorui-windows"]
+[selectors.linux]
+packages = ["choscorui-linux"]
+[selectors.facade]
+packages = ["choscorui"]
+[selectors.gallery]
+packages = ["choscorui-gallery"]
+[selectors.libraries]
+packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui"]
+[selectors.workspace]
+packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery"]
+
+[[rule]]
+id = "library-layers"
+kind = "layers"
+scope = "both"
+[[rule.layers]]
+name = "core"
+selector = "core"
+[[rule.layers]]
+name = "controls"
+selector = "controls"
+[[rule.layers]]
+name = "compose"
+selector = "compose"
+[[rule.layers]]
+name = "render"
+selector = "render"
+[[rule.layers]]
+name = "macos"
+selector = "macos"
+[[rule.layers]]
+name = "windows"
+selector = "windows"
+[[rule.layers]]
+name = "linux"
+selector = "linux"
+[[rule.layers]]
+name = "facade"
+selector = "facade"
+[[rule.dependencies]]
+from = "controls"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "compose"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "render"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "macos"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "windows"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "linux"
+may_depend_on = ["core"]
+[[rule.dependencies]]
+from = "facade"
+may_depend_on = ["core", "controls", "compose", "macos"]
+
+[[rule]]
+id = "libraries-do-not-depend-on-gallery"
+kind = "forbid-dependencies"
+from = "libraries"
+to = "gallery"
+scope = "both"
+
+[[rule]]
+id = "workspace-crates-are-acyclic"
+kind = "no-cycles"
+within = "workspace"
+grouping = "crates"
+scope = "both"

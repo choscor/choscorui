@@ -1,0 +1,109 @@
+use choscorui_core::{
+    Point, Rect, SemanticAction, SemanticChange, SemanticNode, SemanticRole, SemanticState,
+    SemanticTree, Size, Tree,
+};
+use choscorui_macos::{AccessibilityNotification, AccessibilityProjection};
+
+fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
+    Rect::new(Point::new(x, y), Size::new(width, height))
+}
+
+fn semantic(role: SemanticRole, name: &str, actions: Vec<SemanticAction>) -> SemanticNode {
+    SemanticNode {
+        role,
+        name: name.into(),
+        description: String::new(),
+        value: None,
+        state: SemanticState::default(),
+        relations: Vec::new(),
+        actions,
+        text: None,
+    }
+}
+
+#[test]
+fn reconciliation_preserves_native_identity_and_retires_removed_nodes() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 100.0));
+    let button = tree
+        .attach(tree.root(), rect(10.0, 10.0, 80.0, 30.0))
+        .unwrap();
+    let mut semantics = SemanticTree::new();
+    semantics
+        .set(
+            button,
+            semantic(SemanticRole::Button, "Run", vec![SemanticAction::Activate]),
+            &tree,
+        )
+        .unwrap();
+    let mut projection = AccessibilityProjection::new();
+    let first = projection.reconcile(&semantics.snapshot(&tree), &[SemanticChange::Tree]);
+    let identity = first.elements[0].identity;
+    assert_eq!(
+        first.notifications,
+        vec![AccessibilityNotification::LayoutChanged]
+    );
+
+    let mut updated = semantic(SemanticRole::Button, "Run", vec![SemanticAction::Activate]);
+    updated.value = Some("Ready".into());
+    semantics.set(button, updated, &tree).unwrap();
+    let second = projection.reconcile(&semantics.snapshot(&tree), &[SemanticChange::Value(button)]);
+    assert_eq!(second.elements[0].identity, identity);
+    assert_eq!(
+        second.notifications,
+        vec![AccessibilityNotification::ValueChanged(identity)]
+    );
+
+    let mut localized = semantic(SemanticRole::Button, "Chạy", vec![SemanticAction::Activate]);
+    localized.value = Some("Ready".into());
+    semantics.set(button, localized, &tree).unwrap();
+    let localized =
+        projection.reconcile(&semantics.snapshot(&tree), &[SemanticChange::Label(button)]);
+    assert_eq!(localized.elements[0].identity, identity);
+    assert_eq!(
+        localized.notifications,
+        vec![AccessibilityNotification::LabelChanged(identity)]
+    );
+
+    tree.detach(button).unwrap();
+    semantics.prune(&tree);
+    let removed = projection.reconcile(&semantics.snapshot(&tree), &[SemanticChange::Tree]);
+    assert_eq!(removed.retired, vec![identity]);
+}
+
+#[test]
+fn focus_notifications_and_actions_use_declared_semantic_capabilities() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 100.0));
+    let button = tree
+        .attach(tree.root(), rect(10.0, 10.0, 80.0, 30.0))
+        .unwrap();
+    tree.set_focusable(button, true).unwrap();
+    let mut semantics = SemanticTree::new();
+    semantics
+        .set(
+            button,
+            semantic(SemanticRole::Button, "Run", vec![SemanticAction::Activate]),
+            &tree,
+        )
+        .unwrap();
+    let mut projection = AccessibilityProjection::new();
+    projection.reconcile(&semantics.snapshot(&tree), &[SemanticChange::Tree]);
+    tree.set_focus(Some(button)).unwrap();
+    let change = semantics.sync_focus(&tree).unwrap();
+    let result = projection.reconcile(&semantics.snapshot(&tree), &[change]);
+    let identity = result.elements[0].identity;
+    assert_eq!(
+        result.notifications,
+        vec![AccessibilityNotification::FocusChanged(identity)]
+    );
+    assert!(
+        projection
+            .request_action(identity, SemanticAction::Activate)
+            .is_ok()
+    );
+    assert!(
+        projection
+            .request_action(identity, SemanticAction::Increment)
+            .is_err()
+    );
+    assert_eq!(projection.take_actions()[0].node, button);
+}

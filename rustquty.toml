@@ -1,0 +1,11 @@
+[profile]
+default = "full"
+
+[gate.defaults]
+max-lines-per-function = 700
+max-lines-per-file = 3000
+max-clippy-warnings = 0
+max-line-length = 500
+
+[output]
+dir = "quality"

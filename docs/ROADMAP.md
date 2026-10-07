@@ -1,6 +1,6 @@
 # choscorui: native Rust desktop UI roadmap
 
-Status: planning document (2026-09-19). No implementation has started.
+Status: implementation underway (2026-09-20). This remains the full product roadmap; the current prototype does not satisfy the phase gates yet.
 
 ## Goal and boundary
 

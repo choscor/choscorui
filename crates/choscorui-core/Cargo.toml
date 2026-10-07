@@ -1,0 +1,8 @@
+[package]
+name = "choscorui-core"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+unicode-segmentation = "1.13.3"

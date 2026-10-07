@@ -1,0 +1,8 @@
+[package]
+name = "choscorui-compose"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+choscorui-core = { path = "../choscorui-core" }

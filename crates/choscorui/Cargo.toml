@@ -1,0 +1,13 @@
+[package]
+name = "choscorui"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+choscorui-compose = { path = "../choscorui-compose" }
+choscorui-controls = { path = "../choscorui-controls" }
+choscorui-core = { path = "../choscorui-core" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+choscorui-macos = { path = "../choscorui-macos" }
