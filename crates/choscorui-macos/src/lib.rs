@@ -36,7 +36,10 @@ pub use runloop::{PostError, Poster, Timer};
 use runloop::{
     PostInner, PostState, TimerAction, TimerContext, TimerInner, fire_timer, perform_posted,
 };
+mod imaging;
+pub use imaging::{decode_image, encode_png};
 mod shaping;
+mod surface;
 pub use accessibility::{
     AccessibilityActionError, AccessibilityActionRequest, AccessibilityElement,
     AccessibilityIdentity, AccessibilityNotification, AccessibilityProjection, AccessibilityUpdate,
@@ -124,13 +127,11 @@ unsafe extern "C" {
     fn CGContextRestoreGState(context: Id);
     fn CGContextClipToRect(context: Id, rect: NSRect);
     fn CGContextSetRGBFillColor(context: Id, red: f64, green: f64, blue: f64, alpha: f64);
-    fn CGContextSetRGBStrokeColor(context: Id, red: f64, green: f64, blue: f64, alpha: f64);
     fn CGContextSetAlpha(context: Id, alpha: f64);
     fn CGContextFillRect(context: Id, rect: NSRect);
     fn CGContextStrokeRectWithWidth(context: Id, rect: NSRect, width: f64);
     fn CGContextBeginPath(context: Id);
     fn CGContextMoveToPoint(context: Id, x: f64, y: f64);
-    fn CGContextAddArcToPoint(context: Id, x1: f64, y1: f64, x2: f64, y2: f64, radius: f64);
     fn CGContextClosePath(context: Id);
     fn CGContextFillPath(context: Id);
     fn CGContextStrokePath(context: Id);
@@ -140,7 +141,6 @@ unsafe extern "C" {
     fn CGContextSetTextPosition(context: Id, x: f64, y: f64);
     fn CGContextSetTextMatrix(context: Id, matrix: CGAffineTransform);
     fn CGContextGetTextMatrix(context: Id) -> CGAffineTransform;
-    fn CGColorSpaceCreateDeviceRGB() -> Id;
     fn CGBitmapContextCreate(
         data: Id,
         width: usize,
@@ -290,6 +290,9 @@ pub enum Error {
     ClipboardWriteFailed,
     AppKitUnavailable,
     InvalidInterval,
+    /// A custom cursor image was empty, larger than 256 points, or its
+    /// hotspot lay outside the image.
+    InvalidCursor,
 }
 
 /// Owned native window notifications, delivered in AppKit callback order.
@@ -318,6 +321,8 @@ pub enum WindowEvent {
         text: String,
     },
     Ime(ImeEvent),
+    /// The window became fully hidden (`true`) or partly visible again.
+    Occluded(bool),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -346,6 +351,8 @@ static WINDOW_QUEUES: OnceLock<Mutex<HashMap<usize, WindowQueue>>> = OnceLock::n
 struct PaintState {
     list: DisplayList,
     count: usize,
+    last_damage: Option<choscorui_core::Rect>,
+    cursor: choscorui_core::CursorShape,
 }
 struct NativeAccessibilityState {
     projection: AccessibilityProjection,
@@ -967,6 +974,11 @@ unsafe fn view_class() -> Result<Id, Error> {
                     c"v@::",
                 ),
                 (
+                    c"resetCursorRects",
+                    surface::view_reset_cursor_rects as *const c_void,
+                    c"v@:",
+                ),
+                (
                     c"drawRect:",
                     view_draw_rect as *const c_void,
                     c"v@:{CGRect={CGPoint=dd}{CGSize=dd}}",
@@ -1004,6 +1016,10 @@ unsafe fn delegate_class() -> Result<Id, Error> {
                 (c"windowDidBecomeKey:", window_did_focus as *const c_void),
                 (c"windowDidResignKey:", window_did_blur as *const c_void),
                 (c"windowWillClose:", window_will_close as *const c_void),
+                (
+                    c"windowDidChangeOcclusionState:",
+                    surface::window_did_change_occlusion as *const c_void,
+                ),
             ] {
                 if class_addMethod(cls, selector(name), imp, c"v@:@".as_ptr()) == 0 {
                     objc_disposeClassPair(cls);
@@ -1199,6 +1215,8 @@ impl Application {
             let paint = Arc::new(Mutex::new(PaintState {
                 list: DisplayList::new(),
                 count: 0,
+                last_damage: None,
+                cursor: Default::default(),
             }));
             let ime = Arc::new(Mutex::new(TextInputState {
                 selected_utf16: 0..0,
@@ -1664,21 +1682,6 @@ impl Window {
         actions
     }
 
-    /// Replaces the display list and asks AppKit for a frame only if it changed.
-    pub fn set_display_list(&self, list: DisplayList) {
-        let mut paint = self.paint.lock().unwrap();
-        if paint.list == list {
-            return;
-        }
-        paint.list = list;
-        drop(paint);
-        // SAFETY: The window owns this NSView until Window::drop.
-        unsafe {
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            send_void_bool(view, c"setNeedsDisplay:", 1);
-        }
-    }
-
     pub fn paint_count(&self) -> usize {
         self.paint.lock().unwrap().count
     }
@@ -1796,6 +1799,9 @@ impl Drop for Window {
                 .remove(&(self.raw.as_ptr() as usize));
             send_void(self.delegate.as_ptr(), c"release");
             send_void(self.raw.as_ptr(), c"release");
+        }
+        if paint_states().lock().unwrap().is_empty() {
+            paint::clear_image_cache();
         }
     }
 }

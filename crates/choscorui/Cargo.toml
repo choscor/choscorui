@@ -11,3 +11,6 @@ choscorui-core = { path = "../choscorui-core" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 choscorui-macos = { path = "../choscorui-macos" }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+choscorui-render = { path = "../choscorui-render" }

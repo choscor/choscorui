@@ -447,6 +447,7 @@ fn main() {
         app.dispatch_next_event(Duration::from_millis(100));
     }
     assert!(*pumped.lock().unwrap());
+    check_surface(&app, &window);
     send_native_window_close();
     assert!(!window.is_visible());
     assert!(window.take_events().contains(&WindowEvent::Closing));
@@ -458,6 +459,87 @@ fn main() {
     drop(app);
     assert!(!pending.is_active());
     assert!(poster.post(|| {}).is_err());
+}
+
+#[cfg(target_os = "macos")]
+fn surface_list(accent: Color) -> DisplayList {
+    let mut list = DisplayList::new();
+    list.fill_rect(
+        Rect::new(Point::new(0.0, 0.0), Size::new(320.0, 240.0)),
+        Color::rgba8(24, 32, 48, 255),
+    );
+    list.fill_rect(
+        Rect::new(Point::new(10.0, 10.0), Size::new(40.0, 30.0)),
+        accent,
+    );
+    list
+}
+
+#[cfg(target_os = "macos")]
+fn check_surface(app: &Application, window: &choscorui_macos::Window) {
+    use choscorui_core::{CursorShape, Image};
+
+    window.set_display_list(surface_list(Color::rgba8(220, 60, 80, 255)));
+    for _ in 0..5 {
+        app.pump_once(Duration::from_millis(20));
+    }
+    // Idle: nothing changed, so AppKit is never asked for another frame.
+    let idle = window.paint_count();
+    window.set_display_list(surface_list(Color::rgba8(220, 60, 80, 255)));
+    for _ in 0..5 {
+        app.pump_once(Duration::from_millis(20));
+    }
+    assert_eq!(window.paint_count(), idle, "idle window repainted");
+
+    // Only the changed rectangle is invalidated.
+    window.set_display_list(surface_list(Color::rgba8(40, 200, 90, 255)));
+    assert_eq!(
+        window.last_damage(),
+        Some(Rect::new(Point::new(10.0, 10.0), Size::new(40.0, 30.0)))
+    );
+
+    let capture = window.capture().expect("view capture");
+    let scale = window.backing_scale_factor();
+    let size = window.content_size();
+    assert_eq!(capture.width(), (size.width * scale).round() as u32);
+    assert_eq!(capture.height(), (size.height * scale).round() as u32);
+    let pixel = |x: f64, y: f64| {
+        let index = (((y * scale) as usize) * capture.width() as usize + (x * scale) as usize) * 4;
+        capture.pixels()[index..index + 4].to_vec()
+    };
+    let near = |actual: Vec<u8>, expected: [u8; 4]| {
+        actual.iter().zip(expected).all(|(a, e)| a.abs_diff(e) <= 3)
+    };
+    assert!(
+        near(pixel(100.0, 100.0), [24, 32, 48, 255]),
+        "{:?}",
+        pixel(100.0, 100.0)
+    );
+    assert!(
+        near(pixel(30.0, 25.0), [40, 200, 90, 255]),
+        "{:?}",
+        pixel(30.0, 25.0)
+    );
+
+    assert!(!window.is_occluded() || !window.is_visible());
+
+    window.set_cursor(CursorShape::IBeam).unwrap();
+    assert_eq!(window.cursor(), CursorShape::IBeam);
+    let arrow = Image::from_rgba8(16, 16, vec![255; 16 * 16 * 4]).unwrap();
+    window
+        .set_cursor(CursorShape::Custom {
+            image: arrow.clone(),
+            hotspot: Point::new(8.0, 8.0),
+        })
+        .unwrap();
+    assert!(matches!(
+        window.set_cursor(CursorShape::Custom {
+            image: arrow,
+            hotspot: Point::new(20.0, 2.0),
+        }),
+        Err(Error::InvalidCursor)
+    ));
+    window.set_cursor(CursorShape::Arrow).unwrap();
 }
 
 #[cfg(target_os = "macos")]

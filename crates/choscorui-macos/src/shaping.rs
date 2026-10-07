@@ -46,15 +46,13 @@ impl MacBitmap {
         // SAFETY: Core Graphics owns the automatically allocated context data.
         // It stays alive until every row has been copied into `pixels`.
         unsafe {
-            let color_space = CfOwned::new(CGColorSpaceCreateDeviceRGB())
-                .ok_or(BitmapError::ContextUnavailable)?;
             let context = CfOwned::new(CGBitmapContextCreate(
                 std::ptr::null_mut(),
                 width as usize,
                 height as usize,
                 8,
                 0,
-                color_space.as_ptr(),
+                paint::srgb(),
                 1 | (4 << 12),
             ))
             .ok_or(BitmapError::ContextUnavailable)?;

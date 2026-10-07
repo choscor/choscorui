@@ -7,8 +7,17 @@ pub use input::{
     DragEvent, DragFormat, DragItem, DragOperation, DragOperations, DropRouter, GestureEvent,
     HoverChange, HoverTracker, InputCapabilities, PointerDetails, PointerKind, negotiate_drag,
 };
+mod path;
+pub use path::{
+    FillRule, GradientStop, Image, ImageError, ImageSampling, LineCap, LineJoin, Paint, Path,
+    PathElement, StrokeStyle, lerp_color,
+};
 mod display;
-pub use display::{Color, DisplayCommand, DisplayList, DisplayListError};
+pub use display::{
+    Color, CursorShape, DisplayCommand, DisplayList, DisplayListError, Shadow, damage,
+};
+mod svg;
+pub use svg::{SvgDocument, SvgError, SvgShape, parse_path_data};
 mod layout;
 pub use layout::{
     Axis, CrossAlign, FormLayout, GridLayout, Insets, LayoutDirection, LayoutError, LinearLayout,

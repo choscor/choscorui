@@ -114,3 +114,36 @@ fn bitmap_paints_new_primitives_and_nested_opacity() {
     assert_eq!(bitmap.pixel(7, 2), Some([0, 0, 255, 255]));
     assert_eq!(bitmap.pixel(5, 2), Some([255, 191, 191, 255]));
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn png_encode_decode_round_trips_straight_alpha_pixels() {
+    use choscorui_core::{Image, ImageError};
+    use choscorui_macos::{decode_image, encode_png};
+
+    let pixels = vec![
+        255, 0, 0, 255, 0, 255, 0, 128, //
+        0, 0, 255, 0, 10, 20, 30, 255,
+    ];
+    let image = Image::from_rgba8(2, 2, pixels).unwrap();
+    let png = encode_png(&image).unwrap();
+    assert_eq!(&png[1..4], b"PNG");
+    let decoded = decode_image(&png).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (2, 2));
+    for (a, b) in image.pixels().chunks(4).zip(decoded.pixels().chunks(4)) {
+        if a[3] == 0 {
+            assert_eq!(b[3], 0);
+        } else {
+            assert!(
+                a.iter().zip(b).all(|(x, y)| x.abs_diff(*y) <= 2),
+                "{a:?} vs {b:?}"
+            );
+        }
+    }
+    assert_eq!(decode_image(&[]), Err(ImageError::UnsupportedFormat));
+    assert!(decode_image(b"not an image").is_err());
+
+    let bitmap = MacBitmap::render(&text_fixture(), 80, 40, 1.0).unwrap();
+    let exported = decode_image(&bitmap.encode_png().unwrap()).unwrap();
+    assert_eq!(exported.pixels()[..4], [255, 255, 255, 255]);
+}
