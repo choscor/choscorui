@@ -797,7 +797,25 @@ unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
                 0x77 => Key::End,
                 0x33 => Key::Backspace,
                 0x75 => Key::Delete,
-                other => Key::Other(u32::from(other)),
+                0x74 => Key::PageUp,
+                0x79 => Key::PageDown,
+                other => {
+                    let chars = send_id(native_event, c"charactersIgnoringModifiers");
+                    let text = if chars.is_null() {
+                        std::ptr::null()
+                    } else {
+                        send_cstr(chars, c"UTF8String")
+                    };
+                    let printable = (!text.is_null())
+                        .then(|| CStr::from_ptr(text).to_str().ok())
+                        .flatten()
+                        .and_then(|text| text.chars().next())
+                        .filter(|ch| !ch.is_control() && !('\u{F700}'..='\u{F8FF}').contains(ch));
+                    match printable {
+                        Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
+                        None => Key::Other(u32::from(other)),
+                    }
+                }
             };
             let event = match send_usize(native_event, c"type") {
                 10 => KeyEvent::Down {

@@ -519,7 +519,7 @@ fn main() {
                 WindowEvent::Key {
                     event:
                         KeyEvent::Down {
-                            key: Key::Other(code),
+                            key: Key::Character(code),
                             repeat: false,
                         },
                     modifiers,
@@ -529,16 +529,16 @@ fn main() {
                     && !modifiers.control =>
                 {
                     let change = match code {
-                        0 => text_field
+                        'a' => text_field
                             .handle(&mut tree, text_field_node, TextFieldInput::SelectAll)
                             .unwrap(),
-                        8 => {
+                        'c' => {
                             if !text_field.selected_text().is_empty() {
                                 clipboard.write_text(text_field.selected_text()).unwrap();
                             }
                             TextFieldChange::None
                         }
-                        7 => {
+                        'x' => {
                             if text_field.selected_text().is_empty() {
                                 TextFieldChange::None
                             } else {
@@ -548,16 +548,16 @@ fn main() {
                                     .unwrap()
                             }
                         }
-                        9 => match clipboard.read_text().unwrap() {
+                        'v' => match clipboard.read_text().unwrap() {
                             Some(text) => text_field
                                 .handle(&mut tree, text_field_node, TextFieldInput::Text(text))
                                 .unwrap(),
                             None => TextFieldChange::None,
                         },
-                        6 if modifiers.shift => text_field
+                        'z' if modifiers.shift => text_field
                             .handle(&mut tree, text_field_node, TextFieldInput::Redo)
                             .unwrap(),
-                        6 => text_field
+                        'z' => text_field
                             .handle(&mut tree, text_field_node, TextFieldInput::Undo)
                             .unwrap(),
                         _ => TextFieldChange::None,

@@ -39,6 +39,28 @@ impl ScrollViewport {
     pub fn offset(&self) -> Point {
         self.offset
     }
+    pub fn content_size(&self) -> Size {
+        self.content_size
+    }
+    pub fn line_step(&self) -> Size {
+        self.line_step
+    }
+    pub fn viewport(&self) -> NodeId {
+        self.viewport
+    }
+    pub fn content(&self) -> NodeId {
+        self.content
+    }
+
+    /// Scrolls to an absolute offset, clamped to the content.
+    pub fn scroll_to(&mut self, tree: &mut Tree, offset: Point) -> Result<(), LayoutError> {
+        if !offset.x.is_finite() || !offset.y.is_finite() {
+            return Err(LayoutError::InvalidGeometry);
+        }
+        let bounds = tree.bounds(self.viewport).ok_or(LayoutError::MissingNode)?;
+        let offset = self.clamp_offset(offset, bounds.size);
+        self.reposition(tree, bounds, offset, self.content_size)
+    }
 
     pub fn arrange(&mut self, tree: &mut Tree, bounds: Rect) -> Result<(), LayoutError> {
         let offset = self.clamp_offset(self.offset, bounds.size);

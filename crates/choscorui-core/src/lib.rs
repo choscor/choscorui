@@ -204,8 +204,14 @@ pub enum Key {
     ArrowRight,
     Home,
     End,
+    PageUp,
+    PageDown,
     Backspace,
     Delete,
+    /// A printable key, lowercased and independent of modifiers, from the
+    /// active keyboard layout (so shortcuts follow AZERTY or Dvorak).
+    Character(char),
+    /// Platform key code for keys without a portable name.
     Other(u32),
 }
 

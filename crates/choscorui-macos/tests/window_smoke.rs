@@ -154,7 +154,7 @@ fn main() {
         event,
         WindowEvent::Key {
             event: KeyEvent::Down {
-                key: Key::Other(0),
+                key: Key::Character('é'),
                 ..
             },
             ..

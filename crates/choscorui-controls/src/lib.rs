@@ -34,6 +34,11 @@ pub use containers::{
     ContainerError, GroupBox, SplitOrientation, Splitter, SplitterInput, SplitterStyle,
     SplitterVisualState, StackPage, StackedContainer,
 };
+mod navigation;
+pub use navigation::{
+    DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea, ScrollAreaInput,
+    ScrollAreaStyle, ScrollAreaVisualState, ScrollbarGeometry, parse_mnemonic,
+};
 mod static_controls;
 pub use static_controls::{Label, LabelStyle, Separator, SeparatorOrientation, SeparatorStyle};
 
