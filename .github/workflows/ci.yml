@@ -1,0 +1,87 @@
+# Continuous integration for the supported platform: macOS 15 on Apple
+# silicon and on Intel. Manual gates (IME, VoiceOver, notarized install,
+# budgets on reference hardware) are listed in docs/RELEASING.md.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15: Apple silicon (arm64). macos-15-intel: x86_64.
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchains
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.88 --profile minimal
+      - name: Format
+        run: cargo fmt --all --check && (cd samples/notes && cargo fmt --check)
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Minimum supported Rust version
+        run: cargo +1.88 check --workspace --all-targets --locked
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Notes sample (external app)
+        working-directory: samples/notes
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
+
+  native:
+    name: native windows (${{ matrix.os }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke tests
+        env:
+          CHOSCORUI_RUN_MACOS_SMOKE: "1"
+        run: |
+          cargo test -p choscorui-macos --test window_smoke --locked
+          cargo test -p choscorui-macos --test menu_smoke --locked
+          cargo test -p choscorui-macos --test lifetime_smoke --locked
+          CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
+      - name: Gallery first frame
+        run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
+      - name: Stress gallery autopilot
+        run: CHOSCORUI_STRESS_SETTINGS="$RUNNER_TEMP/stress.txt" CHOSCORUI_STRESS_AUTOPILOT=1 cargo run -p choscorui-stress --locked
+      - name: Notes sample autopilot
+        working-directory: samples/notes
+        run: NOTES_AUTOPILOT=1 cargo run --locked
+
+  package:
+    name: package and install check
+    needs: native
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: Universal archive (ad-hoc signed)
+        run: CHOSCORUI_UNIVERSAL=1 scripts/macos/package.sh
+      - name: Install, run core scenarios, uninstall
+        run: scripts/macos/install-check.sh dist/choscorui-*-macos-universal.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choscorui-macos-universal
+          path: |
+            dist/*.zip
+            dist/*.sha256

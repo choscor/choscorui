@@ -97,6 +97,10 @@ done
 
 cp "$root/scripts/macos/install.sh" "$root/scripts/macos/uninstall.sh" "$stage/"
 cp "$root/docs/INSTALL.md" "$stage/README.md"
+# The project license and third-party notices travel with the binaries.
+for notice in "$root"/LICENSE* "$root"/NOTICE*; do
+    [ -f "$notice" ] && cp "$notice" "$stage/"
+done
 
 archive="$dist/choscorui-$version-macos-$arch.zip"
 pack() {
