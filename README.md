@@ -56,6 +56,10 @@ Run the native smoke test and gallery separately. Both create foreground AppKit 
 
 Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. Start with the [API guide](docs/GUIDE.md), the [customization cookbook](docs/COOKBOOK.md), the [control behavior contract](docs/CONTROLS.md), and [localization and resources](docs/LOCALIZATION.md). See also the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), [theming guide](docs/THEMING.md), [accessibility contract](docs/ACCESSIBILITY.md), [dialogs](docs/DIALOGS.md), [settings](docs/SETTINGS.md), [desktop integration](docs/DESKTOP.md), [canvas](docs/CANVAS.md), [rich text](docs/RICH_TEXT.md), [custom controls](docs/CUSTOM_CONTROLS.md), [benchmarks](docs/BENCHMARKS.md) with [release budgets](docs/BUDGETS.md), [reliability checks](docs/RELIABILITY.md), and the [versioning policy](docs/VERSIONING.md) for scope and current limits.
 
+## Install, release, and security
+
+Prebuilt demo apps ship as a zip with `install.sh` and `uninstall.sh` ([install notes](docs/INSTALL.md)). Build one with `scripts/macos/package.sh`, and check it end to end with `scripts/macos/install-check.sh dist/choscorui-*-macos-*.zip`. Release steps and manual gates are in [RELEASING.md](docs/RELEASING.md), changes are in the [changelog](CHANGELOG.md), and vulnerability reporting is in [SECURITY.md](SECURITY.md).
+
 ## Static analysis
 
 Install the pinned tools:
