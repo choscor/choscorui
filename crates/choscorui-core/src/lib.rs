@@ -77,6 +77,13 @@ pub use proxy::{
     ConcatModel, MappedModel, MatchMode, ProxyView, SliceModel, SortFilterProxy, SortOrder,
     TextFilter,
 };
+mod rich_text;
+pub use rich_text::{
+    BlockAlignment, BlockKind, FormatFlag, RichBlock, RichDocument, RichPosition, RichRun,
+    RichTextError, SpanFormat,
+};
+mod rich_layout;
+pub use rich_layout::{RichLayout, RichLine, RichPiece, RichTheme};
 mod scene;
 pub use scene::{ItemShape, ItemStyle, Scene, SceneChange, SceneError, SceneItem, SceneItemId};
 mod settings;
