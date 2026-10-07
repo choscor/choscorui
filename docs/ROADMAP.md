@@ -2,6 +2,8 @@
 
 Status: implementation underway (2026-09-20). This remains the full product roadmap; the current prototype does not satisfy the phase gates yet.
 
+**Current delivery scope (2026-10-08): macOS only.** Windows (phase 10) and Linux (phase 11) backends, and the Windows/Linux items inside other phases, are skipped for this delivery. Their existing contract crates stay compiling but receive no new work. Every remaining phase is implemented and gated on macOS alone. Each roadmap item lands as its own commit on `main`.
+
 ## Goal and boundary
 
 Build a reusable, native-performance desktop UI toolkit in Rust with a Qt-like range of customization. Use the Rust standard library and direct foreign function interfaces (FFI) to operating-system APIs. Do not depend on iced, Slint, Qt, GTK, a webview, or another UI runtime. Platform SDKs and system libraries are unavoidable dependencies; the goal is to avoid installing a third-party UI framework in applications using choscorui-v2.
