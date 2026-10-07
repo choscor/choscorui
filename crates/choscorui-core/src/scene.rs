@@ -637,9 +637,12 @@ impl Scene {
                 found.extend(ids.iter().copied());
             }
         }
-        found.sort_unstable_by_key(|id| self.rank[id]);
+        // Dedup and filter on cheap id compares first, then look up
+        // each survivor's rank once.
+        found.sort_unstable();
         found.dedup();
         found.retain(keep);
+        found.sort_by_cached_key(|id| self.rank[id]);
         found
     }
 

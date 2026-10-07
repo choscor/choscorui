@@ -1,0 +1,22 @@
+# Ltr
+row measure Size { width: 148.0, height: 46.0 }
+row NodeId(1) Rect { origin: Point { x: 8.0, y: 18.0 }, size: Size { width: 80.0, height: 24.0 } }
+row NodeId(2) Rect { origin: Point { x: 94.0, y: 15.0 }, size: Size { width: 124.0, height: 30.0 } }
+row NodeId(3) Rect { origin: Point { x: 224.0, y: 20.0 }, size: Size { width: 168.0, height: 20.0 } }
+form measure Size { width: 238.0, height: 82.0 }
+form NodeId(4) Rect { origin: Point { x: 60.0, y: 70.0 }, size: Size { width: 40.0, height: 28.0 } }
+form NodeId(5) Rect { origin: Point { x: 108.0, y: 70.0 }, size: Size { width: 282.0, height: 28.0 } }
+form NodeId(6) Rect { origin: Point { x: 10.0, y: 104.0 }, size: Size { width: 90.0, height: 28.0 } }
+form NodeId(7) Rect { origin: Point { x: 108.0, y: 104.0 }, size: Size { width: 282.0, height: 28.0 } }
+grid NodeId(8) Rect { origin: Point { x: 4.0, y: 184.0 }, size: Size { width: 100.0, height: 112.0 } }
+# Rtl
+row measure Size { width: 148.0, height: 46.0 }
+row NodeId(1) Rect { origin: Point { x: 312.0, y: 18.0 }, size: Size { width: 80.0, height: 24.0 } }
+row NodeId(2) Rect { origin: Point { x: 182.0, y: 15.0 }, size: Size { width: 124.0, height: 30.0 } }
+row NodeId(3) Rect { origin: Point { x: 8.0, y: 20.0 }, size: Size { width: 168.0, height: 20.0 } }
+form measure Size { width: 238.0, height: 82.0 }
+form NodeId(4) Rect { origin: Point { x: 300.0, y: 70.0 }, size: Size { width: 40.0, height: 28.0 } }
+form NodeId(5) Rect { origin: Point { x: 10.0, y: 70.0 }, size: Size { width: 282.0, height: 28.0 } }
+form NodeId(6) Rect { origin: Point { x: 300.0, y: 104.0 }, size: Size { width: 90.0, height: 28.0 } }
+form NodeId(7) Rect { origin: Point { x: 10.0, y: 104.0 }, size: Size { width: 282.0, height: 28.0 } }
+grid NodeId(8) Rect { origin: Point { x: 296.0, y: 184.0 }, size: Size { width: 100.0, height: 112.0 } }

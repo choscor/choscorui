@@ -1,0 +1,343 @@
+//! Compatibility suite: pins focus order, layout geometry, accessibility
+//! semantics, theme resolution, and painted output for fixed scenes
+//! against golden files, so backend additions and refactors cannot
+//! change them silently.
+//!
+//! An intended change is re-recorded with
+//! `CHOSCORUI_BLESS=1 cargo test -p choscorui --test compatibility`;
+//! review the golden diff and note it in the release notes.
+
+use choscorui::controls::{
+    Button, ButtonDecoration, ButtonStyle, ButtonVisualState, Checkbox, ComboBox, ComboItem,
+    IntegerRange, ItemView, PillButtonRecipe, ProgressBar, Slider, SliderOrientation, SpinBox,
+    TextField, TextItemDelegate, paint_button,
+};
+use choscorui::core::{
+    AccessibilityPreferences, Axis, Color, CrossAlign, DesignTokens, DisplayList, FormLayout,
+    GridLayout, Insets, ItemKey, LayoutDirection, LinearLayout, NodeId, Point, Rect, SemanticRole,
+    Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
+};
+use std::fmt::Write;
+use std::path::PathBuf;
+
+fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
+    Rect::new(Point::new(x, y), Size::new(width, height))
+}
+
+/// Compares `actual` with `tests/golden/<name>.txt`, or rewrites it when
+/// `CHOSCORUI_BLESS` is set.
+fn golden(name: &str, actual: &str) {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden")
+        .join(format!("{name}.txt"));
+    if std::env::var_os("CHOSCORUI_BLESS").is_some() {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+        panic!(
+            "missing {}; record it with CHOSCORUI_BLESS=1",
+            path.display()
+        )
+    });
+    if expected != actual {
+        let line = expected
+            .lines()
+            .zip(actual.lines())
+            .position(|(a, b)| a != b)
+            .unwrap_or_else(|| expected.lines().count().min(actual.lines().count()));
+        panic!(
+            "{name} changed at line {}:\n  golden: {:?}\n  actual: {:?}\nIf intended, re-record with CHOSCORUI_BLESS=1 and note it in the release notes.",
+            line + 1,
+            expected.lines().nth(line),
+            actual.lines().nth(line),
+        );
+    }
+}
+
+fn names(nodes: &[(NodeId, &str)], id: Option<NodeId>) -> String {
+    id.and_then(|id| nodes.iter().find(|(node, _)| *node == id))
+        .map_or("none", |(_, name)| *name)
+        .to_owned()
+}
+
+#[test]
+fn focus_order() {
+    let mut out = String::new();
+    for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
+        let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
+        let root = tree.root();
+        let mut nodes = Vec::new();
+        let mut add = |tree: &mut Tree, parent, name, focusable, visible| {
+            let node = tree.attach(parent, Rect::default()).unwrap();
+            tree.set_focusable(node, focusable).unwrap();
+            tree.set_visible(node, visible).unwrap();
+            nodes.push((node, name));
+            node
+        };
+        let toolbar = add(&mut tree, root, "toolbar", false, true);
+        add(&mut tree, toolbar, "toolbar.back", true, true);
+        add(&mut tree, toolbar, "toolbar.hidden", true, false);
+        add(&mut tree, toolbar, "toolbar.search", true, true);
+        let form = add(&mut tree, root, "form", false, true);
+        add(&mut tree, form, "form.name-label", false, true);
+        add(&mut tree, form, "form.name", true, true);
+        let group = add(&mut tree, form, "form.group", true, true);
+        add(&mut tree, group, "form.group.yes", true, true);
+        add(&mut tree, group, "form.group.no", true, true);
+        add(&mut tree, root, "ok", true, true);
+        add(&mut tree, root, "cancel", true, true);
+        writeln!(out, "# {direction:?}").unwrap();
+        for reverse in [false, true] {
+            tree.set_focus(None).unwrap();
+            let mut order = Vec::new();
+            for _ in 0..10 {
+                order.push(names(&nodes, tree.focus_next(reverse)));
+            }
+            writeln!(
+                out,
+                "{}: {}",
+                if reverse { "backward" } else { "forward" },
+                order.join(" > ")
+            )
+            .unwrap();
+        }
+    }
+    golden("focus_order", &out);
+}
+
+#[test]
+fn layout_geometry() {
+    let mut out = String::new();
+    for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
+        writeln!(out, "# {direction:?}").unwrap();
+        let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
+        let root = tree.root();
+        let children: Vec<NodeId> = (0..8)
+            .map(|_| tree.attach(root, Rect::default()).unwrap())
+            .collect();
+
+        let mut row = LinearLayout::new(
+            Axis::Horizontal,
+            direction,
+            Insets::all(8.0),
+            6.0,
+            CrossAlign::Center,
+        )
+        .unwrap();
+        row.add_fixed(children[0], 80.0, 24.0).unwrap();
+        row.add_flex(children[1], 1.0, 40.0, 200.0, 30.0).unwrap();
+        row.add_flex(children[2], 2.0, 0.0, f64::INFINITY, 20.0)
+            .unwrap();
+        writeln!(out, "row measure {:?}", row.measure()).unwrap();
+        for (node, bounds) in row.arrange(rect(0.0, 0.0, 400.0, 60.0)).unwrap() {
+            writeln!(out, "row {node:?} {bounds:?}").unwrap();
+        }
+
+        let mut form = FormLayout::new(direction, Insets::all(10.0), 6.0, 8.0).unwrap();
+        form.add_row(children[3], children[4], 40.0, 120.0, 28.0)
+            .unwrap();
+        form.add_row(children[5], children[6], 90.0, 80.0, 28.0)
+            .unwrap();
+        writeln!(out, "form measure {:?}", form.measure()).unwrap();
+        for (node, bounds) in form.arrange(rect(0.0, 60.0, 400.0, 120.0)).unwrap() {
+            writeln!(out, "form {node:?} {bounds:?}").unwrap();
+        }
+
+        let mut grid = GridLayout::new(direction, Insets::all(4.0), 4.0, 4.0).unwrap();
+        grid.add_row_fixed(30.0).unwrap();
+        grid.add_row_flex(1.0, 20.0, f64::INFINITY).unwrap();
+        grid.add_column_fixed(100.0).unwrap();
+        grid.add_column_flex(1.0, 50.0, f64::INFINITY).unwrap();
+        grid.place(children[7], 0, 0, 2, 1).unwrap();
+        for (node, bounds) in grid.arrange(rect(0.0, 180.0, 400.0, 120.0)).unwrap() {
+            writeln!(out, "grid {node:?} {bounds:?}").unwrap();
+        }
+    }
+    golden("layout_geometry", &out);
+}
+
+#[test]
+fn control_semantics() {
+    let mut out = String::new();
+    let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
+    let root = tree.root();
+    let node = tree.attach(root, rect(10.0, 10.0, 100.0, 30.0)).unwrap();
+    tree.set_focusable(node, true).unwrap();
+    tree.set_focus(Some(node)).unwrap();
+
+    writeln!(
+        out,
+        "{:?}",
+        Button::new("Lưu", choscorui::controls::CommandId(1)).semantics(&tree, node)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "{:?}",
+        Checkbox::new("Ghi nhớ", true).semantics(&tree, node)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "{:?}",
+        TextField::new("Tên", "Nguyễn").semantics(&tree, node)
+    )
+    .unwrap();
+    let range = IntegerRange::new(0, 100, 40, 5, 20).unwrap();
+    writeln!(
+        out,
+        "{:?}",
+        Slider::new("Âm lượng", range, SliderOrientation::Horizontal).semantics(&tree, node)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "{:?}",
+        SpinBox::new("Số lượng", range).semantics(&tree, node)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "{:?}",
+        ProgressBar::new("Tải", 3, 10).unwrap().semantics()
+    )
+    .unwrap();
+    let mut combo = ComboBox::new("Thành phố", false);
+    combo.set_items(
+        ["Hà Nội", "Huế"]
+            .iter()
+            .enumerate()
+            .map(|(i, text)| ComboItem {
+                key: ItemKey(i as u64 + 1),
+                text: (*text).into(),
+            })
+            .collect(),
+    );
+    writeln!(out, "{:?}", combo.semantics()).unwrap();
+
+    let model = StringListModel::from_strings(["một", "hai", "ba"]);
+    let mut view = ItemView::new("Danh sách", SemanticRole::List, 20.0);
+    view.sync(&model);
+    view.arrange(&mut tree, node, rect(0.0, 0.0, 200.0, 100.0))
+        .unwrap();
+    writeln!(out, "{:?}", view.semantics()).unwrap();
+    golden("control_semantics", &out);
+}
+
+#[test]
+fn theme_resolution() {
+    let mut out = String::new();
+    writeln!(out, "light {:?}", DesignTokens::light()).unwrap();
+    writeln!(out, "dark {:?}", DesignTokens::dark()).unwrap();
+    let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
+    let root = tree.root();
+    let panel = tree.attach(root, rect(0.0, 0.0, 50.0, 50.0)).unwrap();
+    let child = tree.attach(panel, rect(0.0, 0.0, 10.0, 10.0)).unwrap();
+    let mut themes = ThemeResolver::new(DesignTokens::light());
+    let change = themes
+        .set_scope(
+            &mut tree,
+            panel,
+            ThemeOverride {
+                accent: Some(Color::rgba8(200, 0, 120, 255)),
+                font_size: Some(18.0),
+                ..ThemeOverride::default()
+            },
+        )
+        .unwrap();
+    writeln!(out, "scope change {change:?}").unwrap();
+    writeln!(
+        out,
+        "scoped child {:?}",
+        themes.resolve(&tree, child).unwrap()
+    )
+    .unwrap();
+    let change = themes
+        .set_accessibility_preferences(
+            &mut tree,
+            AccessibilityPreferences {
+                high_contrast: true,
+                reduced_motion: true,
+                text_scale: 1.5,
+            },
+        )
+        .unwrap();
+    writeln!(out, "preferences change {change:?}").unwrap();
+    writeln!(
+        out,
+        "accessible root {:?}",
+        themes.resolve(&tree, root).unwrap()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "accessible child {:?}",
+        themes.resolve(&tree, child).unwrap()
+    )
+    .unwrap();
+    golden("theme_resolution", &out);
+}
+
+#[test]
+fn painted_output() {
+    let mut out = String::new();
+    let tokens = DesignTokens::light();
+    let bounds = rect(10.0, 10.0, 120.0, 32.0);
+    let states = [
+        ButtonVisualState {
+            enabled: true,
+            hovered: false,
+            pressed: false,
+            focused: true,
+        },
+        ButtonVisualState {
+            enabled: false,
+            hovered: false,
+            pressed: false,
+            focused: false,
+        },
+    ];
+    let flat = ButtonStyle {
+        normal: tokens.accent,
+        hover: tokens.accent,
+        pressed: tokens.danger,
+        disabled: Color::rgba8(90, 90, 90, 255),
+        focus: tokens.content,
+        decoration: ButtonDecoration::LeadingRail {
+            width: tokens.spacing,
+            color: tokens.danger,
+        },
+    };
+    for state in states {
+        for (name, recipe) in [
+            ("flat", &flat as &dyn choscorui::controls::ButtonRecipe),
+            ("pill", &PillButtonRecipe { emphasized: true }),
+        ] {
+            let mut list = DisplayList::new();
+            let slots = paint_button(recipe, &mut list, bounds, state, &tokens, |_, _| {});
+            writeln!(out, "# {name} {state:?}\nslots {slots:?}").unwrap();
+            for command in list.commands() {
+                writeln!(out, "{command:?}").unwrap();
+            }
+        }
+    }
+
+    let model = StringListModel::from_strings(["Hà Nội", "Huế", "Đà Lạt"]);
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 100.0));
+    let node = tree
+        .attach(tree.root(), rect(0.0, 0.0, 200.0, 60.0))
+        .unwrap();
+    let mut view = ItemView::new("Cities", SemanticRole::List, 20.0);
+    view.sync(&model);
+    view.arrange(&mut tree, node, rect(0.0, 0.0, 200.0, 60.0))
+        .unwrap();
+    let mut list = DisplayList::new();
+    view.paint(&mut list, &model, &TextItemDelegate::default(), &[], true);
+    writeln!(out, "# item view").unwrap();
+    for command in list.commands() {
+        writeln!(out, "{command:?}").unwrap();
+    }
+    golden("painted_output", &out);
+}

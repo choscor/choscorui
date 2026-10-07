@@ -1,0 +1,6 @@
+# Ltr
+forward: toolbar.back > toolbar.search > form.name > form.group > form.group.yes > form.group.no > ok > cancel > toolbar.back > toolbar.search
+backward: cancel > ok > form.group.no > form.group.yes > form.group > form.name > toolbar.search > toolbar.back > cancel > ok
+# Rtl
+forward: toolbar.back > toolbar.search > form.name > form.group > form.group.yes > form.group.no > ok > cancel > toolbar.back > toolbar.search
+backward: cancel > ok > form.group.no > form.group.yes > form.group > form.name > toolbar.search > toolbar.back > cancel > ok
