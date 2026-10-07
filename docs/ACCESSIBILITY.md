@@ -36,6 +36,9 @@ No control ships without a row here and a test of its `semantics()`.
 | Tooltip | Tooltip (AXHelpTag), described-by its target | text | — | — |
 | `DialogStack` dialogs, `MessageDialog` | Dialog (AXSheet-like group); description "Modal" for modal dialogs | title / message and detail | — | Dismiss (Escape) |
 | `ColorPicker` | Group with hex value | name / "Red r, Green g, Blue b, Opacity n%" | — | SetValue (hex), Focus |
+| `Toolbar` | Toolbar; one Tab stop with roving arrow focus | toolbar name | — | items' own actions |
+| `StatusBar` | StatusBar; temporary messages are announced at low priority (`take_announcement`) | "Status" / message and sections | — | Focus |
+| `DockLayout` panels and splitters | TabPanel per panel (selected = active tab, "Floating" description); Slider per area splitter (value in points) | panel title | selected | Focus, Dismiss (closable); Increment/Decrement on splitters |
 | `ScrollBar` | ScrollBar (AXScrollBar) | label / percent | hidden when not needed | Increment, Decrement |
 | `DecimalSpinBox`, `DateTimeEdit` | SpinButton (AXIncrementor) | label / formatted value (long date) | invalid with message | Increment, Decrement, SetValue, Focus |
 | `Calendar` | Table (AXTable) with Cell (AXCell) days | month title / long date | selected, disabled outside range | Activate per enabled day |

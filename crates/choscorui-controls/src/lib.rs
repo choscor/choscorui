@@ -72,6 +72,16 @@ pub use dialogs::{
     ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog, InputDialog,
     InputKind, InputValue, MessageDialog, Modality, dialog_key_button, order_dialog_buttons,
 };
+mod dock;
+pub use dock::{
+    DockArea, DockArrangement, DockError, DockLayout, DockPanel, DockRestoreReport, DockTarget,
+    GroupFrame, PanelId, PanelLocation,
+};
+mod shell;
+pub use shell::{
+    MainWindowFrames, StatusBar, StatusBarLayout, StatusSection, Toolbar, ToolbarArea, ToolbarItem,
+    ToolbarItemKind, ToolbarLayout, compose_main_window,
+};
 mod recipe;
 pub use recipe::{
     ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,

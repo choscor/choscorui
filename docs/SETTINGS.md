@@ -37,3 +37,12 @@ Keys use ASCII letters, digits, `.`, `_`, `-`, and `/`.
 - If the frame is larger than the screen it is on, the window shrinks to fit, but never below the minimum size.
 
 Zoom and full-screen state are restored after the frame, so leaving them returns the window to its saved size.
+
+## Dock and toolbar state
+
+`DockLayout::save` and `Toolbar::save` each produce a single string. Store it as a `text` setting, for example `dock.main` or `toolbar.main`.
+
+On launch, register panels and toolbar items first, then call `restore`. Restoring the dock layout handles changes between versions:
+- Saved keys that no registered panel has are reported in `unknown_keys` and skipped.
+- Registered panels that the saved layout does not mention keep their registered location and are reported in `unplaced`.
+- If the text is malformed, the layout is left unchanged.
