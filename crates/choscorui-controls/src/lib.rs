@@ -72,6 +72,8 @@ pub use dialogs::{
     ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog, InputDialog,
     InputKind, InputValue, MessageDialog, Modality, dialog_key_button, order_dialog_buttons,
 };
+mod canvas;
+pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod dock;
 pub use dock::{
     DockArea, DockArrangement, DockError, DockLayout, DockPanel, DockRestoreReport, DockTarget,

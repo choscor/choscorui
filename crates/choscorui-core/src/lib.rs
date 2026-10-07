@@ -77,6 +77,8 @@ pub use proxy::{
     ConcatModel, MappedModel, MatchMode, ProxyView, SliceModel, SortFilterProxy, SortOrder,
     TextFilter,
 };
+mod scene;
+pub use scene::{ItemShape, ItemStyle, Scene, SceneChange, SceneError, SceneItem, SceneItemId};
 mod settings;
 pub use settings::{
     LoadReport, SettingValue, Settings, SettingsError, SettingsMigration, SettingsSchema,
