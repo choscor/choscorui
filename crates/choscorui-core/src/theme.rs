@@ -1,4 +1,19 @@
-use crate::{Color, Dirty, NodeId, Tree};
+//! Design tokens and their resolution.
+//!
+//! Resolution order, lowest to highest precedence:
+//! 1. the application theme ([`ThemeResolver::set_application`]);
+//! 2. scoped overrides on each ancestor, applied root first
+//!    ([`ThemeResolver::set_scope`]);
+//! 3. the node's own instance override ([`ThemeResolver::set_instance`]);
+//! 4. user accessibility preferences (text scale, high contrast, reduced
+//!    motion), which always win.
+//!
+//! Light/dark is an application theme choice; contrast is a token that the
+//! user preference can only raise. Metric changes (type size, weight, line
+//! height, spacing, radius, border width) invalidate layout; color,
+//! elevation, and motion changes invalidate paint only.
+
+use crate::{Color, Dirty, FontWeight, NodeId, Tree};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,6 +57,9 @@ pub struct DesignTokens {
     pub accent: Color,
     pub danger: Color,
     pub font_size: f64,
+    pub font_weight: FontWeight,
+    /// Line height as a multiple of `font_size`.
+    pub line_height: f64,
     pub spacing: f64,
     pub radius: f64,
     pub border_width: f64,
@@ -51,6 +69,13 @@ pub struct DesignTokens {
 }
 
 impl DesignTokens {
+    /// Body text style for `family` built from the typography tokens.
+    pub fn text_style(&self, family: &str) -> crate::TextStyle {
+        crate::TextStyle::new(family, self.font_size)
+            .with_weight(self.font_weight)
+            .with_line_height(self.line_height)
+    }
+
     pub const fn dark() -> Self {
         Self {
             background: Color::rgba8(24, 32, 48, 255),
@@ -59,6 +84,8 @@ impl DesignTokens {
             accent: Color::rgba8(40, 140, 230, 255),
             danger: Color::rgba8(230, 70, 90, 255),
             font_size: 17.0,
+            font_weight: FontWeight::REGULAR,
+            line_height: 1.0,
             spacing: 8.0,
             radius: 4.0,
             border_width: 2.0,
@@ -79,6 +106,8 @@ impl DesignTokens {
             accent: Color::rgba8(120, 55, 190, 255),
             danger: Color::rgba8(190, 35, 55, 255),
             font_size: 17.0,
+            font_weight: FontWeight::REGULAR,
+            line_height: 1.2,
             spacing: 8.0,
             radius: 10.0,
             border_width: 1.0,
@@ -100,6 +129,8 @@ pub struct ThemeOverride {
     pub accent: Option<Color>,
     pub danger: Option<Color>,
     pub font_size: Option<f64>,
+    pub font_weight: Option<FontWeight>,
+    pub line_height: Option<f64>,
     pub spacing: Option<f64>,
     pub radius: Option<f64>,
     pub border_width: Option<f64>,
@@ -268,6 +299,12 @@ fn apply(mut tokens: DesignTokens, values: ThemeOverride) -> DesignTokens {
     if let Some(value) = values.font_size {
         tokens.font_size = value;
     }
+    if let Some(value) = values.font_weight {
+        tokens.font_weight = value;
+    }
+    if let Some(value) = values.line_height {
+        tokens.line_height = value;
+    }
     if let Some(value) = values.spacing {
         tokens.spacing = value;
     }
@@ -313,6 +350,9 @@ fn validate(tokens: DesignTokens) -> Result<(), ThemeError> {
         tokens.elevation,
     ];
     if tokens.font_size <= 0.0
+        || tokens.line_height <= 0.0
+        || !tokens.line_height.is_finite()
+        || !(1..=1000).contains(&tokens.font_weight.0)
         || values
             .into_iter()
             .any(|value| !value.is_finite() || value < 0.0)
@@ -327,6 +367,8 @@ fn classify(old: DesignTokens, new: DesignTokens) -> ThemeInvalidation {
     if old == new {
         ThemeInvalidation::None
     } else if old.font_size != new.font_size
+        || old.font_weight != new.font_weight
+        || old.line_height != new.line_height
         || old.spacing != new.spacing
         || old.radius != new.radius
         || old.border_width != new.border_width

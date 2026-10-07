@@ -40,6 +40,8 @@ mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod dnd;
 mod pasteboard;
+mod preferences;
+pub use preferences::{system_accessibility_preferences, system_prefers_dark};
 mod shaping;
 mod surface;
 pub use dnd::SimulatedDragPhase;

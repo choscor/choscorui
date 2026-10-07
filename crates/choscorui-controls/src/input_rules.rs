@@ -309,9 +309,7 @@ impl DateInput {
             }
             return (ValidationState::Valid, Some(date));
         }
-        let fields: Vec<&str> = trimmed
-            .split([separator, '/', '.', '-'])
-            .collect();
+        let fields: Vec<&str> = trimmed.split([separator, '/', '.', '-']).collect();
         let shaped_like_date = trimmed
             .chars()
             .all(|c| c.is_ascii_digit() || c == separator || matches!(c, '/' | '.' | '-'))

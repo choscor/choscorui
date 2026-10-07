@@ -98,3 +98,15 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | AppKit IME composition and candidate placement; marked vs. committed text | Done | `NSTextInputClient` bridge (`setMarkedText`, `insertText`, `firstRectForCharacterRange`); `TextEditor::marked_range_utf16`, `caret_rect` |
 | Composition survives redraws; edits rejected when the focused node is removed | Done | `composition_survives_redraws_commits_on_click_and_undo_skips_marked_text`, `removed_node_rejects_edits_and_read_only_blocks_changes` |
 | Gate: Vietnamese, Japanese/Chinese, emoji, dead keys, paste, undo, selection, screen reader editing | Done (automated) + Manual | `window_smoke` drives dead-key (´ → é) and Telex (ê → ệ) composition through the real `NSTextInputClient`; editor tests cover kana → kanji commit, undo, selection, and `SetValue`. Manual: type with macOS Vietnamese Telex and Japanese Romaji input sources in the gallery document; edit the document with VoiceOver. |
+
+## Phase 8 — theme and customization API
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Tokens for color, typography, spacing, radii, borders, elevation, motion; documented resolution of light/dark, contrast, overrides | Done | `DesignTokens` (`font_weight`, `line_height`, `text_style`); [THEMING.md](THEMING.md); `core/tests/theme.rs` |
+| Visual recipe/slot API for background, content, icon, indicator, overlay | Done | `ButtonRecipe`, `Slot`, `paint_button`, `PillButtonRecipe`, `ButtonStyle` recipe; `controls/tests/recipe.rs` |
+| Instance, scoped, and application themes; hot changes; metric vs. paint invalidation | Done | `ThemeResolver::set_instance`/`set_scope`/`set_application`; `paint_only_and_metric_changes_request_different_work`, `typography_tokens_drive_layout_and_text_style` |
+| Animation clock, easing, interruption, reduced motion, node removal, frame scheduling, paint-only invalidation | Done | `AnimationClock`; `core/tests/animation.rs`; system Reduce Motion via `system_accessibility_preferences` (`macos/tests/preferences.rs`) |
+| Two structurally distinct gallery themes | Done | Dark is a flat square button with leading rail and label; light is an elevated pill with badge, centered label, and focus ring (`examples/gallery` `display_list`) |
+| Native-looking themes documented as emulation; system UI listed | Done | [THEMING.md](THEMING.md) "Native look and system UI" |
+| Gate: runtime theme switch replaces button visuals without replacing behavior | Done (automated) + Manual | `swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantics` swaps recipe and tokens while Space is held. Manual: in the gallery, press Control-Return or click the button, then confirm Tab focus, Space activation, and VoiceOver name are unchanged. |

@@ -108,6 +108,13 @@ fn main() {
         (document_viewport_bounds(window.content_size()).size.width - 20.0).max(1.0);
     let mut commands = CommandRegistry::new();
     let mut themes = ThemeResolver::new(DesignTokens::dark());
+    // Reduce Motion and Increase Contrast from System Settings apply on top
+    // of whichever theme is active.
+    if let Ok(preferences) = choscorui_macos::system_accessibility_preferences() {
+        themes
+            .set_accessibility_preferences(&mut tree, preferences)
+            .unwrap();
+    }
     commands
         .insert(CommandId(1), CommandState::default())
         .unwrap();
@@ -1053,7 +1060,10 @@ fn display_list(
     document: GalleryDocument<'_>,
     theme: choscorui_core::DesignTokens,
 ) -> choscorui_core::DisplayList {
-    use choscorui_controls::{ButtonDecoration, ButtonStyle, CheckboxStyle, TextFieldStyle};
+    use choscorui_controls::{
+        ButtonDecoration, ButtonRecipe, ButtonStyle, CheckboxStyle, ContentAlignment,
+        PillButtonRecipe, TextFieldStyle, paint_button,
+    };
     use choscorui_core::{Color, DisplayList, Point, Rect, Size};
     let mut list = DisplayList::new();
     list.fill_rect(tree.bounds(tree.root()).unwrap(), theme.background);
@@ -1063,27 +1073,57 @@ fn display_list(
         .state(choscorui_controls::CommandId(1))
         .unwrap()
         .checked;
-    ButtonStyle {
+    // The two themes differ structurally: the dark theme paints a flat,
+    // square button with a leading rail and leading label; the light theme
+    // paints an elevated pill with a trailing badge, centered label, and an
+    // outset focus ring. Both drive the same `Button` state machine.
+    let flat = ButtonStyle {
         normal: if selected { theme.danger } else { theme.accent },
         hover: Color::rgba8(80, 170, 245, 255),
         pressed: Color::rgba8(20, 95, 175, 255),
         disabled: Color::rgba8(90, 90, 90, 255),
         focus: theme.content,
-        decoration: if theme.radius > 5.0 {
-            ButtonDecoration::LeadingRail {
-                width: theme.spacing,
-                color: theme.danger,
-            }
-        } else {
-            ButtonDecoration::Plain
+        decoration: ButtonDecoration::LeadingRail {
+            width: theme.spacing,
+            color: theme.danger,
         },
-    }
-    .paint(
+    };
+    let pill = PillButtonRecipe {
+        emphasized: selected,
+    };
+    let recipe: &dyn ButtonRecipe = if selected { &pill } else { &flat };
+    let label = ui
+        .button
+        .semantics_with_commands(tree, ui.button_node, ui.commands)
+        .unwrap()
+        .name;
+    paint_button(
+        recipe,
         &mut list,
         bounds,
         ui.button
             .visual_state_with_commands(tree, ui.button_node, ui.commands)
             .unwrap(),
+        &theme,
+        |list, slots| {
+            let size = 22.0;
+            let width = label.chars().count() as f64 * size * 0.52;
+            let x = match slots.alignment {
+                ContentAlignment::Leading => slots.content.origin.x,
+                ContentAlignment::Center => {
+                    slots.content.origin.x + ((slots.content.size.width - width) / 2.0).max(0.0)
+                }
+            };
+            let baseline = slots.content.origin.y + slots.content.size.height / 2.0 + size * 0.35;
+            list.draw_text(
+                Point::new(x, baseline),
+                &label,
+                "Helvetica",
+                size,
+                slots.content_color,
+            )
+            .unwrap();
+        },
     );
     CheckboxStyle {
         box_color: Color::rgba8(60, 85, 110, 255),
@@ -1099,24 +1139,6 @@ fn display_list(
         ui.checkbox.visual_state(tree, ui.checkbox_node),
     );
     list.push_clip(bounds);
-    list.fill_rect(
-        Rect::new(
-            Point::new(bounds.origin.x + 24.0, bounds.origin.y + 24.0),
-            Size::new(32.0, 32.0),
-        ),
-        Color::rgba8(255, 255, 255, 255),
-    );
-    list.draw_text(
-        Point::new(bounds.origin.x + 72.0, bounds.origin.y + 51.0),
-        &ui.button
-            .semantics_with_commands(tree, ui.button_node, ui.commands)
-            .unwrap()
-            .name,
-        "Helvetica",
-        22.0,
-        Color::rgba8(255, 255, 255, 255),
-    )
-    .unwrap();
     let field_bounds = tree.bounds(ui.text_field_node).unwrap();
     TextFieldStyle {
         background: Color::rgba8(36, 48, 68, 255),

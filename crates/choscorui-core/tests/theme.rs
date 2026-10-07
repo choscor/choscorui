@@ -1,6 +1,6 @@
 use choscorui_core::{
-    AccessibilityPreferences, Color, Contrast, DesignTokens, Dirty, MotionTokens, Point, Rect,
-    Size, ThemeError, ThemeInvalidation, ThemeOverride, ThemeResolver, Tree,
+    AccessibilityPreferences, Color, Contrast, DesignTokens, Dirty, FontWeight, MotionTokens,
+    Point, Rect, Size, ThemeError, ThemeInvalidation, ThemeOverride, ThemeResolver, Tree,
 };
 
 fn rect() -> Rect {
@@ -199,4 +199,40 @@ fn invalid_scope_update_preserves_previous_resolved_theme() {
             .is_err()
     );
     assert_eq!(themes.resolve(&tree, node).unwrap().spacing, 12.0);
+}
+
+#[test]
+fn typography_tokens_drive_layout_and_text_style() {
+    let mut tree = Tree::new(rect());
+    let node = tree.attach(tree.root(), rect()).unwrap();
+    let mut themes = ThemeResolver::new(DesignTokens::dark());
+    let bold = ThemeOverride {
+        font_weight: Some(FontWeight::BOLD),
+        ..Default::default()
+    };
+    assert_eq!(
+        themes.set_scope(&mut tree, node, bold).unwrap(),
+        ThemeInvalidation::Layout
+    );
+    let tokens = themes.resolve(&tree, node).unwrap();
+    let style = tokens.text_style("Helvetica");
+    assert_eq!(style.weight, FontWeight::BOLD);
+    assert_eq!(style.line_height, tokens.line_height);
+    assert_eq!(style.size, tokens.font_size);
+    let invalid = ThemeOverride {
+        line_height: Some(0.0),
+        ..Default::default()
+    };
+    assert_eq!(
+        themes.set_scope(&mut tree, node, invalid),
+        Err(ThemeError::InvalidTokens)
+    );
+    assert_eq!(
+        themes.resolve(&tree, node).unwrap().font_weight,
+        FontWeight::BOLD
+    );
+    assert_ne!(
+        DesignTokens::dark().line_height,
+        DesignTokens::light().line_height
+    );
 }

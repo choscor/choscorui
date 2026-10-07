@@ -84,7 +84,7 @@ pub(crate) unsafe fn type_array(formats: &[DragFormat]) -> Option<CfOwned> {
     unsafe { ns_array(&raw) }
 }
 
-unsafe fn ns_string_to_rust(value: Id) -> Option<String> {
+pub(crate) unsafe fn ns_string_to_rust(value: Id) -> Option<String> {
     if value.is_null() {
         return None;
     }

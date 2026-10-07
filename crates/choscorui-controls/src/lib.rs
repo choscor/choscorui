@@ -38,6 +38,10 @@ mod input_rules;
 pub use input_rules::{DateInput, InputMask, MaskError, MaskedText, NumberInput};
 mod text_editor;
 pub use text_editor::{TextEditor, TextEditorChange, TextEditorInput};
+mod recipe;
+pub use recipe::{
+    ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,
+};
 mod navigation;
 pub use navigation::{
     DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea, ScrollAreaInput,

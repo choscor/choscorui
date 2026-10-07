@@ -24,7 +24,7 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke
 
 Run the native smoke test and gallery separately. Both create foreground AppKit windows, so concurrent runs can change focus and make input assertions unreliable.
 
-Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. See the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), and [FFI safety record](docs/FFI.md) for scope and current limits.
+Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. See the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), and [theming guide](docs/THEMING.md) for scope and current limits.
 
 ## Static analysis
 
