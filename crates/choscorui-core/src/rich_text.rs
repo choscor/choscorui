@@ -514,9 +514,7 @@ impl RichDocument {
                 BlockKind::Quote => "> ".into(),
             };
             let mut line = prefix;
-            for run in &block.runs {
-                line.push_str(&inline_markdown(run));
-            }
+            line.push_str(&inline_markdown(&block.runs));
             // A paragraph that looks like markup is escaped.
             if block.kind == BlockKind::Paragraph && looks_like_block_markup(&line) {
                 line.insert(0, '\\');
@@ -594,32 +592,113 @@ fn escape_markdown(text: &str) -> String {
     out
 }
 
-fn inline_markdown(run: &RichRun) -> String {
-    let format = &run.format;
-    let mut text = if format.code {
-        // Code spans cannot contain escapes; fall back to escaping when
-        // the text has a backtick.
-        if run.text.contains('`') {
-            escape_markdown(&run.text)
-        } else {
-            format!("`{}`", run.text)
+/// Bold, italic, and strikethrough: the formats Markdown toggles inline.
+#[derive(Clone, Copy, Default, PartialEq)]
+struct Toggles {
+    bold: bool,
+    italic: bool,
+    strikethrough: bool,
+}
+
+impl Toggles {
+    fn of(format: &SpanFormat) -> Self {
+        Self {
+            bold: format.bold,
+            italic: format.italic,
+            strikethrough: format.strikethrough,
         }
+    }
+    fn and(self, other: Self) -> Self {
+        Self {
+            bold: self.bold && other.bold,
+            italic: self.italic && other.italic,
+            strikethrough: self.strikethrough && other.strikethrough,
+        }
+    }
+    fn without(self, other: Self) -> Self {
+        Self {
+            bold: self.bold && !other.bold,
+            italic: self.italic && !other.italic,
+            strikethrough: self.strikethrough && !other.strikethrough,
+        }
+    }
+}
+
+/// Emits the markers that switch `state` to `target`. The parser treats
+/// `**`, `_`, and `~~` as independent toggles, so any adjacent combination
+/// reads back unambiguously (`_` avoids `*`/`**` runs such as `***`).
+fn transition(out: &mut String, state: &mut Toggles, target: Toggles) {
+    if state.bold != target.bold {
+        out.push_str("**");
+    }
+    if state.italic != target.italic {
+        out.push('_');
+    }
+    if state.strikethrough != target.strikethrough {
+        out.push_str("~~");
+    }
+    *state = target;
+}
+
+fn push_run_text(out: &mut String, run: &RichRun) {
+    // Code spans cannot contain escapes; fall back to escaping when the
+    // text has a backtick.
+    if run.format.code && !run.text.contains('`') {
+        out.push('`');
+        out.push_str(&run.text);
+        out.push('`');
     } else {
-        escape_markdown(&run.text)
-    };
-    if format.strikethrough {
-        text = format!("~~{text}~~");
+        out.push_str(&escape_markdown(&run.text));
     }
-    if format.italic {
-        text = format!("*{text}*");
+}
+
+/// Serializes a block's runs as format transitions, mirroring the
+/// toggle-based parser so that parsing the output reproduces the runs.
+fn inline_markdown(runs: &[RichRun]) -> String {
+    let mut out = String::new();
+    let mut state = Toggles::default();
+    let mut index = 0;
+    while index < runs.len() {
+        let Some(link) = &runs[index].format.link else {
+            transition(&mut out, &mut state, Toggles::of(&runs[index].format));
+            push_run_text(&mut out, &runs[index]);
+            index += 1;
+            continue;
+        };
+        let end = runs[index..]
+            .iter()
+            .position(|run| run.format.link.as_ref() != Some(link))
+            .map_or(runs.len(), |offset| index + offset);
+        let group = &runs[index..end];
+        // The parser applies the surrounding formats to the whole label, so
+        // only formats shared by every run in the group stay outside.
+        let all = Toggles {
+            bold: true,
+            italic: true,
+            strikethrough: true,
+        };
+        let common = group
+            .iter()
+            .fold(all, |acc, run| acc.and(Toggles::of(&run.format)));
+        transition(&mut out, &mut state, common);
+        out.push('[');
+        let mut inner = Toggles::default();
+        for run in group {
+            transition(
+                &mut out,
+                &mut inner,
+                Toggles::of(&run.format).without(common),
+            );
+            push_run_text(&mut out, run);
+        }
+        transition(&mut out, &mut inner, Toggles::default());
+        out.push_str("](");
+        out.push_str(&link.replace(')', "%29").replace(' ', "%20"));
+        out.push(')');
+        index = end;
     }
-    if format.bold {
-        text = format!("**{text}**");
-    }
-    if let Some(link) = &format.link {
-        text = format!("[{text}]({})", link.replace(')', "%29").replace(' ', "%20"));
-    }
-    text
+    transition(&mut out, &mut state, Toggles::default());
+    out
 }
 
 fn escape_html(text: &str) -> String {
@@ -733,6 +812,12 @@ fn find_link_end(chars: &[char]) -> Option<(usize, usize)> {
     while i < chars.len() {
         match chars[i] {
             '\\' => i += 1,
+            // Brackets inside a code span are literal, as in `parse_inline`.
+            '`' => {
+                if let Some(close) = chars[i + 1..].iter().position(|c| *c == '`') {
+                    i += close + 1;
+                }
+            }
             '[' => depth += 1,
             ']' if depth > 0 => depth -= 1,
             ']' => {

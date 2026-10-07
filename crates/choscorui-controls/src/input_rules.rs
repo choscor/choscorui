@@ -238,7 +238,12 @@ impl NumberInput {
             .map_or(0, |(_, fraction)| {
                 fraction.chars().filter(char::is_ascii_digit).count()
             });
-        if digits > self.fraction_digits {
+        // The parser also accepts `.` where the locale's separator is `,`, so
+        // check the value itself: it must survive formatting at this
+        // precision unchanged.
+        let representable = value.fract() == 0.0
+            || self.locale.parse_decimal(&self.format(value)).ok() == Some(value);
+        if digits > self.fraction_digits || !representable {
             let message = format!("Use at most {} decimal places", self.fraction_digits);
             return (ValidationState::Invalid(message), None);
         }

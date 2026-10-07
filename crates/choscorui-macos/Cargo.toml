@@ -21,3 +21,8 @@ harness = false
 name = "menu_smoke"
 path = "tests/menu_smoke.rs"
 harness = false
+
+[[test]]
+name = "lifetime_smoke"
+path = "tests/lifetime_smoke.rs"
+harness = false
