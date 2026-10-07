@@ -2326,16 +2326,46 @@ unsafe fn send_void_rect(receiver: Id, name: &CStr, rect: NSRect) {
     unsafe { f(receiver, selector(name), rect) }
 }
 
+// A 32-byte NSRect is returned in registers on arm64 but through a hidden
+// result pointer on x86-64, which needs objc_msgSend_stret.
+#[cfg(target_arch = "aarch64")]
 unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) -> NSRect {
     let f: unsafe extern "C" fn(Id, Sel, NSRect, Id) -> NSRect =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), rect, value) }
 }
+#[cfg(target_arch = "x86_64")]
+unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) -> NSRect {
+    unsafe extern "C" {
+        fn objc_msgSend_stret();
+    }
+    let f: unsafe extern "C" fn(*mut NSRect, Id, Sel, NSRect, Id) =
+        unsafe { std::mem::transmute(objc_msgSend_stret as *const ()) };
+    let mut result = std::mem::MaybeUninit::<NSRect>::uninit();
+    unsafe {
+        f(result.as_mut_ptr(), receiver, selector(name), rect, value);
+        result.assume_init()
+    }
+}
 
+#[cfg(target_arch = "aarch64")]
 unsafe fn send_rect_rect(receiver: Id, name: &CStr, rect: NSRect) -> NSRect {
     let f: unsafe extern "C" fn(Id, Sel, NSRect) -> NSRect =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), rect) }
+}
+#[cfg(target_arch = "x86_64")]
+unsafe fn send_rect_rect(receiver: Id, name: &CStr, rect: NSRect) -> NSRect {
+    unsafe extern "C" {
+        fn objc_msgSend_stret();
+    }
+    let f: unsafe extern "C" fn(*mut NSRect, Id, Sel, NSRect) =
+        unsafe { std::mem::transmute(objc_msgSend_stret as *const ()) };
+    let mut result = std::mem::MaybeUninit::<NSRect>::uninit();
+    unsafe {
+        f(result.as_mut_ptr(), receiver, selector(name), rect);
+        result.assume_init()
+    }
 }
 
 #[cfg(target_arch = "aarch64")]
