@@ -121,6 +121,17 @@ unsafe extern "C" {
     static NSAccessibilitySelectedTextChangedNotification: Id;
     static NSAccessibilitySecureTextFieldSubrole: Id;
     static NSAccessibilityWindowRole: Id;
+    static NSAccessibilityTableRole: Id;
+    static NSAccessibilityRowRole: Id;
+    static NSAccessibilityCellRole: Id;
+    static NSAccessibilityOutlineRole: Id;
+    static NSAccessibilityMenuRole: Id;
+    static NSAccessibilityMenuItemRole: Id;
+    static NSAccessibilityComboBoxRole: Id;
+    static NSAccessibilityHelpTagRole: Id;
+    static NSAccessibilityToolbarRole: Id;
+    static NSAccessibilityImageRole: Id;
+    static NSAccessibilityLinkRole: Id;
     static NSAccessibilityLayoutChangedNotification: Id;
     static NSAccessibilityTitleChangedNotification: Id;
     static NSAccessibilityFocusedUIElementChangedNotification: Id;
@@ -453,6 +464,42 @@ unsafe extern "C" fn accessibility_perform_decrement(element: Id, _: Sel) -> i8 
     .unwrap_or(0)
 }
 
+unsafe extern "C" fn accessibility_perform_show_menu(element: Id, _: Sel) -> i8 {
+    catch_unwind(AssertUnwindSafe(|| {
+        queue_accessibility_action(element, SemanticAction::ShowMenu)
+    }))
+    .unwrap_or(0)
+}
+
+unsafe extern "C" fn accessibility_perform_cancel(element: Id, _: Sel) -> i8 {
+    catch_unwind(AssertUnwindSafe(|| {
+        queue_accessibility_action(element, SemanticAction::Dismiss)
+    }))
+    .unwrap_or(0)
+}
+
+unsafe extern "C" fn accessibility_set_expanded(element: Id, _: Sel, expanded: i8) {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let updating = accessibility_bindings()
+            .lock()
+            .unwrap()
+            .get(&(element as usize))
+            .is_some_and(|binding| binding.updating);
+        if updating {
+            unsafe { send_super_void_bool(element, c"setAccessibilityExpanded:", expanded) };
+        } else {
+            queue_accessibility_action(
+                element,
+                if expanded != 0 {
+                    SemanticAction::Expand
+                } else {
+                    SemanticAction::Collapse
+                },
+            );
+        }
+    }));
+}
+
 unsafe extern "C" fn accessibility_set_value(element: Id, _: Sel, value: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         let binding = accessibility_bindings()
@@ -563,11 +610,29 @@ unsafe fn accessibility_element_class() -> Result<Id, Error> {
                 c"accessibilityPerformDecrement",
                 accessibility_perform_decrement as *const c_void,
             ),
+            (
+                c"accessibilityPerformShowMenu",
+                accessibility_perform_show_menu as *const c_void,
+            ),
+            (
+                c"accessibilityPerformCancel",
+                accessibility_perform_cancel as *const c_void,
+            ),
         ] {
             if class_addMethod(cls, selector(name), imp, c"c@:".as_ptr()) == 0 {
                 objc_disposeClassPair(cls);
                 return Err(Error::AppKitUnavailable);
             }
+        }
+        if class_addMethod(
+            cls,
+            selector(c"setAccessibilityExpanded:"),
+            accessibility_set_expanded as *const c_void,
+            c"v@:c".as_ptr(),
+        ) == 0
+        {
+            objc_disposeClassPair(cls);
+            return Err(Error::AppKitUnavailable);
         }
         if class_addMethod(
             cls,
@@ -1632,6 +1697,12 @@ impl Window {
                     i8::from(!element.semantic.state.disabled),
                 );
                 send_void_bool(raw, c"setAccessibilityFocused:", i8::from(element.focused));
+                if let Some(expanded) = element.semantic.state.expanded {
+                    send_void_bool(raw, c"setAccessibilityExpanded:", i8::from(expanded));
+                }
+                if let Some(selected) = element.semantic.state.selected {
+                    send_void_bool(raw, c"setAccessibilitySelected:", i8::from(selected));
+                }
                 send_void_id(
                     raw,
                     c"setAccessibilityLabel:",
@@ -2003,9 +2074,23 @@ unsafe fn native_accessibility_role(role: SemanticRole) -> Id {
             SemanticRole::Slider => NSAccessibilitySliderRole,
             SemanticRole::SpinButton => NSAccessibilityIncrementorRole,
             SemanticRole::ProgressIndicator => NSAccessibilityProgressIndicatorRole,
-            SemanticRole::Application | SemanticRole::Group | SemanticRole::ListItem => {
-                NSAccessibilityGroupRole
-            }
+            SemanticRole::Table => NSAccessibilityTableRole,
+            SemanticRole::Row | SemanticRole::TreeItem => NSAccessibilityRowRole,
+            SemanticRole::Cell => NSAccessibilityCellRole,
+            SemanticRole::ColumnHeader => NSAccessibilityButtonRole,
+            SemanticRole::Tree => NSAccessibilityOutlineRole,
+            SemanticRole::Menu => NSAccessibilityMenuRole,
+            SemanticRole::MenuItem => NSAccessibilityMenuItemRole,
+            SemanticRole::ComboBox => NSAccessibilityComboBoxRole,
+            SemanticRole::Tooltip => NSAccessibilityHelpTagRole,
+            SemanticRole::Toolbar => NSAccessibilityToolbarRole,
+            SemanticRole::Image => NSAccessibilityImageRole,
+            SemanticRole::Link => NSAccessibilityLinkRole,
+            SemanticRole::Application
+            | SemanticRole::Group
+            | SemanticRole::ListItem
+            | SemanticRole::Dialog
+            | SemanticRole::StatusBar => NSAccessibilityGroupRole,
         }
     }
 }

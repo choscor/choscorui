@@ -185,6 +185,22 @@ impl<T> UndoStack<T> {
         self.clean == Some(self.applied) && self.open.is_none()
     }
 
+    /// Number of recorded groups (applied and redoable).
+    pub fn len(&self) -> usize {
+        self.groups.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+    /// Number of groups currently applied; `0` is the initial state.
+    pub fn applied(&self) -> usize {
+        self.applied
+    }
+    /// Label of group `index` (oldest first), for undo-history views.
+    pub fn label(&self, index: usize) -> Option<&str> {
+        self.groups.get(index).map(|group| group.label.as_str())
+    }
+
     pub fn clear(&mut self) {
         self.groups.clear();
         self.applied = 0;

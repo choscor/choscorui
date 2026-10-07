@@ -23,6 +23,21 @@ pub enum SemanticRole {
     Tab,
     TabList,
     TabPanel,
+    Table,
+    Row,
+    Cell,
+    ColumnHeader,
+    Tree,
+    TreeItem,
+    Menu,
+    MenuItem,
+    ComboBox,
+    Tooltip,
+    Dialog,
+    Toolbar,
+    StatusBar,
+    Image,
+    Link,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,6 +47,11 @@ pub enum SemanticAction {
     Increment,
     Decrement,
     Focus,
+    Expand,
+    Collapse,
+    /// Opens a context menu or popup.
+    ShowMenu,
+    Dismiss,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

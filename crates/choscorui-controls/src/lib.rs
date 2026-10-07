@@ -38,6 +38,17 @@ mod input_rules;
 pub use input_rules::{DateInput, InputMask, MaskError, MaskedText, NumberInput};
 mod text_editor;
 pub use text_editor::{TextEditor, TextEditorChange, TextEditorInput};
+mod item_view;
+pub use item_view::{
+    ItemDelegate, ItemModifiers, ItemState, ItemView, ItemViewInput, ItemViewResponse,
+    RealizedItem, TYPE_AHEAD_TIMEOUT, TextItemDelegate, ViewLayout,
+};
+mod model_widgets;
+pub use model_widgets::{
+    CellEdit, ColumnBrowser, DataMapper, DefaultEditorFactory, EditorFactory, EditorKind,
+    HeaderColumn, HeaderInput, HeaderResponse, HeaderStyle, HeaderView, UndoHistoryRow,
+    undo_history, undo_steps_to,
+};
 mod recipe;
 pub use recipe::{
     ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,

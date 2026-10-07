@@ -741,6 +741,12 @@ impl Collator for BasicCollator {
     }
 }
 
+/// Lowercased text with Latin diacritics removed, for search and filtering
+/// ("Việt Nam" folds to "viet nam").
+pub fn fold_for_search(text: &str) -> String {
+    text.chars().map(|c| fold_base(c).0).collect()
+}
+
 /// Lowercase base letter and whether the character carried a diacritic.
 fn fold_base(c: char) -> (char, bool) {
     const GROUPS: &[(char, &str)] = &[

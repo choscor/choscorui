@@ -52,7 +52,7 @@ pub use theme::{
 mod locale;
 pub use locale::{
     BasicCollator, Catalog, CatalogIssue, Collator, DateOrder, Locale, LocaleData, LocaleError,
-    Localizer, Message, PluralCategory,
+    Localizer, Message, PluralCategory, fold_for_search,
 };
 mod datetime;
 pub use datetime::{
@@ -66,6 +66,16 @@ pub use model::{
     ChangeLog, CheckState, EditableModel, ItemData, ItemKey, ItemModel, ListStore, ModelChange,
     ModelError, Role, Selection, SelectionCommand, SelectionMode, StringListModel, TreeStore,
     Value, visible_keys,
+};
+mod fs_model;
+pub use fs_model::{
+    DirectoryState, FS_COLUMN_KIND, FS_COLUMN_MODIFIED, FS_COLUMN_NAME, FS_COLUMN_SIZE, FileEntry,
+    FileSystemModel, format_size,
+};
+mod proxy;
+pub use proxy::{
+    ConcatModel, MappedModel, MatchMode, ProxyView, SliceModel, SortFilterProxy, SortOrder,
+    TextFilter,
 };
 mod notify;
 pub use notify::{

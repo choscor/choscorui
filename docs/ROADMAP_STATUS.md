@@ -121,3 +121,11 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | High contrast, reduced motion, larger text | Done | `system_accessibility_preferences` → `ThemeResolver::set_accessibility_preferences`; `accessibility_preferences_link_contrast_motion_and_text_scale` |
 | Localized names, RTL reading order, live updates, accessible actions | Done | Vietnamese/Arabic labels in tests; `rtl_snapshot_keeps_logical_reading_order_after_mirrored_layout`; `Window::announce` (gallery announces validation errors); press/set value/focus through native elements in `window_smoke`. Menus, dialogs, and virtualized data controls are checked again as phase 12 adds them. |
 | Gate: gallery core controls operable with VoiceOver with correct roles, labels, states, focus, values | Done (automated) + Manual | `window_smoke` reads AX role/label/value/selection/row count/index from the real `NSAccessibilityElement`s and performs press, set value, and focus; the gallery exposes button, checkbox, text field, multiline document (AXTextArea), and rows. Manual: the VoiceOver checklist in [ACCESSIBILITY.md](ACCESSIBILITY.md). |
+
+## Phase 12 — advanced controls and large-data behavior
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Model interfaces: stable identity, change notifications, lazy fetch, sort/filter proxies, shared selection | Done | `ItemModel`/`EditableModel`, `SortFilterProxy` (locale collation, diacritic-insensitive filter, recursive tree filter, keyed diffs), `MappedModel`, `ConcatModel`, `SliceModel`, `FileSystemModel` (background listing, keyed refresh); `core/tests/proxy.rs` |
+| Virtualized list/tree/table/icon views, stable selection, incremental updates, keyboard navigation, type-ahead | Done | `ItemView` (recycled realized nodes, `ViewLayout::Grid`, disclosure, context menu, `sync_semantics` with collection size and item index); `hundred_thousand_rows_keep_realized_nodes_bounded_while_scrolling` and the other `controls/tests/item_view.rs` tests |
+| Header behavior, editor delegates/factories, data-widget mapping, column view, undo-history presentation | Done | `HeaderView` (click/keyboard sort, drag/keyboard resize, `ColumnHeader` semantics), `EditorFactory`/`CellEdit` (locale numbers, dates, bools), `DataMapper` (pending text per item), `ColumnBrowser`, `undo_history`/`undo_steps_to` |
