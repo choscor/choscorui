@@ -20,6 +20,18 @@ pub use theme::{
     AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,
     ThemeOverride, ThemeResolver,
 };
+mod locale;
+pub use locale::{
+    BasicCollator, Catalog, CatalogIssue, Collator, DateOrder, Locale, LocaleData, LocaleError,
+    Localizer, Message, PluralCategory,
+};
+mod datetime;
+pub use datetime::{
+    CivilDate, CivilDateTime, CivilTime, Weekday, days_in_month, is_leap_year, month_grid,
+    month_name, weekday_short_name,
+};
+mod resource;
+pub use resource::{ResourceBundle, ResourceError, ResourceKind, ResourceRef};
 mod model;
 pub use model::{
     ChangeLog, CheckState, EditableModel, ItemData, ItemKey, ItemModel, ListStore, ModelChange,
