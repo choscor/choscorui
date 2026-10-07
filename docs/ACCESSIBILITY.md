@@ -34,6 +34,8 @@ No control ships without a row here and a test of its `semantics()`.
 | `ComboBox`, `FontChooser` | ComboBox (AXComboBox) with ListItem suggestions | label / text | expanded; invalid when the font is missing | ShowMenu, SetValue, Focus |
 | `PopupMenu` | MenuItem (AXMenuItem) | label, shortcut as description | disabled, checked, highlighted, submenu expanded | Activate |
 | Tooltip | Tooltip (AXHelpTag), described-by its target | text | — | — |
+| `DialogStack` dialogs, `MessageDialog` | Dialog (AXSheet-like group); description "Modal" for modal dialogs | title / message and detail | — | Dismiss (Escape) |
+| `ColorPicker` | Group with hex value | name / "Red r, Green g, Blue b, Opacity n%" | — | SetValue (hex), Focus |
 | `ScrollBar` | ScrollBar (AXScrollBar) | label / percent | hidden when not needed | Increment, Decrement |
 | `DecimalSpinBox`, `DateTimeEdit` | SpinButton (AXIncrementor) | label / formatted value (long date) | invalid with message | Increment, Decrement, SetValue, Focus |
 | `Calendar` | Table (AXTable) with Cell (AXCell) days | month title / long date | selected, disabled outside range | Activate per enabled day |

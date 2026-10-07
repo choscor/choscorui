@@ -67,6 +67,11 @@ pub use widgets::{
 };
 mod datetime_controls;
 pub use datetime_controls::{Calendar, CalendarCell, DateTimeEdit, DateTimeField, DateTimeKind};
+mod dialogs;
+pub use dialogs::{
+    ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog, InputDialog,
+    InputKind, InputValue, MessageDialog, Modality, dialog_key_button, order_dialog_buttons,
+};
 mod recipe;
 pub use recipe::{
     ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,
