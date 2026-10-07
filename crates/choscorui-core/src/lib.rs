@@ -20,6 +20,10 @@ pub use theme::{
     AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,
     ThemeOverride, ThemeResolver,
 };
+mod notify;
+pub use notify::{
+    Notification, NotificationQueue, NotifyError, TimerId, WorkError, WorkQueue, WorkSender,
+};
 mod animation;
 pub use animation::{
     AnimationClock, AnimationError, AnimationFrame, AnimationId, AnimationKey, AnimationSpec,
