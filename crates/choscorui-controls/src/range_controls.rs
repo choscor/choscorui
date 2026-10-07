@@ -11,6 +11,19 @@ pub enum RangeError {
     MissingNode,
 }
 
+impl std::fmt::Display for RangeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reversed => f.write_str("the minimum is greater than the maximum"),
+            Self::ZeroStep => f.write_str("the step must be positive"),
+            Self::InvalidMaximum => f.write_str("the maximum must be greater than zero"),
+            Self::MissingNode => f.write_str("the control's node is not in the tree"),
+        }
+    }
+}
+
+impl std::error::Error for RangeError {}
+
 /// Validated integer value state shared by integer range controls.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct IntegerRange {

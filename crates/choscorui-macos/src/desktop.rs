@@ -48,6 +48,23 @@ pub enum DesktopError {
     AppKitUnavailable,
 }
 
+impl std::fmt::Display for DesktopError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidUrl => f.write_str("the URL is not valid"),
+            Self::NoHandler => f.write_str("no application is registered for this URL"),
+            Self::RequiresAppBundle => f.write_str(
+                "this feature needs the process to run from an app bundle with a bundle identifier",
+            ),
+            Self::PermissionDenied => f.write_str("the user has not granted permission"),
+            Self::InvalidText => f.write_str("text contains an interior NUL character"),
+            Self::AppKitUnavailable => f.write_str("AppKit is unavailable"),
+        }
+    }
+}
+
+impl std::error::Error for DesktopError {}
+
 impl From<Error> for DesktopError {
     fn from(error: Error) -> Self {
         match error {
@@ -605,4 +622,31 @@ pub fn post_notification(identifier: &str, title: &str, body: &str) -> Result<()
         send_void(content, c"release");
         result
     }
+}
+
+/// What this backend provides on the running system. Notifications need
+/// the process to run from an app bundle with a bundle identifier.
+pub fn capabilities() -> choscorui_core::BackendCapabilities {
+    use choscorui_core::Support::{Conditional, Supported, Unsupported};
+    let mut capabilities = choscorui_core::BackendCapabilities::none("macos");
+    capabilities.multiple_windows = Supported;
+    capabilities.native_menus = Supported;
+    capabilities.context_menus = Supported;
+    capabilities.native_dialogs = Supported;
+    capabilities.clipboard = Supported;
+    capabilities.drag_and_drop = Supported;
+    capabilities.input_methods = Supported;
+    capabilities.accessibility = Supported;
+    capabilities.status_items = Supported;
+    capabilities.notifications = if has_bundle_identifier() {
+        Supported
+    } else {
+        Conditional("run from an app bundle with a bundle identifier")
+    };
+    capabilities.open_urls = Supported;
+    capabilities.system_appearance = Supported;
+    capabilities.text_shaping = Supported;
+    capabilities.image_codecs = Supported;
+    capabilities.gpu_painting = Unsupported;
+    capabilities
 }

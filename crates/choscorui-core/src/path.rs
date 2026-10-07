@@ -489,6 +489,22 @@ pub enum ImageError {
     EncodeFailed,
 }
 
+impl std::fmt::Display for ImageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidDimensions => f.write_str("image dimensions must be positive"),
+            Self::LengthMismatch => {
+                f.write_str("the pixel buffer length does not match the dimensions")
+            }
+            Self::UnsupportedFormat => f.write_str("the image format is not supported"),
+            Self::DecodeFailed => f.write_str("the image could not be decoded"),
+            Self::EncodeFailed => f.write_str("the image could not be encoded"),
+        }
+    }
+}
+
+impl std::error::Error for ImageError {}
+
 /// Decoded straight-alpha sRGB RGBA8 pixels, shared cheaply between display
 /// lists. Identity is per decoded image, so clones compare equal and two
 /// separately decoded copies do not.

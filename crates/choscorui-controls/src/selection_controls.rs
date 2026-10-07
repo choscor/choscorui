@@ -14,6 +14,28 @@ pub enum SelectionError {
     Tree(TreeError),
 }
 
+impl std::fmt::Display for SelectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("the group has no options"),
+            Self::DuplicateNode(node) => write!(f, "node {node:?} is already an option"),
+            Self::UnknownSelection => f.write_str("the selection is not one of the options"),
+            Self::MissingNode(node) => write!(f, "node {node:?} is not in the tree"),
+            Self::DisabledSelection => f.write_str("a disabled option cannot be selected"),
+            Self::Tree(error) => write!(f, "tree update failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for SelectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Tree(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl From<TreeError> for SelectionError {
     fn from(value: TreeError) -> Self {
         Self::Tree(value)

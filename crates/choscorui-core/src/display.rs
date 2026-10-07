@@ -245,6 +245,28 @@ pub enum DisplayListError {
     UnbalancedTransform,
 }
 
+impl std::fmt::Display for DisplayListError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnbalancedClip => f.write_str("pop_clip without a matching push_clip"),
+            Self::InvalidText => {
+                f.write_str("text has a non-finite position or size, or an empty font family")
+            }
+            Self::InvalidGeometry => f.write_str("geometry is not finite"),
+            Self::InvalidOpacity => f.write_str("opacity must be finite and between 0 and 1"),
+            Self::UnbalancedOpacity => f.write_str("pop_opacity without a matching push_opacity"),
+            Self::InvalidPaint => f.write_str(
+                "a gradient needs two or more ordered stops in 0..=1 and finite geometry",
+            ),
+            Self::UnbalancedTransform => {
+                f.write_str("pop_transform without a matching push_transform")
+            }
+        }
+    }
+}
+
+impl std::error::Error for DisplayListError {}
+
 /// An ordered display list. Clipping is nested and applies to later commands.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DisplayList {

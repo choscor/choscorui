@@ -16,6 +16,35 @@ pub enum ContainerError {
     Tree(TreeError),
 }
 
+impl std::fmt::Display for ContainerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("the container has no pages"),
+            Self::DuplicateNode(node) => write!(f, "node {node:?} is already in the container"),
+            Self::MissingNode(node) => write!(f, "node {node:?} is not in the tree"),
+            Self::InvalidDescendant { node, container } => write!(
+                f,
+                "node {node:?} is not a descendant of container {container:?}"
+            ),
+            Self::InvalidGeometry => f.write_str("container geometry is not finite or is negative"),
+            Self::InvalidPosition => {
+                f.write_str("the splitter position is outside its allowed range")
+            }
+            Self::UnknownPage(node) => write!(f, "node {node:?} is not a page of this container"),
+            Self::Tree(error) => write!(f, "tree update failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ContainerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Tree(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl From<TreeError> for ContainerError {
     fn from(value: TreeError) -> Self {
         Self::Tree(value)

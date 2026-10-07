@@ -423,6 +423,26 @@ pub enum EngineError {
     InvalidBounds,
 }
 
+impl std::fmt::Display for EngineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingNode(node) => write!(f, "node {node:?} is not in the tree"),
+            Self::InvalidStyle => {
+                f.write_str("the layout style has a non-finite or negative value")
+            }
+            Self::Unsatisfiable(node) => {
+                write!(f, "the constraints of node {node:?} cannot be satisfied")
+            }
+            Self::InvalidPlacement(node) => {
+                write!(f, "node {node:?} has an invalid grid placement")
+            }
+            Self::InvalidBounds => f.write_str("the root bounds are not finite"),
+        }
+    }
+}
+
+impl std::error::Error for EngineError {}
+
 /// Counters for the most recent [`LayoutEngine::layout`] call.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayoutStats {

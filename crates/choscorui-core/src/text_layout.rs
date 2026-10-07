@@ -170,6 +170,21 @@ pub enum TextLayoutError {
     Unavailable,
 }
 
+impl std::fmt::Display for TextLayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidStyle => {
+                f.write_str("the text style has an invalid size, weight, or line height")
+            }
+            Self::InvalidWidth => f.write_str("the wrap width must be positive and finite"),
+            Self::InvalidLayout => f.write_str("the shaper returned inconsistent lines"),
+            Self::Unavailable => f.write_str("text shaping is unavailable for this font or text"),
+        }
+    }
+}
+
+impl std::error::Error for TextLayoutError {}
+
 /// Glyphs from one resolved font, in visual order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlyphRun {

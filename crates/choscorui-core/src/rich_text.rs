@@ -185,6 +185,19 @@ pub enum RichTextError {
     InvalidPosition(RichPosition),
 }
 
+impl std::fmt::Display for RichTextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidPosition(position) => write!(
+                f,
+                "{position:?} is not a character boundary inside the document"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RichTextError {}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RichDocument {
     blocks: Vec<RichBlock>,

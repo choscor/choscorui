@@ -15,6 +15,16 @@ pub enum TextError {
     InvalidSelection,
 }
 
+impl std::fmt::Display for TextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidSelection => f.write_str("the selection is outside the text"),
+        }
+    }
+}
+
+impl std::error::Error for TextError {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextMotion {
     Left,

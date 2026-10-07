@@ -111,6 +111,20 @@ pub enum DockError {
     Parse { line: usize, message: String },
 }
 
+impl std::fmt::Display for DockError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownPanel(panel) => write!(f, "unknown dock panel {panel:?}"),
+            Self::DuplicateKey(key) => write!(f, "a dock panel already uses the key {key:?}"),
+            Self::NotClosable(panel) => write!(f, "dock panel {panel:?} cannot be closed"),
+            Self::NotFloatable(panel) => write!(f, "dock panel {panel:?} cannot float"),
+            Self::Parse { line, message } => write!(f, "dock layout line {line}: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for DockError {}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GroupFrame {
     pub area: DockArea,

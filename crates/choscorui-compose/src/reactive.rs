@@ -15,6 +15,18 @@ pub enum ReactiveError {
     Compute(String),
 }
 
+impl std::fmt::Display for ReactiveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cycle => f.write_str("a computed value depends on itself"),
+            Self::DifferentRuntime => f.write_str("the binding belongs to a different runtime"),
+            Self::Compute(message) => write!(f, "computation failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ReactiveError {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Binding {
     source: NodeId,

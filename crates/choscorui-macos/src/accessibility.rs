@@ -48,6 +48,17 @@ pub enum AccessibilityActionError {
     UnsupportedAction,
 }
 
+impl std::fmt::Display for AccessibilityActionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingElement => f.write_str("the accessibility element no longer exists"),
+            Self::UnsupportedAction => f.write_str("the element does not support this action"),
+        }
+    }
+}
+
+impl std::error::Error for AccessibilityActionError {}
+
 #[derive(Default)]
 pub struct AccessibilityProjection {
     next_identity: u64,

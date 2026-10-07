@@ -35,6 +35,8 @@ pub use semantics::{
     SemanticError, SemanticNode, SemanticRelation, SemanticRole, SemanticState, SemanticText,
     SemanticTree,
 };
+mod capabilities;
+pub use capabilities::{BackendCapabilities, Support};
 mod text;
 pub use text::{TextBuffer, TextError, TextMotion, UNDO_LIMIT, grapheme_boundaries};
 mod text_layout;
@@ -166,6 +168,22 @@ pub enum TreeError {
     InvalidChildIndex,
     Cycle,
 }
+
+impl std::fmt::Display for TreeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingParent => f.write_str("the parent node is not in the tree"),
+            Self::CannotDetachRoot => f.write_str("the root node cannot be detached"),
+            Self::MissingNode => f.write_str("the node is not in the tree"),
+            Self::InvalidGeometry => f.write_str("bounds are not finite or have a negative size"),
+            Self::HiddenNode => f.write_str("a hidden node cannot take focus or pointer capture"),
+            Self::InvalidChildIndex => f.write_str("the child index is out of range"),
+            Self::Cycle => f.write_str("the move would make a node its own ancestor"),
+        }
+    }
+}
+
+impl std::error::Error for TreeError {}
 
 /// A logical pointer button. Backends map OS-specific button numbers here.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

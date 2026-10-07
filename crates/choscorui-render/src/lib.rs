@@ -17,6 +17,18 @@ pub enum RenderError {
     UnsupportedText,
 }
 
+impl std::fmt::Display for RenderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidScale => f.write_str("the scale must be positive and finite"),
+            Self::TooLarge => f.write_str("the raster is too large"),
+            Self::UnsupportedText => f.write_str("the software renderer does not draw text"),
+        }
+    }
+}
+
+impl std::error::Error for RenderError {}
+
 /// Straight-alpha RGBA8 pixels in row-major order.
 pub struct Raster {
     width: u32,

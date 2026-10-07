@@ -170,6 +170,26 @@ pub enum StateError {
     Animation(AnimationError),
 }
 
+impl std::fmt::Display for StateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateName => f.write_str("a state with this name already exists"),
+            Self::DuplicateAssignment => f.write_str("the property is assigned twice in one state"),
+            Self::InvalidTarget => f.write_str("an animated target value is not finite"),
+            Self::Animation(error) => write!(f, "transition animation failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for StateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Animation(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl From<AnimationError> for StateError {
     fn from(error: AnimationError) -> Self {
         Self::Animation(error)

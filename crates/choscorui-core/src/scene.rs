@@ -182,6 +182,18 @@ pub enum SceneError {
     InvalidTransform,
 }
 
+impl std::fmt::Display for SceneError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownItem(id) => write!(f, "scene item {id:?} does not exist"),
+            Self::Cycle => f.write_str("the item would become its own ancestor"),
+            Self::InvalidTransform => f.write_str("the transform is not finite or not invertible"),
+        }
+    }
+}
+
+impl std::error::Error for SceneError {}
+
 struct Node {
     item: SceneItem,
     parent: Option<SceneItemId>,

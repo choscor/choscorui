@@ -28,6 +28,17 @@ pub enum MaskError {
     TrailingEscape,
 }
 
+impl std::fmt::Display for MaskError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("the input mask is empty"),
+            Self::TrailingEscape => f.write_str("the input mask ends with an escape character"),
+        }
+    }
+}
+
+impl std::error::Error for MaskError {}
+
 /// A fixed-format mask such as `(000) 000-0000` or `AA-9999`.
 ///
 /// | Symbol | Accepts | Required |

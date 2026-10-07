@@ -153,6 +153,18 @@ pub enum ThemeError {
     InvalidPreferences,
 }
 
+impl std::fmt::Display for ThemeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingNode => f.write_str("the node is not in the tree"),
+            Self::InvalidTokens => f.write_str("theme tokens have a non-finite or negative value"),
+            Self::InvalidPreferences => f.write_str("the text scale must be positive and finite"),
+        }
+    }
+}
+
+impl std::error::Error for ThemeError {}
+
 pub struct ThemeResolver {
     application: DesignTokens,
     scopes: HashMap<NodeId, ThemeOverride>,

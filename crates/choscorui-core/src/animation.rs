@@ -55,6 +55,18 @@ pub enum AnimationError {
     TimeWentBackwards,
 }
 
+impl std::fmt::Display for AnimationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingNode => f.write_str("the animated node is not in the tree"),
+            Self::InvalidValue => f.write_str("the animation value or duration is not finite"),
+            Self::TimeWentBackwards => f.write_str("the animation clock moved backwards"),
+        }
+    }
+}
+
+impl std::error::Error for AnimationError {}
+
 #[derive(Clone, Copy)]
 struct ActiveAnimation {
     id: AnimationId,

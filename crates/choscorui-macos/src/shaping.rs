@@ -8,6 +8,19 @@ pub enum BitmapError {
     PaintFailed,
 }
 
+impl std::fmt::Display for BitmapError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidScale => f.write_str("the scale must be positive and finite"),
+            Self::TooLarge => f.write_str("the bitmap is too large"),
+            Self::ContextUnavailable => f.write_str("a bitmap context could not be created"),
+            Self::PaintFailed => f.write_str("painting the display list failed"),
+        }
+    }
+}
+
+impl std::error::Error for BitmapError {}
+
 /// Premultiplied RGBA8 pixels drawn with the same Core Graphics/Core Text
 /// command path as a window. Rows are contiguous in bitmap storage order.
 pub struct MacBitmap {
@@ -126,6 +139,19 @@ pub enum ShapeError {
     InvalidSelection,
     Unavailable,
 }
+
+impl std::fmt::Display for ShapeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidFont => f.write_str("the font could not be created"),
+            Self::InvalidWidth => f.write_str("the wrap width must be positive and finite"),
+            Self::InvalidSelection => f.write_str("the selection is outside the text"),
+            Self::Unavailable => f.write_str("Core Text could not shape the text"),
+        }
+    }
+}
+
+impl std::error::Error for ShapeError {}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLineMetrics {

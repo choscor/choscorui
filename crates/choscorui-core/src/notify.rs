@@ -24,6 +24,18 @@ pub enum NotifyError {
     CascadeLimit,
 }
 
+impl std::fmt::Display for NotifyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CascadeLimit => {
+                f.write_str("notifications kept triggering each other past the cascade limit")
+            }
+        }
+    }
+}
+
+impl std::error::Error for NotifyError {}
+
 /// FIFO notification queue with removal-safe, reentrant delivery.
 ///
 /// Handlers may push more notifications; they are delivered in the same
@@ -117,6 +129,17 @@ pub enum WorkError {
     Closed,
     InvalidInterval,
 }
+
+impl std::fmt::Display for WorkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Closed => f.write_str("the work queue is closed"),
+            Self::InvalidInterval => f.write_str("the interval must be positive and finite"),
+        }
+    }
+}
+
+impl std::error::Error for WorkError {}
 
 /// Worker-side handle. It is `Send + Clone` and can only enqueue work; the
 /// work runs later on the UI thread inside [`WorkQueue::run_ready`].

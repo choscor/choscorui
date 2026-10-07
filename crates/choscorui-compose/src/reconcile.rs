@@ -51,6 +51,25 @@ pub enum ComposeError {
     Tree(TreeError),
 }
 
+impl std::fmt::Display for ComposeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateKey(key) => write!(f, "duplicate element key {key:?}"),
+            Self::InvalidBounds(key) => write!(f, "element {key:?} has invalid bounds"),
+            Self::Tree(error) => write!(f, "tree update failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ComposeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Tree(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 impl From<TreeError> for ComposeError {
     fn from(value: TreeError) -> Self {
         Self::Tree(value)

@@ -14,6 +14,24 @@ pub enum DialogError {
     InvalidResult,
 }
 
+impl std::fmt::Display for DialogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyMessage => f.write_str("the alert message is empty"),
+            Self::NoButtons => f.write_str("the alert has no buttons"),
+            Self::InvalidText => f.write_str("text contains an interior NUL character"),
+            Self::InvalidExtension => {
+                f.write_str("a file extension is empty or contains a dot or slash")
+            }
+            Self::WrongThread => f.write_str("dialogs must run on the main thread"),
+            Self::AppKitUnavailable => f.write_str("AppKit is unavailable"),
+            Self::InvalidResult => f.write_str("AppKit returned an unexpected dialog result"),
+        }
+    }
+}
+
+impl std::error::Error for DialogError {}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AlertButton {
     title: String,

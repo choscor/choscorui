@@ -25,6 +25,16 @@ pub enum PostError {
     Stopped,
 }
 
+impl std::fmt::Display for PostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stopped => f.write_str("the application run loop has stopped"),
+        }
+    }
+}
+
+impl std::error::Error for PostError {}
+
 impl Poster {
     pub fn post(&self, task: impl FnOnce() + Send + 'static) -> Result<(), PostError> {
         let mut state = self.inner.state.lock().map_err(|_| PostError::Stopped)?;

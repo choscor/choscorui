@@ -78,6 +78,21 @@ pub enum MenuError {
     AppKitUnavailable,
 }
 
+impl std::fmt::Display for MenuError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateCommand(command) => write!(f, "menu command {command:?} appears twice"),
+            Self::UnknownCommand(command) => {
+                write!(f, "menu command {command:?} is not in the menu bar")
+            }
+            Self::InvalidText => f.write_str("menu text contains an interior NUL character"),
+            Self::AppKitUnavailable => f.write_str("AppKit is unavailable"),
+        }
+    }
+}
+
+impl std::error::Error for MenuError {}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuBarModel {
     menus: Vec<MenuSpec>,

@@ -123,6 +123,20 @@ pub enum CommandError {
     UnknownId,
 }
 
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateId => f.write_str("a command with this id is already registered"),
+            Self::DuplicateShortcut => {
+                f.write_str("another command already uses this shortcut in the same scope")
+            }
+            Self::UnknownId => f.write_str("no command is registered with this id"),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ShortcutModifiers {
     pub shift: bool,
@@ -155,6 +169,24 @@ struct ShortcutBinding {
 pub enum CommandSyncError {
     Command(CommandError),
     Tree(TreeError),
+}
+
+impl std::fmt::Display for CommandSyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Command(error) => write!(f, "command error: {error}"),
+            Self::Tree(error) => write!(f, "tree update failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for CommandSyncError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Command(error) => Some(error),
+            Self::Tree(error) => Some(error),
+        }
+    }
 }
 
 /// Application-owned command state shared by controls and future menu/toolbar views.

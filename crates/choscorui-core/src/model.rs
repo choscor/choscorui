@@ -132,6 +132,20 @@ pub enum ModelError {
     InvalidValue,
 }
 
+impl std::fmt::Display for ModelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingItem => f.write_str("the item is not in the model"),
+            Self::InvalidRow => f.write_str("the row is out of range"),
+            Self::InvalidColumn => f.write_str("the column is out of range"),
+            Self::ReadOnly => f.write_str("the item is not editable"),
+            Self::InvalidValue => f.write_str("the value has the wrong type for this item"),
+        }
+    }
+}
+
+impl std::error::Error for ModelError {}
+
 /// Bounded log of changes. Consumers remember the last revision they saw.
 #[derive(Clone, Debug)]
 pub struct ChangeLog {

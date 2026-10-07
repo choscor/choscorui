@@ -55,6 +55,22 @@ pub enum LayoutError {
     InvalidPlacement,
 }
 
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidGeometry => f.write_str("layout geometry is not finite or is negative"),
+            Self::InsufficientSpace => {
+                f.write_str("the children do not fit in the available space")
+            }
+            Self::MissingNode => f.write_str("a laid-out node is not in the tree"),
+            Self::DuplicateNode => f.write_str("a node appears twice in the layout"),
+            Self::InvalidPlacement => f.write_str("a grid placement is out of range or overlaps"),
+        }
+    }
+}
+
+impl std::error::Error for LayoutError {}
+
 #[derive(Clone, Copy)]
 enum MainSize {
     Fixed(f64),

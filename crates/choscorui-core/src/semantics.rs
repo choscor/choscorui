@@ -150,6 +150,19 @@ pub enum SemanticError {
     MissingRelationTarget(NodeId),
 }
 
+impl std::fmt::Display for SemanticError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingNode => f.write_str("the node is not in the tree"),
+            Self::MissingRelationTarget(node) => {
+                write!(f, "relation target {node:?} is not in the tree")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SemanticError {}
+
 #[derive(Default)]
 pub struct SemanticTree {
     nodes: HashMap<NodeId, SemanticNode>,

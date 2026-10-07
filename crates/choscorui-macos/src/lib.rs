@@ -30,9 +30,9 @@ use ime::{
 pub use menu_native::{ContextMenu, MainMenu};
 mod desktop;
 pub use desktop::{
-    AppEvent, DesktopError, NotificationPermission, StatusItem, has_bundle_identifier,
-    notification_permission, open_url, post_notification, request_notification_permission,
-    url_handler,
+    AppEvent, DesktopError, NotificationPermission, StatusItem, capabilities,
+    has_bundle_identifier, notification_permission, open_url, post_notification,
+    request_notification_permission, url_handler,
 };
 mod window_state;
 pub use window_state::screen_visible_frames;
@@ -328,6 +328,29 @@ pub enum Error {
     /// A drag can only start while handling a mouse-down or mouse-drag.
     NoDragEvent,
 }
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WrongThread => f.write_str("AppKit must be used from the main thread"),
+            Self::InvalidSize => f.write_str("the size must be positive and finite"),
+            Self::InvalidTitle => f.write_str("the title contains an interior NUL character"),
+            Self::InvalidClipboardText => {
+                f.write_str("clipboard text contains an interior NUL character")
+            }
+            Self::ClipboardWriteFailed => f.write_str("the pasteboard rejected the write"),
+            Self::AppKitUnavailable => f.write_str("AppKit is unavailable"),
+            Self::InvalidInterval => f.write_str("the interval must be positive and finite"),
+            Self::InvalidCursor => f.write_str("the custom cursor image or hotspot is invalid"),
+            Self::UnsupportedFormat => f.write_str("the drag or clipboard format is not supported"),
+            Self::NoDragEvent => {
+                f.write_str("a drag can only start while handling a pointer event")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// Owned native window notifications, delivered in AppKit callback order.
 #[derive(Clone, Debug, PartialEq)]
