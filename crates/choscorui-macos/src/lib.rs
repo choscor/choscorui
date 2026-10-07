@@ -1279,7 +1279,12 @@ impl Application {
             let cls = class(c"NSApplication")?;
             let raw =
                 NonNull::new(send_id(cls, c"sharedApplication")).ok_or(Error::AppKitUnavailable)?;
-            if send_bool_usize(raw.as_ptr(), c"setActivationPolicy:", 0) == 0 {
+            // Launched from an app bundle, AppKit may already be in the
+            // Regular policy and refuse the redundant switch; only a policy
+            // that stays non-regular is a failure.
+            if send_bool_usize(raw.as_ptr(), c"setActivationPolicy:", 0) == 0
+                && send_usize(raw.as_ptr(), c"activationPolicy") != 0
+            {
                 return Err(Error::AppKitUnavailable);
             }
             desktop::install_app_delegate(raw.as_ptr())?;

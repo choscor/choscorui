@@ -6,7 +6,7 @@
 
 | Object or boundary | Ownership and lifetime | Thread rule |
 | --- | --- | --- |
-| `NSApplication sharedApplication` | Process singleton, never released by Rust. `Application` is a non-owning handle. | Construct and use on the process main thread. |
+| `NSApplication sharedApplication` | Process singleton, never released by Rust. `Application` is a non-owning handle. `setActivationPolicy:` (Regular, `NSUInteger` 0, returns `BOOL` as `i8`) may refuse a redundant switch when launched from an app bundle, so a refusal is an error only if `activationPolicy` (returns `NSUInteger`) is still not Regular. | Construct and use on the process main thread. |
 | `NSWindow alloc/initWithContentRect:...` | Returns +1 retained object. `setReleasedWhenClosed:NO` prevents `close` from releasing it. Rust `Window::drop` closes then releases once. | All methods and Drop stay on main thread; the safe type is `!Send`/`!Sync`. |
 | `NSAutoreleasePool alloc/init` | +1 pool drained by local RAII guard. Autoreleased `NSString` values do not outlive each call. | Created and drained on the same thread. |
 | `NSString stringWithUTF8String:` | Autoreleased; `setTitle:` copies/retains it before the local pool drains. NUL-containing Rust strings are rejected. | Used on main thread with the window. |
