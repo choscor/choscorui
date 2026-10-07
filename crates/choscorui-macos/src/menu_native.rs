@@ -1,6 +1,6 @@
 use super::{
-    Application, Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, Sel, class,
-    class_addMethod, objc_allocateClassPair, objc_getClass, objc_registerClassPair,
+    Application, Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec,
+    Sel, class, class_addMethod, objc_allocateClassPair, objc_getClass, objc_registerClassPair,
     sel_registerName, send_id, send_id_cstr, send_void, send_void_id,
 };
 use std::collections::{HashMap, VecDeque};
@@ -103,30 +103,13 @@ impl MainMenu {
                 let parent_item = owned_menu_item(&menu.title, None)?;
                 send_void_id(parent_item.as_ptr(), c"setSubmenu:", submenu.as_ptr());
                 send_void_id(root.as_ptr(), c"addItem:", parent_item.as_ptr());
-                for entry in &menu.entries {
-                    match entry {
-                        MenuEntry::Separator => {
-                            let separator = send_id(
-                                class(c"NSMenuItem").map_err(|_| MenuError::AppKitUnavailable)?,
-                                c"separatorItem",
-                            );
-                            send_void_id(submenu.as_ptr(), c"addItem:", separator);
-                        }
-                        MenuEntry::Command { command, state } => {
-                            let item = owned_menu_item(
-                                &state.title,
-                                state.shortcut.as_ref().map(|s| s.key.as_str()),
-                            )?;
-                            send_void_id(item.as_ptr(), c"setTarget:", target.as_ptr());
-                            set_action(item.as_ptr(), c"choscorMenuItemActivated:");
-                            apply_state(item.as_ptr(), state)?;
-                            send_void_id(submenu.as_ptr(), c"addItem:", item.as_ptr());
-                            commands.insert(item.as_ptr() as usize, *command);
-                            items.insert(*command, item);
-                            send_void(item.as_ptr(), c"release");
-                        }
-                    }
-                }
+                populate(
+                    submenu.as_ptr(),
+                    &menu.entries,
+                    target.as_ptr(),
+                    &mut items,
+                    &mut commands,
+                )?;
                 send_void(submenu.as_ptr(), c"release");
                 send_void(parent_item.as_ptr(), c"release");
             }
@@ -195,6 +178,151 @@ impl MainMenu {
 
     pub fn callback_panic_count(&self) -> usize {
         *self.panics.lock().unwrap()
+    }
+}
+
+/// Adds `entries` to `menu`, wiring command items to `target`.
+unsafe fn populate(
+    menu: Id,
+    entries: &[MenuEntry],
+    target: Id,
+    items: &mut HashMap<MenuCommandId, NonNull<c_void>>,
+    commands: &mut HashMap<usize, MenuCommandId>,
+) -> Result<(), MenuError> {
+    for entry in entries {
+        match entry {
+            MenuEntry::Separator => unsafe {
+                let separator = send_id(
+                    class(c"NSMenuItem").map_err(|_| MenuError::AppKitUnavailable)?,
+                    c"separatorItem",
+                );
+                send_void_id(menu, c"addItem:", separator);
+            },
+            MenuEntry::Command { command, state } => unsafe {
+                let item = owned_menu_item(
+                    &state.title,
+                    state.shortcut.as_ref().map(|s| s.key.as_str()),
+                )?;
+                send_void_id(item.as_ptr(), c"setTarget:", target);
+                set_action(item.as_ptr(), c"choscorMenuItemActivated:");
+                apply_state(item.as_ptr(), state)?;
+                send_void_id(menu, c"addItem:", item.as_ptr());
+                commands.insert(item.as_ptr() as usize, *command);
+                items.insert(*command, item);
+                // The menu retains the item; `items` holds a weak pointer.
+                send_void(item.as_ptr(), c"release");
+            },
+        }
+    }
+    Ok(())
+}
+
+/// A native `NSMenu` shown at a point in a window (right click, ⌃-click,
+/// Shift-F10, or the accessibility ShowMenu action). Activations use the
+/// same target/action path as the main menu.
+pub struct ContextMenu {
+    menu: NonNull<c_void>,
+    target: NonNull<c_void>,
+    items: HashMap<MenuCommandId, NonNull<c_void>>,
+    model: MenuBarModel,
+    activations: Arc<Mutex<VecDeque<MenuCommandId>>>,
+    _main_thread: PhantomData<Rc<()>>,
+}
+
+impl ContextMenu {
+    /// Builds the menu. Call on the main thread after `Application::new`.
+    pub fn new(spec: MenuSpec) -> Result<Self, MenuError> {
+        let model = MenuBarModel::new(vec![spec])?;
+        unsafe {
+            let menu = owned_menu(&model.menus()[0].title)?;
+            // Items keep their own enabled state instead of AppKit's
+            // responder-chain validation.
+            send_void_bool(menu.as_ptr(), c"setAutoenablesItems:", 0);
+            let target = NonNull::new(send_id(send_id(menu_target_class()?, c"alloc"), c"init"))
+                .ok_or(MenuError::AppKitUnavailable)?;
+            let mut items = HashMap::new();
+            let mut commands = HashMap::new();
+            populate(
+                menu.as_ptr(),
+                &model.menus()[0].entries,
+                target.as_ptr(),
+                &mut items,
+                &mut commands,
+            )?;
+            let activations = Arc::new(Mutex::new(VecDeque::new()));
+            bindings().lock().unwrap().insert(
+                target.as_ptr() as usize,
+                TargetBinding {
+                    commands,
+                    activations: Arc::clone(&activations),
+                    panics: Arc::new(Mutex::new(0)),
+                },
+            );
+            Ok(Self {
+                menu,
+                target,
+                items,
+                model,
+                activations,
+                _main_thread: PhantomData,
+            })
+        }
+    }
+
+    pub fn spec(&self) -> &MenuSpec {
+        &self.model.menus()[0]
+    }
+
+    /// Number of native items, separators included.
+    pub fn item_count(&self) -> usize {
+        unsafe { super::send_usize(self.menu.as_ptr(), c"numberOfItems") }
+    }
+
+    pub fn set_state(
+        &mut self,
+        command: MenuCommandId,
+        state: MenuItemState,
+    ) -> Result<(), MenuError> {
+        self.model.set_state(command, state.clone())?;
+        let item = self.items[&command];
+        unsafe { apply_state(item.as_ptr(), &state) }
+    }
+
+    pub fn take_activations(&self) -> Vec<MenuCommandId> {
+        self.activations.lock().unwrap().drain(..).collect()
+    }
+
+    /// Activates `command` as if chosen (automation and smoke tests).
+    pub fn perform_action(&self, command: MenuCommandId) -> Result<bool, MenuError> {
+        if !self.model.state(command)?.enabled {
+            return Ok(false);
+        }
+        let item = self.items[&command];
+        unsafe {
+            send_void_id(
+                self.target.as_ptr(),
+                c"choscorMenuItemActivated:",
+                item.as_ptr(),
+            )
+        };
+        Ok(true)
+    }
+
+    pub(super) fn raw(&self) -> Id {
+        self.menu.as_ptr()
+    }
+}
+
+impl Drop for ContextMenu {
+    fn drop(&mut self) {
+        bindings()
+            .lock()
+            .unwrap()
+            .remove(&(self.target.as_ptr() as usize));
+        unsafe {
+            send_void(self.target.as_ptr(), c"release");
+            send_void(self.menu.as_ptr(), c"release");
+        }
     }
 }
 

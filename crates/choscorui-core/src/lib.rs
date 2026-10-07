@@ -77,6 +77,11 @@ pub use proxy::{
     ConcatModel, MappedModel, MatchMode, ProxyView, SliceModel, SortFilterProxy, SortOrder,
     TextFilter,
 };
+mod settings;
+pub use settings::{
+    LoadReport, SettingValue, Settings, SettingsError, SettingsMigration, SettingsSchema,
+    WindowGeometry, is_valid_setting_key, user_settings_path,
+};
 mod notify;
 pub use notify::{
     Notification, NotificationQueue, NotifyError, TimerId, WorkError, WorkQueue, WorkSender,

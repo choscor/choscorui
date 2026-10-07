@@ -479,6 +479,7 @@ fn main() {
     assert!(*pumped.lock().unwrap());
     check_surface(&app, &window);
     check_drop_target(&mut window);
+    check_geometry_and_context_menu(&mut window);
     send_native_window_close();
     assert!(!window.is_visible());
     assert!(window.take_events().contains(&WindowEvent::Closing));
@@ -787,6 +788,82 @@ fn check_accessibility_collections_and_announcements(
     assert_eq!(
         window.last_announcement(),
         Some(("Đã lưu".to_owned(), AnnouncementPriority::High))
+    );
+}
+
+#[cfg(target_os = "macos")]
+fn check_geometry_and_context_menu(window: &mut choscorui_macos::Window) {
+    use choscorui_core::WindowGeometry;
+    use choscorui_macos::{
+        ContextMenu, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, screen_visible_frames,
+    };
+    let screens = screen_visible_frames().unwrap();
+    assert!(!screens.is_empty());
+    let main = screens[0];
+    let saved = WindowGeometry {
+        frame: Rect::new(
+            Point::new(main.origin.x + 40.0, main.origin.y + 30.0),
+            Size::new(420.0, 300.0),
+        ),
+        zoomed: false,
+        full_screen: false,
+    };
+    let fitted = WindowGeometry {
+        frame: saved.fit_to_screens(&screens, Size::new(200.0, 150.0)),
+        ..saved
+    };
+    window.set_geometry(&fitted).unwrap();
+    let restored = window.geometry();
+    assert!(!restored.zoomed && !restored.full_screen);
+    let delta = |a: f64, b: f64| (a - b).abs() <= 1.0;
+    assert!(
+        delta(restored.frame.origin.x, fitted.frame.origin.x)
+            && delta(restored.frame.origin.y, fitted.frame.origin.y)
+            && delta(restored.frame.size.width, fitted.frame.size.width)
+            && delta(restored.frame.size.height, fitted.frame.size.height),
+        "{restored:?} != {fitted:?}"
+    );
+    assert!(matches!(
+        window.set_geometry(&WindowGeometry {
+            frame: Rect::new(Point::new(0.0, 0.0), Size::new(f64::NAN, 1.0)),
+            ..saved
+        }),
+        Err(Error::InvalidSize)
+    ));
+
+    let copy = MenuCommandId(901);
+    let paste = MenuCommandId(902);
+    let mut paste_state = MenuItemState::new("Paste");
+    paste_state.enabled = false;
+    let mut menu = ContextMenu::new(MenuSpec::new(
+        "Edit",
+        vec![
+            MenuEntry::command(copy, MenuItemState::new("Copy")),
+            MenuEntry::separator(),
+            MenuEntry::command(paste, paste_state.clone()),
+        ],
+    ))
+    .unwrap();
+    assert_eq!(menu.item_count(), 3);
+    assert!(menu.perform_action(copy).unwrap());
+    assert!(
+        !menu.perform_action(paste).unwrap(),
+        "disabled items do nothing"
+    );
+    assert_eq!(menu.take_activations(), vec![copy]);
+    paste_state.enabled = true;
+    menu.set_state(paste, paste_state).unwrap();
+    assert!(menu.perform_action(paste).unwrap());
+    assert_eq!(menu.take_activations(), vec![paste]);
+    assert!(
+        ContextMenu::new(MenuSpec::new(
+            "Dup",
+            vec![
+                MenuEntry::command(copy, MenuItemState::new("A")),
+                MenuEntry::command(copy, MenuItemState::new("B")),
+            ],
+        ))
+        .is_err()
     );
 }
 

@@ -27,7 +27,9 @@ use ime::{
     view_marked_range, view_selected_range, view_set_marked_text, view_unmark_text,
     view_valid_marked_attributes,
 };
-pub use menu_native::MainMenu;
+pub use menu_native::{ContextMenu, MainMenu};
+mod window_state;
+pub use window_state::screen_visible_frames;
 mod accessibility;
 mod clipboard;
 pub use clipboard::Clipboard;
