@@ -20,6 +20,12 @@ pub use theme::{
     AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,
     ThemeOverride, ThemeResolver,
 };
+mod model;
+pub use model::{
+    ChangeLog, CheckState, EditableModel, ItemData, ItemKey, ItemModel, ListStore, ModelChange,
+    ModelError, Role, Selection, SelectionCommand, SelectionMode, StringListModel, TreeStore,
+    Value, visible_keys,
+};
 mod notify;
 pub use notify::{
     Notification, NotificationQueue, NotifyError, TimerId, WorkError, WorkQueue, WorkSender,
