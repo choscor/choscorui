@@ -13,6 +13,11 @@ mod layout;
 pub use layout::{
     Axis, CrossAlign, FormLayout, GridLayout, Insets, LayoutDirection, LayoutError, LinearLayout,
 };
+mod layout_engine;
+pub use layout_engine::{
+    Constraints, EngineError, GridPlacement, ItemAlign, LayoutEngine, LayoutKind, LayoutStats,
+    LayoutStyle, LeafMeasure, Length, MainAlign, Measured, Track,
+};
 mod scroll;
 pub use scroll::ScrollViewport;
 mod semantics;
@@ -408,6 +413,17 @@ impl Tree {
             self.mark_ancestors(id, Dirty::LAYOUT);
             self.mark_ancestors(id, Dirty::PAINT);
             self.mark_ancestors(id, Dirty::SEMANTICS);
+        }
+        Ok(())
+    }
+
+    /// Places a node as the result of layout. Unlike [`Tree::set_bounds`],
+    /// this does not request layout again; it requests paint and semantics.
+    pub fn set_layout_bounds(&mut self, id: NodeId, bounds: Rect) -> Result<(), TreeError> {
+        let node = self.nodes.get_mut(&id).ok_or(TreeError::MissingNode)?;
+        if node.bounds != bounds {
+            node.bounds = bounds;
+            self.mark_ancestors(id, Dirty(Dirty::PAINT.0 | Dirty::SEMANTICS.0));
         }
         Ok(())
     }
