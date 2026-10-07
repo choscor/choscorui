@@ -1,5 +1,12 @@
 //! Platform-independent contracts for the retained desktop UI tree.
 
+mod geometry;
+pub use geometry::{PixelRect, ScaleFactor, Transform};
+mod input;
+pub use input::{
+    DragEvent, DragFormat, DragItem, DragOperation, DragOperations, DropRouter, GestureEvent,
+    HoverChange, HoverTracker, InputCapabilities, PointerDetails, PointerKind, negotiate_drag,
+};
 mod display;
 pub use display::{Color, DisplayCommand, DisplayList, DisplayListError};
 mod layout;
