@@ -74,9 +74,14 @@ pub(crate) unsafe extern "C" fn perform_posted(info: *mut c_void) {
     }));
 }
 
+pub(crate) enum TimerAction {
+    Once(Box<dyn FnOnce()>),
+    Repeat(Box<dyn FnMut()>),
+}
+
 pub(crate) struct TimerContext {
     pub(crate) owner: Weak<TimerInner>,
-    pub(crate) action: RefCell<Option<Box<dyn FnOnce()>>>,
+    pub(crate) action: RefCell<Option<TimerAction>>,
     pub(crate) panics: Rc<Cell<usize>>,
 }
 
@@ -116,14 +121,15 @@ impl Drop for TimerInner {
         // and release happen after the last Rust handle and callback finish.
         unsafe {
             let raw = self.raw.get() as *mut c_void;
-            CFRunLoopRemoveTimer(self.runloop as *mut c_void, raw, kCFRunLoopDefaultMode);
+            CFRunLoopRemoveTimer(self.runloop as *mut c_void, raw, kCFRunLoopCommonModes);
             CFRelease(raw);
             drop(Box::from_raw(self.info.get() as *mut TimerContext));
         }
     }
 }
 
-/// Main-thread one-shot timer. Dropping or canceling it prevents delivery.
+/// Main-thread one-shot or repeating timer. Dropping or canceling it
+/// prevents further delivery, including from inside its own callback.
 pub struct Timer {
     pub(crate) inner: Rc<TimerInner>,
 }
@@ -145,14 +151,26 @@ pub(crate) unsafe extern "C" fn fire_timer(_: *mut c_void, info: *mut c_void) {
         let Some(owner) = context.owner.upgrade() else {
             return;
         };
-        owner.active.set(false);
-        // SAFETY: One-shot timer is no longer needed after firing.
-        unsafe { CFRunLoopTimerInvalidate(owner.raw.get() as *mut c_void) }
         let action = context.action.borrow_mut().take();
-        if let Some(action) = action {
-            if catch_unwind(AssertUnwindSafe(action)).is_err() {
-                context.panics.set(context.panics.get() + 1);
+        match action {
+            Some(TimerAction::Once(action)) => {
+                owner.active.set(false);
+                // SAFETY: One-shot timer is no longer needed after firing.
+                unsafe { CFRunLoopTimerInvalidate(owner.raw.get() as *mut c_void) }
+                if catch_unwind(AssertUnwindSafe(action)).is_err() {
+                    context.panics.set(context.panics.get() + 1);
+                }
             }
+            Some(TimerAction::Repeat(mut action)) => {
+                if catch_unwind(AssertUnwindSafe(&mut action)).is_err() {
+                    context.panics.set(context.panics.get() + 1);
+                }
+                // Restore unless the callback canceled its own timer.
+                if owner.active.get() {
+                    *context.action.borrow_mut() = Some(TimerAction::Repeat(action));
+                }
+            }
+            None => {}
         }
     }));
 }

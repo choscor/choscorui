@@ -33,7 +33,9 @@ mod clipboard;
 pub use clipboard::Clipboard;
 mod runloop;
 pub use runloop::{PostError, Poster, Timer};
-use runloop::{PostInner, PostState, TimerContext, TimerInner, fire_timer, perform_posted};
+use runloop::{
+    PostInner, PostState, TimerAction, TimerContext, TimerInner, fire_timer, perform_posted,
+};
 mod shaping;
 pub use accessibility::{
     AccessibilityActionError, AccessibilityActionRequest, AccessibilityElement,
@@ -200,6 +202,7 @@ struct CFRunLoopTimerContext {
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
     static kCFRunLoopDefaultMode: *const c_void;
+    static kCFRunLoopCommonModes: *const c_void;
     static kCFBooleanTrue: *const c_void;
     fn CFStringCreateWithBytes(
         allocator: Id,
@@ -286,6 +289,7 @@ pub enum Error {
     InvalidClipboardText,
     ClipboardWriteFailed,
     AppKitUnavailable,
+    InvalidInterval,
 }
 
 /// Owned native window notifications, delivered in AppKit callback order.
@@ -1106,7 +1110,7 @@ impl Application {
                 return Err(Error::AppKitUnavailable);
             }
             posted.state.lock().unwrap().source = source as usize;
-            CFRunLoopAddSource(runloop, source, kCFRunLoopDefaultMode);
+            CFRunLoopAddSource(runloop, source, kCFRunLoopCommonModes);
             Ok(Self {
                 raw,
                 posted,
@@ -1297,10 +1301,38 @@ impl Application {
     /// Schedules a one-shot callback on the main run loop. Posted work is FIFO;
     /// timers run by deadline, with no ordering promise at equal deadlines or
     /// relative to posted work that becomes ready in the same run-loop turn.
+    /// Runs `action` once on the UI thread after `delay`. Timers fire in
+    /// all common run-loop modes, including live resize and menu tracking.
     pub fn schedule_once(
         &self,
         delay: Duration,
         action: impl FnOnce() + 'static,
+    ) -> Result<Timer, Error> {
+        self.schedule_timer(delay, None, TimerAction::Once(Box::new(action)))
+    }
+
+    /// Runs `action` every `interval` until the timer is canceled or
+    /// dropped. Core Foundation skips missed ticks instead of bursting.
+    pub fn schedule_repeating(
+        &self,
+        interval: Duration,
+        action: impl FnMut() + 'static,
+    ) -> Result<Timer, Error> {
+        if interval.is_zero() {
+            return Err(Error::InvalidInterval);
+        }
+        self.schedule_timer(
+            interval,
+            Some(interval),
+            TimerAction::Repeat(Box::new(action)),
+        )
+    }
+
+    fn schedule_timer(
+        &self,
+        delay: Duration,
+        interval: Option<Duration>,
+        action: TimerAction,
     ) -> Result<Timer, Error> {
         let inner = Rc::new(TimerInner {
             raw: Cell::new(0),
@@ -1310,7 +1342,7 @@ impl Application {
         });
         let info = Box::into_raw(Box::new(TimerContext {
             owner: Rc::downgrade(&inner),
-            action: RefCell::new(Some(Box::new(action))),
+            action: RefCell::new(Some(action)),
             panics: Rc::clone(&self.timer_panics),
         }));
         inner.info.set(info as usize);
@@ -1327,7 +1359,7 @@ impl Application {
             let raw = CFRunLoopTimerCreate(
                 std::ptr::null(),
                 CFAbsoluteTimeGetCurrent() + delay.as_secs_f64(),
-                0.0,
+                interval.map_or(0.0, |interval| interval.as_secs_f64()),
                 0,
                 0,
                 fire_timer,
@@ -1343,7 +1375,7 @@ impl Application {
             CFRunLoopAddTimer(
                 self.posted.runloop as *mut c_void,
                 raw,
-                kCFRunLoopDefaultMode,
+                kCFRunLoopCommonModes,
             );
         }
         let mut timers = self.timers.borrow_mut();
@@ -1373,7 +1405,7 @@ impl Drop for Application {
             CFRunLoopRemoveSource(
                 self.posted.runloop as *mut c_void,
                 source,
-                kCFRunLoopDefaultMode,
+                kCFRunLoopCommonModes,
             );
             CFRunLoopSourceInvalidate(source);
             CFRelease(source);

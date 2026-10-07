@@ -361,6 +361,41 @@ fn main() {
     assert!(!failed_timer.is_active());
     assert_eq!(app.timer_panic_count(), 1);
     std::panic::set_hook(previous_hook);
+    let ticks = Rc::new(Cell::new(0));
+    let tick_count = Rc::clone(&ticks);
+    let self_cancel: Rc<std::cell::RefCell<Option<choscorui_macos::Timer>>> =
+        Rc::new(std::cell::RefCell::new(None));
+    let cancel_slot = Rc::clone(&self_cancel);
+    let repeating = app
+        .schedule_repeating(Duration::from_millis(5), move || {
+            tick_count.set(tick_count.get() + 1);
+            if tick_count.get() == 3 {
+                if let Some(timer) = cancel_slot.borrow().as_ref() {
+                    timer.cancel();
+                }
+            }
+        })
+        .unwrap();
+    *self_cancel.borrow_mut() = Some(repeating);
+    for _ in 0..50 {
+        if ticks.get() >= 3 {
+            break;
+        }
+        app.pump_once(Duration::from_millis(10));
+    }
+    for _ in 0..5 {
+        app.pump_once(Duration::from_millis(10));
+    }
+    assert_eq!(
+        ticks.get(),
+        3,
+        "repeating timer canceled itself after three ticks"
+    );
+    assert!(!self_cancel.borrow().as_ref().unwrap().is_active());
+    assert_eq!(
+        app.schedule_repeating(Duration::ZERO, || {}).err(),
+        Some(choscorui_macos::Error::InvalidInterval)
+    );
     let pending = app.schedule_once(Duration::from_secs(3600), || {}).unwrap();
     window.show();
     window.take_events();
