@@ -28,6 +28,13 @@ cargo run -p choscorui-stress
 CHOSCORUI_STRESS_SETTINGS=/tmp/stress.txt CHOSCORUI_STRESS_AUTOPILOT=1 cargo run -p choscorui-stress
 ```
 
+The benchmark driver runs the reference scenarios on real windows and checks the release budgets:
+
+```sh
+cargo build --release -p choscorui-gallery -p choscorui-bench
+target/release/choscorui-bench --check bench/budgets.txt
+```
+
 The opt-in native smoke test creates real AppKit windows:
 
 ```sh
@@ -36,7 +43,7 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke
 
 Run the native smoke test and gallery separately. Both create foreground AppKit windows, so concurrent runs can change focus and make input assertions unreliable.
 
-Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. See the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), [theming guide](docs/THEMING.md), [accessibility contract](docs/ACCESSIBILITY.md), [dialogs](docs/DIALOGS.md), [settings](docs/SETTINGS.md), [desktop integration](docs/DESKTOP.md), [canvas](docs/CANVAS.md), [rich text](docs/RICH_TEXT.md), and [custom controls](docs/CUSTOM_CONTROLS.md) for scope and current limits.
+Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. See the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), [theming guide](docs/THEMING.md), [accessibility contract](docs/ACCESSIBILITY.md), [dialogs](docs/DIALOGS.md), [settings](docs/SETTINGS.md), [desktop integration](docs/DESKTOP.md), [canvas](docs/CANVAS.md), [rich text](docs/RICH_TEXT.md), [custom controls](docs/CUSTOM_CONTROLS.md), and [benchmarks](docs/BENCHMARKS.md) with [release budgets](docs/BUDGETS.md) for scope and current limits.
 
 ## Static analysis
 

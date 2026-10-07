@@ -364,6 +364,13 @@ pub enum WindowEvent {
     DragEnded(choscorui_core::DragOperation),
 }
 
+/// Timing of one completed `drawRect:` replay.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PaintTiming {
+    pub finished: std::time::Instant,
+    pub duration: std::time::Duration,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Modifiers {
     pub shift: bool,
@@ -388,8 +395,9 @@ impl Modifiers {
 type WindowQueue = Arc<Mutex<VecDeque<WindowEvent>>>;
 static WINDOW_QUEUES: OnceLock<Mutex<HashMap<usize, WindowQueue>>> = OnceLock::new();
 struct PaintState {
-    list: DisplayList,
+    list: Arc<DisplayList>,
     count: usize,
+    last_paint: Option<PaintTiming>,
     last_damage: Option<choscorui_core::Rect>,
     cursor: choscorui_core::CursorShape,
     drop_formats: Vec<choscorui_core::DragFormat>,
@@ -711,7 +719,8 @@ unsafe extern "C" fn view_draw_rect(view: Id, _: Sel, dirty: NSRect) {
             let Some(paint) = paint else {
                 return;
             };
-            let list = paint.lock().unwrap().list.clone();
+            let started = std::time::Instant::now();
+            let list = Arc::clone(&paint.lock().unwrap().list);
             let graphics = send_id(class(c"NSGraphicsContext").unwrap(), c"currentContext");
             if graphics.is_null() {
                 return;
@@ -721,7 +730,13 @@ unsafe extern "C" fn view_draw_rect(view: Id, _: Sel, dirty: NSRect) {
                 return;
             }
             if paint::paint_commands(context, dirty, &list) {
-                paint.lock().unwrap().count += 1;
+                let finished = std::time::Instant::now();
+                let mut paint = paint.lock().unwrap();
+                paint.count += 1;
+                paint.last_paint = Some(PaintTiming {
+                    finished,
+                    duration: finished - started,
+                });
             }
         }
     }));
@@ -1366,8 +1381,9 @@ impl Application {
             }
             let events = Arc::new(Mutex::new(VecDeque::new()));
             let paint = Arc::new(Mutex::new(PaintState {
-                list: DisplayList::new(),
+                list: Arc::new(DisplayList::new()),
                 count: 0,
+                last_paint: None,
                 last_damage: None,
                 cursor: Default::default(),
                 drop_formats: Vec::new(),
@@ -1414,12 +1430,29 @@ impl Application {
     }
 
     pub fn stop(&self) {
+        let _pool = Pool::new();
         // SAFETY: stop: accepts a nullable sender.
         unsafe { send_void_id(self.raw.as_ptr(), c"stop:", std::ptr::null_mut()) }
     }
 
     /// Requests foreground activation. AppKit may complete it asynchronously.
+    /// Number of native windows AppKit still tracks (open or not yet
+    /// released). Leak checks compare it before and after window churn.
+    pub fn window_count(&self) -> usize {
+        let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
+        // SAFETY: NSApplication.windows returns an autoreleased NSArray.
+        unsafe {
+            let windows = send_id(self.raw.as_ptr(), c"windows");
+            if windows.is_null() {
+                0
+            } else {
+                send_usize(windows, c"count")
+            }
+        }
+    }
+
     pub fn activate(&self) {
+        let _pool = Pool::new();
         // SAFETY: NSApplication activate is available on the macOS 15+ target.
         unsafe { send_void(self.raw.as_ptr(), c"activate") }
     }
@@ -1433,6 +1466,7 @@ impl Application {
     /// Processes at most one run-loop source or timer, blocking up to `timeout`.
     /// This supports native integration tests and future embedded loops.
     pub fn pump_once(&self, timeout: Duration) {
+        let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
         // SAFETY: Called on the main thread, using the registered default mode.
         unsafe {
             CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout.as_secs_f64(), 1);
@@ -1893,6 +1927,12 @@ impl Window {
         self.paint.lock().unwrap().count
     }
 
+    /// When the most recent completed paint finished and how long the
+    /// display-list replay took. Benchmarks use this as the present point.
+    pub fn last_paint(&self) -> Option<PaintTiming> {
+        self.paint.lock().unwrap().last_paint
+    }
+
     pub fn take_events(&mut self) -> Vec<WindowEvent> {
         self.events.lock().unwrap().drain(..).collect()
     }
@@ -1932,6 +1972,7 @@ impl Window {
     }
 
     pub fn is_visible(&self) -> bool {
+        let _pool = Pool::new();
         // SAFETY: isVisible returns an Objective-C BOOL.
         unsafe { send_bool(self.raw.as_ptr(), c"isVisible") != 0 }
     }
@@ -1944,6 +1985,7 @@ impl Window {
     }
 
     pub fn set_content_size(&mut self, size: Size) -> Result<(), Error> {
+        let _pool = Pool::new();
         if !size.width.is_finite()
             || !size.height.is_finite()
             || size.width <= 0.0
@@ -1966,12 +2008,14 @@ impl Window {
     }
 
     pub fn backing_scale_factor(&self) -> f64 {
+        let _pool = Pool::new();
         // SAFETY: backingScaleFactor returns CGFloat (double on supported Macs).
         unsafe { send_f64(self.raw.as_ptr(), c"backingScaleFactor") }
     }
 
     pub fn close(&mut self) {
         if !self.closed {
+            let _pool = Pool::new();
             // SAFETY: setReleasedWhenClosed:NO retains ownership after close.
             unsafe { send_void(self.raw.as_ptr(), c"close") }
             self.closed = true;
@@ -1980,6 +2024,9 @@ impl Window {
 }
 impl Drop for Window {
     fn drop(&mut self) {
+        // `close` and `release` autorelease internally; drain them here so a
+        // caller without its own pool does not keep the window alive.
+        let _pool = Pool::new();
         self.close();
         // SAFETY: NSWindow.delegate is weak. Detach it before releasing the
         // +1 delegate, then unregister its event queue and release the window.

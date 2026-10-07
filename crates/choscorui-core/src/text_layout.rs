@@ -604,6 +604,62 @@ impl TextLayoutCache {
         Ok(layout)
     }
 
+    /// Lays out `text` one `\n`-separated paragraph at a time, reusing the
+    /// cached layout of every unchanged paragraph, and joins them into one
+    /// layout. Editing a long document then reshapes only the edited
+    /// paragraph.
+    ///
+    /// The result equals `shaper.shape(text, ..)` for shapers that lay out
+    /// paragraphs independently and stack lines by `height × line_height`,
+    /// as [`TextShaper`] implementations in this workspace do. Size the cache
+    /// for the document's paragraph count, or paragraphs are reshaped as
+    /// they are evicted. The joined layout itself is not cached.
+    pub fn layout_paragraphs(
+        &mut self,
+        shaper: &dyn TextShaper,
+        text: &str,
+        style: &TextStyle,
+        max_width: Option<f64>,
+    ) -> Result<Arc<TextLayout>, TextLayoutError> {
+        if !text.contains('\n') {
+            return self.layout(shaper, text, style, max_width);
+        }
+        let mut lines = Vec::new();
+        let (mut byte_offset, mut grapheme_offset, mut top) = (0usize, 0usize, 0.0f64);
+        for raw in text.split('\n') {
+            let paragraph = self.layout(shaper, raw, style, max_width)?;
+            for line in paragraph.lines() {
+                let mut line = line.clone();
+                if byte_offset > 0 {
+                    line.bytes = line.bytes.start + byte_offset..line.bytes.end + byte_offset;
+                    line.runs = line
+                        .runs
+                        .iter()
+                        .map(|run| {
+                            let mut run = GlyphRun::clone(run);
+                            run.text = run.text.start + byte_offset..run.text.end + byte_offset;
+                            Arc::new(run)
+                        })
+                        .collect();
+                }
+                line.graphemes =
+                    line.graphemes.start + grapheme_offset..line.graphemes.end + grapheme_offset;
+                line.baseline += top;
+                lines.push(line);
+            }
+            // A trailing `\r` joins the `\n` into one grapheme.
+            let own = raw.strip_suffix('\r').unwrap_or(raw);
+            grapheme_offset += own.graphemes(true).count() + 1;
+            byte_offset += raw.len() + 1;
+            top += paragraph
+                .lines()
+                .iter()
+                .map(|line| line.height() * style.line_height)
+                .sum::<f64>();
+        }
+        TextLayout::from_lines(text, style.clone(), max_width, lines).map(Arc::new)
+    }
+
     /// Drops every layout using `family` as primary or fallback font.
     pub fn invalidate_family(&mut self, family: &str) {
         self.retain(|key| {

@@ -36,7 +36,7 @@ pub use semantics::{
     SemanticTree,
 };
 mod text;
-pub use text::{TextBuffer, TextError, TextMotion, grapheme_boundaries};
+pub use text::{TextBuffer, TextError, TextMotion, UNDO_LIMIT, grapheme_boundaries};
 mod text_layout;
 pub use text_layout::{
     CaretStop, FontSlant, FontWeight, GlyphRun, LayoutLine, TextCacheStats, TextDirection,

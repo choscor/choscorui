@@ -1,6 +1,25 @@
-# Phase 0 benchmark harness design
+# Benchmarks
 
-The harness will run the same gallery scenarios on every supported backend. This is a measurement plan, not a performance claim. No release threshold is set until the window, display list, and text prototypes produce a baseline.
+The harness runs the reference scenarios below on real windows. Phase 0 designed it, and `examples/bench` (`choscorui-bench`) implements it for macOS. Measured baselines and the release budgets derived from them are in [BUDGETS.md](BUDGETS.md).
+
+## Running
+
+```sh
+cargo build --release -p choscorui-gallery -p choscorui-bench
+target/release/choscorui-bench                       # full run, about 2 minutes
+target/release/choscorui-bench --quick               # shorter workloads
+target/release/choscorui-bench --only scroll,document
+target/release/choscorui-bench --check bench/budgets.txt   # exit 1 on a failed budget
+```
+
+Each run prints a machine manifest and its metrics. It writes the same report plus every raw sample to `target/bench/results-<unix time>.txt`, or to the path given with `--out`. Raw results stay out of the source tree.
+
+What the driver records:
+- **Presented frames.** Every latency sample ends when the window's `drawRect:` replay completes (`Window::last_paint`). The driver does not trust an app-side "done" flag.
+- **Startup.** Startup times separate processes. The gallery (`CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-gallery child each report the time from process entry to first paint. The driver also records spawn-to-report time.
+- **Allocations.** A counting global allocator reports Rust heap allocations per scroll frame.
+- **Resources.** CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`. Both use hand-written libSystem declarations.
+
 
 ## Reference machine
 
@@ -22,3 +41,17 @@ Initial development machine: `Mac16,1`, Apple M4, 24 GiB RAM, macOS 26.5, arm64.
 The gallery will emit monotonic timestamps at input receipt, dispatch completion, layout completion, display-list completion, and present callback. A separate driver will trigger input and collect timestamps so app-side instrumentation does not define its own success. Store raw samples and summary statistics beside a machine manifest, not in the source tree. Repeat runs under a fixed display scale and theme, then repeat scale-sensitive scenarios at 1x and 2x. Record background load and thermal state; discard a run only with a stated reason.
 
 The prototype will establish observed distributions. Release budgets will be chosen from those distributions and user-visible responsiveness goals, then checked on each platform independently. A green core unit test cannot stand in for an on-screen latency measurement.
+
+## Profiling findings (phase 13)
+
+The first harness runs found these hotspots, all now fixed:
+
+| Path | Before | Cause | Fix | After |
+| --- | --- | --- | --- | --- |
+| Large-canvas paint, 20,000 visible items | 16 ms build, 85k allocations per frame | Per frame, two `BTreeSet`s, a clone and sort of all roots, a save/restore per item, and a path per rectangle. In `damage`, one `Vec` per distinct command. | Paint-order filtering. Cached sorted roots. Identity transforms skipped. Solid rectangles use `FillRect`. Paths pre-sized. `damage` is a sorted merge. | 8 ms build, 7k allocations (one per ellipse path) |
+| `drawRect:` | Cloned the whole display list on every paint | | Paint state holds `Arc<DisplayList>` | Replay only |
+| Typing in a 100,000-character document | 94 ms reshape, 106 ms to present | Every edit reshaped the whole document | `TextLayoutCache::layout_paragraphs` reshapes only the edited paragraph. It reuses cached paragraphs and gives the same result as whole-text shaping (`paragraph_layout_matches_whole_text_and_reshapes_only_edits`). | 5 ms reshape, 18 ms to present |
+
+The remaining costs:
+- **Scroll frames.** Display-list diffing (`damage`) takes about half the build time of a 20,000-item scroll frame. Core Graphics replay takes about 7 ms.
+- **Software fallback.** None is needed. The macOS painter is Core Graphics on the CPU, so there is no GPU device to lose.

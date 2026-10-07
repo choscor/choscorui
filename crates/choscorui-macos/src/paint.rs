@@ -147,6 +147,7 @@ fn with_cached_image<R>(image: &Image, draw: impl FnOnce(Id) -> R) -> Option<R> 
 /// Drops cached native images; called when a window tears down.
 pub(crate) fn clear_image_cache() {
     IMAGES.with(|cache| cache.borrow_mut().clear());
+    SHADOW_MASKS.with(|cache| cache.borrow_mut().clear());
 }
 
 /// Paints a logical top-left display list into a context already configured
@@ -488,11 +489,43 @@ unsafe fn draw_image(context: Id, image: &Image, rect: Rect, sampling: ImageSamp
     });
 }
 
+const SHADOW_CACHE_LIMIT: usize = 128;
+
+thread_local! {
+    /// Blurred masks by everything but position: a mask is translation
+    /// invariant, and recomputing it per pixel each frame dominated replay
+    /// of shadowed controls.
+    static SHADOW_MASKS: RefCell<HashMap<[u64; 8], Image>> = RefCell::new(HashMap::new());
+}
+
 unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
     // The user-to-device transform includes the backing scale and every
     // pushed transform, so the mask stays sharp on 2x displays.
-    let scale = unsafe { device_scale(context) };
-    if let Some(mask) = shadow.mask(rect, radius, scale.max(1.0)) {
+    let scale = unsafe { device_scale(context) }.max(1.0);
+    let color = shadow.color;
+    let key = [
+        rect.size.width.to_bits(),
+        rect.size.height.to_bits(),
+        radius.to_bits(),
+        shadow.offset.x.to_bits(),
+        shadow.offset.y.to_bits(),
+        shadow.blur.to_bits(),
+        scale.to_bits(),
+        u64::from_le_bytes([color.red, color.green, color.blue, color.alpha, 0, 0, 0, 0]),
+    ];
+    let mask = SHADOW_MASKS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(mask) = cache.get(&key) {
+            return Some(mask.clone());
+        }
+        let mask = shadow.mask(rect, radius, scale)?;
+        if cache.len() >= SHADOW_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(key, mask.clone());
+        Some(mask)
+    });
+    if let Some(mask) = mask {
         unsafe { draw_image(context, &mask, shadow.bounds(rect), ImageSampling::Linear) };
     }
 }

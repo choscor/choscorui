@@ -9,7 +9,7 @@
 //! - `CHOSCORUI_STRESS_AUTOCLOSE_MS=<n>` closes the interactive window.
 
 #[cfg(target_os = "macos")]
-mod workspace;
+use choscorui_stress::workspace;
 
 #[cfg(target_os = "macos")]
 fn main() {

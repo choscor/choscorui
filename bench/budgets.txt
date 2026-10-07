@@ -1,0 +1,48 @@
+# Release budgets for macOS, checked by `choscorui-bench --check bench/budgets.txt`.
+# Reference machine and baselines: docs/BUDGETS.md. Each limit sits above
+# the measured p95 by a stated margin, or at a user-visible goal (a 60 Hz
+# frame is 16.7 ms; a 30 Hz frame is 33 ms), whichever is tighter.
+# Correctness counters must stay at zero.
+
+# Startup: process entry to first presented frame.
+startup.gallery.first_frame_ms.p95 <= 250
+startup.stress.first_frame_ms.p95 <= 400
+startup.gallery.failures <= 0
+startup.stress.failures <= 0
+
+# Idle: no repeated drawing, negligible CPU and wakeups.
+idle.paints <= 0
+idle.cpu_percent <= 1
+idle.wakeups_per_sec <= 20
+idle.footprint_mib.after <= 200
+
+# Resize between 400x300 and 1600x1000 points.
+resize.present_ms.p95 <= 33
+resize.missed_configure <= 0
+resize.missed_present <= 0
+
+# 100,000-row list and 20,000-item canvas, wheel scrolling.
+scroll.present_ms.p95 <= 25
+scroll.frame_interval_ms.p95 <= 25
+scroll.peak_realized_rows <= 40
+scroll.allocations_per_frame.p95 <= 10000
+scroll.missed_present <= 0
+
+# Typing in a 100,000-character multilingual document.
+document.present_ms.p95 <= 33
+document.shape_ms.p95 <= 12
+document.caret_mismatches <= 0
+document.missed_present <= 0
+
+# Structurally distinct light/dark theme switch, 240 controls.
+theme.present_ms.p95 <= 16.7
+theme.missed_present <= 0
+
+# Open, resize, and close 20 windows twice.
+windows.first_frame_ms.p95 <= 33
+windows.leaked_native_windows <= 0
+windows.missed_present <= 0
+windows.idle_cpu_percent_after_close <= 3
+
+# Release executable size (unstripped).
+size.choscorui-gallery_mib <= 3

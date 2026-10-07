@@ -280,3 +280,56 @@ fn installed_font_families_include_system_faces() {
     assert!(families.iter().any(|family| family == "Helvetica"));
     assert!(families.iter().all(|family| !family.starts_with('.')));
 }
+
+fn assert_same_layout(joined: &TextLayout, whole: &TextLayout) {
+    assert_eq!(joined.text(), whole.text());
+    assert_eq!(joined.grapheme_count(), whole.grapheme_count());
+    assert_eq!(joined.lines().len(), whole.lines().len());
+    for (a, b) in joined.lines().iter().zip(whole.lines()) {
+        assert_eq!(a.bytes, b.bytes);
+        assert_eq!(a.graphemes, b.graphemes);
+        assert!((a.baseline - b.baseline).abs() < 1e-6, "{a:?} vs {b:?}");
+        assert_eq!(a.carets, b.carets);
+        assert_eq!(a.extents, b.extents);
+        assert_eq!(a.offset_x, b.offset_x);
+        assert_eq!(a.right_to_left, b.right_to_left);
+        assert_eq!(a.runs.len(), b.runs.len());
+        for (x, y) in a.runs.iter().zip(&b.runs) {
+            assert_eq!(x.text, y.text);
+            assert_eq!(x.glyphs, y.glyphs);
+        }
+    }
+    assert!((joined.size().height - whole.size().height).abs() < 1e-6);
+    for caret in [0, whole.grapheme_count() / 3, whole.grapheme_count()] {
+        assert_eq!(joined.caret_rect(caret), whole.caret_rect(caret));
+    }
+}
+
+#[test]
+fn paragraph_layout_matches_whole_text_and_reshapes_only_edits() {
+    let paragraphs: Vec<&str> = FIXTURES.iter().map(|(_, text, _)| *text).collect();
+    let mut text = paragraphs.join("\n");
+    text.push_str(
+        "\n\nCRLF line\r\nA long English paragraph wraps across several lines at this width.\n",
+    );
+    let style = style().with_line_height(1.25);
+    let mut cache = TextLayoutCache::new(64, 16 << 20);
+    for width in [None, Some(140.0)] {
+        let joined = cache
+            .layout_paragraphs(&CoreTextShaper, &text, &style, width)
+            .unwrap();
+        assert_same_layout(&joined, &shape(&text, &style, width));
+    }
+
+    let misses = cache.stats().misses;
+    let edited = text.replacen("Tiếng", "Tiếng Việt", 1);
+    let joined = cache
+        .layout_paragraphs(&CoreTextShaper, &edited, &style, Some(140.0))
+        .unwrap();
+    assert_eq!(
+        cache.stats().misses,
+        misses + 1,
+        "only the edited paragraph"
+    );
+    assert_same_layout(&joined, &shape(&edited, &style, Some(140.0)));
+}

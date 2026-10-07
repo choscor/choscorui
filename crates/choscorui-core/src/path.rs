@@ -35,6 +35,13 @@ impl Path {
         Self::default()
     }
 
+    /// Avoids regrowth while building fixed-size shapes.
+    fn with_capacity(elements: usize) -> Self {
+        Self {
+            elements: Vec::with_capacity(elements),
+        }
+    }
+
     pub fn elements(&self) -> &[PathElement] {
         &self.elements
     }
@@ -69,7 +76,7 @@ impl Path {
     }
 
     pub fn rect(rect: Rect) -> Self {
-        let mut path = Self::new();
+        let mut path = Self::with_capacity(5);
         path.move_to(rect.origin)
             .line_to(Point::new(rect.max_x(), rect.min_y()))
             .line_to(Point::new(rect.max_x(), rect.max_y()))
@@ -122,7 +129,7 @@ impl Path {
         let c = rect.center();
         let (rx, ry) = (rect.size.width / 2.0, rect.size.height / 2.0);
         let (kx, ky) = (rx * KAPPA, ry * KAPPA);
-        let mut path = Self::new();
+        let mut path = Self::with_capacity(6);
         path.move_to(Point::new(c.x + rx, c.y))
             .cubic_to(
                 Point::new(c.x + rx, c.y + ky),

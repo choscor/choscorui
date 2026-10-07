@@ -1,7 +1,6 @@
 use crate::{
     FillRule, Image, ImageSampling, Paint, Path, Point, Rect, Size, StrokeStyle, Transform,
 };
-use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Straight-alpha sRGB color, stored as eight-bit channels.
@@ -603,10 +602,12 @@ pub fn damage(old: &DisplayList, new: &DisplayList) -> Option<Rect> {
     if old == new {
         return None;
     }
-    let mut counts: HashMap<u64, Vec<Rect>> = HashMap::new();
-    for (hash, rect) in old.draw_regions() {
-        counts.entry(hash).or_default().push(rect);
-    }
+    // Multiset difference of (hash, region) pairs via a sorted merge: two
+    // allocations regardless of list size.
+    let mut old = old.draw_regions();
+    let mut new = new.draw_regions();
+    old.sort_unstable_by_key(|(hash, _)| *hash);
+    new.sort_unstable_by_key(|(hash, _)| *hash);
     let mut region: Option<Rect> = None;
     let mut add = |rect: Rect| {
         region = Some(match region {
@@ -614,16 +615,25 @@ pub fn damage(old: &DisplayList, new: &DisplayList) -> Option<Rect> {
             Some(existing) => existing.union(rect),
         });
     };
-    for (hash, rect) in new.draw_regions() {
-        match counts.get_mut(&hash).and_then(|rects| rects.pop()) {
-            Some(_) => {}
-            None => add(rect),
+    let (mut i, mut j) = (0, 0);
+    while i < old.len() && j < new.len() {
+        match old[i].0.cmp(&new[j].0) {
+            std::cmp::Ordering::Equal => {
+                i += 1;
+                j += 1;
+            }
+            std::cmp::Ordering::Less => {
+                add(old[i].1);
+                i += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                add(new[j].1);
+                j += 1;
+            }
         }
     }
-    for rects in counts.into_values() {
-        for rect in rects {
-            add(rect);
-        }
+    for (_, rect) in old[i..].iter().chain(&new[j..]) {
+        add(*rect);
     }
     region
 }

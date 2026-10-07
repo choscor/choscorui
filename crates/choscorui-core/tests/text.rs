@@ -1,4 +1,4 @@
-use choscorui_core::{TextBuffer, TextError, TextMotion};
+use choscorui_core::{TextBuffer, TextError, TextMotion, UNDO_LIMIT};
 
 #[test]
 fn maps_graphemes_bytes_and_utf16_across_combining_and_joined_sequences() {
@@ -134,4 +134,49 @@ fn forward_delete_removes_one_whole_grapheme_and_undo_restores_caret() {
     assert!(text.undo());
     assert_eq!(text.as_str(), "A👩‍💻B");
     assert_eq!(text.selection(), 1..1);
+}
+
+#[test]
+fn undo_history_stores_deltas_and_round_trips_long_documents() {
+    let original = "Tiếng Việt 👩‍💻 ".repeat(400);
+    let mut text = TextBuffer::new(original.clone());
+    let middle = text.grapheme_count() / 2;
+    text.set_selection(middle, middle).unwrap();
+    for _ in 0..200 {
+        text.replace_selection("ắ");
+    }
+    text.delete_backward();
+    text.set_selection(3, 10).unwrap();
+    text.replace_selection("e\u{301}");
+    let edited = text.as_str().to_owned();
+    let mut steps = 0;
+    while text.undo() {
+        steps += 1;
+    }
+    assert_eq!(steps, 202);
+    assert_eq!(text.as_str(), original);
+    assert_eq!(text.selection(), middle..middle);
+    while text.redo() {}
+    assert_eq!(text.as_str(), edited);
+    assert_eq!(text.selection(), 4..4);
+
+    // Replacing a selection with identical text and caret is not a step.
+    let mut same = TextBuffer::new("ab");
+    same.set_selection(1, 1).unwrap();
+    same.replace_selection("");
+    assert!(!same.undo());
+
+    // History is bounded: the oldest steps are dropped.
+    let mut bounded = TextBuffer::new("");
+    for step in 0..UNDO_LIMIT + 5 {
+        let all = bounded.grapheme_count();
+        bounded.set_selection(0, all).unwrap();
+        bounded.replace_selection(&step.to_string());
+    }
+    let mut steps = 0;
+    while bounded.undo() {
+        steps += 1;
+    }
+    assert_eq!(steps, UNDO_LIMIT);
+    assert_eq!(bounded.as_str(), "4", "state after the oldest kept step");
 }

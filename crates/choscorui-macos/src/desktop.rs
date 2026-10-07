@@ -289,6 +289,7 @@ impl Application {
     /// Delivers a Dock reopen callback through the installed delegate.
     #[doc(hidden)]
     pub fn simulate_reopen(&self, has_visible_windows: bool) -> bool {
+        let _pool = Pool::new();
         unsafe {
             let delegate = send_id(self.raw.as_ptr(), c"delegate");
             let f: unsafe extern "C" fn(Id, Sel, Id, i8) -> i8 =
@@ -384,6 +385,7 @@ impl StatusItem {
     }
 
     pub fn title(&self) -> String {
+        let _pool = Pool::new();
         unsafe {
             pasteboard::ns_string_to_rust(send_id(self.button(), c"title")).unwrap_or_default()
         }
@@ -397,16 +399,19 @@ impl StatusItem {
     }
 
     pub fn set_visible(&self, visible: bool) {
+        let _pool = Pool::new();
         unsafe { send_void_bool(self.raw.as_ptr(), c"setVisible:", i8::from(visible)) }
     }
 
     pub fn is_visible(&self) -> bool {
+        let _pool = Pool::new();
         unsafe { send_bool(self.raw.as_ptr(), c"isVisible") != 0 }
     }
 
     /// Attaches the menu shown on click. The item owns the menu so its
     /// action target outlives every possible click.
     pub fn set_menu(&mut self, menu: Option<ContextMenu>) {
+        let _pool = Pool::new();
         unsafe {
             send_void_id(
                 self.raw.as_ptr(),

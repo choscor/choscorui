@@ -13,7 +13,7 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Every Qt inventory family classified | Done | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) |
 | Desktop contracts and platform limits | Done | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) |
 | Reference scenarios | Done | [BENCHMARKS.md](BENCHMARKS.md) |
-| Baseline measurements on named machine | Open | |
+| Baseline measurements on named machine | Done | [BUDGETS.md](BUDGETS.md) baselines on `Mac16,1` (M4, macOS 26.5) from `examples/bench` |
 | Dependency rule | Done | [CONTRACT.md](CONTRACT.md) revision 1, [LICENSES.md](LICENSES.md) |
 
 ## Phase 1 — macOS process, window, event loop
@@ -142,3 +142,11 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Validated text, numeric, and date inputs; resizable splitters and dockable panels; keyboard resizing, focus restoration, validation feedback, accessible values/actions | Done | Phase 7 inputs (`NumberInput`, `InputMask`, `DateInput`, `DecimalSpinBox`, `DateTimeEdit`), `Splitter` (keyboard, Slider semantics), `DockLayout` (`handle_splitter_key`, focus successor on close), `InputDialog` validation; `controls/tests/input_rules.rs`, `controls/tests/shell.rs` |
 | Locale-aware data presentation and sorting; view state and selection stable across updates and filtering | Done | `SortFilterProxy` with a `Collator` and diacritic-insensitive `TextFilter`, keyed `Selection`, `ItemView::restore_expanded`; `selection_survives_filter_and_sort_and_type_ahead_folds_diacritics` |
 | Gate: stress gallery scrolls/searches large data with bounded nodes; restores settings and dock state after restart; validates structured input; zoom/selection on a large canvas; desktop integration | Done (automated) + Manual | `examples/stress` autopilot (`CHOSCORUI_STRESS_AUTOPILOT=1`): 100,000 records searched by folded text, 2,000 PageDowns with realized rows at most the viewport plus overscan, bounded paint and semantics, a 20,000-item canvas with zoomed hit test, rubber band, culling, and virtualized item semantics, structured-input validation, a v1→v2 settings migration, then a full rebuild from the settings file that verifies window geometry, dock, toolbar, search, and zoom, plus status item, URL handler, and notification capability. Manual: VoiceOver walk through the stress gallery's list and canvas. |
+
+## Phase 13 — performance and reliability engineering
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Profile startup, frame scheduling, text shaping, layout invalidation, allocations, CPU paths | Done | `examples/bench` (`choscorui-bench`): presented-frame timing via `Window::last_paint`, counting allocator, CPU and footprint from `getrusage`/`proc_pid_rusage`. Findings and fixes in [BENCHMARKS.md](BENCHMARKS.md#profiling-findings-phase-13): scene paint 16→3 ms, allocation-free `damage`, `Arc` display lists in `drawRect:`, `TextLayoutCache::layout_paragraphs` (keystroke 106→21 ms on 100,000 characters), cached shadow masks (light-theme replay 47→2.4 ms), delta-based `TextBuffer` undo |
+| Measured, enforced release budgets with hardware, OS, workload, percentile | Done | [BUDGETS.md](BUDGETS.md), [`bench/budgets.txt`](../bench/budgets.txt); `choscorui-bench --check` exits non-zero on a failed or missing budget |
+| Software fallback only if needed | Done | Not needed: the macOS painter is CPU Core Graphics, so there is no GPU device to lose or fall back from ([BENCHMARKS.md](BENCHMARKS.md#profiling-findings-phase-13)) |

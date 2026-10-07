@@ -75,6 +75,7 @@ pub fn screen_visible_frames() -> Result<Vec<Rect>, Error> {
 impl Window {
     /// The current frame (title bar included) and zoom/full-screen state.
     pub fn geometry(&self) -> WindowGeometry {
+        let _pool = Pool::new();
         // SAFETY: frame returns NSRect; isZoomed BOOL; styleMask NSUInteger.
         unsafe {
             let window = self.raw.as_ptr();
@@ -135,6 +136,7 @@ impl Window {
     /// runs AppKit's menu tracking loop until it closes. Returns the chosen
     /// command, which is also queued in `menu.take_activations()`.
     pub fn show_context_menu(&self, menu: &ContextMenu, at: Point) -> Option<MenuCommandId> {
+        let _pool = Pool::new();
         menu.take_activations();
         // SAFETY: the content view is owned by the window and flipped, so
         // the location is in its top-left coordinates. The menu and target

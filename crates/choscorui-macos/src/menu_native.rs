@@ -1,7 +1,7 @@
 use super::{
     Application, Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec,
-    Sel, class, class_addMethod, objc_allocateClassPair, objc_getClass, objc_registerClassPair,
-    sel_registerName, send_id, send_id_cstr, send_void, send_void_id,
+    Pool, Sel, class, class_addMethod, objc_allocateClassPair, objc_getClass,
+    objc_registerClassPair, sel_registerName, send_id, send_id_cstr, send_void, send_void_id,
 };
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -158,6 +158,7 @@ impl MainMenu {
     /// Invokes the same Objective-C target/action path as a native selection.
     /// This is useful for application automation and native smoke tests.
     pub fn perform_action(&self, command: MenuCommandId) -> Result<bool, MenuError> {
+        let _pool = Pool::new();
         if !self.model.state(command)?.enabled {
             return Ok(false);
         }
@@ -232,6 +233,7 @@ pub struct ContextMenu {
 impl ContextMenu {
     /// Builds the menu. Call on the main thread after `Application::new`.
     pub fn new(spec: MenuSpec) -> Result<Self, MenuError> {
+        let _pool = Pool::new();
         let model = MenuBarModel::new(vec![spec])?;
         unsafe {
             let menu = owned_menu(&model.menus()[0].title)?;
@@ -275,6 +277,7 @@ impl ContextMenu {
 
     /// Number of native items, separators included.
     pub fn item_count(&self) -> usize {
+        let _pool = Pool::new();
         unsafe { super::send_usize(self.menu.as_ptr(), c"numberOfItems") }
     }
 
@@ -294,6 +297,7 @@ impl ContextMenu {
 
     /// Activates `command` as if chosen (automation and smoke tests).
     pub fn perform_action(&self, command: MenuCommandId) -> Result<bool, MenuError> {
+        let _pool = Pool::new();
         if !self.model.state(command)?.enabled {
             return Ok(false);
         }

@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -24,12 +25,21 @@ pub enum TextMotion {
     End,
 }
 
+/// One reversible change. Bytes `start..start + inserted.len()` hold
+/// `inserted`, which replaced `removed`. Selections are (anchor, caret)
+/// grapheme indices. Storing the delta instead of the whole text keeps
+/// history proportional to what was typed, not to document size.
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct TextSnapshot {
-    text: String,
-    anchor: usize,
-    caret: usize,
+struct TextEdit {
+    start: usize,
+    removed: String,
+    inserted: String,
+    before: (usize, usize),
+    after: (usize, usize),
 }
+
+/// Oldest edits are dropped beyond this many undo steps.
+pub const UNDO_LIMIT: usize = 10_000;
 
 /// UTF-8 text with explicit boundary conversions. Byte offsets may be inside
 /// a grapheme; grapheme APIs only accept whole extended grapheme clusters.
@@ -38,8 +48,8 @@ pub struct TextBuffer {
     text: String,
     anchor: usize,
     caret: usize,
-    undo: Vec<TextSnapshot>,
-    redo: Vec<TextSnapshot>,
+    undo: VecDeque<TextEdit>,
+    redo: Vec<TextEdit>,
 }
 
 impl TextBuffer {
@@ -48,7 +58,7 @@ impl TextBuffer {
             text: text.into(),
             anchor: 0,
             caret: 0,
-            undo: Vec::new(),
+            undo: VecDeque::new(),
             redo: Vec::new(),
         }
     }
@@ -196,8 +206,8 @@ impl TextBuffer {
     }
 
     pub fn replace_selection(&mut self, replacement: &str) {
-        let previous = self.snapshot();
-        self.replace_selection_from(replacement, previous);
+        let before = (self.anchor, self.caret);
+        self.replace_selection_from(replacement, before);
     }
 
     pub fn cut_selection(&mut self) -> String {
@@ -212,7 +222,7 @@ impl TextBuffer {
         self.replace_selection(text);
     }
 
-    fn replace_selection_from(&mut self, replacement: &str, previous: TextSnapshot) {
+    fn replace_selection_from(&mut self, replacement: &str, before: (usize, usize)) {
         let selected = self.selection();
         let start = self
             .grapheme_to_byte(selected.start)
@@ -220,6 +230,7 @@ impl TextBuffer {
         let end = self
             .grapheme_to_byte(selected.end)
             .expect("selection in bounds");
+        let removed = self.text[start..end].to_owned();
         self.text.replace_range(start..end, replacement);
         let inserted_end = start + replacement.len();
         let caret = self
@@ -230,17 +241,26 @@ impl TextBuffer {
             .unwrap_or_else(|| self.grapheme_count());
         self.anchor = caret;
         self.caret = caret;
-        if self.snapshot() != previous {
-            self.undo.push(previous);
+        if removed != replacement || before != (caret, caret) {
+            if self.undo.len() == UNDO_LIMIT {
+                self.undo.pop_front();
+            }
+            self.undo.push_back(TextEdit {
+                start,
+                removed,
+                inserted: replacement.to_owned(),
+                before,
+                after: (caret, caret),
+            });
             self.redo.clear();
         }
     }
 
     pub fn delete_backward(&mut self) {
         if self.selection().is_empty() && self.caret > 0 {
-            let previous = self.snapshot();
+            let before = (self.anchor, self.caret);
             self.anchor = self.caret - 1;
-            self.replace_selection_from("", previous);
+            self.replace_selection_from("", before);
         } else if !self.selection().is_empty() {
             self.replace_selection("");
         }
@@ -248,44 +268,34 @@ impl TextBuffer {
 
     pub fn delete_forward(&mut self) {
         if self.selection().is_empty() && self.caret < self.grapheme_count() {
-            let previous = self.snapshot();
+            let before = (self.anchor, self.caret);
             self.anchor = self.caret;
             self.caret += 1;
-            self.replace_selection_from("", previous);
+            self.replace_selection_from("", before);
         } else if !self.selection().is_empty() {
             self.replace_selection("");
         }
     }
 
     pub fn undo(&mut self) -> bool {
-        let Some(previous) = self.undo.pop() else {
+        let Some(edit) = self.undo.pop_back() else {
             return false;
         };
-        self.redo.push(self.snapshot());
-        self.restore(previous);
+        self.text
+            .replace_range(edit.start..edit.start + edit.inserted.len(), &edit.removed);
+        (self.anchor, self.caret) = edit.before;
+        self.redo.push(edit);
         true
     }
 
     pub fn redo(&mut self) -> bool {
-        let Some(next) = self.redo.pop() else {
+        let Some(edit) = self.redo.pop() else {
             return false;
         };
-        self.undo.push(self.snapshot());
-        self.restore(next);
+        self.text
+            .replace_range(edit.start..edit.start + edit.removed.len(), &edit.inserted);
+        (self.anchor, self.caret) = edit.after;
+        self.undo.push_back(edit);
         true
-    }
-
-    fn snapshot(&self) -> TextSnapshot {
-        TextSnapshot {
-            text: self.text.clone(),
-            anchor: self.anchor,
-            caret: self.caret,
-        }
-    }
-
-    fn restore(&mut self, snapshot: TextSnapshot) {
-        self.text = snapshot.text;
-        self.anchor = snapshot.anchor;
-        self.caret = snapshot.caret;
     }
 }

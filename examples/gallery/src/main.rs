@@ -1,5 +1,7 @@
 #[cfg(target_os = "macos")]
 fn main() {
+    // Process-entry timestamp for the startup benchmark.
+    let entered = std::time::Instant::now();
     use choscorui_controls::{
         Button, ButtonInput, Checkbox, CheckboxInput, CommandId, CommandRegistry, CommandState,
         SemanticAction as ControlSemanticAction, Shortcut, ShortcutModifiers, ShortcutScope,
@@ -202,8 +204,19 @@ fn main() {
                 .expect("gallery timer must be scheduled")
         });
 
+    // `choscorui-bench` launches the gallery with this set and times the
+    // first presented frame.
+    let report_first_frame = std::env::var_os("CHOSCORUI_GALLERY_REPORT_FIRST_FRAME").is_some();
     loop {
-        app.dispatch_next_event(Duration::from_millis(250));
+        app.dispatch_next_event(Duration::from_millis(if report_first_frame {
+            1
+        } else {
+            250
+        }));
+        if report_first_frame && let Some(paint) = window.last_paint() {
+            println!("first_frame_us={}", (paint.finished - entered).as_micros());
+            return;
+        }
         let mut closing = false;
         let mut redraw = false;
         for request in window.take_accessibility_actions() {
@@ -1319,7 +1332,7 @@ fn shape_document(
     width: f64,
 ) -> std::sync::Arc<choscorui_core::TextLayout> {
     cache
-        .layout(
+        .layout_paragraphs(
             &choscorui_macos::CoreTextShaper,
             &editor.layout_text(),
             style,

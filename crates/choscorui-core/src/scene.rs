@@ -7,7 +7,7 @@ use crate::{
     Color, DisplayList, DisplayListError, FillRule, Image, ImageSampling, Paint, Path, Point, Rect,
     SemanticRole, Size, StrokeStyle, SvgDocument, Transform,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -207,6 +207,7 @@ pub struct Scene {
     large: BTreeSet<SceneItemId>,
     next_id: u64,
     order: Vec<SceneItemId>,
+    sorted_roots: Vec<SceneItemId>,
     rank: HashMap<SceneItemId, usize>,
     order_dirty: bool,
     changes: Vec<SceneChange>,
@@ -566,7 +567,7 @@ impl Scene {
         let mut order = Vec::with_capacity(self.nodes.len());
         let mut roots = self.roots.clone();
         self.sort_siblings(&mut roots);
-        let mut stack: Vec<SceneItemId> = roots.into_iter().rev().collect();
+        let mut stack: Vec<SceneItemId> = roots.iter().rev().copied().collect();
         while let Some(id) = stack.pop() {
             order.push(id);
             let mut children = self.nodes[&id].children.clone();
@@ -575,6 +576,7 @@ impl Scene {
         }
         self.rank = order.iter().enumerate().map(|(i, id)| (*id, i)).collect();
         self.order = order;
+        self.sorted_roots = roots;
         self.order_dirty = false;
     }
 
@@ -606,28 +608,27 @@ impl Scene {
     /// Uses the spatial index, so cost follows the area, not scene size.
     pub fn items_in_rect(&mut self, rect: Rect) -> Vec<SceneItemId> {
         self.ensure_order();
-        let mut found: BTreeSet<SceneItemId> = self.large.iter().copied().collect();
+        let keep = |id: &SceneItemId| {
+            self.nodes[id]
+                .bounds
+                .is_some_and(|bounds| bounds.intersects(rect))
+                && self.effectively_visible(*id)
+        };
         let (cells, large) = cover(rect);
         if large {
-            found.extend(self.nodes.keys().copied());
-        } else {
-            for cell in cells {
-                if let Some(ids) = self.grid.get(&cell) {
-                    found.extend(ids.iter().copied());
-                }
+            // Already in paint order; no sort or dedup needed.
+            return self.order.iter().copied().filter(keep).collect();
+        }
+        let mut found: Vec<SceneItemId> = self.large.iter().copied().collect();
+        for cell in cells {
+            if let Some(ids) = self.grid.get(&cell) {
+                found.extend(ids.iter().copied());
             }
         }
-        let mut hits: Vec<SceneItemId> = found
-            .into_iter()
-            .filter(|id| {
-                self.nodes[id]
-                    .bounds
-                    .is_some_and(|bounds| bounds.intersects(rect))
-                    && self.effectively_visible(*id)
-            })
-            .collect();
-        hits.sort_by_key(|id| self.rank[id]);
-        hits
+        found.sort_unstable_by_key(|id| self.rank[id]);
+        found.dedup();
+        found.retain(keep);
+        found
     }
 
     /// Whether `point` (scene space) is inside the item's own shape
@@ -719,10 +720,10 @@ impl Scene {
         visible: Rect,
     ) -> Result<usize, DisplayListError> {
         let ids = self.items_in_rect(visible);
-        let set: BTreeSet<_> = ids.iter().copied().collect();
+        let set: HashSet<_> = ids.into_iter().collect();
         let mut painted = 0;
-        for root in self.sorted(&self.roots.clone()) {
-            painted += self.paint_subtree(list, root, &set)?;
+        for root in &self.sorted_roots {
+            painted += self.paint_subtree(list, *root, &set)?;
         }
         Ok(painted)
     }
@@ -737,7 +738,7 @@ impl Scene {
         &self,
         list: &mut DisplayList,
         id: SceneItemId,
-        visible: &BTreeSet<SceneItemId>,
+        visible: &HashSet<SceneItemId>,
     ) -> Result<usize, DisplayListError> {
         // Groups and their descendants are culled together by bounds.
         if !visible.contains(&id) {
@@ -748,10 +749,20 @@ impl Scene {
         if opacity < 1.0 {
             list.push_opacity(opacity)?;
         }
-        list.push_transform(node.world)?;
+        // Untransformed items (the common case) skip a save/restore pair.
+        let transformed = node.world != Transform::IDENTITY;
+        if transformed {
+            list.push_transform(node.world)?;
+        }
         let mut painted = paint_item(list, &node.item)?;
-        list.pop_transform()?;
-        let children = self.sorted(&node.children);
+        if transformed {
+            list.pop_transform()?;
+        }
+        let children = if node.children.is_empty() {
+            Vec::new()
+        } else {
+            self.sorted(&node.children)
+        };
         if !children.is_empty() {
             let clip = node
                 .item
@@ -833,15 +844,30 @@ fn paint_item(list: &mut DisplayList, item: &SceneItem) -> Result<usize, Display
             list.draw_image(image.clone(), *rect, ImageSampling::Linear)?;
         }
         ItemShape::Svg { document, rect } => document.draw(list, *rect, style.text_color)?,
+        ItemShape::Rect(rect) if style.stroke.is_none() => {
+            if let Some(fill) = &style.fill {
+                match fill {
+                    Paint::Solid(color) => list.fill_rect(*rect, *color),
+                    paint => list.fill_path(Path::rect(*rect), paint.clone(), FillRule::NonZero)?,
+                }
+            }
+        }
         shape => {
             let path = shape.path().expect("primitive shapes have paths");
-            if let Some(fill) = &style.fill
-                && !matches!(shape, ItemShape::Line { .. })
-            {
-                list.fill_path(path.clone(), fill.clone(), FillRule::NonZero)?;
-            }
-            if let Some((paint, stroke)) = &style.stroke {
-                list.stroke_path(path, paint.clone(), stroke.clone())?;
+            let fill = style
+                .fill
+                .as_ref()
+                .filter(|_| !matches!(shape, ItemShape::Line { .. }));
+            match (fill, &style.stroke) {
+                (Some(fill), Some((paint, stroke))) => {
+                    list.fill_path(path.clone(), fill.clone(), FillRule::NonZero)?;
+                    list.stroke_path(path, paint.clone(), stroke.clone())?;
+                }
+                (Some(fill), None) => list.fill_path(path, fill.clone(), FillRule::NonZero)?,
+                (None, Some((paint, stroke))) => {
+                    list.stroke_path(path, paint.clone(), stroke.clone())?
+                }
+                (None, None) => {}
             }
         }
     }

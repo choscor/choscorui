@@ -92,9 +92,10 @@ impl Window {
     /// Replaces the display list. Only the region whose drawing changed is
     /// invalidated; an identical list schedules no frame at all.
     pub fn set_display_list(&self, list: DisplayList) {
+        let _pool = Pool::new();
         let mut paint = self.paint.lock().unwrap();
         let region = damage(&paint.list, &list);
-        paint.list = list;
+        paint.list = Arc::new(list);
         let Some(region) = region else {
             return;
         };
@@ -151,6 +152,7 @@ impl Window {
     /// True when no part of the window is visible on any display; apps should
     /// pause animations and timers that only drive drawing.
     pub fn is_occluded(&self) -> bool {
+        let _pool = Pool::new();
         // SAFETY: The window is live until Window::drop.
         unsafe { send_usize(self.raw.as_ptr(), c"occlusionState") & OCCLUSION_VISIBLE == 0 }
     }
