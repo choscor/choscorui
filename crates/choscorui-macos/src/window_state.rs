@@ -8,7 +8,7 @@ use choscorui_core::{Point, Rect, WindowGeometry};
 /// NSWindowStyleMaskFullScreen.
 const FULL_SCREEN_MASK: usize = 1 << 14;
 
-unsafe fn send_id_usize(receiver: Id, name: &CStr, value: usize) -> Id {
+pub(super) unsafe fn send_id_usize(receiver: Id, name: &CStr, value: usize) -> Id {
     let f: unsafe extern "C" fn(Id, Sel, usize) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), value) }

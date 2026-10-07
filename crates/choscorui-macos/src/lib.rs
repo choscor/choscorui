@@ -28,6 +28,12 @@ use ime::{
     view_valid_marked_attributes,
 };
 pub use menu_native::{ContextMenu, MainMenu};
+mod desktop;
+pub use desktop::{
+    AppEvent, DesktopError, NotificationPermission, StatusItem, has_bundle_identifier,
+    notification_permission, open_url, post_notification, request_notification_permission,
+    url_handler,
+};
 mod window_state;
 pub use window_state::screen_visible_frames;
 mod accessibility;
@@ -1238,6 +1244,7 @@ impl Application {
             if send_bool_usize(raw.as_ptr(), c"setActivationPolicy:", 0) == 0 {
                 return Err(Error::AppKitUnavailable);
             }
+            desktop::install_app_delegate(raw.as_ptr())?;
             static FINISH_LAUNCHING: Once = Once::new();
             FINISH_LAUNCHING.call_once(|| send_void(raw.as_ptr(), c"finishLaunching"));
             let runloop = CFRunLoopGetMain();

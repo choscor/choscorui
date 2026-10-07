@@ -480,6 +480,7 @@ fn main() {
     check_surface(&app, &window);
     check_drop_target(&mut window);
     check_geometry_and_context_menu(&mut window);
+    check_desktop_integration(&app);
     send_native_window_close();
     assert!(!window.is_visible());
     assert!(window.take_events().contains(&WindowEvent::Closing));
@@ -789,6 +790,69 @@ fn check_accessibility_collections_and_announcements(
         window.last_announcement(),
         Some(("Đã lưu".to_owned(), AnnouncementPriority::High))
     );
+}
+
+#[cfg(target_os = "macos")]
+fn check_desktop_integration(app: &Application) {
+    use choscorui_macos::{
+        AppEvent, ContextMenu, DesktopError, MenuCommandId, MenuEntry, MenuItemState, MenuSpec,
+        NotificationPermission, StatusItem, has_bundle_identifier, notification_permission,
+        open_url, post_notification, url_handler,
+    };
+    use std::path::PathBuf;
+    app.take_app_events();
+    app.simulate_open_urls(&["file:///tmp/a%20b.txt", "choscor://open?id=7"])
+        .unwrap();
+    assert!(!app.simulate_reopen(false));
+    assert_eq!(
+        app.take_app_events(),
+        vec![
+            AppEvent::OpenFiles(vec![PathBuf::from("/tmp/a b.txt")]),
+            AppEvent::OpenUrls(vec!["choscor://open?id=7".into()]),
+            AppEvent::Reopen {
+                has_visible_windows: false
+            },
+        ]
+    );
+    assert_eq!(url_handler("not a url"), Err(DesktopError::InvalidUrl));
+    assert_eq!(
+        open_url("x-choscor-unregistered-scheme://nothing"),
+        Err(DesktopError::NoHandler)
+    );
+    // A file URL always has a handler (Finder); query it without opening.
+    assert!(url_handler("file:///").unwrap().is_some());
+
+    let mut item = StatusItem::new("Choscor").unwrap();
+    assert_eq!(item.title(), "Choscor");
+    item.set_title("Ch").unwrap();
+    item.set_tooltip("ChoscorUI status").unwrap();
+    assert_eq!(item.title(), "Ch");
+    let quit = MenuCommandId(950);
+    item.set_menu(Some(
+        ContextMenu::new(MenuSpec::new(
+            "Status",
+            vec![MenuEntry::command(quit, MenuItemState::new("Quit"))],
+        ))
+        .unwrap(),
+    ));
+    let menu = item.menu().unwrap();
+    assert!(menu.perform_action(quit).unwrap());
+    assert_eq!(menu.take_activations(), vec![quit]);
+    item.set_visible(false);
+    assert!(!item.is_visible());
+    drop(item);
+
+    // The test binary is not bundled, so notifications report why.
+    if !has_bundle_identifier() {
+        assert_eq!(
+            post_notification("build", "Done", "Build finished"),
+            Err(DesktopError::RequiresAppBundle)
+        );
+        assert_eq!(
+            notification_permission(),
+            NotificationPermission::NotRequested
+        );
+    }
 }
 
 #[cfg(target_os = "macos")]
