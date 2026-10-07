@@ -92,6 +92,9 @@ impl MainMenu {
         application: &Application,
         model: MenuBarModel,
     ) -> Result<Self, MenuError> {
+        // setMainMenu: autoreleases objects that retain every open window;
+        // without a pool here they were never released.
+        let _pool = Pool::new();
         unsafe {
             let root = owned_menu("")?;
             let target = NonNull::new(send_id(send_id(menu_target_class()?, c"alloc"), c"init"))
@@ -146,6 +149,7 @@ impl MainMenu {
         command: MenuCommandId,
         state: MenuItemState,
     ) -> Result<(), MenuError> {
+        let _pool = Pool::new();
         self.model.set_state(command, state.clone())?;
         let item = self.items[&command];
         unsafe { apply_state(item.as_ptr(), &state) }
@@ -286,6 +290,7 @@ impl ContextMenu {
         command: MenuCommandId,
         state: MenuItemState,
     ) -> Result<(), MenuError> {
+        let _pool = Pool::new();
         self.model.set_state(command, state.clone())?;
         let item = self.items[&command];
         unsafe { apply_state(item.as_ptr(), &state) }
@@ -319,6 +324,7 @@ impl ContextMenu {
 
 impl Drop for ContextMenu {
     fn drop(&mut self) {
+        let _pool = Pool::new();
         bindings()
             .lock()
             .unwrap()
@@ -332,6 +338,7 @@ impl Drop for ContextMenu {
 
 impl Drop for MainMenu {
     fn drop(&mut self) {
+        let _pool = Pool::new();
         bindings()
             .lock()
             .unwrap()

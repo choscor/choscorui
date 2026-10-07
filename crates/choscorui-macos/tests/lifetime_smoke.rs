@@ -1,7 +1,8 @@
 //! Native stress and resource-lifetime checks: window churn, resize storms,
-//! rapid display-list (theme) swaps, worker-thread wakeups, timer churn, and
-//! accessibility churn. After a warm-up round, repeating each workload must
-//! not grow the native window count or the process footprint without bound.
+//! rapid display-list (theme) swaps, worker-thread wakeups, timer churn,
+//! accessibility churn, and main-menu replacement. After a warm-up round,
+//! repeating each workload must not grow the native window count or the
+//! process footprint without bound.
 //!
 //! Opt in with `CHOSCORUI_RUN_MACOS_SMOKE=1`; it needs a window server.
 
@@ -11,7 +12,10 @@ use choscorui_core::{
     SemanticState, SemanticTree, Shadow, Size, Tree,
 };
 #[cfg(target_os = "macos")]
-use choscorui_macos::{Application, Window, WindowEvent, WindowOptions};
+use choscorui_macos::{
+    Application, MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, Window,
+    WindowEvent, WindowOptions,
+};
 #[cfg(target_os = "macos")]
 use std::sync::Arc;
 #[cfg(target_os = "macos")]
@@ -112,6 +116,21 @@ fn window_churn(app: &Application, count: usize) {
         assert!(wait_for_paint(app, &window, before), "churn window paints");
         open.push(window);
     }
+    // Replacing the main menu (as a language switch does) while windows are
+    // open must not keep them alive.
+    let menu = app
+        .install_main_menu(
+            MenuBarModel::new(vec![MenuSpec::new(
+                "Churn",
+                vec![MenuEntry::command(
+                    MenuCommandId(1),
+                    MenuItemState::new("Item"),
+                )],
+            )])
+            .unwrap(),
+        )
+        .unwrap();
+    drop(menu);
     for mut window in open {
         window.close();
     }
