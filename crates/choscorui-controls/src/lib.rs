@@ -20,9 +20,10 @@ pub use text_field::{
 };
 mod range_controls;
 pub use range_controls::{
-    IntegerRange, ProgressBar, ProgressStyle, ProgressVisualState, RangeError, Slider, SliderInput,
-    SliderOrientation, SliderSemanticAction, SliderStyle, SliderVisualState, SpinBox, SpinBoxInput,
-    SpinBoxSemanticAction, SpinBoxStyle, SpinBoxVisualState,
+    INDETERMINATE_PERIOD, IntegerRange, ProgressBar, ProgressStyle, ProgressVisualState,
+    RangeError, Slider, SliderInput, SliderOrientation, SliderSemanticAction, SliderStyle,
+    SliderVisualState, SpinBox, SpinBoxInput, SpinBoxSemanticAction, SpinBoxStyle,
+    SpinBoxVisualState,
 };
 mod selection_controls;
 pub use selection_controls::{
@@ -58,6 +59,14 @@ mod combo;
 pub use combo::{
     ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, text_key,
 };
+mod widgets;
+pub use widgets::{
+    ButtonGroup, CommandLinkRecipe, DecimalSpinBox, Dial, FocusFrame, KeySequenceChange,
+    KeySequenceEdit, NumberBase, NumericDisplay, ScrollBar, ScrollBarInput, ScrollOrientation,
+    SizeGrip, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_text,
+};
+mod datetime_controls;
+pub use datetime_controls::{Calendar, CalendarCell, DateTimeEdit, DateTimeField, DateTimeKind};
 mod recipe;
 pub use recipe::{
     ButtonRecipe, ContentAlignment, PillButtonRecipe, Slot, SlotContext, SlotLayout, paint_button,

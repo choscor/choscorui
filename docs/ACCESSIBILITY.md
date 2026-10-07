@@ -29,6 +29,19 @@ No control ships without a row here and a test of its `semantics()`.
 | `GroupBox`, `StackedContainer` | Group (AXGroup) | title | — | — |
 | `Label` | StaticText (AXStaticText) | text | — | — |
 | `Separator` | none (decorative) | — | — | — |
+| `ItemView` (list/tree/table/grid) | List, Tree, or Table (AXList/AXOutline/AXTable) with ListItem/TreeItem/Row (AXRow) for realized rows | first-column text / other columns joined | selected, expanded; full count and absolute index | Activate, Focus, Expand/Collapse, ShowMenu |
+| `HeaderView` | ColumnHeader (AXButton) | title / "ascending" or "descending" | focused column selected | Activate, Focus |
+| `ComboBox`, `FontChooser` | ComboBox (AXComboBox) with ListItem suggestions | label / text | expanded; invalid when the font is missing | ShowMenu, SetValue, Focus |
+| `PopupMenu` | MenuItem (AXMenuItem) | label, shortcut as description | disabled, checked, highlighted, submenu expanded | Activate |
+| Tooltip | Tooltip (AXHelpTag), described-by its target | text | — | — |
+| `ScrollBar` | ScrollBar (AXScrollBar) | label / percent | hidden when not needed | Increment, Decrement |
+| `DecimalSpinBox`, `DateTimeEdit` | SpinButton (AXIncrementor) | label / formatted value (long date) | invalid with message | Increment, Decrement, SetValue, Focus |
+| `Calendar` | Table (AXTable) with Cell (AXCell) days | month title / long date | selected, disabled outside range | Activate per enabled day |
+| `Dial` | Slider (AXSlider), "Dial" description | label / value | — | Increment, Decrement, SetValue, Focus |
+| `ToolButton` | Button, or Checkbox when checkable | label | disabled, checked | Activate, ShowMenu with a menu |
+| `ToolBox` | Button per header | title | expanded | Activate, Expand |
+| `NumericDisplay` | StaticText | label / plain number | overflow described | — |
+| `KeySequenceEdit` | TextField, read-only | label / "⌘K, ⇧⌘S" | recording described | Activate, Focus |
 
 ## Notifications
 

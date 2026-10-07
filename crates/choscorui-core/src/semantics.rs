@@ -38,6 +38,7 @@ pub enum SemanticRole {
     StatusBar,
     Image,
     Link,
+    ScrollBar,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

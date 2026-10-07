@@ -132,6 +132,7 @@ unsafe extern "C" {
     static NSAccessibilityToolbarRole: Id;
     static NSAccessibilityImageRole: Id;
     static NSAccessibilityLinkRole: Id;
+    static NSAccessibilityScrollBarRole: Id;
     static NSAccessibilityLayoutChangedNotification: Id;
     static NSAccessibilityTitleChangedNotification: Id;
     static NSAccessibilityFocusedUIElementChangedNotification: Id;
@@ -2086,6 +2087,7 @@ unsafe fn native_accessibility_role(role: SemanticRole) -> Id {
             SemanticRole::Toolbar => NSAccessibilityToolbarRole,
             SemanticRole::Image => NSAccessibilityImageRole,
             SemanticRole::Link => NSAccessibilityLinkRole,
+            SemanticRole::ScrollBar => NSAccessibilityScrollBarRole,
             SemanticRole::Application
             | SemanticRole::Group
             | SemanticRole::ListItem

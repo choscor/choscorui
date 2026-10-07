@@ -580,6 +580,11 @@ impl ProgressBar {
         }
         Ok(())
     }
+    /// Indeterminate bars animate only while visible; a hidden or
+    /// determinate bar requests no frames.
+    pub fn needs_frame(&self, visible: bool) -> bool {
+        visible && self.value.is_none()
+    }
     pub fn visual_state(&self) -> ProgressVisualState {
         ProgressVisualState {
             fraction: self
@@ -630,6 +635,34 @@ impl ProgressStyle {
             ),
             color,
         );
+    }
+}
+
+/// One indeterminate sweep, in seconds.
+pub const INDETERMINATE_PERIOD: f64 = 1.2;
+
+impl ProgressStyle {
+    /// Paints the moving indeterminate segment at monotonic time `now`.
+    /// With reduced motion, pass a fixed `now` to draw a static bar.
+    pub fn paint_indeterminate(
+        &self,
+        list: &mut DisplayList,
+        bounds: Rect,
+        now: std::time::Duration,
+    ) {
+        list.fill_rect(bounds, self.track);
+        let phase = (now.as_secs_f64() / INDETERMINATE_PERIOD).fract();
+        let width = bounds.size.width * 0.3;
+        let x = bounds.origin.x - width + (bounds.size.width + width) * phase;
+        list.push_clip(bounds);
+        list.fill_rect(
+            Rect::new(
+                Point::new(x, bounds.origin.y),
+                Size::new(width, bounds.size.height),
+            ),
+            self.indeterminate,
+        );
+        let _ = list.pop_clip();
     }
 }
 
