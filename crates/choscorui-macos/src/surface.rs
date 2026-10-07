@@ -70,18 +70,7 @@ unsafe fn custom_cursor(cursor_class: Id, image: &Image, hotspot: Point) -> Opti
         return None;
     }
     unsafe {
-        let cg = paint::cg_image(image)?;
-        let ns_image = send_id(class(c"NSImage").ok()?, c"alloc");
-        let ns_image = send_id_id_size(
-            ns_image,
-            c"initWithCGImage:size:",
-            cg.as_ptr(),
-            NSSize { width, height },
-        );
-        if ns_image.is_null() {
-            return None;
-        }
-        send_id(ns_image, c"autorelease");
+        let ns_image = imaging::ns_image(image)?;
         let cursor = send_id_id_point(
             send_id(cursor_class, c"alloc"),
             c"initWithImage:hotSpot:",
@@ -198,11 +187,6 @@ unsafe fn send_id_rect(receiver: Id, name: &CStr, rect: NSRect) -> Id {
     let f: unsafe extern "C" fn(Id, Sel, NSRect) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), rect) }
-}
-unsafe fn send_id_id_size(receiver: Id, name: &CStr, value: Id, size: NSSize) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, Id, NSSize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value, size) }
 }
 unsafe fn send_id_id_point(receiver: Id, name: &CStr, value: Id, point: NSPoint) -> Id {
     let f: unsafe extern "C" fn(Id, Sel, Id, NSPoint) -> Id =

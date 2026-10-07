@@ -65,6 +65,36 @@ impl Clipboard {
         Ok(())
     }
 
+    /// Replaces the contents with typed items (text, files, PNG image,
+    /// URL, private data). Other applications see the standard types.
+    pub fn write(&self, items: &[choscorui_core::DragItem]) -> Result<(), Error> {
+        let _pool = Pool::new()?;
+        // SAFETY: Items are built and written within the local pool.
+        unsafe { pasteboard::write_items(self.raw.as_ptr(), items) }
+    }
+
+    /// Formats the clipboard currently offers.
+    pub fn formats(&self) -> Result<Vec<choscorui_core::DragFormat>, Error> {
+        let _pool = Pool::new()?;
+        // SAFETY: Type names are copied before the pool drains.
+        Ok(unsafe { pasteboard::available_formats(self.raw.as_ptr()) })
+    }
+
+    /// Reads whichever of `formats` are present, in that order. TIFF images
+    /// from other applications are converted to PNG.
+    pub fn read(
+        &self,
+        formats: &[choscorui_core::DragFormat],
+    ) -> Result<Vec<choscorui_core::DragItem>, Error> {
+        let _pool = Pool::new()?;
+        // SAFETY: Strings and data are copied before the pool drains.
+        Ok(unsafe { pasteboard::read_items(self.raw.as_ptr(), formats) })
+    }
+
+    pub(crate) fn as_ptr(&self) -> Id {
+        self.raw.as_ptr()
+    }
+
     pub fn read_text(&self) -> Result<Option<String>, Error> {
         let _pool = Pool::new()?;
         // SAFETY: stringForType: returns an autoreleased NSString or nil. The

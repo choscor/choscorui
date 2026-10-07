@@ -168,3 +168,28 @@ impl MacBitmap {
         encode_png(&self.to_image().ok_or(ImageError::InvalidDimensions)?)
     }
 }
+
+/// Autoreleased NSImage sized in points from straight RGBA pixels.
+/// Requires an autorelease pool.
+pub(crate) unsafe fn ns_image(image: &Image) -> Option<Id> {
+    unsafe {
+        let cg = paint::cg_image(image)?;
+        let size = NSSize {
+            width: f64::from(image.width()),
+            height: f64::from(image.height()),
+        };
+        let f: unsafe extern "C" fn(Id, Sel, Id, NSSize) -> Id =
+            std::mem::transmute(objc_msgSend as *const ());
+        let ns_image = f(
+            send_id(class(c"NSImage").ok()?, c"alloc"),
+            selector(c"initWithCGImage:size:"),
+            cg.as_ptr(),
+            size,
+        );
+        if ns_image.is_null() {
+            return None;
+        }
+        send_id(ns_image, c"autorelease");
+        Some(ns_image)
+    }
+}

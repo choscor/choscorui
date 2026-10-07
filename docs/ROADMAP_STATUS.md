@@ -72,3 +72,16 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Bounded font/layout cache with invalidation on font, size, locale, scale | Done | `TextLayoutCache` (LRU by entries and bytes; style and locale in the key; `invalidate_family`, `set_scale`); 64-entry painter font cache |
 | Vietnamese, CJK, emoji, combining marks, RTL, mixed-script fixtures | Done | `every_fixture_has_consistent_caret_geometry`, `painted_glyphs_stay_inside_measured_lines_at_one_and_two_times` |
 | Gate: selection, carets, wrapping, and glyphs agree in the gallery | Done (automated) + Manual | The gallery document uses `CoreTextShaper` + `TextLayoutCache` for hit testing, selection, carets, and drawing; fixture tests prove agreement. Manual: select across the Hebrew line and the wrapped paragraph in the gallery and confirm the highlight matches the glyphs. |
+
+## Phase 6 — input, focus, clipboard, basic controls
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Semantic actions independent of pointer events | Done | `SemanticAction` inputs on every control; `controls/tests/*` |
+| Commands with enabled/checked state, scoped shortcuts, conflict rules | Done | `CommandRegistry`; `controls/tests/commands.rs`, `shortcuts.rs`; macOS `MainMenu` shares command state |
+| Button, label, checkbox, radio, slider, separator, scroll container with all states | Done | `Button`, `Label`, `Checkbox`, `RadioGroup`, `Slider`, `Separator`, `ScrollArea`; `controls/tests/navigation.rs` |
+| Keyboard order, tab/shift-tab, mnemonics, default actions, focus indicators | Done | core focus order (`focus.rs`), `MnemonicTable`, `DialogKeys`, focus rings in each `*Style::paint`; layout-aware `Key::Character` |
+| Clipboard and drag payloads through the platform interface | Done | `Clipboard::write`/`read`/`formats`; `Window::accept_drops`, `Window::begin_drag`; `clipboard_smoke`, `window_smoke::check_drop_target` |
+| Payload formats, copy/move/link negotiation, cancellation, cross-application behavior (text, files, images) | Done | `negotiate_drag`, `DropRouter`; [FFI.md](FFI.md) pasteboard row |
+| Per-control semantic role, state changes, keyboard actions | Done | each control's `semantics()` with role, value, state, and actions |
+| Gate: keyboard-only operation, deterministic state tests, capture outside bounds | Done (automated) + Manual | `thumb_drag_keeps_capture_outside_bounds_and_releases`, slider and button capture tests. Manual: drag text from TextEdit onto the gallery text field; drag a file from Finder onto a drop target. |

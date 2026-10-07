@@ -161,6 +161,16 @@ fn main() {
         },
     );
     sync_text_input_state(&window, &tree, text_field_node, &text_field);
+    // Text dragged from other applications can be dropped on the field.
+    window
+        .accept_drops(
+            &[choscorui_core::DragFormat::Text],
+            choscorui_core::DragOperations {
+                copy: true,
+                ..choscorui_core::DragOperations::NONE
+            },
+        )
+        .unwrap();
     window.show();
     app.activate();
 
@@ -221,6 +231,20 @@ fn main() {
         for event in window.take_events() {
             match event {
                 WindowEvent::Closing => closing = true,
+                WindowEvent::Drag(choscorui_core::DragEvent::Drop {
+                    position, items, ..
+                }) if tree.bounds(text_field_node).unwrap().contains(position) => {
+                    tree.set_focus(Some(text_field_node)).unwrap();
+                    for item in items {
+                        if let choscorui_core::DragItem::Text(text) = item {
+                            text_field
+                                .handle(&mut tree, text_field_node, TextFieldInput::Text(text))
+                                .unwrap();
+                        }
+                    }
+                    sync_text_input_state(&window, &tree, text_field_node, &text_field);
+                    redraw = true;
+                }
                 WindowEvent::ScaleChanged { scale } => {
                     text_cache.set_scale(scale);
                     document = text_cache

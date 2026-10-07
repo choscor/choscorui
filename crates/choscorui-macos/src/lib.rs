@@ -38,8 +38,11 @@ use runloop::{
 };
 mod imaging;
 pub use imaging::{decode_image, encode_png};
+mod dnd;
+mod pasteboard;
 mod shaping;
 mod surface;
+pub use dnd::SimulatedDragPhase;
 mod text_layout;
 pub use accessibility::{
     AccessibilityActionError, AccessibilityActionRequest, AccessibilityElement,
@@ -295,6 +298,10 @@ pub enum Error {
     /// A custom cursor image was empty, larger than 256 points, or its
     /// hotspot lay outside the image.
     InvalidCursor,
+    /// A payload used an unsupported or malformed format.
+    UnsupportedFormat,
+    /// A drag can only start while handling a mouse-down or mouse-drag.
+    NoDragEvent,
 }
 
 /// Owned native window notifications, delivered in AppKit callback order.
@@ -325,6 +332,11 @@ pub enum WindowEvent {
     Ime(ImeEvent),
     /// The window became fully hidden (`true`) or partly visible again.
     Occluded(bool),
+    /// A drag over the content view, after format and operation filtering
+    /// by [`Window::accept_drops`].
+    Drag(choscorui_core::DragEvent),
+    /// A drag started by [`Window::begin_drag`] finished.
+    DragEnded(choscorui_core::DragOperation),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -355,6 +367,10 @@ struct PaintState {
     count: usize,
     last_damage: Option<choscorui_core::Rect>,
     cursor: choscorui_core::CursorShape,
+    drop_formats: Vec<choscorui_core::DragFormat>,
+    drop_operations: choscorui_core::DragOperations,
+    drag_inside: bool,
+    source_operations: choscorui_core::DragOperations,
 }
 struct NativeAccessibilityState {
     projection: AccessibilityProjection,
@@ -994,6 +1010,41 @@ unsafe fn view_class() -> Result<Id, Error> {
                     c"v@::",
                 ),
                 (
+                    c"draggingEntered:",
+                    dnd::view_dragging_entered as *const c_void,
+                    c"Q@:@",
+                ),
+                (
+                    c"draggingUpdated:",
+                    dnd::view_dragging_updated as *const c_void,
+                    c"Q@:@",
+                ),
+                (
+                    c"draggingExited:",
+                    dnd::view_dragging_exited as *const c_void,
+                    c"v@:@",
+                ),
+                (
+                    c"prepareForDragOperation:",
+                    dnd::view_prepare_drag as *const c_void,
+                    c"c@:@",
+                ),
+                (
+                    c"performDragOperation:",
+                    dnd::view_perform_drag as *const c_void,
+                    c"c@:@",
+                ),
+                (
+                    c"draggingSession:sourceOperationMaskForDraggingContext:",
+                    dnd::view_source_operation_mask as *const c_void,
+                    c"Q@:@q",
+                ),
+                (
+                    c"draggingSession:endedAtPoint:operation:",
+                    dnd::view_drag_ended as *const c_void,
+                    c"v@:@{CGPoint=dd}Q",
+                ),
+                (
                     c"resetCursorRects",
                     surface::view_reset_cursor_rects as *const c_void,
                     c"v@:",
@@ -1237,6 +1288,10 @@ impl Application {
                 count: 0,
                 last_damage: None,
                 cursor: Default::default(),
+                drop_formats: Vec::new(),
+                drop_operations: choscorui_core::DragOperations::NONE,
+                drag_inside: false,
+                source_operations: choscorui_core::DragOperations::NONE,
             }));
             let ime = Arc::new(Mutex::new(TextInputState {
                 selected_utf16: 0..0,

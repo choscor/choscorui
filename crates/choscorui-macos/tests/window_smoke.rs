@@ -448,6 +448,7 @@ fn main() {
     }
     assert!(*pumped.lock().unwrap());
     check_surface(&app, &window);
+    check_drop_target(&mut window);
     send_native_window_close();
     assert!(!window.is_visible());
     assert!(window.take_events().contains(&WindowEvent::Closing));
@@ -540,6 +541,102 @@ fn check_surface(app: &Application, window: &choscorui_macos::Window) {
         Err(Error::InvalidCursor)
     ));
     window.set_cursor(CursorShape::Arrow).unwrap();
+}
+
+#[cfg(target_os = "macos")]
+fn check_drop_target(window: &mut choscorui_macos::Window) {
+    use choscorui_core::{DragEvent, DragFormat, DragItem, DragOperation, DragOperations};
+    use choscorui_macos::{Clipboard, SimulatedDragPhase as Phase};
+
+    let board = Clipboard::temporary().unwrap();
+    board.write_text("dropped").unwrap();
+    let at = Point::new(30.0, 40.0);
+    window.take_events();
+    // Not accepting anything yet: the drag is refused silently.
+    assert_eq!(
+        window.simulate_external_drag(Phase::Enter, &board, at, DragOperations::ALL),
+        DragOperation::None
+    );
+    assert!(window.take_events().is_empty());
+
+    window
+        .accept_drops(&[DragFormat::Text, DragFormat::Files], DragOperations::ALL)
+        .unwrap();
+    assert!(matches!(
+        window.accept_drops(&[DragFormat::Custom("a b".into())], DragOperations::ALL),
+        Err(Error::UnsupportedFormat)
+    ));
+    // Across applications without modifiers the preferred operation is copy.
+    assert_eq!(
+        window.simulate_external_drag(Phase::Enter, &board, at, DragOperations::ALL),
+        DragOperation::Copy
+    );
+    window.simulate_external_drag(
+        Phase::Update,
+        &board,
+        Point::new(31.0, 41.0),
+        DragOperations::ALL,
+    );
+    window.simulate_external_drag(Phase::Drop, &board, at, DragOperations::ALL);
+    let drag: Vec<DragEvent> = window
+        .take_events()
+        .into_iter()
+        .filter_map(|event| match event {
+            WindowEvent::Drag(drag) => Some(drag),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        drag,
+        vec![
+            DragEvent::Enter {
+                position: at,
+                formats: vec![DragFormat::Text],
+                allowed: DragOperations::ALL,
+            },
+            DragEvent::Over {
+                position: Point::new(31.0, 41.0),
+                allowed: DragOperations::ALL,
+            },
+            DragEvent::Drop {
+                position: at,
+                items: vec![DragItem::Text("dropped".into())],
+                operation: DragOperation::Copy,
+            },
+        ]
+    );
+
+    // A link-only source still negotiates; exiting reports Leave once.
+    let link_only = DragOperations {
+        link: true,
+        ..DragOperations::NONE
+    };
+    assert_eq!(
+        window.simulate_external_drag(Phase::Enter, &board, at, link_only),
+        DragOperation::Link
+    );
+    window.simulate_external_drag(Phase::Exit, &board, at, link_only);
+    window.simulate_external_drag(Phase::Exit, &board, at, link_only);
+    let leaves = window
+        .take_events()
+        .into_iter()
+        .filter(|event| *event == WindowEvent::Drag(DragEvent::Leave))
+        .count();
+    assert_eq!(leaves, 1);
+
+    // Unaccepted formats are refused.
+    board
+        .write(&[DragItem::Url("https://example.com".into())])
+        .unwrap();
+    assert_eq!(
+        window.simulate_external_drag(Phase::Enter, &board, at, DragOperations::ALL),
+        DragOperation::None
+    );
+    window.accept_drops(&[], DragOperations::NONE).unwrap();
+    assert!(matches!(
+        window.begin_drag(&[], DragOperations::ALL, at, None),
+        Err(Error::UnsupportedFormat)
+    ));
 }
 
 #[cfg(target_os = "macos")]
