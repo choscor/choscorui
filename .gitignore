@@ -2,3 +2,4 @@
 /quality/*
 !/quality/baseline.json
 /samples/*/target/
+/dist/
