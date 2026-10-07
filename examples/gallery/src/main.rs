@@ -8,10 +8,10 @@ fn main() {
     use choscorui_core::{
         Axis, CrossAlign, DesignTokens, Insets, Key, KeyEvent, LayoutDirection, LinearLayout,
         Point, PointerEvent, Rect, ScrollViewport, SemanticAction, SemanticTree, Size, TextBuffer,
-        TextMotion, ThemeResolver, Tree,
+        TextLayoutCache, TextMotion, TextStyle, ThemeResolver, Tree,
     };
     use choscorui_macos::{
-        Application, Clipboard, ImeEvent, WindowEvent, WindowOptions, WrappedText,
+        Application, Clipboard, CoreTextShaper, ImeEvent, WindowEvent, WindowOptions,
     };
     use std::cell::Cell;
     use std::rc::Rc;
@@ -85,13 +85,19 @@ fn main() {
         .attach(root, document_viewport_bounds(window.content_size()))
         .unwrap();
     tree.set_focusable(document_node, true).unwrap();
-    let mut document = WrappedText::new(
-        GALLERY_DOCUMENT,
-        "Helvetica",
-        17.0,
-        (document_viewport_bounds(window.content_size()).size.width - 20.0).max(1.0),
-    )
-    .unwrap();
+    // One shaped layout drives measurement, hit testing, selection, and
+    // painting; the cache reuses it until the width or scale changes.
+    let mut text_cache = TextLayoutCache::new(256, 8 << 20);
+    text_cache.set_scale(window.backing_scale_factor());
+    let document_style = TextStyle::new("Helvetica", 17.0);
+    let mut document = text_cache
+        .layout(
+            &CoreTextShaper,
+            GALLERY_DOCUMENT,
+            &document_style,
+            Some((document_viewport_bounds(window.content_size()).size.width - 20.0).max(1.0)),
+        )
+        .unwrap();
     let mut control = Button::new("Switch theme", CommandId(1));
     let mut checkbox = Checkbox::new("Show selection", true);
     let mut text_field = TextField::new("Greeting", "Xin chào 👩‍💻");
@@ -215,6 +221,18 @@ fn main() {
         for event in window.take_events() {
             match event {
                 WindowEvent::Closing => closing = true,
+                WindowEvent::ScaleChanged { scale } => {
+                    text_cache.set_scale(scale);
+                    document = text_cache
+                        .layout(
+                            &CoreTextShaper,
+                            GALLERY_DOCUMENT,
+                            &document_style,
+                            Some(document.max_width().unwrap_or(1.0)),
+                        )
+                        .unwrap();
+                    redraw = true;
+                }
                 WindowEvent::Focused(false) => {
                     match tree.pointer_capture() {
                         Some(id) if id == document_node => tree.set_pointer_capture(None).unwrap(),
@@ -242,13 +260,14 @@ fn main() {
                     scroll
                         .arrange(&mut tree, gallery_viewport_bounds(size))
                         .unwrap();
-                    document = WrappedText::new(
-                        GALLERY_DOCUMENT,
-                        "Helvetica",
-                        17.0,
-                        (document_viewport_bounds(size).size.width - 20.0).max(1.0),
-                    )
-                    .unwrap();
+                    document = text_cache
+                        .layout(
+                            &CoreTextShaper,
+                            GALLERY_DOCUMENT,
+                            &document_style,
+                            Some((document_viewport_bounds(size).size.width - 20.0).max(1.0)),
+                        )
+                        .unwrap();
                     tree.set_bounds(document_node, document_viewport_bounds(size))
                         .unwrap();
                     tree.set_bounds(text_field_node, text_field_bounds(size))
@@ -425,11 +444,7 @@ fn main() {
                     if matches!(key, Key::ArrowUp | Key::ArrowDown) {
                         let direction = if key == Key::ArrowUp { -1 } else { 1 };
                         let (caret, preferred) = document
-                            .move_caret_vertical(
-                                document_text.caret(),
-                                direction,
-                                preferred_caret_x,
-                            )
+                            .move_vertical(document_text.caret(), direction, preferred_caret_x)
                             .unwrap();
                         document_text.set_caret(caret, modifiers.shift).unwrap();
                         preferred_caret_x = Some(preferred);
@@ -879,7 +894,7 @@ struct GalleryUi<'a> {
 struct GalleryDocument<'a> {
     viewport: choscorui_core::NodeId,
     rows: &'a [choscorui_core::NodeId],
-    layout: &'a choscorui_macos::WrappedText,
+    layout: &'a choscorui_core::TextLayout,
     offset: f64,
     selection: std::ops::Range<usize>,
 }
@@ -1050,11 +1065,7 @@ fn display_list(
         document_bounds.origin.y + 10.0 - document.offset,
     );
     if ui.checkbox.value() {
-        for rect in document
-            .layout
-            .selection_rects(document.selection.clone())
-            .unwrap()
-        {
+        for rect in document.layout.selection_rects(document.selection.clone()) {
             list.fill_rect(
                 Rect::new(
                     Point::new(
@@ -1085,7 +1096,7 @@ fn display_list(
     }
     document
         .layout
-        .append_to_display_list(&mut list, document_origin, Color::rgba8(230, 235, 245, 255))
+        .draw(&mut list, document_origin, Color::rgba8(230, 235, 245, 255))
         .unwrap();
     list.pop_clip().unwrap();
     list
@@ -1093,7 +1104,7 @@ fn display_list(
 
 #[cfg(target_os = "macos")]
 fn document_hit_test(
-    document: &choscorui_macos::WrappedText,
+    document: &choscorui_core::TextLayout,
     bounds: choscorui_core::Rect,
     offset: f64,
     position: choscorui_core::Point,
@@ -1107,7 +1118,7 @@ fn document_hit_test(
 
 #[cfg(target_os = "macos")]
 fn reveal_document_caret(
-    document: &choscorui_macos::WrappedText,
+    document: &choscorui_core::TextLayout,
     text: &choscorui_core::TextBuffer,
     scroll: &mut choscorui_core::ScrollViewport,
     tree: &mut choscorui_core::Tree,

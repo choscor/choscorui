@@ -216,6 +216,13 @@ pub enum DisplayCommand {
         font_size: f64,
         color: Color,
     },
+    /// Pre-shaped glyphs from a [`crate::TextLayout`]; `origin` is the
+    /// line's baseline origin.
+    DrawGlyphs {
+        origin: Point,
+        run: std::sync::Arc<crate::GlyphRun>,
+        color: Color,
+    },
     PushClip(Rect),
     /// Clip to the interior of a path (non-zero rule).
     PushClipPath(Path),
@@ -403,6 +410,21 @@ impl DisplayList {
             font_size,
             color,
         });
+        Ok(())
+    }
+
+    pub fn draw_glyphs(
+        &mut self,
+        origin: Point,
+        run: std::sync::Arc<crate::GlyphRun>,
+        color: Color,
+    ) -> Result<(), DisplayListError> {
+        if !origin.x.is_finite() || !origin.y.is_finite() || run.glyphs.len() != run.positions.len()
+        {
+            return Err(DisplayListError::InvalidText);
+        }
+        self.commands
+            .push(DisplayCommand::DrawGlyphs { origin, run, color });
         Ok(())
     }
 
@@ -640,6 +662,11 @@ fn draw_bounds(command: &DisplayCommand) -> Option<Rect> {
                 Size::new(width + font_size * 2.0, font_size * 1.9),
             )
         }
+        DisplayCommand::DrawGlyphs { origin, run, .. } => {
+            // Glyph ink can overhang the typographic box (italics, accents).
+            let pad = run.size * 0.25;
+            inflate(run.bounds.translate(origin.x, origin.y), pad)
+        }
         _ => return None,
     })
 }
@@ -795,6 +822,16 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             text.hash(hasher);
             font_family.hash(hasher);
             hash_f64(*font_size, hasher);
+            color.hash(hasher);
+        }
+        DisplayCommand::DrawGlyphs { origin, run, color } => {
+            hash_point(*origin, hasher);
+            run.font.hash(hasher);
+            hash_f64(run.size, hasher);
+            run.glyphs.hash(hasher);
+            for position in &run.positions {
+                hash_point(*position, hasher);
+            }
             color.hash(hasher);
         }
         DisplayCommand::PushClip(rect) => hash_rect(*rect, hasher),

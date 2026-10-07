@@ -62,3 +62,13 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Damage regions and frame scheduling | Done | `damage()`; `set_display_list` uses `setNeedsDisplayInRect:`; `window_smoke` checks `last_damage` |
 | Gate: golden fixtures at 1x and 2x | Done | `crates/choscorui/tests/render_parity.rs` (software vs Core Graphics), `choscorui-render` `raster.rs` |
 | Gate: on-screen check and idle window stops drawing | Done | `window_smoke` `check_surface` (captured pixels, unchanged paint count while idle) |
+
+## Phase 5 — text
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| One text-layout contract: fallback, shaping, line breaking, bidi, glyph positions, hit testing | Done | `core::text_layout` (`TextStyle`, `TextShaper`, `TextLayout`, `GlyphRun`); `core/tests/text_layout.rs` |
+| Core Text backend; measurement and drawing share shaped runs | Done | `CoreTextShaper`; `DisplayCommand::DrawGlyphs` paints the measured runs; `macos/tests/text_layout.rs` |
+| Bounded font/layout cache with invalidation on font, size, locale, scale | Done | `TextLayoutCache` (LRU by entries and bytes; style and locale in the key; `invalidate_family`, `set_scale`); 64-entry painter font cache |
+| Vietnamese, CJK, emoji, combining marks, RTL, mixed-script fixtures | Done | `every_fixture_has_consistent_caret_geometry`, `painted_glyphs_stay_inside_measured_lines_at_one_and_two_times` |
+| Gate: selection, carets, wrapping, and glyphs agree in the gallery | Done (automated) + Manual | The gallery document uses `CoreTextShaper` + `TextLayoutCache` for hit testing, selection, carets, and drawing; fixture tests prove agreement. Manual: select across the Hebrew line and the wrapped paragraph in the gallery and confirm the highlight matches the glyphs. |

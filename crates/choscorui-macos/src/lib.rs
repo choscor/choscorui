@@ -40,6 +40,7 @@ mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod shaping;
 mod surface;
+mod text_layout;
 pub use accessibility::{
     AccessibilityActionError, AccessibilityActionRequest, AccessibilityElement,
     AccessibilityIdentity, AccessibilityNotification, AccessibilityProjection, AccessibilityUpdate,
@@ -56,6 +57,7 @@ use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::Duration;
+pub use text_layout::CoreTextShaper;
 
 type Id = *mut c_void;
 type Sel = *mut c_void;

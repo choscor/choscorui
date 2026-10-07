@@ -1,6 +1,14 @@
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Byte offsets of every extended grapheme boundary, including 0 and
+/// `text.len()`. Lets callers map positions in O(log n) by binary search.
+pub fn grapheme_boundaries(text: &str) -> Vec<usize> {
+    let mut boundaries: Vec<usize> = text.grapheme_indices(true).map(|(byte, _)| byte).collect();
+    boundaries.push(text.len());
+    boundaries
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextError {
     InvalidSelection,

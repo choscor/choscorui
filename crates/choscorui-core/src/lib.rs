@@ -35,7 +35,12 @@ pub use semantics::{
     SemanticRole, SemanticState, SemanticText, SemanticTree,
 };
 mod text;
-pub use text::{TextBuffer, TextError, TextMotion};
+pub use text::{TextBuffer, TextError, TextMotion, grapheme_boundaries};
+mod text_layout;
+pub use text_layout::{
+    CaretStop, FontSlant, FontWeight, GlyphRun, LayoutLine, TextCacheStats, TextDirection,
+    TextLayout, TextLayoutCache, TextLayoutError, TextShaper, TextStyle, first_strong_is_rtl,
+};
 mod theme;
 pub use theme::{
     AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,

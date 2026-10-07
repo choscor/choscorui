@@ -207,7 +207,9 @@ impl Renderer {
                 radius,
                 shadow,
             } => self.shadow(*rect, *radius, *shadow),
-            DisplayCommand::DrawText { .. } => return Err(RenderError::UnsupportedText),
+            DisplayCommand::DrawText { .. } | DisplayCommand::DrawGlyphs { .. } => {
+                return Err(RenderError::UnsupportedText);
+            }
             DisplayCommand::PushClip(rect) => {
                 self.clip_marks.push(self.state.clips.len());
                 self.state

@@ -217,6 +217,12 @@ pub(super) unsafe fn paint_commands(context: Id, dirty: NSRect, list: &DisplayLi
                         break;
                     }
                 }
+                DisplayCommand::DrawGlyphs { origin, run, color } => {
+                    if !text_layout::draw_glyph_run(context, *origin, run, *color) {
+                        success = false;
+                        break;
+                    }
+                }
                 DisplayCommand::PushClip(rect) => {
                     CGContextSaveGState(context);
                     CGContextClipToRect(context, native_rect(*rect));
@@ -289,7 +295,7 @@ unsafe fn with_color(color: Color, apply: impl FnOnce(Id)) {
     }
 }
 
-unsafe fn set_fill_color(context: Id, color: Color) {
+pub(crate) unsafe fn set_fill_color(context: Id, color: Color) {
     unsafe { with_color(color, |cg| CGContextSetFillColorWithColor(context, cg)) }
 }
 
