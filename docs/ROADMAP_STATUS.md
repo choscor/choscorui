@@ -35,7 +35,7 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Logical units, rects, transforms, clip bounds, stable IDs | Done | `geometry.rs`, `input.rs` (`transforms_compose_invert_and_bound_rectangles`), `tree.rs` |
 | Ownership, attach/detach, dirty flags | Done | `tree.rs`, `state.rs`, `tree_placement.rs` |
 | Hit testing, capture, enter/leave, wheel, focus, cancellation | Done | `events.rs`, `focus.rs`, `input.rs` (`HoverTracker`) |
-| Device capabilities, gestures, pen, drag-and-drop | Done (core) | `InputCapabilities`, `negotiate_drag`, `DropRouter` in `input.rs`; native macOS drag-and-drop lands in phase 6 |
+| Device capabilities, gestures, pen, drag-and-drop | Done | Core: `InputCapabilities`, `negotiate_drag`, and `DropRouter` in `input.rs`. Native macOS drag and drop arrived in phase 6: `Window::accept_drops`, `begin_drag`, and `WindowEvent::Drag`/`DragEnded`. `window_smoke` drives external drags through `simulate_external_drag` (refused, then accepted and dropped), and the gallery accepts dropped text. |
 | Propagation, re-entrancy, notification ordering | Done | `events.rs` (`nested_event_completes_before_outer_dispatch_resumes`), `notify.rs` |
 | Deterministic, platform-independent state | Done | all of the above run without a platform crate |
 
