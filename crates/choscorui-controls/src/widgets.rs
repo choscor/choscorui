@@ -1047,7 +1047,8 @@ impl SizeGrip {
 
 // ----------------------------------------------------------- KeySequenceEdit
 
-/// Records up to `max_chords` shortcuts. Modifier-only presses are
+/// Records up to `max_chords` shortcuts. Presses of keys without a
+/// `Key` mapping (`Key::Other`, which includes modifier-only presses) are
 /// ignored; Backspace with no modifiers clears; Escape cancels and keeps
 /// the previous sequence; recording finishes when full or on
 /// [`KeySequenceEdit::finish`] (for example after a pause or focus loss).

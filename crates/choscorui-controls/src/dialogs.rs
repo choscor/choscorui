@@ -17,7 +17,7 @@ use choscorui_core::{
 pub enum DialogButtonRole {
     /// Confirms (Return); the default button.
     Accept,
-    /// Dismisses without changes (Escape, ⌘.).
+    /// Dismisses without changes (Escape; `DialogKeys::route` also maps ⌘.).
     Reject,
     /// Confirms a destructive action (for example "Delete").
     Destructive,

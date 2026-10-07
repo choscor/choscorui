@@ -354,8 +354,9 @@ impl DateTimeEdit {
 }
 
 /// Month calendar: arrows move by day and week, Page Up/Down by month,
-/// Home/End to the start/end of the week (locale first weekday), Return
-/// chooses. Dates outside the range are visible but not selectable.
+/// Home/End to the start/end of the week (locale first weekday). Choosing
+/// a date (for example on Return) is left to the host. Dates outside the
+/// range are visible but not selectable.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Calendar {
     locale: Locale,
@@ -439,7 +440,7 @@ impl Calendar {
             .collect()
     }
 
-    /// Returns true when the selection changed; Return reports `chosen`.
+    /// Returns true when the selection changed.
     pub fn handle_key(&mut self, key: Key) -> bool {
         let target = match key {
             Key::ArrowLeft => self.selected.add_days(-1),
