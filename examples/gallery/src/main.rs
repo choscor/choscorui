@@ -3,12 +3,12 @@ fn main() {
     use choscorui_controls::{
         Button, ButtonInput, Checkbox, CheckboxInput, CommandId, CommandRegistry, CommandState,
         SemanticAction as ControlSemanticAction, Shortcut, ShortcutModifiers, ShortcutScope,
-        TextField, TextFieldChange, TextFieldInput, ValidationState,
+        TextEditor, TextEditorInput, TextField, TextFieldChange, TextFieldInput, ValidationState,
     };
     use choscorui_core::{
         Axis, CrossAlign, DesignTokens, Insets, Key, KeyEvent, LayoutDirection, LinearLayout,
-        Point, PointerEvent, Rect, ScrollViewport, SemanticAction, SemanticTree, Size, TextBuffer,
-        TextLayoutCache, TextMotion, TextStyle, ThemeResolver, Tree,
+        Point, PointerEvent, Rect, ScrollViewport, SemanticAction, SemanticTree, Size,
+        TextLayoutCache, TextStyle, ThemeResolver, Tree,
     };
     use choscorui_macos::{
         Application, Clipboard, CoreTextShaper, ImeEvent, WindowEvent, WindowOptions,
@@ -102,10 +102,10 @@ fn main() {
     let mut checkbox = Checkbox::new("Show selection", true);
     let mut text_field = TextField::new("Greeting", "Xin chào 👩‍💻");
     let mut semantic_tree = SemanticTree::new();
-    let mut document_text = TextBuffer::new(GALLERY_DOCUMENT);
-    document_text.set_selection(0, 15).unwrap();
-    let mut selection_anchor = 0usize;
-    let mut preferred_caret_x = None;
+    let mut document_editor = TextEditor::new("Multilingual document", GALLERY_DOCUMENT);
+    document_editor.set_selection(0, 15);
+    let mut document_width =
+        (document_viewport_bounds(window.content_size()).size.width - 20.0).max(1.0);
     let mut commands = CommandRegistry::new();
     let mut themes = ThemeResolver::new(DesignTokens::dark());
     commands
@@ -141,7 +141,7 @@ fn main() {
             rows: &rows,
             layout: &document,
             offset: scroll.offset().y,
-            selection: document_text.selection(),
+            editor: &document_editor,
         },
         themes.resolve(&tree, root).unwrap(),
     ));
@@ -160,7 +160,17 @@ fn main() {
             rows: &rows,
         },
     );
-    sync_text_input_state(&window, &tree, text_field_node, &text_field);
+    sync_input_state(
+        &window,
+        &tree,
+        (text_field_node, &text_field),
+        (
+            document_node,
+            &document_editor,
+            &document,
+            scroll.offset().y,
+        ),
+    );
     // Text dragged from other applications can be dropped on the field.
     window
         .accept_drops(
@@ -247,14 +257,12 @@ fn main() {
                 }
                 WindowEvent::ScaleChanged { scale } => {
                     text_cache.set_scale(scale);
-                    document = text_cache
-                        .layout(
-                            &CoreTextShaper,
-                            GALLERY_DOCUMENT,
-                            &document_style,
-                            Some(document.max_width().unwrap_or(1.0)),
-                        )
-                        .unwrap();
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
                     redraw = true;
                 }
                 WindowEvent::Focused(false) => {
@@ -284,19 +292,17 @@ fn main() {
                     scroll
                         .arrange(&mut tree, gallery_viewport_bounds(size))
                         .unwrap();
-                    document = text_cache
-                        .layout(
-                            &CoreTextShaper,
-                            GALLERY_DOCUMENT,
-                            &document_style,
-                            Some((document_viewport_bounds(size).size.width - 20.0).max(1.0)),
-                        )
-                        .unwrap();
+                    document_width = (document_viewport_bounds(size).size.width - 20.0).max(1.0);
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
                     tree.set_bounds(document_node, document_viewport_bounds(size))
                         .unwrap();
                     tree.set_bounds(text_field_node, text_field_bounds(size))
                         .unwrap();
-                    preferred_caret_x = None;
                     redraw = true;
                 }
                 WindowEvent::Pointer {
@@ -320,22 +326,35 @@ fn main() {
                             position,
                             button: choscorui_core::PointerButton::Primary,
                         },
-                    ..
+                    modifiers,
                 } if tree.pointer_capture().is_none()
                     && tree.hit_test(position) == Some(document_node) =>
                 {
                     tree.set_pointer_capture(Some(document_node)).unwrap();
                     tree.set_focus(Some(document_node)).unwrap();
-                    selection_anchor = document_hit_test(
-                        &document,
+                    let position = document_point(
                         tree.bounds(document_node).unwrap(),
                         scroll.offset().y,
                         position,
                     );
-                    document_text
-                        .set_selection(selection_anchor, selection_anchor)
+                    document_editor
+                        .handle(
+                            &mut tree,
+                            document_node,
+                            &document,
+                            TextEditorInput::PointerDown {
+                                position,
+                                extend: modifiers.shift,
+                                clicks: 1,
+                            },
+                        )
                         .unwrap();
-                    preferred_caret_x = None;
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
                     redraw = true;
                 }
                 WindowEvent::Pointer {
@@ -369,16 +388,19 @@ fn main() {
                     event: PointerEvent::Move { position },
                     ..
                 } if tree.pointer_capture() == Some(document_node) => {
-                    let selection_caret = document_hit_test(
-                        &document,
+                    let position = document_point(
                         tree.bounds(document_node).unwrap(),
                         scroll.offset().y,
                         position,
                     );
-                    document_text
-                        .set_selection(selection_anchor, selection_caret)
+                    document_editor
+                        .handle(
+                            &mut tree,
+                            document_node,
+                            &document,
+                            TextEditorInput::PointerDrag { position },
+                        )
                         .unwrap();
-                    preferred_caret_x = None;
                     redraw = true;
                 }
                 WindowEvent::Pointer {
@@ -389,16 +411,19 @@ fn main() {
                         },
                     ..
                 } if tree.pointer_capture() == Some(document_node) => {
-                    let selection_caret = document_hit_test(
-                        &document,
+                    let position = document_point(
                         tree.bounds(document_node).unwrap(),
                         scroll.offset().y,
                         position,
                     );
-                    document_text
-                        .set_selection(selection_anchor, selection_caret)
-                        .unwrap();
-                    preferred_caret_x = None;
+                    for input in [
+                        TextEditorInput::PointerDrag { position },
+                        TextEditorInput::PointerUp,
+                    ] {
+                        document_editor
+                            .handle(&mut tree, document_node, &document, input)
+                            .unwrap();
+                    }
                     tree.set_pointer_capture(None).unwrap();
                     redraw = true;
                 }
@@ -459,38 +484,77 @@ fn main() {
                     redraw = true;
                 }
                 WindowEvent::Key {
-                    event: KeyEvent::Down { key, .. },
+                    event:
+                        KeyEvent::Down {
+                            key: Key::Character(code),
+                            repeat: false,
+                        },
                     modifiers,
                 } if tree.focus() == Some(document_node)
+                    && document_editor.composition().is_none()
+                    && modifiers.command
+                    && !modifiers.control =>
+                {
+                    let selected = document_editor.selected_text().to_owned();
+                    let input = match code {
+                        'a' => Some(TextEditorInput::SelectAll),
+                        'c' => {
+                            if !selected.is_empty() {
+                                clipboard.write_text(&selected).unwrap();
+                            }
+                            None
+                        }
+                        'x' if !selected.is_empty() => {
+                            clipboard.write_text(&selected).unwrap();
+                            Some(TextEditorInput::Cut)
+                        }
+                        'v' => clipboard.read_text().unwrap().map(TextEditorInput::Text),
+                        'z' if modifiers.shift => Some(TextEditorInput::Redo),
+                        'z' => Some(TextEditorInput::Undo),
+                        _ => None,
+                    };
+                    if let Some(input) = input {
+                        document_editor
+                            .handle(&mut tree, document_node, &document, input)
+                            .unwrap();
+                        document = shape_document(
+                            &mut text_cache,
+                            &document_editor,
+                            &document_style,
+                            document_width,
+                        );
+                        reveal_document_caret(&document, &document_editor, &mut scroll, &mut tree);
+                        redraw = true;
+                    }
+                }
+                WindowEvent::Key {
+                    event: event @ KeyEvent::Down { .. },
+                    modifiers,
+                } if tree.focus() == Some(document_node)
+                    && document_editor.composition().is_none()
                     && !modifiers.control
                     && !modifiers.command =>
                 {
-                    if matches!(key, Key::ArrowUp | Key::ArrowDown) {
-                        let direction = if key == Key::ArrowUp { -1 } else { 1 };
-                        let (caret, preferred) = document
-                            .move_vertical(document_text.caret(), direction, preferred_caret_x)
-                            .unwrap();
-                        document_text.set_caret(caret, modifiers.shift).unwrap();
-                        preferred_caret_x = Some(preferred);
-                        reveal_document_caret(&document, &document_text, &mut scroll, &mut tree);
-                        redraw = true;
-                        continue;
-                    }
-                    let motion = match (key, modifiers.option) {
-                        (Key::ArrowLeft, true) => Some(TextMotion::WordLeft),
-                        (Key::ArrowRight, true) => Some(TextMotion::WordRight),
-                        (Key::ArrowLeft, false) => Some(TextMotion::Left),
-                        (Key::ArrowRight, false) => Some(TextMotion::Right),
-                        (Key::Home, _) => Some(TextMotion::Start),
-                        (Key::End, _) => Some(TextMotion::End),
-                        _ => None,
-                    };
-                    if let Some(motion) = motion {
-                        document_text.move_caret(motion, modifiers.shift);
-                        preferred_caret_x = None;
-                        reveal_document_caret(&document, &document_text, &mut scroll, &mut tree);
-                        redraw = true;
-                    }
+                    document_editor
+                        .handle(
+                            &mut tree,
+                            document_node,
+                            &document,
+                            TextEditorInput::Key {
+                                event,
+                                extend: modifiers.shift,
+                                word: modifiers.option,
+                            },
+                        )
+                        .unwrap();
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
+                    reveal_document_caret(&document, &document_editor, &mut scroll, &mut tree);
+                    redraw = true;
                 }
                 WindowEvent::Key { event, modifiers }
                     if tree.focus() == Some(text_field_node)
@@ -612,7 +676,56 @@ fn main() {
                     }
                     redraw = true;
                 }
+                WindowEvent::Text { text } if tree.focus() == Some(document_node) => {
+                    document_editor
+                        .handle(
+                            &mut tree,
+                            document_node,
+                            &document,
+                            TextEditorInput::Text(text),
+                        )
+                        .unwrap();
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
+                    reveal_document_caret(&document, &document_editor, &mut scroll, &mut tree);
+                    redraw = true;
+                }
                 WindowEvent::Text { .. } => {}
+                WindowEvent::Ime(event) if tree.focus() == Some(document_node) => {
+                    let input = match event {
+                        ImeEvent::SetMarkedText {
+                            text,
+                            selected_utf16,
+                            replacement_utf16,
+                        } => TextEditorInput::SetMarkedText {
+                            text,
+                            selected_utf16,
+                            replacement_utf16,
+                        },
+                        ImeEvent::CommitText {
+                            text,
+                            replacement_utf16,
+                        } => TextEditorInput::CommitMarkedText {
+                            text,
+                            replacement_utf16,
+                        },
+                        ImeEvent::Unmark => TextEditorInput::UnmarkMarkedText,
+                    };
+                    document_editor
+                        .handle(&mut tree, document_node, &document, input)
+                        .unwrap();
+                    document = shape_document(
+                        &mut text_cache,
+                        &document_editor,
+                        &document_style,
+                        document_width,
+                    );
+                    redraw = true;
+                }
                 WindowEvent::Ime(event) if tree.focus() == Some(text_field_node) => {
                     let input = match event {
                         ImeEvent::SetMarkedText {
@@ -704,7 +817,7 @@ fn main() {
                     rows: &rows,
                     layout: &document,
                     offset: scroll.offset().y,
-                    selection: document_text.selection(),
+                    editor: &document_editor,
                 },
                 themes.resolve(&tree, root).unwrap(),
             ));
@@ -723,7 +836,17 @@ fn main() {
                     rows: &rows,
                 },
             );
-            sync_text_input_state(&window, &tree, text_field_node, &text_field);
+            sync_input_state(
+                &window,
+                &tree,
+                (text_field_node, &text_field),
+                (
+                    document_node,
+                    &document_editor,
+                    &document,
+                    scroll.offset().y,
+                ),
+            );
         }
         if close_requested.get() {
             window.close();
@@ -920,7 +1043,7 @@ struct GalleryDocument<'a> {
     rows: &'a [choscorui_core::NodeId],
     layout: &'a choscorui_core::TextLayout,
     offset: f64,
-    selection: std::ops::Range<usize>,
+    editor: &'a choscorui_controls::TextEditor,
 }
 
 #[cfg(target_os = "macos")]
@@ -1089,7 +1212,7 @@ fn display_list(
         document_bounds.origin.y + 10.0 - document.offset,
     );
     if ui.checkbox.value() {
-        for rect in document.layout.selection_rects(document.selection.clone()) {
+        for rect in document.editor.selection_rects(document.layout) {
             list.fill_rect(
                 Rect::new(
                     Point::new(
@@ -1102,11 +1225,25 @@ fn display_list(
             );
         }
     }
-    if tree.focus() == Some(ui.document_node) && document.selection.is_empty() {
-        let rect = document
-            .layout
-            .caret_rect(document.selection.start)
-            .unwrap();
+    if let Some(composition) = document.editor.composition() {
+        // Underline marked text so composition is visible.
+        let start = composition.replacement.start;
+        let count = choscorui_core::TextBuffer::new(&composition.text).grapheme_count();
+        for rect in document.layout.selection_rects(start..start + count) {
+            list.fill_rect(
+                Rect::new(
+                    Point::new(
+                        document_origin.x + rect.origin.x,
+                        document_origin.y + rect.origin.y + rect.size.height - 2.0,
+                    ),
+                    Size::new(rect.size.width, 2.0),
+                ),
+                Color::rgba8(245, 245, 250, 255),
+            );
+        }
+    }
+    if tree.focus() == Some(ui.document_node) && document.editor.selection().is_empty() {
+        let rect = document.editor.caret_rect(document.layout).unwrap();
         list.fill_rect(
             Rect::new(
                 Point::new(
@@ -1127,28 +1264,46 @@ fn display_list(
 }
 
 #[cfg(target_os = "macos")]
-fn document_hit_test(
-    document: &choscorui_core::TextLayout,
+fn shape_document(
+    cache: &mut choscorui_core::TextLayoutCache,
+    editor: &choscorui_controls::TextEditor,
+    style: &choscorui_core::TextStyle,
+    width: f64,
+) -> std::sync::Arc<choscorui_core::TextLayout> {
+    cache
+        .layout(
+            &choscorui_macos::CoreTextShaper,
+            &editor.layout_text(),
+            style,
+            Some(width),
+        )
+        .expect("gallery document must shape")
+}
+
+/// Maps a window point into the document layout's coordinates.
+#[cfg(target_os = "macos")]
+fn document_point(
     bounds: choscorui_core::Rect,
     offset: f64,
     position: choscorui_core::Point,
-) -> usize {
-    use choscorui_core::Point;
-    document.hit_test(Point::new(
+) -> choscorui_core::Point {
+    choscorui_core::Point::new(
         position.x - bounds.origin.x - 10.0,
         position.y - bounds.origin.y - 10.0 + offset,
-    ))
+    )
 }
 
 #[cfg(target_os = "macos")]
 fn reveal_document_caret(
     document: &choscorui_core::TextLayout,
-    text: &choscorui_core::TextBuffer,
+    editor: &choscorui_controls::TextEditor,
     scroll: &mut choscorui_core::ScrollViewport,
     tree: &mut choscorui_core::Tree,
 ) {
     use choscorui_core::{Point, Rect, Size};
-    let caret = document.caret_rect(text.caret()).unwrap();
+    let Some(caret) = editor.caret_rect(document) else {
+        return;
+    };
     scroll
         .reveal(
             tree,
@@ -1158,6 +1313,33 @@ fn reveal_document_caret(
             ),
         )
         .unwrap();
+}
+
+/// Points the native text-input client at whichever editor has focus.
+#[cfg(target_os = "macos")]
+fn sync_input_state(
+    window: &choscorui_macos::Window,
+    tree: &choscorui_core::Tree,
+    field: (choscorui_core::NodeId, &choscorui_controls::TextField),
+    document: (
+        choscorui_core::NodeId,
+        &choscorui_controls::TextEditor,
+        &choscorui_core::TextLayout,
+        f64,
+    ),
+) {
+    let (node, editor, layout, offset) = document;
+    if tree.focus() != Some(node) {
+        sync_text_input_state(window, tree, field.0, field.1);
+        return;
+    }
+    let bounds = tree.bounds(node).expect("document remains attached");
+    let caret = editor.caret_rect(layout).unwrap_or_default();
+    window.set_text_input_state(choscorui_macos::TextInputState {
+        selected_utf16: editor.selection_utf16(),
+        marked_utf16: editor.marked_range_utf16(),
+        caret: caret.translate(bounds.origin.x + 10.0, bounds.origin.y + 10.0 - offset),
+    });
 }
 
 #[cfg(target_os = "macos")]

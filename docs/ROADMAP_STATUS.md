@@ -85,3 +85,16 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Payload formats, copy/move/link negotiation, cancellation, cross-application behavior (text, files, images) | Done | `negotiate_drag`, `DropRouter`; [FFI.md](FFI.md) pasteboard row |
 | Per-control semantic role, state changes, keyboard actions | Done | each control's `semantics()` with role, value, state, and actions |
 | Gate: keyboard-only operation, deterministic state tests, capture outside bounds | Done (automated) + Manual | `thumb_drag_keeps_capture_outside_bounds_and_releases`, slider and button capture tests. Manual: drag text from TextEdit onto the gallery text field; drag a file from Finder onto a drop target. |
+
+## Phase 7 — text editing and input methods
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| UTF-8 text model with byte, grapheme, and UTF-16 mappings | Done | `TextBuffer` (`byte_to_utf16`, `utf16_to_byte`, grapheme boundaries); `core/tests/text.rs` |
+| Caret, selection, word motion, undo/redo, copy/paste, multiline, scroll-to-caret, password masking | Done | `TextField` (single line, password masking), `TextEditor` (multiline, visual-line Home/End, Page Up/Down, preferred column, click/double/triple-click); gallery `reveal_document_caret`; `controls/tests/text_field.rs`, `text_editor.rs` |
+| Validation states and commit separate from editing; error announcements | Done | `ValidationState`, `TextFieldSemantics::announcement`; Return commits only when `Valid` |
+| Input masks and locale-aware numeric/date contracts | Done | `InputMask`, `NumberInput`, `DateInput`; `controls/tests/input_rules.rs` |
+| Undo decision: text-only vs. reusable stack | Done | `core::undo` module docs: `TextBuffer` keeps text history (marked text never enters it); `UndoStack` groups, merging, labels, and save point for application actions; `core/tests/undo.rs` |
+| AppKit IME composition and candidate placement; marked vs. committed text | Done | `NSTextInputClient` bridge (`setMarkedText`, `insertText`, `firstRectForCharacterRange`); `TextEditor::marked_range_utf16`, `caret_rect` |
+| Composition survives redraws; edits rejected when the focused node is removed | Done | `composition_survives_redraws_commits_on_click_and_undo_skips_marked_text`, `removed_node_rejects_edits_and_read_only_blocks_changes` |
+| Gate: Vietnamese, Japanese/Chinese, emoji, dead keys, paste, undo, selection, screen reader editing | Done (automated) + Manual | `window_smoke` drives dead-key (´ → é) and Telex (ê → ệ) composition through the real `NSTextInputClient`; editor tests cover kana → kanji commit, undo, selection, and `SetValue`. Manual: type with macOS Vietnamese Telex and Japanese Romaji input sources in the gallery document; edit the document with VoiceOver. |

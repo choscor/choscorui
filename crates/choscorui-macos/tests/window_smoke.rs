@@ -185,6 +185,35 @@ fn main() {
                 replacement_utf16: None,
             }))
     );
+    // Dead key (Option-E then E on a US layout): AppKit marks the accent,
+    // then commits the composed letter in place of the marked text.
+    send_native_marked_text("´", 1..1);
+    assert!(
+        window
+            .take_events()
+            .contains(&WindowEvent::Ime(ImeEvent::SetMarkedText {
+                text: "´".into(),
+                selected_utf16: 1..1,
+                replacement_utf16: None,
+            }))
+    );
+    send_native_ime_commit("é");
+    assert!(
+        window
+            .take_events()
+            .contains(&WindowEvent::Ime(ImeEvent::CommitText {
+                text: "é".into(),
+                replacement_utf16: None,
+            }))
+    );
+    // Vietnamese Telex composes "ệ" from marked "ê" in the same way.
+    send_native_marked_text("ê", 1..1);
+    send_native_ime_commit("ệ");
+    let telex = window.take_events();
+    assert!(telex.contains(&WindowEvent::Ime(ImeEvent::CommitText {
+        text: "ệ".into(),
+        replacement_utf16: None,
+    })));
     send_native_key_event_text(10, c"keyDown:", 0x07, 1 << 20, false, false, "x");
     let command_events = window.take_events();
     assert!(command_events.iter().any(|event| matches!(event,

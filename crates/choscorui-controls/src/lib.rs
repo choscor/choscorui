@@ -34,6 +34,10 @@ pub use containers::{
     ContainerError, GroupBox, SplitOrientation, Splitter, SplitterInput, SplitterStyle,
     SplitterVisualState, StackPage, StackedContainer,
 };
+mod input_rules;
+pub use input_rules::{DateInput, InputMask, MaskError, MaskedText, NumberInput};
+mod text_editor;
+pub use text_editor::{TextEditor, TextEditorChange, TextEditorInput};
 mod navigation;
 pub use navigation::{
     DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea, ScrollAreaInput,

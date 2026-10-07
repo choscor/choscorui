@@ -41,6 +41,8 @@ pub use text_layout::{
     CaretStop, FontSlant, FontWeight, GlyphRun, LayoutLine, TextCacheStats, TextDirection,
     TextLayout, TextLayoutCache, TextLayoutError, TextShaper, TextStyle, first_strong_is_rtl,
 };
+mod undo;
+pub use undo::{UndoGroup, UndoStack};
 mod theme;
 pub use theme::{
     AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,
