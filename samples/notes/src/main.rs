@@ -50,7 +50,6 @@ mod app {
         MenuItemState, MenuShortcut, MenuShortcutModifiers, MenuSpec, ShapedLine, Window,
         WindowEvent, WindowOptions, system_accessibility_preferences, system_prefers_dark,
     };
-    use std::path::Path;
     use std::time::Duration;
 
     /// Core Text measurement through the safe shaping API.
@@ -90,8 +89,7 @@ mod app {
 
     impl Notes {
         pub fn new(app: &Application) -> Self {
-            let resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
-            let (catalog, notes) = strings::load(&resources);
+            let (catalog, notes) = strings::load(&strings::resources_dir());
             for note in notes {
                 eprintln!("notes: {note}");
             }

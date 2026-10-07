@@ -4,7 +4,7 @@
 //! as a fallback, and every problem is returned as a note to report.
 
 use choscorui::core::{Catalog, Locale, ResourceBundle};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Languages offered by the Language command, in cycling order.
 pub const LANGUAGES: [&str; 3] = ["en", "vi", "he"];
@@ -13,6 +13,17 @@ pub const LANGUAGES: [&str; 3] = ["en", "vi", "he"];
 pub const REFERENCE: &str = "en";
 
 const BUILT_IN_ENGLISH: &str = include_str!("../resources/strings/en.lang");
+
+/// Where packaged resources live: `Contents/Resources` when running from
+/// an app bundle (`Contents/MacOS/<binary>`), else this crate's
+/// `resources/` directory during development.
+pub fn resources_dir() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.parent()?.join("Resources")))
+        .filter(|dir| dir.join("strings").is_dir())
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("resources"))
+}
 
 /// Loads every language from `root` (the resources directory). Returns the
 /// catalog and human-readable notes about anything that was skipped.
@@ -68,8 +79,8 @@ mod tests {
     use super::*;
     use choscorui::core::{LayoutDirection, Localizer};
 
-    fn resources() -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("resources")
+    fn resources() -> PathBuf {
+        resources_dir()
     }
 
     #[test]
