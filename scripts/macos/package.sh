@@ -105,7 +105,7 @@ done
 archive="$dist/choscorui-$version-macos-$arch.zip"
 pack() {
     rm -f "$archive"
-    (cd "$dist" && ditto -c -k --sequesterRsrc --keepParent "choscorui-$version" "$archive")
+    (cd "$dist" && ditto -c -k --keepParent "choscorui-$version" "$archive")
 }
 pack
 

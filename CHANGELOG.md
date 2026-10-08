@@ -28,7 +28,6 @@ All notable changes to choscorui. The versioning policy is in [docs/VERSIONING.m
 ### Known limitations
 
 - **Release blockers:**
-  - **No project license yet.** See [docs/LICENSES.md](docs/LICENSES.md).
   - **Intel runtime unverified.** The Intel `NSRect` fix has been checked on a CI runner only, not on Intel hardware (see [docs/FFI.md](docs/FFI.md)).
 - **Platform and distribution:**
   - **macOS 15+ only.** The Windows and Linux crates compile but have no backend.

@@ -2,14 +2,9 @@
 
 Last checked on 2026-10-08 against `Cargo.lock` (workspace and `samples/notes`), the release link line (`otool -L` on the packaged binaries), and the contents of the packaged archive. Re-run the audit for every dependency-rule revision and before each release (see [RELEASING.md](RELEASING.md)).
 
-## Project license: not yet chosen (release blocker)
+## Project license
 
-The repository has no `LICENSE` file, and no crate declares a `license` field. Until the maintainers choose a license, the code and the packaged apps have no grant of rights, and no release should be published. To resolve this:
-
-1. Add the license file or files at the repository root.
-2. Add `license = "…"` to every `Cargo.toml` (or to `[workspace.package]`, inherited with `license.workspace = true`).
-3. Make `scripts/macos/package.sh` copy the license file or files into the archive.
-4. Update this section.
+choscorui is released under the MIT license ([`LICENSE`](../LICENSE)). The workspace sets `license = "MIT"` in `[workspace.package]`, every crate inherits it with `license.workspace = true`, and `samples/notes` declares it directly. `scripts/macos/package.sh` copies `LICENSE` and `NOTICE` into every archive.
 
 ## Rust crates in the build graph
 
@@ -20,7 +15,7 @@ The repository has no `LICENSE` file, and no crate declares a `license` field. U
 
 Workspace crates are first-party. `cargo tree --workspace -e normal --prefix none | sort -u` must list only workspace crates and the rows above. The `samples/notes` workspace depends only on the `choscorui` path crate.
 
-A packaged binary therefore contains MIT/Apache-2.0 code from `std` and `unicode-segmentation`. Both licenses require the copyright and license notice to accompany redistributed copies. Ship those notices in the archive together with the project license.
+A packaged binary therefore contains MIT/Apache-2.0 code from `std` and `unicode-segmentation`. Both licenses require the copyright and license notice to accompany redistributed copies. [`NOTICE`](../NOTICE) carries them, using the MIT option of each component, and ships in every archive.
 
 ## Linked system libraries (macOS)
 
