@@ -27,8 +27,7 @@ All notable changes to choscorui. The versioning policy is in [docs/VERSIONING.m
 
 ### Known limitations
 
-- **Release blockers:**
-  - **Intel runtime unverified.** The Intel `NSRect` fix has been checked on a CI runner only, not on Intel hardware (see [docs/FFI.md](docs/FFI.md)).
+- **Intel:** the x86-64 build passes every native check under Rosetta 2, but has not yet run on real Intel hardware (see [docs/FFI.md](docs/FFI.md)).
 - **Platform and distribution:**
   - **macOS 15+ only.** The Windows and Linux crates compile but have no backend.
   - **Not on crates.io.** Depend on the repository by path.
