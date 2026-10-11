@@ -891,6 +891,11 @@ behavior.
 - **Keys.** ArrowLeft and ArrowRight move the focused column and stop at
   the ends. Space or Enter toggles the sort of the focused column.
 - `+` or `=` widens the focused column by 10 points, and `-` narrows it.
+- **Look.** `paint` uses the `Table` recipe. The `Header` slot draws a
+  bottom `border` line. Each `HeaderCell` draws its title in sm medium
+  `foreground` text with 8 pt inline padding. The sorted column shows a
+  16 pt `muted-foreground` chevron at the end. A 1 pt `border` divider marks
+  each resize edge. `focus_visible` rings the focused column.
 
 | Field | `HeaderView::column_semantics` |
 | --- | --- |

@@ -53,8 +53,8 @@ pub use item_view::{
 mod model_widgets;
 pub use model_widgets::{
     CellEdit, ColumnBrowser, DataMapper, DefaultEditorFactory, EditorFactory, EditorKind,
-    HeaderColumn, HeaderInput, HeaderResponse, HeaderStyle, HeaderView, UndoHistoryRow,
-    undo_history, undo_steps_to,
+    HeaderColumn, HeaderInput, HeaderResponse, HeaderView, UndoHistoryRow, undo_history,
+    undo_steps_to,
 };
 mod popup;
 pub use popup::{

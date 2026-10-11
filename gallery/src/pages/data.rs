@@ -630,12 +630,8 @@ impl Header {
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         let rect = tree.bounds(self.node).unwrap_or_default();
-        self.view.paint(
-            list,
-            rect,
-            &env.header_style(),
-            tree.focus() == Some(self.node),
-        );
+        self.view
+            .paint(&mut env.cx(list, rect), tree.focus_visible(self.node));
     }
 
     fn semantics(&self) -> Vec<(NodeId, SemanticNode)> {

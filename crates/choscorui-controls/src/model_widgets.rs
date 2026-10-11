@@ -3,10 +3,10 @@
 //! (Miller) browser, and undo-history rows.
 
 use crate::ValidationState;
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    CivilDate, Color, DisplayList, EditableModel, ItemKey, ItemModel, Key, Locale, ModelError,
-    Point, Rect, Role, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder,
-    UndoStack, Value,
+    CivilDate, EditableModel, Icon, ItemKey, ItemModel, Key, Locale, ModelError, Point, Rect, Role,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
 };
 use std::collections::HashMap;
 
@@ -195,76 +195,68 @@ impl HeaderView {
         })
     }
 
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, style: &HeaderStyle, focused: bool) {
-        list.fill_rect(bounds, style.background);
+    /// Paints the header row in the context's bounds with the `Table`
+    /// recipe. `focus_visible` rings the focused column.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, focus_visible: bool) {
+        let bounds = cx.bounds;
+        let query = |slot| StyleQuery::new(ControlKind::Table, slot);
+        let header = cx.style(query(Slot::Header));
+        cx.slot(bounds, &header, |_, _| {});
+        let indicator = cx.style(query(Slot::Indicator));
         let mut x = bounds.origin.x;
         for (index, column) in self.columns.iter().enumerate() {
             let rect = Rect::new(
                 Point::new(x, bounds.origin.y),
                 Size::new(column.width, bounds.size.height),
             );
-            list.push_clip(rect);
-            let _ = list.draw_text(
-                Point::new(x + 6.0, rect.origin.y + rect.size.height / 2.0 + 4.5),
-                &column.title,
-                &style.font_family,
-                style.font_size,
-                style.text,
-            );
-            if let Some((sorted, order)) = self.sort
-                && sorted == index
-            {
-                let arrow = if order == SortOrder::Ascending {
-                    "▲"
-                } else {
-                    "▼"
-                };
-                let _ = list.draw_text(
-                    Point::new(
-                        x + column.width - 16.0,
-                        rect.origin.y + rect.size.height / 2.0 + 4.5,
-                    ),
-                    arrow,
-                    &style.font_family,
-                    style.font_size * 0.7,
-                    style.text,
+            let state = VisualState::NONE
+                .set(VisualState::FOCUSED, index == self.focused)
+                .set(
+                    VisualState::FOCUS_VISIBLE,
+                    focus_visible && index == self.focused,
                 );
-            }
-            let _ = list.pop_clip();
-            list.fill_rect(
-                Rect::new(
-                    Point::new(x + column.width - 1.0, bounds.origin.y + 4.0),
-                    Size::new(1.0, (bounds.size.height - 8.0).max(0.0)),
-                ),
-                style.divider,
+            let cell = cx.style(query(Slot::HeaderCell).state(state));
+            cx.list.push_clip(rect);
+            cx.slot(rect, &cell, |cx, inner| {
+                let mut text = inner;
+                if let Some((sorted, order)) = self.sort
+                    && sorted == index
+                {
+                    let icon = if order == SortOrder::Ascending {
+                        Icon::ChevronUp
+                    } else {
+                        Icon::ChevronDown
+                    };
+                    let width = indicator.icon_size.min(inner.size.width);
+                    let icon_x = if cx.rtl {
+                        inner.origin.x
+                    } else {
+                        inner.max_x() - width
+                    };
+                    let icon_rect =
+                        Rect::from_xywh(icon_x, inner.origin.y, width, inner.size.height);
+                    cx.icon(icon_rect, icon, &indicator);
+                    text.size.width = (text.size.width - width - cell.gap).max(0.0);
+                    if cx.rtl {
+                        text.origin.x = inner.max_x() - text.size.width;
+                    }
+                }
+                cx.label(text, &column.title, &cell, TextAlign::Start);
+            });
+            let _ = cx.list.pop_clip();
+            // The resize divider at the column's end.
+            let divider = Rect::from_xywh(
+                x + column.width - header.border_width,
+                bounds.origin.y + cell.padding.block_start,
+                header.border_width,
+                (bounds.size.height - cell.padding.vertical()).max(0.0),
             );
-            if focused && index == self.focused {
-                let _ = list.stroke_rect(rect, style.focus, 2.0);
+            cx.list.fill_rect(divider, header.border);
+            if state.focus_visible() {
+                let ring = cx.style(query(Slot::Root).state(state));
+                cx.slot(rect, &ring, |_, _| {});
             }
             x += column.width;
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct HeaderStyle {
-    pub background: Color,
-    pub text: Color,
-    pub divider: Color,
-    pub focus: Color,
-    pub font_family: String,
-    pub font_size: f64,
-}
-
-impl Default for HeaderStyle {
-    fn default() -> Self {
-        Self {
-            background: Color::rgba8(236, 236, 240, 255),
-            text: Color::rgba8(40, 40, 45, 255),
-            divider: Color::rgba8(200, 200, 205, 255),
-            focus: Color::rgba8(40, 110, 220, 255),
-            font_family: "Helvetica".into(),
-            font_size: 13.0,
         }
     }
 }

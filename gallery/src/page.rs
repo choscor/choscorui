@@ -3,9 +3,8 @@
 //! category files.
 
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, InputText,
-    PaintContext, ShortcutModifiers, Styles, TextItemDelegate, TextMeasure, ValidationState,
-    VisualState,
+    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HostEnv, InputText, PaintContext,
+    ShortcutModifiers, Styles, TextItemDelegate, TextMeasure, ValidationState, VisualState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -358,17 +357,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn header_style(&self) -> HeaderStyle {
-        HeaderStyle {
-            background: self.mix(0.1),
-            text: self.tokens.color(ColorRole::Foreground),
-            divider: self.mix(0.3),
-            focus: self.tokens.color(ColorRole::Primary),
-            font_family: FONT.into(),
-            font_size: self.small(),
-        }
     }
 
     pub fn item_delegate(&self) -> TextItemDelegate {

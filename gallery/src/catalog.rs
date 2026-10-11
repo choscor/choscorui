@@ -402,7 +402,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("GroupFrame", "one tab group inside a DockArrangement"),
     ("HeaderInput", "input enum for HeaderView::handle"),
     ("HeaderResponse", "result of HeaderView::handle"),
-    ("HeaderStyle", "paint style used by the header-view page"),
     (
         "INDETERMINATE_PERIOD",
         "animation period constant used by Progress",

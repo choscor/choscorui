@@ -3,10 +3,12 @@ use choscorui_controls::{
     HeaderInput, HeaderView, ItemModifiers, ItemView, ItemViewInput, TextItemDelegate,
     ValidationState, ViewLayout, undo_history, undo_steps_to,
 };
+use choscorui_controls::{EstimatedText, PaintContext, Styles};
 use choscorui_core::{
-    DisplayList, ItemData, ItemKey, ItemModel, Key, ListStore, Locale, ModelError, NodeId, Point,
-    Rect, Role, SelectionMode, SemanticAction, SemanticRole, SemanticTree, Size, SliceModel,
-    SortFilterProxy, SortOrder, StringListModel, TextFilter, Tree, TreeStore, UndoStack, Value,
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemData, ItemKey, ItemModel, Key,
+    ListStore, Locale, ModelError, NodeId, Paint, Point, Rect, Role, SelectionMode, SemanticAction,
+    SemanticRole, SemanticTree, Size, SliceModel, SortFilterProxy, SortOrder, StringListModel,
+    TextFilter, Tree, TreeStore, UndoStack, Value,
 };
 use std::time::Duration;
 
@@ -283,6 +285,60 @@ fn header_sorts_resizes_and_exposes_semantics() {
     assert_eq!(header.widths()[0], 50.0);
     header.handle(HeaderInput::Key(Key::Enter));
     assert_eq!(header.sort(), Some((0, SortOrder::Ascending)));
+}
+
+#[test]
+fn header_paints_cells_sort_icon_and_ring_from_the_table_recipe() {
+    let mut header = HeaderView::new(vec![
+        HeaderColumn {
+            title: "Name".into(),
+            width: 120.0,
+            min_width: 40.0,
+        },
+        HeaderColumn {
+            title: "Size".into(),
+            width: 80.0,
+            min_width: 40.0,
+        },
+    ]);
+    header.handle(HeaderInput::Press { x: 150.0 });
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let paint = |focus_visible| {
+        let mut list = DisplayList::new();
+        header.paint(
+            &mut PaintContext::new(
+                &mut list,
+                rect(0.0, 0.0, 200.0, 40.0),
+                &tokens,
+                &styles,
+                &EstimatedText,
+            ),
+            focus_visible,
+        );
+        list
+    };
+    let plain = paint(false);
+    let texts: Vec<_> = plain
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["Name", "Size"]);
+    // The sort chevron is a muted path in the sorted column.
+    let muted = tokens.color(ColorRole::MutedForeground);
+    assert!(plain.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::StrokePath { paint: Paint::Solid(color), .. } if *color == muted
+    )));
+    let ringed = paint(true);
+    assert!(
+        ringed.commands().len() > plain.commands().len(),
+        "focus ring"
+    );
 }
 
 #[derive(Clone)]
