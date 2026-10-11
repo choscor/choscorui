@@ -1,7 +1,6 @@
 /target/
 /quality/*
 !/quality/baseline.json
-/samples/*/target/
 /dist/
 .DS_Store
 

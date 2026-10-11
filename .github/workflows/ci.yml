@@ -29,18 +29,13 @@ jobs:
       - name: Docs
         run: scripts/check-docs.sh
       - name: Format
-        run: cargo fmt --all --check && (cd samples/notes && cargo fmt --check)
+        run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Minimum supported Rust version
         run: cargo +1.88 check --workspace --all-targets --locked
       - name: Tests
         run: cargo test --workspace --locked
-      - name: Notes sample (external app)
-        working-directory: samples/notes
-        run: |
-          cargo clippy --all-targets --locked -- -D warnings
-          cargo test --locked
 
   native:
     name: native windows (${{ matrix.os }})
@@ -62,11 +57,8 @@ jobs:
           CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
       - name: Gallery first frame
         run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
-      - name: Stress gallery autopilot
-        run: CHOSCORUI_STRESS_SETTINGS="$RUNNER_TEMP/stress.txt" CHOSCORUI_STRESS_AUTOPILOT=1 cargo run -p choscorui-stress --locked
-      - name: Notes sample autopilot
-        working-directory: samples/notes
-        run: NOTES_AUTOPILOT=1 cargo run --locked
+      - name: Gallery autopilot
+        run: CHOSCORUI_GALLERY_SETTINGS="$RUNNER_TEMP/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
 
   package:
     name: package and install check
