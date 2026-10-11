@@ -9,10 +9,10 @@
 # Needs the terminal (or CI agent) to be allowed under System Settings →
 # Privacy & Security → Accessibility. Without that permission it exits 2.
 #
-# Status: not yet run against a real session (access was never granted on
-# the development machine). The expected roles and names come from the
-# accessibility bridge's mapping in docs/ACCESSIBILITY.md and may need
-# adjusting on the first run.
+# This is an optional diagnostic. The expected roles and names come from
+# the accessibility bridge's role mapping in crates/choscorui-macos/README.md.
+# No live session has confirmed them, so a mismatch can be an error in this
+# script.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)

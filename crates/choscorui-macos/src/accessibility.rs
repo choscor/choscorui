@@ -1,11 +1,35 @@
+//! Platform-neutral part of the macOS accessibility bridge.
+//!
+//! [`AccessibilityProjection`] reconciles each `SemanticTree` snapshot into
+//! [`AccessibilityElement`]s. A node keeps the same [`AccessibilityIdentity`]
+//! while it stays in the snapshot. A node that leaves the snapshot is
+//! retired, and its identity is not used again. The projection also maps
+//! each `SemanticChange` to an [`AccessibilityNotification`].
+//!
+//! [`Window::set_accessibility`](crate::Window::set_accessibility) applies an
+//! [`AccessibilityUpdate`] to native `NSAccessibilityElement` objects. It
+//! maps each `SemanticRole` to an AppKit role, sets the attributes, and posts
+//! the AppKit notifications. Assistive-technology actions come back as
+//! [`AccessibilityActionRequest`]s through
+//! [`Window::take_accessibility_actions`](crate::Window::take_accessibility_actions).
+//! The bridge queues an action only when the node declares it.
+//!
+//! The `choscorui-macos` README describes the role mapping, the
+//! notifications, and the action callbacks.
+
 use choscorui_core::{
     NodeId, Rect, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry, SemanticNode,
 };
 use std::collections::{HashMap, HashSet};
 
+/// Stable identity of one native accessibility element. It does not change
+/// while its node stays in the snapshot, and a retired identity is never
+/// given to a different node.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct AccessibilityIdentity(pub(crate) u64);
 
+/// One semantic node as the native element sees it: identity, parent,
+/// bounds, focus, semantics, and the collection data of virtualized views.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessibilityElement {
     pub identity: AccessibilityIdentity,
@@ -14,20 +38,35 @@ pub struct AccessibilityElement {
     pub bounds: Rect,
     pub focused: bool,
     pub semantic: SemanticNode,
+    /// Full item and column count of a virtualized collection. It becomes
+    /// `accessibilityRowCount` and `accessibilityColumnCount`.
     pub collection: Option<SemanticCollection>,
+    /// Absolute index of a realized item. It becomes `accessibilityIndex`.
     pub item_index: Option<usize>,
 }
 
+/// A change that the window posts as an AppKit accessibility notification.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AccessibilityNotification {
+    /// Nodes were added, removed, or moved. Posted on the content view as
+    /// `NSAccessibilityLayoutChangedNotification`.
     LayoutChanged,
+    /// Posted as `NSAccessibilityTitleChangedNotification`.
     LabelChanged(AccessibilityIdentity),
+    /// Posted as `NSAccessibilityValueChangedNotification`. Text elements
+    /// also get `NSAccessibilitySelectedTextChangedNotification`.
     ValueChanged(AccessibilityIdentity),
+    /// Posted the same way as [`AccessibilityNotification::ValueChanged`].
     StateChanged(AccessibilityIdentity),
+    /// Posted as `NSAccessibilityFocusedUIElementChangedNotification`.
     FocusChanged(AccessibilityIdentity),
+    /// Focus left every element. Posted on the content view as
+    /// `NSAccessibilityFocusedUIElementChangedNotification`.
     FocusCleared,
 }
 
+/// The result of one reconciliation: the live elements in snapshot order,
+/// the retired identities, and the notifications to post.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccessibilityUpdate {
     pub elements: Vec<AccessibilityElement>,
@@ -35,13 +74,17 @@ pub struct AccessibilityUpdate {
     pub notifications: Vec<AccessibilityNotification>,
 }
 
+/// An action that an assistive technology asked for on a node. The
+/// application routes it into the same control input as a key or pointer.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessibilityActionRequest {
     pub node: NodeId,
     pub action: SemanticAction,
+    /// The new value for [`SemanticAction::SetValue`], as text.
     pub value: Option<String>,
 }
 
+/// Why [`AccessibilityProjection::request_action`] refused an action.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AccessibilityActionError {
     MissingElement,
@@ -59,6 +102,8 @@ impl std::fmt::Display for AccessibilityActionError {
 
 impl std::error::Error for AccessibilityActionError {}
 
+/// Keeps the identity of each semantic node across snapshots and queues
+/// action requests.
 #[derive(Default)]
 pub struct AccessibilityProjection {
     next_identity: u64,
@@ -72,6 +117,9 @@ impl AccessibilityProjection {
         Self::default()
     }
 
+    /// Reconciles `snapshot` with the previous one. New nodes get a new
+    /// identity, nodes that are still present keep theirs, and absent nodes
+    /// are retired. `changes` become notifications for live elements.
     pub fn reconcile(
         &mut self,
         snapshot: &[SemanticEntry],
@@ -165,6 +213,8 @@ impl AccessibilityProjection {
         }
     }
 
+    /// Queues `action` for the element. It fails when the element is retired
+    /// or when its node does not declare the action.
     pub fn request_action(
         &mut self,
         identity: AccessibilityIdentity,
@@ -185,6 +235,7 @@ impl AccessibilityProjection {
         Ok(())
     }
 
+    /// Removes and returns the queued action requests, oldest first.
     pub fn take_actions(&mut self) -> Vec<AccessibilityActionRequest> {
         std::mem::take(&mut self.actions)
     }

@@ -1,105 +1,38 @@
-# choscorui
+# ChoscorUI
 
-An experimental Rust desktop UI toolkit using the standard library and system SDK FFI. The [roadmap](docs/ROADMAP.md) describes the full target; the current prototype is macOS-only and draws a basic custom control tree.
-
-Applications depend on the experimental `choscorui` facade. It provides the safe retained-tree, control, composition, and macOS lifecycle APIs without exposing native handles. The lower-level workspace crates are implementation details while this API is validated.
+ChoscorUI is a desktop UI toolkit for Rust. It uses only the standard library, hand-written system SDK FFI, and one audited crate. Applications depend on the safe `choscorui` facade, which has no `unsafe` code and exposes no native handles.
 
 ## Requirements
 
-- macOS 15 or later (Apple silicon or Intel)
-- Xcode Command Line Tools: `xcode-select --install`
+macOS is the supported platform. You need:
+
+- macOS 15 or later, on Apple silicon or Intel
+- the Xcode Command Line Tools: `xcode-select --install`
 - Rust 1.88 or later: `rustup toolchain install 1.88`
 
-There are no other dependencies; see the [API guide](docs/GUIDE.md#requirements).
+There are no other dependencies.
 
-## Run the macOS window prototype
+## Run the examples
 
-```sh
-cargo run -p choscorui-gallery
-```
+- Run `cargo run -p choscorui-gallery` to see the basic controls, text input, and theme switching.
+- Run `cargo run -p choscorui-stress` to see a large list, a large canvas, and docking panels.
+- Run `cd samples/notes && cargo run` to see a small application with many windows. The [notes sample](samples/notes/README.md) uses only the facade.
 
-Click **Switch theme** to alternate between the dark plain-button theme and the light leading-rail theme; Enter or Space activates it after focus. The single-line field accepts ordinary and IME-composed text and supports selection, deletion, word navigation, Command-A/C/X/V/Z/Shift-Z, and Enter commit. Editing gives it an intermediate indicator; Enter accepts nonempty text or shows an invalid indicator for empty text. Drag across the multilingual document to select text; Arrow, Option-Arrow, Home, and End move its caret, Shift extends selection, and Up/Down preserve the horizontal goal while scrolling into view. The checkbox shows or hides selection. Control-Enter activates the theme command anywhere. Tab and Shift-Tab move focus. Scroll the rows or document with a wheel or trackpad. Resizing rewraps the document. Close the window to exit. For an unattended launch and first-frame check:
+## Documentation
 
-```sh
-CHOSCORUI_GALLERY_AUTOCLOSE_MS=200 cargo run -p choscorui-gallery
-```
-
-The stress gallery shows:
-- 100,000 searchable records, where search ignores diacritics ("ha noi" matches "Hà Nội").
-- A 20,000-item canvas (⌘-scroll to zoom, drag to select or move).
-- Dockable panels, a toolbar, and a status bar.
-
-It restores the window, dock, toolbar, search, and zoom from per-user settings on the next launch. The autopilot mode runs the phase 12 gate checks and exits non-zero on failure:
-
-```sh
-cargo run -p choscorui-stress
-CHOSCORUI_STRESS_SETTINGS=/tmp/stress.txt CHOSCORUI_STRESS_AUTOPILOT=1 cargo run -p choscorui-stress
-```
-
-The benchmark driver runs the reference scenarios on real windows and checks the release budgets:
-
-```sh
-cargo build --release -p choscorui-gallery -p choscorui-bench
-target/release/choscorui-bench --check bench/budgets.txt
-```
-
-The opt-in native smoke tests create real AppKit windows. `lifetime_smoke` stresses window churn, resize storms, and worker wakeups, then checks for leaks:
-
-```sh
-CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke
-CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke
-```
-
-The [notes sample](samples/notes/README.md) is a standalone app that uses only the safe `choscorui` facade. It shows a themed, localized, multi-window UI. Run its scripted check with `cd samples/notes && NOTES_AUTOPILOT=1 cargo run`.
-
-Run the native smoke test and gallery separately. Both create foreground AppKit windows, so concurrent runs can change focus and make input assertions unreliable.
-
-Core tests run on the workspace with `cargo test --workspace`; formatting and lint checks use `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`. Start with the [API guide](docs/GUIDE.md), the [customization cookbook](docs/COOKBOOK.md), the [control behavior contract](docs/CONTROLS.md), and [localization and resources](docs/LOCALIZATION.md). See also the [initial contract](docs/CONTRACT.md), [capability matrix](docs/SUPPORT_MATRIX.md), [FFI safety record](docs/FFI.md), [theming guide](docs/THEMING.md), [accessibility contract](docs/ACCESSIBILITY.md), [dialogs](docs/DIALOGS.md), [settings](docs/SETTINGS.md), [desktop integration](docs/DESKTOP.md), [canvas](docs/CANVAS.md), [rich text](docs/RICH_TEXT.md), [custom controls](docs/CUSTOM_CONTROLS.md), [benchmarks](docs/BENCHMARKS.md) with [release budgets](docs/BUDGETS.md), [reliability checks](docs/RELIABILITY.md), and the [versioning policy](docs/VERSIONING.md) for scope and current limits.
+Start with the [documentation index](docs/README.md).
 
 ## Install, release, and security
 
-Prebuilt demo apps ship as a zip with `install.sh` and `uninstall.sh` ([install notes](docs/INSTALL.md)). Build one with `scripts/macos/package.sh`, and check it end to end with `scripts/macos/install-check.sh dist/choscorui-*-macos-*.zip`. Release steps and manual gates are in [RELEASING.md](docs/RELEASING.md), changes are in each GitHub Release's notes, and vulnerability reporting is in [SECURITY.md](SECURITY.md). Contribution policy is in [CONTRIBUTING.md](CONTRIBUTING.md); bugs and suggestions go in issues.
-
-## Static analysis
-
-Install the pinned tools:
-
-```sh
-rustup component add clippy
-cargo install rustquty --version 0.4.3 --locked
-cargo install cargo-machete --version 0.9.2 --locked
-cargo install cargo-bylaw --version 0.1.0 --locked
-```
-
-`cargo-bylaw` 0.1.0 requires Rust 1.95 or newer, so install and run these tools
-with a current toolchain even though the library workspace supports Rust 1.88.
-
-Run the checks from the workspace root:
-
-```sh
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-rustquty qa --profile full --verbose \
-  --disable-collector tests \
-  --disable-collector coverage \
-  --disable-collector deny \
-  --disable-collector audit \
-  --disable-collector hack \
-  --disable-collector mutants \
-  --disable-collector duplicates \
-  --disable-collector complexity
-cargo machete --with-metadata
-cargo bylaw check
-```
-
-`rustquty.toml` hard-limits source files to 3,000 lines and functions to 700
-lines. The committed baseline ratchets the current maxima of 2,745 and 663
-lines, so either limit becomes stricter as those prototype files are split.
-`bylaw.toml` keeps `choscorui-core` at the base of the workspace, permits the
-composition, controls, render, and platform crates to depend only on core, prevents libraries
-from depending on the gallery composition root, and rejects crate cycles.
+- The demo apps ship as a zip archive with `install.sh` and `uninstall.sh`. `scripts/macos/package.sh` builds the archive, and its [README](scripts/macos/archive-readme.md) gives the install steps.
+- [docs/releasing.md](docs/releasing.md) describes the release procedure. Each GitHub Release contains the release notes.
+- [SECURITY.md](SECURITY.md) describes how to report a vulnerability.
+- [CONTRIBUTING.md](CONTRIBUTING.md) describes the contribution policy and the checks. Report bugs and suggestions in issues.
 
 ## License
 
+<!-- check-docs: no-sentence-check (standard dual-license text, kept verbatim) -->
+
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in choscorui by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ChoscorUI by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

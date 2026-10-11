@@ -5,7 +5,7 @@
 
 ## Outcome and current state
 
-The goal is for outside users of choscorui to have the same contribution experience as choscordb. Anyone can open issues. External pull requests are not accepted. The maintainer implements every change and follows a documented PR standard. The repository also gets the same dependency hygiene automation as choscordb. The project is also relicensed from MIT to `MIT OR Apache-2.0`. That is the Rust ecosystem norm used by egui, Tauri, Dioxus, wgpu, and the Rust standard library: Apache-2.0 adds an explicit patent grant, and MIT keeps GPLv2 compatibility.
+The goal is for outside users of ChoscorUI to have the same contribution experience as choscordb. Anyone can open issues. External pull requests are not accepted. The maintainer implements every change and follows a documented PR standard. The repository also gets the same dependency hygiene automation as choscordb. The project is also relicensed from MIT to `MIT OR Apache-2.0`. That is the Rust ecosystem norm used by egui, Tauri, Dioxus, wgpu, and the Rust standard library: Apache-2.0 adds an explicit patent grant, and MIT keeps GPLv2 compatibility.
 
 Current state (verified 2026-10-12):
 - GitHub: `choscor/choscorui` is already **public** and detected as MIT. Issues are enabled. `main` is at `2d3c34b` and matches local. There is no branch protection.
@@ -38,9 +38,9 @@ Ledger (all settled):
 
 Mirror choscordb's section order and wording. Change only what the different stack requires.
 
-1. **`# Contributing to choscorui`**. Copy the opening paragraph verbatim, with only the project name changed. Anyone may create an issue to report a bug or suggest a change. choscorui does not accept external pull requests. The maintainer implements changes and opens any pull requests the project needs.
+1. **`# Contributing to choscorui`**. Copy the opening paragraph verbatim, with only the project name changed. Anyone may create an issue to report a bug or suggest a change. ChoscorUI does not accept external pull requests. The maintainer implements changes and opens any pull requests the project needs.
 2. **`## Maintainer pull request title and description`**. Copy verbatim, with two changes:
-   - Use a choscorui scope in the example, e.g. `fix(macos): keep field focus after a theme switch`.
+   - Use a ChoscorUI scope in the example, e.g. `fix(macos): keep field focus after a theme switch`.
    - Keep the link to `.github/pull_request_template.md`. Change "Add screenshots for visible UI changes when useful" only if needed for accuracy.
 3. **`## Before submitting a maintainer change`**. Replace the Python/LLVM/Qt content with this project's real prerequisites and commands:
    - Prerequisites: macOS 15+, the Xcode Command Line Tools, Rust stable with `rustfmt` and `clippy`, and Rust 1.88 for the MSRV check.
@@ -137,7 +137,7 @@ Find every reference first: `grep -rnE 'LICENSE|license = |MIT' --exclude-dir=ta
 
   > Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
   >
-  > Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in choscorui by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+  > Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ChoscorUI by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
 - **`CONTRIBUTING.md`.** Add a short `## License` section at the end. It says that changes are dual licensed under `MIT OR Apache-2.0`, as described in the README.
 - **Docs that state "MIT".** Update each one to say `MIT OR Apache-2.0` and to point at `LICENSE-MIT` and `LICENSE-APACHE`:
@@ -172,7 +172,7 @@ Find every reference first: `grep -rnE 'LICENSE|license = |MIT' --exclude-dir=ta
 | The SECURITY.md reporting channel works | `gh api repos/choscor/choscorui/private-vulnerability-reporting` returns `{"enabled":true}` |
 | The project is dual licensed | `LICENSE-MIT` and `LICENSE-APACHE` exist and `LICENSE` does not. The Apache file matches the standard text: `diff` against the downloaded `LICENSE-2.0.txt` ignoring whitespace differences shows nothing. |
 | Every crate reports the dual license | `cargo metadata --format-version 1 --no-deps \| python3 -c 'import json,sys; print({p["license"] for p in json.load(sys.stdin)["packages"]})'` prints `{'MIT OR Apache-2.0'}`. The same check in `samples/notes` gives the same output. |
-| No stale project-license references | `grep -rnE 'LICENSE\b[^-]\|license = "MIT"\|under the MIT license\|\(MIT\)' --exclude-dir=target --exclude-dir=.git --exclude-dir=specs .` shows no reference to choscorui's own license as MIT-only. Third-party wording in NOTICE and LICENSES.md is expected to remain. |
+| No stale project-license references | `grep -rnE 'LICENSE\b[^-]\|license = "MIT"\|under the MIT license\|\(MIT\)' --exclude-dir=target --exclude-dir=.git --exclude-dir=specs .` shows no reference to ChoscorUI's own license as MIT-only. Third-party wording in NOTICE and LICENSES.md is expected to remain. |
 | README and CONTRIBUTING state the dual license and the contribution clause | The `## License` sections in `README.md` and `CONTRIBUTING.md` |
 | Release archives carry both licenses | `CHOSCORUI_UNIVERSAL=1 scripts/macos/package.sh`, then `unzip -l dist/choscorui-*-macos-universal.zip` lists `LICENSE-MIT`, `LICENSE-APACHE`, and `NOTICE`. `scripts/macos/install-check.sh` on that zip passes. |
 | GitHub shows the new license after push | The repository page sidebar lists both licenses. Optional: `gh api repos/choscor/choscorui/license` may report `NOASSERTION` for multiple licenses, which is acceptable. |

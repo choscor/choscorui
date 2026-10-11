@@ -1,6 +1,5 @@
 # Continuous integration for the supported platform: macOS 15 on Apple
-# silicon and on Intel. Manual gates (IME, VoiceOver, notarized install,
-# budgets on reference hardware) are listed in docs/RELEASING.md.
+# silicon and on Intel.
 name: ci
 
 on:
@@ -27,6 +26,8 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup toolchain install 1.88 --profile minimal
+      - name: Docs
+        run: scripts/check-docs.sh
       - name: Format
         run: cargo fmt --all --check && (cd samples/notes && cargo fmt --check)
       - name: Lint

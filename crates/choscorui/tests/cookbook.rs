@@ -1,5 +1,5 @@
-//! The recipes in docs/COOKBOOK.md, compiled and checked. Each test is one
-//! recipe; keep the document's snippets in sync with these bodies.
+//! The customization recipes in docs/theming.md, compiled and checked. Each
+//! test is one recipe; keep the document's snippets in sync with these bodies.
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonRecipe, ButtonVisualState, CommandId, CommandRegistry, CommandState,
