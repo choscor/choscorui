@@ -5,9 +5,10 @@
 //! On macOS the menu bar is the native global menu (`MainMenu`), so it
 //! takes no space in the window.
 
+use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandRegistry, MenuItem};
 use choscorui_core::{
-    Key, LayoutDirection, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
+    Icon, Key, LayoutDirection, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
     SemanticState, Size,
 };
 use std::time::Duration;
@@ -383,6 +384,76 @@ impl Toolbar {
         None
     }
 
+    /// Paints the toolbar in `layout`: the bar with a border on the edge
+    /// that faces the content, ghost buttons for commands, 1 pt
+    /// separators, and the overflow chevron. The host paints embedded
+    /// controls. `focus_visible` rings the focused item.
+    pub fn paint(
+        &self,
+        cx: &mut PaintContext<'_>,
+        layout: &ToolbarLayout,
+        commands: &CommandRegistry,
+        focus_visible: bool,
+    ) {
+        let query = |slot| StyleQuery::new(ControlKind::Toolbar, slot);
+        let mut bar = cx.style(query(Slot::Root));
+        bar.border_sides = match self.area {
+            ToolbarArea::Top => Sides::BOTTOM,
+            ToolbarArea::Bottom => Sides::TOP,
+            ToolbarArea::Left if cx.rtl => Sides::START,
+            ToolbarArea::Left => Sides::END,
+            ToolbarArea::Right if cx.rtl => Sides::END,
+            ToolbarArea::Right => Sides::START,
+        };
+        cx.slot(layout.rect, &bar, |_, _| {});
+        let horizontal = self.area.horizontal();
+        for (index, rect) in &layout.items {
+            match &self.items[*index].kind {
+                ToolbarItemKind::Command { command, label } => {
+                    let enabled = commands.state(*command).is_ok_and(|state| state.enabled);
+                    let state = VisualState::NONE.set(VisualState::DISABLED, !enabled).set(
+                        VisualState::FOCUS_VISIBLE,
+                        focus_visible && self.focused == Some(*index),
+                    );
+                    let style = cx.style(query(Slot::Item).state(state));
+                    cx.slot(*rect, &style, |cx, inner| {
+                        cx.label(inner, label, &style, TextAlign::Center);
+                    });
+                }
+                ToolbarItemKind::Separator => {
+                    let rule = cx.style(query(Slot::Separator));
+                    let center = rect.center();
+                    let line = if horizontal {
+                        Rect::from_xywh(
+                            center.x - rule.min_width / 2.0,
+                            rect.origin.y + rule.padding.block_start,
+                            rule.min_width,
+                            (rect.size.height - rule.padding.vertical()).max(0.0),
+                        )
+                    } else {
+                        Rect::from_xywh(
+                            rect.origin.x + rule.padding.block_start,
+                            center.y - rule.min_height / 2.0,
+                            (rect.size.width - rule.padding.vertical()).max(0.0),
+                            rule.min_height,
+                        )
+                    };
+                    cx.list.fill_rect(line, rule.background);
+                }
+                ToolbarItemKind::Control { .. } | ToolbarItemKind::FlexibleSpace => {}
+            }
+        }
+        if let Some(rect) = layout.overflow_button {
+            let style = cx.style(query(Slot::Action));
+            let icon = match (horizontal, cx.rtl) {
+                (false, _) => Icon::ChevronDown,
+                (true, false) => Icon::ChevronsRight,
+                (true, true) => Icon::ChevronsLeft,
+            };
+            cx.slot(rect, &style, |cx, inner| cx.icon(inner, icon, &style));
+        }
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::Toolbar,
@@ -570,6 +641,44 @@ impl StatusBar {
             }
         }
         StatusBarLayout { message, sections }
+    }
+
+    /// Paints the bar in the context's bounds with the `StatusBar` look:
+    /// a top border, the message, and each section after a 1 pt rule.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, layout: &StatusBarLayout) {
+        let style = cx.style(StyleQuery::new(ControlKind::StatusBar, Slot::Root));
+        let rule = cx.style(StyleQuery::new(ControlKind::StatusBar, Slot::Separator));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |_, _| {});
+        let inset = |rect: Rect| {
+            Rect::from_xywh(
+                rect.origin.x + style.padding.inline_start,
+                rect.origin.y,
+                (rect.size.width - style.padding.horizontal()).max(0.0),
+                rect.size.height,
+            )
+        };
+        cx.label(inset(layout.message), self.text(), &style, TextAlign::Start);
+        for (index, section) in &layout.sections {
+            let x = if cx.rtl {
+                section.max_x() - rule.min_width
+            } else {
+                section.origin.x
+            };
+            let line = Rect::from_xywh(
+                x,
+                section.origin.y + rule.padding.block_start,
+                rule.min_width,
+                (section.size.height - rule.padding.vertical()).max(0.0),
+            );
+            cx.list.fill_rect(line, rule.background);
+            cx.label(
+                inset(*section),
+                &self.sections[*index].text,
+                &style,
+                TextAlign::Start,
+            );
+        }
     }
 
     pub fn semantics(&self) -> SemanticNode {

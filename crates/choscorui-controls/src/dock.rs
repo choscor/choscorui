@@ -539,8 +539,8 @@ impl DockLayout {
         }
     }
 
-    /// Paints the groups and splitters of `arrangement`. Each group gets a
-    /// `border` outline and a line-variant `Tabs` bar; the active tab is
+    /// Paints the groups and splitters of `arrangement`. Each group gets
+    /// the `Dock` frame and a line-variant `Tabs` bar; the active tab is
     /// underlined. Splitters use the `Resizable` handle. The host paints
     /// the center and the panel contents.
     pub fn paint(
@@ -557,8 +557,9 @@ impl DockLayout {
         let border = cx
             .style(StyleQuery::new(ControlKind::Separator, Slot::Root))
             .background;
+        let frame = cx.style(StyleQuery::new(ControlKind::Dock, Slot::Root));
         for group in &arrangement.groups {
-            let _ = cx.list.stroke_rect(group.rect, border, 1.0);
+            cx.slot(group.rect, &frame, |_, _| {});
             let bar = group.tab_bar;
             cx.list.fill_rect(
                 Rect::new(

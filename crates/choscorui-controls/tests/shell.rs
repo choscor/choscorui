@@ -448,3 +448,58 @@ fn dock_paints_line_tabs_and_mirrors_tab_order() {
             .any(|command| matches!(command, DisplayCommand::StrokeRoundedRect { .. }))
     );
 }
+
+fn draw_texts(list: &DisplayList) -> Vec<&str> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn toolbar_and_status_bar_paint_from_recipes() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 600.0));
+    let bar = toolbar(&mut tree);
+    let mut commands = CommandRegistry::new();
+    for id in 1..=3 {
+        commands
+            .insert(CommandId(id), CommandState::default())
+            .unwrap();
+    }
+    commands.set_enabled(CommandId(2), false).unwrap();
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let bounds = rect(0.0, 0.0, 800.0, 38.0);
+    let layout = bar.layout(bounds, LayoutDirection::Ltr);
+    let mut list = DisplayList::new();
+    bar.paint(
+        &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+        &layout,
+        &commands,
+        false,
+    );
+    // Commands paint their labels; the host paints the embedded control.
+    assert_eq!(draw_texts(&list), ["New", "Open", "Print"]);
+    let border = tokens.color(ColorRole::Border);
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRect { rect, color } if *color == border && rect.size.width == 1.0
+        )),
+        "the separator is a 1 pt border line"
+    );
+
+    let mut status = StatusBar::new();
+    status.set_default_text("Ready");
+    status.set_section("line", "Ln 4", 80.0);
+    let bounds = rect(0.0, 0.0, 400.0, 24.0);
+    let layout = status.layout(bounds, LayoutDirection::Ltr);
+    let mut list = DisplayList::new();
+    status.paint(
+        &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+        &layout,
+    );
+    assert_eq!(draw_texts(&list), ["Ready", "Ln 4"]);
+}

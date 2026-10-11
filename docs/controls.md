@@ -1220,6 +1220,11 @@ own semantics.
 - `save` and `restore` keep the area, the order, and the item visibility.
 - `compose_main_window` places the toolbars, the status bar, and the
   content area.
+- **Look.** `paint` uses the `Toolbar` recipe: the bar has a border on
+  the edge that faces the content. Commands are ghost buttons, and
+  separators are 1 pt `border` lines.
+- The overflow chevron is a ghost button. The host paints the embedded
+  controls.
 
 | Field | `Toolbar::semantics` |
 | --- | --- |
@@ -1242,6 +1247,8 @@ The items publish their own semantics.
   `clear_message` removes it.
 - Permanent sections sit on the trailing side. Right-to-left layouts mirror
   them.
+- **Look.** `paint` uses the `StatusBar` recipe: a top border, xs muted
+  text, and a 1 pt rule before each section.
 
 | Field | `StatusBar::semantics` |
 | --- | --- |
@@ -1264,8 +1271,8 @@ The items publish their own semantics.
 - `arrange` keeps the center at least 80 points wide and high.
 - `save` and `restore` keep the layout as text. `restore` reports unknown
   keys and changes nothing on an error.
-- **Look.** `paint` outlines each group in `border` and draws a
-  line-variant `Tabs` bar. The active tab is underlined. Splitters use
+- **Look.** `paint` draws each group with the `Dock` frame, a `card` fill
+  and a `border` outline, and a line-variant `Tabs` bar. The active tab is underlined. Splitters use
   the `Resizable` handle. `DockFocus` names the part that rings.
 - `GroupFrame::tab_rect` shares the tab bar equally, in reading order.
 

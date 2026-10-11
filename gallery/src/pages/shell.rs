@@ -3,8 +3,9 @@
 
 use crate::page::{Align, Column, Env, Page, Push, node, pressed, sem};
 use choscorui::controls::{
-    CommandId, CommandRegistry, CommandState, ShortcutModifiers, StatusBar, Toolbar, ToolbarArea,
-    ToolbarItem, ToolbarItemKind, ToolbarLayout, compose_main_window,
+    Button, ButtonVariant, CommandId, CommandRegistry, CommandState, InputText, ShortcutModifiers,
+    StatusBar, Toolbar, ToolbarArea, ToolbarItem, ToolbarItemKind, ToolbarLayout, VisualState,
+    compose_main_window,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -57,65 +58,28 @@ fn command_name(command: CommandId) -> &'static str {
     }
 }
 
-/// Paints a toolbar's placed items, overflow chevron, and roving focus.
+/// Paints a toolbar, then a placeholder field for each embedded control.
 fn paint_toolbar(
     list: &mut DisplayList,
     env: &Env<'_>,
     toolbar: &Toolbar,
     layout: &ToolbarLayout,
     commands: &CommandRegistry,
-    focused: bool,
+    focus_visible: bool,
 ) {
-    list.fill_rect(layout.rect, env.mix(0.08));
+    toolbar.paint(
+        &mut env.cx(list, layout.rect),
+        layout,
+        commands,
+        focus_visible,
+    );
     for (index, rect) in &layout.items {
-        let item = &toolbar.items()[*index];
-        let (label, enabled) = match &item.kind {
-            ToolbarItemKind::Command { command, label } => (
-                label.clone(),
-                commands.state(*command).is_ok_and(|state| state.enabled),
-            ),
-            ToolbarItemKind::Control { label, .. } => {
-                let field = rect.inset(5.0);
-                let _ = list.fill_rounded_rect(field, 6.0, env.tokens.color(ColorRole::Card));
-                env.text(
-                    list,
-                    field.inset(6.0),
-                    &format!("{label}…"),
-                    env.small(),
-                    env.tokens.color(ColorRole::Foreground).with_alpha(0.5),
-                    Align::Leading,
-                );
-                continue;
-            }
-            ToolbarItemKind::Separator => {
-                let mid = Rect::new(
-                    Point::new(rect.origin.x + rect.size.width / 2.0, rect.origin.y + 8.0),
-                    Size::new(1.0, (rect.size.height - 16.0).max(0.0)),
-                );
-                list.fill_rect(mid, env.mix(0.3));
-                continue;
-            }
-            ToolbarItemKind::FlexibleSpace => continue,
-        };
-        let color = if enabled && env.enabled {
-            env.tokens.color(ColorRole::Foreground)
-        } else {
-            env.tokens.color(ColorRole::Foreground).with_alpha(0.35)
-        };
-        env.text(list, *rect, &label, env.small(), color, Align::Center);
-        if focused && toolbar.focused() == Some(*index) {
-            env.focus_ring(list, rect.inset(3.0));
+        if let ToolbarItemKind::Control { label, .. } = &toolbar.items()[*index].kind {
+            let field = rect.inset(2.0);
+            InputText::new("")
+                .placeholder(&format!("{label}…"))
+                .paint(&mut env.cx(list, field), VisualState::NONE);
         }
-    }
-    if let Some(chevron) = layout.overflow_button {
-        env.text(
-            list,
-            chevron,
-            "»",
-            env.body(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Center,
-        );
     }
 }
 
@@ -223,16 +187,15 @@ impl Page for ToolbarPage {
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         for (push, area) in &self.area_buttons {
-            push.paint(tree, list, env);
-            if *area == self.toolbar.area() {
-                let rect = tree.bounds(push.node).unwrap_or_default();
-                let _ = list.stroke_rounded_rect(
-                    rect,
-                    env.tokens.radius.min(8.0),
-                    env.tokens.color(ColorRole::Primary),
-                    2.0,
-                );
-            }
+            let rect = tree.bounds(push.node).unwrap_or_default();
+            let variant = if *area == self.toolbar.area() {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Outline
+            };
+            Button::new(push.label.clone(), CommandId(0))
+                .with_variant(variant)
+                .paint(&mut env.cx(list, rect), tree, push.node);
         }
         self.narrow.paint(tree, list, env);
         env.caption(
@@ -249,7 +212,7 @@ impl Page for ToolbarPage {
             &self.toolbar,
             &layout,
             &self.commands,
-            tree.focus() == Some(self.bar),
+            tree.focus_visible(self.bar),
         );
         env.caption(
             list,
@@ -492,30 +455,8 @@ impl Page for StatusBarPage {
         self.show.paint(tree, list, env);
         self.words.paint(tree, list, env);
         let rect = tree.bounds(self.bar).unwrap_or_default();
-        list.fill_rect(rect, env.mix(0.1));
         let layout = self.status.layout(rect, env.direction);
-        env.text(
-            list,
-            layout.message.inset(6.0),
-            self.status.text(),
-            env.small(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Leading,
-        );
-        for (index, section) in &layout.sections {
-            list.fill_rect(
-                Rect::new(section.origin, Size::new(1.0, section.size.height)),
-                env.mix(0.25),
-            );
-            env.text(
-                list,
-                section.inset(6.0),
-                &self.status.sections()[*index].text,
-                env.small(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
-        }
+        self.status.paint(&mut env.cx(list, rect), &layout);
     }
 
     fn semantics(&self, tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
@@ -657,19 +598,18 @@ impl Page for MainWindowPage {
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         for (push, id) in &self.toggles {
-            push.paint(tree, list, env);
-            if self.on(id) {
-                let rect = tree.bounds(push.node).unwrap_or_default();
-                let _ = list.stroke_rounded_rect(
-                    rect,
-                    env.tokens.radius.min(8.0),
-                    env.tokens.color(ColorRole::Primary),
-                    2.0,
-                );
-            }
+            let rect = tree.bounds(push.node).unwrap_or_default();
+            let variant = if self.on(id) {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Outline
+            };
+            Button::new(push.label.clone(), CommandId(0))
+                .with_variant(variant)
+                .paint(&mut env.cx(list, rect), tree, push.node);
         }
         let window = tree.bounds(self.window).unwrap_or_default();
-        let _ = list.stroke_rounded_rect(window, 8.0, env.mix(0.35), 1.0);
+        env.panel(list, window);
         let side = if env.rtl() {
             ToolbarArea::Right
         } else {
@@ -684,31 +624,27 @@ impl Page for MainWindowPage {
         }
         let frames = compose_main_window(window, &toolbars, self.status.then_some(22.0));
         for (rect, (area, _)) in frames.toolbars.iter().zip(&toolbars) {
-            list.fill_rect(*rect, env.mix(0.12));
             let label = if *area == ToolbarArea::Top {
                 "Toolbar"
             } else {
                 "Tools"
             };
-            env.text(
-                list,
-                *rect,
-                label,
-                env.small(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
+            let mut toolbar = Toolbar::new(label, vec![]);
+            toolbar.move_to(*area);
+            let layout = toolbar.layout(*rect, env.direction);
+            toolbar.paint(
+                &mut env.cx(list, *rect),
+                &layout,
+                &CommandRegistry::new(),
+                false,
             );
+            env.caption(list, *rect, label);
         }
-        if let Some(status) = frames.status_bar {
-            list.fill_rect(status, env.mix(0.08));
-            env.text(
-                list,
-                status.inset(4.0),
-                "Status bar",
-                env.small(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Leading,
-            );
+        if let Some(rect) = frames.status_bar {
+            let mut status = StatusBar::new();
+            status.set_default_text("Status bar");
+            let layout = status.layout(rect, env.direction);
+            status.paint(&mut env.cx(list, rect), &layout);
         }
         env.panel(list, frames.content.inset(6.0));
         env.text(
