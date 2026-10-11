@@ -1,4 +1,4 @@
-//! Benchmark driver for the reference scenarios in docs/BENCHMARKS.md.
+//! Benchmark driver for the reference scenarios in docs/performance.md.
 //!
 //! ```sh
 //! cargo build --release -p choscorui-gallery -p choscorui-bench

@@ -12,7 +12,7 @@
 //!   shaping. Check [`capabilities`] before relying on optional features.
 //!
 //! The flat re-exports below predate the modules and remain for
-//! compatibility; see docs/VERSIONING.md for the stability policy.
+//! compatibility; see docs/versioning.md for the stability policy.
 
 #![forbid(unsafe_code)]
 

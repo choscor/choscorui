@@ -1,5 +1,5 @@
 # Release budgets for macOS, checked by `choscorui-bench --check bench/budgets.txt`.
-# Reference machine and baselines: docs/BUDGETS.md. Each limit sits above
+# Reference machine and baselines: docs/performance.md. Each limit sits above
 # the measured p95 by a stated margin, or at a user-visible goal (a 60 Hz
 # frame is 16.7 ms; a 30 Hz frame is 33 ms), whichever is tighter.
 # Correctness counters must stay at zero.

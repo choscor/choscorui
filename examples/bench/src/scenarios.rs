@@ -1,4 +1,4 @@
-//! Reference scenarios from docs/BENCHMARKS.md, driven on real AppKit
+//! Reference scenarios from docs/performance.md, driven on real AppKit
 //! windows. Every latency sample ends at a completed `drawRect:` replay
 //! (`Window::last_paint`), not at an app-side "done" marker.
 
