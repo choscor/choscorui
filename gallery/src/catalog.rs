@@ -5,7 +5,7 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, form, inputs, navigation, popups, range, recipes,
+    containers, data, datetime, dialogs, form, inputs, navigation, overlay, popups, range, recipes,
     selection, shell, statics, system, text,
 };
 
@@ -139,6 +139,13 @@ pub const PAGES: &[PageInfo] = &[
     ),
     page!("tooltip", "Tooltip", Popups, popups::tooltip),
     page!(
+        "context-menu",
+        "Context menu",
+        Popups,
+        overlay::context_menu
+    ),
+    page!("menubar", "Menu bar", Popups, overlay::menubar),
+    page!(
         "alert-dialog",
         "Alert dialog",
         Dialogs,
@@ -181,6 +188,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Label", "label"),
     ("Separator", "separator"),
     ("Kbd", "kbd"),
+    ("ContextMenu", "context-menu"),
+    ("Menubar", "menubar"),
     ("RangeSlider", "range-slider"),
     ("CalendarMode", "date-picker"),
     ("DatePicker", "date-picker"),

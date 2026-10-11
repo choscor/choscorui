@@ -83,14 +83,14 @@ impl MenuItem {
         self
     }
 
-    fn label(&self) -> Option<&str> {
+    pub(crate) fn label(&self) -> Option<&str> {
         match self {
             Self::Action { label, .. } | Self::Submenu { label, .. } => Some(label),
             Self::Separator => None,
         }
     }
 
-    fn check(&self) -> MenuCheck {
+    pub(crate) fn check(&self) -> MenuCheck {
         match self {
             Self::Action { check, .. } => *check,
             _ => MenuCheck::None,
@@ -160,11 +160,31 @@ impl DropdownMenu {
         self.metrics = MenuMetrics::resolve(styles, tokens);
     }
 
+    /// The items of every level, root first.
+    pub(crate) fn items(&self) -> &[MenuItem] {
+        &self.items
+    }
+
+    /// The highlighted index of each open level, root first.
+    pub(crate) fn path(&self) -> &[Option<usize>] {
+        &self.path
+    }
+
+    /// The panel padding above the first row.
+    pub(crate) fn inset(&self) -> f64 {
+        self.metrics.inset
+    }
+
+    /// Closes every submenu and clears the highlight.
+    pub(crate) fn reset(&mut self) {
+        self.path = vec![None];
+    }
+
     pub fn depth(&self) -> usize {
         self.path.len()
     }
 
-    fn level_items(&self, level: usize) -> &[MenuItem] {
+    pub(crate) fn level_items(&self, level: usize) -> &[MenuItem] {
         let mut items = &self.items[..];
         for index in self.path.iter().take(level) {
             match index.and_then(|index| items.get(index)) {

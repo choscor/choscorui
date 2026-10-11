@@ -105,6 +105,7 @@ mod custom;
 mod form;
 mod hosted;
 mod listbox;
+mod overlay;
 pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,
@@ -115,6 +116,7 @@ pub use form::{
     ToggleItem,
 };
 pub use listbox::ListEntry;
+pub use overlay::{ContextMenu, Menubar};
 mod dock;
 pub use dock::{
     DockArea, DockArrangement, DockError, DockFocus, DockLayout, DockPanel, DockRestoreReport,

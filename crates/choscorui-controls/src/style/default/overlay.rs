@@ -281,6 +281,17 @@ fn menu(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Separator => rule(cx, cx.sp(1.0)),
         Slot::Shortcut => shortcut(cx, ColorRole::AccentForeground),
+        // The area that opens a context menu.
+        Slot::Placeholder => {
+            let mut style = muted_text(cx, TextSize::Sm);
+            style.border = cx.c(ColorRole::Border);
+            style.border_width = cx.t.border_width;
+            style.radius = Corners::all(cx.r(RadiusScale::Md));
+            style.min_width = 300.0;
+            style.min_height = 150.0;
+            super::focus(&mut style, cx);
+            style
+        }
         Slot::Panel => {
             let mut style = surface(cx, RadiusScale::Md);
             style.padding = Edges::all(cx.sp(1.0));

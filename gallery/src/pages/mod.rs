@@ -8,6 +8,7 @@ pub mod form;
 pub mod hosted;
 pub mod inputs;
 pub mod navigation;
+pub mod overlay;
 pub mod popups;
 pub mod range;
 pub mod recipes;

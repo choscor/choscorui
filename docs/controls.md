@@ -88,6 +88,8 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`FieldText`](#field-and-fieldtext) | Legend, label, title, description, error, or separator of a form field. |
 | Form | [`Field`](#field-and-fieldtext) | Stacked, side-by-side, or responsive layout of a form field. |
 | Form | [`DatePicker`](#datepicker) | Button with a calendar popover for one date, several dates, or a range. |
+| Overlay | [`ContextMenu`](#contextmenu-and-menubar) | Area that opens a menu at the pointer on a secondary click. |
+| Overlay | [`Menubar`](#contextmenu-and-menubar) | Row of menu titles inside the window. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1728,6 +1730,48 @@ list are the same.
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
 [date_picker.rs](../crates/choscorui-controls/tests/date_picker.rs) pins this behavior.
+
+### ContextMenu and Menubar
+
+Both controls own a `DropdownMenu` and the states of its commands. The
+[DropdownMenu](#dropdownmenu) keys, hover, and type-ahead apply.
+
+- Every action command starts enabled and unchecked. `set_command`
+  changes a state before you mount the control.
+- An activated action emits `Command(id)`, then `OpenChanged(false)`.
+- A checkbox action flips its check. A radio action checks itself and
+  clears the other radio actions between the same separators.
+- Escape at the root closes the menu and emits `Dismissed`. Tab closes the
+  menu and moves focus. A press outside the menu closes it.
+- A submenu opens beside its row, toward the end of the line. In
+  right-to-left layouts, the menus open toward the left.
+- **`ContextMenu`.** A secondary press or a Control-press in the area
+  opens the menu with its top-start corner at the pointer. Enter, Space,
+  or `ShowMenu` opens it at the center of the area. A release over an
+  action after the press activates the action.
+- **`Menubar`.** ArrowLeft and ArrowRight move between the titles in
+  reading order, and wrap. Home and End go to the ends.
+- Enter, Space, ArrowDown, or a press opens the menu of a title 4 pt below
+  it. A press on the open title closes it.
+- While a menu is open, ArrowLeft and ArrowRight at the root open the next
+  title in reading order. Hover on another title opens its menu.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Context area | `Menu` `Placeholder` | 300 by 150 pt minimum, 1 pt `border`, radius md, sm `muted-foreground` text |
+| Menu panel | `Menu` `Root` | as [DropdownMenu](#dropdownmenu); at least 128 pt wide, 144 pt in a menu bar |
+| Bar | `Menubar` `Root` | 36 pt high, 1 pt `border`, radius md, 4 pt padding and gap, shadow xs |
+| Title | `Menubar` `Trigger` | sm medium text, padding 8 by 4 pt, radius sm; `muted` fill while hovered, open, or highlighted |
+
+| Field | `ContextMenu::semantics` | `Menubar::semantics` |
+| --- | --- | --- |
+| Role | `Group` (AXGroup) | `Menu` (AXMenu) |
+| Name / value | name / hint text | name / current title |
+| Description | the highlighted item while open | the highlighted item while open |
+| State | expanded, disabled | expanded, disabled |
+| Actions | `ShowMenu` and `Focus` while enabled | `ShowMenu`, `Expand` or `Collapse`, and `Focus` while enabled |
+
+[menus.rs](../crates/choscorui-controls/tests/menus.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

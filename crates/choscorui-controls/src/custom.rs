@@ -60,6 +60,8 @@ pub enum ControlMessage {
     OpenChanged(bool),
     /// The user dismissed an overlay, for example with Escape.
     Dismissed,
+    /// A menu action ran its command.
+    Command(crate::CommandId),
 }
 
 /// The theme, styles, text measurement, direction, and time that the host
