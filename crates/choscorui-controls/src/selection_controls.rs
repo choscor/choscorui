@@ -1,5 +1,9 @@
+use crate::style::{
+    Content, ControlKind, Orientation, PaintContext, Slot, StyleQuery, Styles, TabsVariant,
+    TextAlign, TextMeasure, VisualState, choice_size, fill_shape, paint_choice,
+};
 use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
+    DesignTokens, Dirty, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
     SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::collections::HashSet;
@@ -70,56 +74,6 @@ pub enum RadioInput {
     Activate,
     Key(KeyEvent),
     Semantic(SemanticAction),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RadioVisualState {
-    pub enabled: bool,
-    pub selected: bool,
-    pub focused: bool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RadioStyle {
-    pub ring_color: Color,
-    pub selected_color: Color,
-    pub disabled_color: Color,
-    pub focus_color: Color,
-}
-
-impl RadioStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, state: RadioVisualState) {
-        let ring = if state.enabled {
-            self.ring_color
-        } else {
-            self.disabled_color
-        };
-        list.fill_rect(bounds, ring);
-        if state.selected {
-            let inset = 6.0_f64
-                .min(bounds.size.width / 2.0)
-                .min(bounds.size.height / 2.0);
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x + inset, bounds.origin.y + inset),
-                    Size::new(
-                        (bounds.size.width - inset * 2.0).max(0.0),
-                        (bounds.size.height - inset * 2.0).max(0.0),
-                    ),
-                ),
-                self.selected_color,
-            );
-        }
-        if state.focused {
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x, bounds.origin.y + bounds.size.height - 2.0),
-                    Size::new(bounds.size.width, 2.0),
-                ),
-                self.focus_color,
-            );
-        }
-    }
 }
 
 pub struct RadioGroup {
@@ -234,13 +188,64 @@ impl RadioGroup {
         }
     }
 
-    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> Option<RadioVisualState> {
+    /// The label of the option at `id`.
+    pub fn option_label(&self, id: NodeId) -> Option<&str> {
+        self.options
+            .iter()
+            .find(|option| option.id == id)
+            .map(|option| option.label.as_str())
+    }
+
+    /// The flags the radio recipe reads for the option at `id`.
+    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> Option<VisualState> {
         let option = self.options.iter().find(|option| option.id == id)?;
-        Some(RadioVisualState {
-            enabled: option.enabled,
-            selected: id == self.selected,
-            focused: tree.focus() == Some(id),
-        })
+        Some(
+            VisualState::NONE
+                .set(VisualState::DISABLED, !option.enabled)
+                .set(VisualState::CHECKED, id == self.selected)
+                .set(VisualState::FOCUSED, tree.focus() == Some(id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(id)),
+        )
+    }
+
+    /// The natural size of the option at `id`: the circle, the gap, and
+    /// the label.
+    pub fn measure_option(
+        &self,
+        id: NodeId,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+    ) -> Option<Size> {
+        let label = self.option_label(id)?;
+        Some(choice_size(
+            ControlKind::RadioGroup,
+            label,
+            styles,
+            tokens,
+            text,
+        ))
+    }
+
+    /// Paints the option at `id`: the circle at the start of the bounds,
+    /// the dot when selected, and the label after it.
+    pub fn paint_option(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
+        let (Some(state), Some(label)) = (self.visual_state(tree, id), self.option_label(id))
+        else {
+            return;
+        };
+        let dot = cx.style(StyleQuery::new(ControlKind::RadioGroup, Slot::Indicator).state(state));
+        paint_choice(cx, ControlKind::RadioGroup, label, state, |cx, rect| {
+            if state.checked() {
+                let size = Size::new(dot.min_width, dot.min_height);
+                let center = rect.center();
+                let dot_rect = Rect::new(
+                    Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
+                    size,
+                );
+                fill_shape(cx.list, dot_rect, &dot.radius, cx.rtl, dot.background);
+            }
+        });
     }
 
     fn index_of(&self, id: NodeId) -> Result<usize, SelectionError> {
@@ -283,50 +288,21 @@ pub enum TabInput {
     Semantic(SemanticAction),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TabVisualState {
-    pub enabled: bool,
-    pub selected: bool,
-    pub focused: bool,
-}
+/// The old name of [`Tabs`].
+#[deprecated(since = "0.1.0", note = "renamed to `Tabs`")]
+pub type TabSet = Tabs;
 
-#[derive(Clone, Copy, Debug)]
-pub struct TabStyle {
-    pub background: Color,
-    pub selected: Color,
-    pub disabled: Color,
-    pub focus: Color,
-}
-
-impl TabStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, state: TabVisualState) {
-        let color = if !state.enabled {
-            self.disabled
-        } else if state.selected {
-            self.selected
-        } else {
-            self.background
-        };
-        list.fill_rect(bounds, color);
-        if state.focused {
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x, bounds.origin.y + bounds.size.height - 2.0),
-                    Size::new(bounds.size.width, 2.0),
-                ),
-                self.focus,
-            );
-        }
-    }
-}
-
-pub struct TabSet {
+/// A tab list with one panel per tab. Arrow keys move the selection
+/// along the list, wrapping at its ends.
+pub struct Tabs {
     label: String,
     tabs: Vec<Tab>,
     selected: NodeId,
+    variant: TabsVariant,
+    orientation: Orientation,
 }
 
-impl TabSet {
+impl Tabs {
     pub fn new(
         label: impl Into<String>,
         tabs: Vec<Tab>,
@@ -344,7 +320,31 @@ impl TabSet {
             label: label.into(),
             tabs,
             selected,
+            variant: TabsVariant::Default,
+            orientation: Orientation::Horizontal,
         })
+    }
+
+    #[must_use]
+    pub fn with_variant(mut self, variant: TabsVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    /// Lays the tab list out along `orientation`. The line variant draws
+    /// its indicator under a horizontal tab and beside a vertical one.
+    #[must_use]
+    pub fn with_orientation(mut self, orientation: Orientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    pub fn variant(&self) -> TabsVariant {
+        self.variant
+    }
+
+    pub fn orientation(&self) -> Orientation {
+        self.orientation
     }
 
     pub const fn selected_tab(&self) -> NodeId {
@@ -444,13 +444,91 @@ impl TabSet {
         }
     }
 
-    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> Option<TabVisualState> {
+    /// The label of the tab at `id`.
+    pub fn tab_label(&self, id: NodeId) -> Option<&str> {
+        self.tabs
+            .iter()
+            .find(|tab| tab.tab == id)
+            .map(|tab| tab.label.as_str())
+    }
+
+    /// The flags the tabs recipe reads for the tab at `id`.
+    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> Option<VisualState> {
         let tab = self.tabs.iter().find(|tab| tab.tab == id)?;
-        Some(TabVisualState {
-            enabled: tab.enabled,
-            selected: tab.tab == self.selected,
-            focused: tree.focus() == Some(id),
-        })
+        Some(
+            VisualState::NONE
+                .set(VisualState::DISABLED, !tab.enabled)
+                .set(VisualState::SELECTED, tab.tab == self.selected)
+                .set(VisualState::FOCUSED, tree.focus() == Some(id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(id)),
+        )
+    }
+
+    fn query(&self, slot: Slot, state: VisualState) -> StyleQuery {
+        StyleQuery::new(ControlKind::Tabs, slot)
+            .variant(self.variant)
+            .state(state)
+    }
+
+    /// The natural size of the tab at `id`: its label and padding.
+    pub fn measure_tab(
+        &self,
+        id: NodeId,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+    ) -> Option<Size> {
+        let label = self.tab_label(id)?;
+        let style = styles.resolve(tokens, self.query(Slot::Trigger, VisualState::NONE));
+        Some(Content::label(label).size(&style, text))
+    }
+
+    /// Paints the tab list surface in the context's bounds. Paint it
+    /// before the tabs.
+    pub fn paint_list(&self, cx: &mut PaintContext<'_>) {
+        let style = cx.style(self.query(Slot::Group, VisualState::NONE));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |_, _| {});
+    }
+
+    /// Paints the tab at `id` in the context's bounds: its trigger box,
+    /// label, and the line indicator when selected.
+    pub fn paint_tab(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
+        let (Some(state), Some(label)) = (self.visual_state(tree, id), self.tab_label(id)) else {
+            return;
+        };
+        let style = cx.style(self.query(Slot::Trigger, state));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |cx, rect| {
+            cx.label(rect, label, &style, TextAlign::Center);
+        });
+        let indicator = cx.style(self.query(Slot::Indicator, state));
+        if indicator.background.alpha == 0 {
+            return;
+        }
+        // The indicator sits just outside the tab, over the list padding.
+        let offset = -indicator.padding.block_start;
+        let line = match self.orientation {
+            Orientation::Horizontal => Rect::new(
+                Point::new(
+                    bounds.origin.x,
+                    bounds.max_y() + offset - indicator.min_height,
+                ),
+                Size::new(bounds.size.width, indicator.min_height),
+            ),
+            Orientation::Vertical => {
+                let x = if cx.rtl {
+                    bounds.origin.x - offset
+                } else {
+                    bounds.max_x() + offset - indicator.min_width
+                };
+                Rect::new(
+                    Point::new(x, bounds.origin.y),
+                    Size::new(indicator.min_width, bounds.size.height),
+                )
+            }
+        };
+        cx.list.fill_rect(line, indicator.background);
     }
 
     fn index_of_tab(&self, id: NodeId) -> Result<usize, SelectionError> {

@@ -565,12 +565,14 @@ impl GalleryView {
         for (index, (_, id, _)) in self.language_buttons.iter().enumerate() {
             let _ = self.tree.set_bounds(*id, cells[4 + index]);
         }
-        let toggle = cells[8];
+        // The checkbox paints its own label, so it spans both cells.
+        let left = cells[8].origin.x.min(cells[9].origin.x);
+        let right = cells[8].max_x().max(cells[9].max_x());
         let _ = self.tree.set_bounds(
             self.enabled_node,
             Rect::new(
-                Point::new(toggle.origin.x, toggle.origin.y + 5.0),
-                Size::new(toggle.size.width, 22.0),
+                Point::new(left, cells[8].origin.y + 5.0),
+                Size::new(right - left, 22.0),
             ),
         );
         let _ = self.tree.set_bounds(self.new_window_node, cells[11]);
@@ -701,15 +703,10 @@ impl GalleryView {
                 );
         }
         let toggle = self.tree.bounds(self.enabled_node).unwrap_or_default();
-        env.checkbox_style().paint(
-            &mut list,
-            toggle,
-            self.enabled_box.visual_state(&self.tree, self.enabled_node),
-        );
-        env.label(
-            &mut list,
-            crate::pages::inputs::beside(toggle, 92.0, &env),
-            &ctx.text("state.enabled", &[]),
+        self.enabled_box.paint(
+            &mut env.cx(&mut list, toggle),
+            &self.tree,
+            self.enabled_node,
         );
 
         // Sidebar.

@@ -1,6 +1,9 @@
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure, VisualState,
+};
 use choscorui_core::{
-    Color, Dirty, DisplayList, DisplayListError, NodeId, Point, Rect, SemanticNode, SemanticRole,
-    SemanticState, Tree, TreeError,
+    DesignTokens, Dirty, NodeId, Point, Rect, SemanticNode, SemanticRole, SemanticState, Size,
+    Tree, TreeError,
 };
 
 pub struct Label {
@@ -39,6 +42,26 @@ impl Label {
         Ok(true)
     }
 
+    fn query(state: VisualState) -> StyleQuery {
+        StyleQuery::new(ControlKind::Label, Slot::Root).state(state)
+    }
+
+    /// The natural size of the text in the label recipe.
+    pub fn measure(&self, styles: &Styles, tokens: &DesignTokens, text: &dyn TextMeasure) -> Size {
+        let style = styles.resolve(tokens, Self::query(VisualState::NONE));
+        Size::new(text.width(&self.text, &style.text), style.text.line_height)
+    }
+
+    /// Paints the text at the start of the bounds, vertically centered.
+    /// A `DISABLED` state in the context dims it.
+    pub fn paint(&self, cx: &mut PaintContext<'_>) {
+        let style = cx.style(Self::query(cx.state));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |cx, rect| {
+            cx.label(rect, &self.text, &style, TextAlign::Start);
+        });
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::StaticText,
@@ -50,30 +73,6 @@ impl Label {
             actions: Vec::new(),
             text: None,
         }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct LabelStyle {
-    pub font_family: String,
-    pub font_size: f64,
-    pub color: Color,
-}
-
-impl LabelStyle {
-    pub fn paint(
-        &self,
-        list: &mut DisplayList,
-        baseline: Point,
-        label: &Label,
-    ) -> Result<(), DisplayListError> {
-        list.draw_text(
-            baseline,
-            label.text(),
-            &self.font_family,
-            self.font_size,
-            self.color,
-        )
     }
 }
 
@@ -96,36 +95,33 @@ impl Separator {
     pub const fn orientation(self) -> SeparatorOrientation {
         self.orientation
     }
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SeparatorStyle {
-    pub color: Color,
-    pub thickness: u16,
-}
-
-impl SeparatorStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, separator: Separator) {
-        let thickness = f64::from(self.thickness).min(match separator.orientation() {
-            SeparatorOrientation::Horizontal => bounds.size.height,
-            SeparatorOrientation::Vertical => bounds.size.width,
-        });
-        let line = match separator.orientation() {
-            SeparatorOrientation::Horizontal => Rect::new(
-                Point::new(
-                    bounds.origin.x,
-                    bounds.origin.y + (bounds.size.height - thickness) / 2.0,
-                ),
-                choscorui_core::Size::new(bounds.size.width, thickness),
-            ),
-            SeparatorOrientation::Vertical => Rect::new(
-                Point::new(
-                    bounds.origin.x + (bounds.size.width - thickness) / 2.0,
-                    bounds.origin.y,
-                ),
-                choscorui_core::Size::new(thickness, bounds.size.height),
-            ),
+    /// Paints a rule of the recipe thickness, centered across the bounds.
+    pub fn paint(self, cx: &mut PaintContext<'_>) {
+        let style = cx.style(StyleQuery::new(ControlKind::Separator, Slot::Root).state(cx.state));
+        let bounds = cx.bounds;
+        let line = match self.orientation {
+            SeparatorOrientation::Horizontal => {
+                let thickness = style.min_height.min(bounds.size.height);
+                Rect::new(
+                    Point::new(
+                        bounds.origin.x,
+                        bounds.origin.y + (bounds.size.height - thickness) / 2.0,
+                    ),
+                    Size::new(bounds.size.width, thickness),
+                )
+            }
+            SeparatorOrientation::Vertical => {
+                let thickness = style.min_width.min(bounds.size.width);
+                Rect::new(
+                    Point::new(
+                        bounds.origin.x + (bounds.size.width - thickness) / 2.0,
+                        bounds.origin.y,
+                    ),
+                    Size::new(thickness, bounds.size.height),
+                )
+            }
         };
-        list.fill_rect(line, self.color);
+        cx.list.fill_rect(line, style.background);
     }
 }

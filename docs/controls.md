@@ -22,10 +22,10 @@ in parentheses is the role that the macOS backend gives to that
 | Group | Control | Purpose |
 | --- | --- | --- |
 | Basic | [`Button`](#button) | Momentary push button that returns a `CommandId`. |
-| Basic | [`CommandLinkRecipe`](#button) | Command-link look for a `Button`: arrow, title, and description. |
+| Basic | [`CommandLink`](#button) | Command-link look for a `Button`: arrow, title, and description. |
 | Basic | [`Checkbox`](#checkbox) | Independent on or off value. |
-| Basic | [`RadioGroup`](#radiogroup-and-tabset) | One choice from a group of options. |
-| Basic | [`TabSet`](#radiogroup-and-tabset) | Tabs that show one panel at a time. |
+| Basic | [`RadioGroup`](#radiogroup-and-tabs) | One choice from a group of options. |
+| Basic | [`Tabs`](#radiogroup-and-tabs) | Tabs that show one panel at a time. |
 | Basic | [`ToolButton`](#toolbutton-and-buttongroup) | Toolbar button with an optional check state and menu. |
 | Basic | [`ButtonGroup`](#toolbutton-and-buttongroup) | Exclusive or non-exclusive group of checkable commands. |
 | Basic | [`CommandRegistry`](#commandregistry-and-shortcuts) | Shared command state and keyboard shortcuts. |
@@ -81,7 +81,7 @@ in parentheses is the role that the macOS backend gives to that
 ## Shared rules
 
 Some controls take the retained `Tree` and a `NodeId` in `handle`. These
-are `Button`, `Checkbox`, `RadioGroup`, `TabSet`, `TextField`,
+are `Button`, `Checkbox`, `RadioGroup`, `Tabs`, `TextField`,
 `TextEditor`, `Slider`, `SpinBox`, `ScrollArea`, and `Splitter`. The rules
 below apply to them, unless a section gives a different rule.
 
@@ -91,7 +91,7 @@ only the missing-node rule below applies, with `TreeError`. The
 
 - **Missing node.** `handle` returns a missing-node error and does not
   change the value. The error type is `TreeError` for most controls.
-  `ScrollArea` uses `LayoutError`, `RadioGroup` and `TabSet` use
+  `ScrollArea` uses `LayoutError`, `RadioGroup` and `Tabs` use
   `SelectionError`, and `Splitter` uses `ContainerError`.
 - **Primary button only.** Pointer presses and releases act only for
   `PointerButton::Primary`.
@@ -108,7 +108,7 @@ only the missing-node rule below applies, with `TreeError`. The
 - **Disabled.** A disabled control ignores input. On `Button`,
   `Checkbox`, `Slider`, and `ScrollArea`, `set_enabled(false)` cancels a
   press or drag and releases pointer capture. Text controls drop IME
-  marked text. `RadioGroup` and `TabSet` disable single options.
+  marked text. `RadioGroup` and `Tabs` disable single options.
 - **Cancel.** `Button`, `Checkbox`, `Slider`, and `ScrollArea` accept a
   `Cancel` input. It clears an armed press or drag and releases capture. It
   never activates and never restores an earlier value.
@@ -198,18 +198,35 @@ A disabled button has 50% opacity.
 - Enter does nothing.
 - `Semantic(Activate)` toggles. `Semantic(SetValue(v))` sets `v`.
 - `handle` returns `Some(value)` only when the value changed.
+- A pointer press focuses without the focus ring. Keyboard focus shows it.
+- `set_indeterminate(true)` shows the mixed state. The next activation or
+  `SetValue` clears it and reports the value, also when the value is the
+  same.
+- `set_invalid(true)` shows the invalid ring and sets the invalid
+  semantic state.
+- **Look.** `paint` draws the box at the start of the bounds and the label
+  after it. In right-to-left layouts, the box is at the right.
+
+| Part | Value |
+| --- | --- |
+| Box | 16 square, radius 4, `input` edge, extra-small shadow; dark: `input` at 30% fill |
+| Checked or mixed | `primary` fill and edge, `primary-foreground` check or minus icon at 14 |
+| Label | small medium text, 8 after the box |
+| Focus ring | `ring` edge and 3 pt ring at 50% |
+| Invalid | `destructive` edge and ring at 20% (dark 40%) |
+| Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
 | --- | --- |
 | Role | `Checkbox` (AXCheckBox) |
-| Name / value | label / `true` or `false` |
-| State | disabled, checked |
+| Name / value | label / `true`, `false`, or `mixed` |
+| State | disabled, invalid, checked (none while mixed) |
 | Actions | `Activate`, `SetValue`, `Focus` while enabled |
 
 [checkbox.rs](../crates/choscorui-controls/tests/checkbox.rs) pins this
 behavior.
 
-### RadioGroup and TabSet
+### RadioGroup and Tabs
 
 - **Roving focus.** After `install`, only the selected option is
   focusable.
@@ -229,6 +246,19 @@ behavior.
 - Right-to-left layouts do not mirror the arrow keys.
 - `new` rejects an empty list, a duplicate node, an unknown selection, and
   a disabled selection.
+- `TabSet` is a deprecated alias of `Tabs`.
+- **Radio look.** `paint_option` draws a 16 pt circle with the same edge,
+  focus, invalid, and disabled values as `Checkbox`. The selected option
+  has a `primary` fill and an 8 pt `primary-foreground` dot.
+- **Tabs look.** `with_variant` takes a `TabsVariant`: `Default` or
+  `Line`. `with_orientation` takes an `Orientation`. Paint the list with
+  `paint_list`, then each tab with `paint_tab`.
+
+| Tabs part | `Default` | `Line` |
+| --- | --- | --- |
+| List | `muted` fill, radius lg, padding 3, height 36 | transparent, gap 4 |
+| Tab | small medium text, padding 8 by 4, radius md; `foreground` at 60% (dark: `muted-foreground`) | same |
+| Selected tab | `background` fill, small shadow, `foreground` text; dark: `input` at 30% fill and `input` edge | `foreground` text and a 2 pt `foreground` line 5 pt outside the tab |
 
 | Field | Group node | Option or tab node | Tab panel node |
 | --- | --- | --- | --- |
@@ -329,7 +359,9 @@ behavior.
   and `SEMANTICS`, and returns whether the text changed. It fails when the
   node is not in the tree.
 - `Separator` takes no input and publishes no semantic node, because it is
-  decorative. `SeparatorStyle` centers the line in either orientation.
+  decorative. `paint` centers a 1 pt `border` line in either orientation.
+- `Label::paint` draws the small medium text at the start of the bounds.
+  A `DISABLED` state in the context gives 50% opacity.
 
 | Field | `Label::semantics` |
 | --- | --- |

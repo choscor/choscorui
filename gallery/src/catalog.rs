@@ -162,10 +162,8 @@ pub const PAGES: &[PageInfo] = &[
 #[cfg(test)]
 pub const SHOWN: &[(&str, &str)] = &[
     ("Label", "label"),
-    ("LabelStyle", "label"),
     ("Separator", "separator"),
     ("SeparatorOrientation", "separator"),
-    ("SeparatorStyle", "separator"),
     ("Button", "button"),
     ("ButtonVariant", "button"),
     ("CommandRegistry", "button"),
@@ -182,7 +180,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("shortcut_text", "key-sequence"),
     ("RadioGroup", "radio"),
     ("RadioOption", "radio"),
-    ("TabSet", "tabs"),
+    ("Tabs", "tabs"),
     ("Tab", "tabs"),
     ("ComboBox", "combo-box"),
     ("ComboItem", "combo-box"),
@@ -373,11 +371,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "CheckboxSemantics",
         "semantics record converted to a SemanticNode by checkboxes",
     ),
-    (
-        "CheckboxStyle",
-        "paint style; every checkbox page uses it through the theme",
-    ),
-    ("CheckboxVisualState", "visual state input to CheckboxStyle"),
     ("ComboChange", "result of ComboBox::handle"),
     ("ComboInput", "input enum for ComboBox and FontChooser"),
     ("CommandError", "error type of CommandRegistry"),
@@ -432,8 +425,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("ProgressStyle", "paint style used by the progress-bar page"),
     ("ProgressVisualState", "visual state input to ProgressStyle"),
     ("RadioInput", "input enum for RadioGroup::handle"),
-    ("RadioStyle", "paint style used by the radio page"),
-    ("RadioVisualState", "visual state input to RadioStyle"),
     ("RangeError", "error type of IntegerRange"),
     (
         "RealizedItem",
@@ -457,7 +448,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "track and thumb rectangles reported by ScrollArea",
     ),
     ("ScrollBarInput", "input enum for ScrollBar::handle"),
-    ("SelectionError", "error type of RadioGroup and TabSet"),
+    ("SelectionError", "error type of RadioGroup and Tabs"),
     (
         "SemanticAction",
         "control-level assistive actions converted from the core enum",
@@ -481,9 +472,12 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("SplitterVisualState", "visual state input to SplitterStyle"),
     ("StatusBarLayout", "geometry returned by StatusBar::layout"),
     ("StatusSection", "a permanent StatusBar section"),
-    ("TabInput", "input enum for TabSet::handle"),
-    ("TabStyle", "paint style used by the tabs page"),
-    ("TabVisualState", "visual state input to TabStyle"),
+    ("TabInput", "input enum for Tabs::handle"),
+    ("TabSet", "deprecated alias of Tabs"),
+    (
+        "Orientation",
+        "axis argument of Tabs and other line controls",
+    ),
     (
         "TextComposition",
         "IME marked text; the gallery does not host an input method",

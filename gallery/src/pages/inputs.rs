@@ -110,7 +110,7 @@ impl Page for ButtonPage {
             let cell = column.cells(36.0, &[260.0])[0];
             let _ = tree.set_bounds(*id, cell);
         }
-        let _ = tree.set_bounds(self.toggle_node, column.cells(22.0, &[22.0])[0]);
+        let _ = tree.set_bounds(self.toggle_node, column.cells(22.0, &[320.0])[0]);
         let _ = tree.set_bounds(self.status, column.row(24.0));
     }
 
@@ -123,16 +123,8 @@ impl Page for ButtonPage {
             button.paint_state(&mut env.cx(list, bounds), state);
         }
         let toggle = tree.bounds(self.toggle_node).unwrap_or_default();
-        env.checkbox_style().paint(
-            list,
-            toggle,
-            self.toggle.visual_state(tree, self.toggle_node),
-        );
-        env.label(
-            list,
-            beside(toggle, 320.0, env),
-            "Enable the Archive command",
-        );
+        self.toggle
+            .paint(&mut env.cx(list, toggle), tree, self.toggle_node);
         env.caption(
             list,
             tree.bounds(self.status).unwrap_or_default(),
@@ -269,36 +261,27 @@ impl Page for ButtonPage {
     }
 }
 
-/// The label area after a small control, in reading order.
-pub fn beside(control: Rect, width: f64, env: &Env<'_>) -> Rect {
-    let gap = env.tokens.spacing;
-    let x = if env.rtl() {
-        control.origin.x - gap - width
-    } else {
-        control.max_x() + gap
-    };
-    Rect::new(
-        choscorui::core::Point::new(x, control.origin.y),
-        choscorui::core::Size::new(width, control.size.height),
-    )
-}
-
-/// Checked, unchecked, and permanently disabled checkboxes.
+/// Checked, unchecked, mixed, invalid, and permanently disabled
+/// checkboxes.
 pub struct CheckboxPage {
-    boxes: Vec<(NodeId, Checkbox, &'static str)>,
+    boxes: Vec<(NodeId, Checkbox)>,
 }
 
 pub fn checkbox(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let mut boxes = Vec::new();
-    for (label, checked, enabled) in [
-        ("Show line numbers", true, true),
-        ("Wrap long lines", false, true),
-        ("Sync settings (unavailable)", true, false),
+    for (label, checked, mixed, invalid, enabled) in [
+        ("Show line numbers", true, false, false, true),
+        ("Wrap long lines", false, false, false, true),
+        ("Select all files", false, true, false, true),
+        ("Accept the terms", false, false, true, true),
+        ("Sync settings (unavailable)", true, false, false, false),
     ] {
         let id = node(tree, parent, true);
         let mut checkbox = Checkbox::new(label, checked);
+        let _ = checkbox.set_indeterminate(tree, id, mixed);
+        let _ = checkbox.set_invalid(tree, id, invalid);
         let _ = checkbox.set_enabled(tree, id, enabled && env.enabled);
-        boxes.push((id, checkbox, label));
+        boxes.push((id, checkbox));
     }
     Box::new(CheckboxPage { boxes })
 }
@@ -306,36 +289,22 @@ pub fn checkbox(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page>
 impl Page for CheckboxPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        for (id, _, _) in &self.boxes {
-            let _ = tree.set_bounds(*id, column.cells(22.0, &[22.0])[0]);
+        for (id, _) in &self.boxes {
+            let _ = tree.set_bounds(*id, column.cells(22.0, &[320.0])[0]);
         }
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        for (id, checkbox, label) in &self.boxes {
+        for (id, checkbox) in &self.boxes {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let state = checkbox.visual_state(tree, *id);
-            env.checkbox_style().paint(list, bounds, state);
-            let color = if state.enabled {
-                env.tokens.color(ColorRole::Foreground)
-            } else {
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
-            };
-            env.text(
-                list,
-                beside(bounds, 320.0, env),
-                label,
-                env.body(),
-                color,
-                Align::Leading,
-            );
+            checkbox.paint(&mut env.cx(list, bounds), tree, *id);
         }
     }
 
     fn semantics(&self, tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
         self.boxes
             .iter()
-            .map(|(id, checkbox, _)| (*id, checkbox.semantics(tree, *id).shared()))
+            .map(|(id, checkbox)| (*id, checkbox.semantics(tree, *id).shared()))
             .collect()
     }
 
@@ -346,7 +315,7 @@ impl Page for CheckboxPage {
         _modifiers: ShortcutModifiers,
         _env: &Env<'_>,
     ) -> bool {
-        for (id, checkbox, _) in &mut self.boxes {
+        for (id, checkbox) in &mut self.boxes {
             let _ = checkbox.handle(tree, *id, CheckboxInput::Pointer(event));
         }
         true
@@ -361,7 +330,7 @@ impl Page for CheckboxPage {
     ) -> bool {
         let focus = tree.focus();
         let mut consumed = false;
-        for (id, checkbox, _) in &mut self.boxes {
+        for (id, checkbox) in &mut self.boxes {
             if focus == Some(*id) || matches!(event, KeyEvent::Up { .. }) {
                 consumed |= focus == Some(*id);
                 let _ = checkbox.handle(tree, *id, CheckboxInput::Key(event));
@@ -378,7 +347,7 @@ impl Page for CheckboxPage {
         _value: Option<&str>,
         _env: &Env<'_>,
     ) -> bool {
-        let Some((id, checkbox, _)) = self.boxes.iter_mut().find(|(id, _, _)| *id == node) else {
+        let Some((id, checkbox)) = self.boxes.iter_mut().find(|(id, _)| *id == node) else {
             return false;
         };
         action == SemanticAction::Activate

@@ -4,7 +4,7 @@
 use crate::page::{Align, Column, Env, Page, node, pressed, sem};
 use choscorui::controls::{
     ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, RadioGroup,
-    RadioInput, RadioOption, ShortcutModifiers, Tab, TabInput, TabSet, text_key,
+    RadioInput, RadioOption, ShortcutModifiers, Tab, TabInput, Tabs, TabsVariant, text_key,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -62,7 +62,7 @@ impl Page for RadioPage {
             let top = column.y;
             column.space(24.0);
             for (id, _) in options {
-                let _ = tree.set_bounds(*id, column.cells(20.0, &[20.0])[0]);
+                let _ = tree.set_bounds(*id, column.cells(20.0, &[280.0])[0]);
             }
             let group = Rect::new(
                 Point::new(bounds.origin.x, top),
@@ -78,25 +78,9 @@ impl Page for RadioPage {
             let bounds = tree.bounds(*group_node).unwrap_or_default();
             let title = Rect::new(bounds.origin, Size::new(bounds.size.width, 20.0));
             env.caption(list, title, &group.group_semantics().name);
-            for (id, text) in options {
-                let Some(state) = group.visual_state(tree, *id) else {
-                    continue;
-                };
+            for (id, _) in options {
                 let rect = tree.bounds(*id).unwrap_or_default();
-                env.radio_style().paint(list, rect, state);
-                let color = if state.enabled {
-                    env.tokens.color(ColorRole::Foreground)
-                } else {
-                    env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
-                };
-                env.text(
-                    list,
-                    crate::pages::inputs::beside(rect, 260.0, env),
-                    text,
-                    env.body(),
-                    color,
-                    Align::Leading,
-                );
+                group.paint_option(&mut env.cx(list, rect), tree, *id);
             }
         }
     }
@@ -119,7 +103,7 @@ impl Page for RadioPage {
         tree: &mut Tree,
         event: PointerEvent,
         _modifiers: ShortcutModifiers,
-        env: &Env<'_>,
+        _env: &Env<'_>,
     ) -> bool {
         let PointerEvent::Down {
             position,
@@ -131,8 +115,7 @@ impl Page for RadioPage {
         for (_, group, options) in &mut self.groups {
             for (id, _) in options.iter() {
                 let rect = tree.bounds(*id).unwrap_or_default();
-                let label = crate::pages::inputs::beside(rect, 260.0, env);
-                if rect.contains(position) || label.contains(position) {
+                if rect.contains(position) {
                     return matches!(group.handle(tree, *id, RadioInput::Activate), Ok(Some(_)));
                 }
             }
@@ -179,97 +162,137 @@ impl Page for RadioPage {
     }
 }
 
-/// A tab set with three panels; the last tab is disabled.
+/// One tab list: its node, the tabs, and each tab's node, panel node,
+/// label, and panel text.
+type TabList = (
+    NodeId,
+    Tabs,
+    Vec<(NodeId, NodeId, &'static str, &'static str)>,
+);
+
+/// Tabs in the default and line looks, with three panels each; the last
+/// tab is disabled.
 pub struct TabsPage {
-    list_node: NodeId,
-    tabs: TabSet,
-    items: Vec<(NodeId, NodeId, &'static str, &'static str)>,
+    sets: Vec<TabList>,
 }
 
 pub fn tabs(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
-    let list_node = node(tree, parent, false);
     let content = [
         ("General", "Name, icon, and startup behavior."),
         ("Appearance", "Theme, accent color, and font size."),
         ("Advanced (disabled)", "Hidden settings."),
     ];
-    let items: Vec<_> = content
-        .iter()
-        .map(|(label, body)| {
-            (
-                node(tree, list_node, false),
-                node(tree, parent, false),
-                *label,
-                *body,
-            )
+    let sets = [TabsVariant::Default, TabsVariant::Line]
+        .into_iter()
+        .map(|variant| {
+            let list_node = node(tree, parent, false);
+            let items: Vec<_> = content
+                .iter()
+                .map(|(label, body)| {
+                    (
+                        node(tree, list_node, false),
+                        node(tree, parent, false),
+                        *label,
+                        *body,
+                    )
+                })
+                .collect();
+            let tab_list = items
+                .iter()
+                .enumerate()
+                .map(|(index, (tab, panel, label, _))| {
+                    let tab = Tab::new(*tab, *panel, *label);
+                    if index == 2 { tab.disabled() } else { tab }
+                })
+                .collect();
+            let tabs = Tabs::new("Settings", tab_list, items[0].0)
+                .expect("tabs are distinct")
+                .with_variant(variant);
+            tabs.install(tree).expect("tabs are attached");
+            (list_node, tabs, items)
         })
         .collect();
-    let tab_list = items
-        .iter()
-        .enumerate()
-        .map(|(index, (tab, panel, label, _))| {
-            let tab = Tab::new(*tab, *panel, *label);
-            if index == 2 { tab.disabled() } else { tab }
-        })
-        .collect();
-    let tabs = TabSet::new("Settings", tab_list, items[0].0).expect("tabs are distinct");
-    tabs.install(tree).expect("tabs are attached");
-    Box::new(TabsPage {
-        list_node,
-        tabs,
-        items,
-    })
+    Box::new(TabsPage { sets })
+}
+
+impl TabsPage {
+    fn owner(&mut self, node: NodeId) -> Option<&mut Tabs> {
+        self.sets
+            .iter_mut()
+            .find(|(_, _, items)| items.iter().any(|(tab, _, _, _)| *tab == node))
+            .map(|(_, tabs, _)| tabs)
+    }
 }
 
 impl Page for TabsPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        let row = column.row(32.0);
-        let _ = tree.set_bounds(self.list_node, row);
-        let cells = crate::page::split(row, &[120.0, 140.0, 180.0], 2.0, env.rtl());
-        let panel = column.row(160.0);
-        for ((tab, panel_node, _, _), cell) in self.items.iter().zip(cells) {
-            let _ = tree.set_bounds(*tab, cell);
-            let _ = tree.set_bounds(*panel_node, panel);
+        for (list_node, tabs, items) in &self.sets {
+            let row = column.row(36.0);
+            let widths: Vec<f64> = items
+                .iter()
+                .map(|(tab, _, _, _)| {
+                    tabs.measure_tab(*tab, env.styles(), env.tokens, env)
+                        .map_or(120.0, |size| size.width)
+                })
+                .collect();
+            let total = widths.iter().sum::<f64>() + 6.0;
+            let list = Rect::new(
+                Point::new(
+                    if env.rtl() {
+                        row.max_x() - total
+                    } else {
+                        row.origin.x
+                    },
+                    row.origin.y,
+                ),
+                Size::new(total, row.size.height),
+            );
+            let _ = tree.set_bounds(*list_node, list);
+            let cells = crate::page::split(list.inset(3.0), &widths, 0.0, env.rtl());
+            let panel = column.row(96.0);
+            for ((tab, panel_node, _, _), cell) in items.iter().zip(cells) {
+                let _ = tree.set_bounds(*tab, cell);
+                let _ = tree.set_bounds(*panel_node, panel);
+            }
+            column.space(12.0);
         }
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        for (tab, panel, label, body) in &self.items {
-            let Some(state) = self.tabs.visual_state(tree, *tab) else {
-                continue;
-            };
-            let rect = tree.bounds(*tab).unwrap_or_default();
-            env.tab_style().paint(list, rect, state);
-            let color = if state.enabled {
-                env.tokens.color(ColorRole::Foreground)
-            } else {
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
-            };
-            env.text(list, rect, label, env.body(), color, Align::Center);
-            if state.selected {
-                let panel = tree.bounds(*panel).unwrap_or_default();
-                env.panel(list, panel);
-                env.label(
-                    list,
-                    Rect::new(
-                        Point::new(panel.origin.x + 12.0, panel.origin.y + 12.0),
-                        Size::new(panel.size.width - 24.0, 24.0),
-                    ),
-                    body,
-                );
+        for (list_node, tabs, items) in &self.sets {
+            let bounds = tree.bounds(*list_node).unwrap_or_default();
+            tabs.paint_list(&mut env.cx(list, bounds));
+            for (tab, panel, _, body) in items {
+                let rect = tree.bounds(*tab).unwrap_or_default();
+                tabs.paint_tab(&mut env.cx(list, rect), tree, *tab);
+                if tabs.selected_tab() == *tab {
+                    let panel = tree.bounds(*panel).unwrap_or_default();
+                    env.panel(list, panel);
+                    env.label(
+                        list,
+                        Rect::new(
+                            Point::new(panel.origin.x + 12.0, panel.origin.y + 12.0),
+                            Size::new(panel.size.width - 24.0, 24.0),
+                        ),
+                        body,
+                    );
+                }
             }
         }
     }
 
     fn semantics(&self, _tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
-        let mut nodes = vec![(self.list_node, self.tabs.group_semantics())];
-        for (tab, panel, _, _) in &self.items {
-            if let Some(node) = self.tabs.tab_semantics(*tab) {
-                nodes.push((*tab, node));
-            }
-            if let Some(node) = self.tabs.panel_semantics(*panel) {
-                nodes.push((*panel, node));
+        let mut nodes = Vec::new();
+        for (list_node, tabs, items) in &self.sets {
+            nodes.push((*list_node, tabs.group_semantics()));
+            for (tab, panel, _, _) in items {
+                if let Some(node) = tabs.tab_semantics(*tab) {
+                    nodes.push((*tab, node));
+                }
+                if let Some(node) = tabs.panel_semantics(*panel) {
+                    nodes.push((*panel, node));
+                }
             }
         }
         nodes
@@ -290,12 +313,13 @@ impl Page for TabsPage {
             return false;
         };
         let hit = self
-            .items
+            .sets
             .iter()
+            .flat_map(|(_, _, items)| items.iter())
             .find(|(tab, _, _, _)| tree.bounds(*tab).is_some_and(|b| b.contains(position)))
             .map(|(tab, _, _, _)| *tab);
-        match hit {
-            Some(tab) => matches!(self.tabs.handle(tree, tab, TabInput::Activate), Ok(Some(_))),
+        match hit.and_then(|tab| Some((tab, self.owner(tab)?))) {
+            Some((tab, tabs)) => matches!(tabs.handle(tree, tab, TabInput::Activate), Ok(Some(_))),
             None => false,
         }
     }
@@ -310,10 +334,10 @@ impl Page for TabsPage {
         let Some(focus) = tree.focus() else {
             return false;
         };
-        if !self.items.iter().any(|(tab, _, _, _)| *tab == focus) {
+        let Some(tabs) = self.owner(focus) else {
             return false;
-        }
-        let _ = self.tabs.handle(tree, focus, TabInput::Key(event));
+        };
+        let _ = tabs.handle(tree, focus, TabInput::Key(event));
         true
     }
 
@@ -325,11 +349,12 @@ impl Page for TabsPage {
         _value: Option<&str>,
         _env: &Env<'_>,
     ) -> bool {
-        self.items.iter().any(|(tab, _, _, _)| *tab == node)
-            && matches!(
-                self.tabs.handle(tree, node, TabInput::Semantic(action)),
+        self.owner(node).is_some_and(|tabs| {
+            matches!(
+                tabs.handle(tree, node, TabInput::Semantic(action)),
                 Ok(Some(_))
             )
+        })
     }
 }
 

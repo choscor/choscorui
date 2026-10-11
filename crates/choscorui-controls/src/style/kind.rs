@@ -247,3 +247,12 @@ macro_rules! variant_enum {
     };
 }
 pub(crate) use variant_enum;
+
+/// The main axis of a control that lays out parts in a line, such as tabs,
+/// a toggle group, or a resizable panel group.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum Orientation {
+    #[default]
+    Horizontal,
+    Vertical,
+}

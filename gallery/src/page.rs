@@ -3,10 +3,10 @@
 //! category files.
 
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, CheckboxStyle, CommandId, EstimatedText, HeaderStyle,
-    HostEnv, MenuStyle, PaintContext, ProgressStyle, RadioStyle, ScrollAreaStyle,
-    ShortcutModifiers, SliderStyle, SpinBoxStyle, SplitterStyle, Styles, TabStyle, TextFieldStyle,
-    TextFieldVisualState, TextItemDelegate, TextMeasure, ValidationState,
+    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, MenuStyle,
+    PaintContext, ProgressStyle, ScrollAreaStyle, ShortcutModifiers, SliderStyle, SpinBoxStyle,
+    SplitterStyle, Styles, TextFieldStyle, TextFieldVisualState, TextItemDelegate, TextMeasure,
+    ValidationState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -223,6 +223,11 @@ impl Env<'_> {
             .time(self.now.as_secs_f64())
     }
 
+    /// The style registry pages measure and paint with.
+    pub fn styles(&self) -> &Styles {
+        &self.measure_cache.styles
+    }
+
     /// The environment a `ControlHost` measures, arranges, and paints
     /// with: `themes`, this page's styles and text, direction, and time.
     pub fn host<'b>(&'b self, themes: &'b ThemeResolver) -> HostEnv<'b> {
@@ -354,39 +359,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn checkbox_style(&self) -> CheckboxStyle {
-        CheckboxStyle {
-            box_color: self.mix(0.15),
-            hover_color: self.mix(0.25),
-            pressed_color: self.mix(0.35),
-            check_color: self.tokens.color(ColorRole::Primary),
-            disabled_color: self.mix(0.05),
-            focus_color: self.tokens.color(ColorRole::Primary),
-        }
-    }
-
-    pub fn radio_style(&self) -> RadioStyle {
-        RadioStyle {
-            ring_color: self.mix(0.4),
-            selected_color: self.tokens.color(ColorRole::Primary),
-            disabled_color: self.mix(0.1),
-            focus_color: self.tokens.color(ColorRole::Primary),
-        }
-    }
-
-    pub fn tab_style(&self) -> TabStyle {
-        TabStyle {
-            background: self.mix(0.06),
-            selected: lerp_color(
-                self.tokens.color(ColorRole::Card),
-                self.tokens.color(ColorRole::Primary),
-                0.35,
-            ),
-            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
-            focus: self.tokens.color(ColorRole::Primary),
-        }
     }
 
     pub fn slider_style(&self) -> SliderStyle {

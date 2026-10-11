@@ -1,6 +1,10 @@
 use crate::SemanticAction;
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, Styles, TextMeasure, VisualState, choice_size,
+    paint_choice,
+};
 use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    DesignTokens, Dirty, Icon, Key, KeyEvent, NodeId, PointerButton, PointerEvent,
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
     TreeError,
 };
@@ -13,20 +17,14 @@ pub enum CheckboxInput {
     Cancel,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CheckboxVisualState {
-    pub enabled: bool,
-    pub checked: bool,
-    pub hovered: bool,
-    pub pressed: bool,
-    pub focused: bool,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CheckboxSemantics {
     pub role: &'static str,
     pub name: String,
     pub checked: bool,
+    /// Shown as mixed; `checked` still holds the value a toggle flips.
+    pub mixed: bool,
+    pub invalid: bool,
     pub enabled: bool,
     pub focused: bool,
     pub actions: &'static [SemanticAction],
@@ -38,10 +36,15 @@ impl CheckboxSemantics {
             role: SemanticRole::Checkbox,
             name: self.name.clone(),
             description: String::new(),
-            value: Some(self.checked.to_string()),
+            value: Some(if self.mixed {
+                "mixed".to_owned()
+            } else {
+                self.checked.to_string()
+            }),
             state: SemanticState {
                 disabled: !self.enabled,
-                checked: Some(self.checked),
+                checked: (!self.mixed).then_some(self.checked),
+                invalid: self.invalid,
                 ..SemanticState::default()
             },
             relations: Vec::new(),
@@ -59,57 +62,12 @@ impl CheckboxSemantics {
     }
 }
 
-/// Swappable drawing recipe; checkbox behavior owns no colors or geometry.
-#[derive(Clone, Copy, Debug)]
-pub struct CheckboxStyle {
-    pub box_color: Color,
-    pub hover_color: Color,
-    pub pressed_color: Color,
-    pub check_color: Color,
-    pub disabled_color: Color,
-    pub focus_color: Color,
-}
-
-impl CheckboxStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, state: CheckboxVisualState) {
-        let color = if !state.enabled {
-            self.disabled_color
-        } else if state.pressed {
-            self.pressed_color
-        } else if state.hovered {
-            self.hover_color
-        } else {
-            self.box_color
-        };
-        list.fill_rect(bounds, color);
-        if state.checked {
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x + 8.0, bounds.origin.y + 8.0),
-                    Size::new(
-                        (bounds.size.width - 16.0).max(0.0),
-                        (bounds.size.height - 16.0).max(0.0),
-                    ),
-                ),
-                self.check_color,
-            );
-        }
-        if state.focused {
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x, bounds.origin.y + bounds.size.height - 2.0),
-                    Size::new(bounds.size.width, 2.0),
-                ),
-                self.focus_color,
-            );
-        }
-    }
-}
-
 /// Independent Boolean value control. Returns Some(value) only on a change.
 pub struct Checkbox {
     label: String,
     checked: bool,
+    indeterminate: bool,
+    invalid: bool,
     enabled: bool,
     hovered: bool,
     pointer_armed: bool,
@@ -122,6 +80,8 @@ impl Checkbox {
         Self {
             label: label.into(),
             checked,
+            indeterminate: false,
+            invalid: false,
             enabled: true,
             hovered: false,
             pointer_armed: false,
@@ -132,6 +92,47 @@ impl Checkbox {
 
     pub fn value(&self) -> bool {
         self.checked
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn is_indeterminate(&self) -> bool {
+        self.indeterminate
+    }
+
+    /// Shows the mixed state until the next change of value.
+    pub fn set_indeterminate(
+        &mut self,
+        tree: &mut Tree,
+        id: NodeId,
+        indeterminate: bool,
+    ) -> Result<(), TreeError> {
+        if self.indeterminate != indeterminate {
+            self.indeterminate = indeterminate;
+            tree.invalidate(id, Dirty::PAINT)?;
+            tree.invalidate(id, Dirty::SEMANTICS)?;
+        }
+        Ok(())
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        self.invalid
+    }
+
+    pub fn set_invalid(
+        &mut self,
+        tree: &mut Tree,
+        id: NodeId,
+        invalid: bool,
+    ) -> Result<(), TreeError> {
+        if self.invalid != invalid {
+            self.invalid = invalid;
+            tree.invalidate(id, Dirty::PAINT)?;
+            tree.invalidate(id, Dirty::SEMANTICS)?;
+        }
+        Ok(())
     }
 
     pub fn set_enabled(
@@ -178,7 +179,7 @@ impl Checkbox {
                 position,
                 button: PointerButton::Primary,
             }) if tree.hit_test(position) == Some(id) => {
-                tree.set_focus(Some(id))?;
+                tree.focus_by_pointer(id)?;
                 tree.set_pointer_capture(Some(id))?;
                 self.pointer_armed = true;
                 self.pointer_inside = true;
@@ -228,9 +229,10 @@ impl Checkbox {
             _ => {}
         }
         if let Some(value) = next
-            && value != self.checked
+            && (value != self.checked || self.indeterminate)
         {
             self.checked = value;
+            self.indeterminate = false;
             tree.invalidate(id, Dirty::PAINT)?;
             tree.invalidate(id, Dirty::SEMANTICS)?;
             return Ok(Some(value));
@@ -241,18 +243,49 @@ impl Checkbox {
         Ok(None)
     }
 
-    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> CheckboxVisualState {
-        CheckboxVisualState {
-            enabled: self.enabled,
-            checked: self.checked,
-            hovered: self.hovered,
-            pressed: self.enabled
-                && ((self.pointer_armed
-                    && self.pointer_inside
-                    && tree.pointer_capture() == Some(id))
-                    || (self.space_armed && tree.focus() == Some(id))),
-            focused: tree.focus() == Some(id),
-        }
+    /// The flags the checkbox recipe reads.
+    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> VisualState {
+        let pressed = self.enabled
+            && ((self.pointer_armed && self.pointer_inside && tree.pointer_capture() == Some(id))
+                || (self.space_armed && tree.focus() == Some(id)));
+        VisualState::NONE
+            .set(VisualState::DISABLED, !self.enabled)
+            .set(VisualState::HOVERED, self.hovered)
+            .set(VisualState::PRESSED, pressed)
+            .set(VisualState::FOCUSED, tree.focus() == Some(id))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(id))
+            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::CHECKED, self.checked && !self.indeterminate)
+            .set(VisualState::INDETERMINATE, self.indeterminate)
+    }
+
+    /// The natural size: the box, the gap, and the label.
+    pub fn measure(&self, styles: &Styles, tokens: &DesignTokens, text: &dyn TextMeasure) -> Size {
+        choice_size(ControlKind::Checkbox, &self.label, styles, tokens, text)
+    }
+
+    /// Paints the checkbox in the context's bounds.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
+        let state = self.visual_state(tree, id);
+        self.paint_state(cx, state);
+    }
+
+    /// Paints the box at the start of the bounds and the label after it,
+    /// in an explicit visual state.
+    pub fn paint_state(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        let indicator = cx.style(StyleQuery::new(ControlKind::Checkbox, Slot::Root).state(state));
+        let mark = if state.indeterminate() {
+            Some(Icon::Minus)
+        } else if state.checked() {
+            Some(Icon::Check)
+        } else {
+            None
+        };
+        paint_choice(cx, ControlKind::Checkbox, &self.label, state, |cx, rect| {
+            if let Some(mark) = mark {
+                cx.icon(rect, mark, &indicator);
+            }
+        });
     }
 
     pub fn semantics(&self, tree: &Tree, id: NodeId) -> CheckboxSemantics {
@@ -265,6 +298,8 @@ impl Checkbox {
             role: "checkbox",
             name: self.label.clone(),
             checked: self.checked,
+            mixed: self.indeterminate,
+            invalid: self.invalid,
             enabled: self.enabled,
             focused: tree.focus() == Some(id),
             actions: if self.enabled { ACTIONS } else { &[] },

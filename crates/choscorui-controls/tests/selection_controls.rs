@@ -1,5 +1,5 @@
 use choscorui_controls::{
-    RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, TabSet,
+    RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
 };
 use choscorui_core::{
     Dirty, Key, KeyEvent, Point, Rect, SemanticAction, SemanticRelation, SemanticRole, Size, Tree,
@@ -104,7 +104,7 @@ fn tabs_select_panels_and_expose_bidirectional_relationships() {
     let first_panel = node(&mut tree, 60.0);
     let second_panel = node(&mut tree, 60.0);
     let third_panel = node(&mut tree, 60.0);
-    let mut tabs = TabSet::new(
+    let mut tabs = Tabs::new(
         "Settings",
         vec![
             Tab::new(first_tab, first_panel, "General"),
@@ -167,7 +167,7 @@ fn selection_models_reject_bad_identity_without_partial_installation() {
         tree.detach(value).unwrap();
         value
     };
-    let tabs = TabSet::new("Bad", vec![Tab::new(id, missing_panel, "A")], id).unwrap();
+    let tabs = Tabs::new("Bad", vec![Tab::new(id, missing_panel, "A")], id).unwrap();
     assert_eq!(
         tabs.install(&mut tree),
         Err(SelectionError::MissingNode(missing_panel))
@@ -193,4 +193,129 @@ fn detachment_cancels_a_selection_transaction() {
         Err(SelectionError::MissingNode(first))
     );
     assert_eq!(group.selected(), first);
+}
+
+mod painting {
+    use choscorui_controls::{
+        EstimatedText, Orientation, PaintContext, RadioGroup, RadioOption, Styles, Tab, Tabs,
+        TabsVariant,
+    };
+    use choscorui_core::{
+        ColorRole, DesignTokens, DisplayCommand, DisplayList, Point, Rect, Size, Tree,
+    };
+
+    fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
+        Rect::new(Point::new(x, y), Size::new(w, h))
+    }
+
+    #[test]
+    fn radio_paints_the_selected_dot_and_disabled_options_faded() {
+        let mut tree = Tree::new(rect(0.0, 0.0, 300.0, 100.0));
+        let root = tree.root();
+        let a = tree.attach(root, rect(0.0, 0.0, 200.0, 20.0)).unwrap();
+        let b = tree.attach(root, rect(0.0, 30.0, 200.0, 20.0)).unwrap();
+        let group = RadioGroup::new(
+            "Size",
+            vec![
+                RadioOption::new(a, "Small"),
+                RadioOption::new(b, "Large").disabled(),
+            ],
+            a,
+        )
+        .unwrap();
+        group.install(&mut tree).unwrap();
+        let tokens = DesignTokens::light();
+        let styles = Styles::new();
+        let paint = |id| {
+            let mut list = DisplayList::new();
+            let bounds = tree.bounds(id).unwrap();
+            group.paint_option(
+                &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+                &tree,
+                id,
+            );
+            list
+        };
+        let selected = paint(a);
+        let primary = tokens.color(ColorRole::Primary);
+        let dot = tokens.color(ColorRole::PrimaryForeground);
+        assert!(selected.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRoundedRect { color, rect, .. }
+                if *color == primary && rect.size == Size::new(16.0, 16.0)
+        )));
+        assert!(selected.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRoundedRect { color, rect, .. }
+                if *color == dot && rect.size == Size::new(8.0, 8.0)
+        )));
+        let disabled = paint(b);
+        assert!(
+            disabled.commands().iter().any(
+                |command| matches!(command, DisplayCommand::PushOpacity(alpha) if *alpha == 0.5)
+            )
+        );
+        assert!(!disabled.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRoundedRect { color, .. } if *color == dot
+        )));
+        let size = group
+            .measure_option(a, &styles, &tokens, &EstimatedText)
+            .unwrap();
+        assert_eq!(size.height, 16.0);
+    }
+
+    #[test]
+    fn tabs_paint_the_list_trigger_and_line_indicator() {
+        let mut tree = Tree::new(rect(0.0, 0.0, 300.0, 200.0));
+        let root = tree.root();
+        let list_node = tree.attach(root, rect(0.0, 0.0, 300.0, 36.0)).unwrap();
+        let tab = tree.attach(list_node, rect(3.0, 3.0, 80.0, 30.0)).unwrap();
+        let panel = tree.attach(root, rect(0.0, 40.0, 300.0, 100.0)).unwrap();
+        let tokens = DesignTokens::light();
+        let styles = Styles::new();
+        let tabs = Tabs::new("Settings", vec![Tab::new(tab, panel, "General")], tab).unwrap();
+        let mut list = DisplayList::new();
+        tabs.paint_list(&mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 300.0, 36.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ));
+        let muted = tokens.color(ColorRole::Muted);
+        assert!(matches!(
+            list.commands(),
+            [DisplayCommand::FillRoundedRect { color, .. }] if *color == muted
+        ));
+
+        let line = tabs
+            .with_variant(TabsVariant::Line)
+            .with_orientation(Orientation::Horizontal);
+        let mut list = DisplayList::new();
+        line.paint_tab(
+            &mut PaintContext::new(
+                &mut list,
+                rect(3.0, 3.0, 80.0, 30.0),
+                &tokens,
+                &styles,
+                &EstimatedText,
+            ),
+            &tree,
+            tab,
+        );
+        let foreground = tokens.color(ColorRole::Foreground);
+        assert!(
+            matches!(list.commands().last(), Some(DisplayCommand::FillRect { color, rect: bar })
+                if *color == foreground && bar.size.height == 2.0 && bar.max_y() == 38.0),
+            "the line indicator sits under the selected tab: {:?}",
+            list.commands().last()
+        );
+        assert!(
+            line.measure_tab(tab, &styles, &tokens, &EstimatedText)
+                .unwrap()
+                .width
+                > 16.0
+        );
+    }
 }

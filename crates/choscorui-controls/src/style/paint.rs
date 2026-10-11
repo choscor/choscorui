@@ -1,6 +1,6 @@
 //! The general slot painter and text helpers that every control uses.
 
-use super::{Corners, ResolvedStyle, StyleQuery, Styles, VisualState};
+use super::{ControlKind, Corners, ResolvedStyle, Slot, StyleQuery, Styles, VisualState};
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Paint, Path, Point, Rect, Shadow, Size,
     StrokeStyle, TextRun, TextShaper, TypeSpec,
@@ -523,4 +523,70 @@ impl<'a> Content<'a> {
             x += part + style.gap;
         }
     }
+}
+
+/// The size of a checkbox-like choice of `kind`: the `Root` indicator,
+/// the `Label` gap, and the label.
+pub(crate) fn choice_size(
+    kind: ControlKind,
+    label: &str,
+    styles: &Styles,
+    tokens: &DesignTokens,
+    text: &dyn TextMeasure,
+) -> Size {
+    let indicator = styles.resolve(tokens, StyleQuery::new(kind, Slot::Root));
+    if label.is_empty() {
+        return Size::new(indicator.min_width, indicator.min_height);
+    }
+    let style = styles.resolve(tokens, StyleQuery::new(kind, Slot::Label));
+    Size::new(
+        indicator.min_width + style.gap + text.width(label, &style.text),
+        indicator.min_height.max(style.text.line_height),
+    )
+}
+
+/// Paints a checkbox-like choice of `kind`: the `Root` indicator box at
+/// the start of the bounds, `mark` inside its padding, then the label
+/// after the `Label` gap.
+pub(crate) fn paint_choice(
+    cx: &mut PaintContext<'_>,
+    kind: ControlKind,
+    label: &str,
+    state: VisualState,
+    mark: impl FnOnce(&mut PaintContext<'_>, Rect),
+) {
+    let query = |slot| StyleQuery::new(kind, slot).state(state);
+    let indicator = cx.style(query(Slot::Root));
+    let bounds = cx.bounds;
+    let size = Size::new(indicator.min_width, indicator.min_height);
+    let x = if cx.rtl {
+        bounds.max_x() - size.width
+    } else {
+        bounds.origin.x
+    };
+    let rect = Rect::new(
+        Point::new(
+            x,
+            bounds.origin.y + (bounds.size.height - size.height) / 2.0,
+        ),
+        size,
+    );
+    cx.slot(rect, &indicator, |cx, _| mark(cx, rect));
+    if label.is_empty() {
+        return;
+    }
+    let style = cx.style(query(Slot::Label));
+    let inset = size.width + style.gap;
+    let x = if cx.rtl {
+        bounds.origin.x
+    } else {
+        bounds.origin.x + inset
+    };
+    let text = Rect::new(
+        Point::new(x, bounds.origin.y),
+        Size::new((bounds.size.width - inset).max(0.0), bounds.size.height),
+    );
+    cx.slot(text, &style, |cx, inner| {
+        cx.label(inner, label, &style, TextAlign::Start);
+    });
 }

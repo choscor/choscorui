@@ -76,16 +76,15 @@ pub use choscorui_compose::{
     TransitionDescription,
 };
 pub use choscorui_controls::{
-    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CheckboxStyle, CommandError,
-    CommandId, CommandRegistry, CommandState, ControlContext, ControlEvent, ControlHost,
-    ControlKind, ControlSize, CustomControl, GroupBox, IntegerRange, Label, LabelStyle,
-    PaintContext, ProgressBar, ProgressStyle, RadioGroup, RadioInput, RadioOption, RadioStyle,
-    Recipe, ResolvedStyle, SemanticAction as ControlAction, Separator, SeparatorOrientation,
-    SeparatorStyle, Shortcut, ShortcutModifiers, ShortcutScope, Slider, SliderInput,
-    SliderOrientation, SliderStyle, SpinBox, SpinBoxInput, SpinBoxStyle, SplitOrientation,
-    Splitter, SplitterInput, SplitterStyle, StackPage, StackedContainer, StyleQuery, Styles, Tab,
-    TabInput, TabSet, TabStyle, TextField, TextFieldChange, TextFieldInput, TextFieldStyle,
-    VisualState,
+    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandError, CommandId,
+    CommandRegistry, CommandState, ControlContext, ControlEvent, ControlHost, ControlKind,
+    ControlSize, CustomControl, GroupBox, IntegerRange, Label, PaintContext, ProgressBar,
+    ProgressStyle, RadioGroup, RadioInput, RadioOption, Recipe, ResolvedStyle,
+    SemanticAction as ControlAction, Separator, SeparatorOrientation, Shortcut, ShortcutModifiers,
+    ShortcutScope, Slider, SliderInput, SliderOrientation, SliderStyle, SpinBox, SpinBoxInput,
+    SpinBoxStyle, SplitOrientation, Splitter, SplitterInput, SplitterStyle, StackPage,
+    StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField, TextFieldChange,
+    TextFieldInput, TextFieldStyle, VisualState,
 };
 pub use choscorui_core::{
     AccessibilityPreferences, Axis, Color, Constraints, CrossAlign, DesignTokens, Dirty,

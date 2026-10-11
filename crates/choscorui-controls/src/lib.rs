@@ -4,9 +4,7 @@ use choscorui_core::{Key, NodeId, TreeError};
 use std::collections::HashMap;
 
 mod checkbox;
-pub use checkbox::{
-    Checkbox, CheckboxInput, CheckboxSemantics, CheckboxStyle, CheckboxVisualState,
-};
+pub use checkbox::{Checkbox, CheckboxInput, CheckboxSemantics};
 mod text_field;
 pub use text_field::{
     TextComposition, TextField, TextFieldChange, TextFieldInput, TextFieldSemanticAction,
@@ -20,9 +18,13 @@ pub use range_controls::{
     SpinBoxVisualState,
 };
 mod selection_controls;
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `TabSet` alias for one release"
+)]
+pub use selection_controls::TabSet;
 pub use selection_controls::{
-    RadioGroup, RadioInput, RadioOption, RadioStyle, RadioVisualState, SelectionError, Tab,
-    TabInput, TabSet, TabStyle, TabVisualState,
+    RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
 };
 mod containers;
 pub use containers::{
@@ -90,7 +92,7 @@ pub use style::{
     AddonAlign, AlertVariant, AttachmentState, BadgeVariant, BubbleVariant, ButtonVariant,
     CalendarDay, Content, ControlKind, ControlSize, Corners, Cursor, DefaultRecipe, Edges,
     EmptyMediaVariant, EstimatedText, FieldOrientation, ItemVariant, KbdVariant, MarkerVariant,
-    MenuItemVariant, PaintContext, Recipe, ResolvedStyle, Ring, ShapedText, SheetSide,
+    MenuItemVariant, Orientation, PaintContext, Recipe, ResolvedStyle, Ring, ShapedText, SheetSide,
     SidebarVariant, Sides, Slot, StyleCacheStats, StyleQuery, Styles, TabsVariant, TextAlign,
     TextLine, TextMeasure, ToastVariant, ToggleVariant, Variant, VisualState, align_x,
     content_rect, draw_icon, draw_text, fill_shape, paint_box, paint_slot,
@@ -101,7 +103,7 @@ pub use navigation::{
     ScrollAreaStyle, ScrollAreaVisualState, ScrollbarGeometry, parse_mnemonic,
 };
 mod static_controls;
-pub use static_controls::{Label, LabelStyle, Separator, SeparatorOrientation, SeparatorStyle};
+pub use static_controls::{Label, Separator, SeparatorOrientation};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CommandId(pub u64);

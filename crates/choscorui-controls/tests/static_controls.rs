@@ -1,6 +1,9 @@
-use choscorui_controls::{Label, LabelStyle, Separator, SeparatorOrientation, SeparatorStyle};
+use choscorui_controls::{
+    EstimatedText, Label, PaintContext, Separator, SeparatorOrientation, Styles, VisualState,
+};
 use choscorui_core::{
-    Color, Dirty, DisplayCommand, DisplayList, Point, Rect, SemanticRole, Size, Tree,
+    ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Point, Rect, SemanticRole, Size,
+    Tree,
 };
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
@@ -24,42 +27,70 @@ fn label_updates_layout_paint_and_accessibility_and_uses_its_recipe() {
     assert_eq!(label.semantics().role, SemanticRole::StaticText);
     assert_eq!(label.semantics().name, "Display name");
 
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
     let mut list = DisplayList::new();
-    LabelStyle {
-        font_family: "sans".into(),
-        font_size: 13.0,
-        color: Color::rgba8(1, 2, 3, 255),
-    }
-    .paint(&mut list, Point::new(4.0, 18.0), &label)
-    .unwrap();
+    label.paint(&mut PaintContext::new(
+        &mut list,
+        rect(4.0, 0.0, 200.0, 36.0),
+        &tokens,
+        &styles,
+        &EstimatedText,
+    ));
+    let foreground = tokens.color(ColorRole::Foreground);
+    assert!(matches!(
+        list.commands(),
+        [DisplayCommand::DrawText { text, font_size, color, .. }]
+            if text == "Display name" && *font_size == 14.0 && *color == foreground
+    ));
+
+    let mut dimmed = DisplayList::new();
+    label.paint(
+        &mut PaintContext::new(
+            &mut dimmed,
+            rect(4.0, 0.0, 200.0, 36.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        )
+        .state(VisualState::DISABLED),
+    );
     assert!(
-        matches!(list.commands(), [DisplayCommand::DrawText { text, .. }] if text == "Display name")
+        matches!(dimmed.commands().first(), Some(DisplayCommand::PushOpacity(alpha)) if *alpha == 0.5),
+        "a disabled label paints at half opacity"
     );
 }
 
 #[test]
-fn separator_centers_the_requested_thickness_in_either_orientation() {
-    let style = SeparatorStyle {
-        color: Color::rgba8(20, 20, 20, 255),
-        thickness: 2,
+fn separator_centers_a_border_rule_in_either_orientation() {
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let border = tokens.color(ColorRole::Border);
+    let paint = |bounds: Rect, orientation| {
+        let mut list = DisplayList::new();
+        Separator::new(orientation).paint(&mut PaintContext::new(
+            &mut list,
+            bounds,
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ));
+        list
     };
-    let mut horizontal = DisplayList::new();
-    style.paint(
-        &mut horizontal,
+    let horizontal = paint(
         rect(10.0, 20.0, 100.0, 10.0),
-        Separator::new(SeparatorOrientation::Horizontal),
+        SeparatorOrientation::Horizontal,
     );
     assert!(
-        matches!(horizontal.commands(), [DisplayCommand::FillRect { rect: line, .. }] if *line == rect(10.0, 24.0, 100.0, 2.0))
+        matches!(horizontal.commands(), [DisplayCommand::FillRect { rect: line, color }]
+            if *line == rect(10.0, 24.5, 100.0, 1.0) && *color == border)
     );
-
-    let mut vertical = DisplayList::new();
-    style.paint(
-        &mut vertical,
+    let vertical = paint(
         rect(10.0, 20.0, 10.0, 100.0),
-        Separator::new(SeparatorOrientation::Vertical),
+        SeparatorOrientation::Vertical,
     );
     assert!(
-        matches!(vertical.commands(), [DisplayCommand::FillRect { rect: line, .. }] if *line == rect(14.0, 20.0, 2.0, 100.0))
+        matches!(vertical.commands(), [DisplayCommand::FillRect { rect: line, .. }]
+            if *line == rect(14.5, 20.0, 1.0, 100.0))
     );
 }
