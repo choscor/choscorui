@@ -2,8 +2,8 @@
 
 use crate::page::{Align, Column, Env, Page, Push, node, pressed, sem};
 use choscorui::controls::{
-    CommandId, CommandRegistry, CommandState, MenuItem, MenuResponse, Placement, PopupMenu,
-    PopupPress, PopupStack, ShortcutModifiers, TooltipController, place_popup,
+    CommandId, CommandRegistry, CommandState, DropdownMenu, MenuCheck, MenuItem, MenuResponse,
+    Placement, PopupPress, PopupStack, ShortcutModifiers, TooltipController, place_popup,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -19,37 +19,38 @@ const MESSAGES: CommandId = CommandId(6);
 const MENU_WIDTH: f64 = 200.0;
 
 fn menu_items() -> Vec<MenuItem> {
-    let with_shortcut = |label: &str, command, shortcut: &str| MenuItem::Action {
-        label: label.into(),
-        command,
-        shortcut: Some(shortcut.into()),
+    let with_shortcut = |label: &str, command, shortcut: &str| {
+        MenuItem::action(label, command).with_shortcut(shortcut)
     };
     vec![
         with_shortcut("Cut", CUT, "⌘X"),
         with_shortcut("Copy", COPY, "⌘C"),
         with_shortcut("Paste (nothing copied)", PASTE, "⌘V"),
         MenuItem::Separator,
-        MenuItem::action("Wrap long lines", WRAP),
-        MenuItem::Submenu {
-            label: "Share".into(),
-            items: vec![
+        MenuItem::action("Wrap long lines", WRAP).with_check(MenuCheck::Checkbox),
+        MenuItem::submenu(
+            "Share",
+            vec![
                 MenuItem::action("Email", EMAIL),
                 MenuItem::action("Messages", MESSAGES),
             ],
-        },
+        ),
     ]
 }
 
 /// Labelled (non-separator) items per level.
 const LEVEL_ITEMS: [usize; 2] = [5, 2];
+/// The rows of the separator and of the Share submenu in the root level.
+const SEPARATOR_ROW: usize = 3;
+const SHARE_ROW: usize = 5;
 
 /// A button that opens a popup menu; Paste is disabled and Wrap toggles
 /// a check mark. Arrow keys, Return, and Escape work inside the menu.
-pub struct PopupMenuPage {
+pub struct DropdownMenuPage {
     button: Push,
     status: NodeId,
     levels: Vec<(NodeId, Vec<NodeId>)>,
-    menu: PopupMenu,
+    menu: DropdownMenu,
     stack: PopupStack,
     commands: CommandRegistry,
     rects: Vec<Rect>,
@@ -57,7 +58,7 @@ pub struct PopupMenuPage {
     last: String,
 }
 
-pub fn popup_menu(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
+pub fn dropdown_menu(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let button = Push::new(tree, parent, "Edit ▾", env);
     let status = node(tree, parent, false);
     let levels = LEVEL_ITEMS
@@ -75,11 +76,11 @@ pub fn popup_menu(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Pag
     }
     let _ = commands.set_enabled(PASTE, false);
     let _ = commands.set_checked(WRAP, true);
-    Box::new(PopupMenuPage {
+    Box::new(DropdownMenuPage {
         button,
         status,
         levels,
-        menu: PopupMenu::new(menu_items()),
+        menu: DropdownMenu::new(menu_items()),
         stack: PopupStack::new(),
         commands,
         rects: Vec::new(),
@@ -88,13 +89,13 @@ pub fn popup_menu(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Pag
     })
 }
 
-impl PopupMenuPage {
+impl DropdownMenuPage {
     /// Opens the menu under the button.
     pub fn open(&mut self, tree: &mut Tree, env: &Env<'_>) {
         if self.stack.is_open() {
             return;
         }
-        self.menu = PopupMenu::new(menu_items());
+        self.menu = DropdownMenu::new(menu_items());
         let anchor = tree.bounds(self.button.node).unwrap_or_default();
         let rect = place_popup(
             anchor,
@@ -133,31 +134,21 @@ impl PopupMenuPage {
         if self.menu.depth() > 1 {
             // The submenu opens beside the Share row (the last row).
             let size = self.menu.level_size(1, MENU_WIDTH);
-            let row = Rect::new(
-                Point::new(root.origin.x, root.max_y() - 4.0 - 22.0),
-                Size::new(root.size.width, 22.0),
-            );
+            let share = self.menu.item_rect(0, root, SHARE_ROW).unwrap_or(root);
             self.rects
-                .push(place_popup(row, size, self.bounds, Placement::After, env.direction).rect);
+                .push(place_popup(share, size, self.bounds, Placement::After, env.direction).rect);
         }
         for (level, (container, items)) in self.levels.iter().enumerate() {
             let rect = self.rects.get(level).copied();
             let _ = tree.set_visible(*container, rect.is_some());
             let Some(rect) = rect else { continue };
             let _ = tree.set_bounds(*container, rect);
-            let mut y = rect.origin.y + 4.0;
-            for (index, id) in items.iter().enumerate() {
-                if level == 0 && index == 3 {
-                    y += 9.0;
+            // Separators have no node, so skip their rows.
+            let rows = (0..).filter(|&row| !(level == 0 && row == SEPARATOR_ROW));
+            for (id, row) in items.iter().zip(rows) {
+                if let Some(bounds) = self.menu.item_rect(level, rect, row) {
+                    let _ = tree.set_bounds(*id, bounds);
                 }
-                let _ = tree.set_bounds(
-                    *id,
-                    Rect::new(
-                        Point::new(rect.origin.x, y),
-                        Size::new(rect.size.width, 22.0),
-                    ),
-                );
-                y += 22.0;
             }
         }
         let depth = self.menu.depth().min(self.levels.len());
@@ -210,9 +201,10 @@ impl PopupMenuPage {
     }
 }
 
-impl Page for PopupMenuPage {
+impl Page for DropdownMenuPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         self.bounds = bounds;
+        self.menu.set_metrics(env.styles(), env.tokens);
         let mut column = Column::new(bounds, env);
         let cell = column.cells(30.0, &[110.0])[0];
         let _ = tree.set_bounds(self.button.node, cell);
@@ -249,7 +241,7 @@ impl Page for PopupMenuPage {
         );
         for (level, rect) in self.rects.iter().enumerate() {
             self.menu
-                .paint(list, level, *rect, &env.menu_style(), &self.commands);
+                .paint(&mut env.cx(list, *rect), level, &self.commands);
         }
     }
 
@@ -590,13 +582,13 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn popup_menu_opens_from_its_button_and_escape_closes_it() {
-        let mut h = Harness::new("popup-menu");
+    fn dropdown_menu_opens_from_its_button_and_escape_closes_it() {
+        let mut h = Harness::new("dropdown-menu");
         let button = h.node("Edit ▾", None);
         h.act(button, SemanticAction::Activate);
-        assert!(h.get::<PopupMenuPage>().stack.is_open());
+        assert!(h.get::<DropdownMenuPage>().stack.is_open());
         h.press(Key::Escape);
-        assert!(!h.get::<PopupMenuPage>().stack.is_open());
+        assert!(!h.get::<DropdownMenuPage>().stack.is_open());
     }
 
     #[test]

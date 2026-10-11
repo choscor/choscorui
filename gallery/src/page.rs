@@ -4,8 +4,8 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, InputText,
-    MenuStyle, PaintContext, ShortcutModifiers, Styles, TextItemDelegate, TextMeasure,
-    ValidationState, VisualState,
+    PaintContext, ShortcutModifiers, Styles, TextItemDelegate, TextMeasure, ValidationState,
+    VisualState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -358,19 +358,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn menu_style(&self) -> MenuStyle {
-        MenuStyle {
-            background: self.tokens.color(ColorRole::Card),
-            highlight: self.tokens.color(ColorRole::Primary),
-            text: self.tokens.color(ColorRole::Foreground),
-            highlight_text: self.on_accent(),
-            disabled_text: self.tokens.color(ColorRole::Foreground).with_alpha(0.4),
-            separator: self.mix(0.2),
-            font_family: FONT.into(),
-            font_size: self.body(),
-        }
     }
 
     pub fn header_style(&self) -> HeaderStyle {

@@ -1,9 +1,13 @@
 use choscorui_controls::{
     ComboBox, ComboChange, ComboInput, ComboItem, CommandId, CommandRegistry, CommandState,
-    CompletionMode, FontChooser, MenuItem, MenuResponse, Placement, PopupMenu, PopupPress,
-    PopupStack, TOOLTIP_DELAY, TooltipController, place_popup, text_key,
+    CompletionMode, DropdownMenu, FontChooser, MenuCheck, MenuItem, MenuResponse, Placement,
+    PopupPress, PopupStack, TOOLTIP_DELAY, TooltipController, place_popup, text_key,
 };
-use choscorui_core::{ItemKey, Key, LayoutDirection, Point, Rect, SemanticAction, Size, Tree};
+use choscorui_controls::{EstimatedText, PaintContext, Styles};
+use choscorui_core::{
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Point,
+    Rect, SemanticAction, Size, Tree,
+};
 use std::time::Duration;
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -159,20 +163,20 @@ fn commands() -> CommandRegistry {
 }
 
 #[test]
-fn popup_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
+fn dropdown_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
     let commands = commands();
-    let mut menu = PopupMenu::new(vec![
+    let mut menu = DropdownMenu::new(vec![
         MenuItem::action("Cut", CommandId(1)),
         MenuItem::action("Copy", CommandId(2)),
         MenuItem::Separator,
-        MenuItem::action("Show Ruler", CommandId(3)),
-        MenuItem::Submenu {
-            label: "Export".into(),
-            items: vec![
+        MenuItem::action("Show Ruler", CommandId(3)).with_check(MenuCheck::Checkbox),
+        MenuItem::submenu(
+            "Export",
+            vec![
                 MenuItem::action("PDF", CommandId(4)),
                 MenuItem::action("PNG", CommandId(5)),
             ],
-        },
+        ),
     ]);
     menu.handle_key(Key::ArrowDown, &commands);
     assert_eq!(menu.highlighted(), Some(0));
@@ -181,6 +185,7 @@ fn popup_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
     let semantics = menu.semantics(0, &commands);
     assert_eq!(semantics.len(), 4);
     assert!(semantics[1].state.disabled);
+    assert_eq!(semantics[0].state.checked, None, "not checkable");
     assert_eq!(semantics[2].state.checked, Some(true));
     menu.handle_key(Key::Character('e'), &commands);
     assert_eq!(menu.highlighted(), Some(4));
@@ -199,19 +204,18 @@ fn popup_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
     );
 
     // Pointer: release over a disabled item does nothing.
-    let origin = Point::new(0.0, 0.0);
+    let panel = Rect::new(Point::new(0.0, 0.0), menu.level_size(0, 200.0));
+    let center = |index| {
+        let row = menu.item_rect(0, panel, index).unwrap();
+        Point::new(row.origin.x + 10.0, row.origin.y + row.size.height / 2.0)
+    };
+    let (copy, cut) = (center(1), center(0));
     assert_eq!(
-        menu.pointer(
-            0,
-            origin,
-            Point::new(10.0, 4.0 + 22.0 + 5.0),
-            true,
-            &commands
-        ),
+        menu.pointer(0, panel.origin, copy, true, &commands),
         MenuResponse::None
     );
     assert_eq!(
-        menu.pointer(0, origin, Point::new(10.0, 10.0), true, &commands),
+        menu.pointer(0, panel.origin, cut, true, &commands),
         MenuResponse::Activated(CommandId(1))
     );
 }
@@ -336,4 +340,57 @@ fn font_chooser_reports_missing_family_and_falls_back() {
         alt: false,
     });
     assert_eq!(chooser.resolved_family(), "Times");
+}
+
+#[test]
+fn dropdown_menu_takes_metrics_and_look_from_the_menu_recipe() {
+    let mut commands = commands();
+    commands.set_checked(CommandId(4), true).unwrap();
+    let mut menu = DropdownMenu::new(vec![
+        MenuItem::action("Cut", CommandId(1)).with_shortcut("⌘X"),
+        MenuItem::Separator,
+        MenuItem::action("Small", CommandId(4)).with_check(MenuCheck::Radio),
+        MenuItem::action("Large", CommandId(5)).with_check(MenuCheck::Radio),
+        MenuItem::action("Delete", CommandId(1)).destructive(),
+    ]);
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    menu.set_metrics(&styles, &tokens);
+    // Rows are 32 pt, the separator 9 pt, and the panel inset 4 pt.
+    let panel = Rect::new(Point::new(0.0, 0.0), menu.level_size(0, 200.0));
+    assert_eq!(panel.size.height, 4.0 * 32.0 + 9.0 + 8.0);
+    assert_eq!(
+        menu.item_rect(0, panel, 2),
+        Some(rect(4.0, 4.0 + 32.0 + 9.0, 192.0, 32.0))
+    );
+
+    let semantics = menu.semantics(0, &commands);
+    assert_eq!(semantics[1].state.checked, Some(true));
+    assert_eq!(semantics[2].state.checked, Some(false));
+
+    menu.handle_key(Key::End, &commands);
+    assert_eq!(menu.highlighted(), Some(4));
+    let mut list = DisplayList::new();
+    menu.paint(
+        &mut PaintContext::new(&mut list, panel, &tokens, &styles, &EstimatedText),
+        0,
+        &commands,
+    );
+    let fills = |color| {
+        list.commands()
+            .iter()
+            .filter(|command| {
+                matches!(command, DisplayCommand::FillRoundedRect { color: c, .. } if *c == color)
+            })
+            .count()
+    };
+    assert_eq!(fills(tokens.color(ColorRole::Popover)), 1, "one panel");
+    let highlight = tokens.color(ColorRole::Destructive).with_alpha(0.1);
+    assert_eq!(fills(highlight), 1, "the destructive row is highlighted");
+    // Only the checked radio item draws its 8 pt dot.
+    let dot = list.commands().iter().filter(|command| {
+        matches!(command, DisplayCommand::FillRoundedRect { rect, .. }
+            if rect.size == Size::new(8.0, 8.0))
+    });
+    assert_eq!(dot.count(), 1);
 }

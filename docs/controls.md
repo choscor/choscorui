@@ -57,7 +57,7 @@ in parentheses is the role that the macOS backend gives to that
 | Data and item views | [`DataMapper`](#celledit-and-datamapper) | Binds form fields to the current model item. |
 | Data and item views | [`ColumnBrowser`](#columnbrowser-and-undo-history) | Column (Miller) browser for a tree model. |
 | Data and item views | [`undo_history`](#columnbrowser-and-undo-history) | Rows for an undo history list. |
-| Popups and dialogs | [`PopupMenu`](#popupmenu) | Custom-drawn menu backed by commands. |
+| Popups and dialogs | [`DropdownMenu`](#dropdownmenu) | Custom-drawn menu backed by commands. |
 | Popups and dialogs | [`PopupStack`](#popupstack) | Open popups, dismissal, and focus restore. |
 | Popups and dialogs | [`TooltipController`](#tooltipcontroller) | Hover tooltips with delay and grace time. |
 | Popups and dialogs | [`DialogStack`](#dialogstack-and-dialogkeys) | Modal and modeless dialogs in a window. |
@@ -942,7 +942,7 @@ These types have no semantic node. Show the rows in an `ItemView`.
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) pins this
 behavior.
 
-### PopupMenu
+### DropdownMenu
 
 - Hover highlights an enabled item. Hover on a submenu opens it at once.
   A release over an enabled action activates it.
@@ -956,12 +956,31 @@ behavior.
 - The menu skips disabled or unknown commands, separators, and empty
   submenus. These items never activate.
 - Right-to-left layouts do not mirror ArrowLeft and ArrowRight.
+- `PopupMenu` is a deprecated alias of `DropdownMenu`.
+- **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
+  shortcut text, and `destructive` sets the destructive look.
+  `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`
+  shows the checked state of the command.
+- **Metrics.** `set_metrics` reads the row heights from the `Menu`
+  recipe. `level_size` and `item_rect` use them.
+- **Look.** `paint` draws the `Root` panel, then each row in the context's
+  bounds. The values come from the `Menu` recipe:
 
-| Field | `PopupMenu::semantics(level, commands)`, one node per item |
+| Part | Slot | Value |
+| --- | --- | --- |
+| Panel | `Root` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, padding 4 pt |
+| Action | `Item` | 32 pt high, padding 8 by 6 pt, radius sm; `accent` fill while highlighted |
+| Destructive action | `Item` | `destructive` text; `destructive` fill at 10% (20% dark) while highlighted |
+| Submenu | `Trigger` | as `Item`, with a chevron at the end; `accent` fill while open |
+| Check or dot | `ItemIndicator` | 16 pt column before the label in a level with a checkable item |
+| Shortcut | `Shortcut` | xs `muted-foreground` text with widest tracking, at the end |
+| Separator | `Separator` | 1 pt `border` line with 4 pt above and below, across the panel |
+
+| Field | `DropdownMenu::semantics(level, commands)`, one node per item |
 | --- | --- |
 | Role | `MenuItem` (AXMenuItem) |
 | Name / value | label / -; the shortcut text is the description |
-| State | disabled, checked, selected when highlighted, expanded for an open submenu |
+| State | disabled, checked for a checkable action, selected when highlighted, expanded for an open submenu |
 | Actions | `Activate` while enabled |
 
 Separators have no node.

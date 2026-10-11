@@ -58,9 +58,16 @@ pub use model_widgets::{
 };
 mod popup;
 pub use popup::{
-    MenuItem, MenuResponse, MenuStyle, Placement, PopupId, PopupMenu, PopupPlacement, PopupPress,
-    PopupStack, TOOLTIP_DELAY, TOOLTIP_GRACE, TooltipController, VisibleTooltip, place_popup,
+    Placement, PopupId, PopupPlacement, PopupPress, PopupStack, TOOLTIP_DELAY, TOOLTIP_GRACE,
+    TooltipController, VisibleTooltip, place_popup,
 };
+mod menu;
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `PopupMenu` alias for one release"
+)]
+pub use menu::PopupMenu;
+pub use menu::{DropdownMenu, MenuCheck, MenuItem, MenuResponse};
 mod combo;
 pub use combo::{
     ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, text_key,
