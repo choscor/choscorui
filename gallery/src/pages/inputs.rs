@@ -1,6 +1,6 @@
 //! Buttons and other momentary or toggled inputs.
 
-use crate::page::{Align, Clicks, Column, Env, Page, node, pressed, sem};
+use crate::page::{Align, Clicks, Column, Env, Page, node, pressed, sem, split};
 use choscorui::controls::{
     Button, ButtonGroup, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId,
     CommandRegistry, CommandState, InputText, KeySequenceChange, KeySequenceEdit,
@@ -623,7 +623,10 @@ impl Page for ButtonGroupPage {
         for ((_, members), caption) in self.groups.iter().zip(self.captions) {
             let _ = tree.set_bounds(caption, column.row(22.0));
             let widths = vec![92.0; members.len()];
-            for ((id, _, _), cell) in members.iter().zip(column.cells(30.0, &widths)) {
+            // Joined members touch: the cells have no gap between them.
+            let row = column.cells(36.0, &[92.0 * members.len() as f64])[0];
+            let cells = split(row, &widths, 0.0, env.rtl());
+            for ((id, _, _), cell) in members.iter().zip(cells) {
                 let _ = tree.set_bounds(*id, cell);
             }
         }
@@ -637,29 +640,14 @@ impl Page for ButtonGroupPage {
         for (caption, text) in self.captions.iter().zip(captions) {
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), text);
         }
-        for (_, members) in &self.groups {
-            for (id, command, label) in members {
+        for (group, members) in &self.groups {
+            for (index, (id, command, label)) in members.iter().enumerate() {
                 let bounds = tree.bounds(*id).unwrap_or_default();
-                let state = self.commands.state(*command).unwrap_or_default();
-                let fill = if state.checked {
-                    choscorui::core::lerp_color(
-                        env.tokens.color(ColorRole::Card),
-                        env.tokens.color(ColorRole::Primary),
-                        0.5,
-                    )
-                } else {
-                    env.mix(0.08)
-                };
-                list.fill_rect(bounds, fill);
-                let color = if state.enabled {
-                    env.tokens.color(ColorRole::Foreground)
-                } else {
-                    env.tokens.color(ColorRole::Foreground).with_alpha(0.35)
-                };
-                env.text(list, bounds, label, env.body(), color, Align::Center);
-                if tree.focus() == Some(*id) {
-                    env.focus_ring(list, bounds);
-                }
+                let host = VisualState::NONE
+                    .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                    .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+                let state = group.member_state(&self.commands, *command, host);
+                group.paint_member(&mut env.cx(list, bounds), index, label, state);
             }
         }
     }

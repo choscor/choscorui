@@ -291,6 +291,12 @@ pins this behavior.
 - **`ButtonGroup::step`.** Moves the check to the next or previous enabled
   member, and wraps. With no checked member, the search starts at the
   first member.
+- **`ButtonGroup` look.** `paint_member` draws a member with the outline
+  `ToggleGroup` item look: an `input` border, sm medium text, and a 36 pt
+  height. A checked member fills `muted`. `member_state` adds the
+  command's checked and disabled state to the host's flags.
+- Inner corners are square. Each member after the first overlaps the border
+  before it. `with_orientation` joins the members in a row or a column.
 
 | Field | `ToolButton::semantics` |
 | --- | --- |

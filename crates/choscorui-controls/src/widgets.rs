@@ -4,8 +4,8 @@
 //! Each documents its value, keyboard, and accessibility contract.
 
 use crate::style::{
-    ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
-    fill_shape,
+    ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, TextAlign,
+    ToggleVariant, VisualState, content_rect, fill_shape,
 };
 use crate::{
     CommandId, CommandRegistry, IntegerRange, NumberInput, Shortcut, ShortcutModifiers,
@@ -688,11 +688,90 @@ impl ToolButton {
 pub struct ButtonGroup {
     members: Vec<CommandId>,
     exclusive: bool,
+    orientation: Orientation,
 }
 
 impl ButtonGroup {
     pub fn new(members: Vec<CommandId>, exclusive: bool) -> Self {
-        Self { members, exclusive }
+        Self {
+            members,
+            exclusive,
+            orientation: Orientation::Horizontal,
+        }
+    }
+
+    /// Joins the members in a row (the default) or a column.
+    pub fn with_orientation(mut self, orientation: Orientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    pub fn orientation(&self) -> Orientation {
+        self.orientation
+    }
+
+    pub fn members(&self) -> &[CommandId] {
+        &self.members
+    }
+
+    /// The flags the member recipe reads: the host's focus and hover flags
+    /// in `host`, with the command's checked and disabled state.
+    pub fn member_state(
+        &self,
+        commands: &CommandRegistry,
+        member: CommandId,
+        host: VisualState,
+    ) -> VisualState {
+        let state = commands.state(member).unwrap_or_default();
+        host.set(VisualState::CHECKED, state.checked)
+            .set(VisualState::DISABLED, !state.enabled)
+    }
+
+    /// Paints member `index` in the context's bounds with the outline
+    /// toggle look. Inner corners are square, and each member after the
+    /// first overlaps the border before it, so the members read as one
+    /// control.
+    pub fn paint_member(
+        &self,
+        cx: &mut PaintContext<'_>,
+        index: usize,
+        label: &str,
+        state: VisualState,
+    ) {
+        let query = StyleQuery::new(ControlKind::ToggleGroup, Slot::Item)
+            .variant(ToggleVariant::Outline)
+            .state(state);
+        let mut style = cx.style(query);
+        let last = index + 1 >= self.members.len();
+        let mut rect = cx.bounds;
+        let corners = &mut style.radius;
+        match self.orientation {
+            Orientation::Horizontal => {
+                if index > 0 {
+                    (corners.top_start, corners.bottom_start) = (0.0, 0.0);
+                    rect.size.width += style.border_width;
+                    if !cx.rtl {
+                        rect.origin.x -= style.border_width;
+                    }
+                }
+                if !last {
+                    (corners.top_end, corners.bottom_end) = (0.0, 0.0);
+                }
+            }
+            Orientation::Vertical => {
+                if index > 0 {
+                    (corners.top_start, corners.top_end) = (0.0, 0.0);
+                    rect.origin.y -= style.border_width;
+                    rect.size.height += style.border_width;
+                }
+                if !last {
+                    (corners.bottom_start, corners.bottom_end) = (0.0, 0.0);
+                }
+            }
+        }
+        cx.slot(rect, &style, |cx, inner| {
+            cx.label(inner, label, &style, TextAlign::Center);
+        });
     }
     pub fn checked(&self, commands: &CommandRegistry) -> Vec<CommandId> {
         self.members

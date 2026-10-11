@@ -1,9 +1,9 @@
 use choscorui_controls::{
     ButtonGroup, Calendar, CommandId, CommandLink, CommandRegistry, CommandState, DateTimeEdit,
     DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange,
-    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, PaintContext, Progress,
-    ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox,
-    ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
+    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, Orientation, PaintContext,
+    Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles,
+    ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
@@ -476,4 +476,44 @@ fn gauges_and_focus_frame_paint_from_tokens_and_recipes() {
         command,
         DisplayCommand::StrokeRoundedRect { color, .. } if *color == ring
     )));
+}
+
+#[test]
+fn button_group_joins_members_with_square_inner_corners() {
+    let mut commands = CommandRegistry::new();
+    for id in 1..=3 {
+        commands
+            .insert(CommandId(id), CommandState::default())
+            .unwrap();
+    }
+    commands.set_checked(CommandId(2), true).unwrap();
+    let group = ButtonGroup::new(vec![CommandId(1), CommandId(2), CommandId(3)], true);
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let paint = |index: usize, bounds| {
+        let state = group.member_state(&commands, CommandId(index as u64 + 1), VisualState::NONE);
+        let mut list = DisplayList::new();
+        group.paint_member(
+            &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+            index,
+            "A",
+            state,
+        );
+        list
+    };
+    // The first member keeps its rounded start; the middle one is square.
+    let first = paint(0, rect(0.0, 0.0, 40.0, 36.0));
+    assert!(first.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillPath { .. } | DisplayCommand::StrokePath { .. }
+    )));
+    let middle = paint(1, rect(40.0, 0.0, 40.0, 36.0));
+    let muted = tokens.color(ColorRole::Muted);
+    assert!(
+        middle.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRect { rect, color } if *color == muted && rect.origin.x == 39.0
+        )),
+        "the checked member fills muted and overlaps the border before it"
+    );
+    assert_eq!(group.orientation(), Orientation::Horizontal);
 }
