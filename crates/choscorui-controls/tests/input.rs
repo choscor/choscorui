@@ -4,12 +4,12 @@ mod hosted;
 
 use choscorui_controls::{
     AddonAlign, ControlMessage, ControlSize, ControlValue, Input, InputGroup, InputGroupAddon,
-    ShortcutModifiers, TextField, ValidationState,
+    InputOtp, ShortcutModifiers, TextField, Textarea, ValidationState,
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, Icon, Key, Point, SemanticAction, SemanticRole,
 };
-use hosted::{Harness, texts};
+use hosted::{Harness, paints, texts};
 
 fn typed(text: &str) -> ControlMessage {
     ControlMessage::Changed(ControlValue::Text(text.into()))
@@ -161,4 +161,74 @@ fn block_addons_stack_above_and_below_the_text() {
         height > 36.0 + 28.0,
         "both block addons add height: {height}"
     );
+}
+
+#[test]
+fn otp_fills_slots_in_order_and_completes() {
+    let mut h = Harness::new(InputOtp::new("Code", 6).with_groups(vec![3, 3]));
+    // Six 36 pt slots, and a 16 pt separator with 8 pt gaps.
+    assert_eq!(h.measure().width, 6.0 * 36.0 + 16.0 + 16.0);
+    h.click(h.bounds().center());
+    h.text("12a3");
+    assert_eq!(h.semantics().value.as_deref(), Some("123"), "digits only");
+    h.key(Key::Backspace);
+    h.text("4567890");
+    assert_eq!(
+        h.messages(),
+        [
+            typed("123"),
+            typed("12"),
+            typed("124567"),
+            ControlMessage::Activated,
+        ]
+    );
+    assert_eq!(texts(&h.paint()), ["1", "2", "4", "5", "6", "7"]);
+    assert!(h.perform(SemanticAction::SetValue, Some("9 8 7")));
+    assert_eq!(h.semantics().value.as_deref(), Some("987"));
+    assert_eq!(h.semantics().role, SemanticRole::TextField);
+}
+
+#[test]
+fn otp_marks_the_active_slot_with_the_ring_while_focused() {
+    let mut h = Harness::new(InputOtp::new("Code", 4).alphanumeric());
+    let ring = DesignTokens::light().color(ColorRole::Ring);
+    let rings = |h: &Harness| paints(&h.paint(), ring);
+    assert!(!rings(&h));
+    h.focus();
+    h.text("ab");
+    assert!(rings(&h), "the third slot shows the ring border");
+}
+
+#[test]
+fn textarea_wraps_lines_and_grows() {
+    let mut h = Harness::new(Textarea::new("Notes", "").with_placeholder("Type here"));
+    assert_eq!(h.measure().height, 64.0, "the 64 pt minimum");
+    h.focus();
+    let long = "word ".repeat(40);
+    h.text(&long);
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Text(long.clone()))]
+    );
+    let grown = h.measure().height;
+    assert!(grown > 64.0, "wrapped lines grow it: {grown}");
+    h.place(hosted::rect(10.0, 10.0, 240.0, grown));
+    let painted = texts(&h.paint());
+    assert!(painted.len() > 2, "one text run per line");
+    assert!(painted.iter().all(|line| line.starts_with("word")));
+    h.text("\nend");
+    assert!(texts(&h.paint()).last().is_some_and(|line| line == "end"));
+}
+
+#[test]
+fn native_select_keeps_the_chevron_in_the_end_padding() {
+    use choscorui_controls::{ListEntry, Select};
+    let mut h = Harness::new(Select::native(
+        "Status",
+        vec![ListEntry::option("Todo"), ListEntry::option("Done")],
+    ));
+    let size = h.measure();
+    assert_eq!(size.height, 36.0);
+    h.click(h.bounds().center());
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(true)]);
 }

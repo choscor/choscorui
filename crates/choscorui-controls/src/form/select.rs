@@ -28,6 +28,8 @@ pub struct Select {
     motion_ms: u32,
     /// The scroll step of one wheel line: the first row's height.
     line: f64,
+    /// True for the native-select look of the trigger.
+    native: bool,
 }
 
 impl Select {
@@ -43,6 +45,16 @@ impl Select {
             reveal: Reveal::default(),
             motion_ms: 0,
             line: 0.0,
+            native: false,
+        }
+    }
+
+    /// A select with the native-select look: a plain input box with the
+    /// chevron in its end padding. It behaves like a select.
+    pub fn native(name: impl Into<String>, entries: Vec<ListEntry>) -> Self {
+        Self {
+            native: true,
+            ..Self::new(name, entries)
         }
     }
 
@@ -99,6 +111,24 @@ impl Select {
         StyleQuery::new(ControlKind::Select, slot)
             .size(self.size)
             .state(state)
+    }
+
+    /// A trigger part. The native look has a root box, an end icon, and
+    /// the select placeholder.
+    fn part(&self, slot: Slot, state: VisualState) -> StyleQuery {
+        let query = self.query(slot, state);
+        match (self.native, slot) {
+            (false, _) | (true, Slot::Placeholder) => query,
+            (true, Slot::Icon) => StyleQuery {
+                kind: ControlKind::NativeSelect,
+                ..query
+            },
+            (true, _) => StyleQuery {
+                kind: ControlKind::NativeSelect,
+                slot: Slot::Root,
+                ..query
+            },
+        }
     }
 
     fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
@@ -218,10 +248,10 @@ impl Select {
 
 impl CustomControl for Select {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        let trigger = cx.style(self.query(Slot::Trigger, VisualState::NONE));
-        let value = cx.style(self.query(Slot::Value, VisualState::NONE));
-        let placeholder = cx.style(self.query(Slot::Placeholder, VisualState::NONE));
-        let icon = cx.style(self.query(Slot::Icon, VisualState::NONE));
+        let trigger = cx.style(self.part(Slot::Trigger, VisualState::NONE));
+        let value = cx.style(self.part(Slot::Value, VisualState::NONE));
+        let placeholder = cx.style(self.part(Slot::Placeholder, VisualState::NONE));
+        let icon = cx.style(self.part(Slot::Icon, VisualState::NONE));
         let widest = self
             .list
             .entries
@@ -232,7 +262,13 @@ impl CustomControl for Select {
                 cx.text.width(&self.placeholder, &placeholder.text),
                 f64::max,
             );
-        let width = trigger.padding.horizontal() + widest + trigger.gap + icon.icon_size;
+        // The native look keeps its icon inside the end padding.
+        let icon_width = if self.native {
+            0.0
+        } else {
+            trigger.gap + icon.icon_size
+        };
+        let width = trigger.padding.horizontal() + widest + icon_width;
         Measured {
             size: Size::new(width.max(trigger.min_width), trigger.min_height),
             baseline: None,
@@ -285,17 +321,32 @@ impl CustomControl for Select {
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let state = self.visual_state(cx.state);
-        let trigger = cx.style(self.query(Slot::Trigger, state));
-        let icon = cx.style(self.query(Slot::Icon, state));
+        let trigger = cx.style(self.part(Slot::Trigger, state));
+        let icon = cx.style(self.part(Slot::Icon, state));
         let (text, style) = match self.value() {
-            Some(value) => (value, cx.style(self.query(Slot::Value, state))),
+            Some(value) => (value, cx.style(self.part(Slot::Value, state))),
             None => (
                 self.placeholder.as_str(),
-                cx.style(self.query(Slot::Placeholder, state)),
+                cx.style(self.part(Slot::Placeholder, state)),
             ),
         };
-        cx.slot(cx.bounds, &trigger, |cx, inner| {
+        let bounds = cx.bounds;
+        let native = self.native;
+        cx.slot(bounds, &trigger, |cx, inner| {
             let size = icon.icon_size;
+            if native {
+                cx.label(inner, text, &style, TextAlign::Start);
+                // The icon sits in the end padding, inset by its own.
+                let inset = icon.padding.inline_end + size;
+                let x = if cx.rtl {
+                    bounds.origin.x + icon.padding.inline_end
+                } else {
+                    bounds.max_x() - inset
+                };
+                let mark = Rect::from_xywh(x, inner.origin.y, size, inner.size.height);
+                cx.icon(mark, Icon::ChevronDown, &icon);
+                return;
+            }
             let text_width = (inner.size.width - size - trigger.gap).max(0.0);
             let (text_x, icon_x) = if cx.rtl {
                 (inner.max_x() - text_width, inner.origin.x)

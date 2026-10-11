@@ -197,3 +197,8 @@ pub fn rounded_fills(list: &DisplayList, color: choscorui_core::Color) -> Vec<Re
         })
         .collect()
 }
+
+/// True when any command of `list` paints in `color`.
+pub fn paints(list: &DisplayList, color: choscorui_core::Color) -> bool {
+    format!("{:?}", list.commands()).contains(&format!("{color:?}"))
+}

@@ -79,9 +79,11 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`Toggle`](#toggle-and-togglegroup) | Button that stays on or off. |
 | Form | [`ToggleGroup`](#toggle-and-togglegroup) | Row or column of toggles with one or many on. |
 | Form | [`Kbd`](#kbd) | Keyboard key caps for shortcuts. |
-| Form | [`Select`](#select-and-listentry) | Trigger with a popup list of options. |
+| Form | [`Select`](#select-and-listentry) | Trigger with a popup list of options; `Select::native` has the native-select look. |
 | Form | [`Input`](#input-and-inputgroup) | Hosted single-line text input. |
 | Form | [`InputGroup`](#input-and-inputgroup) | Text input with text, icon, and button addons. |
+| Form | [`Textarea`](#textarea) | Hosted multiline text input that grows with its lines. |
+| Form | [`InputOtp`](#inputotp) | One-time code input with one character per slot. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1519,6 +1521,10 @@ extra-small medium text.
 
 `SetValue` with the label of an enabled option chooses it.
 
+`Select::native` gives the trigger the native-select look: a plain input
+box with the chevron 10 pt inside its 32 pt end padding. Its behavior and
+list are the same.
+
 [select.rs](../crates/choscorui-controls/tests/select.rs) pins this behavior.
 
 ### Input and InputGroup
@@ -1564,7 +1570,59 @@ extra-small medium text.
 | State | invalid, disabled | invalid, disabled |
 | Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
 
-[input.rs](../crates/choscorui-controls/tests/input.rs) pins this behavior.
+[input.rs](../crates/choscorui-controls/tests/input.rs) pins the behavior of
+`Input`, `InputGroup`, `Textarea`, and `InputOtp`.
+
+### Textarea
+
+- `Textarea` mounts a `TextEditor` model through the control host. Keys,
+  modifiers, and pointer presses and drags edit as in `Input`.
+- Lines break after spaces and at line breaks. The textarea grows with its
+  lines from a 64 pt minimum, and requests layout after each edit.
+- Each edit emits `Changed(Text)`. `set_invalid` gives it the invalid
+  border and ring.
+- The placeholder shows in `muted-foreground` while the value is empty.
+
+| Part | Value |
+| --- | --- |
+| Box | `input` border, extra-small shadow, `md` radius, 64 pt minimum height |
+| Padding | 10 pt sides, 8 pt top and bottom |
+
+| Field | `Textarea::semantics` |
+| --- | --- |
+| Role | `TextField`, with multiline text |
+| Name / value | name / value |
+| State | invalid, disabled |
+| Actions | `SetValue` and `Focus` while enabled |
+
+### InputOtp
+
+- `InputOtp::new` makes a code of a given length in one group.
+  `with_groups` splits the slots into groups with a minus separator
+  between them.
+- Typed or pasted text fills the empty slots in order. Characters that are
+  not digits are ignored, or not letters or digits after `alphanumeric`.
+- Backspace or Delete clears the last character. The caret is always after
+  the last character.
+- Each change emits `Changed(Text)`. Filling the last slot also emits
+  `Activated`.
+- While focused, the first empty slot (or the last slot) shows the `ring`
+  border and the focus ring. An empty active slot shows a 1 × 16 pt caret.
+
+| Part | Value |
+| --- | --- |
+| Slot | 36 × 36 pt, `input` border; the first and last slot of a group round to `md` |
+| Separator | 16 pt minus icon, 8 pt from each group |
+| Invalid | `destructive` border; the group gets the destructive ring |
+
+| Field | `InputOtp::semantics` |
+| --- | --- |
+| Role | `TextField` (AXTextField) |
+| Name / value | name / the characters entered |
+| State | invalid, disabled |
+| Actions | `SetValue` and `Focus` while enabled |
+
+`SetValue` keeps the accepted characters of the value, cut to the length.
 
 ### CustomControl and ControlHost
 

@@ -110,8 +110,8 @@ pub use custom::{
     HostEnv, MeasureContext,
 };
 pub use form::{
-    AddonContent, Input, InputGroup, InputGroupAddon, Kbd, Select, Switch, Toggle, ToggleGroup,
-    ToggleItem,
+    AddonContent, Input, InputGroup, InputGroupAddon, InputOtp, Kbd, Select, Switch, Textarea,
+    Toggle, ToggleGroup, ToggleItem,
 };
 pub use listbox::ListEntry;
 mod dock;

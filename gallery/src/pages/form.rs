@@ -1,12 +1,12 @@
 //! Form components mounted through `ControlHost`: switches, toggles,
-//! toggle groups, and keyboard keys.
+//! selects, text inputs, code inputs, and keyboard keys.
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    AddonAlign, ControlSize, CustomControl, Input, InputGroup, InputGroupAddon, Kbd, KbdVariant,
-    ListEntry, Orientation, Select, Switch, TextField, Toggle, ToggleGroup, ToggleItem,
-    ToggleVariant, ValidationState,
+    AddonAlign, ControlSize, CustomControl, Input, InputGroup, InputGroupAddon, InputOtp, Kbd,
+    KbdVariant, ListEntry, Orientation, Select, Switch, TextField, Textarea, Toggle, ToggleGroup,
+    ToggleItem, ToggleVariant, ValidationState,
 };
 use choscorui::core::{Icon, NodeId, Tree};
 
@@ -159,6 +159,20 @@ pub fn select(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> 
         ),
         ("Invalid", vec![boxed(invalid)]),
         (
+            "Native look",
+            vec![boxed(
+                Select::native(
+                    "Status",
+                    vec![
+                        ListEntry::option("Todo"),
+                        ListEntry::option("In progress"),
+                        ListEntry::option("Done"),
+                    ],
+                )
+                .with_placeholder("Select a status"),
+            )],
+        ),
+        (
             "Scrolling list",
             vec![boxed(
                 Select::new(
@@ -249,6 +263,48 @@ pub fn input_group(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn P
                 ],
             ))],
         ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn textarea(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let mut invalid = Textarea::new("Bio", "");
+    invalid.set_invalid(true);
+    let rows: Vec<Row> = vec![
+        (
+            "Grows with its text",
+            vec![boxed(
+                Textarea::new("Message", "").with_placeholder("Type your message here."),
+            )],
+        ),
+        (
+            "Invalid",
+            vec![boxed(invalid.with_placeholder("Tell us about yourself"))],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn input_otp(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let mut invalid = InputOtp::new("Invalid code", 6);
+    invalid.set_invalid(true);
+    let rows: Vec<Row> = vec![
+        ("Six digits", vec![boxed(InputOtp::new("Code", 6))]),
+        (
+            "Groups with a separator",
+            vec![boxed(
+                InputOtp::new("Grouped code", 6).with_groups(vec![3, 3]),
+            )],
+        ),
+        (
+            "Letters and digits",
+            vec![boxed(
+                InputOtp::new("Recovery code", 6)
+                    .with_groups(vec![2, 2, 2])
+                    .alphanumeric(),
+            )],
+        ),
+        ("Invalid", vec![boxed(invalid)]),
     ];
     HostedPage::build(tree, parent, rows)
 }

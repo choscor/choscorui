@@ -158,6 +158,19 @@ impl TextEditor {
         Ok(())
     }
 
+    /// Enables or disables without a tree, for the hosted textarea.
+    pub(crate) fn set_enabled_state(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.composition = None;
+            self.dragging = None;
+        }
+    }
+
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
     /// Text to shape: the value with any marked text in place.
     pub fn layout_text(&self) -> String {
         let Some(composition) = &self.composition else {
