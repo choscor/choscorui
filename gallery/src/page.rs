@@ -4,8 +4,8 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, InputText,
-    MenuStyle, PaintContext, ScrollAreaStyle, ShortcutModifiers, SplitterStyle, Styles,
-    TextItemDelegate, TextMeasure, ValidationState, VisualState,
+    MenuStyle, PaintContext, ShortcutModifiers, Styles, TextItemDelegate, TextMeasure,
+    ValidationState, VisualState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -360,13 +360,6 @@ impl Env<'_> {
         );
     }
 
-    pub fn splitter_style(&self) -> SplitterStyle {
-        SplitterStyle {
-            handle: self.mix(0.25),
-            focused_handle: self.tokens.color(ColorRole::Primary),
-        }
-    }
-
     pub fn menu_style(&self) -> MenuStyle {
         MenuStyle {
             background: self.tokens.color(ColorRole::Card),
@@ -388,16 +381,6 @@ impl Env<'_> {
             focus: self.tokens.color(ColorRole::Primary),
             font_family: FONT.into(),
             font_size: self.small(),
-        }
-    }
-
-    pub fn scroll_style(&self) -> ScrollAreaStyle {
-        ScrollAreaStyle {
-            track: self.mix(0.06),
-            thumb: self.mix(0.3),
-            thumb_hover: self.mix(0.45),
-            thumb_active: self.tokens.color(ColorRole::Primary),
-            focus: self.tokens.color(ColorRole::Primary),
         }
     }
 

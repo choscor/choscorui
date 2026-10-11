@@ -98,7 +98,7 @@ fn thumb_drag_keeps_capture_outside_bounds_and_releases() {
     )
     .unwrap();
     assert_eq!(area.viewport().offset().y, 900.0);
-    assert!(area.visual_state(&tree).thumb_dragging);
+    assert!(area.visual_state(&tree).pressed());
     // Halfway along the 80-point travel is halfway through the content.
     area.handle(
         &mut tree,
@@ -117,7 +117,7 @@ fn thumb_drag_keeps_capture_outside_bounds_and_releases() {
     )
     .unwrap();
     assert_eq!(tree.pointer_capture(), None);
-    assert!(!area.visual_state(&tree).thumb_dragging);
+    assert!(!area.visual_state(&tree).pressed());
 
     // Clicking the track pages toward the click.
     area.handle(

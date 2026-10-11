@@ -1,6 +1,7 @@
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState, fill_shape};
 use choscorui_core::{
-    Color, DisplayList, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
-    SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
+    Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRelation,
+    SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -58,37 +59,22 @@ pub enum SplitOrientation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SplitterInput {
+pub enum ResizableInput {
     Key(KeyEvent),
     Semantic(SemanticAction),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SplitterVisualState {
-    pub focused: bool,
-}
+/// The old name of [`ResizableInput`].
+#[deprecated(since = "0.1.0", note = "renamed to `ResizableInput`")]
+pub type SplitterInput = ResizableInput;
 
-#[derive(Clone, Copy, Debug)]
-pub struct SplitterStyle {
-    pub handle: Color,
-    pub focused_handle: Color,
-}
+/// The old name of [`Resizable`].
+#[deprecated(since = "0.1.0", note = "renamed to `Resizable`")]
+pub type Splitter = Resizable;
 
-impl SplitterStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, state: SplitterVisualState) {
-        list.fill_rect(
-            bounds,
-            if state.focused {
-                self.focused_handle
-            } else {
-                self.handle
-            },
-        );
-    }
-}
-
-/// A two-pane split whose `position` is the first pane's width or height.
-pub struct Splitter {
+/// Two resizable panels and the handle between them. `position` is the
+/// first panel's width or height.
+pub struct Resizable {
     label: String,
     orientation: SplitOrientation,
     first: NodeId,
@@ -100,9 +86,10 @@ pub struct Splitter {
     handle_extent: f64,
     step: f64,
     position: f64,
+    grip: bool,
 }
 
-impl Splitter {
+impl Resizable {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         label: impl Into<String>,
@@ -143,7 +130,24 @@ impl Splitter {
             handle_extent,
             step: 10.0,
             position,
+            grip: false,
         })
+    }
+
+    /// Shows a grip on the handle.
+    #[must_use]
+    pub fn with_grip(mut self, grip: bool) -> Self {
+        self.grip = grip;
+        self
+    }
+
+    pub const fn orientation(&self) -> SplitOrientation {
+        self.orientation
+    }
+
+    /// The handle node, which takes focus and paints the divider.
+    pub const fn handle_node(&self) -> NodeId {
+        self.handle
     }
 
     pub fn install(&self, tree: &mut Tree) -> Result<(), ContainerError> {
@@ -172,17 +176,19 @@ impl Splitter {
     pub fn handle(
         &mut self,
         tree: &mut Tree,
-        input: SplitterInput,
+        input: ResizableInput,
     ) -> Result<Option<f64>, ContainerError> {
         let target = match input {
-            SplitterInput::Semantic(SemanticAction::Focus) => {
+            ResizableInput::Semantic(SemanticAction::Focus) => {
                 validate_attached(tree, [self.handle])?;
                 tree.set_focus(Some(self.handle))?;
                 return Ok(None);
             }
-            SplitterInput::Semantic(SemanticAction::Increment) => self.position + self.step,
-            SplitterInput::Semantic(SemanticAction::Decrement) => self.position - self.step,
-            SplitterInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(self.handle) => {
+            ResizableInput::Semantic(SemanticAction::Increment) => self.position + self.step,
+            ResizableInput::Semantic(SemanticAction::Decrement) => self.position - self.step,
+            ResizableInput::Key(KeyEvent::Down { key, .. })
+                if tree.focus() == Some(self.handle) =>
+            {
                 match (self.orientation, key) {
                     (_, Key::Home) => self.minimum_first,
                     (_, Key::End) => self.maximum(),
@@ -219,10 +225,48 @@ impl Splitter {
         }
     }
 
-    pub fn visual_state(&self, tree: &Tree) -> SplitterVisualState {
-        SplitterVisualState {
-            focused: tree.focus() == Some(self.handle),
+    /// The flags the resizable recipe reads for the handle.
+    pub fn visual_state(&self, tree: &Tree) -> VisualState {
+        VisualState::NONE
+            .set(VisualState::FOCUSED, tree.focus() == Some(self.handle))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(self.handle))
+    }
+
+    /// Paints the 1 pt divider centered in the handle bounds, across the
+    /// split, and the grip when it has one.
+    pub fn paint_handle(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
+        let state = self.visual_state(tree);
+        let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle).state(state));
+        let bounds = cx.bounds;
+        let center = bounds.center();
+        let divider = match self.orientation {
+            SplitOrientation::Horizontal => Rect::from_xywh(
+                center.x - line.min_width / 2.0,
+                bounds.origin.y,
+                line.min_width,
+                bounds.size.height,
+            ),
+            SplitOrientation::Vertical => Rect::from_xywh(
+                bounds.origin.x,
+                center.y - line.min_height / 2.0,
+                bounds.size.width,
+                line.min_height,
+            ),
+        };
+        cx.slot(divider, &line, |_, _| {});
+        if !self.grip {
+            return;
         }
+        let grip = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Thumb).state(state));
+        let size = match self.orientation {
+            SplitOrientation::Horizontal => Size::new(grip.min_width, grip.min_height),
+            SplitOrientation::Vertical => Size::new(grip.min_height, grip.min_width),
+        };
+        let rect = Rect::new(
+            Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
+            size,
+        );
+        fill_shape(cx.list, rect, &grip.radius, cx.rtl, grip.background);
     }
 
     fn maximum(&self) -> f64 {

@@ -1,10 +1,12 @@
 //! Scroll container, mnemonics, and dialog default/cancel keys.
 
 use super::{CommandId, CommandRegistry, ShortcutModifiers};
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, VisualState, content_rect, fill_shape,
+};
 use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, LayoutError, NodeId, Point, PointerButton,
-    PointerEvent, Rect, ScrollViewport, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    Size, Tree,
+    Dirty, Key, KeyEvent, LayoutError, NodeId, Point, PointerButton, PointerEvent, Rect,
+    ScrollViewport, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 
 /// Keyboard and assistive-technology scroll requests.
@@ -34,14 +36,6 @@ pub enum ScrollAreaInput {
 pub struct ScrollbarGeometry {
     pub track: Rect,
     pub thumb: Rect,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ScrollAreaVisualState {
-    pub enabled: bool,
-    pub focused: bool,
-    pub thumb_hovered: bool,
-    pub thumb_dragging: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -350,13 +344,15 @@ impl ScrollArea {
             .map_err(|_| LayoutError::MissingNode)
     }
 
-    pub fn visual_state(&self, tree: &Tree) -> ScrollAreaVisualState {
-        ScrollAreaVisualState {
-            enabled: self.enabled,
-            focused: tree.focus() == Some(self.node()),
-            thumb_hovered: self.thumb_hovered,
-            thumb_dragging: self.drag.is_some(),
-        }
+    /// The flags the scroll area recipe reads. Hover and press apply to
+    /// the thumb.
+    pub fn visual_state(&self, tree: &Tree) -> VisualState {
+        VisualState::NONE
+            .set(VisualState::DISABLED, !self.enabled)
+            .set(VisualState::FOCUSED, tree.focus() == Some(self.node()))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(self.node()))
+            .set(VisualState::HOVERED, self.thumb_hovered)
+            .set(VisualState::PRESSED, self.drag.is_some())
     }
 
     /// Scroll area semantics; the value is the vertical position in percent.
@@ -391,9 +387,15 @@ impl ScrollArea {
         }
     }
 
-    /// Paints overlay scrollbars above content.
-    pub fn paint(&self, tree: &Tree, list: &mut DisplayList, style: &ScrollAreaStyle) {
+    /// Paints the overlay scrollbars above the content, and the focus
+    /// ring around the area. Paint it after the content.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
         let state = self.visual_state(tree);
+        let query = |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(state);
+        let (bar, thumb) = (
+            cx.style(query(Slot::Scrollbar)),
+            cx.style(query(Slot::Thumb)),
+        );
         for geometry in [
             self.vertical_scrollbar(tree),
             self.horizontal_scrollbar(tree),
@@ -401,41 +403,14 @@ impl ScrollArea {
         .into_iter()
         .flatten()
         {
-            list.fill_rect(geometry.track, style.track);
-            let color = if state.thumb_dragging {
-                style.thumb_active
-            } else if state.thumb_hovered {
-                style.thumb_hover
-            } else {
-                style.thumb
-            };
-            let _ = list.fill_rounded_rect(geometry.thumb.inset(2.0), 3.0, color);
+            let rect = content_rect(geometry.thumb, &bar, cx.rtl);
+            fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
         }
-        if state.focused
+        let root = cx.style(query(Slot::Root));
+        if root.ring.is_some()
             && let Some(bounds) = tree.bounds(self.node())
         {
-            let _ = list.stroke_rect(bounds.inset(1.0), style.focus, 2.0);
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ScrollAreaStyle {
-    pub track: Color,
-    pub thumb: Color,
-    pub thumb_hover: Color,
-    pub thumb_active: Color,
-    pub focus: Color,
-}
-
-impl Default for ScrollAreaStyle {
-    fn default() -> Self {
-        Self {
-            track: Color::rgba8(0, 0, 0, 20),
-            thumb: Color::rgba8(0, 0, 0, 90),
-            thumb_hover: Color::rgba8(0, 0, 0, 130),
-            thumb_active: Color::rgba8(0, 0, 0, 170),
-            focus: Color::rgba8(40, 110, 230, 255),
+            cx.slot(bounds, &root, |_, _| {});
         }
     }
 }

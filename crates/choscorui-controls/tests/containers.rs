@@ -1,5 +1,5 @@
 use choscorui_controls::{
-    ContainerError, GroupBox, SplitOrientation, Splitter, SplitterInput, StackPage,
+    ContainerError, GroupBox, Resizable, ResizableInput, SplitOrientation, StackPage,
     StackedContainer,
 };
 use choscorui_core::{Dirty, Key, KeyEvent, Point, Rect, SemanticAction, SemanticRole, Size, Tree};
@@ -20,7 +20,7 @@ fn splitter_resizes_by_keyboard_and_reports_an_accessible_range() {
     let second = tree
         .attach(tree.root(), rect(248.0, 0.0, 252.0, 200.0))
         .unwrap();
-    let mut splitter = Splitter::new(
+    let mut splitter = Resizable::new(
         "Sidebar width",
         SplitOrientation::Horizontal,
         first,
@@ -43,7 +43,7 @@ fn splitter_resizes_by_keyboard_and_reports_an_accessible_range() {
         splitter
             .handle(
                 &mut tree,
-                SplitterInput::Key(KeyEvent::Down {
+                ResizableInput::Key(KeyEvent::Down {
                     key: Key::ArrowRight,
                     repeat: false,
                 }),
@@ -58,7 +58,7 @@ fn splitter_resizes_by_keyboard_and_reports_an_accessible_range() {
         splitter
             .handle(
                 &mut tree,
-                SplitterInput::Semantic(SemanticAction::Decrement)
+                ResizableInput::Semantic(SemanticAction::Decrement)
             )
             .unwrap(),
         Some(240.0)
@@ -93,7 +93,7 @@ fn splitter_rejects_invalid_changes_atomically_and_clamps_actions() {
     let second = tree
         .attach(tree.root(), rect(0.0, 190.0, 300.0, 210.0))
         .unwrap();
-    let mut splitter = Splitter::new(
+    let mut splitter = Resizable::new(
         "Rows",
         SplitOrientation::Vertical,
         first,
@@ -123,7 +123,7 @@ fn splitter_rejects_invalid_changes_atomically_and_clamps_actions() {
         splitter
             .handle(
                 &mut tree,
-                SplitterInput::Key(KeyEvent::Down {
+                ResizableInput::Key(KeyEvent::Down {
                     key: Key::End,
                     repeat: false,
                 }),

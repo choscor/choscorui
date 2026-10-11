@@ -33,9 +33,14 @@ pub use selection_controls::{
 };
 mod containers;
 pub use containers::{
-    ContainerError, GroupBox, SplitOrientation, Splitter, SplitterInput, SplitterStyle,
-    SplitterVisualState, StackPage, StackedContainer,
+    ContainerError, GroupBox, Resizable, ResizableInput, SplitOrientation, StackPage,
+    StackedContainer,
 };
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `Splitter` and `SplitterInput` aliases for one release"
+)]
+pub use containers::{Splitter, SplitterInput};
 mod input_rules;
 pub use input_rules::{DateInput, InputMask, MaskError, MaskedText, NumberInput};
 mod text_editor;
@@ -105,7 +110,7 @@ pub use style::{
 mod navigation;
 pub use navigation::{
     DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea, ScrollAreaInput,
-    ScrollAreaStyle, ScrollAreaVisualState, ScrollbarGeometry, parse_mnemonic,
+    ScrollbarGeometry, parse_mnemonic,
 };
 mod static_controls;
 pub use static_controls::{Label, Separator, SeparatorOrientation};

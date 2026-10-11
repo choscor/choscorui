@@ -3,8 +3,8 @@
 
 use crate::page::{Align, Column, Env, Page, PageState, Push, node, pressed, sem, split};
 use choscorui::controls::{
-    DockArea, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox, PanelId, ScrollArea,
-    ScrollAreaInput, ShortcutModifiers, SizeGrip, SplitOrientation, Splitter, SplitterInput,
+    DockArea, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox, PanelId, Resizable,
+    ResizableInput, ScrollArea, ScrollAreaInput, ShortcutModifiers, SizeGrip, SplitOrientation,
     StackPage, StackedContainer, ToolBox,
 };
 use choscorui::core::{
@@ -159,7 +159,7 @@ impl Page for GroupBoxPage {
 }
 
 // ---------------------------------------------------------------------------
-// Splitter
+// Resizable
 
 const HANDLE: f64 = 6.0;
 
@@ -169,7 +169,7 @@ struct Split {
     first: NodeId,
     handle: NodeId,
     second: NodeId,
-    splitter: Option<Splitter>,
+    splitter: Option<Resizable>,
     /// Position as a fraction, kept across relayouts.
     fraction: f64,
     dragging: bool,
@@ -206,7 +206,7 @@ impl Split {
         let minimum = 60.0;
         let position =
             (primary * self.fraction).clamp(minimum, (primary - HANDLE - minimum).max(minimum));
-        self.splitter = Splitter::new(
+        self.splitter = Resizable::new(
             self.label,
             self.orientation,
             self.first,
@@ -218,7 +218,8 @@ impl Split {
             HANDLE,
             position,
         )
-        .ok();
+        .ok()
+        .map(|splitter| splitter.with_grip(true));
         if let Some(splitter) = &self.splitter {
             let _ = splitter.install(tree);
         }
@@ -280,7 +281,7 @@ impl Split {
         }
     }
 
-    fn input(&mut self, tree: &mut Tree, input: SplitterInput) -> bool {
+    fn input(&mut self, tree: &mut Tree, input: ResizableInput) -> bool {
         let changed = self
             .splitter
             .as_mut()
@@ -296,7 +297,7 @@ pub struct SplitterPage {
     inner: Split,
 }
 
-pub fn splitter(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+pub fn resizable(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
     let outer = Split::new(tree, parent, "Sidebar width", SplitOrientation::Horizontal);
     let inner = Split::new(tree, parent, "Console height", SplitOrientation::Vertical);
     Box::new(SplitterPage { outer, inner })
@@ -342,11 +343,8 @@ impl Page for SplitterPage {
         }
         for split in [&self.outer, &self.inner] {
             if let Some(splitter) = &split.splitter {
-                env.splitter_style().paint(
-                    list,
-                    tree.bounds(split.handle).unwrap_or_default(),
-                    splitter.visual_state(tree),
-                );
+                let handle = tree.bounds(split.handle).unwrap_or_default();
+                splitter.paint_handle(&mut env.cx(list, handle), tree);
             }
         }
     }
@@ -410,11 +408,11 @@ impl Page for SplitterPage {
             },
             (event, _) => event,
         };
-        if self.outer.input(tree, SplitterInput::Key(event)) {
+        if self.outer.input(tree, ResizableInput::Key(event)) {
             self.relayout_inner(tree);
             return true;
         }
-        self.inner.input(tree, SplitterInput::Key(event))
+        self.inner.input(tree, ResizableInput::Key(event))
     }
 
     fn action(
@@ -428,7 +426,7 @@ impl Page for SplitterPage {
         let Some(index) = self.splits().iter().position(|split| split.handle == node) else {
             return false;
         };
-        let changed = self.splits()[index].input(tree, SplitterInput::Semantic(action));
+        let changed = self.splits()[index].input(tree, ResizableInput::Semantic(action));
         if index == 0 {
             self.relayout_inner(tree);
         }
@@ -736,7 +734,8 @@ impl Page for ScrollAreaPage {
             }
         }
         let _ = list.pop_clip();
-        self.area.paint(tree, list, &env.scroll_style());
+        let bounds = tree.bounds(self.area.node()).unwrap_or_default();
+        self.area.paint(&mut env.cx(list, bounds), tree);
     }
 
     fn semantics(&self, tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {

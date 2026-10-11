@@ -79,10 +79,10 @@ pub use choscorui_controls::{
     Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandError, CommandId,
     CommandRegistry, CommandState, ControlContext, ControlEvent, ControlHost, ControlKind,
     ControlSize, CustomControl, GroupBox, IntegerRange, Label, PaintContext, Progress, RadioGroup,
-    RadioInput, RadioOption, Recipe, ResolvedStyle, SemanticAction as ControlAction, Separator,
-    SeparatorOrientation, Shortcut, ShortcutModifiers, ShortcutScope, Slider, SliderInput,
-    SliderOrientation, SpinBox, SpinBoxInput, SplitOrientation, Splitter, SplitterInput,
-    SplitterStyle, StackPage, StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField,
+    RadioInput, RadioOption, Recipe, Resizable, ResizableInput, ResolvedStyle,
+    SemanticAction as ControlAction, Separator, SeparatorOrientation, Shortcut, ShortcutModifiers,
+    ShortcutScope, Slider, SliderInput, SliderOrientation, SpinBox, SpinBoxInput, SplitOrientation,
+    StackPage, StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField,
     TextFieldChange, TextFieldInput, VisualState,
 };
 pub use choscorui_core::{

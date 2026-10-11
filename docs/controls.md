@@ -48,7 +48,7 @@ in parentheses is the role that the macOS backend gives to that
 | Range | [`Dial`](#dial) | Rotary integer value. |
 | Range | [`ScrollBar`](#scrollbar) | Standalone scroll position. |
 | Range | [`ScrollArea`](#scrollarea) | Scroll container with overlay scroll bars. |
-| Range | [`Splitter`](#splitter) | Movable divider between two panes. |
+| Range | [`Resizable`](#resizable) | Two panels with a movable handle between them. |
 | Range | [`DateTimeEdit`](#datetimeedit-and-calendar) | Date or time in sections. |
 | Range | [`Calendar`](#datetimeedit-and-calendar) | Month grid for date choice. |
 | Data and item views | [`ItemView`](#itemview) | Virtualized list, tree, table, or grid. |
@@ -82,7 +82,7 @@ in parentheses is the role that the macOS backend gives to that
 
 Some controls take the retained `Tree` and a `NodeId` in `handle`. These
 are `Button`, `Checkbox`, `RadioGroup`, `Tabs`, `TextField`,
-`TextEditor`, `Slider`, `SpinBox`, `ScrollArea`, and `Splitter`. The rules
+`TextEditor`, `Slider`, `SpinBox`, `ScrollArea`, and `Resizable`. The rules
 below apply to them, unless a section gives a different rule.
 
 `ItemView::handle` also takes the `Tree` and a `NodeId`. For `ItemView`,
@@ -92,11 +92,11 @@ only the missing-node rule below applies, with `TreeError`. The
 - **Missing node.** `handle` returns a missing-node error and does not
   change the value. The error type is `TreeError` for most controls.
   `ScrollArea` uses `LayoutError`, `RadioGroup` and `Tabs` use
-  `SelectionError`, and `Splitter` uses `ContainerError`.
+  `SelectionError`, and `Resizable` uses `ContainerError`.
 - **Primary button only.** Pointer presses and releases act only for
   `PointerButton::Primary`.
 - **Keys need focus.** A key event acts only when the control's node has
-  focus. For `Splitter`, the handle node must have focus. Semantic actions
+  focus. For `Resizable`, the handle node must have focus. Semantic actions
   and external setters do not need focus.
 - **Change reporting.** `handle` reports a change only when the value
   changed. A selection of the current option, or a step past a bound,
@@ -104,7 +104,7 @@ only the missing-node rule below applies, with `TreeError`. The
 - **Invalidation.** A value change invalidates `PAINT` and `SEMANTICS`,
   but not `LAYOUT`. A hover or press change on `Button` and `Checkbox`
   invalidates `PAINT`. A `TextEditor` edit also invalidates `LAYOUT`.
-  `Splitter` sets the bounds of its panes and its handle.
+  `Resizable` sets the bounds of its panes and its handle.
 - **Disabled.** A disabled control ignores input. On `Button`,
   `Checkbox`, `Slider`, and `ScrollArea`, `set_enabled(false)` cancels a
   press or drag and releases pointer capture. Text controls drop IME
@@ -745,6 +745,10 @@ this behavior.
 - Semantic `Increment` pages down, and `Decrement` pages up. Semantic
   `Focus` focuses the area.
 - `Cancel`, a primary release, and `set_enabled(false)` end the drag.
+- **Look.** `paint` draws each thumb inset 1 pt in its bar, with a full
+  radius and the `border` color. Hover or a drag changes the thumb to
+  `muted-foreground` at 50% alpha. Keyboard focus adds the focus ring
+  around the area. Paint it after the content.
 
 | Field | `ScrollArea::semantics` |
 | --- | --- |
@@ -756,9 +760,9 @@ this behavior.
 [navigation.rs](../crates/choscorui-controls/tests/navigation.rs) pins this
 behavior.
 
-### Splitter
+### Resizable
 
-- After `install`, the handle is focusable. The splitter has no pointer
+- After `install`, the handle is focusable. The control has no pointer
   input.
 - The arrow keys along the split axis move the handle by 10 points.
 - Home and End go to the smallest and the largest position that both pane
@@ -767,9 +771,14 @@ behavior.
   with `InvalidPosition` and changes nothing.
 - Semantic `Increment` and `Decrement` use the same step. Semantic `Focus`
   focuses the handle.
-- The splitter has no disabled state.
+- The control has no disabled state.
+- `Splitter` and `SplitterInput` are deprecated aliases of `Resizable` and
+  `ResizableInput`.
+- **Look.** `paint_handle` draws a 1 pt `border` line across the split,
+  centered in the handle node. Keyboard focus adds a 1 pt `ring` ring.
+  `with_grip(true)` adds a 4 by 24 pt `border` grip with radius lg.
 
-| Field | `Splitter::semantics` |
+| Field | `Resizable::semantics` |
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | label / position in points |

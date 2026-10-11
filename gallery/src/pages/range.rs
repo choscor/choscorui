@@ -281,7 +281,7 @@ pub struct ProgressPage {
     reset: Push,
 }
 
-pub fn progress_bar(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
+pub fn progress(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let captions = [
         caption(tree, parent),
         caption(tree, parent),
