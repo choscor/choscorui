@@ -4,8 +4,9 @@
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    ControlSize, CustomControl, Kbd, KbdVariant, ListEntry, Orientation, Select, Switch, Toggle,
-    ToggleGroup, ToggleItem, ToggleVariant,
+    AddonAlign, ControlSize, CustomControl, Input, InputGroup, InputGroupAddon, Kbd, KbdVariant,
+    ListEntry, Orientation, Select, Switch, TextField, Toggle, ToggleGroup, ToggleItem,
+    ToggleVariant, ValidationState,
 };
 use choscorui::core::{Icon, NodeId, Tree};
 
@@ -166,6 +167,87 @@ pub fn select(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> 
                 )
                 .with_placeholder("Select a time zone"),
             )],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn input(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let mut invalid = Input::new("Username", "a");
+    invalid.set_validation(ValidationState::Invalid(
+        "Use at least three characters".into(),
+    ));
+    let rows: Vec<Row> = vec![
+        (
+            "Text",
+            vec![boxed(
+                Input::new("Email", "").with_placeholder("name@example.com"),
+            )],
+        ),
+        (
+            "Password",
+            vec![boxed(Input::password("Password", "hunter2"))],
+        ),
+        ("Invalid", vec![boxed(invalid)]),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn input_group(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![
+        (
+            "Inline addons",
+            vec![boxed(InputGroup::new(
+                TextField::new("Search", "").with_placeholder("Search…"),
+                vec![
+                    InputGroupAddon::icon(AddonAlign::InlineStart, Icon::Search),
+                    InputGroupAddon::text(AddonAlign::InlineEnd, "12 results"),
+                ],
+            ))],
+        ),
+        (
+            "Text and buttons",
+            vec![
+                boxed(InputGroup::new(
+                    TextField::new("Website", "example"),
+                    vec![
+                        InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
+                        InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
+                    ],
+                )),
+                boxed(InputGroup::new(
+                    TextField::new("Link", "https://choscor.com"),
+                    vec![
+                        InputGroupAddon::button(
+                            AddonAlign::InlineEnd,
+                            "Copy",
+                            Some(Icon::Copy),
+                            ControlSize::IconXs,
+                        ),
+                        InputGroupAddon::button(
+                            AddonAlign::InlineEnd,
+                            "Share",
+                            None,
+                            ControlSize::Xs,
+                        ),
+                    ],
+                )),
+            ],
+        ),
+        (
+            "Block addons",
+            vec![boxed(InputGroup::new(
+                TextField::new("Message", "").with_placeholder("Ask anything"),
+                vec![
+                    InputGroupAddon::text(AddonAlign::BlockStart, "To: Design team"),
+                    InputGroupAddon::button(
+                        AddonAlign::BlockEnd,
+                        "Send",
+                        Some(Icon::Send),
+                        ControlSize::Sm,
+                    ),
+                ],
+            ))],
         ),
     ];
     HostedPage::build(tree, parent, rows)

@@ -80,6 +80,8 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`ToggleGroup`](#toggle-and-togglegroup) | Row or column of toggles with one or many on. |
 | Form | [`Kbd`](#kbd) | Keyboard key caps for shortcuts. |
 | Form | [`Select`](#select-and-listentry) | Trigger with a popup list of options. |
+| Form | [`Input`](#input-and-inputgroup) | Hosted single-line text input. |
+| Form | [`InputGroup`](#input-and-inputgroup) | Text input with text, icon, and button addons. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1519,6 +1521,51 @@ extra-small medium text.
 
 [select.rs](../crates/choscorui-controls/tests/select.rs) pins this behavior.
 
+### Input and InputGroup
+
+- `Input` mounts a `TextField` model through the control host. A press
+  focuses it and puts the caret at the nearest caret stop. A drag extends
+  the selection.
+- **Keys.** The arrow keys, Home, End, Backspace, and Delete edit as in
+  `TextField`. Shift extends the selection and Option moves by word.
+  Command+A selects all, Command+Z undoes, Shift+Command+Z redoes, and
+  Command+X cuts.
+- Committed text from `ControlHost::dispatch_text` is typed in. The host
+  does not route IME marked text. Use `TextField` directly for IME
+  composition.
+- Each edit emits `Changed(Text)`. Enter on a valid value emits
+  `Activated`.
+- `set_validation` marks the input invalid. The border and ring become
+  `destructive`, and the message becomes the semantic description.
+- Without a width constraint, an input is 60 spacing units (240 pt) wide.
+  With one, it fills the width.
+- **`InputGroup`.** One box holds the text and its addons. Inline-start
+  addons sit before the text and inline-end addons after it, in reading
+  order. Inline addons do not change the 36 pt height.
+- Block-start addons sit above the text row and block-end addons below it.
+  Each adds its own height.
+- A button addon is a ghost button. A click on it emits
+  `ItemActivated(index)` with the addon index. A press anywhere else
+  focuses the text. Button addons take no keyboard focus. Give each one a
+  keyboard path too, such as a command shortcut.
+
+| Part | Value |
+| --- | --- |
+| Box | 36 pt high, `input` border, extra-small shadow, `md` radius |
+| Text padding | 10 pt sides, 4 pt top and bottom |
+| Addon | small medium `muted-foreground` text; 8 pt padding at the outer edge |
+| Button addon | `Xs` 24 pt, `IconXs` 24 × 24 pt, `Sm` 32 pt, `IconSm` 32 × 32 pt |
+
+| Field | `Input::semantics` | `InputGroup::semantics` |
+| --- | --- | --- |
+| Role | `TextField` (AXTextField), or `PasswordField` | as `Input` |
+| Name / value | name / value (bullets for a password) | name / value |
+| Description | validation message | text of the text addons |
+| State | invalid, disabled | invalid, disabled |
+| Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
+
+[input.rs](../crates/choscorui-controls/tests/input.rs) pins this behavior.
+
 ### CustomControl and ControlHost
 
 - `ControlHost::mount` creates a child node for the control. The node is
@@ -1547,6 +1594,8 @@ extra-small medium text.
   flag, or of all controls with `force`.
 - `perform` routes an assistive action only when the control's
   `semantics()` lists that action.
+- `set_modifiers` sets the modifier keys that `ControlContext::modifiers`
+  reports with later events.
 
 The semantics come from the control's own `semantics`. The
 [guide](guide.md) shows how to write a custom control.

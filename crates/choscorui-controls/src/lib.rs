@@ -109,7 +109,10 @@ pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,
 };
-pub use form::{Kbd, Select, Switch, Toggle, ToggleGroup, ToggleItem};
+pub use form::{
+    AddonContent, Input, InputGroup, InputGroupAddon, Kbd, Select, Switch, Toggle, ToggleGroup,
+    ToggleItem,
+};
 pub use listbox::ListEntry;
 mod dock;
 pub use dock::{

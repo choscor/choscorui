@@ -7,7 +7,7 @@
 )]
 
 use choscorui_controls::{
-    ControlHost, ControlMessage, CustomControl, EstimatedText, HostEnv, Styles,
+    ControlHost, ControlMessage, CustomControl, EstimatedText, HostEnv, ShortcutModifiers, Styles,
 };
 use choscorui_core::{
     Constraints, DesignTokens, DisplayCommand, DisplayList, InputModality, Key, KeyEvent,
@@ -62,6 +62,11 @@ impl Harness {
         HostEnv::new(&self.themes, &self.styles, &EstimatedText)
             .direction(self.direction)
             .time(self.time)
+    }
+
+    /// Sets the modifier keys that later events carry.
+    pub fn modifiers(&mut self, modifiers: ShortcutModifiers) {
+        self.host.set_modifiers(modifiers);
     }
 
     /// Sets the time that input and paint see.

@@ -131,10 +131,11 @@ impl Page for HostedPage {
         &mut self,
         tree: &mut Tree,
         event: PointerEvent,
-        _modifiers: ShortcutModifiers,
+        modifiers: ShortcutModifiers,
         env: &Env<'_>,
     ) -> bool {
         self.host.set_time(env.now.as_secs_f64());
+        self.host.set_modifiers(modifiers);
         self.host.dispatch_pointer(tree, event);
         // The page reads values through semantics; drop the change reports.
         self.host.take_messages();
@@ -145,10 +146,11 @@ impl Page for HostedPage {
         &mut self,
         tree: &mut Tree,
         event: KeyEvent,
-        _modifiers: ShortcutModifiers,
+        modifiers: ShortcutModifiers,
         env: &Env<'_>,
     ) -> bool {
         self.host.set_time(env.now.as_secs_f64());
+        self.host.set_modifiers(modifiers);
         let focus = tree.focus();
         if !focus.is_some_and(|id| self.host.contains(id))
             || matches!(event, KeyEvent::Down { key: Key::Tab, .. })

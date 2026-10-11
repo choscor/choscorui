@@ -1,8 +1,8 @@
 use crate::InputText;
 use crate::style::{PaintContext, VisualState};
 use choscorui_core::{
-    Dirty, Key, KeyEvent, NodeId, SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole,
-    SemanticState, SemanticText, TextBuffer, TextMotion, Tree, TreeError,
+    Dirty, Key, KeyEvent, NodeId, Rect, SemanticAction as CoreSemanticAction, SemanticNode,
+    SemanticRole, SemanticState, SemanticText, TextBuffer, TextMotion, Tree, TreeError,
 };
 use std::ops::Range;
 
@@ -229,7 +229,11 @@ impl TextField {
     /// The flags the input recipe reads. A focused field always shows
     /// the focus ring, as text inputs do.
     pub fn visual_state(&self, tree: &Tree, id: NodeId) -> VisualState {
-        let focused = tree.focus() == Some(id);
+        self.state_for(tree.focus() == Some(id))
+    }
+
+    /// The recipe flags with focus given directly.
+    pub(crate) fn state_for(&self, focused: bool) -> VisualState {
         VisualState::NONE
             .set(VisualState::DISABLED, !self.enabled)
             .set(VisualState::FOCUSED, focused)
@@ -244,19 +248,50 @@ impl TextField {
     /// selection, marked text, and the caret.
     pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
         let state = self.visual_state(tree, id);
+        self.paint_state(cx, state);
+    }
+
+    /// Paints like [`paint`](Self::paint) with the recipe flags given.
+    pub(crate) fn paint_state(&self, cx: &mut PaintContext<'_>, state: VisualState) {
         let display = self.display_value();
+        self.input_text(&display).paint(cx, state);
+    }
+
+    /// Paints only the text, selection, marks, and caret inside `rect`.
+    pub(crate) fn paint_text(&self, cx: &mut PaintContext<'_>, rect: Rect, state: VisualState) {
+        let display = self.display_value();
+        self.input_text(&display).paint_text(cx, rect, state);
+    }
+
+    fn input_text<'a>(&'a self, display: &'a str) -> InputText<'a> {
         let marked = self.composition.as_ref().map(|composition| {
             let start = composition.replacement.start;
             start..start + choscorui_core::grapheme_boundaries(&composition.text).len() - 1
         });
         InputText {
-            text: &display,
+            text: display,
             placeholder: &self.placeholder,
             caret: Some(self.caret()),
             selection: self.selection(),
             marked,
         }
-        .paint(cx, state);
+    }
+
+    /// Sets the validation state without a tree, for hosted inputs.
+    pub(crate) fn set_validation_state(&mut self, validation: ValidationState) {
+        self.validation = validation;
+    }
+
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Enables or disables without a tree, for hosted inputs.
+    pub(crate) fn set_enabled_state(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.composition = None;
+        }
     }
 
     pub fn set_enabled(
@@ -460,6 +495,11 @@ impl TextField {
     }
 
     pub fn semantics(&self, tree: &Tree, id: NodeId) -> TextFieldSemantics {
+        self.semantics_for(tree.focus() == Some(id))
+    }
+
+    /// The semantics with focus given directly.
+    pub(crate) fn semantics_for(&self, focused: bool) -> TextFieldSemantics {
         const ACTIONS: &[TextFieldSemanticAction] = &[TextFieldSemanticAction::SetValue];
         TextFieldSemantics {
             role: if self.secure {
@@ -474,7 +514,7 @@ impl TextField {
                 self.buffer.as_str().to_owned()
             },
             enabled: self.enabled,
-            focused: tree.focus() == Some(id),
+            focused,
             validation: self.validation.kind(),
             announcement: match &self.validation {
                 ValidationState::Invalid(message) => Some(message.clone()),

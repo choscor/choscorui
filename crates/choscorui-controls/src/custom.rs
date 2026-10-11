@@ -5,6 +5,7 @@
 //! Built-in controls and application controls use the same protocol. No
 //! platform or FFI code is involved.
 
+use crate::ShortcutModifiers;
 use crate::style::{PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, VisualState};
 use choscorui_core::{
     CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
@@ -129,6 +130,7 @@ pub struct ControlContext<'a> {
     tree: &'a mut Tree,
     phase: EventPhase,
     time: f64,
+    modifiers: ShortcutModifiers,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
 }
 
@@ -149,6 +151,14 @@ impl ControlContext<'_> {
     /// The host time in seconds, for delays such as a tooltip's.
     pub fn time(&self) -> f64 {
         self.time
+    }
+    /// The modifier keys held during the event.
+    pub fn modifiers(&self) -> ShortcutModifiers {
+        self.modifiers
+    }
+    /// The tree, for built-in controls that wrap a tree-based model.
+    pub(crate) fn tree_mut(&mut self) -> &mut Tree {
+        self.tree
     }
     pub fn request_paint(&mut self) {
         let _ = self.tree.invalidate(self.node, Dirty::PAINT);
@@ -249,6 +259,7 @@ pub struct ControlHost {
     hovered: Vec<NodeId>,
     messages: Vec<(NodeId, ControlMessage)>,
     time: f64,
+    modifiers: ShortcutModifiers,
 }
 
 impl ControlHost {
@@ -302,6 +313,11 @@ impl ControlHost {
     /// Sets the time that controls read during events, in seconds.
     pub fn set_time(&mut self, time: f64) {
         self.time = time;
+    }
+
+    /// Sets the modifier keys that controls see with later events.
+    pub fn set_modifiers(&mut self, modifiers: ShortcutModifiers) {
+        self.modifiers = modifiers;
     }
 
     /// Enables or disables a mounted control. A disabled control gets no
@@ -442,6 +458,7 @@ impl ControlHost {
                     tree,
                     phase,
                     time: self.time,
+                    modifiers: self.modifiers,
                     messages: &mut self.messages,
                 };
                 control.event(&mut context, event)
@@ -778,6 +795,7 @@ impl ControlHost {
             tree,
             phase: EventPhase::Target,
             time: self.time,
+            modifiers: self.modifiers,
             messages: &mut self.messages,
         };
         control.perform(&mut context, action, value)
