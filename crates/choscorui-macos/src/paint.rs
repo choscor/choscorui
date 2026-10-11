@@ -211,9 +211,17 @@ pub(super) unsafe fn paint_commands(context: Id, dirty: NSRect, list: &DisplayLi
                     text,
                     font_family,
                     font_size,
+                    font_weight,
+                    tracking,
                     color,
                 } => {
-                    if !draw_text_run(context, *baseline, text, font_family, *font_size, *color) {
+                    let run = choscorui_core::TextRun {
+                        family: font_family,
+                        size: *font_size,
+                        weight: *font_weight,
+                        tracking: *tracking,
+                    };
+                    if !draw_text_run(context, *baseline, text, &run, *color) {
                         success = false;
                         break;
                     }
@@ -495,7 +503,7 @@ thread_local! {
     /// Blurred masks by everything but position: a mask is translation
     /// invariant, and recomputing it per pixel each frame dominated replay
     /// of shadowed controls.
-    static SHADOW_MASKS: RefCell<HashMap<[u64; 8], Image>> = RefCell::new(HashMap::new());
+    static SHADOW_MASKS: RefCell<HashMap<[u64; 10], Image>> = RefCell::new(HashMap::new());
 }
 
 unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
@@ -510,6 +518,8 @@ unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
         shadow.offset.x.to_bits(),
         shadow.offset.y.to_bits(),
         shadow.blur.to_bits(),
+        shadow.spread.to_bits(),
+        u64::from(shadow.inset),
         scale.to_bits(),
         u64::from_le_bytes([color.red, color.green, color.blue, color.alpha, 0, 0, 0, 0]),
     ];

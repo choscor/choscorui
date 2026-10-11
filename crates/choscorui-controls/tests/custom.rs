@@ -2,8 +2,8 @@
 
 use choscorui_controls::{ControlContext, ControlEvent, ControlHost, CustomControl};
 use choscorui_core::{
-    Color, Constraints, DesignTokens, Dirty, DisplayCommand, DisplayList, EventPhase, EventReply,
-    Key, KeyEvent, LayoutDirection, Measured, Point, PointerButton, PointerEvent, Rect,
+    Color, ColorRole, Constraints, DesignTokens, Dirty, DisplayCommand, DisplayList, EventPhase,
+    EventReply, Key, KeyEvent, LayoutDirection, Measured, Point, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticChange, SemanticNode, SemanticRole, SemanticState, SemanticTree, Size,
     Tree,
 };
@@ -70,7 +70,7 @@ impl CustomControl for Rating {
     fn paint(&self, list: &mut DisplayList, bounds: Rect, tokens: &DesignTokens, focused: bool) {
         for star in 0..5 {
             let color = if star < self.value {
-                tokens.accent
+                tokens.color(ColorRole::Primary)
             } else {
                 Color::rgba8(200, 200, 200, 255)
             };
@@ -83,7 +83,7 @@ impl CustomControl for Rating {
             );
         }
         if focused {
-            list.fill_rect(bounds, tokens.accent.with_alpha(0.1));
+            list.fill_rect(bounds, tokens.color(ColorRole::Primary).with_alpha(0.1));
         }
     }
 

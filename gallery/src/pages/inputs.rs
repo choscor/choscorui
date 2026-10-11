@@ -8,8 +8,8 @@ use choscorui::controls::{
     ToolButtonAction, ToolButtonMenu, shortcut_text,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction, SemanticNode,
-    SemanticRole, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, Tree,
 };
 
 const HELLO: CommandId = CommandId(1);
@@ -54,7 +54,7 @@ pub fn button(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
         .expect("shortcut is free");
     let rail = ButtonDecoration::LeadingRail {
         width: 4.0,
-        color: env.tokens.accent,
+        color: env.tokens.color(ColorRole::Primary),
     };
     let mut buttons = Vec::new();
     for (label, command, decoration) in [
@@ -130,9 +130,9 @@ impl Page for ButtonPage {
             style.paint(list, bounds, state);
             let name = button.semantics(tree, *id).name;
             let color = if state.enabled {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             } else {
-                env.tokens.content.with_alpha(0.4)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
             };
             env.text(list, bounds, &name, env.body(), color, Align::Center);
         }
@@ -331,9 +331,9 @@ impl Page for CheckboxPage {
             let state = checkbox.visual_state(tree, *id);
             env.checkbox_style().paint(list, bounds, state);
             let color = if state.enabled {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             } else {
-                env.tokens.content.with_alpha(0.4)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
             };
             env.text(
                 list,
@@ -478,7 +478,11 @@ impl Page for ToolButtonPage {
                 .state(button.command)
                 .is_ok_and(|state| state.checked);
             let fill = if checked {
-                choscorui::core::lerp_color(env.tokens.surface, env.tokens.accent, 0.45)
+                choscorui::core::lerp_color(
+                    env.tokens.color(ColorRole::Card),
+                    env.tokens.color(ColorRole::Primary),
+                    0.45,
+                )
             } else {
                 env.mix(0.08)
             };
@@ -505,7 +509,7 @@ impl Page for ToolButtonPage {
                     arrow_rect,
                     "▾",
                     env.small(),
-                    env.tokens.content,
+                    env.tokens.color(ColorRole::Foreground),
                     Align::Center,
                 );
             }
@@ -514,7 +518,7 @@ impl Page for ToolButtonPage {
                 label_rect,
                 &button.label,
                 env.body(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             if tree.focus() == Some(*id) {
@@ -683,15 +687,19 @@ impl Page for ButtonGroupPage {
                 let bounds = tree.bounds(*id).unwrap_or_default();
                 let state = self.commands.state(*command).unwrap_or_default();
                 let fill = if state.checked {
-                    choscorui::core::lerp_color(env.tokens.surface, env.tokens.accent, 0.5)
+                    choscorui::core::lerp_color(
+                        env.tokens.color(ColorRole::Card),
+                        env.tokens.color(ColorRole::Primary),
+                        0.5,
+                    )
                 } else {
                     env.mix(0.08)
                 };
                 list.fill_rect(bounds, fill);
                 let color = if state.enabled {
-                    env.tokens.content
+                    env.tokens.color(ColorRole::Foreground)
                 } else {
-                    env.tokens.content.with_alpha(0.35)
+                    env.tokens.color(ColorRole::Foreground).with_alpha(0.35)
                 };
                 env.text(list, bounds, label, env.body(), color, Align::Center);
                 if tree.focus() == Some(*id) {
@@ -885,7 +893,7 @@ impl Page for KeySequencePage {
             field.inset(8.0),
             &text,
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
         let examples = tree.bounds(self.examples).unwrap_or_default();

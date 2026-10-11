@@ -4,7 +4,7 @@
 //! so replacing a recipe at runtime cannot change behavior.
 
 use crate::{ButtonDecoration, ButtonStyle, ButtonVisualState};
-use choscorui_core::{Color, DesignTokens, DisplayList, Point, Rect, Shadow, Size};
+use choscorui_core::{Color, ColorRole, DesignTokens, DisplayList, Point, Rect, Shadow, Size};
 
 /// Paint layers in drawing order.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -99,7 +99,7 @@ impl ButtonRecipe for ButtonStyle {
             content: inset(bounds, rail + tokens.spacing * 2.0, tokens.spacing),
             alignment: ContentAlignment::Leading,
             icon: None,
-            content_color: tokens.content,
+            content_color: tokens.color(ColorRole::Foreground),
         }
     }
 
@@ -168,7 +168,7 @@ impl ButtonRecipe for PillButtonRecipe {
             content,
             alignment: ContentAlignment::Center,
             icon: Some(icon),
-            content_color: tokens.background,
+            content_color: tokens.color(ColorRole::Background),
         }
     }
 
@@ -177,18 +177,14 @@ impl ButtonRecipe for PillButtonRecipe {
         let bounds = context.bounds;
         let radius = Self::radius(bounds, tokens);
         let fill = if self.emphasized {
-            tokens.danger
+            tokens.color(ColorRole::Destructive)
         } else {
-            tokens.accent
+            tokens.color(ColorRole::Primary)
         };
         match slot {
             Slot::Background => {
-                if tokens.elevation > 0.0 && context.state.enabled {
-                    let lift = if context.state.pressed {
-                        tokens.elevation / 2.0
-                    } else {
-                        tokens.elevation
-                    };
+                if context.state.enabled {
+                    let lift = if context.state.pressed { 1.0 } else { 2.0 };
                     let _ = list.draw_shadow(
                         bounds,
                         radius,
@@ -196,11 +192,13 @@ impl ButtonRecipe for PillButtonRecipe {
                             offset: Point::new(0.0, lift),
                             blur: lift * 3.0,
                             color: Color::rgba8(0, 0, 0, 90),
+                            spread: 0.0,
+                            inset: false,
                         },
                     );
                 }
                 let fill = if context.state.hovered && !context.state.pressed {
-                    mix(fill, tokens.surface, 0.2)
+                    mix(fill, tokens.color(ColorRole::Card), 0.2)
                 } else {
                     fill
                 };
@@ -208,7 +206,11 @@ impl ButtonRecipe for PillButtonRecipe {
             }
             Slot::Icon => {
                 if let Some(icon) = context.layout.icon {
-                    let _ = list.fill_rounded_rect(icon, icon.size.height / 2.0, tokens.surface);
+                    let _ = list.fill_rounded_rect(
+                        icon,
+                        icon.size.height / 2.0,
+                        tokens.color(ColorRole::Card),
+                    );
                     let dot = inset(icon, icon.size.width * 0.3, icon.size.height * 0.3);
                     let _ = list.fill_rounded_rect(dot, dot.size.height / 2.0, fill);
                 }
@@ -221,14 +223,14 @@ impl ButtonRecipe for PillButtonRecipe {
                     let _ = list.stroke_rounded_rect(
                         ring,
                         radius + gap,
-                        tokens.content,
+                        tokens.color(ColorRole::Foreground),
                         tokens.border_width.max(1.0) * 2.0,
                     );
                 }
             }
             Slot::Overlay => {
                 let shade = if !context.state.enabled {
-                    Some(tokens.surface.with_alpha(0.6))
+                    Some(tokens.color(ColorRole::Card).with_alpha(0.6))
                 } else if context.state.pressed {
                     Some(Color::rgba8(0, 0, 0, 50))
                 } else {

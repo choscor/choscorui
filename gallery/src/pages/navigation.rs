@@ -8,8 +8,8 @@ use choscorui::controls::{
     ValidationState, parse_mnemonic,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticNode,
-    SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, Size, Tree,
 };
 
 /// Labels with mnemonics; `&P` is shared, so pressing it cycles focus.
@@ -101,7 +101,7 @@ impl Page for MnemonicsPage {
                     ),
                     Size::new(width, 1.0),
                 ),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
             );
         }
         env.caption(
@@ -340,7 +340,7 @@ impl Page for DialogKeysPage {
                 rect,
                 line,
                 env.body(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Leading,
             );
         }
@@ -349,8 +349,12 @@ impl Page for DialogKeysPage {
         if self.ok_enabled() {
             // The default button is outlined in the accent color.
             let rect = tree.bounds(self.ok.node).unwrap_or_default();
-            let _ =
-                list.stroke_rounded_rect(rect, env.tokens.radius.min(8.0), env.tokens.accent, 2.0);
+            let _ = list.stroke_rounded_rect(
+                rect,
+                env.tokens.radius.min(8.0),
+                env.tokens.color(ColorRole::Primary),
+                2.0,
+            );
         }
         self.toggle.paint(tree, list, env);
         env.caption(

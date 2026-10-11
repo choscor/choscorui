@@ -1,35 +1,35 @@
 # flat ButtonVisualState { enabled: true, hovered: false, pressed: false, focused: true }
-slots SlotLayout { content: Rect { origin: Point { x: 34.0, y: 18.0 }, size: Size { width: 72.0, height: 16.0 } }, alignment: Leading, icon: None, content_color: Color { red: 25, green: 31, blue: 42, alpha: 255 } }
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, color: Color { red: 120, green: 55, blue: 190, alpha: 255 } }
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 8.0, height: 32.0 } }, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 2.0 } }, color: Color { red: 25, green: 31, blue: 42, alpha: 255 } }
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 40.0 }, size: Size { width: 120.0, height: 2.0 } }, color: Color { red: 25, green: 31, blue: 42, alpha: 255 } }
+slots SlotLayout { content: Rect { origin: Point { x: 22.0, y: 14.0 }, size: Size { width: 96.0, height: 24.0 } }, alignment: Leading, icon: None, content_color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 4.0, height: 32.0 } }, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
+FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 2.0 } }, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+FillRect { rect: Rect { origin: Point { x: 10.0, y: 40.0 }, size: Size { width: 120.0, height: 2.0 } }, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 # pill ButtonVisualState { enabled: true, hovered: false, pressed: false, focused: true }
-slots SlotLayout { content: Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 64.0, height: 32.0 } }, alignment: Center, icon: Some(Rect { origin: Point { x: 98.0, y: 18.0 }, size: Size { width: 16.0, height: 16.0 } }), content_color: Color { red: 244, green: 246, blue: 250, alpha: 255 } }
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, shadow: Shadow { offset: Point { x: 0.0, y: 3.0 }, blur: 9.0, color: Color { red: 0, green: 0, blue: 0, alpha: 90 } } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 98.0, y: 18.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 102.8, y: 22.8 }, size: Size { width: 6.4, height: 6.4 } }, radius: 3.2, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 7.0, y: 7.0 }, size: Size { width: 126.0, height: 38.0 } }, radius: 13.0, color: Color { red: 25, green: 31, blue: 42, alpha: 255 }, width: 2.0 }
+slots SlotLayout { content: Rect { origin: Point { x: 18.0, y: 10.0 }, size: Size { width: 76.0, height: 32.0 } }, alignment: Center, icon: Some(Rect { origin: Point { x: 98.0, y: 14.0 }, size: Size { width: 24.0, height: 24.0 } }), content_color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, shadow: Shadow { offset: Point { x: 0.0, y: 2.0 }, blur: 6.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 90 }, inset: false } }
+FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 98.0, y: 14.0 }, size: Size { width: 24.0, height: 24.0 } }, radius: 12.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 105.2, y: 21.2 }, size: Size { width: 9.600000000000001, height: 9.600000000000001 } }, radius: 4.800000000000001, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 7.0, y: 7.0 }, size: Size { width: 126.0, height: 38.0 } }, radius: 13.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 }, width: 2.0 }
 # flat ButtonVisualState { enabled: false, hovered: false, pressed: false, focused: false }
-slots SlotLayout { content: Rect { origin: Point { x: 34.0, y: 18.0 }, size: Size { width: 72.0, height: 16.0 } }, alignment: Leading, icon: None, content_color: Color { red: 25, green: 31, blue: 42, alpha: 255 } }
+slots SlotLayout { content: Rect { origin: Point { x: 22.0, y: 14.0 }, size: Size { width: 96.0, height: 24.0 } }, alignment: Leading, icon: None, content_color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, color: Color { red: 90, green: 90, blue: 90, alpha: 255 } }
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 8.0, height: 32.0 } }, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
+FillRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 4.0, height: 32.0 } }, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
 # pill ButtonVisualState { enabled: false, hovered: false, pressed: false, focused: false }
-slots SlotLayout { content: Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 64.0, height: 32.0 } }, alignment: Center, icon: Some(Rect { origin: Point { x: 98.0, y: 18.0 }, size: Size { width: 16.0, height: 16.0 } }), content_color: Color { red: 244, green: 246, blue: 250, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 98.0, y: 18.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 102.8, y: 22.8 }, size: Size { width: 6.4, height: 6.4 } }, radius: 3.2, color: Color { red: 190, green: 35, blue: 55, alpha: 255 } }
+slots SlotLayout { content: Rect { origin: Point { x: 18.0, y: 10.0 }, size: Size { width: 76.0, height: 32.0 } }, alignment: Center, icon: Some(Rect { origin: Point { x: 98.0, y: 14.0 }, size: Size { width: 24.0, height: 24.0 } }), content_color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 98.0, y: 14.0 }, size: Size { width: 24.0, height: 24.0 } }, radius: 12.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 105.2, y: 21.2 }, size: Size { width: 9.600000000000001, height: 9.600000000000001 } }, radius: 4.800000000000001, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 32.0 } }, radius: 10.0, color: Color { red: 255, green: 255, blue: 255, alpha: 153 } }
 # item view
 PushClip(Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 200.0, height: 60.0 } })
 PushClip(Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 14.899999999999999 }, text: "Hà Nội", font_family: "Helvetica", font_size: 14.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 20.0, y: 14.899999999999999 }, text: "Hà Nội", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
 PopClip
 PushClip(Rect { origin: Point { x: 0.0, y: 20.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 34.9 }, text: "Huế", font_family: "Helvetica", font_size: 14.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 20.0, y: 34.9 }, text: "Huế", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
 PopClip
 PushClip(Rect { origin: Point { x: 0.0, y: 40.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 54.9 }, text: "Đà Lạt", font_family: "Helvetica", font_size: 14.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 20.0, y: 54.9 }, text: "Đà Lạt", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
 PopClip
 PopClip

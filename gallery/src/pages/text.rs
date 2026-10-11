@@ -9,8 +9,8 @@ use choscorui::controls::{
     TextFieldChange, TextFieldInput, ValidationState,
 };
 use choscorui::core::{
-    CivilDate, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, Size, TextLayout, TextShaper, TextStyle, Tree,
+    CivilDate, ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, Size, TextLayout, TextShaper, TextStyle, Tree,
     grapheme_boundaries,
 };
 
@@ -90,9 +90,9 @@ impl Page for TextFieldPage {
             let inner = bounds.inset(8.0);
             list.push_clip(bounds);
             let color = if state.enabled {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             } else {
-                env.tokens.content.with_alpha(0.45)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.45)
             };
             env.text(list, inner, &display, env.body(), color, Align::Leading);
             if state.focused {
@@ -110,7 +110,7 @@ impl Page for TextFieldPage {
                         Point::new(x, bounds.origin.y + 6.0),
                         Size::new(1.0, bounds.size.height - 12.0),
                     ),
-                    env.tokens.content,
+                    env.tokens.color(ColorRole::Foreground),
                 );
             }
             let _ = list.pop_clip();
@@ -347,15 +347,22 @@ impl Page for TextEditorPage {
         };
         let origin = self.origin(tree);
         list.push_clip(bounds);
-        let selection = choscorui::core::lerp_color(env.tokens.surface, env.tokens.accent, 0.35);
+        let selection = choscorui::core::lerp_color(
+            env.tokens.color(ColorRole::Card),
+            env.tokens.color(ColorRole::Primary),
+            0.35,
+        );
         for rect in self.editor.selection_rects(layout) {
             list.fill_rect(rect.translate(origin.x, origin.y), selection);
         }
-        let _ = layout.draw(list, origin, env.tokens.content);
+        let _ = layout.draw(list, origin, env.tokens.color(ColorRole::Foreground));
         if tree.focus() == Some(self.node)
             && let Some(caret) = self.editor.caret_rect(layout)
         {
-            list.fill_rect(caret.translate(origin.x, origin.y), env.tokens.content);
+            list.fill_rect(
+                caret.translate(origin.x, origin.y),
+                env.tokens.color(ColorRole::Foreground),
+            );
         }
         let _ = list.pop_clip();
     }

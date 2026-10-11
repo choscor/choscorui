@@ -7,8 +7,8 @@ use choscorui::controls::{
     RadioInput, RadioOption, ShortcutModifiers, Tab, TabInput, TabSet, text_key,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 
 /// A radio group's caption node, the group, and each option's node and
@@ -85,9 +85,9 @@ impl Page for RadioPage {
                 let rect = tree.bounds(*id).unwrap_or_default();
                 env.radio_style().paint(list, rect, state);
                 let color = if state.enabled {
-                    env.tokens.content
+                    env.tokens.color(ColorRole::Foreground)
                 } else {
-                    env.tokens.content.with_alpha(0.4)
+                    env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
                 };
                 env.text(
                     list,
@@ -242,9 +242,9 @@ impl Page for TabsPage {
             let rect = tree.bounds(*tab).unwrap_or_default();
             env.tab_style().paint(list, rect, state);
             let color = if state.enabled {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             } else {
-                env.tokens.content.with_alpha(0.4)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
             };
             env.text(list, rect, label, env.body(), color, Align::Center);
             if state.selected {
@@ -385,7 +385,7 @@ impl ComboField {
             arrow,
             "▾",
             env.small(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Center,
         );
     }
@@ -402,7 +402,7 @@ impl ComboField {
             return;
         }
         let popup = self.popup(tree, combo);
-        let _ = list.fill_rounded_rect(popup, 4.0, env.tokens.surface);
+        let _ = list.fill_rounded_rect(popup, 4.0, env.tokens.color(ColorRole::Card));
         let _ = list.stroke_rounded_rect(popup, 4.0, env.mix(0.3), 1.0);
         let highlighted = combo.highlighted();
         for (index, item) in combo
@@ -420,7 +420,7 @@ impl ComboField {
             );
             let selected = Some(item.key) == highlighted;
             if selected {
-                list.fill_rect(row, env.tokens.accent);
+                list.fill_rect(row, env.tokens.color(ColorRole::Primary));
             }
             env.text(
                 list,
@@ -430,7 +430,7 @@ impl ComboField {
                 if selected {
                     env.on_accent()
                 } else {
-                    env.tokens.content
+                    env.tokens.color(ColorRole::Foreground)
                 },
                 Align::Leading,
             );
@@ -705,7 +705,7 @@ impl Page for FontChooserPage {
             "The quick brown fox — Chữ Việt",
             family,
             24.0,
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
         );
         env.caption(
             list,

@@ -558,10 +558,19 @@ fn miter_contains(prev: Point, vertex: Point, next: Point, p: Point, half: f64) 
     if along < 0.0 || along > tip {
         return false;
     }
+    // Past the end of the incoming segment and before the start of the
+    // outgoing one, so the wedge stays at the vertex.
+    let beyond_first = rel.x * d1.x + rel.y * d1.y >= 0.0;
+    let before_second = rel.x * d2.x + rel.y * d2.y <= 0.0;
     // Inside both offset half-planes' outer extents.
     let o1 = rel.x * n1.x + rel.y * n1.y;
     let o2 = rel.x * n2.x + rel.y * n2.y;
-    o1 <= half + 1e-9 && o2 <= half + 1e-9 && o1 >= 0.0 && o2 >= 0.0
+    beyond_first
+        && before_second
+        && o1 <= half + 1e-9
+        && o2 <= half + 1e-9
+        && o1 >= 0.0
+        && o2 >= 0.0
 }
 
 fn normalize(p: Point) -> Option<Point> {

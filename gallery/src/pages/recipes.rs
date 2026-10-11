@@ -8,9 +8,9 @@ use choscorui::controls::{
     paint_button,
 };
 use choscorui::core::{
-    Constraints, DesignTokens, DisplayList, EventReply, Key, KeyEvent, LayoutDirection, Measured,
-    NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size, Tree,
+    ColorRole, Constraints, DesignTokens, DisplayList, EventReply, Key, KeyEvent, LayoutDirection,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, Size, Tree,
 };
 
 /// Which recipe paints a demo button.
@@ -133,7 +133,7 @@ impl Page for ButtonRecipesPage {
                         bottom,
                         description,
                         env.small(),
-                        env.tokens.content.with_alpha(0.6),
+                        env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
                         align,
                     );
                 } else {
@@ -312,9 +312,9 @@ impl CustomControl for StarRating {
                 Size::new(width, bounds.size.height),
             );
             let color = if star <= shown {
-                tokens.accent
+                tokens.color(ColorRole::Primary)
             } else {
-                tokens.content.with_alpha(0.25)
+                tokens.color(ColorRole::Foreground).with_alpha(0.25)
             };
             let _ = list.draw_text(
                 Point::new(cell.origin.x + 4.0, cell.origin.y + cell.size.height * 0.8),
@@ -325,7 +325,12 @@ impl CustomControl for StarRating {
             );
         }
         if focused {
-            let _ = list.stroke_rounded_rect(bounds.inset(1.0), 4.0, tokens.accent, 2.0);
+            let _ = list.stroke_rounded_rect(
+                bounds.inset(1.0),
+                4.0,
+                tokens.color(ColorRole::Primary),
+                2.0,
+            );
         }
     }
 

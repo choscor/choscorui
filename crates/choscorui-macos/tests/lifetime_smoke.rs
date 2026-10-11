@@ -8,8 +8,8 @@
 
 #[cfg(target_os = "macos")]
 use choscorui_core::{
-    Color, DesignTokens, DisplayList, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, SemanticTree, Shadow, Size, Tree,
+    Color, ColorRole, DesignTokens, DisplayList, Point, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, SemanticTree, Shadow, Size, Tree,
 };
 #[cfg(target_os = "macos")]
 use choscorui_macos::{
@@ -62,7 +62,10 @@ fn wait_for_paint(app: &Application, window: &Window, before: usize) -> bool {
 #[cfg(target_os = "macos")]
 fn themed(size: Size, tokens: &DesignTokens, light: bool) -> DisplayList {
     let mut list = DisplayList::new();
-    list.fill_rect(Rect::new(Point::new(0.0, 0.0), size), tokens.background);
+    list.fill_rect(
+        Rect::new(Point::new(0.0, 0.0), size),
+        tokens.color(ColorRole::Background),
+    );
     for i in 0..40 {
         let rect = Rect::new(
             Point::new(10.0 + (i % 8) as f64 * 70.0, 10.0 + (i / 8) as f64 * 40.0),
@@ -76,17 +79,19 @@ fn themed(size: Size, tokens: &DesignTokens, light: bool) -> DisplayList {
                     offset: Point::new(0.0, 2.0),
                     blur: 4.0,
                     color: Color::rgba8(0, 0, 0, 80),
+                    spread: 0.0,
+                    inset: false,
                 },
             )
             .unwrap();
         }
-        list.fill_rect(rect, tokens.accent);
+        list.fill_rect(rect, tokens.color(ColorRole::Primary));
         list.draw_text(
             Point::new(rect.origin.x + 6.0, rect.origin.y + 18.0),
             &format!("Mục {i}"),
             "Helvetica",
             12.0,
-            tokens.content,
+            tokens.color(ColorRole::Foreground),
         )
         .unwrap();
     }

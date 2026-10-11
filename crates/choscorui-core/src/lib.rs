@@ -14,9 +14,12 @@ pub use path::{
 };
 mod display;
 pub use display::{
-    Color, CursorShape, DisplayCommand, DisplayList, DisplayListError, Shadow, damage,
+    Color, CursorShape, DisplayCommand, DisplayList, DisplayListError, Shadow, TextRun, damage,
 };
+mod icons;
+mod oklch;
 mod svg;
+pub use icons::Icon;
 pub use svg::{SvgDocument, SvgError, SvgShape, parse_path_data};
 mod layout;
 pub use layout::{
@@ -48,8 +51,10 @@ mod undo;
 pub use undo::{UndoGroup, UndoStack};
 mod theme;
 pub use theme::{
-    AccessibilityPreferences, Contrast, DesignTokens, MotionTokens, ThemeError, ThemeInvalidation,
-    ThemeOverride, ThemeResolver,
+    AccessibilityPreferences, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens,
+    FULL_RADIUS, FontFamily, MotionTokens, Oklch, Palette, RadiusScale, RoleOverrides,
+    ShadowLayers, ShadowScale, TextPreset, TextSize, ThemeError, ThemeInvalidation, ThemeOverride,
+    ThemeResolver, Tracking, TypeSpec, palette_source,
 };
 mod locale;
 pub use locale::{
@@ -100,7 +105,7 @@ pub use notify::{
 mod animation;
 pub use animation::{
     AnimationClock, AnimationError, AnimationFrame, AnimationId, AnimationKey, AnimationSpec,
-    AnimationStart, AnimationUpdate, AnimationValues, Easing,
+    AnimationStart, AnimationUpdate, AnimationValues, CubicBezier, Easing,
 };
 
 use std::collections::HashMap;
@@ -314,7 +319,17 @@ pub struct Tree {
     next_id: u64,
     nodes: HashMap<NodeId, Node>,
     focus: Option<NodeId>,
+    modality: InputModality,
     pointer_capture: Option<NodeId>,
+}
+
+/// The kind of input that last moved or used focus. Focus that keyboard
+/// input caused shows a focus ring; focus from a pointer press does not.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum InputModality {
+    #[default]
+    Keyboard,
+    Pointer,
 }
 
 impl Tree {
@@ -336,6 +351,7 @@ impl Tree {
             next_id: 1,
             nodes,
             focus: None,
+            modality: InputModality::Keyboard,
             pointer_capture: None,
         }
     }
@@ -558,6 +574,34 @@ impl Tree {
         self.focus
     }
 
+    /// True when `id` has focus and the last input was the keyboard: the
+    /// control shows its focus ring.
+    pub fn focus_visible(&self, id: NodeId) -> bool {
+        self.focus == Some(id) && self.modality == InputModality::Keyboard
+    }
+
+    pub fn input_modality(&self) -> InputModality {
+        self.modality
+    }
+
+    /// Records the kind of the latest input. A change repaints the focused
+    /// node, because its ring appears or disappears.
+    pub fn set_input_modality(&mut self, modality: InputModality) {
+        if self.modality != modality {
+            self.modality = modality;
+            if let Some(focus) = self.focus {
+                self.mark_ancestors(focus, Dirty::PAINT);
+            }
+        }
+    }
+
+    /// Focuses `id` because of a pointer press: no focus ring shows.
+    pub fn focus_by_pointer(&mut self, id: NodeId) -> Result<(), TreeError> {
+        self.set_focus(Some(id))?;
+        self.set_input_modality(InputModality::Pointer);
+        Ok(())
+    }
+
     pub fn visible(&self, id: NodeId) -> Option<bool> {
         self.nodes.get(&id)?;
         let mut current = Some(id);
@@ -611,6 +655,7 @@ impl Tree {
 
     /// Moves focus to the next (or previous) opted-in node, wrapping at ends.
     pub fn focus_next(&mut self, reverse: bool) -> Option<NodeId> {
+        self.set_input_modality(InputModality::Keyboard);
         let mut order = Vec::new();
         let mut pending = vec![self.root];
         while let Some(id) = pending.pop() {
@@ -698,6 +743,9 @@ impl Tree {
         event: PointerEvent,
         mut handler: impl FnMut(&mut Self, NodeId, EventPhase, PointerEvent) -> EventReply,
     ) {
+        if let PointerEvent::Down { .. } = event {
+            self.set_input_modality(InputModality::Pointer);
+        }
         let Some(target) = self
             .pointer_capture
             .or_else(|| self.hit_test(event.position()))
@@ -714,6 +762,9 @@ impl Tree {
         event: KeyEvent,
         mut handler: impl FnMut(&mut Self, NodeId, EventPhase, KeyEvent) -> EventReply,
     ) {
+        if let KeyEvent::Down { .. } = event {
+            self.set_input_modality(InputModality::Keyboard);
+        }
         if let Some(target) = self.focus {
             self.dispatch_path(target, event, &mut handler);
         }

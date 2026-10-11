@@ -7,8 +7,8 @@ use choscorui::controls::{
     ToolbarItem, ToolbarItemKind, ToolbarLayout, compose_main_window,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 use std::time::Duration;
 
@@ -76,13 +76,13 @@ fn paint_toolbar(
             ),
             ToolbarItemKind::Control { label, .. } => {
                 let field = rect.inset(5.0);
-                let _ = list.fill_rounded_rect(field, 6.0, env.tokens.surface);
+                let _ = list.fill_rounded_rect(field, 6.0, env.tokens.color(ColorRole::Card));
                 env.text(
                     list,
                     field.inset(6.0),
                     &format!("{label}…"),
                     env.small(),
-                    env.tokens.content.with_alpha(0.5),
+                    env.tokens.color(ColorRole::Foreground).with_alpha(0.5),
                     Align::Leading,
                 );
                 continue;
@@ -98,9 +98,9 @@ fn paint_toolbar(
             ToolbarItemKind::FlexibleSpace => continue,
         };
         let color = if enabled && env.enabled {
-            env.tokens.content
+            env.tokens.color(ColorRole::Foreground)
         } else {
-            env.tokens.content.with_alpha(0.35)
+            env.tokens.color(ColorRole::Foreground).with_alpha(0.35)
         };
         env.text(list, *rect, &label, env.small(), color, Align::Center);
         if focused && toolbar.focused() == Some(*index) {
@@ -113,7 +113,7 @@ fn paint_toolbar(
             chevron,
             "»",
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Center,
         );
     }
@@ -229,7 +229,7 @@ impl Page for ToolbarPage {
                 let _ = list.stroke_rounded_rect(
                     rect,
                     env.tokens.radius.min(8.0),
-                    env.tokens.accent,
+                    env.tokens.color(ColorRole::Primary),
                     2.0,
                 );
             }
@@ -499,7 +499,7 @@ impl Page for StatusBarPage {
             layout.message.inset(6.0),
             self.status.text(),
             env.small(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
         for (index, section) in &layout.sections {
@@ -512,7 +512,7 @@ impl Page for StatusBarPage {
                 section.inset(6.0),
                 &self.status.sections()[*index].text,
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
         }
@@ -663,7 +663,7 @@ impl Page for MainWindowPage {
                 let _ = list.stroke_rounded_rect(
                     rect,
                     env.tokens.radius.min(8.0),
-                    env.tokens.accent,
+                    env.tokens.color(ColorRole::Primary),
                     2.0,
                 );
             }
@@ -695,7 +695,7 @@ impl Page for MainWindowPage {
                 *rect,
                 label,
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
         }
@@ -706,7 +706,7 @@ impl Page for MainWindowPage {
                 status.inset(4.0),
                 "Status bar",
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Leading,
             );
         }
@@ -719,7 +719,7 @@ impl Page for MainWindowPage {
                 frames.content.size.width, frames.content.size.height
             ),
             env.body(),
-            env.tokens.content.with_alpha(0.7),
+            env.tokens.color(ColorRole::Foreground).with_alpha(0.7),
             Align::Center,
         );
     }

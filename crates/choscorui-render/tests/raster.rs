@@ -248,11 +248,7 @@ mod vector {
         list.draw_shadow(
             Rect::from_xywh(5.0, 5.0, 10.0, 10.0),
             0.0,
-            Shadow {
-                offset: Point::new(0.0, 3.0),
-                blur: 2.0,
-                color: Color::BLACK,
-            },
+            Shadow::drop(Point::new(0.0, 3.0), 2.0, Color::BLACK),
         )
         .unwrap();
         let r = Raster::render(&list, 20, 24, 1.0).unwrap();
@@ -263,6 +259,40 @@ mod vector {
         assert!(edge > 30 && edge < 200, "soft edge {edge}");
         assert_eq!(alpha(&r, 10, 23), 0);
         assert_eq!(alpha(&r, 0, 0), 0);
+
+        // An inset shadow darkens the inside edge and leaves the outside.
+        let mut list = DisplayList::new();
+        list.draw_shadow(
+            Rect::from_xywh(4.0, 4.0, 16.0, 16.0),
+            0.0,
+            Shadow {
+                offset: Point::new(0.0, 2.0),
+                blur: 0.0,
+                spread: 0.0,
+                color: Color::BLACK,
+                inset: true,
+            },
+        )
+        .unwrap();
+        let r = Raster::render(&list, 24, 24, 1.0).unwrap();
+        assert!(alpha(&r, 10, 4) > 200, "top inside edge");
+        assert_eq!(alpha(&r, 10, 12), 0);
+        assert_eq!(alpha(&r, 10, 2), 0);
+
+        // A negative spread shrinks the shadow under the shape.
+        let mut list = DisplayList::new();
+        list.draw_shadow(
+            Rect::from_xywh(5.0, 5.0, 10.0, 10.0),
+            0.0,
+            Shadow {
+                spread: -2.0,
+                ..Shadow::drop(Point::new(0.0, 3.0), 0.0, Color::BLACK)
+            },
+        )
+        .unwrap();
+        let r = Raster::render(&list, 20, 24, 1.0).unwrap();
+        assert!(alpha(&r, 10, 15) > 150);
+        assert_eq!(alpha(&r, 5, 15), 0, "spread pulls the side in");
     }
 
     #[test]

@@ -2,7 +2,9 @@
 
 use crate::page::{Column, Env, Page, node, sem};
 use choscorui::controls::{Label, LabelStyle, Separator, SeparatorOrientation, SeparatorStyle};
-use choscorui::core::{DisplayList, NodeId, Point, Rect, SemanticNode, SemanticRole, Tree};
+use choscorui::core::{
+    ColorRole, DisplayList, NodeId, Point, Rect, SemanticNode, SemanticRole, Tree,
+};
 
 pub struct LabelPage {
     labels: Vec<(NodeId, Label, f64, bool)>,
@@ -31,7 +33,7 @@ impl Page for LabelPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
         for (id, _, scale, _) in &self.labels {
-            let height = (env.tokens.font_size * scale * 1.6).round();
+            let height = (16.0 * scale * 1.6).round();
             let _ = tree.set_bounds(*id, column.row(height));
         }
     }
@@ -41,7 +43,7 @@ impl Page for LabelPage {
             let Some(bounds) = tree.bounds(*id) else {
                 continue;
             };
-            let size = (env.tokens.font_size * scale).round();
+            let size = (16.0 * scale).round();
             let width = env.measure(label.text(), size);
             let x = if env.rtl() {
                 bounds.max_x() - width
@@ -52,9 +54,9 @@ impl Page for LabelPage {
                 font_family: crate::page::FONT.into(),
                 font_size: size,
                 color: if *dim {
-                    env.tokens.content.with_alpha(0.6)
+                    env.tokens.color(ColorRole::Foreground).with_alpha(0.6)
                 } else {
-                    env.tokens.content
+                    env.tokens.color(ColorRole::Foreground)
                 },
             };
             let baseline = Point::new(x, bounds.origin.y + bounds.size.height / 2.0 + size * 0.35);
@@ -77,7 +79,7 @@ pub struct SeparatorPage {
 }
 
 pub fn separator(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
-    let color = env.tokens.content.with_alpha(0.35);
+    let color = env.tokens.color(ColorRole::Foreground).with_alpha(0.35);
     let styles = [1u16, 2, 4].map(|thickness| SeparatorStyle { color, thickness });
     Box::new(SeparatorPage {
         captions: (0..2).map(|_| node(tree, parent, false)).collect(),

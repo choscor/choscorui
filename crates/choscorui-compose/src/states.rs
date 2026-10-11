@@ -331,6 +331,7 @@ impl StateMachine {
                 motion.duration_ms
             },
             reduced: motion.reduced,
+            ..motion
         };
         let start = self.clock.animate(
             tree,

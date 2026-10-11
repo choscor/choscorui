@@ -9,25 +9,82 @@ change input handling, focus, or accessibility semantics.
 
 ## Design tokens
 
-`DesignTokens` in `choscorui-core` holds each themeable value. The stock token
-sets are `DesignTokens::light()` and `DesignTokens::dark()`.
+`DesignTokens` in `choscorui-core` holds each themeable value. A theme is a
+`BaseColor` in a `ColorScheme`. `DesignTokens::new(base, scheme)` builds any
+of the 7 bases (`Neutral`, `Stone`, `Zinc`, `Mauve`, `Olive`, `Mist`,
+`Taupe`) in `Light` or `Dark`. `DesignTokens::light()` and
+`DesignTokens::dark()` are the `Neutral` base.
 
-| Group | Fields | Change invalidates |
+| Group | Fields and helpers | Change invalidates |
 | --- | --- | --- |
-| Color | `background`, `surface`, `content`, `accent`, `danger` | paint |
-| Typography | `font_size`, `font_weight`, `line_height` | layout, paint, semantics |
-| Spacing and shape | `spacing`, `radius`, `border_width` | layout, paint, semantics |
-| Elevation | `elevation` | paint |
-| Motion | `motion.duration_ms`, `motion.reduced` | paint |
+| Color | `base`, `scheme`, `palette`, `color(role)` | paint |
+| Shape | `radius`, `radius(step)`, `radius_for(step, bounds)`, `border_width` | layout, paint, semantics |
+| Spacing | `spacing`, `space(units)` | layout, paint, semantics |
+| Typography | `text_scale`, `font_sans`, `font_mono`, `text(size, weight)`, `preset(preset)` | layout, paint, semantics |
+| Focus ring | `ring_width`, `ring_alpha`, `ring_color(color)` | `ring_width`: layout; `ring_alpha`: paint |
+| Shadows | `shadow(step)` | paint |
+| Motion | `motion.duration_ms`, `motion.easing`, `motion.reduced` | paint |
 | Contrast | `contrast` (`Contrast::Normal` or `Contrast::High`) | paint |
 
-`line_height` is a multiple of `font_size`.
-`DesignTokens::text_style(family)` makes a `TextStyle` for the shaper from the
-typography tokens.
+### Color roles and palettes
+
+A `Palette` holds one `Color` for each `ColorRole`. Controls ask for a role,
+not for a raw color, so one control follows each base and scheme. The roles
+are `Background`, `Card`, `Popover`, `Primary`, `Secondary`, `Muted`,
+`Accent`, `Destructive`, `Border`, `Input`, `Ring`, and `Chart1` to `Chart5`.
+The `Sidebar` roles repeat these for a sidebar. Each surface also has a
+`…Foreground` role for the content on it.
+
+The palette tables are OKLCH values. `Color::from_oklch` converts them to
+sRGB and clips each channel to the sRGB gamut. Some roles keep an alpha
+value. For example, the dark `Border` is white at 10%.
+
+### Scales
+
+All sizes are in logical points. One CSS pixel is one point, and one `rem`
+is 16 points.
+
+| Scale | Steps |
+| --- | --- |
+| `RadiusScale` | `Sm`, `Md`, `Lg`, `Xl`, `Xl2`, `Xl3`, `Xl4` are 0.6, 0.8, 1, 1.4, 1.8, 2.2, and 2.6 × `radius` (10). `None` is 0 and `Full` makes a pill. |
+| Spacing | `space(n)` is `n` × `spacing` (4). |
+| `TextSize` | `Xs` 12/16, `Sm` 14/20, `Base` 16/24, `Lg` 18/28, `Xl` 20/28, `Xl2` 24/32, `Xl3` 30/36, `Xl4` 36/40 (size/line height). |
+| `Tracking` | `Tighter` −0.05 em, `Tight` −0.025 em, `Normal`, `Wide` 0.025 em, `Wider` 0.05 em, `Widest` 0.1 em. |
+| `ShadowScale` | `Xs2`, `Xs`, `Sm`, `Md`, `Lg`, `Xl`, `Xl2`, and the inset steps `InsetXs2`, `InsetXs`, `InsetSm`. |
+
+`text` and `preset` return a `TypeSpec`: family, size, line height, weight,
+slant, and tracking. `TypeSpec::text_style` makes a `TextStyle` for the
+shaper. The `TextPreset` values are the typography rules: `H1` to `H4`,
+`Paragraph`, `Lead`, `Large`, `Small`, `Muted`, `Blockquote`, `List`, and
+`InlineCode`.
+
+`font_sans` and `font_mono` are `FontFamily` values. The defaults
+`FontFamily::SYSTEM_UI` and `FontFamily::SYSTEM_MONO` select the system faces.
+The toolkit bundles no fonts.
+
+A `Shadow` has an offset, a blur radius, a spread, a color, and an `inset`
+flag, with the meaning of CSS `box-shadow`. `ShadowLayers` holds up to three
+shadows. `DisplayList::draw_shadows` draws them in order.
+
+`DisplayList::draw_ring` draws a focus ring. The ring is a stroke of
+`ring_width` just outside the shape, and it follows the corner radius.
 
 `ThemeResolver` returns a `ThemeInvalidation` for each change: `None`, `Paint`,
 or `Layout`. It marks only the changed subtree dirty. A `Layout` change also
 marks the subtree paint-dirty and semantics-dirty.
+
+### Overrides
+
+`ThemeOverride` has an optional value for each token. The resolver applies an
+override in this order:
+
+1. A `base` or `scheme` builds the palette of that base and scheme again.
+2. A `palette` replaces the full palette.
+3. Each entry in `roles` replaces one color role.
+4. The other fields replace their tokens.
+
+`ThemeOverride::role(role, color)` and `ThemeOverride::theme(base, scheme)`
+make the usual overrides.
 
 ## Resolution order
 
@@ -53,13 +110,17 @@ flowchart TD
 
 The accessibility preferences change the tokens as follows:
 
-- `text_scale` multiplies `font_size`.
-- `high_contrast` sets `contrast` to `Contrast::High`.
+- `text_scale` multiplies the `text_scale` token, and thus each type step.
+- `high_contrast` sets `contrast` to `Contrast::High`. With high contrast, the
+  resolver makes `MutedForeground` reach 4.5:1 against its surfaces. It makes
+  `Border`, `Input`, and `Ring` reach 3:1 against `Background`, and sets
+  `ring_alpha` to 1. These colors become opaque.
 - `reduced_motion` sets `motion.reduced` and sets `motion.duration_ms` to zero.
 
 A change that gives invalid tokens returns `ThemeError`, and the previous theme
-stays in effect. Invalid tokens include a negative or non-finite size and a
-`font_size` of zero. A `text_scale` that is not positive and finite returns
+stays in effect. Invalid tokens include a negative or non-finite size, a
+`text_scale` of zero, an empty font family, and a `ring_alpha` outside
+`0..=1`. A `text_scale` that is not positive and finite returns
 `ThemeError::InvalidPreferences`.
 
 ## Visual recipes and slots
@@ -104,7 +165,11 @@ supplies. Call `animate` to start an animation on a node and an
 `AnimationKey` channel. Call `advance` with the current time to get the
 sampled values.
 
-- **Easing:** `Easing::Linear` or `Easing::EaseInOut`. A non-zero
+- **Easing:** `Easing::Linear`, `Easing::EaseInOut`, `Easing::In`,
+  `Easing::Out`, `Easing::Standard`, or `Easing::CubicBezier`. A
+  `CubicBezier` has the meaning of CSS `cubic-bezier(x1, y1, x2, y2)`. The
+  default curve `CubicBezier::STANDARD` is `(0.4, 0, 0.2, 1)`, and the default
+  duration is 150 ms. A non-zero
   `motion.duration_ms` token replaces the duration in the `AnimationSpec`.
 - **Interruption:** a new animation on the same node and channel starts from
   the current sampled value.
@@ -150,7 +215,9 @@ fn brand(dark: bool) -> DesignTokens {
         DesignTokens::light()
     };
     DesignTokens {
-        accent: Color::rgba8(0, 128, 128, 255),
+        palette: base
+            .palette
+            .with(ColorRole::Primary, Color::rgba8(0, 128, 128, 255)),
         radius: 8.0,
         ..base
     }
@@ -182,7 +249,8 @@ can offer its own text scale setting.
 ### Restyle one subtree
 
 Use a scoped override to give part of the UI different tokens. In this
-example, the accent of a "danger zone" subtree becomes the danger color:
+example, the primary color of a "danger zone" subtree becomes the
+destructive color:
 
 ```rust
 let tokens = themes.resolve(&tree, root).unwrap();
@@ -190,17 +258,12 @@ themes
     .set_scope(
         &mut tree,
         danger_zone,
-        ThemeOverride {
-            accent: Some(tokens.danger),
-            ..ThemeOverride::default()
-        },
+        ThemeOverride::role(ColorRole::Primary, tokens.color(ColorRole::Destructive)),
     )
     .unwrap();
-assert_eq!(themes.resolve(&tree, delete).unwrap().accent, tokens.danger);
-assert_eq!(themes.resolve(&tree, root).unwrap().accent, tokens.accent);
 ```
 
-Descendants of `danger_zone` get the danger accent. The other nodes do not
+Descendants of `danger_zone` get the destructive primary color. The other nodes do not
 change. `set_instance` gives an override to one node in the same way.
 
 ### A custom button look

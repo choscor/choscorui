@@ -1,6 +1,6 @@
 use choscorui_core::{
-    AnimationClock, AnimationKey, AnimationSpec, AnimationValues, Dirty, Easing, MotionTokens,
-    Point, Rect, Size, Tree,
+    AnimationClock, AnimationKey, AnimationSpec, AnimationValues, CubicBezier, Dirty, Easing,
+    MotionTokens, Point, Rect, Size, Tree,
 };
 use std::time::Duration;
 
@@ -36,6 +36,7 @@ fn animation_advances_marks_only_paint_and_schedules_until_finished() {
             },
             MotionTokens {
                 duration_ms: 100,
+                easing: CubicBezier::STANDARD,
                 reduced: false,
             },
         )
@@ -76,6 +77,7 @@ fn interruption_starts_from_current_value_and_reduced_motion_finishes_immediatel
             spec,
             MotionTokens {
                 duration_ms: 100,
+                easing: CubicBezier::STANDARD,
                 reduced: false,
             },
         )
@@ -93,6 +95,7 @@ fn interruption_starts_from_current_value_and_reduced_motion_finishes_immediatel
             spec,
             MotionTokens {
                 duration_ms: 100,
+                easing: CubicBezier::STANDARD,
                 reduced: false,
             },
         )
@@ -110,6 +113,7 @@ fn interruption_starts_from_current_value_and_reduced_motion_finishes_immediatel
             spec,
             MotionTokens {
                 duration_ms: 100,
+                easing: CubicBezier::STANDARD,
                 reduced: true,
             },
         )
@@ -135,6 +139,7 @@ fn removing_node_cancels_animation_and_clock_rejects_backward_time() {
             },
             MotionTokens {
                 duration_ms: 1000,
+                easing: CubicBezier::STANDARD,
                 reduced: false,
             },
         )
@@ -154,4 +159,19 @@ fn removing_node_cancels_animation_and_clock_rejects_backward_time() {
             .advance(&mut tree, Duration::from_millis(250))
             .is_err()
     );
+}
+
+#[test]
+fn cubic_bezier_curves_match_reference_shapes() {
+    let standard = CubicBezier::STANDARD;
+    assert_eq!(standard.solve(0.0), 0.0);
+    assert!((standard.solve(1.0) - 1.0).abs() < 1e-9);
+    // (0.4, 0, 0.2, 1) is past 0.75 at the halfway point.
+    assert!(standard.solve(0.5) > 0.75 && standard.solve(0.5) < 0.85);
+    assert!(CubicBezier::IN.solve(0.5) < 0.5);
+    assert!(CubicBezier::OUT.solve(0.5) > 0.5);
+    let linear = CubicBezier::new(0.0, 0.0, 1.0, 1.0);
+    assert!((linear.solve(0.3) - 0.3).abs() < 1e-6);
+    assert_eq!(Easing::Standard.apply(0.5), standard.solve(0.5));
+    assert_eq!(Easing::CubicBezier(linear).apply(2.0), 1.0);
 }

@@ -4,8 +4,8 @@
 use crate::page::{Align, Column, Env, Page, Push, node, sem};
 use choscorui::controls::ShortcutModifiers;
 use choscorui::core::{
-    BackendCapabilities, DisplayList, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Support, Tree,
+    BackendCapabilities, ColorRole, DisplayList, KeyEvent, NodeId, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Support, Tree,
 };
 
 /// Every capability the backend reports, by display name.
@@ -131,13 +131,13 @@ impl Page for DesktopPage {
                 cells[0],
                 name,
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Leading,
             );
             let color = if support.is_supported() {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             } else {
-                env.tokens.content.with_alpha(0.5)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.5)
             };
             env.text(
                 list,

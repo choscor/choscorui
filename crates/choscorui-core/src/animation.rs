@@ -8,13 +8,90 @@ pub struct AnimationKey(pub u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct AnimationId(u64);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Easing {
     Linear,
+    /// Smoothstep ease in and out.
     EaseInOut,
+    /// Accelerates from rest: [`CubicBezier::IN`].
+    In,
+    /// Decelerates to rest: [`CubicBezier::OUT`].
+    Out,
+    /// The standard transition curve: [`CubicBezier::STANDARD`].
+    Standard,
+    CubicBezier(CubicBezier),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+impl Easing {
+    /// Eased progress for linear `progress` in `0..=1`.
+    pub fn apply(self, progress: f64) -> f64 {
+        let progress = progress.clamp(0.0, 1.0);
+        match self {
+            Self::Linear => progress,
+            Self::EaseInOut => progress * progress * (3.0 - 2.0 * progress),
+            Self::In => CubicBezier::IN.solve(progress),
+            Self::Out => CubicBezier::OUT.solve(progress),
+            Self::Standard => CubicBezier::STANDARD.solve(progress),
+            Self::CubicBezier(curve) => curve.solve(progress),
+        }
+    }
+}
+
+/// A CSS `cubic-bezier(x1, y1, x2, y2)` timing curve from (0, 0) to (1, 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CubicBezier {
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+}
+
+impl CubicBezier {
+    /// The default transition curve, `(0.4, 0, 0.2, 1)`.
+    pub const STANDARD: Self = Self::new(0.4, 0.0, 0.2, 1.0);
+    pub const IN: Self = Self::new(0.4, 0.0, 1.0, 1.0);
+    pub const OUT: Self = Self::new(0.0, 0.0, 0.2, 1.0);
+
+    pub const fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+        Self { x1, y1, x2, y2 }
+    }
+
+    /// Finite control points with both x values in `0..=1`.
+    pub fn is_valid(self) -> bool {
+        (0.0..=1.0).contains(&self.x1)
+            && (0.0..=1.0).contains(&self.x2)
+            && self.y1.is_finite()
+            && self.y2.is_finite()
+    }
+
+    /// The curve's y at horizontal position `x` in `0..=1`.
+    pub fn solve(self, x: f64) -> f64 {
+        if !self.is_valid() {
+            return x;
+        }
+        let x = x.clamp(0.0, 1.0);
+        if x == 0.0 || x == 1.0 {
+            return x;
+        }
+        let bezier = |t: f64, p1: f64, p2: f64| {
+            let u = 1.0 - t;
+            3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t
+        };
+        // Bisection on the monotonic x(t); 40 halvings reach f64 noise.
+        let (mut low, mut high) = (0.0, 1.0);
+        for _ in 0..40 {
+            let mid = (low + high) / 2.0;
+            if bezier(mid, self.x1, self.x2) < x {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        bezier((low + high) / 2.0, self.y1, self.y2)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnimationSpec {
     pub duration: Duration,
     pub easing: Easing,
@@ -212,10 +289,7 @@ impl AnimationClock {
 fn sample(animation: ActiveAnimation, now: Duration) -> (f64, bool) {
     let elapsed = now.saturating_sub(animation.start);
     let progress = (elapsed.as_secs_f64() / animation.duration.as_secs_f64()).clamp(0.0, 1.0);
-    let eased = match animation.easing {
-        Easing::Linear => progress,
-        Easing::EaseInOut => progress * progress * (3.0 - 2.0 * progress),
-    };
+    let eased = animation.easing.apply(progress);
     (
         animation.from + (animation.to - animation.from) * eased,
         progress >= 1.0,

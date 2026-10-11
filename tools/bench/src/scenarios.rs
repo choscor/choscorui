@@ -11,7 +11,7 @@ use choscorui_controls::{
     TextEditorInput, paint_button,
 };
 use choscorui_core::{
-    Color, DesignTokens, DisplayList, Point, Rect, Size, TextLayoutCache, TextStyle,
+    Color, ColorRole, DesignTokens, DisplayList, Point, Rect, Size, TextLayoutCache, TextStyle,
     ThemeInvalidation, ThemeResolver, Tree,
 };
 use choscorui_macos::{
@@ -249,18 +249,21 @@ fn paint_theme(
     light: bool,
 ) -> DisplayList {
     let mut list = DisplayList::new();
-    list.fill_rect(tree.bounds(tree.root()).unwrap(), tokens.background);
+    list.fill_rect(
+        tree.bounds(tree.root()).unwrap(),
+        tokens.color(ColorRole::Background),
+    );
     // Structurally distinct themes, as in the gallery: flat railed buttons
     // in dark, elevated pills in light.
     let flat = ButtonStyle {
-        normal: tokens.accent,
-        hover: tokens.accent,
-        pressed: tokens.danger,
+        normal: tokens.color(ColorRole::Primary),
+        hover: tokens.color(ColorRole::Primary),
+        pressed: tokens.color(ColorRole::Destructive),
         disabled: Color::rgba8(90, 90, 90, 255),
-        focus: tokens.content,
+        focus: tokens.color(ColorRole::Foreground),
         decoration: ButtonDecoration::LeadingRail {
             width: tokens.spacing,
-            color: tokens.danger,
+            color: tokens.color(ColorRole::Destructive),
         },
     };
     let pill = PillButtonRecipe { emphasized: false };

@@ -5,8 +5,8 @@ use choscorui::controls::{
     Calendar, CalendarCell, DateTimeEdit, DateTimeKind, ShortcutModifiers, ValidationState,
 };
 use choscorui::core::{
-    CivilDate, CivilDateTime, CivilTime, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, Size, Tree,
+    CivilDate, CivilDateTime, CivilTime, ColorRole, DisplayList, Key, KeyEvent, NodeId, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, Size, Tree,
 };
 
 fn date(year: i32, month: u8, day: u8) -> CivilDate {
@@ -81,7 +81,7 @@ impl Page for CalendarPage {
             title,
             &self.calendar.title(),
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Center,
         );
         let grid = tree.bounds(self.grid).unwrap_or_default();
@@ -100,7 +100,7 @@ impl Page for CalendarPage {
                 rect,
                 name,
                 env.small(),
-                env.tokens.content.with_alpha(0.6),
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
                 Align::Center,
             );
         }
@@ -108,16 +108,24 @@ impl Page for CalendarPage {
         let focused = tree.focus() == Some(self.grid);
         for (cell, id) in self.calendar.cells().iter().zip(&self.cells) {
             let rect = tree.bounds(*id).unwrap_or_default().inset(3.0);
-            let mut color = env.tokens.content;
+            let mut color = env.tokens.color(ColorRole::Foreground);
             if cell.selected {
-                let _ = list.fill_rounded_rect(rect, rect.size.height / 2.0, env.tokens.accent);
+                let _ = list.fill_rounded_rect(
+                    rect,
+                    rect.size.height / 2.0,
+                    env.tokens.color(ColorRole::Primary),
+                );
                 color = env.on_accent();
                 if focused {
                     env.focus_ring(list, rect);
                 }
             } else if Some(cell.date) == self.chosen {
-                let _ =
-                    list.stroke_rounded_rect(rect, rect.size.height / 2.0, env.tokens.accent, 1.5);
+                let _ = list.stroke_rounded_rect(
+                    rect,
+                    rect.size.height / 2.0,
+                    env.tokens.color(ColorRole::Primary),
+                    1.5,
+                );
             }
             if !cell.in_month || !cell.enabled || !env.enabled {
                 color = color.with_alpha(0.35);

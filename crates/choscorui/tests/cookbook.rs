@@ -8,8 +8,9 @@ use choscorui::controls::{
     ValidationKind, ValidationState, paint_button,
 };
 use choscorui::core::{
-    Color, DesignTokens, DisplayCommand, DisplayList, ItemKey, ItemModel, Key, Locale, Point, Rect,
-    Role, SemanticRole, Size, StringListModel, ThemeOverride, ThemeResolver, Tree, Value,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, ItemModel, Key, Locale,
+    Point, Rect, Role, SemanticRole, Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
+    Value,
 };
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
@@ -24,7 +25,9 @@ fn brand(dark: bool) -> DesignTokens {
         DesignTokens::light()
     };
     DesignTokens {
-        accent: Color::rgba8(0, 128, 128, 255),
+        palette: base
+            .palette
+            .with(ColorRole::Primary, Color::rgba8(0, 128, 128, 255)),
         radius: 8.0,
         ..base
     }
@@ -38,8 +41,11 @@ fn brand_theme_switches_at_runtime() {
     assert_eq!(themes.resolve(&tree, root).unwrap().radius, 8.0);
     themes.set_application(&mut tree, brand(true)).unwrap();
     assert_eq!(
-        themes.resolve(&tree, root).unwrap().background,
-        DesignTokens::dark().background
+        themes
+            .resolve(&tree, root)
+            .unwrap()
+            .color(ColorRole::Background),
+        DesignTokens::dark().color(ColorRole::Background)
     );
 }
 
@@ -58,14 +64,23 @@ fn scoped_override_restyles_one_subtree() {
         .set_scope(
             &mut tree,
             danger_zone,
-            ThemeOverride {
-                accent: Some(tokens.danger),
-                ..ThemeOverride::default()
-            },
+            ThemeOverride::role(ColorRole::Primary, tokens.color(ColorRole::Destructive)),
         )
         .unwrap();
-    assert_eq!(themes.resolve(&tree, delete).unwrap().accent, tokens.danger);
-    assert_eq!(themes.resolve(&tree, root).unwrap().accent, tokens.accent);
+    assert_eq!(
+        themes
+            .resolve(&tree, delete)
+            .unwrap()
+            .color(ColorRole::Primary),
+        tokens.color(ColorRole::Destructive)
+    );
+    assert_eq!(
+        themes
+            .resolve(&tree, root)
+            .unwrap()
+            .color(ColorRole::Primary),
+        tokens.color(ColorRole::Primary)
+    );
 }
 
 // Recipe: a custom button recipe (outline style).
@@ -78,9 +93,9 @@ impl ButtonRecipe for OutlineRecipe {
             alignment: ContentAlignment::Center,
             icon: None,
             content_color: if state.enabled {
-                tokens.accent
+                tokens.color(ColorRole::Primary)
             } else {
-                tokens.content.with_alpha(0.4)
+                tokens.color(ColorRole::Foreground).with_alpha(0.4)
             },
         }
     }
@@ -92,7 +107,7 @@ impl ButtonRecipe for OutlineRecipe {
                 let _ = list.fill_rounded_rect(
                     context.bounds,
                     tokens.radius,
-                    tokens.accent.with_alpha(0.15),
+                    tokens.color(ColorRole::Primary).with_alpha(0.15),
                 );
             }
             Slot::Indicator => {
@@ -171,7 +186,7 @@ impl ItemDelegate for BadgeDelegate {
     ) {
         let tokens = DesignTokens::light();
         if state.selected {
-            list.fill_rect(rect, tokens.accent.with_alpha(0.2));
+            list.fill_rect(rect, tokens.color(ColorRole::Primary).with_alpha(0.2));
         }
         if let Value::Text(text) = model.data(key, column, Role::Display) {
             let _ = list.draw_text(
@@ -179,7 +194,7 @@ impl ItemDelegate for BadgeDelegate {
                 &text,
                 "Helvetica",
                 13.0,
-                tokens.content,
+                tokens.color(ColorRole::Foreground),
             );
             let badge = rect.size.height - 8.0;
             let _ = list.fill_rounded_rect(
@@ -188,7 +203,7 @@ impl ItemDelegate for BadgeDelegate {
                     Size::new(badge, badge),
                 ),
                 badge / 2.0,
-                tokens.accent,
+                tokens.color(ColorRole::Primary),
             );
         }
     }

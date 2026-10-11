@@ -83,25 +83,53 @@ pub enum CursorShape {
     },
 }
 
-/// A soft drop shadow drawn beneath a rounded rectangle (elevation).
+/// A soft shadow of a rounded rectangle, with CSS `box-shadow` meaning:
+/// `blur` is the blur radius (a Gaussian with sigma `blur / 2`), `spread`
+/// grows or shrinks the shadow shape, and an inset shadow falls inside
+/// the shape instead of outside.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shadow {
     pub offset: Point,
     pub blur: f64,
+    pub spread: f64,
     pub color: Color,
+    pub inset: bool,
 }
 
 impl Shadow {
+    /// A drop shadow with no spread.
+    pub const fn drop(offset: Point, blur: f64, color: Color) -> Self {
+        Self {
+            offset,
+            blur,
+            spread: 0.0,
+            color,
+            inset: false,
+        }
+    }
+
     /// Area the shadow may cover, in the same space as `rect`.
     pub fn bounds(&self, rect: Rect) -> Rect {
+        if self.inset {
+            return rect;
+        }
         rect.translate(self.offset.x, self.offset.y)
-            .inset(-self.blur * 2.0 - 1.0)
+            .inset(-(self.blur * 1.5 + self.spread.max(0.0) + 1.0))
+    }
+
+    fn is_valid(&self) -> bool {
+        self.offset.x.is_finite()
+            && self.offset.y.is_finite()
+            && self.blur.is_finite()
+            && self.blur >= 0.0
+            && self.spread.is_finite()
     }
 
     /// Shared alpha mask so every renderer draws identical shadows. Pixels
     /// cover [`Shadow::bounds`] at `scale` pixels per point; color channels
-    /// carry the shadow color and alpha its coverage. The casting shape
-    /// (`rect` with `radius`) is cut out: shadows fall outside the shape.
+    /// carry the shadow color and alpha its coverage. A drop shadow cuts
+    /// out the casting shape (`rect` with `radius`); an inset shadow is
+    /// clipped to it.
     pub fn mask(&self, rect: Rect, radius: f64, scale: f64) -> Option<crate::Image> {
         let bounds = self.bounds(rect);
         let width = (bounds.size.width * scale).ceil().max(1.0) as u32;
@@ -109,9 +137,19 @@ impl Shadow {
         if u64::from(width) * u64::from(height) > 16 * 1024 * 1024 {
             return None;
         }
-        let caster = rect;
-        let shifted = rect.translate(self.offset.x, self.offset.y);
-        let blur = self.blur.max(1e-6);
+        let shape = rect
+            .translate(self.offset.x, self.offset.y)
+            .inset(if self.inset {
+                self.spread
+            } else {
+                -self.spread
+            });
+        let shape_radius = if self.inset {
+            (radius - self.spread).max(0.0)
+        } else {
+            (radius + self.spread).max(0.0)
+        };
+        let sigma = (self.blur / 2.0).max(1e-6) * std::f64::consts::SQRT_2;
         let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
         for y in 0..height {
             for x in 0..width {
@@ -119,11 +157,12 @@ impl Shadow {
                     bounds.min_x() + (f64::from(x) + 0.5) / scale,
                     bounds.min_y() + (f64::from(y) + 0.5) / scale,
                 );
-                let coverage = if rounded_rect_distance(caster, radius, p) < 0.0 {
-                    0.0
-                } else {
-                    let d = rounded_rect_distance(shifted, radius, p);
-                    0.5 * (1.0 - erf(d / (blur * std::f64::consts::FRAC_1_SQRT_2)))
+                let inside_caster = rounded_rect_distance(rect, radius, p) < 0.0;
+                let d = rounded_rect_distance(shape, shape_radius, p);
+                let coverage = match (self.inset, inside_caster) {
+                    (false, true) | (true, false) => 0.0,
+                    (false, false) => 0.5 * (1.0 - erf(d / sigma)),
+                    (true, true) => 0.5 * (1.0 + erf(d / sigma)),
                 };
                 let alpha = (coverage * f64::from(self.color.alpha)).round() as u8;
                 pixels.extend_from_slice(&[
@@ -213,6 +252,10 @@ pub enum DisplayCommand {
         text: String,
         font_family: String,
         font_size: f64,
+        /// Weight of the face; painters pick the nearest available face.
+        font_weight: crate::FontWeight,
+        /// Extra space after each character, in points.
+        tracking: f64,
         color: Color,
     },
     /// Pre-shaped glyphs from a [`crate::TextLayout`]; `origin` is the
@@ -266,6 +309,16 @@ impl std::fmt::Display for DisplayListError {
 }
 
 impl std::error::Error for DisplayListError {}
+
+/// Font of one text line drawn with [`DisplayList::draw_text_run`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextRun<'a> {
+    pub family: &'a str,
+    pub size: f64,
+    pub weight: crate::FontWeight,
+    /// Extra space after each character, in points.
+    pub tracking: f64,
+}
 
 /// An ordered display list. Clipping is nested and applies to later commands.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -395,8 +448,7 @@ impl DisplayList {
         shadow: Shadow,
     ) -> Result<(), DisplayListError> {
         validate_radius(radius)?;
-        validate_radius(shadow.blur)?;
-        if !rect.is_finite() || !shadow.offset.is_finite() {
+        if !rect.is_finite() || !shadow.is_valid() {
             return Err(DisplayListError::InvalidGeometry);
         }
         self.commands.push(DisplayCommand::DrawShadow {
@@ -416,22 +468,75 @@ impl DisplayList {
         font_size: f64,
         color: Color,
     ) -> Result<(), DisplayListError> {
+        self.draw_text_run(
+            baseline,
+            text,
+            &TextRun {
+                family: font_family,
+                size: font_size,
+                weight: crate::FontWeight::REGULAR,
+                tracking: 0.0,
+            },
+            color,
+        )
+    }
+
+    /// Stores a single text line in a font with weight and tracking.
+    pub fn draw_text_run(
+        &mut self,
+        baseline: Point,
+        text: &str,
+        run: &TextRun<'_>,
+        color: Color,
+    ) -> Result<(), DisplayListError> {
         if !baseline.x.is_finite()
             || !baseline.y.is_finite()
-            || !font_size.is_finite()
-            || font_size <= 0.0
-            || font_family.is_empty()
+            || !run.size.is_finite()
+            || run.size <= 0.0
+            || !run.tracking.is_finite()
+            || run.family.is_empty()
+            || !(1..=1000).contains(&run.weight.0)
         {
             return Err(DisplayListError::InvalidText);
         }
         self.commands.push(DisplayCommand::DrawText {
             baseline,
             text: text.to_owned(),
-            font_family: font_family.to_owned(),
-            font_size,
+            font_family: run.family.to_owned(),
+            font_size: run.size,
+            font_weight: run.weight,
+            tracking: run.tracking,
             color,
         });
         Ok(())
+    }
+
+    /// Draws every layer of `layers` for the rounded rectangle, in order.
+    pub fn draw_shadows(
+        &mut self,
+        rect: Rect,
+        radius: f64,
+        layers: &crate::ShadowLayers,
+    ) -> Result<(), DisplayListError> {
+        for shadow in layers.iter() {
+            self.draw_shadow(rect, radius, *shadow)?;
+        }
+        Ok(())
+    }
+
+    /// An outset focus ring: a stroke of `width` just outside the rounded
+    /// rectangle, following its radius. Every painter draws it as the
+    /// equivalent rounded-rectangle stroke.
+    pub fn draw_ring(
+        &mut self,
+        rect: Rect,
+        radius: f64,
+        width: f64,
+        color: Color,
+    ) -> Result<(), DisplayListError> {
+        validate_positive(width)?;
+        let half = width / 2.0;
+        self.stroke_rounded_rect(rect.inset(-half), radius.max(0.0) + half, color, width)
     }
 
     pub fn draw_glyphs(
@@ -677,18 +782,16 @@ fn draw_bounds(command: &DisplayCommand) -> Option<Rect> {
             inflate(path.bounds(), style.width * 2.0)
         }
         DisplayCommand::DrawImage { rect, .. } => *rect,
-        DisplayCommand::DrawShadow { rect, shadow, .. } => inflate(
-            rect.translate(shadow.offset.x, shadow.offset.y),
-            shadow.blur * 2.0,
-        ),
+        DisplayCommand::DrawShadow { rect, shadow, .. } => shadow.bounds(*rect),
         DisplayCommand::DrawText {
             baseline,
             text,
             font_size,
+            tracking,
             ..
         } => {
             // Conservative: em-box height and up to 1.2 em per character.
-            let width = text.chars().count() as f64 * font_size * 1.2;
+            let width = text.chars().count() as f64 * (font_size * 1.2 + tracking.max(0.0));
             Rect::new(
                 Point::new(baseline.x - font_size, baseline.y - font_size * 1.3),
                 Size::new(width + font_size * 2.0, font_size * 1.9),
@@ -841,6 +944,8 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             hash_f64(*radius, hasher);
             hash_point(shadow.offset, hasher);
             hash_f64(shadow.blur, hasher);
+            hash_f64(shadow.spread, hasher);
+            shadow.inset.hash(hasher);
             shadow.color.hash(hasher);
         }
         DisplayCommand::DrawText {
@@ -848,12 +953,16 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             text,
             font_family,
             font_size,
+            font_weight,
+            tracking,
             color,
         } => {
             hash_point(*baseline, hasher);
             text.hash(hasher);
             font_family.hash(hasher);
             hash_f64(*font_size, hasher);
+            font_weight.hash(hasher);
+            hash_f64(*tracking, hasher);
             color.hash(hasher);
         }
         DisplayCommand::DrawGlyphs { origin, run, color } => {

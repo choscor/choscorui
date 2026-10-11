@@ -17,9 +17,12 @@ pub struct FontWeight(pub u16);
 impl FontWeight {
     pub const LIGHT: Self = Self(300);
     pub const REGULAR: Self = Self(400);
+    /// The CSS name of [`FontWeight::REGULAR`].
+    pub const NORMAL: Self = Self(400);
     pub const MEDIUM: Self = Self(500);
     pub const SEMIBOLD: Self = Self(600);
     pub const BOLD: Self = Self(700);
+    pub const EXTRABOLD: Self = Self(800);
 }
 
 impl Default for FontWeight {
@@ -88,6 +91,8 @@ pub struct TextStyle {
     pub locale: Option<String>,
     /// Multiple of the font's natural line height; 1.0 keeps it unchanged.
     pub line_height: f64,
+    /// Extra space after each character, in points.
+    pub tracking: f64,
 }
 
 impl TextStyle {
@@ -101,7 +106,12 @@ impl TextStyle {
             direction: TextDirection::Auto,
             locale: None,
             line_height: 1.0,
+            tracking: 0.0,
         }
+    }
+    pub fn with_tracking(mut self, tracking: f64) -> Self {
+        self.tracking = tracking;
+        self
     }
     pub fn with_weight(mut self, weight: FontWeight) -> Self {
         self.weight = weight;
@@ -136,6 +146,7 @@ impl TextStyle {
             && (1..=1000).contains(&self.weight.0)
             && self.line_height.is_finite()
             && self.line_height > 0.0
+            && self.tracking.is_finite()
             && self.fallback.iter().all(|family| !family.is_empty());
         if valid {
             Ok(())
@@ -157,6 +168,7 @@ impl Hash for TextStyle {
         self.direction.hash(state);
         self.locale.hash(state);
         self.line_height.to_bits().hash(state);
+        self.tracking.to_bits().hash(state);
     }
 }
 

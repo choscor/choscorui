@@ -6,8 +6,8 @@ use choscorui::controls::{
     PopupPress, PopupStack, ShortcutModifiers, TooltipController, place_popup,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 
 const CUT: CommandId = CommandId(1);
@@ -482,13 +482,13 @@ impl Page for TooltipPage {
             "Hover a button and wait; move to the next one to see the grace period.",
         );
         if let (Some(tip), Some(rect)) = (self.tooltips.visible(), self.tip_rect(env)) {
-            let _ = list.fill_rounded_rect(rect, 4.0, env.tokens.content);
+            let _ = list.fill_rounded_rect(rect, 4.0, env.tokens.color(ColorRole::Foreground));
             env.text(
                 list,
                 rect,
                 &tip.text,
                 env.small(),
-                env.tokens.background,
+                env.tokens.color(ColorRole::Background),
                 Align::Center,
             );
         }

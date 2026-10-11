@@ -4,8 +4,8 @@
 
 use super::*;
 use choscorui_core::{
-    CaretStop, FontSlant, FontWeight, GlyphRun, LayoutLine, TextLayout, TextLayoutError,
-    TextShaper, TextStyle, grapheme_boundaries,
+    CaretStop, GlyphRun, LayoutLine, TextLayout, TextLayoutError, TextShaper, TextStyle,
+    grapheme_boundaries,
 };
 
 #[repr(C)]
@@ -24,8 +24,6 @@ struct CTParagraphStyleSetting {
 
 const PARAGRAPH_BASE_WRITING_DIRECTION: u32 = 13;
 const RUN_STATUS_RIGHT_TO_LEFT: u32 = 1;
-const FONT_TRAIT_ITALIC: u32 = 1 << 0;
-const FONT_TRAIT_BOLD: u32 = 1 << 1;
 const UTF8: u32 = 0x0800_0100;
 
 #[link(name = "CoreText", kind = "framework")]
@@ -35,13 +33,6 @@ unsafe extern "C" {
     static kCTFontCascadeListAttribute: Id;
     static kCTFontFamilyNameAttribute: Id;
     fn CTFontManagerCopyAvailableFontFamilyNames() -> Id;
-    fn CTFontCreateCopyWithSymbolicTraits(
-        font: Id,
-        size: f64,
-        matrix: Id,
-        value: u32,
-        mask: u32,
-    ) -> Id;
     fn CTFontCopyFontDescriptor(font: Id) -> Id;
     fn CTFontDescriptorCreateWithAttributes(attributes: Id) -> Id;
     fn CTFontDescriptorCreateCopyWithAttributes(descriptor: Id, attributes: Id) -> Id;
@@ -165,36 +156,12 @@ unsafe fn rust_string(string: Id) -> Option<String> {
     }
 }
 
-/// +1 CTFont for `style`: the named face, bold at weight 600 and above,
-/// italic when requested, then the style's fallback cascade.
+/// +1 CTFont for `style`: the face from [`fonts::create_font`], then the
+/// style's fallback cascade.
 unsafe fn create_font(style: &TextStyle) -> Result<CfOwned, TextLayoutError> {
     unsafe {
-        let name = cf_utf8(&style.family).ok_or(TextLayoutError::Unavailable)?;
-        let mut font = CfOwned::new(CTFontCreateWithName(
-            name.as_ptr(),
-            style.size,
-            std::ptr::null_mut(),
-        ))
-        .ok_or(TextLayoutError::Unavailable)?;
-        let mut traits = 0;
-        if style.weight >= FontWeight::SEMIBOLD {
-            traits |= FONT_TRAIT_BOLD;
-        }
-        if style.slant == FontSlant::Italic {
-            traits |= FONT_TRAIT_ITALIC;
-        }
-        if traits != 0 {
-            // A family without the requested face keeps the regular one.
-            if let Some(styled) = CfOwned::new(CTFontCreateCopyWithSymbolicTraits(
-                font.as_ptr(),
-                0.0,
-                std::ptr::null_mut(),
-                traits,
-                traits,
-            )) {
-                font = styled;
-            }
-        }
+        let font = fonts::create_font(&style.family, style.size, style.weight, style.slant)
+            .ok_or(TextLayoutError::Unavailable)?;
         if style.fallback.is_empty() {
             return Ok(font);
         }
@@ -342,6 +309,11 @@ unsafe fn shape_paragraph(
         if let Some(language) = &language {
             keys.push(kCTLanguageAttributeName);
             values.push(language.as_ptr());
+        }
+        let kern = fonts::kern_attribute(style.tracking);
+        if let Some((key, number)) = &kern {
+            keys.push(*key);
+            values.push(number.as_ptr());
         }
         let attributes = cf_dictionary(&keys, &values).ok_or(unavailable)?;
         let attributed = CfOwned::new(CFAttributedStringCreate(

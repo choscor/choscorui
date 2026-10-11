@@ -9,9 +9,10 @@ use choscorui::controls::{
     ValidationState,
 };
 use choscorui::core::{
-    BackendCapabilities, Color, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Locale,
-    NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticCollection,
-    SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle, Tree, lerp_color,
+    BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
+    LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle,
+    Tree, lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
@@ -211,11 +212,11 @@ impl Env<'_> {
     }
 
     pub fn body(&self) -> f64 {
-        (self.tokens.font_size * 0.8).round()
+        (16.0_f64 * 0.8).round()
     }
 
     pub fn small(&self) -> f64 {
-        (self.tokens.font_size * 0.7).round()
+        (16.0_f64 * 0.7).round()
     }
 
     /// Draws one line of `text` vertically centered in `rect`, aligned in
@@ -254,7 +255,7 @@ impl Env<'_> {
             rect,
             text,
             self.body(),
-            self.tokens.content,
+            self.tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
     }
@@ -266,19 +267,27 @@ impl Env<'_> {
             rect,
             text,
             self.small(),
-            self.tokens.content.with_alpha(0.65),
+            self.tokens.color(ColorRole::Foreground).with_alpha(0.65),
             Align::Leading,
         );
     }
 
     /// A rounded surface panel behind a group of controls.
     pub fn panel(&self, list: &mut DisplayList, rect: Rect) {
-        let _ = list.fill_rounded_rect(rect, self.tokens.radius.min(8.0), self.tokens.surface);
+        let _ = list.fill_rounded_rect(
+            rect,
+            self.tokens.radius.min(8.0),
+            self.tokens.color(ColorRole::Card),
+        );
     }
 
     /// Surface color mixed toward content, for hover and pressed fills.
     pub fn mix(&self, amount: f64) -> Color {
-        lerp_color(self.tokens.surface, self.tokens.content, amount)
+        lerp_color(
+            self.tokens.color(ColorRole::Card),
+            self.tokens.color(ColorRole::Foreground),
+            amount,
+        )
     }
 
     /// A two-pixel accent ring around a focused rectangle.
@@ -289,7 +298,7 @@ impl Env<'_> {
                 Size::new(rect.size.width + 4.0, rect.size.height + 4.0),
             ),
             self.tokens.radius.min(8.0),
-            self.tokens.accent,
+            self.tokens.color(ColorRole::Primary),
             2.0,
         );
     }
@@ -298,9 +307,13 @@ impl Env<'_> {
         ButtonStyle {
             normal: self.mix(0.08),
             hover: self.mix(0.16),
-            pressed: lerp_color(self.tokens.surface, self.tokens.accent, 0.5),
-            disabled: self.tokens.surface.with_alpha(0.45),
-            focus: self.tokens.accent,
+            pressed: lerp_color(
+                self.tokens.color(ColorRole::Card),
+                self.tokens.color(ColorRole::Primary),
+                0.5,
+            ),
+            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.45),
+            focus: self.tokens.color(ColorRole::Primary),
             decoration: ButtonDecoration::Plain,
         }
     }
@@ -310,37 +323,41 @@ impl Env<'_> {
             box_color: self.mix(0.15),
             hover_color: self.mix(0.25),
             pressed_color: self.mix(0.35),
-            check_color: self.tokens.accent,
+            check_color: self.tokens.color(ColorRole::Primary),
             disabled_color: self.mix(0.05),
-            focus_color: self.tokens.accent,
+            focus_color: self.tokens.color(ColorRole::Primary),
         }
     }
 
     pub fn radio_style(&self) -> RadioStyle {
         RadioStyle {
             ring_color: self.mix(0.4),
-            selected_color: self.tokens.accent,
+            selected_color: self.tokens.color(ColorRole::Primary),
             disabled_color: self.mix(0.1),
-            focus_color: self.tokens.accent,
+            focus_color: self.tokens.color(ColorRole::Primary),
         }
     }
 
     pub fn tab_style(&self) -> TabStyle {
         TabStyle {
             background: self.mix(0.06),
-            selected: lerp_color(self.tokens.surface, self.tokens.accent, 0.35),
-            disabled: self.tokens.surface.with_alpha(0.4),
-            focus: self.tokens.accent,
+            selected: lerp_color(
+                self.tokens.color(ColorRole::Card),
+                self.tokens.color(ColorRole::Primary),
+                0.35,
+            ),
+            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
+            focus: self.tokens.color(ColorRole::Primary),
         }
     }
 
     pub fn slider_style(&self) -> SliderStyle {
         SliderStyle {
             track: self.mix(0.2),
-            fill: self.tokens.accent,
-            thumb: self.tokens.content,
+            fill: self.tokens.color(ColorRole::Primary),
+            thumb: self.tokens.color(ColorRole::Foreground),
             disabled: self.mix(0.08),
-            focus: self.tokens.accent,
+            focus: self.tokens.color(ColorRole::Primary),
             track_thickness: 4.0,
             thumb_size: 16.0,
         }
@@ -350,8 +367,8 @@ impl Env<'_> {
         SpinBoxStyle {
             background: self.mix(0.06),
             buttons: self.mix(0.18),
-            disabled: self.tokens.surface.with_alpha(0.4),
-            focus: self.tokens.accent,
+            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
+            focus: self.tokens.color(ColorRole::Primary),
             button_width: 22.0,
         }
     }
@@ -359,35 +376,39 @@ impl Env<'_> {
     pub fn progress_style(&self) -> ProgressStyle {
         ProgressStyle {
             track: self.mix(0.15),
-            fill: self.tokens.accent,
-            indeterminate: lerp_color(self.tokens.surface, self.tokens.accent, 0.7),
+            fill: self.tokens.color(ColorRole::Primary),
+            indeterminate: lerp_color(
+                self.tokens.color(ColorRole::Card),
+                self.tokens.color(ColorRole::Primary),
+                0.7,
+            ),
         }
     }
 
     pub fn field_style(&self) -> TextFieldStyle {
         TextFieldStyle {
             background: self.mix(0.06),
-            disabled: self.tokens.surface.with_alpha(0.4),
-            focus: self.tokens.accent,
+            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
+            focus: self.tokens.color(ColorRole::Primary),
             intermediate: Color::rgba8(235, 175, 55, 255),
-            invalid: self.tokens.danger,
+            invalid: self.tokens.color(ColorRole::Destructive),
         }
     }
 
     pub fn splitter_style(&self) -> SplitterStyle {
         SplitterStyle {
             handle: self.mix(0.25),
-            focused_handle: self.tokens.accent,
+            focused_handle: self.tokens.color(ColorRole::Primary),
         }
     }
 
     pub fn menu_style(&self) -> MenuStyle {
         MenuStyle {
-            background: self.tokens.surface,
-            highlight: self.tokens.accent,
-            text: self.tokens.content,
+            background: self.tokens.color(ColorRole::Card),
+            highlight: self.tokens.color(ColorRole::Primary),
+            text: self.tokens.color(ColorRole::Foreground),
             highlight_text: self.on_accent(),
-            disabled_text: self.tokens.content.with_alpha(0.4),
+            disabled_text: self.tokens.color(ColorRole::Foreground).with_alpha(0.4),
             separator: self.mix(0.2),
             font_family: FONT.into(),
             font_size: self.body(),
@@ -397,9 +418,9 @@ impl Env<'_> {
     pub fn header_style(&self) -> HeaderStyle {
         HeaderStyle {
             background: self.mix(0.1),
-            text: self.tokens.content,
+            text: self.tokens.color(ColorRole::Foreground),
             divider: self.mix(0.3),
-            focus: self.tokens.accent,
+            focus: self.tokens.color(ColorRole::Primary),
             font_family: FONT.into(),
             font_size: self.small(),
         }
@@ -410,8 +431,8 @@ impl Env<'_> {
             track: self.mix(0.06),
             thumb: self.mix(0.3),
             thumb_hover: self.mix(0.45),
-            thumb_active: self.tokens.accent,
-            focus: self.tokens.accent,
+            thumb_active: self.tokens.color(ColorRole::Primary),
+            focus: self.tokens.color(ColorRole::Primary),
         }
     }
 
@@ -419,11 +440,11 @@ impl Env<'_> {
         TextItemDelegate {
             font_family: FONT.into(),
             font_size: self.body(),
-            text: self.tokens.content,
+            text: self.tokens.color(ColorRole::Foreground),
             selected_text: self.on_accent(),
-            selection: self.tokens.accent,
+            selection: self.tokens.color(ColorRole::Primary),
             inactive_selection: self.mix(0.3),
-            focus: self.tokens.accent,
+            focus: self.tokens.color(ColorRole::Primary),
             ..TextItemDelegate::default()
         }
     }
@@ -676,9 +697,9 @@ impl Push {
         let state = self.button.visual_state(tree, self.node);
         env.button_style().paint(list, bounds, state);
         let color = if state.enabled {
-            env.tokens.content
+            env.tokens.color(ColorRole::Foreground)
         } else {
-            env.tokens.content.with_alpha(0.4)
+            env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
         };
         env.text(list, bounds, &self.label, env.body(), color, Align::Center);
     }
@@ -769,7 +790,7 @@ pub fn paint_field(
             inner,
             placeholder,
             env.body(),
-            env.tokens.content.with_alpha(0.45),
+            env.tokens.color(ColorRole::Foreground).with_alpha(0.45),
             Align::Leading,
         );
     } else {
@@ -778,7 +799,7 @@ pub fn paint_field(
             inner,
             text,
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
     }
@@ -794,16 +815,21 @@ pub fn paint_field(
                 Point::new(x, rect.origin.y + 6.0),
                 Size::new(1.0, (rect.size.height - 12.0).max(0.0)),
             ),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
         );
     }
     if let Some(message_rect) = message_rect {
         let (message, color) = match validation {
-            ValidationState::Valid => ("Valid".to_owned(), env.tokens.content.with_alpha(0.6)),
+            ValidationState::Valid => (
+                "Valid".to_owned(),
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
+            ),
             ValidationState::Intermediate => {
                 ("Incomplete".to_owned(), Color::rgba8(200, 140, 30, 255))
             }
-            ValidationState::Invalid(message) => (message.clone(), env.tokens.danger),
+            ValidationState::Invalid(message) => {
+                (message.clone(), env.tokens.color(ColorRole::Destructive))
+            }
         };
         env.text(
             list,

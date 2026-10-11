@@ -4,8 +4,8 @@ use choscorui_controls::{
     paint_button,
 };
 use choscorui_core::{
-    Color, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent, NodeId, Point, Rect, Size,
-    ThemeInvalidation, ThemeResolver, Tree,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent, NodeId, Point,
+    Rect, Size, ThemeInvalidation, ThemeResolver, Tree,
 };
 use std::cell::RefCell;
 
@@ -61,7 +61,7 @@ fn paint(
             Point::new(layout.content.origin.x, layout.content.origin.y + 20.0),
             "Run",
             "Helvetica",
-            tokens.font_size,
+            16.0,
             layout.content_color,
         )
         .unwrap();
@@ -95,7 +95,7 @@ fn swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantic
         themes
             .set_application(&mut tree, DesignTokens::light())
             .unwrap(),
-        ThemeInvalidation::Layout
+        ThemeInvalidation::Paint
     );
     recipe = &pill;
     let tokens = themes.resolve(&tree, id).unwrap();
@@ -134,7 +134,7 @@ fn slots_paint_in_order_and_layouts_differ_structurally() {
                 content: bounds,
                 alignment: ContentAlignment::Leading,
                 icon: None,
-                content_color: tokens.content,
+                content_color: tokens.color(ColorRole::Foreground),
             }
         }
         fn paint_slot(&self, slot: Slot, _: &mut DisplayList, _: &SlotContext<'_>) {

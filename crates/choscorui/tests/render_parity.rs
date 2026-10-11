@@ -6,7 +6,7 @@
 
 use choscorui_core::{
     Color, DisplayList, FillRule, GradientStop, Image, ImageSampling, LineCap, Paint, Path, Point,
-    Rect, Shadow, StrokeStyle, Transform,
+    Rect, Shadow, ShadowScale, StrokeStyle, Transform,
 };
 use choscorui_macos::MacBitmap;
 use choscorui_render::{Raster, compare};
@@ -138,15 +138,40 @@ fn fixtures() -> Vec<(&'static str, DisplayList)> {
     list.draw_shadow(
         card,
         6.0,
-        Shadow {
-            offset: Point::new(0.0, 3.0),
-            blur: 4.0,
-            color: Color::BLACK.with_alpha(0.4),
-        },
+        Shadow::drop(Point::new(0.0, 3.0), 4.0, Color::BLACK.with_alpha(0.4)),
     )
     .unwrap();
     list.fill_rounded_rect(card, 6.0, Color::WHITE).unwrap();
     out.push(("shadow", list));
+
+    let mut list = background();
+    list.draw_shadows(card, 8.0, &ShadowScale::Lg.layers())
+        .unwrap();
+    list.fill_rounded_rect(card, 8.0, Color::WHITE).unwrap();
+    out.push(("shadow-layers-spread", list));
+
+    let mut list = background();
+    list.fill_rounded_rect(card, 8.0, Color::WHITE).unwrap();
+    list.draw_shadow(
+        card,
+        8.0,
+        Shadow {
+            offset: Point::new(0.0, 2.0),
+            blur: 4.0,
+            spread: 1.0,
+            color: Color::BLACK.with_alpha(0.6),
+            inset: true,
+        },
+    )
+    .unwrap();
+    out.push(("shadow-inset", list));
+
+    let mut list = background();
+    let button = Rect::from_xywh(16.0, 12.0, 32.0, 20.0);
+    list.fill_rounded_rect(button, 6.0, Color::WHITE).unwrap();
+    list.draw_ring(button, 6.0, 3.0, Color::rgba8(30, 90, 200, 128))
+        .unwrap();
+    out.push(("focus-ring", list));
 
     out
 }

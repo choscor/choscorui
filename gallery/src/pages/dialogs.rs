@@ -12,8 +12,9 @@ use choscorui::controls::{
     ValidationState, dialog_key_button, order_dialog_buttons,
 };
 use choscorui::core::{
-    Color, DisplayList, FontSlant, FontWeight, Key, KeyEvent, NodeId, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextStyle, Tree,
+    Color, ColorRole, DisplayList, FontSlant, FontWeight, Key, KeyEvent, NodeId, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextStyle,
+    Tree,
 };
 
 // ---------------------------------------------------------------------------
@@ -245,16 +246,18 @@ impl Page for MessageDialogPage {
                 offset: Point::new(0.0, 4.0),
                 blur: 16.0,
                 color: Color::rgba8(0, 0, 0, 80),
+                spread: 0.0,
+                inset: false,
             },
         );
-        let _ = list.fill_rounded_rect(rect, 10.0, env.tokens.surface);
+        let _ = list.fill_rounded_rect(rect, 10.0, env.tokens.color(ColorRole::Card));
         let inner = rect.inset(16.0);
         env.text(
             list,
             Rect::new(inner.origin, Size::new(inner.size.width, 22.0)),
             &open.dialog.message,
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
         if let Some(detail) = &open.dialog.detail {
@@ -275,7 +278,7 @@ impl Page for MessageDialogPage {
                 let _ = list.stroke_rounded_rect(
                     bounds,
                     env.tokens.radius.min(8.0),
-                    env.tokens.accent,
+                    env.tokens.color(ColorRole::Primary),
                     2.0,
                 );
             }
@@ -539,7 +542,7 @@ impl Page for InputDialogPage {
                 // Dim OK while the value is invalid.
                 list.fill_rect(
                     tree.bounds(ok.node).unwrap_or_default(),
-                    env.tokens.background.with_alpha(0.55),
+                    env.tokens.color(ColorRole::Background).with_alpha(0.55),
                 );
             }
         }
@@ -809,8 +812,9 @@ impl Page for ColorPickerPage {
                 Point::new(x - 3.0, rect.origin.y - 3.0),
                 Size::new(6.0, rect.size.height + 6.0),
             );
-            let _ = list.fill_rounded_rect(knob, 3.0, env.tokens.surface);
-            let _ = list.stroke_rounded_rect(knob, 3.0, env.tokens.content, 1.0);
+            let _ = list.fill_rounded_rect(knob, 3.0, env.tokens.color(ColorRole::Card));
+            let _ =
+                list.stroke_rounded_rect(knob, 3.0, env.tokens.color(ColorRole::Foreground), 1.0);
             if tree.focus() == Some(*id) {
                 env.focus_ring(list, rect);
             }
@@ -853,7 +857,7 @@ impl Page for ColorPickerPage {
                 ),
                 message,
                 env.small(),
-                env.tokens.danger,
+                env.tokens.color(ColorRole::Destructive),
                 Align::Leading,
             );
         }
@@ -1132,7 +1136,7 @@ impl Page for FontDialogPage {
                 let _ = list.stroke_rounded_rect(
                     rect,
                     env.tokens.radius.min(8.0),
-                    env.tokens.accent,
+                    env.tokens.color(ColorRole::Primary),
                     2.0,
                 );
             }
@@ -1148,7 +1152,7 @@ impl Page for FontDialogPage {
                 let _ = layout.draw(
                     list,
                     Point::new(preview.origin.x + 12.0, preview.origin.y + 12.0),
-                    env.tokens.content,
+                    env.tokens.color(ColorRole::Foreground),
                 );
             }
             Err(_) => env.label(list, preview, PREVIEW),

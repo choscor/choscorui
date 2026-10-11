@@ -10,8 +10,8 @@ use choscorui::controls::{
     SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 
 fn range(minimum: i32, maximum: i32, value: i32, step: u32, page: u32) -> IntegerRange {
@@ -212,7 +212,7 @@ impl Page for SpinBoxPage {
                 text,
                 &env.locale.format_integer(i64::from(spin.value())),
                 env.body(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             let arrows = Rect::new(
@@ -225,7 +225,7 @@ impl Page for SpinBoxPage {
                 up,
                 "▲",
                 env.small() * 0.8,
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             env.text(
@@ -233,7 +233,7 @@ impl Page for SpinBoxPage {
                 down,
                 "▼",
                 env.small() * 0.8,
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
         }
@@ -551,7 +551,7 @@ impl Page for ScrollBarPage {
                 ),
                 crate::page::FONT,
                 env.body(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
             );
         }
         let _ = list.pop_clip();
@@ -706,7 +706,12 @@ impl Page for DialPage {
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         for (id, dial, label) in &self.dials {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            dial.paint(list, bounds, env.mix(0.12), env.tokens.accent);
+            dial.paint(
+                list,
+                bounds,
+                env.mix(0.12),
+                env.tokens.color(ColorRole::Primary),
+            );
             let below = Rect::new(
                 Point::new(bounds.origin.x, bounds.max_y() + 4.0),
                 Size::new(bounds.size.width, 20.0),
@@ -716,7 +721,7 @@ impl Page for DialPage {
                 below,
                 &format!("{label}: {}", dial.value()),
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             if tree.focus() == Some(*id) {
@@ -1011,7 +1016,11 @@ impl Page for NumericDisplayPage {
         for (id, base, label) in &self.bases {
             let bounds = tree.bounds(*id).unwrap_or_default();
             let fill = if *base == self.base {
-                choscorui::core::lerp_color(env.tokens.surface, env.tokens.accent, 0.5)
+                choscorui::core::lerp_color(
+                    env.tokens.color(ColorRole::Card),
+                    env.tokens.color(ColorRole::Primary),
+                    0.5,
+                )
             } else {
                 env.mix(0.08)
             };
@@ -1021,7 +1030,7 @@ impl Page for NumericDisplayPage {
                 bounds,
                 label,
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             if tree.focus() == Some(*id) {

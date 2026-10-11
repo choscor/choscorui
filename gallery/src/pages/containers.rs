@@ -8,8 +8,8 @@ use choscorui::controls::{
     StackPage, StackedContainer, ToolBox,
 };
 use choscorui::core::{
-    DisplayList, Key, KeyEvent, NodeId, Paint, Path, Point, PointerButton, PointerEvent, Rect,
-    ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, StrokeStyle, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Paint, Path, Point, PointerButton, PointerEvent,
+    Rect, ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, StrokeStyle, Tree,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,13 +86,13 @@ impl Page for GroupBoxPage {
                 title_rect.origin.x
             };
             let chip = Rect::new(Point::new(x, title_rect.origin.y), Size::new(width, 20.0));
-            list.fill_rect(chip, env.tokens.background);
+            list.fill_rect(chip, env.tokens.color(ColorRole::Background));
             env.text(
                 list,
                 chip,
                 label,
                 env.small(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
             for push in pushes {
@@ -336,7 +336,7 @@ impl Page for SplitterPage {
                 rect,
                 label,
                 env.body(),
-                env.tokens.content.with_alpha(0.7),
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.7),
                 Align::Center,
             );
         }
@@ -539,7 +539,7 @@ impl Page for StackedPage {
                         Point::new(rect.origin.x + 8.0, rect.max_y() + 2.0),
                         Size::new(rect.size.width - 16.0, 2.0),
                     ),
-                    env.tokens.accent,
+                    env.tokens.color(ColorRole::Primary),
                 );
             }
         }
@@ -730,7 +730,7 @@ impl Page for ScrollAreaPage {
                     tile,
                     &format!("{}{}", (b'A' + row as u8) as char, column + 1),
                     env.small(),
-                    env.tokens.content,
+                    env.tokens.color(ColorRole::Foreground),
                     Align::Center,
                 );
             }
@@ -887,7 +887,7 @@ impl Page for ToolBoxPage {
                 rect.inset(10.0),
                 &format!("{marker}  {}", TOOL_PAGES[index].0),
                 env.body(),
-                env.tokens.content,
+                env.tokens.color(ColorRole::Foreground),
                 Align::Leading,
             );
             if focused && index == self.toolbox.focused() {
@@ -1197,7 +1197,7 @@ impl Page for DockPage {
             arrangement.center,
             "Editor",
             env.body(),
-            env.tokens.content.with_alpha(0.5),
+            env.tokens.color(ColorRole::Foreground).with_alpha(0.5),
             Align::Center,
         );
         for group in &arrangement.groups {
@@ -1221,7 +1221,7 @@ impl Page for DockPage {
                     rect,
                     title,
                     env.small(),
-                    env.tokens.content,
+                    env.tokens.color(ColorRole::Foreground),
                     Align::Center,
                 );
                 if tree.focus() == Some(*id) {
@@ -1243,7 +1243,7 @@ impl Page for DockPage {
             list.fill_rect(
                 *rect,
                 if focused {
-                    env.tokens.accent
+                    env.tokens.color(ColorRole::Primary)
                 } else {
                     env.mix(0.25)
                 },
@@ -1479,7 +1479,7 @@ impl Page for SizeGripPage {
             window,
             &format!("{:.0} × {:.0}", self.size.width, self.size.height),
             env.body(),
-            env.tokens.content,
+            env.tokens.color(ColorRole::Foreground),
             Align::Center,
         );
         let grip = tree.bounds(self.grip_node).unwrap_or_default();
@@ -1653,7 +1653,7 @@ impl Page for FocusFramePage {
             .any(|push| tree.focus() == Some(push.node))
         {
             FocusFrame {
-                color: env.tokens.accent,
+                color: env.tokens.color(ColorRole::Primary),
                 width: 3.0,
                 outset: 4.0,
                 radius: env.tokens.radius.min(8.0) + 4.0,

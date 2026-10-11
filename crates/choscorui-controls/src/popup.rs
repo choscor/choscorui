@@ -669,6 +669,8 @@ impl PopupMenu {
                 offset: Point::new(0.0, 3.0),
                 blur: 10.0,
                 color: Color::rgba8(0, 0, 0, 70),
+                spread: 0.0,
+                inset: false,
             },
         );
         let _ = list.fill_rounded_rect(rect, 6.0, style.background);

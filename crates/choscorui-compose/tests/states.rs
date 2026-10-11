@@ -33,6 +33,7 @@ fn first_matching_named_state_assigns_its_properties() {
     let motion = MotionTokens {
         duration_ms: 100,
         reduced: false,
+        ..MotionTokens::default()
     };
 
     let selected = machine.select(&mut tree, node, motion).unwrap();
@@ -68,6 +69,7 @@ fn transition_animates_assignments_and_interruption_starts_at_current_value() {
     let motion = MotionTokens {
         duration_ms: 100,
         reduced: false,
+        ..MotionTokens::default()
     };
 
     machine.select(&mut tree, node, motion).unwrap();
@@ -105,6 +107,7 @@ fn reduced_motion_applies_transition_target_without_scheduling_a_frame() {
     let reduced = MotionTokens {
         duration_ms: 1000,
         reduced: true,
+        ..MotionTokens::default()
     };
 
     machine.select(&mut tree, node, reduced).unwrap();
@@ -136,6 +139,7 @@ fn authored_duration_overrides_the_theme_default_and_removed_nodes_cancel() {
     let motion = MotionTokens {
         duration_ms: 20,
         reduced: false,
+        ..MotionTokens::default()
     };
 
     machine.select(&mut tree, node, motion).unwrap();
@@ -197,6 +201,7 @@ fn discrete_assignments_switch_non_numeric_properties_immediately() {
     let motion = MotionTokens {
         duration_ms: 1000,
         reduced: false,
+        ..MotionTokens::default()
     };
 
     machine.select(&mut tree, node, motion).unwrap();
@@ -228,6 +233,7 @@ fn an_immediate_state_change_cancels_an_in_flight_property_transition() {
     let motion = MotionTokens {
         duration_ms: 100,
         reduced: false,
+        ..MotionTokens::default()
     };
 
     machine.select(&mut tree, node, motion).unwrap();

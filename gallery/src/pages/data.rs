@@ -11,8 +11,8 @@ use choscorui::controls::{
     ItemViewResponse, ShortcutModifiers, ValidationState, ViewLayout, undo_history, undo_steps_to,
 };
 use choscorui::core::{
-    Color, DisplayList, ItemData, ItemKey, ItemModel, ItemShape, ItemStyle, Key, KeyEvent,
-    MatchMode, ModelError, NodeId, Point, PointerButton, PointerEvent, Rect, Role, Scene,
+    Color, ColorRole, DisplayList, ItemData, ItemKey, ItemModel, ItemShape, ItemStyle, Key,
+    KeyEvent, MatchMode, ModelError, NodeId, Point, PointerButton, PointerEvent, Rect, Role, Scene,
     SceneItem, SceneItemId, SemanticAction, SemanticCollection, SemanticNode, SemanticRole, Size,
     SortFilterProxy, StringListModel, TextFilter, Tree, TreeStore, UndoStack, Value, WheelUnit,
 };
@@ -886,7 +886,12 @@ impl Page for CellEditPage {
             && let Some(rect) = self.cell_rect(key, self.column)
             && tree.focus() == Some(self.list.node)
         {
-            let _ = list.stroke_rounded_rect(rect.inset(1.0), 2.0, env.tokens.accent, 1.5);
+            let _ = list.stroke_rounded_rect(
+                rect.inset(1.0),
+                2.0,
+                env.tokens.color(ColorRole::Primary),
+                1.5,
+            );
         }
         let below = Rect::new(
             Point::new(self.list.rect.origin.x, self.list.rect.max_y() + 8.0),
@@ -1469,11 +1474,11 @@ impl Page for ColumnBrowserPage {
         }
         for (key, column, rect) in self.placed(tree, env.rtl()) {
             let selected = self.browser.path().get(column) == Some(&key);
-            let mut color = env.tokens.content;
+            let mut color = env.tokens.color(ColorRole::Foreground);
             if selected {
                 let active = focused && column == self.browser.focused_column();
                 let fill = if active {
-                    env.tokens.accent
+                    env.tokens.color(ColorRole::Primary)
                 } else {
                     env.mix(0.2)
                 };
@@ -1746,9 +1751,9 @@ impl Page for UndoHistoryPage {
                 list.fill_rect(rect, env.mix(0.18));
             }
             let color = if row.redoable {
-                env.tokens.content.with_alpha(0.45)
+                env.tokens.color(ColorRole::Foreground).with_alpha(0.45)
             } else {
-                env.tokens.content
+                env.tokens.color(ColorRole::Foreground)
             };
             let label = if row.current {
                 format!("● {}", row.label)
@@ -1945,7 +1950,7 @@ pub fn canvas(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
         );
     }
     let mut canvas = CanvasView::new("Canvas", Rect::default());
-    canvas.selection_color = env.tokens.accent;
+    canvas.selection_color = env.tokens.color(ColorRole::Primary);
     Box::new(CanvasPage {
         canvas_node,
         zoom_in,

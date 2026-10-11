@@ -51,6 +51,7 @@ mod dnd;
 mod pasteboard;
 mod preferences;
 pub use preferences::{system_accessibility_preferences, system_prefers_dark};
+mod fonts;
 mod shaping;
 mod surface;
 pub use dnd::SimulatedDragPhase;

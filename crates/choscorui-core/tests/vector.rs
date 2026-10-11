@@ -146,16 +146,12 @@ fn damage_covers_only_changed_draws_including_state() {
         .draw_shadow(
             Rect::from_xywh(10.0, 10.0, 10.0, 10.0),
             2.0,
-            Shadow {
-                offset: Point::new(0.0, 2.0),
-                blur: 4.0,
-                color: Color::BLACK,
-            },
+            Shadow::drop(Point::new(0.0, 2.0), 4.0, Color::BLACK),
         )
         .unwrap();
     assert_eq!(
         damage(&DisplayList::new(), &shadow),
-        Some(Rect::from_xywh(2.0, 4.0, 26.0, 26.0))
+        Some(Rect::from_xywh(3.0, 5.0, 24.0, 24.0))
     );
 }
 

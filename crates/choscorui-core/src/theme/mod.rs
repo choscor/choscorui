@@ -8,12 +8,21 @@
 //! 4. user accessibility preferences (text scale, high contrast, reduced
 //!    motion), which always win.
 //!
-//! Light/dark is an application theme choice; contrast is a token that the
-//! user preference can only raise. Metric changes (type size, weight, line
-//! height, spacing, radius, border width) invalidate layout; color,
-//! elevation, and motion changes invalidate paint only.
+//! Light and dark are color schemes of a base palette. Metric changes (text
+//! scale, fonts, spacing, radius, border and ring width) invalidate layout;
+//! color, shadow, and motion changes invalidate paint only.
 
-use crate::{Color, Dirty, FontWeight, NodeId, Tree};
+mod contrast;
+mod palette;
+mod scale;
+
+pub use palette::{BaseColor, ColorRole, ColorScheme, Oklch, Palette, source as palette_source};
+pub use scale::{
+    FULL_RADIUS, FontFamily, RadiusScale, ShadowLayers, ShadowScale, TextPreset, TextSize,
+    Tracking, TypeSpec,
+};
+
+use crate::{Color, CubicBezier, Dirty, FontSlant, FontWeight, NodeId, Rect, Tree};
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -41,102 +50,208 @@ impl Default for AccessibilityPreferences {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MotionTokens {
     pub duration_ms: u32,
+    pub easing: CubicBezier,
     pub reduced: bool,
+}
+
+impl Default for MotionTokens {
+    fn default() -> Self {
+        Self {
+            duration_ms: 150,
+            easing: CubicBezier::STANDARD,
+            reduced: false,
+        }
+    }
 }
 
 /// Resolved design values. Geometry-affecting values are explicit so a theme
 /// update can distinguish layout from paint work.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DesignTokens {
-    pub background: Color,
-    pub surface: Color,
-    pub content: Color,
-    pub accent: Color,
-    pub danger: Color,
-    pub font_size: f64,
-    pub font_weight: FontWeight,
-    /// Line height as a multiple of `font_size`.
-    pub line_height: f64,
-    pub spacing: f64,
+    pub base: BaseColor,
+    pub scheme: ColorScheme,
+    pub palette: Palette,
+    /// Base corner radius; [`RadiusScale`] steps are multiples of it.
     pub radius: f64,
+    /// Spacing unit; `space(n)` is `n` units.
+    pub spacing: f64,
     pub border_width: f64,
-    pub elevation: f64,
+    /// Width of the outset focus ring.
+    pub ring_width: f64,
+    /// Alpha of the focus ring color.
+    pub ring_alpha: f64,
+    /// Multiplies every step of the type scale.
+    pub text_scale: f64,
+    pub font_sans: FontFamily,
+    pub font_mono: FontFamily,
     pub motion: MotionTokens,
     pub contrast: Contrast,
 }
 
 impl DesignTokens {
-    /// Body text style for `family` built from the typography tokens.
-    pub fn text_style(&self, family: &str) -> crate::TextStyle {
-        crate::TextStyle::new(family, self.font_size)
-            .with_weight(self.font_weight)
-            .with_line_height(self.line_height)
-    }
-
-    pub const fn dark() -> Self {
+    /// The built-in theme of `base` in `scheme`.
+    pub fn new(base: BaseColor, scheme: ColorScheme) -> Self {
         Self {
-            background: Color::rgba8(24, 32, 48, 255),
-            surface: Color::rgba8(40, 52, 72, 255),
-            content: Color::rgba8(240, 243, 250, 255),
-            accent: Color::rgba8(40, 140, 230, 255),
-            danger: Color::rgba8(230, 70, 90, 255),
-            font_size: 17.0,
-            font_weight: FontWeight::REGULAR,
-            line_height: 1.0,
-            spacing: 8.0,
-            radius: 4.0,
-            border_width: 2.0,
-            elevation: 1.0,
-            motion: MotionTokens {
-                duration_ms: 160,
-                reduced: false,
-            },
+            base,
+            scheme,
+            palette: Palette::new(base, scheme),
+            radius: 10.0,
+            spacing: 4.0,
+            border_width: 1.0,
+            ring_width: 3.0,
+            ring_alpha: 0.5,
+            text_scale: 1.0,
+            font_sans: FontFamily::SYSTEM_UI,
+            font_mono: FontFamily::SYSTEM_MONO,
+            motion: MotionTokens::default(),
             contrast: Contrast::Normal,
         }
     }
 
-    pub const fn light() -> Self {
+    /// The neutral base in the dark scheme.
+    pub fn dark() -> Self {
+        Self::new(BaseColor::Neutral, ColorScheme::Dark)
+    }
+
+    /// The neutral base in the light scheme.
+    pub fn light() -> Self {
+        Self::new(BaseColor::Neutral, ColorScheme::Light)
+    }
+
+    pub const fn color(&self, role: ColorRole) -> Color {
+        self.palette.get(role)
+    }
+
+    /// The radius of `step` for a box of `bounds`, clamped to a pill.
+    pub fn radius_for(&self, step: RadiusScale, bounds: Rect) -> f64 {
+        let half = bounds.size.width.min(bounds.size.height).max(0.0) / 2.0;
+        match step.factor() {
+            Some(factor) => (self.radius * factor).min(half),
+            None => half,
+        }
+    }
+
+    /// The unclamped radius of `step`; [`RadiusScale::Full`] is
+    /// [`FULL_RADIUS`].
+    pub fn radius(&self, step: RadiusScale) -> f64 {
+        step.factor()
+            .map_or(FULL_RADIUS, |factor| self.radius * factor)
+    }
+
+    /// `units` steps of the spacing unit.
+    pub fn space(&self, units: f64) -> f64 {
+        self.spacing * units
+    }
+
+    /// The sans text spec of `size` at `weight`, scaled by the text scale.
+    pub fn text(&self, size: TextSize, weight: FontWeight) -> TypeSpec {
+        let (font_size, line_height) = size.metrics();
+        TypeSpec {
+            family: self.font_sans,
+            size: font_size * self.text_scale,
+            line_height: line_height * self.text_scale,
+            weight,
+            slant: FontSlant::Upright,
+            tracking: 0.0,
+        }
+    }
+
+    /// The monospace text spec of `size` at `weight`.
+    pub fn mono(&self, size: TextSize, weight: FontWeight) -> TypeSpec {
+        TypeSpec {
+            family: self.font_mono,
+            ..self.text(size, weight)
+        }
+    }
+
+    /// A named typography preset.
+    pub fn preset(&self, preset: TextPreset) -> TypeSpec {
+        let rule = preset.rule();
+        let mut spec = if rule.mono {
+            self.mono(rule.size, rule.weight)
+        } else {
+            self.text(rule.size, rule.weight)
+        }
+        .with_tracking(rule.tracking);
+        spec.slant = rule.slant;
+        if let Some(line_height) = rule.line_height {
+            spec.line_height = line_height * self.text_scale;
+        }
+        spec
+    }
+
+    pub fn shadow(&self, step: ShadowScale) -> ShadowLayers {
+        step.layers()
+    }
+
+    /// The focus ring color: `color` at the ring alpha.
+    pub fn ring_color(&self, color: Color) -> Color {
+        color.with_alpha(self.ring_alpha)
+    }
+
+    /// The duration of a standard transition, zero with reduced motion.
+    pub fn duration(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(u64::from(self.motion.duration_ms))
+    }
+}
+
+/// Optional replacements for each token. A base or scheme rebuilds the
+/// palette first; then a whole palette, then single roles, apply.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ThemeOverride {
+    pub base: Option<BaseColor>,
+    pub scheme: Option<ColorScheme>,
+    pub palette: Option<Palette>,
+    pub roles: RoleOverrides,
+    pub radius: Option<f64>,
+    pub spacing: Option<f64>,
+    pub border_width: Option<f64>,
+    pub ring_width: Option<f64>,
+    pub ring_alpha: Option<f64>,
+    pub text_scale: Option<f64>,
+    pub font_sans: Option<FontFamily>,
+    pub font_mono: Option<FontFamily>,
+    pub motion: Option<MotionTokens>,
+    pub contrast: Option<Contrast>,
+}
+
+impl ThemeOverride {
+    /// An override of one color role.
+    pub fn role(role: ColorRole, color: Color) -> Self {
+        let mut overrides = Self::default();
+        overrides.roles.set(role, color);
+        overrides
+    }
+
+    /// An override that switches the base and the scheme.
+    pub fn theme(base: BaseColor, scheme: ColorScheme) -> Self {
         Self {
-            background: Color::rgba8(244, 246, 250, 255),
-            surface: Color::rgba8(255, 255, 255, 255),
-            content: Color::rgba8(25, 31, 42, 255),
-            accent: Color::rgba8(120, 55, 190, 255),
-            danger: Color::rgba8(190, 35, 55, 255),
-            font_size: 17.0,
-            font_weight: FontWeight::REGULAR,
-            line_height: 1.2,
-            spacing: 8.0,
-            radius: 10.0,
-            border_width: 1.0,
-            elevation: 3.0,
-            motion: MotionTokens {
-                duration_ms: 220,
-                reduced: false,
-            },
-            contrast: Contrast::Normal,
+            base: Some(base),
+            scheme: Some(scheme),
+            ..Self::default()
         }
     }
 }
 
+/// Per-role color overrides.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ThemeOverride {
-    pub background: Option<Color>,
-    pub surface: Option<Color>,
-    pub content: Option<Color>,
-    pub accent: Option<Color>,
-    pub danger: Option<Color>,
-    pub font_size: Option<f64>,
-    pub font_weight: Option<FontWeight>,
-    pub line_height: Option<f64>,
-    pub spacing: Option<f64>,
-    pub radius: Option<f64>,
-    pub border_width: Option<f64>,
-    pub elevation: Option<f64>,
-    pub motion: Option<MotionTokens>,
-    pub contrast: Option<Contrast>,
+pub struct RoleOverrides([Option<Color>; ColorRole::COUNT]);
+
+impl RoleOverrides {
+    pub fn set(&mut self, role: ColorRole, color: Color) {
+        self.0[role as usize] = Some(color);
+    }
+
+    pub fn clear(&mut self, role: ColorRole) {
+        self.0[role as usize] = None;
+    }
+
+    pub fn get(&self, role: ColorRole) -> Option<Color> {
+        self.0[role as usize]
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -293,41 +408,37 @@ impl ThemeResolver {
 }
 
 fn apply(mut tokens: DesignTokens, values: ThemeOverride) -> DesignTokens {
-    if let Some(value) = values.background {
-        tokens.background = value;
+    if values.base.is_some() || values.scheme.is_some() {
+        tokens.base = values.base.unwrap_or(tokens.base);
+        tokens.scheme = values.scheme.unwrap_or(tokens.scheme);
+        tokens.palette = Palette::new(tokens.base, tokens.scheme);
     }
-    if let Some(value) = values.surface {
-        tokens.surface = value;
+    if let Some(palette) = values.palette {
+        tokens.palette = palette;
     }
-    if let Some(value) = values.content {
-        tokens.content = value;
+    for role in ColorRole::ALL {
+        if let Some(color) = values.roles.get(role) {
+            tokens.palette.set(role, color);
+        }
     }
-    if let Some(value) = values.accent {
-        tokens.accent = value;
+    let metrics = [
+        (&mut tokens.radius, values.radius),
+        (&mut tokens.spacing, values.spacing),
+        (&mut tokens.border_width, values.border_width),
+        (&mut tokens.ring_width, values.ring_width),
+        (&mut tokens.ring_alpha, values.ring_alpha),
+        (&mut tokens.text_scale, values.text_scale),
+    ];
+    for (slot, value) in metrics {
+        if let Some(value) = value {
+            *slot = value;
+        }
     }
-    if let Some(value) = values.danger {
-        tokens.danger = value;
+    if let Some(value) = values.font_sans {
+        tokens.font_sans = value;
     }
-    if let Some(value) = values.font_size {
-        tokens.font_size = value;
-    }
-    if let Some(value) = values.font_weight {
-        tokens.font_weight = value;
-    }
-    if let Some(value) = values.line_height {
-        tokens.line_height = value;
-    }
-    if let Some(value) = values.spacing {
-        tokens.spacing = value;
-    }
-    if let Some(value) = values.radius {
-        tokens.radius = value;
-    }
-    if let Some(value) = values.border_width {
-        tokens.border_width = value;
-    }
-    if let Some(value) = values.elevation {
-        tokens.elevation = value;
+    if let Some(value) = values.font_mono {
+        tokens.font_mono = value;
     }
     if let Some(value) = values.motion {
         tokens.motion = value;
@@ -342,9 +453,13 @@ fn apply_accessibility(
     mut tokens: DesignTokens,
     preferences: AccessibilityPreferences,
 ) -> DesignTokens {
-    tokens.font_size *= preferences.text_scale;
+    tokens.text_scale *= preferences.text_scale;
     if preferences.high_contrast {
         tokens.contrast = Contrast::High;
+    }
+    if tokens.contrast == Contrast::High {
+        tokens.palette = contrast::raise(tokens.palette);
+        tokens.ring_alpha = 1.0;
     }
     if preferences.reduced_motion {
         tokens.motion.reduced = true;
@@ -355,16 +470,19 @@ fn apply_accessibility(
 
 fn validate(tokens: DesignTokens) -> Result<(), ThemeError> {
     let values = [
-        tokens.font_size,
-        tokens.spacing,
         tokens.radius,
+        tokens.spacing,
         tokens.border_width,
-        tokens.elevation,
+        tokens.ring_width,
     ];
-    if tokens.font_size <= 0.0
-        || tokens.line_height <= 0.0
-        || !tokens.line_height.is_finite()
-        || !(1..=1000).contains(&tokens.font_weight.0)
+    let easing = tokens.motion.easing;
+    if tokens.text_scale <= 0.0
+        || !tokens.text_scale.is_finite()
+        || !(16.0 * tokens.text_scale * 2.6).is_finite()
+        || !(0.0..=1.0).contains(&tokens.ring_alpha)
+        || tokens.font_sans.name().is_empty()
+        || tokens.font_mono.name().is_empty()
+        || !easing.is_valid()
         || values
             .into_iter()
             .any(|value| !value.is_finite() || value < 0.0)
@@ -378,12 +496,13 @@ fn validate(tokens: DesignTokens) -> Result<(), ThemeError> {
 fn classify(old: DesignTokens, new: DesignTokens) -> ThemeInvalidation {
     if old == new {
         ThemeInvalidation::None
-    } else if old.font_size != new.font_size
-        || old.font_weight != new.font_weight
-        || old.line_height != new.line_height
+    } else if old.text_scale != new.text_scale
+        || old.font_sans != new.font_sans
+        || old.font_mono != new.font_mono
         || old.spacing != new.spacing
         || old.radius != new.radius
         || old.border_width != new.border_width
+        || old.ring_width != new.ring_width
     {
         ThemeInvalidation::Layout
     } else {

@@ -10,9 +10,9 @@ use choscorui::controls::{
     TextField, TextFieldChange, TextFieldInput, paint_button,
 };
 use choscorui::core::{
-    Color, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticNode,
-    SemanticRole, SemanticTree, Size, TextShaper, Tree, WheelUnit, fold_for_search,
+    Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry,
+    SemanticNode, SemanticRole, SemanticTree, Size, TextShaper, Tree, WheelUnit, fold_for_search,
     grapheme_boundaries,
 };
 use std::time::Duration;
@@ -55,11 +55,16 @@ impl Theme {
         match self {
             Self::Dark => DesignTokens::dark(),
             Self::Light => DesignTokens::light(),
-            Self::Brand => DesignTokens {
-                accent: Color::rgba8(0, 128, 128, 255),
-                radius: 8.0,
-                ..DesignTokens::light()
-            },
+            Self::Brand => {
+                let light = DesignTokens::light();
+                DesignTokens {
+                    palette: light
+                        .palette
+                        .with(ColorRole::Primary, Color::rgba8(0, 128, 128, 255)),
+                    radius: 8.0,
+                    ..light
+                }
+            }
         }
     }
 }
@@ -639,11 +644,11 @@ impl GalleryView {
         let mut list = DisplayList::new();
         list.fill_rect(
             Rect::new(Point::new(0.0, 0.0), self.size),
-            tokens.background,
+            tokens.color(ColorRole::Background),
         );
 
         // State bar.
-        list.fill_rect(self.bar, tokens.surface);
+        list.fill_rect(self.bar, tokens.color(ColorRole::Card));
         list.fill_rect(
             Rect::new(
                 Point::new(0.0, self.bar.max_y() - 1.0),
@@ -728,7 +733,7 @@ impl GalleryView {
                 text_rect,
                 &ctx.text("sidebar.placeholder", &[]),
                 env.body(),
-                tokens.content.with_alpha(0.45),
+                tokens.color(ColorRole::Foreground).with_alpha(0.45),
                 Align::Leading,
             );
         } else {
@@ -737,7 +742,7 @@ impl GalleryView {
                 text_rect,
                 &shown,
                 env.body(),
-                tokens.content,
+                tokens.color(ColorRole::Foreground),
                 Align::Leading,
             );
         }
@@ -757,7 +762,7 @@ impl GalleryView {
                     Point::new(x, filter.origin.y + 6.0),
                     Size::new(1.0, filter.size.height - 12.0),
                 ),
-                tokens.content,
+                tokens.color(ColorRole::Foreground),
             );
         }
         list.push_clip(self.list_rect);
@@ -780,7 +785,7 @@ impl GalleryView {
                     text_rect,
                     &ctx.category_title(category).to_uppercase(),
                     env.small(),
-                    tokens.content.with_alpha(0.55),
+                    tokens.color(ColorRole::Foreground).with_alpha(0.55),
                     Align::Leading,
                 ),
                 RowKind::Page(index) => {
@@ -793,16 +798,20 @@ impl GalleryView {
                         ),
                     );
                     if selected {
-                        let _ = list.fill_rounded_rect(highlight_rect, 5.0, tokens.accent);
+                        let _ = list.fill_rounded_rect(
+                            highlight_rect,
+                            5.0,
+                            tokens.color(ColorRole::Primary),
+                        );
                     }
                     if list_focused && self.highlight == Some(index) {
                         let _ = list.stroke_rounded_rect(
                             highlight_rect,
                             5.0,
                             if selected {
-                                tokens.content
+                                tokens.color(ColorRole::Foreground)
                             } else {
-                                tokens.accent
+                                tokens.color(ColorRole::Primary)
                             },
                             2.0,
                         );
@@ -815,7 +824,7 @@ impl GalleryView {
                         if selected {
                             env.on_accent()
                         } else {
-                            tokens.content
+                            tokens.color(ColorRole::Foreground)
                         },
                         Align::Leading,
                     );
@@ -835,8 +844,8 @@ impl GalleryView {
             &mut list,
             title,
             &ctx.page_title(self.selected),
-            (tokens.font_size * 1.3).round(),
-            tokens.content,
+            (16.0_f64 * 1.3).round(),
+            tokens.color(ColorRole::Foreground),
             Align::Leading,
         );
         env.text(
@@ -844,7 +853,7 @@ impl GalleryView {
             title,
             PAGES[self.selected].id,
             env.small(),
-            tokens.content.with_alpha(0.5),
+            tokens.color(ColorRole::Foreground).with_alpha(0.5),
             Align::Trailing,
         );
         env.caption(
@@ -1564,11 +1573,11 @@ mod tests {
         };
         assert_eq!(
             background(&view.paint(&ctx(&english, Theme::Dark))),
-            Theme::Dark.tokens().background
+            Theme::Dark.tokens().color(ColorRole::Background)
         );
         assert_eq!(
             background(&view.paint(&ctx(&english, Theme::Light))),
-            Theme::Light.tokens().background
+            Theme::Light.tokens().color(ColorRole::Background)
         );
     }
 

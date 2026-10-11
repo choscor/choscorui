@@ -51,6 +51,7 @@ impl RenderPlan {
                     font_family,
                     font_size,
                     color,
+                    ..
                 } => {
                     if !baseline.x.is_finite()
                         || !baseline.y.is_finite()

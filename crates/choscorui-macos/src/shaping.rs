@@ -1,4 +1,5 @@
 use super::*;
+use choscorui_core::{FontSlant, FontWeight};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BitmapError {
@@ -176,30 +177,43 @@ pub struct ShapedLine {
 
 impl ShapedLine {
     pub fn new(text: &str, family: &str, size: f64) -> Result<Self, ShapeError> {
+        Self::styled(text, family, size, FontWeight::REGULAR, 0.0)
+    }
+
+    /// A line in `family` at `weight`, with `tracking` points after each
+    /// character.
+    pub fn styled(
+        text: &str,
+        family: &str,
+        size: f64,
+        weight: FontWeight,
+        tracking: f64,
+    ) -> Result<Self, ShapeError> {
         if family.is_empty() || !size.is_finite() || size <= 0.0 {
             return Err(ShapeError::InvalidFont);
         }
-        // SAFETY: The attributed string and font stay alive through line
-        // creation. Core Text returns a separately owned immutable CTLine.
+        // SAFETY: The attributed string, font, and kern number stay alive
+        // through line creation. Core Text returns a separately owned
+        // immutable CTLine.
         unsafe {
             let string = cf_utf8(text).ok_or(ShapeError::Unavailable)?;
-            let font_name = cf_utf8(family).ok_or(ShapeError::Unavailable)?;
-            let font = CfOwned::new(CTFontCreateWithName(
-                font_name.as_ptr(),
-                size,
-                std::ptr::null_mut(),
-            ))
-            .ok_or(ShapeError::Unavailable)?;
-            let keys = [
+            let font = fonts::create_font(family, size, weight, FontSlant::Upright)
+                .ok_or(ShapeError::Unavailable)?;
+            let kern = fonts::kern_attribute(tracking);
+            let mut keys = vec![
                 kCTFontAttributeName,
                 kCTForegroundColorFromContextAttributeName,
             ];
-            let values = [font.as_ptr(), kCFBooleanTrue as Id];
+            let mut values = vec![font.as_ptr(), kCFBooleanTrue as Id];
+            if let Some((key, number)) = &kern {
+                keys.push(*key);
+                values.push(number.as_ptr());
+            }
             let attributes = CfOwned::new(CFDictionaryCreate(
                 std::ptr::null_mut(),
                 keys.as_ptr(),
                 values.as_ptr(),
-                2,
+                keys.len() as isize,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             ))
@@ -629,11 +643,10 @@ pub(crate) unsafe fn draw_text_run(
     context: Id,
     baseline: Point,
     text: &str,
-    family: &str,
-    size: f64,
+    run: &choscorui_core::TextRun<'_>,
     color: choscorui_core::Color,
 ) -> bool {
-    let Ok(line) = ShapedLine::new(text, family, size) else {
+    let Ok(line) = ShapedLine::styled(text, run.family, run.size, run.weight, run.tracking) else {
         return false;
     };
     unsafe { line.draw(context, baseline, color) };

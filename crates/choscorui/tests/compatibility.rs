@@ -13,9 +13,10 @@ use choscorui::controls::{
     TextField, TextItemDelegate, paint_button,
 };
 use choscorui::core::{
-    AccessibilityPreferences, Axis, Color, CrossAlign, DesignTokens, DisplayList, FormLayout,
-    GridLayout, Insets, ItemKey, LayoutDirection, LinearLayout, NodeId, Point, Rect, SemanticRole,
-    Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
+    AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, CrossAlign,
+    DesignTokens, DisplayList, FormLayout, GridLayout, Insets, ItemKey, LayoutDirection,
+    LinearLayout, NodeId, Point, Rect, SemanticRole, Size, StringListModel, ThemeOverride,
+    ThemeResolver, Tree,
 };
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -226,34 +227,58 @@ fn control_semantics() {
     golden("control_semantics", &out);
 }
 
+/// Every token of `tokens`, one per line, colors as `#rrggbbaa`.
+fn describe_tokens(out: &mut String, tokens: &DesignTokens) {
+    for role in ColorRole::ALL {
+        let c = tokens.color(role);
+        writeln!(
+            out,
+            "  {} #{:02x}{:02x}{:02x}{:02x}",
+            role.name(),
+            c.red,
+            c.green,
+            c.blue,
+            c.alpha
+        )
+        .unwrap();
+    }
+    writeln!(
+        out,
+        "  radius {} spacing {} border {} ring {}@{} text_scale {} fonts {}/{} motion {:?} contrast {:?}",
+        tokens.radius,
+        tokens.spacing,
+        tokens.border_width,
+        tokens.ring_width,
+        tokens.ring_alpha,
+        tokens.text_scale,
+        tokens.font_sans.name(),
+        tokens.font_mono.name(),
+        tokens.motion,
+        tokens.contrast
+    )
+    .unwrap();
+}
+
 #[test]
 fn theme_resolution() {
     let mut out = String::new();
-    writeln!(out, "light {:?}", DesignTokens::light()).unwrap();
-    writeln!(out, "dark {:?}", DesignTokens::dark()).unwrap();
+    for base in BaseColor::ALL {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            writeln!(out, "{} {scheme:?}", base.id()).unwrap();
+            describe_tokens(&mut out, &DesignTokens::new(base, scheme));
+        }
+    }
     let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
     let root = tree.root();
     let panel = tree.attach(root, rect(0.0, 0.0, 50.0, 50.0)).unwrap();
     let child = tree.attach(panel, rect(0.0, 0.0, 10.0, 10.0)).unwrap();
     let mut themes = ThemeResolver::new(DesignTokens::light());
-    let change = themes
-        .set_scope(
-            &mut tree,
-            panel,
-            ThemeOverride {
-                accent: Some(Color::rgba8(200, 0, 120, 255)),
-                font_size: Some(18.0),
-                ..ThemeOverride::default()
-            },
-        )
-        .unwrap();
+    let mut overrides = ThemeOverride::role(ColorRole::Primary, Color::rgba8(200, 0, 120, 255));
+    overrides.text_scale = Some(1.125);
+    let change = themes.set_scope(&mut tree, panel, overrides).unwrap();
     writeln!(out, "scope change {change:?}").unwrap();
-    writeln!(
-        out,
-        "scoped child {:?}",
-        themes.resolve(&tree, child).unwrap()
-    )
-    .unwrap();
+    writeln!(out, "scoped child").unwrap();
+    describe_tokens(&mut out, &themes.resolve(&tree, child).unwrap());
     let change = themes
         .set_accessibility_preferences(
             &mut tree,
@@ -265,18 +290,10 @@ fn theme_resolution() {
         )
         .unwrap();
     writeln!(out, "preferences change {change:?}").unwrap();
-    writeln!(
-        out,
-        "accessible root {:?}",
-        themes.resolve(&tree, root).unwrap()
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "accessible child {:?}",
-        themes.resolve(&tree, child).unwrap()
-    )
-    .unwrap();
+    writeln!(out, "accessible root").unwrap();
+    describe_tokens(&mut out, &themes.resolve(&tree, root).unwrap());
+    writeln!(out, "accessible child").unwrap();
+    describe_tokens(&mut out, &themes.resolve(&tree, child).unwrap());
     golden("theme_resolution", &out);
 }
 
@@ -300,14 +317,14 @@ fn painted_output() {
         },
     ];
     let flat = ButtonStyle {
-        normal: tokens.accent,
-        hover: tokens.accent,
-        pressed: tokens.danger,
+        normal: tokens.color(ColorRole::Primary),
+        hover: tokens.color(ColorRole::Primary),
+        pressed: tokens.color(ColorRole::Destructive),
         disabled: Color::rgba8(90, 90, 90, 255),
-        focus: tokens.content,
+        focus: tokens.color(ColorRole::Foreground),
         decoration: ButtonDecoration::LeadingRail {
             width: tokens.spacing,
-            color: tokens.danger,
+            color: tokens.color(ColorRole::Destructive),
         },
     };
     for state in states {

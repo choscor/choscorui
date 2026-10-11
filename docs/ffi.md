@@ -95,10 +95,12 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Lines.** `ShapedLine` owns the `CTLine` that it uses for metrics, caret offsets, hit tests, and `CTLineDraw`. Rust RAII releases each Core Text object.
 - **Wrapping.** `WrappedText` keeps its attributed string and font alive while a +1 typesetter gives break counts. Rust maps each break to a grapheme boundary.
 - **Shaping.** `CoreTextShaper` creates the font, paragraph style, attributes, attributed string, and typesetter for each paragraph. It copies glyphs, positions, and font names into owned `GlyphRun` values. No Core Text object lives after `shape`.
+- **Font faces.** `fonts::create_font` makes each primary font. The generic families `system-ui` and `ui-monospace` call `NSFont systemFontOfSize:weight:` and `monospacedSystemFontOfSize:weight:`. These return autoreleased fonts, and `CFRetain` makes them +1. `NSFont` is toll-free bridged to `CTFont`. Other families use `CTFontCreateWithName` and the symbolic bold and italic traits.
+- **Tracking.** `fonts::kern_attribute` makes a +1 `CFNumber` for `kCTKernAttributeName`. The attribute dictionary retains it, and Rust RAII releases the local reference.
 - **Fonts for paint.** Paint creates fonts again by PostScript name, through a thread-local cache of 64 entries. It draws with `CTFontDrawGlyphs`.
 - **Text matrix.** Graphics-state save and restore do not include the text matrix, so the painter restores it explicitly.
 - **Threads.** `shape` works on any thread. Paint occurs on the main thread or in an offscreen bitmap.
-- **Tests.** The tests cover Vietnamese, CJK, emoji sequences, combining marks, Hebrew, Arabic, font fallback, wrapping, and painted ink at 1x and 2x.
+- **Tests.** The `fonts` unit test makes each generic face at three weights. The tests cover Vietnamese, CJK, emoji sequences, combining marks, Hebrew, Arabic, font fallback, wrapping, and painted ink at 1x and 2x.
 
 ### Clipboard and drag and drop
 

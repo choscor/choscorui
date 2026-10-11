@@ -8,8 +8,8 @@ use crate::{
     NumberInput, Shortcut, ShortcutModifiers, Slot, SlotContext, SlotLayout, ValidationState,
 };
 use choscorui_core::{
-    Color, DesignTokens, DisplayList, Key, Locale, NodeId, Path, Point, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    Color, ColorRole, DesignTokens, DisplayList, Key, Locale, NodeId, Path, Point, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -696,7 +696,7 @@ impl ButtonRecipe for CommandLinkRecipe {
             ),
             alignment: ContentAlignment::Leading,
             icon: Some(icon),
-            content_color: tokens.accent,
+            content_color: tokens.color(ColorRole::Primary),
         }
     }
     fn paint_slot(&self, slot: Slot, list: &mut DisplayList, context: &SlotContext<'_>) {
@@ -707,7 +707,7 @@ impl ButtonRecipe for CommandLinkRecipe {
                     context.bounds,
                     tokens.radius,
                     tokens
-                        .surface
+                        .color(ColorRole::Card)
                         .with_alpha(if context.state.pressed { 0.9 } else { 0.6 }),
                 );
             }
@@ -722,19 +722,24 @@ impl ButtonRecipe for CommandLinkRecipe {
                         .line_to(Point::new(icon.origin.x + 10.0, mid + 6.0));
                     let _ = list.stroke_path(
                         path,
-                        choscorui_core::Paint::Solid(tokens.accent),
+                        choscorui_core::Paint::Solid(tokens.color(ColorRole::Primary)),
                         choscorui_core::StrokeStyle::new(2.0),
                     );
                 }
             }
             Slot::Indicator if context.state.focused => {
-                let _ = list.stroke_rounded_rect(context.bounds, tokens.radius, tokens.accent, 2.0);
+                let _ = list.stroke_rounded_rect(
+                    context.bounds,
+                    tokens.radius,
+                    tokens.color(ColorRole::Primary),
+                    2.0,
+                );
             }
             Slot::Overlay if !context.state.enabled => {
                 let _ = list.fill_rounded_rect(
                     context.bounds,
                     tokens.radius,
-                    tokens.background.with_alpha(0.5),
+                    tokens.color(ColorRole::Background).with_alpha(0.5),
                 );
             }
             _ => {}
