@@ -1,20 +1,20 @@
 #!/bin/sh
 # Release gate: installs a packaged archive the way a user would, runs
-# every core scenario from the installed bundles, uninstalls, and checks
+# every core scenario from the installed bundle, uninstalls, and checks
 # that nothing is left behind.
 #
 #   scripts/macos/install-check.sh dist/choscorui-<version>-macos-<arch>.zip
 #
-# Needs a logged-in GUI session (the apps open real windows). It refuses to
-# run if the user already has data for the demo apps, so it can never
-# delete anything it did not create.
+# Needs a logged-in GUI session (the gallery opens real windows). It
+# refuses to run if the user already has data for the gallery, so it can
+# never delete anything it did not create.
 set -eu
 
 archive=${1:?usage: install-check.sh <archive.zip>}
 archive=$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")
 work=$(mktemp -d "${TMPDIR:-/tmp}/choscorui-install-check.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-ids="com.choscor.gallery com.choscor.stress com.choscor.notes"
+ids="com.choscor.gallery"
 failures=0
 
 check() { # description command...
@@ -29,7 +29,7 @@ check() { # description command...
     fi
 }
 
-leftovers() { # prints any per-user data for the demo apps
+leftovers() { # prints any per-user data for the gallery
     for id in $ids; do
         for path in \
             "$HOME/Library/Application Support/$id" \
@@ -46,7 +46,7 @@ leftovers() { # prints any per-user data for the demo apps
 
 existing=$(leftovers)
 if [ -n "$existing" ]; then
-    echo "refusing to run: data for the demo apps already exists:" >&2
+    echo "refusing to run: data for the gallery already exists:" >&2
     echo "$existing" >&2
     echo "remove it with uninstall.sh first" >&2
     exit 2
@@ -61,29 +61,23 @@ for file in README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.txt; do
 done
 export CHOSCORUI_INSTALL_DIR="$apps"
 
-check "install.sh installs three signed apps" "$package/install.sh"
-check "three apps installed" test "$(find "$apps" -maxdepth 1 -name '*.app' | wc -l | tr -d ' ')" = 3
+check "install.sh installs one signed app" "$package/install.sh"
+check "one app installed" test "$(find "$apps" -maxdepth 1 -name '*.app' | wc -l | tr -d ' ')" = 1
 for app in "$apps"/*.app; do
     check "signature valid: $(basename "$app")" codesign --verify --deep --strict "$app"
 done
 
 gallery="$apps/choscorui Gallery.app"
-stress="$apps/choscorui Stress.app"
-notes="$apps/choscorui Notes.app"
 check "gallery launches through LaunchServices and draws" \
     open -n -W --env CHOSCORUI_GALLERY_AUTOCLOSE_MS=1500 "$gallery"
+check "gallery interactive launch saved its settings on exit" \
+    test -f "$HOME/Library/Application Support/com.choscor.gallery/settings.txt"
 check "gallery first frame" \
     env CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 "$gallery/Contents/MacOS/choscorui-gallery"
-check "stress autopilot (real per-user settings)" \
-    env CHOSCORUI_STRESS_AUTOPILOT=1 "$stress/Contents/MacOS/choscorui-stress"
-check "stress interactive launch saves settings on exit" \
-    env CHOSCORUI_STRESS_AUTOCLOSE_MS=1500 "$stress/Contents/MacOS/choscorui-stress"
-check "stress wrote its settings file" \
-    test -f "$HOME/Library/Application Support/com.choscor.stress/settings.txt"
-check "notes autopilot with bundled translations" \
-    env NOTES_AUTOPILOT=1 "$notes/Contents/MacOS/choscorui-notes-sample"
-check "notes found translations inside the bundle" \
-    test -f "$notes/Contents/Resources/strings/he.lang"
+check "gallery autopilot (real per-user settings, bundled translations)" \
+    env CHOSCORUI_GALLERY_AUTOPILOT=1 "$gallery/Contents/MacOS/choscorui-gallery"
+check "gallery translations are inside the bundle" \
+    test -f "$gallery/Contents/Resources/strings/vi.lang"
 
 check "uninstall.sh runs" "$package/uninstall.sh"
 check "no apps left in the install directory" \

@@ -4,15 +4,14 @@
 # checks that the expected controls are exposed with the right roles and
 # names.
 #
-#   scripts/macos/ax-check.sh            # builds and checks the gallery and notes
+#   scripts/macos/ax-check.sh            # builds and checks the gallery in English and Vietnamese
 #
 # Needs the terminal (or CI agent) to be allowed under System Settings →
 # Privacy & Security → Accessibility. Without that permission it exits 2.
 #
-# This is an optional diagnostic. The expected roles and names come from
-# the accessibility bridge's role mapping in crates/choscorui-macos/README.md.
-# No live session has confirmed them, so a mismatch can be an error in this
-# script.
+# This is an optional diagnostic. It walks `UI elements` recursively,
+# because System Events cannot resolve the items of `entire contents` for
+# the toolkit's accessibility elements.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -21,6 +20,32 @@ trap 'rm -rf "$work"' EXIT
 failures=0
 
 cat >"$work/dump.applescript" <<'EOF'
+on walk(e, depth)
+  tell application "System Events"
+    set r to ""
+    set d to ""
+    set t to ""
+    try
+      set r to role of e
+    end try
+    try
+      set d to description of e
+    end try
+    try
+      set t to title of e
+    end try
+    set out to r & "|" & d & "|" & t & linefeed
+    if depth < 12 then
+      try
+        repeat with c in (UI elements of e)
+          set out to out & my walk(c, depth + 1)
+        end repeat
+      end try
+    end if
+  end tell
+  return out
+end walk
+
 on run argv
   set pid to (item 1 of argv) as integer
   set out to ""
@@ -28,20 +53,8 @@ on run argv
     set p to first process whose unix id is pid
     repeat with w in windows of p
       set out to out & "AXWindow|" & (name of w) & linefeed
-      repeat with e in (entire contents of w)
-        set r to ""
-        set d to ""
-        set t to ""
-        try
-          set r to role of e
-        end try
-        try
-          set d to description of e
-        end try
-        try
-          set t to title of e
-        end try
-        set out to out & r & "|" & d & "|" & t & linefeed
+      repeat with c in (UI elements of w)
+        set out to out & my walk(c, 1)
       end repeat
     end repeat
   end tell
@@ -57,10 +70,11 @@ if ! osascript -e 'tell application "System Events" to get windows of (first pro
     exit 2
 fi
 
-dump() { # binary env... -> writes $work/tree.txt
+dump() { # binary page-id env... -> writes $work/tree.txt
     binary=$1
-    shift
-    env "$@" "$binary" >/dev/null 2>&1 &
+    page=$2
+    shift 2
+    env "$@" "$binary" -- "$page" >/dev/null 2>&1 &
     pid=$!
     tree=""
     for _ in 1 2 3 4 5 6 7 8 9 10; do
@@ -83,19 +97,23 @@ expect() { # description pattern (extended regex over role|description|title)
 }
 
 cargo build --quiet --release -p choscorui-gallery --manifest-path "$root/Cargo.toml"
-dump "$root/target/release/choscorui-gallery" CHOSCORUI_GALLERY_AUTOCLOSE_MS=15000
-expect "gallery: theme button" '^AXButton\|.*Switch theme'
-expect "gallery: checkbox" '^AXCheckBox\|.*Show selection'
-expect "gallery: text field" '^AXTextField\|.*Greeting'
-expect "gallery: multiline document" '^AXTextArea\|.*Multilingual document'
-expect "gallery: scrollable rows" 'Row 1'
+# Private settings, so the check neither reads nor changes the user's.
+settings="$work/settings.txt"
+dump "$root/target/release/choscorui-gallery" slider CHOSCORUI_GALLERY_SETTINGS="$settings" \
+    CHOSCORUI_GALLERY_AUTOCLOSE_MS=120000 CHOSCORUI_GALLERY_LANG=en
+expect "gallery: window title names the page" '^AXWindow\|choscorui gallery — Slider'
+expect "gallery: theme button" '^AXButton\|.*Dark'
+expect "gallery: Enabled toggle" '^AXCheckBox\|.*Enabled'
+expect "gallery: sidebar filter" '^AXTextField\|.*Filter pages'
+expect "gallery: new window button" '^AXButton\|.*Open in new window'
+expect "gallery: slider page control" '^AXSlider\|'
 
-(cd "$root/samples/notes" && cargo build --quiet --release)
-dump "$root/samples/notes/target/release/choscorui-notes-sample" NOTES_LANG=he
-expect "notes: Hebrew window title" '^AXWindow\|פתק 1'
-expect "notes: Hebrew toolbar button" '^AXButton\|.*חלון חדש'
-expect "notes: Hebrew text field" '^AXTextField\|.*טקסט הפתק'
-expect "notes: status text" '^AXStaticText\|.*חלון אחד פתוח'
+dump "$root/target/release/choscorui-gallery" slider CHOSCORUI_GALLERY_SETTINGS="$settings" \
+    CHOSCORUI_GALLERY_AUTOCLOSE_MS=120000 CHOSCORUI_GALLERY_LANG=vi
+expect "gallery (vi): Vietnamese window title" '^AXWindow\|choscorui gallery — Thanh trượt'
+expect "gallery (vi): Vietnamese theme button" '^AXButton\|.*Tối'
+expect "gallery (vi): Vietnamese Enabled toggle" '^AXCheckBox\|.*Bật'
+expect "gallery (vi): Vietnamese sidebar filter" '^AXTextField\|.*Lọc trang'
 
 if [ "$failures" = 0 ]; then
     echo "OK (0 failures)"

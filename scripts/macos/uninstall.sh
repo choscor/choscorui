@@ -1,9 +1,9 @@
 #!/bin/sh
-# Removes the choscorui apps and the data they write for this user:
+# Removes the choscorui gallery app and the data it writes for this user:
 # settings (Application Support), preferences, caches, and saved window
 # state.
 #
-#   ./uninstall.sh               removes apps from ~/Applications
+#   ./uninstall.sh               removes the app from ~/Applications
 #   ./uninstall.sh --keep-data   keeps settings and preferences
 #   CHOSCORUI_INSTALL_DIR=/Applications ./uninstall.sh
 set -eu
@@ -13,9 +13,7 @@ keep_data=0
 [ "${1:-}" = --keep-data ] && keep_data=1
 
 # app name | bundle identifier
-apps="choscorui Gallery|com.choscor.gallery
-choscorui Stress|com.choscor.stress
-choscorui Notes|com.choscor.notes"
+apps="choscorui Gallery|com.choscor.gallery"
 
 echo "$apps" | while IFS='|' read -r name bundle_id; do
     if [ -d "$target/$name.app" ]; then

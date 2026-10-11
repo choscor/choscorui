@@ -1,9 +1,8 @@
 #!/bin/sh
-# Builds release app bundles for the gallery, the stress gallery, and the
-# notes sample, signs them, optionally notarizes them, and writes
-# dist/choscorui-<version>/ (apps, install.sh, uninstall.sh, README.md,
-# licenses, and THIRD-PARTY-NOTICES.txt) and a zip of it with a SHA-256
-# checksum.
+# Builds the gallery's release app bundle, signs it, optionally notarizes
+# it, and writes dist/choscorui-<version>/ (the app, install.sh,
+# uninstall.sh, README.md, licenses, and THIRD-PARTY-NOTICES.txt) and a zip
+# of it with a SHA-256 checksum.
 #
 # Environment:
 #   CHOSCORUI_SIGN_IDENTITY  codesign identity ("Developer ID Application: …").
@@ -26,9 +25,7 @@ arch=$(uname -m)
 [ "${CHOSCORUI_UNIVERSAL:-0}" = 1 ] && arch=universal
 
 # name | cargo package | manifest directory | bundle id | executable | resources
-apps="Gallery|choscorui-gallery|.|com.choscor.gallery|choscorui-gallery|
-Stress|choscorui-stress|.|com.choscor.stress|choscorui-stress|
-Notes|choscorui-notes-sample|samples/notes|com.choscor.notes|choscorui-notes-sample|samples/notes/resources"
+apps="Gallery|choscorui-gallery|.|com.choscor.gallery|choscorui-gallery|gallery/resources"
 
 build() { # package manifest-dir -> path of the built binary
     package=$1
