@@ -1,0 +1,11 @@
+[package]
+name = "choscorui-gallery"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Every choscorui control in one window, built on the safe facade alone"
+
+[dependencies]
+choscorui = { path = "../crates/choscorui" }

@@ -1,6 +1,5 @@
 [workspace]
-members = ["crates/choscorui", "crates/choscorui-core", "crates/choscorui-controls", "crates/choscorui-compose", "crates/choscorui-linux", "crates/choscorui-macos", "crates/choscorui-windows", "crates/choscorui-render", "examples/gallery", "examples/stress", "examples/bench"]
-exclude = ["samples"]
+members = ["crates/choscorui", "crates/choscorui-core", "crates/choscorui-controls", "crates/choscorui-compose", "crates/choscorui-linux", "crates/choscorui-macos", "crates/choscorui-windows", "crates/choscorui-render", "gallery", "tools/bench"]
 resolver = "3"
 
 [workspace.package]
