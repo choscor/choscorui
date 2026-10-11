@@ -2,7 +2,7 @@
 //! inputs (numbers, masks, dates) with validation feedback.
 
 use crate::page::{
-    Align, Column, Env, FONT, Page, field_semantics, node, paint_field, pressed, type_into,
+    Column, Env, FONT, Page, field_semantics, node, paint_field, pressed, type_into,
 };
 use choscorui::controls::{
     DateInput, InputMask, NumberInput, ShortcutModifiers, TextEditor, TextEditorInput, TextField,
@@ -71,7 +71,7 @@ impl Page for TextFieldPage {
         let mut column = Column::new(bounds, env);
         for (caption, id, _, _, _) in &self.fields {
             let _ = tree.set_bounds(*caption, column.row(20.0));
-            let _ = tree.set_bounds(*id, column.cells(32.0, &[340.0])[0]);
+            let _ = tree.set_bounds(*id, column.cells(36.0, &[340.0])[0]);
         }
     }
 
@@ -84,36 +84,7 @@ impl Page for TextFieldPage {
             };
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), &note);
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let state = field.visual_state(tree, *id);
-            env.field_style().paint(list, bounds, state);
-            let display = field.display_value();
-            let inner = bounds.inset(8.0);
-            list.push_clip(bounds);
-            let color = if state.enabled {
-                env.tokens.color(ColorRole::Foreground)
-            } else {
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.45)
-            };
-            env.text(list, inner, &display, env.body(), color, Align::Leading);
-            if state.focused {
-                let boundaries = grapheme_boundaries(&display);
-                let caret = field.caret().min(boundaries.len().saturating_sub(1));
-                let before = env.measure(&display[..boundaries[caret]], env.body());
-                let width = env.measure(&display, env.body());
-                let x = if env.rtl() {
-                    inner.max_x() - width + before
-                } else {
-                    inner.origin.x + before
-                };
-                list.fill_rect(
-                    Rect::new(
-                        Point::new(x, bounds.origin.y + 6.0),
-                        Size::new(1.0, bounds.size.height - 12.0),
-                    ),
-                    env.tokens.color(ColorRole::Foreground),
-                );
-            }
-            let _ = list.pop_clip();
+            field.paint(&mut env.cx(list, bounds), tree, *id);
         }
     }
 
@@ -140,7 +111,7 @@ impl Page for TextFieldPage {
         };
         for (_, id, field, _, _) in &mut self.fields {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            if !bounds.contains(position) || !field.visual_state(tree, *id).enabled {
+            if !bounds.contains(position) || field.visual_state(tree, *id).disabled() {
                 continue;
             }
             let _ = tree.set_focus(Some(*id));

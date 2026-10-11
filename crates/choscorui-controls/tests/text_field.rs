@@ -1,11 +1,13 @@
 use choscorui_controls::{
-    TextField, TextFieldChange, TextFieldInput, TextFieldSemanticAction, TextFieldStyle,
-    ValidationKind, ValidationState,
+    ControlKind, EstimatedText, PaintContext, Recipe, ResolvedStyle, StyleQuery, Styles, TextField,
+    TextFieldChange, TextFieldInput, TextFieldSemanticAction, ValidationKind, ValidationState,
 };
 use choscorui_core::{
-    Color, Dirty, DisplayCommand, DisplayList, Key, KeyEvent, Point, Rect, Size, Tree,
+    Color, ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent, Point,
+    RecipeSet, Rect, Size, Tree,
 };
 use choscorui_core::{SemanticAction as CoreSemanticAction, SemanticRole};
+use std::rc::Rc;
 
 fn setup() -> (Tree, choscorui_core::NodeId, TextField) {
     let mut tree = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(240.0, 80.0)));
@@ -214,39 +216,97 @@ fn single_line_text_normalizes_line_breaks_and_delete_is_grapheme_safe() {
 
 #[test]
 fn visual_recipe_is_swappable_without_changing_text_behavior() {
+    struct Flat;
+    impl Recipe for Flat {
+        fn resolve(&self, _: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+            Some(ResolvedStyle {
+                background: Color::rgba8(100, 110, 120, 255),
+                ..ResolvedStyle::new(tokens)
+            })
+        }
+    }
     let (mut tree, id, mut field) = setup();
     tree.set_focus(Some(id)).unwrap();
-    let first = TextFieldStyle {
-        background: Color::rgba8(10, 20, 30, 255),
-        disabled: Color::rgba8(60, 60, 60, 255),
-        focus: Color::rgba8(255, 255, 255, 255),
-        intermediate: Color::rgba8(240, 180, 50, 255),
-        invalid: Color::rgba8(240, 60, 70, 255),
+    let tokens = DesignTokens::light();
+    let mut custom = Styles::new();
+    custom.set_recipe(RecipeSet::DEFAULT, ControlKind::Input, Rc::new(Flat));
+    let paint = |styles: &Styles, field: &TextField, tree: &Tree| {
+        let mut list = DisplayList::new();
+        let bounds = tree.bounds(id).unwrap();
+        field.paint(
+            &mut PaintContext::new(&mut list, bounds, &tokens, styles, &EstimatedText),
+            tree,
+            id,
+        );
+        list
     };
-    let second = TextFieldStyle {
-        background: Color::rgba8(100, 110, 120, 255),
-        ..first
-    };
-    let mut before = DisplayList::new();
-    first.paint(
-        &mut before,
-        tree.bounds(id).unwrap(),
-        field.visual_state(&tree, id),
-    );
-    let mut after = DisplayList::new();
-    second.paint(
-        &mut after,
-        tree.bounds(id).unwrap(),
-        field.visual_state(&tree, id),
-    );
+    let before = paint(&Styles::new(), &field, &tree);
+    let after = paint(&custom, &field, &tree);
     assert_ne!(before.commands(), after.commands());
-    assert!(
-        matches!(after.commands()[0], DisplayCommand::FillRect { color, .. } if color == second.background)
-    );
+    assert!(after.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRect { color, .. } if *color == Color::rgba8(100, 110, 120, 255)
+    )));
     field
         .handle(&mut tree, id, TextFieldInput::Text("é".into()))
         .unwrap();
     assert_eq!(field.value(), "é");
+}
+
+#[test]
+fn field_paints_placeholder_text_caret_and_invalid_ring() {
+    let (mut tree, id, field) = setup();
+    let mut field = field.with_placeholder("Your name");
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let paint = |field: &TextField, tree: &Tree| {
+        let mut list = DisplayList::new();
+        let bounds = tree.bounds(id).unwrap();
+        field.paint(
+            &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+            tree,
+            id,
+        );
+        list
+    };
+    let muted = tokens.color(ColorRole::MutedForeground);
+    let empty = paint(&field, &tree);
+    assert!(empty.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, color, .. } if text == "Your name" && *color == muted
+    )));
+
+    tree.set_focus(Some(id)).unwrap();
+    field
+        .handle(&mut tree, id, TextFieldInput::Text("Ana".into()))
+        .unwrap();
+    field
+        .handle(
+            &mut tree,
+            id,
+            TextFieldInput::SetValidation(ValidationState::Invalid("Too short".into())),
+        )
+        .unwrap();
+    let state = field.visual_state(&tree, id);
+    assert!(state.focused() && state.focus_visible() && state.invalid());
+    let typed = paint(&field, &tree);
+    let foreground = tokens.color(ColorRole::Foreground);
+    assert!(typed.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, .. } if text == "Ana"
+    )));
+    assert!(
+        typed.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRect { rect, color } if *color == foreground && rect.size.width == 1.0
+        )),
+        "the caret shows while focused"
+    );
+    assert!(typed.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::StrokeRoundedRect { color, .. } if *color == tokens.color(ColorRole::Destructive).with_alpha(0.2)
+    )));
+    assert!(typed.is_balanced());
 }
 
 #[test]
@@ -527,26 +587,7 @@ fn validation_state_is_separate_and_only_valid_value_commits() {
     let semantics = field.semantics(&tree, id);
     assert_eq!(semantics.validation, ValidationKind::Invalid);
     assert_eq!(semantics.announcement.as_deref(), Some("Name is required"));
-    assert_eq!(
-        field.visual_state(&tree, id).validation,
-        ValidationKind::Invalid
-    );
-    let style = TextFieldStyle {
-        background: Color::rgba8(10, 20, 30, 255),
-        disabled: Color::rgba8(60, 60, 60, 255),
-        focus: Color::rgba8(255, 255, 255, 255),
-        intermediate: Color::rgba8(240, 180, 50, 255),
-        invalid: Color::rgba8(240, 60, 70, 255),
-    };
-    let mut list = DisplayList::new();
-    style.paint(
-        &mut list,
-        tree.bounds(id).unwrap(),
-        field.visual_state(&tree, id),
-    );
-    assert!(
-        matches!(list.commands().last().unwrap(), DisplayCommand::FillRect { color, .. } if *color == style.invalid)
-    );
+    assert!(field.visual_state(&tree, id).invalid());
     assert_eq!(
         field
             .handle(

@@ -248,11 +248,7 @@ fn custom_validation_follows_the_locale() {
             .handle(&mut tree, node, TextFieldInput::SetValue(text.into()))
             .unwrap();
         validate_amount(&mut field, &mut tree, node, &vietnamese);
-        assert_eq!(
-            field.visual_state(&tree, node).validation,
-            expected,
-            "{text}"
-        );
+        assert_eq!(field.semantics(&tree, node).validation, expected, "{text}");
     }
     let semantics = field.semantics(&tree, node);
     assert_eq!(

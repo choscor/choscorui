@@ -501,6 +501,20 @@ behavior.
 - **Password.** `TextField::password` masks the value. `Cut` does
   nothing, and `selected_text` is empty.
 - The field has no `Cancel` input and no Escape behavior.
+- **Look.** `paint` uses the `Input` recipe. `with_placeholder` sets the
+  muted text that shows while the value is empty. A focused field always
+  shows the focus ring and the caret. The text scrolls so the caret stays
+  visible. The selection has a `primary` fill at 25%, and marked text is
+  underlined. An `Invalid` validation shows the invalid ring.
+- `InputText` paints the same look for other single-line fields.
+
+| Part | Value |
+| --- | --- |
+| Box | height 36, radius md, `input` edge, extra-small shadow, padding 10 by 4; dark: `input` at 30% fill |
+| Text | small text in `foreground`; placeholder in `muted-foreground` |
+| Focus | `ring` edge and 3 pt ring at 50% |
+| Invalid | `destructive` edge and ring at 20% (dark 40%) |
+| Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
 | --- | --- |

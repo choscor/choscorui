@@ -403,7 +403,7 @@ fn validate_amount(
 }
 ```
 
-- The field paints the indicator for the state through its `TextFieldStyle`.
+- An `Invalid` state paints the invalid ring of the `Input` recipe.
 - The field semantics give an `Invalid` message as `announcement`.
 - `Locale::parse_decimal` accepts the decimal format of the user's locale.
 

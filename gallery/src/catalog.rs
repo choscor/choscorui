@@ -200,6 +200,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("NumberBase", "numeric-display"),
     ("TextField", "text-field"),
     ("ValidationState", "text-field"),
+    ("InputText", "text-field"),
     ("TextEditor", "text-editor"),
     ("NumberInput", "number-input"),
     ("InputMask", "input-mask"),
@@ -489,14 +490,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     (
         "TextFieldSemantics",
         "semantics record produced by TextField",
-    ),
-    (
-        "TextFieldStyle",
-        "paint style used by text and structured-input pages",
-    ),
-    (
-        "TextFieldVisualState",
-        "visual state input to TextFieldStyle",
     ),
     ("ToolbarItemKind", "variant data inside ToolbarItem"),
     ("ToolbarLayout", "geometry returned by Toolbar::layout"),

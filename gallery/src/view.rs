@@ -6,14 +6,13 @@ use crate::catalog::PAGES;
 use crate::page::{Align, Category, Desktop, Env, MeasureCache, Page, PageState, sem, split};
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlSize,
+    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlSize, InputText,
     ShortcutModifiers, TextField, TextFieldChange, TextFieldInput,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId,
     Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry,
     SemanticNode, SemanticRole, SemanticTree, Size, TextShaper, Tree, WheelUnit, fold_for_search,
-    grapheme_boundaries,
 };
 use std::time::Duration;
 
@@ -712,51 +711,18 @@ impl GalleryView {
         // Sidebar.
         list.fill_rect(self.sidebar, env.mix(0.03));
         let filter = self.tree.bounds(self.filter_node).unwrap_or_default();
-        env.field_style().paint(
-            &mut list,
-            filter,
+        let shown = self.filter.display_value();
+        InputText {
+            text: &shown,
+            placeholder: &ctx.text("sidebar.placeholder", &[]),
+            caret: Some(self.filter.caret()),
+            selection: self.filter.selection(),
+            marked: None,
+        }
+        .paint(
+            &mut env.cx(&mut list, filter),
             self.filter.visual_state(&self.tree, self.filter_node),
         );
-        let shown = self.filter.display_value();
-        let text_rect = filter.inset(8.0);
-        if shown.is_empty() {
-            env.text(
-                &mut list,
-                text_rect,
-                &ctx.text("sidebar.placeholder", &[]),
-                env.body(),
-                tokens.color(ColorRole::Foreground).with_alpha(0.45),
-                Align::Leading,
-            );
-        } else {
-            env.text(
-                &mut list,
-                text_rect,
-                &shown,
-                env.body(),
-                tokens.color(ColorRole::Foreground),
-                Align::Leading,
-            );
-        }
-        if self.tree.focus() == Some(self.filter_node) {
-            let boundaries = grapheme_boundaries(&shown);
-            let caret = self.filter.caret().min(boundaries.len().saturating_sub(1));
-            let prefix = &shown[..boundaries.get(caret).copied().unwrap_or(shown.len())];
-            let width = env.measure(&shown, env.body());
-            let before = env.measure(prefix, env.body());
-            let x = if env.rtl() {
-                text_rect.max_x() - width + before
-            } else {
-                text_rect.origin.x + before
-            };
-            list.fill_rect(
-                Rect::new(
-                    Point::new(x, filter.origin.y + 6.0),
-                    Size::new(1.0, filter.size.height - 12.0),
-                ),
-                tokens.color(ColorRole::Foreground),
-            );
-        }
         list.push_clip(self.list_rect);
         let list_focused = self.tree.focus() == Some(self.list_node);
         for row in &self.rows {

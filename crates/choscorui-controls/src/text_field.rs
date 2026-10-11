@@ -1,7 +1,8 @@
+use crate::InputText;
+use crate::style::{PaintContext, VisualState};
 use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, NodeId, Point, Rect,
-    SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, SemanticText,
-    Size, TextBuffer, TextMotion, Tree, TreeError,
+    Dirty, Key, KeyEvent, NodeId, SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole,
+    SemanticState, SemanticText, TextBuffer, TextMotion, Tree, TreeError,
 };
 use std::ops::Range;
 
@@ -130,50 +131,6 @@ impl TextFieldSemantics {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TextFieldVisualState {
-    pub enabled: bool,
-    pub focused: bool,
-    pub validation: ValidationKind,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct TextFieldStyle {
-    pub background: Color,
-    pub disabled: Color,
-    pub focus: Color,
-    pub intermediate: Color,
-    pub invalid: Color,
-}
-
-impl TextFieldStyle {
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, state: TextFieldVisualState) {
-        list.fill_rect(
-            bounds,
-            if state.enabled {
-                self.background
-            } else {
-                self.disabled
-            },
-        );
-        let indicator = match state.validation {
-            ValidationKind::Invalid => Some(self.invalid),
-            ValidationKind::Intermediate => Some(self.intermediate),
-            ValidationKind::Valid if state.focused => Some(self.focus),
-            ValidationKind::Valid => None,
-        };
-        if let Some(indicator) = indicator {
-            list.fill_rect(
-                Rect::new(
-                    Point::new(bounds.origin.x, bounds.origin.y + bounds.size.height - 2.0),
-                    Size::new(bounds.size.width, 2.0),
-                ),
-                indicator,
-            );
-        }
-    }
-}
-
 /// Single-line editing behavior. Platform text services feed committed text
 /// through `Text`; validation and application commit policy remain external.
 pub struct TextField {
@@ -183,6 +140,7 @@ pub struct TextField {
     validation: ValidationState,
     composition: Option<TextComposition>,
     secure: bool,
+    placeholder: String,
 }
 
 impl TextField {
@@ -199,7 +157,19 @@ impl TextField {
             validation: ValidationState::Valid,
             composition: None,
             secure: false,
+            placeholder: String::new(),
         }
+    }
+
+    /// Text shown in muted color while the value is empty.
+    #[must_use]
+    pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = placeholder.into();
+        self
+    }
+
+    pub fn placeholder(&self) -> &str {
+        &self.placeholder
     }
 
     pub fn password(name: impl Into<String>, value: impl Into<String>) -> Self {
@@ -256,12 +226,37 @@ impl TextField {
         Some(start..start + composition.text.encode_utf16().count())
     }
 
-    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> TextFieldVisualState {
-        TextFieldVisualState {
-            enabled: self.enabled,
-            focused: tree.focus() == Some(id),
-            validation: self.validation.kind(),
+    /// The flags the input recipe reads. A focused field always shows
+    /// the focus ring, as text inputs do.
+    pub fn visual_state(&self, tree: &Tree, id: NodeId) -> VisualState {
+        let focused = tree.focus() == Some(id);
+        VisualState::NONE
+            .set(VisualState::DISABLED, !self.enabled)
+            .set(VisualState::FOCUSED, focused)
+            .set(VisualState::FOCUS_VISIBLE, focused)
+            .set(
+                VisualState::INVALID,
+                self.validation.kind() == ValidationKind::Invalid,
+            )
+    }
+
+    /// Paints the input box, the display value or placeholder, the
+    /// selection, marked text, and the caret.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
+        let state = self.visual_state(tree, id);
+        let display = self.display_value();
+        let marked = self.composition.as_ref().map(|composition| {
+            let start = composition.replacement.start;
+            start..start + choscorui_core::grapheme_boundaries(&composition.text).len() - 1
+        });
+        InputText {
+            text: &display,
+            placeholder: &self.placeholder,
+            caret: Some(self.caret()),
+            selection: self.selection(),
+            marked,
         }
+        .paint(cx, state);
     }
 
     pub fn set_enabled(

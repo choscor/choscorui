@@ -3,9 +3,9 @@
 use crate::page::{Align, Clicks, Column, Env, Page, node, pressed, sem};
 use choscorui::controls::{
     Button, ButtonGroup, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId,
-    CommandRegistry, CommandState, KeySequenceChange, KeySequenceEdit,
+    CommandRegistry, CommandState, InputText, KeySequenceChange, KeySequenceEdit,
     SemanticAction as ControlAction, Shortcut, ShortcutModifiers, ShortcutScope, ToolButton,
-    ToolButtonAction, ToolButtonMenu, shortcut_text,
+    ToolButtonAction, ToolButtonMenu, VisualState, shortcut_text,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Icon, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
@@ -821,21 +821,20 @@ fn examples() -> String {
 impl Page for KeySequencePage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        let _ = tree.set_bounds(self.field, column.cells(34.0, &[320.0])[0]);
+        let _ = tree.set_bounds(self.field, column.cells(36.0, &[320.0])[0]);
         let _ = tree.set_bounds(self.examples, column.row(60.0));
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         let field = tree.bounds(self.field).unwrap_or_default();
-        let mut state = choscorui::controls::TextFieldVisualState {
-            enabled: env.enabled,
-            focused: tree.focus() == Some(self.field),
-            validation: choscorui::controls::ValidationKind::Valid,
-        };
-        if self.edit.is_recording() {
-            state.validation = choscorui::controls::ValidationKind::Intermediate;
-        }
-        env.field_style().paint(list, field, state);
+        let focused = tree.focus() == Some(self.field);
+        let state = VisualState::NONE
+            .set(VisualState::DISABLED, !env.enabled)
+            .set(VisualState::FOCUSED, focused)
+            .set(
+                VisualState::FOCUS_VISIBLE,
+                focused || self.edit.is_recording(),
+            );
         let text = if self.edit.is_recording() {
             "Recording… press keys, Escape cancels".to_owned()
         } else if self.edit.sequence().is_empty() {
@@ -843,14 +842,7 @@ impl Page for KeySequencePage {
         } else {
             self.edit.text()
         };
-        env.text(
-            list,
-            field.inset(8.0),
-            &text,
-            env.body(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Leading,
-        );
+        InputText::new(&text).paint(&mut env.cx(list, field), state);
         let examples = tree.bounds(self.examples).unwrap_or_default();
         let (top, bottom) = halves(examples);
         env.caption(list, top, &format!("Last change: {:?}", self.last));

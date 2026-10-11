@@ -8,8 +8,10 @@ pub use checkbox::{Checkbox, CheckboxInput, CheckboxSemantics};
 mod text_field;
 pub use text_field::{
     TextComposition, TextField, TextFieldChange, TextFieldInput, TextFieldSemanticAction,
-    TextFieldSemantics, TextFieldStyle, TextFieldVisualState, ValidationKind, ValidationState,
+    TextFieldSemantics, ValidationKind, ValidationState,
 };
+mod input_text;
+pub use input_text::InputText;
 mod range_controls;
 #[expect(
     deprecated,

@@ -4,8 +4,8 @@ use crate::page::{
     Align, Column, Env, Page, Push, field_semantics, node, paint_field, pressed, sem, type_into,
 };
 use choscorui::controls::{
-    CommandId, CommandRegistry, CommandState, DialogKeys, MnemonicTable, ShortcutModifiers,
-    ValidationState, parse_mnemonic,
+    CommandId, CommandRegistry, CommandState, ControlKind, DialogKeys, MnemonicTable,
+    ShortcutModifiers, Slot, StyleQuery, ValidationState, VisualState, parse_mnemonic,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerEvent, Rect, SemanticAction,
@@ -318,15 +318,14 @@ impl Page for DialogKeysPage {
             "Note (Return inserts a line here)",
         );
         let note = tree.bounds(self.note.1).unwrap_or_default();
-        env.field_style().paint(
-            list,
-            note,
-            choscorui::controls::TextFieldVisualState {
-                enabled: env.enabled,
-                focused: tree.focus() == Some(self.note.1),
-                validation: ValidationState::Valid.kind(),
-            },
-        );
+        let focused = tree.focus() == Some(self.note.1);
+        let state = VisualState::NONE
+            .set(VisualState::DISABLED, !env.enabled)
+            .set(VisualState::FOCUSED, focused)
+            .set(VisualState::FOCUS_VISIBLE, focused);
+        let mut cx = env.cx(list, note);
+        let style = cx.style(StyleQuery::new(ControlKind::Textarea, Slot::Root).state(state));
+        cx.slot(note, &style, |_, _| {});
         for (index, line) in self.note.2.split('\n').enumerate().take(4) {
             let rect = Rect::new(
                 Point::new(

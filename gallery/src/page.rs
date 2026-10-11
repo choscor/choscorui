@@ -3,15 +3,15 @@
 //! category files.
 
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, MenuStyle,
-    PaintContext, ScrollAreaStyle, ShortcutModifiers, SplitterStyle, Styles, TextFieldStyle,
-    TextFieldVisualState, TextItemDelegate, TextMeasure, ValidationState,
+    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, InputText,
+    MenuStyle, PaintContext, ScrollAreaStyle, ShortcutModifiers, SplitterStyle, Styles,
+    TextItemDelegate, TextMeasure, ValidationState, VisualState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
     LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
     SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle,
-    ThemeResolver, Tree, TypeSpec, lerp_color,
+    ThemeResolver, Tree, TypeSpec, grapheme_boundaries, lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
@@ -358,16 +358,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn field_style(&self) -> TextFieldStyle {
-        TextFieldStyle {
-            background: self.mix(0.06),
-            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
-            focus: self.tokens.color(ColorRole::Primary),
-            intermediate: Color::rgba8(235, 175, 55, 255),
-            invalid: self.tokens.color(ColorRole::Destructive),
-        }
     }
 
     pub fn splitter_style(&self) -> SplitterStyle {
@@ -744,50 +734,19 @@ pub fn paint_field(
     validation: &ValidationState,
     message_rect: Option<Rect>,
 ) {
-    env.field_style().paint(
-        list,
-        rect,
-        TextFieldVisualState {
-            enabled: env.enabled,
-            focused,
-            validation: validation.kind(),
-        },
-    );
-    let inner = rect.inset(8.0);
-    if text.is_empty() {
-        env.text(
-            list,
-            inner,
-            placeholder,
-            env.body(),
-            env.tokens.color(ColorRole::Foreground).with_alpha(0.45),
-            Align::Leading,
+    let state = VisualState::NONE
+        .set(VisualState::DISABLED, !env.enabled)
+        .set(VisualState::FOCUSED, focused)
+        .set(VisualState::FOCUS_VISIBLE, focused)
+        .set(
+            VisualState::INVALID,
+            matches!(validation, ValidationState::Invalid(_)),
         );
-    } else {
-        env.text(
-            list,
-            inner,
-            text,
-            env.body(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Leading,
-        );
-    }
-    if focused {
-        let width = env.measure(text, env.body());
-        let x = if env.rtl() {
-            inner.max_x() - width - 1.0
-        } else {
-            inner.origin.x + width + 1.0
-        };
-        list.fill_rect(
-            Rect::new(
-                Point::new(x, rect.origin.y + 6.0),
-                Size::new(1.0, (rect.size.height - 12.0).max(0.0)),
-            ),
-            env.tokens.color(ColorRole::Foreground),
-        );
-    }
+    let caret = grapheme_boundaries(text).len() - 1;
+    InputText::new(text)
+        .placeholder(placeholder)
+        .caret(caret)
+        .paint(&mut env.cx(list, rect), state);
     if let Some(message_rect) = message_rect {
         let (message, color) = match validation {
             ValidationState::Valid => (

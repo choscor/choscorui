@@ -83,7 +83,7 @@ pub use choscorui_controls::{
     SeparatorOrientation, Shortcut, ShortcutModifiers, ShortcutScope, Slider, SliderInput,
     SliderOrientation, SpinBox, SpinBoxInput, SplitOrientation, Splitter, SplitterInput,
     SplitterStyle, StackPage, StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField,
-    TextFieldChange, TextFieldInput, TextFieldStyle, VisualState,
+    TextFieldChange, TextFieldInput, VisualState,
 };
 pub use choscorui_core::{
     AccessibilityPreferences, Axis, Color, Constraints, CrossAlign, DesignTokens, Dirty,
