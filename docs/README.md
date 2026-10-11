@@ -1,4 +1,4 @@
-# choscorui documentation
+# ChoscorUI documentation
 
 These documents describe the current code. The [specs](specs/) folder contains dated decision records.
 

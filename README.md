@@ -1,6 +1,6 @@
-# choscorui
+# ChoscorUI
 
-choscorui is a desktop UI toolkit for Rust. It uses only the standard library, hand-written system SDK FFI, and one audited crate. Applications depend on the safe `choscorui` facade, which has no `unsafe` code and exposes no native handles.
+ChoscorUI is a desktop UI toolkit for Rust. It uses only the standard library, hand-written system SDK FFI, and one audited crate. Applications depend on the safe `choscorui` facade, which has no `unsafe` code and exposes no native handles.
 
 ## Requirements
 
@@ -35,4 +35,4 @@ Start with the [documentation index](docs/README.md).
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in choscorui by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ChoscorUI by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

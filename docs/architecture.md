@@ -1,6 +1,6 @@
 # Architecture
 
-This document tells how choscorui works. It describes the crates, the rules between them, the frame pipeline, the threading model, and the dependency rule. To build an application, read the [guide](guide.md).
+This document tells how ChoscorUI works. It describes the crates, the rules between them, the frame pipeline, the threading model, and the dependency rule. To build an application, read the [guide](guide.md).
 
 ## Crates
 

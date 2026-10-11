@@ -1,6 +1,6 @@
 # Text
 
-This document describes how choscorui shapes, arranges, edits, and paints
+This document describes how ChoscorUI shapes, arranges, edits, and paints
 text. It also describes the IME flow and rich text. The behavior contracts of
 `TextField` and `TextEditor` (keys, focus, validation, undo) are in
 [controls.md](controls.md).

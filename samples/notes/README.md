@@ -1,6 +1,6 @@
 # Notes sample
 
-The notes sample is an external application. It uses choscorui in the same way as an application from a different developer:
+The notes sample is an external application. It uses ChoscorUI in the same way as an application from a different developer:
 
 - It has its own Cargo workspace and depends only on the `choscorui` facade crate.
 - It sets `#![forbid(unsafe_code)]`. It has no FFI declarations, and it does not name a backend crate such as `choscorui-macos`.

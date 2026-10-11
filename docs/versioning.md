@@ -2,7 +2,7 @@
 
 ## Versions
 
-choscorui follows [Semantic Versioning](https://semver.org/) for the `choscorui` facade crate. All workspace crates use one version number.
+ChoscorUI follows [Semantic Versioning](https://semver.org/) for the `choscorui` facade crate. All workspace crates use one version number.
 
 - **Before 1.0 (`0.y.z`).** A breaking change increments `y`. A `z` release is compatible. The API is experimental, and the release notes list each breaking change.
 - **From 1.0.** A breaking change needs a major release. Additions go in minor releases. Examples of additions are new types, new methods, new enum variants on `#[non_exhaustive]` types, and new capability fields. A patch release only fixes bugs.

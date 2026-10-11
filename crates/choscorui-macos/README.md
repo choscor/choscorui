@@ -1,6 +1,6 @@
 # choscorui-macos
 
-`choscorui-macos` is the macOS backend of choscorui. The `choscorui` facade re-exports it as `choscorui::platform`. The crate is an implementation detail, so applications depend on the facade and not on this crate.
+`choscorui-macos` is the macOS backend of ChoscorUI. The `choscorui` facade re-exports it as `choscorui::platform`. The crate is an implementation detail, so applications depend on the facade and not on this crate.
 
 The crate calls AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, and UserNotifications through hand-written FFI. Its public handles stay on the main thread.
 

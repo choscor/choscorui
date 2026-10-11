@@ -1,6 +1,6 @@
 # Releasing
 
-This document describes how to publish a choscorui release for macOS. Do the steps in order. Use one source commit for the tag, the archive, and the release notes.
+This document describes how to publish a ChoscorUI release for macOS. Do the steps in order. Use one source commit for the tag, the archive, and the release notes.
 
 ```mermaid
 flowchart LR

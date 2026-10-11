@@ -1,6 +1,6 @@
 # Build an application
 
-This guide tells how to build a desktop application with choscorui. Each section names the types to use and links to a working example. [`samples/notes`](../samples/notes/README.md) is a complete small application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
+This guide tells how to build a desktop application with ChoscorUI. Each section names the types to use and links to a working example. [`samples/notes`](../samples/notes/README.md) is a complete small application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
 
 ## Requirements
 
@@ -44,7 +44,7 @@ Depend only on `choscorui`. The other crates are internal and can change in any 
 
 ## The application loop
 
-choscorui does not own your main loop. You make an `Application` on the main thread, open windows, and read events:
+ChoscorUI does not own your main loop. You make an `Application` on the main thread, open windows, and read events:
 
 ```rust
 use choscorui::prelude::*;

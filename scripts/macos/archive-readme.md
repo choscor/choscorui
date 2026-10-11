@@ -1,6 +1,6 @@
-# choscorui demo apps
+# ChoscorUI demo apps
 
-This archive contains three macOS apps that use choscorui.
+This archive contains three macOS apps that use ChoscorUI.
 
 | App | Content |
 | --- | --- |

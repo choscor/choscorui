@@ -1,6 +1,6 @@
-# Contributing to choscorui
+# Contributing to ChoscorUI
 
-Anyone can create an issue to report a bug or to suggest a change. choscorui does not accept external pull requests. The maintainer makes the changes and opens the pull requests for the project.
+Anyone can create an issue to report a bug or to suggest a change. ChoscorUI does not accept external pull requests. The maintainer makes the changes and opens the pull requests for the project.
 
 ## Maintainer pull request title and description
 
@@ -139,4 +139,4 @@ Do not report these items as verified from automated evidence.
 
 ## License
 
-choscorui has a dual license, `MIT OR Apache-2.0`, as the [README](README.md#license) describes. Changes to the project use the same licenses.
+ChoscorUI has a dual license, `MIT OR Apache-2.0`, as the [README](README.md#license) describes. Changes to the project use the same licenses.

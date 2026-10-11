@@ -4,7 +4,7 @@ Last checked on 2026-10-12 against `Cargo.lock` (the workspace and `samples/note
 
 ## Project license
 
-choscorui has a dual license, `MIT OR Apache-2.0` ([`LICENSE-MIT`](../LICENSE-MIT) and [`LICENSE-APACHE`](../LICENSE-APACHE)). The user selects one license. The workspace sets `license = "MIT OR Apache-2.0"` in `[workspace.package]`. Each crate uses `license.workspace = true`, and `samples/notes` sets the license directly.
+ChoscorUI has a dual license, `MIT OR Apache-2.0` ([`LICENSE-MIT`](../LICENSE-MIT) and [`LICENSE-APACHE`](../LICENSE-APACHE)). The user selects one license. The workspace sets `license = "MIT OR Apache-2.0"` in `[workspace.package]`. Each crate uses `license.workspace = true`, and `samples/notes` sets the license directly.
 
 ## Rust crates in the build graph
 
@@ -28,7 +28,7 @@ The release binaries link only these libraries (`otool -L dist/choscorui-*/…/C
 - **Frameworks:** AppKit, Foundation, CoreFoundation, CoreGraphics, CoreText, ImageIO, and UserNotifications.
 - **Libraries:** `libobjc` and `libSystem`.
 
-macOS supplies these libraries, and they load dynamically. The Xcode and macOS SDK license agreements apply to them. choscorui does not distribute them.
+macOS supplies these libraries, and they load dynamically. The Xcode and macOS SDK license agreements apply to them. ChoscorUI does not distribute them.
 
 ## Fonts and bundled assets
 

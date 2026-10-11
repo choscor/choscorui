@@ -1,10 +1,10 @@
 ---
 name: release-new-version
 disable-model-invocation: true
-description: Release choscorui from one verified tag with a signed, notarized macOS universal archive and a GitHub Release whose text is the release notes.
+description: Release ChoscorUI from one verified tag with a signed, notarized macOS universal archive and a GitHub Release whose text is the release notes.
 ---
 
-# Release choscorui
+# Release ChoscorUI
 
 Work from the repository root. Read [the release procedure](../../../docs/releasing.md),
 [the versioning policy](../../../docs/versioning.md), and

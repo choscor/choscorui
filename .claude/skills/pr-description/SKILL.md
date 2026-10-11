@@ -1,6 +1,6 @@
 ---
 name: pr-description
-description: Draft or revise a choscorui pull request title and body from the actual changes and verification evidence. Use when preparing a PR for review or updating its description after the diff changes.
+description: Draft or revise a ChoscorUI pull request title and body from the actual changes and verification evidence. Use when preparing a PR for review or updating its description after the diff changes.
 ---
 
 # Pull request description
