@@ -12,7 +12,6 @@ use choscorui::core::{
     LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, RadiusScale, Rect,
     SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
     TextShaper, TextSize, TextStyle, ThemeResolver, Tree, TypeSpec, grapheme_boundaries,
-    lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
@@ -233,12 +232,6 @@ impl Env<'_> {
             .time(self.now.as_secs_f64())
     }
 
-    /// Text and glyph color on an accent fill. Every theme's accent is a
-    /// saturated mid-tone, so white keeps contrast in light and dark modes.
-    pub fn on_accent(&self) -> Color {
-        Color::rgba8(255, 255, 255, 255)
-    }
-
     pub fn rtl(&self) -> bool {
         self.direction == LayoutDirection::Rtl
     }
@@ -340,15 +333,6 @@ impl Env<'_> {
             .styles()
             .resolve(self.tokens, StyleQuery::new(ControlKind::Card, Slot::Root));
         paint_box(list, rect, &style, self.rtl());
-    }
-
-    /// Surface color mixed toward content, for hover and pressed fills.
-    pub fn mix(&self, amount: f64) -> Color {
-        lerp_color(
-            self.tokens.color(ColorRole::Card),
-            self.tokens.color(ColorRole::Foreground),
-            amount,
-        )
     }
 
     /// The theme's focus ring around a focused rectangle, at radius md.

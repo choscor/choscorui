@@ -6,8 +6,9 @@ use crate::catalog::PAGES;
 use crate::page::{Align, Category, Desktop, Env, MeasureCache, Page, PageState, sem, split};
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlSize, InputText,
-    ShortcutModifiers, TextField, TextFieldChange, TextFieldInput,
+    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlKind,
+    ControlSize, InputText, ShortcutModifiers, Slot, StyleQuery, TextAlign, TextField,
+    TextFieldChange, TextFieldInput, VisualState, paint_box,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId,
@@ -648,15 +649,11 @@ impl GalleryView {
             tokens.color(ColorRole::Background),
         );
 
-        // State bar.
-        list.fill_rect(self.bar, tokens.color(ColorRole::Card));
-        list.fill_rect(
-            Rect::new(
-                Point::new(0.0, self.bar.max_y() - 1.0),
-                Size::new(self.size.width, 1.0),
-            ),
-            env.mix(0.15),
-        );
+        // State bar, with the toolbar look.
+        let bar = env
+            .styles()
+            .resolve(&tokens, StyleQuery::new(ControlKind::Toolbar, Slot::Root));
+        paint_box(&mut list, self.bar, &bar, env.rtl());
         let theme_labels: Vec<(NodeId, &Button, bool, String)> = self
             .theme_buttons
             .iter()
@@ -709,7 +706,18 @@ impl GalleryView {
         );
 
         // Sidebar.
-        list.fill_rect(self.sidebar, env.mix(0.03));
+        let sidebar = |slot, state| {
+            env.styles().resolve(
+                &tokens,
+                StyleQuery::new(ControlKind::Sidebar, slot).state(state),
+            )
+        };
+        paint_box(
+            &mut list,
+            self.sidebar,
+            &sidebar(Slot::Root, VisualState::NONE),
+            env.rtl(),
+        );
         let filter = self.tree.bounds(self.filter_node).unwrap_or_default();
         let shown = self.filter.display_value();
         InputText {
@@ -724,7 +732,7 @@ impl GalleryView {
             self.filter.visual_state(&self.tree, self.filter_node),
         );
         list.push_clip(self.list_rect);
-        let list_focused = self.tree.focus() == Some(self.list_node);
+        let list_focused = self.tree.focus_visible(self.list_node);
         for row in &self.rows {
             let Some(bounds) = self
                 .tree
@@ -733,59 +741,42 @@ impl GalleryView {
             else {
                 continue;
             };
-            let text_rect = Rect::new(
-                Point::new(bounds.origin.x + 14.0, bounds.origin.y),
-                Size::new((bounds.size.width - 28.0).max(0.0), bounds.size.height),
-            );
-            match row.kind {
-                RowKind::Header(category) => env.text(
-                    &mut list,
-                    text_rect,
-                    &ctx.category_title(category).to_uppercase(),
-                    env.small(),
-                    tokens.color(ColorRole::Foreground).with_alpha(0.55),
-                    Align::Leading,
+            // Rows sit inside the sidebar group padding.
+            let group = sidebar(Slot::Group, VisualState::NONE);
+            let row_rect = Rect::new(
+                Point::new(
+                    bounds.origin.x + group.padding.inline_start,
+                    bounds.origin.y,
                 ),
+                Size::new(
+                    (bounds.size.width - group.padding.horizontal()).max(0.0),
+                    bounds.size.height,
+                ),
+            );
+            let mut cx = env.cx(&mut list, row_rect);
+            match row.kind {
+                RowKind::Header(category) => {
+                    let style = sidebar(Slot::GroupLabel, VisualState::NONE);
+                    cx.slot(row_rect, &style, |cx, inner| {
+                        cx.label(
+                            inner,
+                            &ctx.category_title(category),
+                            &style,
+                            TextAlign::Start,
+                        );
+                    });
+                }
                 RowKind::Page(index) => {
-                    let selected = index == self.selected;
-                    let highlight_rect = Rect::new(
-                        Point::new(bounds.origin.x + 6.0, bounds.origin.y + 1.0),
-                        Size::new(
-                            (bounds.size.width - 12.0).max(0.0),
-                            bounds.size.height - 2.0,
-                        ),
-                    );
-                    if selected {
-                        let _ = list.fill_rounded_rect(
-                            highlight_rect,
-                            5.0,
-                            tokens.color(ColorRole::Primary),
+                    let state = VisualState::NONE
+                        .set(VisualState::SELECTED, index == self.selected)
+                        .set(
+                            VisualState::FOCUS_VISIBLE,
+                            list_focused && self.highlight == Some(index),
                         );
-                    }
-                    if list_focused && self.highlight == Some(index) {
-                        let _ = list.stroke_rounded_rect(
-                            highlight_rect,
-                            5.0,
-                            if selected {
-                                tokens.color(ColorRole::Foreground)
-                            } else {
-                                tokens.color(ColorRole::Primary)
-                            },
-                            2.0,
-                        );
-                    }
-                    env.text(
-                        &mut list,
-                        text_rect,
-                        &ctx.page_title(index),
-                        env.body(),
-                        if selected {
-                            env.on_accent()
-                        } else {
-                            tokens.color(ColorRole::Foreground)
-                        },
-                        Align::Leading,
-                    );
+                    let style = sidebar(Slot::Item, state);
+                    cx.slot(row_rect, &style, |cx, inner| {
+                        cx.label(inner, &ctx.page_title(index), &style, TextAlign::Start);
+                    });
                 }
             }
         }
