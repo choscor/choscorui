@@ -12,11 +12,14 @@ macOS is the supported platform. You need:
 
 There are no other dependencies.
 
-## Run the examples
+## Run the gallery
 
-- Run `cargo run -p choscorui-gallery` to see the basic controls, text input, and theme switching.
-- Run `cargo run -p choscorui-stress` to see a large list, a large canvas, and docking panels.
-- Run `cd samples/notes && cargo run` to see a small application with many windows. The [notes sample](samples/notes/README.md) uses only the facade.
+The gallery shows each public control on its own page. It uses only the `choscorui` facade.
+
+- Run `cargo run -p choscorui-gallery` to open the gallery on the last page.
+- Run `cargo run -p choscorui-gallery -- slider` to open one page.
+- Run `cargo run -p choscorui-gallery -- --list` to print each page id.
+- Run `CHOSCORUI_GALLERY_SETTINGS=/tmp/gallery.txt CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery` to run the scripted checks. The private settings file keeps your own settings.
 
 ## Documentation
 

@@ -166,8 +166,7 @@ themes.set_application(&mut tree, brand(true)).unwrap();
 ```
 
 `set_application` returns the `ThemeInvalidation` that it caused. For more
-than one window, keep one `ThemeResolver` for each window tree. The
-[notes sample](../samples/notes/README.md) does this.
+than one window, keep one `ThemeResolver` for each window tree.
 
 To follow the system settings on macOS, read them at launch:
 

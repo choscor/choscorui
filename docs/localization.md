@@ -4,8 +4,7 @@ This document describes translatable strings, plural forms, locale-aware
 formatting, language changes at runtime, and right-to-left layout. It also
 describes translation validation and packaged resources. All of these types
 are in `choscorui::core` and have no platform code. The
-[notes sample](../samples/notes/README.md) uses them with English,
-Vietnamese, and Hebrew.
+[gallery](../gallery/src/strings.rs) uses them with English and Vietnamese.
 
 ## Locales
 
@@ -37,8 +36,8 @@ separator, a `,` grouping separator, and ISO dates. It also has a 24-hour
 clock, Monday as the first weekday, and left-to-right direction.
 
 The toolkit does not read the preferred languages of the system. Select the
-first locale from a setting or the command line. The notes sample reads the
-`NOTES_LANG` environment variable.
+first locale from a setting or the command line. The gallery reads its
+settings file and the `CHOSCORUI_GALLERY_LANG` environment variable.
 
 ## Translatable strings
 
@@ -67,8 +66,8 @@ lookup returns `LocaleError::MissingMessage`. It does not panic. If a
 placeholder has no value in `args`, the lookup returns
 `LocaleError::MissingArgument`.
 
-You decide what the user sees when a message is missing. The notes sample
-shows the message id. Thus the user can see the problem, and the UI continues
+You decide what the user sees when a message is missing. The gallery shows
+the English page title or the message id. Thus the user can see the problem, and the UI continues
 to work.
 
 ```rust
@@ -152,9 +151,8 @@ When the language changes, do these steps:
    `LayoutDirection`.
 
 Keep user data during the change, for example text field contents,
-selection, and scroll position. Only the labels change. `NoteView::relabel`
-in the notes sample does this. Its test changes the language to Hebrew and
-checks that the note text stays.
+selection, and scroll position. Only the labels change. `GalleryView` in the
+gallery keeps the filter text and its caret when the language changes.
 
 ## Right-to-left layout
 
@@ -190,7 +188,7 @@ language. It returns a list of `CatalogIssue` values:
 
 Run the validation in a unit test, so that a bad translation fails CI. The
 `bundled_translations_are_complete_and_consistent` test in
-[strings.rs](../samples/notes/src/strings.rs) does this.
+[strings.rs](../gallery/src/strings.rs) does this.
 
 ## Packaged resources
 
@@ -221,7 +219,7 @@ A failed lookup returns an error value. It does not panic.
 | `Io { path, message }` | The toolkit could not read the directory | Report it one time, then use built-in assets |
 | `InvalidUtf8 { name }` | `text()` read bytes that are not UTF-8 | Use the same action as for a missing translation |
 
-The notes sample compiles English into the binary with `include_str!`. It
+The gallery compiles English into the binary with `include_str!`. It
 uses that text when it cannot read the English file.
 
 ### Resource location

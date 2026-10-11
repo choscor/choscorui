@@ -75,14 +75,14 @@ Dependencies: `choscorui-core` only.
 
 Dependencies: none.
 
-### Examples and the sample
+### Gallery and benchmark
 
-- `examples/gallery` (`choscorui-gallery`) shows the controls in one window.
-- `examples/stress` (`choscorui-stress`) shows large data, a large canvas, docking, and settings restore. The benchmark also uses its workspace.
-- `examples/bench` (`choscorui-bench`) runs the benchmark scenarios. See [performance.md](performance.md).
-- `samples/notes` is a complete small application. It has its own Cargo workspace and depends only on the facade, as an external application does. See the [notes README](../samples/notes/README.md).
+- `gallery` (`choscorui-gallery`) shows each public control on a page. It also shows large data, a large canvas, docking, and settings restore. See [main.rs](../gallery/src/main.rs).
+- `tools/bench` (`choscorui-bench`) runs the benchmark scenarios. See [performance.md](performance.md).
 
-The three examples depend directly on `choscorui-core`, `choscorui-controls`, and `choscorui-macos`, for macOS targets only.
+The gallery depends only on the facade, as an external application does. A test in [coverage.rs](../gallery/src/coverage.rs) reads `gallery/Cargo.toml` and makes sure that `choscorui` is the only dependency. The gallery also has `#![forbid(unsafe_code)]`.
+
+The benchmark depends directly on `choscorui-core`, `choscorui-controls`, and `choscorui-macos`, for macOS targets only.
 
 ## Layering rules
 
@@ -106,10 +106,8 @@ flowchart BT
     windows["choscorui-windows"]
     linux["choscorui-linux"]
     facade["choscorui"]
-    gallery["choscorui-gallery"]
-    stress["choscorui-stress"]
-    bench["choscorui-bench"]
-    notes["samples/notes"]
+    gallery["choscorui-gallery (gallery)"]
+    bench["choscorui-bench (tools/bench)"]
     controls --> core
     compose --> core
     render --> core
@@ -119,15 +117,12 @@ flowchart BT
     facade --> controls
     facade --> compose
     facade -.-> macos
-    gallery -.-> controls
-    gallery -.-> macos
-    stress -.-> controls
-    stress -.-> macos
-    bench -.-> stress
-    notes --> facade
+    gallery --> facade
+    bench -.-> controls
+    bench -.-> macos
 ```
 
-To keep the graph legible, it does not show two sets of arrows. These are the arrows from each example to `choscorui-core`, and from `choscorui-bench` to `choscorui-controls` and `choscorui-macos`.
+To keep the graph legible, it does not show the arrow from `choscorui-bench` to `choscorui-core`.
 
 ## Frame pipeline
 

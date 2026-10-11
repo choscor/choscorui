@@ -31,11 +31,9 @@ Run the fast checks from the CI `check` job:
 ```sh
 scripts/check-docs.sh
 cargo fmt --all --check
-(cd samples/notes && cargo fmt --check)
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo +1.88 check --workspace --all-targets --locked
 cargo test --workspace --locked
-(cd samples/notes && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked)
 ```
 
 For backend or UI changes, also run the native checks from the CI `native` job.
@@ -48,8 +46,7 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test menu_smoke --lo
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
 CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
-CHOSCORUI_STRESS_SETTINGS=/tmp/stress.txt CHOSCORUI_STRESS_AUTOPILOT=1 cargo run -p choscorui-stress --locked
-(cd samples/notes && NOTES_AUTOPILOT=1 cargo run --locked)
+CHOSCORUI_GALLERY_SETTINGS=/tmp/gallery.txt CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
 ```
 
 For changes to paint, layout, text, the display list, or the run loop, also run the benchmark check in [docs/performance.md](docs/performance.md).
@@ -87,6 +84,17 @@ cargo bylaw check
 ```
 
 `bylaw.toml` keeps `choscorui-core` at the base of the workspace. The controls, composition, render, and platform crates can depend only on core. No library can depend on the gallery, and the crates cannot have cycles. [docs/architecture.md](docs/architecture.md) describes the layers.
+
+## Adding a control
+
+The gallery shows each public name of `choscorui-controls`. A test fails when a name is not in the gallery.
+
+1. Add a page to the category file in `gallery/src/pages/`.
+2. Add the page to `PAGES` in `gallery/src/catalog.rs`.
+3. Add each new export name to `SHOWN`, or to `EXEMPT` with a reason.
+4. Run `cargo test -p choscorui-gallery`.
+
+The coverage test names each export that is missing or stale. The headless page test builds each page with and without the enabled state.
 
 ## Source file size
 

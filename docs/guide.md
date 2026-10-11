@@ -1,6 +1,6 @@
 # Build an application
 
-This guide tells how to build a desktop application with ChoscorUI. Each section names the types to use and links to a working example. [`samples/notes`](../samples/notes/README.md) is a complete small application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
+This guide tells how to build a desktop application with ChoscorUI. Each section names the types to use and links to a working example. The [gallery](../gallery/src/main.rs) is a complete application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
 
 ## Requirements
 
@@ -12,12 +12,12 @@ This guide tells how to build a desktop application with ChoscorUI. Each section
 
 The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. On other operating systems the facade compiles, but `choscorui::platform` does not exist. [platform-macos.md](platform-macos.md) describes the supported backend.
 
-To run the examples, use these commands from the repository root:
+To run the gallery, use these commands from the repository root:
 
 ```sh
-cargo run -p choscorui-gallery                       # control gallery
-cargo run -p choscorui-stress                        # large data, canvas, docking
-cd samples/notes && cargo run                        # sample application
+cargo run -p choscorui-gallery                       # opens the last page
+cargo run -p choscorui-gallery -- canvas             # opens one page
+cargo run -p choscorui-gallery -- --list             # shows the page ids
 ```
 
 ## Depend on the facade
@@ -86,7 +86,7 @@ fn main() {
 - `Window::last_paint` tells when the last paint finished and how long it took.
 - `Application::window_count` counts the native windows that are open or not yet released. Leak checks use it.
 
-Each `Window` is independent. Usually each window has its own `Tree`, and the windows share the models, commands, themes, and localizer. In the notes sample, `Notes::pump` reads the events of each window and sends them to the view of that window.
+Each `Window` is independent. Usually each window has its own `Tree`, and the windows share the models, commands, themes, and localizer. In the gallery, `Gallery::pump` reads the events of each window and sends them to the view of that window.
 
 ### Threads and timers
 
@@ -134,7 +134,7 @@ Controls do not own nodes. You attach a node, keep the state object of the contr
 | `compose_main_window` | Toolbar areas, status bar, and central content |
 | `DockLayout` | Docked, tabbed, and floating panels |
 
-`LinearLayout::apply(&mut tree, bounds)` writes bounds into the tree. If the layout cannot give each child its minimum size, it returns `LayoutError::InsufficientSpace` and moves no node. Your application then decides what to hide. The notes sample hides its toolbar in a very narrow window.
+`LinearLayout::apply(&mut tree, bounds)` writes bounds into the tree. If the layout cannot give each child its minimum size, it returns `LayoutError::InsufficientSpace` and moves no node. Your application then decides what to hide.
 
 `LayoutEngine` asks a `LeafMeasure` for the size of each leaf node. A closure with the signature `FnMut(NodeId, Constraints, LayoutDirection) -> Measured` is a `LeafMeasure`. Text sizes come from the text layout, which [text.md](text.md) describes. For custom controls, see [Write a custom control](#write-a-custom-control).
 
@@ -351,11 +351,11 @@ To restore the state at launch:
 
 Only the native window needs the operating system. The tree, layout, controls, semantics, display lists, themes, and locales are plain Rust values, so most UI tests run without a window.
 
-1. Put the platform-independent state of each window in one struct, as `ui::NoteView` does in the notes sample.
+1. Put the platform-independent state of each window in one struct, as `GalleryView` does in the gallery.
 2. Send synthetic events to the struct in a test.
 3. Examine its `DisplayList` and its `SemanticTree::snapshot`.
 
-The facade test [external_app.rs](../crates/choscorui/tests/external_app.rs) builds a control tree through the facade with no window. To check native behavior, use a scripted run, as `NOTES_AUTOPILOT=1` does for the notes sample.
+The facade test [external_app.rs](../crates/choscorui/tests/external_app.rs) builds a control tree through the facade with no window. To check native behavior, use a scripted run, as `CHOSCORUI_GALLERY_AUTOPILOT=1` does for the gallery.
 
 ## Write a custom control
 

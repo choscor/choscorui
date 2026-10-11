@@ -203,8 +203,8 @@ The backend also commits ordinary typed text as `ImeEvent::CommitText`. It
 calls `interpretKeyEvents:` for each key press without Command or Control.
 When that call gives no text, the backend uses the characters of the key
 event. It removes control characters and the private-use characters of
-function keys. The [gallery](../examples/gallery/src/main.rs) shows the full
-routing.
+function keys. The [macOS backend](../crates/choscorui-macos/src/ime.rs)
+contains the full routing.
 
 > **Note:** automated tests send marked text through the native view. They do
 > not use a real input method.

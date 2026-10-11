@@ -4,12 +4,12 @@ This document describes the benchmark harness, the release budgets, the profilin
 
 ## Benchmark harness
 
-`choscorui-bench` ([`examples/bench`](../examples/bench/src/main.rs)) runs the reference scenarios on real AppKit windows. It runs on macOS only.
+`choscorui-bench` ([`tools/bench`](../tools/bench/src/main.rs)) runs the reference scenarios on real AppKit windows. It runs on macOS only.
 
 The harness measures these values:
 
 - **Presented frames.** Each latency sample ends when the `drawRect:` replay of the window completes (`Window::last_paint`). The harness does not use a "done" flag from the application.
-- **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-gallery child report the time from process entry to the first presented frame. The driver also records the time from spawn to report.
+- **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the first presented frame. The driver also records the time from spawn to report.
 - **Allocations.** A counting global allocator gives the number of Rust heap allocations in each scroll frame.
 - **Resources.** CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
 
@@ -17,10 +17,10 @@ The harness measures these values:
 
 | Scenario | Workload | Main metrics |
 | --- | --- | --- |
-| `startup` | Launch the gallery and the stress gallery 30 times each, after one warm-up launch | `startup.*.first_frame_ms`, `startup.*.failures` |
+| `startup` | Launch the gallery and the stress workload 30 times each, after one warm-up launch | `startup.*.first_frame_ms`, `startup.*.failures` |
 | `idle` | Keep one unchanged window open for 60 seconds | `idle.cpu_percent`, `idle.paints`, `idle.wakeups_per_sec`, `idle.footprint_mib.after` |
 | `resize` | Alternate between 400×300 and 1600×1000 points, 100 times | `resize.present_ms`, `resize.missed_configure` |
-| `scroll` | Scroll the 100,000-row list of the stress-gallery workspace by 10,000 points in each direction. Each frame also paints the 20,000-item canvas. | `scroll.present_ms`, `scroll.frame_interval_ms`, `scroll.peak_realized_rows`, `scroll.allocations_per_frame` |
+| `scroll` | Scroll the 100,000-row list of the stress workload by 10,000 points in each direction. Each frame also paints the 20,000-item canvas. | `scroll.present_ms`, `scroll.frame_interval_ms`, `scroll.peak_realized_rows`, `scroll.allocations_per_frame` |
 | `theme` | Switch between a light theme and a structurally different dark theme on 240 controls, 100 times | `theme.present_ms` |
 | `document` | Type 1,000 edits in the middle of a 100,000-character document with Vietnamese, CJK, emoji, combining marks, and right-to-left text | `document.present_ms`, `document.shape_ms`, `document.caret_mismatches` |
 | `windows` | Open, resize, and close 20 windows, two times | `windows.first_frame_ms`, `windows.leaked_native_windows`, `windows.idle_cpu_percent_after_close` |

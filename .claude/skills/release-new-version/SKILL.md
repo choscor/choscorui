@@ -38,9 +38,8 @@ network or authentication failures as errors, not as absence. An existing tag is
 reusable only when its peeled commit equals the selected source commit. Never
 force-push or move a conflicting tag.
 
-Bump `version` in every `Cargo.toml`, including `samples/notes`, then run
-`cargo update -w` and `(cd samples/notes && cargo update -w)`. Stage only the
-intended manifests and lockfiles with explicit paths.
+Bump `version` in every `Cargo.toml`, then run `cargo update -w`. Stage only
+the intended manifests and the lockfile with explicit paths.
 
 ## Draft the release notes
 

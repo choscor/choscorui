@@ -22,9 +22,8 @@ flowchart LR
 
 ## Version bump
 
-1. Set the same `version` in each `Cargo.toml`, including `samples/notes/Cargo.toml`.
+1. Set the same `version` in each `Cargo.toml`, including `gallery/Cargo.toml` and `tools/bench/Cargo.toml`.
 2. Run `cargo update -w`.
-3. Run `(cd samples/notes && cargo update -w)`.
 
 ## Release notes
 
@@ -70,9 +69,9 @@ To build, sign, notarize, and check the archive, do these steps:
 
 2. Run `scripts/macos/install-check.sh dist/choscorui-<version>-macos-universal.zip`.
 
-`package.sh` signs each app with the hardened runtime and a secure timestamp. It sends the zip to `notarytool --wait`, staples each app, and checks each app with `spctl --assess`. Then it makes the zip again and writes `dist/*.sha256`.
+`package.sh` signs the gallery app with the hardened runtime and a secure timestamp. It sends the zip to `notarytool --wait`, staples the app, and checks the app with `spctl --assess`. Then it makes the zip again and writes `dist/*.sha256`.
 
-The archive contains the apps, `install.sh`, `uninstall.sh`, and `README.md` from `scripts/macos/archive-readme.md`. It also contains `LICENSE-MIT`, `LICENSE-APACHE`, and `THIRD-PARTY-NOTICES.txt` from `scripts/macos/third-party-notices.txt`. `install-check.sh` makes sure that these files are in the archive.
+The archive contains the gallery app, `install.sh`, `uninstall.sh`, and `README.md` from `scripts/macos/archive-readme.md`. It also contains `LICENSE-MIT`, `LICENSE-APACHE`, and `THIRD-PARTY-NOTICES.txt` from `scripts/macos/third-party-notices.txt`. `install-check.sh` makes sure that these files are in the archive.
 
 ## Tag and publish
 
