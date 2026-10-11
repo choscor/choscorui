@@ -3,7 +3,7 @@
 //! them out, paints them, and routes input to the host.
 
 use crate::page::{Column, Env, Page, node};
-use choscorui::controls::{ControlHost, CustomControl, ShortcutModifiers};
+use choscorui::controls::{ControlHost, CustomControl, Field, FieldOrientation, ShortcutModifiers};
 use std::cell::Cell;
 
 use choscorui::core::{
@@ -18,6 +18,9 @@ pub struct HostedPage {
     pub host: ControlHost,
     /// Each row's caption node, caption, and control nodes.
     rows: Vec<(NodeId, &'static str, Vec<NodeId>)>,
+    /// A field orientation per row lays its controls out as one form
+    /// field; `None` wraps them in lines.
+    fields: Vec<Option<FieldOrientation>>,
     enabled: bool,
     /// Whether a control still animated at the last paint.
     busy: Cell<bool>,
@@ -25,6 +28,18 @@ pub struct HostedPage {
 
 impl HostedPage {
     pub fn build(tree: &mut Tree, parent: NodeId, rows: Vec<Row>) -> Box<dyn Page> {
+        let rows = rows.into_iter().map(|row| (row, None)).collect();
+        Self::build_fields(tree, parent, rows)
+    }
+
+    /// Rows whose controls form one field each, in the given orientation.
+    pub fn build_fields(
+        tree: &mut Tree,
+        parent: NodeId,
+        rows: Vec<(Row, Option<FieldOrientation>)>,
+    ) -> Box<dyn Page> {
+        let fields = rows.iter().map(|(_, field)| *field).collect();
+        let rows = rows.into_iter().map(|(row, _)| row);
         let mut host = ControlHost::new();
         let rows = rows
             .into_iter()
@@ -43,6 +58,7 @@ impl HostedPage {
         Box::new(Self {
             host,
             rows,
+            fields,
             enabled: true,
             busy: Cell::new(false),
         })
@@ -67,8 +83,40 @@ impl Page for HostedPage {
         let host_env = env.host(&themes);
         let mut column = Column::new(bounds, env);
         let gap = env.tokens.spacing * 2.0;
-        for (caption, _, ids) in &self.rows {
+        for ((caption, _, ids), field) in self.rows.iter().zip(&self.fields) {
             let _ = tree.set_bounds(*caption, column.row(20.0));
+            if let Some(orientation) = field {
+                // A field is at most 480 pt wide, and its parts wrap to it.
+                let width = bounds.size.width.min(480.0);
+                let constraints = Constraints::loose(Size::new(width, f64::INFINITY));
+                let sizes: Vec<Size> = ids
+                    .iter()
+                    .map(|id| {
+                        self.host
+                            .measure(tree, *id, constraints, &host_env)
+                            .map_or(Size::new(width, 20.0), |measured| measured.size)
+                    })
+                    .collect();
+                let field = Field::new(*orientation);
+                let height = field.height(env.styles(), env.tokens, width, &sizes);
+                let row = column.row(height);
+                let area = Rect::new(
+                    Point::new(
+                        if env.rtl() {
+                            row.max_x() - width
+                        } else {
+                            row.origin.x
+                        },
+                        row.origin.y,
+                    ),
+                    Size::new(width, height),
+                );
+                let rects = field.layout(env.styles(), env.tokens, area, env.rtl(), &sizes);
+                for (id, rect) in ids.iter().zip(rects) {
+                    let _ = tree.set_bounds(*id, rect);
+                }
+                continue;
+            }
             let sizes: Vec<Size> = ids
                 .iter()
                 .map(|id| {

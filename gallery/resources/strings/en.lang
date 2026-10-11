@@ -57,6 +57,7 @@ page.select = Select
 page.input = Input
 page.input-group = Input group
 page.textarea = Textarea
+page.field = Field
 page.input-otp = One-time code
 page.radio = Radio group
 page.tabs = Tabs

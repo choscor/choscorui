@@ -1,15 +1,18 @@
 //! Form controls that mount through the control host: switches, toggles,
 //! toggle groups, key caps, selects, text inputs, and code inputs.
 
+mod field;
 mod input;
 mod input_group;
 mod kbd;
+mod measured;
 mod otp;
 mod select;
 mod switch;
 mod textarea;
 mod toggle;
 
+pub use field::{Field, FieldGap, FieldPart, FieldText};
 pub use input::Input;
 pub use input_group::{AddonContent, InputGroup, InputGroupAddon};
 pub use kbd::Kbd;

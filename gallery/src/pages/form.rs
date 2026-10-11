@@ -4,9 +4,9 @@
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    AddonAlign, ControlSize, CustomControl, Input, InputGroup, InputGroupAddon, InputOtp, Kbd,
-    KbdVariant, ListEntry, Orientation, Select, Switch, TextField, Textarea, Toggle, ToggleGroup,
-    ToggleItem, ToggleVariant, ValidationState,
+    AddonAlign, ControlSize, CustomControl, FieldOrientation, FieldPart, FieldText, Input,
+    InputGroup, InputGroupAddon, InputOtp, Kbd, KbdVariant, ListEntry, Orientation, Select, Switch,
+    TextField, Textarea, Toggle, ToggleGroup, ToggleItem, ToggleVariant, ValidationState,
 };
 use choscorui::core::{Icon, NodeId, Tree};
 
@@ -307,6 +307,87 @@ pub fn input_otp(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Pag
         ("Invalid", vec![boxed(invalid)]),
     ];
     HostedPage::build(tree, parent, rows)
+}
+
+pub fn field(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let text = |part, text: &str| boxed(FieldText::new(part, text));
+    let mut invalid = Input::new("Username", "a");
+    invalid.set_validation(ValidationState::Invalid(
+        "Use at least three characters".into(),
+    ));
+    let rows: Vec<(Row, Option<FieldOrientation>)> = vec![
+        (
+            (
+                "Field set",
+                vec![
+                    text(FieldPart::Legend, "Payment method"),
+                    text(
+                        FieldPart::Description,
+                        "All transactions are secure and encrypted.",
+                    ),
+                    text(FieldPart::Label, "Name on card"),
+                    boxed(Input::new("Name on card", "").with_placeholder("Evil Rabbit")),
+                ],
+            ),
+            Some(FieldOrientation::Vertical),
+        ),
+        (
+            (
+                "Vertical field",
+                vec![
+                    text(FieldPart::Label, "Email"),
+                    boxed(Input::new("Email", "").with_placeholder("name@example.com")),
+                    text(
+                        FieldPart::Description,
+                        "We never share your email with anyone.",
+                    ),
+                ],
+            ),
+            Some(FieldOrientation::Vertical),
+        ),
+        (
+            (
+                "Horizontal field",
+                vec![
+                    boxed(Switch::new("Marketing emails", true)),
+                    text(
+                        FieldPart::Description,
+                        "Receive emails about new products and features.",
+                    ),
+                ],
+            ),
+            Some(FieldOrientation::Horizontal),
+        ),
+        (
+            (
+                "Responsive field",
+                vec![
+                    text(FieldPart::Label, "Display name"),
+                    boxed(Input::new("Display name", "")),
+                ],
+            ),
+            Some(FieldOrientation::Responsive),
+        ),
+        (
+            (
+                "Invalid field",
+                vec![
+                    text(FieldPart::Label, "Username"),
+                    boxed(invalid),
+                    text(FieldPart::Error, "Use at least three characters."),
+                ],
+            ),
+            Some(FieldOrientation::Vertical),
+        ),
+        (
+            (
+                "Separator",
+                vec![text(FieldPart::Separator, "Or continue with")],
+            ),
+            Some(FieldOrientation::Vertical),
+        ),
+    ];
+    HostedPage::build_fields(tree, parent, rows)
 }
 
 pub fn kbd(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {

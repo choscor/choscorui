@@ -55,6 +55,7 @@ page.select = Hộp chọn
 page.input = Ô nhập
 page.input-group = Nhóm ô nhập
 page.textarea = Vùng văn bản
+page.field = Trường biểu mẫu
 page.input-otp = Mã một lần
 page.radio = Nhóm nút chọn
 page.tabs = Thẻ

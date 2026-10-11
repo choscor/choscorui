@@ -84,6 +84,8 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`InputGroup`](#input-and-inputgroup) | Text input with text, icon, and button addons. |
 | Form | [`Textarea`](#textarea) | Hosted multiline text input that grows with its lines. |
 | Form | [`InputOtp`](#inputotp) | One-time code input with one character per slot. |
+| Form | [`FieldText`](#field-and-fieldtext) | Legend, label, title, description, error, or separator of a form field. |
+| Form | [`Field`](#field-and-fieldtext) | Stacked, side-by-side, or responsive layout of a form field. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1623,6 +1625,43 @@ list are the same.
 | Actions | `SetValue` and `Focus` while enabled |
 
 `SetValue` keeps the accepted characters of the value, cut to the length.
+
+### Field and FieldText
+
+- `FieldText` shows one text part of a field: `Legend`, `Label`, `Title`,
+  `Description`, `Error`, or `Separator`. It takes no focus.
+- Descriptions and other parts wrap to the width they are given, and
+  break after spaces. Without a width, they take one line.
+- A `Separator` paints a 1 pt rule across its width. Its text, if any,
+  sits on a background chip in the middle.
+- **`Field::layout`.** A `Vertical` field stacks its parts in order. Each
+  fills the width, with the 12 pt field gap between them.
+- A `Horizontal` field puts the first part at the leading edge. The other
+  parts stack beside it, 12 pt away, with the 4 pt content gap. One other
+  part centers on the first; more align to its top.
+- A `Responsive` field is horizontal at 448 pt wide or more, and vertical
+  when narrower. In a right-to-left layout, the parts mirror.
+- **`Field::stack`.** `FieldGap::Group` stacks whole fields 28 pt apart.
+  `FieldGap::Set` stacks the legend, description, and group of a field
+  set 24 pt apart.
+
+| Part | Value |
+| --- | --- |
+| `Legend` | base medium text (`Sm`: small), 12 pt below |
+| `Label` | small medium `foreground` text |
+| `Title` | small medium `foreground` text |
+| `Description` | small `muted-foreground` text |
+| `Error` | small `destructive` text |
+| `Separator` | 20 pt high; 1 pt `border` rule; small muted text on a `background` chip with 8 pt sides |
+
+| Field | `FieldText::semantics` |
+| --- | --- |
+| Role | `StaticText` (AXStaticText) |
+| Name / value | text / - |
+| State | invalid for `Error`; hidden for a separator without text |
+| Actions | none |
+
+[field.rs](../crates/choscorui-controls/tests/field.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 
