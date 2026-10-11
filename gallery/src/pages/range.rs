@@ -7,7 +7,7 @@ use crate::page::{
 use choscorui::controls::{
     DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, Progress, ScrollBar,
     ScrollBarInput, ScrollOrientation, ShortcutModifiers, Slider, SliderInput, SliderOrientation,
-    SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
+    SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction, VisualState,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -514,7 +514,7 @@ impl Page for ScrollBarPage {
         let _ = list.pop_clip();
         for (id, bar) in &self.bars {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            bar.paint(list, bounds, env.mix(0.08), env.mix(0.4));
+            bar.paint(&mut env.cx(list, bounds));
             if tree.focus() == Some(*id) {
                 env.focus_ring(list, bounds);
             }
@@ -663,12 +663,10 @@ impl Page for DialPage {
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         for (id, dial, label) in &self.dials {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            dial.paint(
-                list,
-                bounds,
-                env.mix(0.12),
-                env.tokens.color(ColorRole::Primary),
-            );
+            let state = VisualState::NONE
+                .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+            dial.paint(&mut env.cx(list, bounds), state);
             let below = Rect::new(
                 Point::new(bounds.origin.x, bounds.max_y() + 4.0),
                 Size::new(bounds.size.width, 20.0),
@@ -960,16 +958,10 @@ impl Page for NumericDisplayPage {
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         let (id, display) = &self.display;
         let bounds = tree.bounds(*id).unwrap_or_default();
-        list.fill_rect(bounds, choscorui::core::Color::rgba8(20, 24, 20, 255));
-        display.paint(
-            list,
-            bounds.inset(8.0),
-            choscorui::core::Color::rgba8(120, 255, 120, 255),
-            choscorui::core::Color::rgba8(40, 60, 40, 255),
-        );
-        if tree.focus() == Some(*id) {
-            env.focus_ring(list, bounds);
-        }
+        let state = VisualState::NONE
+            .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+        display.paint(&mut env.cx(list, bounds), state);
         for (id, base, label) in &self.bases {
             let bounds = tree.bounds(*id).unwrap_or_default();
             let fill = if *base == self.base {

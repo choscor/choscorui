@@ -1651,13 +1651,7 @@ impl Page for FocusFramePage {
             .iter()
             .any(|push| tree.focus() == Some(push.node))
         {
-            FocusFrame {
-                color: env.tokens.color(ColorRole::Primary),
-                width: 3.0,
-                outset: 4.0,
-                radius: env.tokens.radius.min(8.0) + 4.0,
-            }
-            .paint(list, tree);
+            FocusFrame.paint(&mut env.cx(list, rect), tree);
         }
         let below = Rect::new(
             Point::new(rect.origin.x, rect.max_y() + 12.0),

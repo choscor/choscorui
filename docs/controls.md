@@ -403,6 +403,10 @@ this behavior.
   `NumberBase`.
 - `text` aligns the number to the right. A value with more characters than
   `digits` shows as dashes, and `overflow` is true.
+- **Look.** `paint` draws the `NumericDisplay` box: the input border, radius
+  lg, and 12 pt padding. Lit segments use the `Value` color, `foreground`.
+  Unlit segments use the `Track` color, `muted`. Keyboard focus adds the
+  focus ring.
 
 | Field | `NumericDisplay::semantics` |
 | --- | --- |
@@ -696,6 +700,10 @@ this behavior.
   wrapping dial wraps at the ends.
 - PageUp and PageDown step by `page_step`. Home and End go to the bounds.
 - The dial has no disabled state.
+- **Look.** `paint` uses the `Dial` recipe. A 6 pt `muted` track arc follows
+  the sweep, and a 6 pt `primary` arc runs to the value. A 16 pt white thumb
+  with a `primary` border sits at the value. Hover or keyboard focus rings
+  the thumb.
 
 | Field | `Dial::semantics` |
 | --- | --- |
@@ -720,6 +728,9 @@ this behavior.
 - Semantic `Increment` and `Decrement` page one viewport.
 - The value stays in `0..=content - viewport`. The scroll bar has no focus
   and no disabled state.
+- **Look.** `paint` uses the `ScrollArea` thumb, inset 1 pt in the bar. A
+  drag changes the thumb to `muted-foreground` at 50% alpha. A bar that is
+  not needed paints nothing.
 
 | Field | `ScrollBar::semantics` |
 | --- | --- |
@@ -1184,11 +1195,11 @@ The items publish their own semantics.
 
 ### FocusFrame and SizeGrip
 
-- `FocusFrame::rect` returns the bounds of the focused node, grown by
-  `outset`. It returns `None` when nothing has focus or the focused node
-  is hidden.
-- `FocusFrame` paints outside the node, so a container that clips its
-  children still shows focus.
+- `FocusFrame::rect` returns the bounds of the focused node. It returns
+  `None` when nothing has focus or the focused node is hidden.
+- `FocusFrame` paints the theme's focus ring outside the node, at radius
+  md. A container that clips its children still shows focus. The ring
+  shows only while focus is visible.
 - `SizeGrip::press` records the start. `drag` returns a new content size,
   clamped to the minimum and the maximum. `release` ends the drag.
 - In right-to-left layouts, the grip sits at the bottom-left and grows to

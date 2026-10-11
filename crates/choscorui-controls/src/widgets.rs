@@ -4,15 +4,16 @@
 //! Each documents its value, keyboard, and accessibility contract.
 
 use crate::style::{
-    ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
+    ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
+    fill_shape,
 };
 use crate::{
     CommandId, CommandRegistry, IntegerRange, NumberInput, Shortcut, ShortcutModifiers,
     ValidationState,
 };
 use choscorui_core::{
-    Color, ColorRole, DisplayList, Icon, Key, Locale, NodeId, Path, Point, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    Color, ColorRole, DisplayList, Icon, Key, Locale, NodeId, Path, Point, RadiusScale, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -189,24 +190,41 @@ impl ScrollBar {
         }
     }
 
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, track: Color, thumb: Color) {
+    /// The flags the scroll area recipe reads: pressed while dragging.
+    pub fn visual_state(&self) -> VisualState {
+        VisualState::NONE.set(VisualState::PRESSED, self.drag.is_some())
+    }
+
+    /// Paints the thumb in the context's bounds with the `ScrollArea`
+    /// scrollbar look. A bar that is not needed paints nothing.
+    pub fn paint(&self, cx: &mut PaintContext<'_>) {
         if !self.is_needed() {
             return;
         }
-        list.fill_rect(bounds, track);
+        let bounds = cx.bounds;
+        let query =
+            |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(self.visual_state());
+        let (bar, thumb) = (
+            cx.style(query(Slot::Scrollbar)),
+            cx.style(query(Slot::Thumb)),
+        );
         let (start, length) = self.thumb();
         let rect = match self.orientation {
-            ScrollOrientation::Vertical => Rect::new(
-                Point::new(bounds.origin.x + 2.0, bounds.origin.y + start),
-                Size::new((bounds.size.width - 4.0).max(0.0), length),
+            ScrollOrientation::Vertical => Rect::from_xywh(
+                bounds.origin.x,
+                bounds.origin.y + start,
+                bounds.size.width,
+                length,
             ),
-            ScrollOrientation::Horizontal => Rect::new(
-                Point::new(bounds.origin.x + start, bounds.origin.y + 2.0),
-                Size::new(length, (bounds.size.height - 4.0).max(0.0)),
+            ScrollOrientation::Horizontal => Rect::from_xywh(
+                bounds.origin.x + start,
+                bounds.origin.y,
+                length,
+                bounds.size.height,
             ),
         };
-        let radius = rect.size.width.min(rect.size.height) / 2.0;
-        let _ = list.fill_rounded_rect(rect, radius, thumb);
+        let rect = content_rect(rect, &bar, cx.rtl);
+        fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
     }
 }
 
@@ -466,29 +484,88 @@ impl Dial {
             text: None,
         }
     }
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, face: Color, needle: Color) {
+    /// Paints the dial in the context's bounds with the `Dial` recipe: a
+    /// track arc over the sweep, the value arc, and a thumb at the value.
+    /// `state` carries hover, focus, and disabled flags.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        let bounds = cx.bounds;
+        let query = |slot| StyleQuery::new(ControlKind::Dial, slot).state(state);
+        let (root, track, range, thumb) = (
+            cx.style(query(Slot::Root)),
+            cx.style(query(Slot::Track)),
+            cx.style(query(Slot::Range)),
+            cx.style(query(Slot::Thumb)),
+        );
         let radius = bounds.size.width.min(bounds.size.height) / 2.0;
         let center = Point::new(
             bounds.origin.x + bounds.size.width / 2.0,
             bounds.origin.y + bounds.size.height / 2.0,
         );
-        let circle = Rect::new(
-            Point::new(center.x - radius, center.y - radius),
-            Size::new(radius * 2.0, radius * 2.0),
+        let circle = Rect::from_xywh(
+            center.x - radius,
+            center.y - radius,
+            radius * 2.0,
+            radius * 2.0,
         );
-        let _ = list.fill_rounded_rect(circle, radius, face);
+        cx.slot(circle, &root, |_, _| {});
+        let arc_radius = (radius - thumb.min_width / 2.0).max(0.0);
+        let start = if self.wrapping { 0.0 } else { -0.75 * PI };
+        let at = |angle: f64| {
+            Point::new(
+                center.x + angle.sin() * arc_radius,
+                center.y - angle.cos() * arc_radius,
+            )
+        };
+        let arc = |from: f64, to: f64| {
+            // Line segments of at most 4 degrees follow the circle.
+            let steps = (((to - from).abs() / (PI / 45.0)).ceil() as usize).max(1);
+            let mut path = Path::new();
+            path.move_to(at(from));
+            for step in 1..=steps {
+                path.line_to(at(from + (to - from) * step as f64 / steps as f64));
+            }
+            path
+        };
+        let stroke = |list: &mut DisplayList, path: Path, color: Color, width: f64| {
+            let _ = list.stroke_path(
+                path,
+                choscorui_core::Paint::Solid(color),
+                choscorui_core::StrokeStyle {
+                    cap: choscorui_core::LineCap::Round,
+                    ..choscorui_core::StrokeStyle::new(width)
+                },
+            );
+        };
+        stroke(
+            cx.list,
+            arc(start, start + self.sweep()),
+            track.background,
+            track.min_width,
+        );
         let angle = self.angle();
-        let tip = Point::new(
-            center.x + angle.sin() * radius * 0.8,
-            center.y - angle.cos() * radius * 0.8,
+        if angle > start {
+            let faded = range.opacity < 1.0;
+            if faded {
+                let _ = cx.list.push_opacity(range.opacity);
+            }
+            stroke(
+                cx.list,
+                arc(start, angle),
+                range.background,
+                range.min_width,
+            );
+            if faded {
+                let _ = cx.list.pop_opacity();
+            }
+        }
+        let tip = at(angle);
+        let knob = Rect::from_xywh(
+            tip.x - thumb.min_width / 2.0,
+            tip.y - thumb.min_height / 2.0,
+            thumb.min_width,
+            thumb.min_height,
         );
-        let mut path = Path::new();
-        path.move_to(center).line_to(tip);
-        let _ = list.stroke_path(
-            path,
-            choscorui_core::Paint::Solid(needle),
-            choscorui_core::StrokeStyle::new(3.0),
-        );
+        cx.slot(knob, &thumb, |_, _| {});
     }
 }
 
@@ -923,7 +1000,23 @@ impl NumericDisplay {
         }
     }
 
-    pub fn paint(&self, list: &mut DisplayList, bounds: Rect, on: Color, off: Color) {
+    /// Paints the display in the context's bounds with the
+    /// `NumericDisplay` recipe: lit segments take the `Value` color and
+    /// unlit ones the `Track` color. `state` carries focus flags.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        let query = |slot| StyleQuery::new(ControlKind::NumericDisplay, slot).state(state);
+        let (root, value, track) = (
+            cx.style(query(Slot::Root)),
+            cx.style(query(Slot::Value)),
+            cx.style(query(Slot::Track)),
+        );
+        let (on, off) = (value.foreground, track.background);
+        cx.slot(cx.bounds, &root, |cx, bounds| {
+            self.paint_segments(cx.list, bounds, on, off)
+        });
+    }
+
+    fn paint_segments(&self, list: &mut DisplayList, bounds: Rect, on: Color, off: Color) {
         let text = self.text();
         let cell = bounds.size.width / self.digits as f64;
         let thickness = (cell * 0.12).max(1.0);
@@ -957,34 +1050,35 @@ impl NumericDisplay {
 
 // ------------------------------------------------------- FocusFrame, SizeGrip
 
-/// Draws a focus ring around whichever node has focus, outside its bounds,
-/// so containers that clip their children still show focus.
-#[derive(Clone, Copy, Debug)]
-pub struct FocusFrame {
-    pub color: Color,
-    pub width: f64,
-    pub outset: f64,
-    pub radius: f64,
-}
+/// Draws the focus ring around whichever node has keyboard focus, outside
+/// its bounds, so containers that clip their children still show focus.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FocusFrame;
 
 impl FocusFrame {
+    /// The bounds of the focused node, or None when it is hidden.
     pub fn rect(&self, tree: &Tree) -> Option<Rect> {
         let focused = tree.focus()?;
         if tree.visible(focused) == Some(false) {
             return None;
         }
-        let bounds = tree.bounds(focused)?;
-        Some(Rect::new(
-            Point::new(bounds.origin.x - self.outset, bounds.origin.y - self.outset),
-            Size::new(
-                bounds.size.width + self.outset * 2.0,
-                bounds.size.height + self.outset * 2.0,
-            ),
-        ))
+        tree.bounds(focused)
     }
-    pub fn paint(&self, list: &mut DisplayList, tree: &Tree) {
-        if let Some(rect) = self.rect(tree) {
-            let _ = list.stroke_rounded_rect(rect, self.radius, self.color, self.width);
+
+    /// Draws the theme's focus ring, at radius md, while focus is
+    /// visible.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
+        let Some(rect) = self.rect(tree) else {
+            return;
+        };
+        if tree
+            .focus()
+            .is_some_and(|focused| tree.focus_visible(focused))
+        {
+            let tokens = cx.tokens;
+            let color = tokens.ring_color(tokens.color(ColorRole::Ring));
+            let radius = tokens.radius(RadiusScale::Md);
+            let _ = cx.list.draw_ring(rect, radius, tokens.ring_width, color);
         }
     }
 }

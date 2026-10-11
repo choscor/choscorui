@@ -6,8 +6,8 @@ use choscorui_controls::{
     ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, Color, DesignTokens, DisplayCommand, DisplayList, Key,
-    Locale, Point, Rect, SemanticAction, SemanticRole, Size, Tree,
+    CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
+    InputModality, Key, Locale, Paint, Point, Rect, SemanticAction, SemanticRole, Size, Tree,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -233,15 +233,10 @@ fn toolbox_numeric_display_focus_frame_and_size_grip() {
         .attach(tree.root(), rect(10.0, 10.0, 50.0, 20.0))
         .unwrap();
     tree.set_focusable(node, true).unwrap();
-    let frame = FocusFrame {
-        color: Color::rgba8(0, 0, 255, 255),
-        width: 2.0,
-        outset: 3.0,
-        radius: 4.0,
-    };
+    let frame = FocusFrame;
     assert_eq!(frame.rect(&tree), None);
     tree.set_focus(Some(node)).unwrap();
-    assert_eq!(frame.rect(&tree), Some(rect(7.0, 7.0, 56.0, 26.0)));
+    assert_eq!(frame.rect(&tree), Some(rect(10.0, 10.0, 50.0, 20.0)));
     tree.set_visible(node, false).unwrap();
     assert_eq!(frame.rect(&tree), None, "hidden focus shows no frame");
 
@@ -413,4 +408,72 @@ fn calendar_keyboard_respects_range_and_locale_week() {
     calendar.show_month(-13);
     assert_eq!(calendar.shown_month(), (2023, 3));
     assert_eq!(calendar.weekday_headers().len(), 7);
+}
+
+#[test]
+fn gauges_and_focus_frame_paint_from_tokens_and_recipes() {
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let bounds = rect(0.0, 0.0, 100.0, 100.0);
+    let run = |paint: &dyn Fn(&mut PaintContext<'_>)| {
+        let mut list = DisplayList::new();
+        paint(&mut PaintContext::new(
+            &mut list,
+            bounds,
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ));
+        list
+    };
+    let solid = |list: &DisplayList, role| {
+        let color = tokens.color(role);
+        list.commands().iter().any(|command| match command {
+            DisplayCommand::StrokePath {
+                paint: Paint::Solid(c),
+                ..
+            }
+            | DisplayCommand::FillRoundedRect { color: c, .. }
+            | DisplayCommand::FillRect { color: c, .. } => *c == color,
+            _ => false,
+        })
+    };
+
+    // The scroll bar thumb fills with `border`, inset 1 pt in its bar.
+    let mut bar = ScrollBar::new("Vertical", ScrollOrientation::Vertical);
+    bar.set_range(1000.0, 100.0, 100.0);
+    let list = run(&|cx| bar.paint(cx));
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRoundedRect { rect, color, .. }
+            if *color == tokens.color(ColorRole::Border) && rect.origin.x == 1.0
+    )));
+
+    // The dial strokes a muted track and a primary value arc.
+    let dial = Dial::new(IntegerRange::new(0, 100, 50, 1, 10).unwrap(), false);
+    let list = run(&|cx| dial.paint(cx, VisualState::NONE));
+    assert!(solid(&list, ColorRole::Muted));
+    assert!(solid(&list, ColorRole::Primary));
+
+    // Lit segments take `foreground`, unlit ones `muted`.
+    let display = NumericDisplay::new(2, NumberBase::Decimal);
+    let list = run(&|cx| display.paint(cx, VisualState::NONE));
+    assert!(solid(&list, ColorRole::Foreground));
+    assert!(solid(&list, ColorRole::Muted));
+
+    // The frame rings keyboard focus only.
+    let mut tree = Tree::new(bounds);
+    let node = tree
+        .attach(tree.root(), rect(10.0, 10.0, 50.0, 20.0))
+        .unwrap();
+    tree.set_focusable(node, true).unwrap();
+    tree.focus_by_pointer(node).unwrap();
+    assert!(run(&|cx| FocusFrame.paint(cx, &tree)).commands().is_empty());
+    tree.set_input_modality(InputModality::Keyboard);
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    let list = run(&|cx| FocusFrame.paint(cx, &tree));
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::StrokeRoundedRect { color, .. } if *color == ring
+    )));
 }
