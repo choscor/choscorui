@@ -5,7 +5,7 @@ use crate::page::{
     Align, Column, Env, Page, Push, field_semantics, node, paint_field, pressed, sem, split,
     type_into,
 };
-use crate::pages::selection::{ComboField, MAX_SUGGESTIONS, families};
+use crate::pages::selection::{ComboField, POPUP_SPACE, families};
 use choscorui::controls::{
     ColorPicker, ComboChange, ComboInput, DialogButton, DialogButtonRole, DialogId, DialogStack,
     FontDialog, InputDialog, InputKind, MessageDialog, Modality, ShortcutModifiers,
@@ -1107,7 +1107,7 @@ impl Page for FontDialogPage {
         let _ = tree.set_bounds(self.size_node, cells[1]);
         let _ = tree.set_bounds(self.bold.node, cells[2]);
         let _ = tree.set_bounds(self.italic.node, cells[3]);
-        column.space(MAX_SUGGESTIONS as f64 * 24.0);
+        column.space(POPUP_SPACE);
         let _ = tree.set_bounds(self.preview, column.cells(90.0, &[560.0])[0]);
     }
 

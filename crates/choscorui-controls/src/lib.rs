@@ -69,8 +69,13 @@ mod menu;
 pub use menu::PopupMenu;
 pub use menu::{DropdownMenu, MenuCheck, MenuItem, MenuResponse};
 mod combo;
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `ComboBox` alias for one release"
+)]
+pub use combo::ComboBox;
 pub use combo::{
-    ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, text_key,
+    ComboChange, ComboInput, ComboItem, Combobox, CompletionMode, FontChooser, text_key,
 };
 mod widgets;
 pub use widgets::{

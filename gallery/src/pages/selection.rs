@@ -1,10 +1,11 @@
 //! Choosing one of several: radio groups, tabs, combo boxes, and the font
 //! chooser.
 
-use crate::page::{Align, Column, Env, Page, node, pressed, sem};
+use crate::page::{Column, Env, Page, node, pressed, sem};
 use choscorui::controls::{
-    ComboBox, ComboChange, ComboInput, ComboItem, CompletionMode, FontChooser, RadioGroup,
-    RadioInput, RadioOption, ShortcutModifiers, Tab, TabInput, Tabs, TabsVariant, text_key,
+    ComboChange, ComboInput, ComboItem, Combobox, CompletionMode, FontChooser, RadioGroup,
+    RadioInput, RadioOption, ShortcutModifiers, Tab, TabInput, Tabs, TabsVariant, VisualState,
+    text_key,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -358,13 +359,15 @@ impl Page for TabsPage {
     }
 }
 
-/// Draws a combo box as a field with a popup list of suggestions and turns
+/// Draws a combobox as a field with a popup list of suggestions and turns
 /// pointer and key events into `ComboInput`s for whoever owns the combo.
 pub struct ComboField {
     pub node: NodeId,
 }
 
-const SUGGESTION_HEIGHT: f64 = 24.0;
+/// The space a page reserves below a field for the popup: rows of the
+/// default recipe's 32 pt height plus the 4 pt insets.
+pub const POPUP_SPACE: f64 = MAX_SUGGESTIONS as f64 * 32.0 + 8.0;
 pub const MAX_SUGGESTIONS: usize = 6;
 
 impl ComboField {
@@ -374,45 +377,17 @@ impl ComboField {
         }
     }
 
-    fn popup(&self, tree: &Tree, combo: &ComboBox) -> Rect {
+    fn popup(&self, tree: &Tree, combo: &Combobox) -> Rect {
         let bounds = tree.bounds(self.node).unwrap_or_default();
-        let count = combo.suggestions().len().min(MAX_SUGGESTIONS);
-        Rect::new(
-            Point::new(bounds.origin.x, bounds.max_y() + 2.0),
-            Size::new(bounds.size.width, count as f64 * SUGGESTION_HEIGHT),
-        )
+        combo.popup_rect(bounds, MAX_SUGGESTIONS)
     }
 
-    pub fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>, combo: &ComboBox) {
+    pub fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>, combo: &Combobox) {
         let bounds = tree.bounds(self.node).unwrap_or_default();
-        let focused = tree.focus() == Some(self.node);
-        let text = combo.text().to_owned();
-        let shown = match combo.completion_suffix() {
-            Some(suffix) if focused => format!("{text}{suffix}"),
-            _ => text,
-        };
-        crate::page::paint_field(
-            env,
-            list,
-            bounds,
-            &shown,
-            "Type or press ↓",
-            focused,
-            &choscorui::controls::ValidationState::Valid,
-            None,
-        );
-        let arrow = Rect::new(
-            Point::new(bounds.max_x() - 24.0, bounds.origin.y),
-            Size::new(24.0, bounds.size.height),
-        );
-        env.text(
-            list,
-            arrow,
-            "▾",
-            env.small(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Center,
-        );
+        let state = VisualState::NONE
+            .set(VisualState::FOCUSED, tree.focus() == Some(self.node))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(self.node));
+        combo.paint(&mut env.cx(list, bounds), state, "Type or press ↓");
     }
 
     /// Paints the open popup; call after everything else so it is on top.
@@ -421,45 +396,9 @@ impl ComboField {
         tree: &Tree,
         list: &mut DisplayList,
         env: &Env<'_>,
-        combo: &ComboBox,
+        combo: &Combobox,
     ) {
-        if !combo.is_open() {
-            return;
-        }
-        let popup = self.popup(tree, combo);
-        let _ = list.fill_rounded_rect(popup, 4.0, env.tokens.color(ColorRole::Card));
-        let _ = list.stroke_rounded_rect(popup, 4.0, env.mix(0.3), 1.0);
-        let highlighted = combo.highlighted();
-        for (index, item) in combo
-            .suggestions()
-            .into_iter()
-            .take(MAX_SUGGESTIONS)
-            .enumerate()
-        {
-            let row = Rect::new(
-                Point::new(
-                    popup.origin.x,
-                    popup.origin.y + index as f64 * SUGGESTION_HEIGHT,
-                ),
-                Size::new(popup.size.width, SUGGESTION_HEIGHT),
-            );
-            let selected = Some(item.key) == highlighted;
-            if selected {
-                list.fill_rect(row, env.tokens.color(ColorRole::Primary));
-            }
-            env.text(
-                list,
-                row.inset(6.0),
-                &item.text,
-                env.body(),
-                if selected {
-                    env.on_accent()
-                } else {
-                    env.tokens.color(ColorRole::Foreground)
-                },
-                Align::Leading,
-            );
-        }
+        combo.paint_popup(&mut env.cx(list, self.popup(tree, combo)));
     }
 
     /// The input a pointer event means for `combo`, if any.
@@ -467,7 +406,7 @@ impl ComboField {
         &self,
         tree: &mut Tree,
         event: PointerEvent,
-        combo: &ComboBox,
+        combo: &Combobox,
     ) -> Option<ComboInput> {
         let PointerEvent::Down {
             position,
@@ -479,12 +418,11 @@ impl ComboField {
         if combo.is_open() {
             let popup = self.popup(tree, combo);
             if popup.contains(position) {
-                let index = ((position.y - popup.origin.y) / SUGGESTION_HEIGHT) as usize;
-                return Some(ComboInput::Choose(index));
+                return combo.suggestion_at(popup, position).map(ComboInput::Choose);
             }
         }
         if tree.bounds(self.node).is_some_and(|b| b.contains(position)) {
-            let _ = tree.set_focus(Some(self.node));
+            let _ = tree.focus_by_pointer(self.node);
             return Some(ComboInput::Press);
         }
         combo.is_open().then_some(ComboInput::Dismiss)
@@ -496,7 +434,7 @@ impl ComboField {
         tree: &Tree,
         event: KeyEvent,
         modifiers: ShortcutModifiers,
-        combo: &ComboBox,
+        combo: &Combobox,
     ) -> Option<ComboInput> {
         if tree.focus() != Some(self.node) {
             return None;
@@ -535,11 +473,11 @@ fn items(texts: &[&str]) -> Vec<ComboItem> {
 
 /// A read-only combo, an editable prefix-completing combo, and an editable
 /// contains-matching combo.
-pub struct ComboBoxPage {
-    combos: Vec<(ComboField, ComboBox, &'static str, NodeId)>,
+pub struct ComboboxPage {
+    combos: Vec<(ComboField, Combobox, &'static str, NodeId)>,
 }
 
-pub fn combo_box(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
+pub fn combobox(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let cities = [
         "Hà Nội",
         "Huế",
@@ -564,7 +502,7 @@ pub fn combo_box(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page
             CompletionMode::Contains,
         ),
     ] {
-        let mut combo = ComboBox::new(label, editable);
+        let mut combo = Combobox::new(label, editable);
         combo.set_completion_mode(mode);
         combo.set_items(items(&cities));
         combo.set_enabled(env.enabled);
@@ -574,13 +512,14 @@ pub fn combo_box(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page
         let caption = node(tree, parent, false);
         combos.push((ComboField::new(tree, parent), combo, label, caption));
     }
-    Box::new(ComboBoxPage { combos })
+    Box::new(ComboboxPage { combos })
 }
 
-impl Page for ComboBoxPage {
+impl Page for ComboboxPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        for (field, _, _, caption) in &self.combos {
+        for (field, combo, _, caption) in &mut self.combos {
+            combo.set_metrics(env.styles(), env.tokens);
             let _ = tree.set_bounds(*caption, column.row(20.0));
             let _ = tree.set_bounds(field.node, column.cells(30.0, &[280.0])[0]);
             column.space(8.0);
@@ -716,7 +655,7 @@ impl Page for FontChooserPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
         let _ = tree.set_bounds(self.field.node, column.cells(30.0, &[280.0])[0]);
-        column.space(MAX_SUGGESTIONS as f64 * SUGGESTION_HEIGHT);
+        column.space(POPUP_SPACE);
         let _ = tree.set_bounds(self.preview, column.row(80.0));
     }
 

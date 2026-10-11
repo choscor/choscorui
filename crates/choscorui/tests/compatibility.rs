@@ -8,7 +8,7 @@
 //! review the golden diff and note it in the release notes.
 
 use choscorui::controls::{
-    Button, ButtonVariant, Checkbox, ComboBox, ComboItem, CommandId, ControlSize, EstimatedText,
+    Button, ButtonVariant, Checkbox, ComboItem, Combobox, CommandId, ControlSize, EstimatedText,
     IntegerRange, ItemView, PaintContext, Progress, Slider, SliderOrientation, SpinBox, Styles,
     TextField, TextItemDelegate, VisualState,
 };
@@ -205,7 +205,7 @@ fn control_semantics() {
         Progress::new("Tải", 3, 10).unwrap().semantics()
     )
     .unwrap();
-    let mut combo = ComboBox::new("Thành phố", false);
+    let mut combo = Combobox::new("Thành phố", false);
     combo.set_items(
         ["Hà Nội", "Huế"]
             .iter()

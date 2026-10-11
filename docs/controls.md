@@ -40,8 +40,8 @@ in parentheses is the role that the macOS backend gives to that
 | Basic | [`ToolBox`](#toolbox) | Accordion with one open page. |
 | Text | [`TextField`](#textfield) | Single-line text input, also for passwords. |
 | Text | [`TextEditor`](#texteditor) | Multiline plain-text editor. |
-| Text | [`ComboBox`](#combobox-and-fontchooser) | List choice with optional typed text and completion. |
-| Text | [`FontChooser`](#combobox-and-fontchooser) | Font family combo box with a fallback. |
+| Text | [`Combobox`](#combobox-and-fontchooser) | List choice with optional typed text and completion. |
+| Text | [`FontChooser`](#combobox-and-fontchooser) | Font family combobox with a fallback. |
 | Range | [`Slider`](#slider) | Integer value along a track. |
 | Range | [`SpinBox`](#spinbox) | Integer value with step buttons. |
 | Range | [`DecimalSpinBox`](#decimalspinbox) | Locale-aware decimal value with text editing. |
@@ -563,7 +563,7 @@ The node also carries the UTF-16 length and selection of the text.
 [text_editor.rs](../crates/choscorui-controls/tests/text_editor.rs) pins this
 behavior.
 
-### ComboBox and FontChooser
+### Combobox and FontChooser
 
 - **Press** toggles the popup. **`Choose(index)`** commits that
   suggestion.
@@ -575,7 +575,7 @@ behavior.
   PageUp and Home go to the first suggestion. PageDown and End go to the
   last suggestion.
 - When open, Enter commits the highlight. Space also commits it when the
-  combo box is not editable.
+  combobox is not editable.
 - **Typing** (editable) filters the items by prefix or by substring
   (`CompletionMode`). Matches ignore case and diacritics.
 - Typing opens the popup when an item matches, and closes it when no item
@@ -587,14 +587,28 @@ behavior.
 - **Semantic actions.** `ShowMenu` and `Expand` open the popup.
   `Collapse` and `Dismiss` close it.
 - Semantic `SetValue` commits the item with the same text. Only an
-  editable combo box accepts free text.
+  editable combobox accepts free text.
 - **Disabled.** All input does nothing, and `set_enabled(false)` closes
   the popup.
 - `set_items` keeps the selection and the highlight by `ItemKey`.
-- **`FontChooser`** is an editable combo box named "Font". A family that
+- **`FontChooser`** is an editable combobox named "Font". A family that
   the system does not have resolves to the fallback family.
+- `ComboBox` is a deprecated alias of `Combobox`.
+- **Look.** `paint` draws the trigger and `paint_popup` draws the open
+  list. `popup_rect` places the list below the anchor, and `suggestion_at`
+  maps a point to a row. `set_metrics` reads the row height from the
+  `Combobox` recipe:
 
-| Field | `ComboBox::semantics` | Suggestion |
+| Part | Slot | Value |
+| --- | --- | --- |
+| Trigger | `Trigger` | the input box: `input` border, radius md, shadow xs, 36 pt high; the focus ring while focus is visible |
+| Text | `Value` | sm `foreground` text |
+| Placeholder, completion, chevron | `Placeholder` | sm `muted-foreground` text; a 16 pt chevron at the end |
+| Popup | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, padding 4 pt, 4 pt below the anchor |
+| Suggestion | `Item` | 32 pt high, radius sm; `accent` fill while highlighted |
+| Selected mark | `ItemIndicator` | a 16 pt check in the end padding of the selected item |
+
+| Field | `Combobox::semantics` | Suggestion |
 | --- | --- | --- |
 | Role | `ComboBox` (AXComboBox) | `ListItem` (AXGroup) |
 | Name / value | label / text | item text / - |
@@ -1127,7 +1141,7 @@ own semantics.
 | State | the description gives red, green, blue, and opacity |
 | Actions | `SetValue`, `Focus` |
 
-`FontDialog` has no semantic node. Its family combo box publishes the
+`FontDialog` has no semantic node. Its family combobox publishes the
 `FontChooser` semantics.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.

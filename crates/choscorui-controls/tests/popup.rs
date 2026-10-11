@@ -1,9 +1,9 @@
 use choscorui_controls::{
-    ComboBox, ComboChange, ComboInput, ComboItem, CommandId, CommandRegistry, CommandState,
+    ComboChange, ComboInput, ComboItem, Combobox, CommandId, CommandRegistry, CommandState,
     CompletionMode, DropdownMenu, FontChooser, MenuCheck, MenuItem, MenuResponse, Placement,
     PopupPress, PopupStack, TOOLTIP_DELAY, TooltipController, place_popup, text_key,
 };
-use choscorui_controls::{EstimatedText, PaintContext, Styles};
+use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Point,
     Rect, SemanticAction, Size, Tree,
@@ -232,7 +232,7 @@ fn items(names: &[&str]) -> Vec<ComboItem> {
 
 #[test]
 fn editable_combo_completes_and_keeps_highlight_through_async_updates() {
-    let mut combo = ComboBox::new("Thành phố", true);
+    let mut combo = Combobox::new("Thành phố", true);
     combo.set_items(items(&["Hà Nội", "Hải Phòng", "Huế", "Hồ Chí Minh"]));
     assert_eq!(
         combo.handle(ComboInput::Text("h".into())),
@@ -279,7 +279,7 @@ fn editable_combo_completes_and_keeps_highlight_through_async_updates() {
 
 #[test]
 fn popup_combo_steps_selection_and_handles_accessibility() {
-    let mut combo = ComboBox::new("Size", false);
+    let mut combo = Combobox::new("Size", false);
     combo.set_items(items(&["Small", "Medium", "Large"]));
     combo.select(Some(text_key("Small")));
     combo.handle(ComboInput::Key {
@@ -393,4 +393,53 @@ fn dropdown_menu_takes_metrics_and_look_from_the_menu_recipe() {
             if rect.size == Size::new(8.0, 8.0))
     });
     assert_eq!(dot.count(), 1);
+}
+
+#[test]
+fn combobox_paints_trigger_and_popup_from_the_recipe() {
+    let mut combo = Combobox::new("Size", false);
+    combo.set_items(items(&["Small", "Medium", "Large"]));
+    combo.select(Some(text_key("Medium")));
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    combo.set_metrics(&styles, &tokens);
+    let anchor = rect(0.0, 0.0, 200.0, 36.0);
+    let paint = |combo: &Combobox, bounds, popup: bool| {
+        let mut list = DisplayList::new();
+        let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+        if popup {
+            combo.paint_popup(&mut cx);
+        } else {
+            combo.paint(&mut cx, VisualState::NONE, "Pick one");
+        }
+        list
+    };
+    let texts = |list: &DisplayList| -> Vec<String> {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::DrawText { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(texts(&paint(&combo, anchor, false)), ["Medium"]);
+    assert!(paint(&combo, anchor, true).commands().is_empty(), "closed");
+
+    combo.handle(ComboInput::Press);
+    // Rows are 32 pt with a 4 pt inset, below a 4 pt gap.
+    let popup = combo.popup_rect(anchor, 6);
+    assert_eq!(popup, rect(0.0, 40.0, 200.0, 3.0 * 32.0 + 8.0));
+    assert_eq!(
+        combo.suggestion_at(popup, Point::new(10.0, 40.0 + 4.0 + 32.0 + 1.0)),
+        Some(1)
+    );
+    assert_eq!(combo.suggestion_at(popup, Point::new(10.0, 41.0)), None);
+    let open = paint(&combo, popup, true);
+    assert_eq!(texts(&open), ["Small", "Medium", "Large"]);
+    let accent = tokens.color(ColorRole::Accent);
+    assert!(open.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRoundedRect { color, .. } if *color == accent
+    )));
 }

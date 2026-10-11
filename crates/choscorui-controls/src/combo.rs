@@ -1,11 +1,15 @@
-//! Combo box with completion, and a font chooser built on it.
+//! Combobox with completion, and a font chooser built on it.
 //!
 //! Items carry stable [`ItemKey`]s, so the selection and the highlighted
 //! suggestion survive item lists that update while the popup is open
 //! (for example asynchronous search results).
 
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
+};
 use choscorui_core::{
-    ItemKey, Key, SemanticAction, SemanticNode, SemanticRole, SemanticState, fold_for_search,
+    DesignTokens, Icon, ItemKey, Key, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, fold_for_search,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -52,7 +56,29 @@ pub enum ComboChange {
     Committed(Option<ItemKey>),
 }
 
-pub struct ComboBox {
+/// Row height and popup inset, read from the `Combobox` recipe.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ComboMetrics {
+    row: f64,
+    inset: f64,
+}
+
+impl ComboMetrics {
+    fn resolve(styles: &Styles, tokens: &DesignTokens) -> Self {
+        let style = |slot| styles.resolve(tokens, StyleQuery::new(ControlKind::Combobox, slot));
+        let (item, content) = (style(Slot::Item), style(Slot::Content));
+        Self {
+            row: item
+                .min_height
+                .max(item.text.line_height + item.padding.vertical()),
+            inset: content.padding.block_start,
+        }
+    }
+}
+
+/// A text field or a button with a filterable list of suggestions in a
+/// popover.
+pub struct Combobox {
     name: String,
     editable: bool,
     mode: CompletionMode,
@@ -65,9 +91,14 @@ pub struct ComboBox {
     highlighted: Option<ItemKey>,
     text_before_open: String,
     enabled: bool,
+    metrics: ComboMetrics,
 }
 
-impl ComboBox {
+/// Deprecated name of [`Combobox`].
+#[deprecated(since = "0.1.0", note = "renamed to `Combobox`")]
+pub type ComboBox = Combobox;
+
+impl Combobox {
     pub fn new(name: impl Into<String>, editable: bool) -> Self {
         Self {
             name: name.into(),
@@ -81,7 +112,13 @@ impl ComboBox {
             highlighted: None,
             text_before_open: String::new(),
             enabled: true,
+            metrics: ComboMetrics::resolve(&Styles::new(), &DesignTokens::light()),
         }
+    }
+
+    /// Reads the suggestion row height and the popup inset from `styles`.
+    pub fn set_metrics(&mut self, styles: &Styles, tokens: &DesignTokens) {
+        self.metrics = ComboMetrics::resolve(styles, tokens);
     }
     pub fn set_completion_mode(&mut self, mode: CompletionMode) {
         self.mode = mode;
@@ -370,6 +407,127 @@ impl ComboBox {
         }
     }
 
+    /// The flags the trigger recipe reads, from the host's focus and
+    /// hover flags in `host`.
+    pub fn visual_state(&self, host: VisualState) -> VisualState {
+        host.set(VisualState::OPEN, self.open)
+            .set(VisualState::DISABLED, !self.enabled)
+    }
+
+    /// Paints the trigger in the context's bounds: the field box, the text
+    /// or `placeholder`, the inline completion while focused, and a chevron.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState, placeholder: &str) {
+        let state = self.visual_state(host);
+        let query = |slot| StyleQuery::new(ControlKind::Combobox, slot).state(state);
+        let (trigger, value, muted) = (
+            cx.style(query(Slot::Trigger)),
+            cx.style(query(Slot::Value)),
+            cx.style(query(Slot::Placeholder)),
+        );
+        let bounds = cx.bounds;
+        cx.slot(bounds, &trigger, |cx, inner| {
+            let icon_width = trigger.icon_size.min(inner.size.width);
+            let icon_x = if cx.rtl {
+                inner.origin.x
+            } else {
+                inner.max_x() - icon_width
+            };
+            let icon = Rect::from_xywh(icon_x, inner.origin.y, icon_width, inner.size.height);
+            cx.icon(icon, Icon::ChevronDown, &muted);
+            let mut text = inner;
+            text.size.width = (inner.size.width - icon_width - trigger.gap).max(0.0);
+            if cx.rtl {
+                text.origin.x = inner.max_x() - text.size.width;
+            }
+            if self.text.is_empty() {
+                cx.label(text, placeholder, &muted, TextAlign::Start);
+                return;
+            }
+            let typed = cx.label(text, &self.text, &value, TextAlign::Start);
+            if let Some(suffix) = self.completion_suffix().filter(|_| state.focused()) {
+                let rest = if cx.rtl {
+                    Rect::from_xywh(
+                        text.origin.x,
+                        text.origin.y,
+                        (typed.origin.x - text.origin.x).max(0.0),
+                        text.size.height,
+                    )
+                } else {
+                    Rect::from_xywh(
+                        typed.max_x(),
+                        text.origin.y,
+                        (text.max_x() - typed.max_x()).max(0.0),
+                        text.size.height,
+                    )
+                };
+                cx.label(rest, suffix, &muted, TextAlign::Start);
+            }
+        });
+    }
+
+    /// The popup below `anchor`, showing at most `max_rows` suggestions.
+    pub fn popup_rect(&self, anchor: Rect, max_rows: usize) -> Rect {
+        let rows = self.matches.len().min(max_rows) as f64;
+        Rect::from_xywh(
+            anchor.origin.x,
+            anchor.max_y() + self.metrics.inset,
+            anchor.size.width,
+            rows * self.metrics.row + 2.0 * self.metrics.inset,
+        )
+    }
+
+    /// The suggestion under `point` in a popup at `popup`.
+    pub fn suggestion_at(&self, popup: Rect, point: Point) -> Option<usize> {
+        if !popup.contains(point) {
+            return None;
+        }
+        let y = point.y - popup.origin.y - self.metrics.inset;
+        let index = (y / self.metrics.row).floor();
+        (index >= 0.0 && (index as usize) < self.matches.len()).then_some(index as usize)
+    }
+
+    /// Paints the open popup in the context's bounds, from
+    /// [`Combobox::popup_rect`]. Paint it above other content.
+    pub fn paint_popup(&self, cx: &mut PaintContext<'_>) {
+        if !self.open {
+            return;
+        }
+        let popup = cx.bounds;
+        let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
+        let content = cx.style(query(Slot::Content));
+        cx.slot(popup, &content, |_, _| {});
+        let inner = content_rect(popup, &content, cx.rtl);
+        let rows =
+            ((inner.size.height / self.metrics.row).floor() as usize).min(self.matches.len());
+        for (index, item) in self.suggestions().into_iter().take(rows).enumerate() {
+            let state = VisualState::NONE
+                .set(VisualState::HIGHLIGHTED, self.highlighted == Some(item.key))
+                .set(VisualState::SELECTED, self.selected == Some(item.key));
+            let style = cx.style(query(Slot::Item).state(state));
+            let indicator = cx.style(query(Slot::ItemIndicator).state(state));
+            let row = Rect::from_xywh(
+                inner.origin.x,
+                inner.origin.y + index as f64 * self.metrics.row,
+                inner.size.width,
+                self.metrics.row,
+            );
+            cx.slot(row, &style, |cx, text| {
+                cx.label(text, &item.text, &style, TextAlign::Start);
+            });
+            if state.selected() {
+                // The check sits in the end padding, like the reference.
+                let width = indicator.min_width;
+                let x = if cx.rtl {
+                    row.origin.x + style.padding.inline_start
+                } else {
+                    row.max_x() - style.padding.inline_start - width
+                };
+                let mark = Rect::from_xywh(x, row.origin.y, width, row.size.height);
+                cx.icon(mark, Icon::Check, &indicator);
+            }
+        }
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         let mut actions = Vec::new();
         if self.enabled {
@@ -429,13 +587,13 @@ pub fn text_key(text: &str) -> ItemKey {
 /// `choscorui_macos::available_font_families`); a typed family that is not
 /// installed resolves to the fallback and is reported as missing.
 pub struct FontChooser {
-    combo: ComboBox,
+    combo: Combobox,
     fallback: String,
 }
 
 impl FontChooser {
     pub fn new(families: Vec<String>, current: &str, fallback: impl Into<String>) -> Self {
-        let mut combo = ComboBox::new("Font", true);
+        let mut combo = Combobox::new("Font", true);
         combo.set_items(
             families
                 .into_iter()
@@ -455,7 +613,7 @@ impl FontChooser {
             fallback: fallback.into(),
         }
     }
-    pub fn combo(&self) -> &ComboBox {
+    pub fn combo(&self) -> &Combobox {
         &self.combo
     }
     pub fn handle(&mut self, input: ComboInput) -> ComboChange {
