@@ -1955,8 +1955,7 @@ pub fn canvas(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
                 .named(format!("Node {i}"), SemanticRole::Button),
         );
     }
-    let mut canvas = CanvasView::new("Canvas", Rect::default());
-    canvas.selection_color = env.tokens.color(ColorRole::Primary);
+    let canvas = CanvasView::new("Canvas", Rect::default());
     Box::new(CanvasPage {
         canvas_node,
         zoom_in,
@@ -2100,7 +2099,7 @@ impl Page for CanvasPage {
         env.panel(list, rect);
         let painted = self
             .canvas
-            .paint(&mut self.scene.borrow_mut(), list)
+            .paint(&mut env.cx(list, rect), &mut self.scene.borrow_mut())
             .unwrap_or(0);
         self.painted.set(painted);
         if tree.focus() == Some(self.canvas_node) {

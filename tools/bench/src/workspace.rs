@@ -395,7 +395,16 @@ impl Workspace {
             &[],
             state,
         );
-        let _ = self.canvas.paint(&mut self.scene, &mut list);
+        let _ = self.canvas.paint(
+            &mut PaintContext::new(
+                &mut list,
+                self.canvas_rect,
+                &self.tokens,
+                &self.styles,
+                &EstimatedText,
+            ),
+            &mut self.scene,
+        );
         list.fill_rect(self.status_rect, chrome);
         let status = self.status.layout(self.status_rect, LayoutDirection::Ltr);
         let _ = list.draw_text(

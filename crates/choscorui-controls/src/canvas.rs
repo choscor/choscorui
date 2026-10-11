@@ -5,8 +5,9 @@
 //! Several views may show one scene; each keeps its own zoom, pan, and
 //! selection.
 
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    Color, DisplayList, DisplayListError, Key, Paint, Path, Point, Rect, Scene, SceneItemId,
+    DisplayList, DisplayListError, Key, Paint, Path, Point, Rect, Scene, SceneItemId,
     SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
     StrokeStyle, Transform,
 };
@@ -86,7 +87,6 @@ pub struct CanvasView {
     band_base: BTreeSet<SceneItemId>,
     focus: Option<SceneItemId>,
     gesture: Gesture,
-    pub selection_color: Color,
 }
 
 impl CanvasView {
@@ -100,7 +100,6 @@ impl CanvasView {
             band_base: BTreeSet::new(),
             focus: None,
             gesture: Gesture::None,
-            selection_color: Color::rgba8(10, 132, 255, 255),
         }
     }
 
@@ -447,24 +446,31 @@ impl CanvasView {
     }
 
     /// Paints visible items (culled through the spatial index), selection
-    /// outlines, focus ring, and rubber band. Returns items painted.
+    /// outlines, focus ring, and rubber band. The outlines and the band
+    /// come from the `Canvas` recipe. Returns items painted.
     pub fn paint(
         &self,
+        cx: &mut PaintContext<'_>,
         scene: &mut Scene,
-        list: &mut DisplayList,
     ) -> Result<usize, DisplayListError> {
+        let query = |slot| StyleQuery::new(ControlKind::Canvas, slot);
+        let (selection, band_style) = (
+            cx.style(query(Slot::Indicator)),
+            cx.style(query(Slot::Range)),
+        );
+        let list = &mut *cx.list;
         list.push_clip(self.viewport);
         list.push_transform(self.transform())?;
         let painted = scene.paint(list, self.visible_scene_rect())?;
         list.pop_transform()?;
         let outline = |list: &mut DisplayList, rect: Rect, dashed: bool| {
-            let mut style = StrokeStyle::new(1.0);
+            let mut style = StrokeStyle::new(selection.border_width);
             if dashed {
                 style.dash = vec![4.0, 3.0];
             }
             list.stroke_path(
                 Path::rect(rect.inset(-2.0)),
-                Paint::Solid(self.selection_color),
+                Paint::Solid(selection.border),
                 style,
             )
         };
@@ -479,7 +485,7 @@ impl CanvasView {
             outline(list, self.transform().apply_rect(bounds).inset(-2.0), true)?;
         }
         if let Some(band) = self.rubber_band() {
-            list.fill_rect(band, self.selection_color.with_alpha(0.15));
+            list.fill_rect(band, band_style.background);
             outline(list, band.inset(2.0), false)?;
         }
         list.pop_clip()?;

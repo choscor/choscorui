@@ -1244,6 +1244,10 @@ These types have no semantic node.
 - The view has no disabled state. The host checks focus.
 - **Semantic actions.** `perform` with `Focus` focuses the item and
   scrolls it into view. `Activate` focuses the item and selects it alone.
+- **Look.** `paint` outlines each selected item with the `Canvas`
+  `Indicator` border, 1 pt `primary`, 2 pt outside the item. The focused
+  item gets a dashed outline. The rubber band fills with the `Range`
+  background, `primary` at 15%.
 
 | Field | `CanvasView::semantics` | `CanvasView::item_semantics` |
 | --- | --- | --- |

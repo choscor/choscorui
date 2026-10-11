@@ -1,11 +1,17 @@
-use choscorui_controls::{CanvasInput, CanvasView, MAX_ZOOM};
+use choscorui_controls::{CanvasInput, CanvasView, EstimatedText, MAX_ZOOM, PaintContext, Styles};
 use choscorui_core::{
-    Color, DisplayList, ItemShape, ItemStyle, Key, Point, Rect, Scene, SceneItem, SceneItemId,
-    SemanticAction, SemanticRole, Size,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key, Paint,
+    Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction, SemanticRole, Size,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(w, h))
+}
+
+fn paint(view: &CanvasView, scene: &mut Scene, list: &mut DisplayList) -> usize {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut cx = PaintContext::new(list, view.viewport(), &tokens, &styles, &EstimatedText);
+    view.paint(&mut cx, scene).unwrap()
 }
 
 fn scene() -> (Scene, Vec<SceneItemId>) {
@@ -134,12 +140,18 @@ fn selection_and_dragging_work_in_zoomed_coordinates() {
     );
 
     let mut list = DisplayList::new();
-    let painted = view.paint(&mut scene, &mut list).unwrap();
+    let painted = paint(&view, &mut scene, &mut list);
     assert_eq!(
         painted, 2,
         "box 2 at scene x 200 is outside the zoomed viewport"
     );
     assert!(list.is_balanced());
+    let primary = DesignTokens::light().color(ColorRole::Primary);
+    let outlines = list.commands().iter().filter(|command| {
+        matches!(command, DisplayCommand::StrokePath { paint: Paint::Solid(color), .. }
+            if *color == primary)
+    });
+    assert_eq!(outlines.count(), 3, "two selected items and the focus");
 }
 
 #[test]
@@ -253,6 +265,6 @@ fn two_views_share_a_scene_with_independent_state() {
     );
     // The overview sees the moved geometry on its next paint.
     let mut list = DisplayList::new();
-    assert_eq!(overview.paint(&mut scene, &mut list).unwrap(), 3);
+    assert_eq!(paint(&overview, &mut scene, &mut list), 3);
     assert_eq!(scene.world_bounds(ids[0]).unwrap().origin.x, 10.0);
 }

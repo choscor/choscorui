@@ -16,8 +16,27 @@ pub(super) fn resolve(cx: &Cx) -> ResolvedStyle {
         ControlKind::Item => item(cx),
         ControlKind::Typography => typography(cx),
         ControlKind::TextEditor => editor(cx),
+        ControlKind::Canvas => canvas(cx),
         _ => cx.base(),
     }
+}
+
+/// The selection outline (`Indicator`) and the rubber band (`Range`).
+fn canvas(cx: &Cx) -> ResolvedStyle {
+    let mut style = cx.base();
+    match cx.q.slot {
+        Slot::Indicator => {
+            style.border = cx.c(ColorRole::Primary);
+            style.border_width = cx.t.border_width;
+        }
+        Slot::Range => {
+            style.background = cx.a(ColorRole::Primary, 0.15);
+            style.border = cx.c(ColorRole::Primary);
+            style.border_width = cx.t.border_width;
+        }
+        _ => {}
+    }
+    style
 }
 
 fn separator(cx: &Cx) -> ResolvedStyle {
