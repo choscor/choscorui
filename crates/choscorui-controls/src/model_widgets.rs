@@ -512,6 +512,61 @@ impl ColumnBrowser {
         }
         columns
     }
+    /// Paints one entry in the context's bounds with the `ListView` row
+    /// look. A `selected` entry fills `muted`; in the `active` column it
+    /// fills `accent`. An entry with children ends in a chevron.
+    pub fn paint_entry(
+        cx: &mut PaintContext<'_>,
+        label: &str,
+        has_children: bool,
+        selected: bool,
+        active: bool,
+    ) {
+        let state = VisualState::NONE
+            .set(VisualState::SELECTED, selected)
+            .set(VisualState::HIGHLIGHTED, selected && active);
+        let query = |slot| StyleQuery::new(ControlKind::ListView, slot).state(state);
+        let (row, mut cell, mut indicator) = (
+            cx.style(query(Slot::Row)),
+            cx.style(query(Slot::Cell)),
+            cx.style(query(Slot::Indicator)),
+        );
+        cell.foreground = row.foreground;
+        if active && selected {
+            indicator.foreground = row.foreground;
+        }
+        let bounds = cx.bounds;
+        cx.slot(bounds, &row, |cx, inner| {
+            let mut text = inner;
+            if has_children {
+                let width = indicator.icon_size.min(inner.size.width);
+                let x = if cx.rtl {
+                    inner.origin.x
+                } else {
+                    inner.max_x() - width
+                };
+                let icon = if cx.rtl {
+                    Icon::ChevronLeft
+                } else {
+                    Icon::ChevronRight
+                };
+                cx.icon(
+                    Rect::new(
+                        Point::new(x, inner.origin.y),
+                        Size::new(width, inner.size.height),
+                    ),
+                    icon,
+                    &indicator,
+                );
+                text.size.width = (inner.size.width - width).max(0.0);
+                if cx.rtl {
+                    text.origin.x += width;
+                }
+            }
+            cx.label(text, label, &cell, TextAlign::Start);
+        });
+    }
+
     /// Selects `key` in `column`, truncating deeper columns.
     pub fn select(&mut self, column: usize, key: ItemKey) {
         self.path.truncate(column);

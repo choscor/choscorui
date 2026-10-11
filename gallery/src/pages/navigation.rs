@@ -4,8 +4,9 @@ use crate::page::{
     Align, Column, Env, Page, Push, field_semantics, node, paint_field, pressed, sem, type_into,
 };
 use choscorui::controls::{
-    CommandId, CommandRegistry, CommandState, ControlKind, DialogKeys, MnemonicTable,
-    ShortcutModifiers, Slot, StyleQuery, ValidationState, VisualState, parse_mnemonic,
+    Button, ButtonVariant, CommandId, CommandRegistry, CommandState, ControlKind, DialogKeys,
+    MnemonicTable, ShortcutModifiers, Slot, StyleQuery, ValidationState, VisualState,
+    parse_mnemonic,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerEvent, Rect, SemanticAction,
@@ -344,17 +345,16 @@ impl Page for DialogKeysPage {
             );
         }
         self.cancel.paint(tree, list, env);
-        self.ok.paint(tree, list, env);
-        if self.ok_enabled() {
-            // The default button is outlined in the accent color.
-            let rect = tree.bounds(self.ok.node).unwrap_or_default();
-            let _ = list.stroke_rounded_rect(
-                rect,
-                env.tokens.radius.min(8.0),
-                env.tokens.color(ColorRole::Primary),
-                2.0,
-            );
-        }
+        // The default button takes the primary look while it can run.
+        let variant = if self.ok_enabled() {
+            ButtonVariant::Default
+        } else {
+            ButtonVariant::Outline
+        };
+        let ok = tree.bounds(self.ok.node).unwrap_or_default();
+        Button::new(self.ok.label.clone(), CommandId(0))
+            .with_variant(variant)
+            .paint(&mut env.cx(list, ok), tree, self.ok.node);
         self.toggle.paint(tree, list, env);
         env.caption(
             list,

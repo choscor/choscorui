@@ -2,14 +2,14 @@
 //! editing, form mapping, column browsing, undo history, and the canvas.
 
 use crate::page::{
-    Align, Collection, Column, Env, Page, PageState, Push, node, paint_field, pressed, sem, split,
+    Collection, Column, Env, Page, PageState, Push, node, paint_field, pressed, sem, split,
     type_into,
 };
 use choscorui::controls::{
-    CanvasInput, CanvasView, CellEdit, ColumnBrowser, DataMapper, DefaultEditorFactory,
-    HeaderColumn, HeaderInput, HeaderView, ItemModifiers, ItemView, ItemViewInput,
-    ItemViewResponse, ShortcutModifiers, TextItemDelegate, ValidationState, ViewLayout,
-    VisualState, undo_history, undo_steps_to,
+    CanvasInput, CanvasView, CellEdit, ColumnBrowser, ControlKind, DataMapper,
+    DefaultEditorFactory, HeaderColumn, HeaderInput, HeaderView, ItemModifiers, ItemView,
+    ItemViewInput, ItemViewResponse, ShortcutModifiers, Slot, StyleQuery, TextAlign,
+    TextItemDelegate, ValidationState, ViewLayout, VisualState, undo_history, undo_steps_to,
 };
 use choscorui::core::{
     Color, ColorRole, DisplayList, ItemData, ItemKey, ItemModel, ItemShape, ItemStyle, Key,
@@ -890,14 +890,9 @@ impl Page for CellEditPage {
         self.header.paint(tree, list, env);
         if let Some(key) = self.list.view.current()
             && let Some(rect) = self.cell_rect(key, self.column)
-            && tree.focus() == Some(self.list.node)
+            && tree.focus_visible(self.list.node)
         {
-            let _ = list.stroke_rounded_rect(
-                rect.inset(1.0),
-                2.0,
-                env.tokens.color(ColorRole::Primary),
-                1.5,
-            );
+            env.focus_ring(list, rect.inset(1.0));
         }
         let below = Rect::new(
             Point::new(self.list.rect.origin.x, self.list.rect.max_y() + 8.0),
@@ -1480,33 +1475,16 @@ impl Page for ColumnBrowserPage {
         }
         for (key, column, rect) in self.placed(tree, env.rtl()) {
             let selected = self.browser.path().get(column) == Some(&key);
-            let mut color = env.tokens.color(ColorRole::Foreground);
-            if selected {
-                let active = focused && column == self.browser.focused_column();
-                let fill = if active {
-                    env.tokens.color(ColorRole::Primary)
-                } else {
-                    env.mix(0.2)
-                };
-                list.fill_rect(rect, fill);
-                if active {
-                    color = env.on_accent();
-                }
-            }
-            let mut label = self.name(key);
-            if self.model.has_children(key) {
-                label.push_str(if env.rtl() { "  ‹" } else { "  ›" });
-            }
-            env.text(
-                list,
-                rect.inset(6.0),
-                &label,
-                env.body(),
-                color,
-                Align::Leading,
+            let active = focused && column == self.browser.focused_column();
+            ColumnBrowser::paint_entry(
+                &mut env.cx(list, rect),
+                &self.name(key),
+                self.model.has_children(key),
+                selected,
+                active,
             );
         }
-        if focused {
+        if tree.focus_visible(self.container) {
             env.focus_ring(list, bounds);
         }
         let below = Rect::new(
@@ -1751,29 +1729,19 @@ impl Page for UndoHistoryPage {
         self.undo.paint(tree, list, env);
         self.redo.paint(tree, list, env);
         let history = undo_history(&self.stack, "Start (0)");
+        // Redoable rows are muted; the current row is selected.
         for (row, id) in history.iter().zip(&self.rows) {
             let rect = tree.bounds(*id).unwrap_or_default();
-            if row.current {
-                list.fill_rect(rect, env.mix(0.18));
+            let state = VisualState::NONE.set(VisualState::SELECTED, row.current);
+            let mut cx = env.cx(list, rect);
+            let style = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row).state(state));
+            let mut text = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Cell));
+            if row.redoable {
+                text.foreground = cx.tokens.color(ColorRole::MutedForeground);
             }
-            let color = if row.redoable {
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.45)
-            } else {
-                env.tokens.color(ColorRole::Foreground)
-            };
-            let label = if row.current {
-                format!("● {}", row.label)
-            } else {
-                format!("   {}", row.label)
-            };
-            env.text(
-                list,
-                rect.inset(4.0),
-                &label,
-                env.body(),
-                color,
-                Align::Leading,
-            );
+            cx.slot(rect, &style, |cx, inner| {
+                cx.label(inner, &row.label, &text, TextAlign::Start);
+            });
         }
     }
 
@@ -2102,7 +2070,7 @@ impl Page for CanvasPage {
             .paint(&mut env.cx(list, rect), &mut self.scene.borrow_mut())
             .unwrap_or(0);
         self.painted.set(painted);
-        if tree.focus() == Some(self.canvas_node) {
+        if tree.focus_visible(self.canvas_node) {
             env.focus_ring(list, rect);
         }
         env.caption(

@@ -571,6 +571,9 @@ behavior.
 - **Read-only.** Typing, marked text, Enter, Tab, Backspace, Delete, `Cut`,
   `Undo`, `Redo`, and semantic `SetValue` do nothing. Navigation works.
 - Undo and redo skip marked text. Typed `\r\n` becomes `\n`.
+- **Look.** `paint` uses the `TextEditor` recipe: the textarea box, a
+  `primary` selection at 25%, and a 1 pt caret while focused. The layout
+  starts at `content_origin`, inside the padding.
 
 | Field | `TextEditor::semantics` |
 | --- | --- |
@@ -1004,6 +1007,9 @@ behavior.
   column. ArrowUp and ArrowDown move in the column and stop at the ends.
 - `retain_existing` cuts the path at the first item that the model
   removed.
+- **Look.** `paint_entry` uses the `ListView` row. A selected entry fills
+  `muted`, and in the active column it fills `accent`. An entry with
+  children ends in a chevron that mirrors in right-to-left layouts.
 - `undo_history` returns one row for the initial state, then one row for
   each undo group. Each row has `current` and `redoable` flags.
 - `undo_steps_to` returns the signed number of undo or redo steps to a

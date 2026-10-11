@@ -4,9 +4,10 @@
 //! [`TextEditor::caret_rect`] in its scroll area after each change.
 
 use super::text_field::TextComposition;
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, Styles, VisualState};
 use choscorui_core::{
-    Dirty, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, SemanticText, TextBuffer, TextLayout, TextMotion, Tree, TreeError,
+    DesignTokens, Dirty, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, SemanticText, TextBuffer, TextLayout, TextMotion, Tree, TreeError,
 };
 use std::ops::Range;
 
@@ -206,6 +207,44 @@ impl TextEditor {
             None => self.buffer.caret(),
         };
         layout.caret_rect(caret)
+    }
+
+    /// The layout origin in `bounds`: inside the `TextEditor` padding.
+    pub fn content_origin(bounds: Rect, styles: &Styles, tokens: &DesignTokens) -> Point {
+        let style = styles.resolve(tokens, StyleQuery::new(ControlKind::TextEditor, Slot::Root));
+        Point::new(
+            bounds.origin.x + style.padding.inline_start,
+            bounds.origin.y + style.padding.block_start,
+        )
+    }
+
+    /// Paints the textarea box in the context's bounds, then the selection,
+    /// the text of `layout`, and the caret while `host` is focused. The
+    /// layout starts at [`content_origin`](Self::content_origin).
+    pub fn paint(&self, cx: &mut PaintContext<'_>, layout: &TextLayout, host: VisualState) {
+        let query = |slot| StyleQuery::new(ControlKind::TextEditor, slot).state(host);
+        let (root, selection, caret) = (
+            cx.style(query(Slot::Root)),
+            cx.style(query(Slot::Range)),
+            cx.style(query(Slot::Indicator)),
+        );
+        let bounds = cx.bounds;
+        cx.slot(bounds, &root, |_, _| {});
+        let origin = Self::content_origin(bounds, cx.styles, cx.tokens);
+        cx.list.push_clip(bounds);
+        for rect in self.selection_rects(layout) {
+            cx.list
+                .fill_rect(rect.translate(origin.x, origin.y), selection.background);
+        }
+        let _ = layout.draw(cx.list, origin, root.foreground);
+        if host.focused()
+            && let Some(rect) = self.caret_rect(layout)
+        {
+            let mut rect = rect.translate(origin.x, origin.y);
+            rect.size.width = caret.min_width;
+            cx.list.fill_rect(rect, caret.background);
+        }
+        let _ = cx.list.pop_clip();
     }
 
     /// Selection highlight rectangles in layout coordinates.

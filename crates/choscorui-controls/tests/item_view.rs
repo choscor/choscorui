@@ -473,3 +473,34 @@ fn column_browser_and_undo_history() {
     assert_eq!(undo_steps_to(&stack, 0), -1);
     assert_eq!(undo_steps_to(&stack, 2), 1);
 }
+
+#[test]
+fn column_browser_entries_paint_with_the_list_row_look() {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let paint = |selected, active| {
+        let mut list = DisplayList::new();
+        let cx = &mut PaintContext::new(
+            &mut list,
+            Rect::new(Point::new(0.0, 0.0), Size::new(180.0, 32.0)),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        );
+        ColumnBrowser::paint_entry(cx, "Documents", true, selected, active);
+        list
+    };
+    let fills = |list: &DisplayList, role| {
+        let color = tokens.color(role);
+        list.commands().iter().any(|command| {
+            matches!(command, DisplayCommand::FillRoundedRect { color: c, .. } if *c == color)
+        })
+    };
+    assert!(fills(&paint(true, false), ColorRole::Muted));
+    assert!(fills(&paint(true, true), ColorRole::Accent));
+    let plain = paint(false, false);
+    assert!(!fills(&plain, ColorRole::Muted));
+    assert!(plain.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, .. } if text == "Documents"
+    )));
+}

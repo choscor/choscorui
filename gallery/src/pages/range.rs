@@ -3,10 +3,10 @@
 
 use crate::page::{Align, Clicks, Column, Env, Page, Push, node, pressed, sem, type_into};
 use choscorui::controls::{
-    ControlKind, DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, Progress,
-    ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, Slider, SliderInput,
-    SliderOrientation, SliderSemanticAction, Slot, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
-    StyleQuery, TextAlign, ValidationState, VisualState,
+    Button, ButtonVariant, CommandId, ControlKind, DecimalSpinBox, Dial, IntegerRange, NumberBase,
+    NumericDisplay, Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers,
+    Slider, SliderInput, SliderOrientation, SliderSemanticAction, Slot, SpinBox, SpinBoxInput,
+    SpinBoxSemanticAction, StyleQuery, TextAlign, ValidationState, VisualState,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -514,7 +514,7 @@ impl Page for ScrollBarPage {
         for (id, bar) in &self.bars {
             let bounds = tree.bounds(*id).unwrap_or_default();
             bar.paint(&mut env.cx(list, bounds));
-            if tree.focus() == Some(*id) {
+            if tree.focus_visible(*id) {
                 env.focus_ring(list, bounds);
             }
         }
@@ -678,9 +678,6 @@ impl Page for DialPage {
                 env.tokens.color(ColorRole::Foreground),
                 Align::Center,
             );
-            if tree.focus() == Some(*id) {
-                env.focus_ring(list, bounds);
-            }
         }
     }
 
@@ -963,29 +960,17 @@ impl Page for NumericDisplayPage {
             .set(VisualState::FOCUSED, tree.focus() == Some(*id))
             .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
         display.paint(&mut env.cx(list, bounds), state);
+        // The chosen base shows as a secondary (filled) button.
         for (id, base, label) in &self.bases {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let fill = if *base == self.base {
-                choscorui::core::lerp_color(
-                    env.tokens.color(ColorRole::Card),
-                    env.tokens.color(ColorRole::Primary),
-                    0.5,
-                )
+            let variant = if *base == self.base {
+                ButtonVariant::Secondary
             } else {
-                env.mix(0.08)
+                ButtonVariant::Outline
             };
-            list.fill_rect(bounds, fill);
-            env.text(
-                list,
-                bounds,
-                label,
-                env.small(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
-            if tree.focus() == Some(*id) {
-                env.focus_ring(list, bounds);
-            }
+            Button::new(*label, CommandId(0))
+                .with_variant(variant)
+                .paint(&mut env.cx(list, bounds), tree, *id);
         }
         env.caption(
             list,

@@ -1,9 +1,11 @@
-use choscorui_controls::{TextEditor, TextEditorChange, TextEditorInput};
-use choscorui_core::Key;
+use choscorui_controls::{
+    EstimatedText, PaintContext, Styles, TextEditor, TextEditorChange, TextEditorInput, VisualState,
+};
 use choscorui_core::{
     CaretStop, KeyEvent, LayoutLine, NodeId, Point, Rect, SemanticAction, Size, TextLayout,
     TextLayoutError, TextShaper, TextStyle, Tree, TreeError, grapheme_boundaries,
 };
+use choscorui_core::{ColorRole, DesignTokens, DisplayCommand, DisplayList, Key};
 
 /// Monospace: 10 points per grapheme, 10-point lines, wraps at `max_width`.
 struct Mono;
@@ -370,4 +372,37 @@ fn tab_inserts_only_when_enabled_and_accessibility_can_replace_text() {
     );
     assert_eq!(editor.value(), "Xin chào\nthế giới");
     assert_eq!(editor.semantics().text.unwrap().character_count_utf16, 17);
+}
+
+#[test]
+fn editor_paints_the_textarea_selection_and_caret_from_the_recipe() {
+    let (mut tree, id, mut editor) = setup("hello");
+    key(&mut tree, id, &mut editor, Key::Home, false);
+    key(&mut tree, id, &mut editor, Key::ArrowRight, true);
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let bounds = Rect::new(Point::new(0.0, 0.0), Size::new(200.0, 100.0));
+    let origin = TextEditor::content_origin(bounds, &styles, &tokens);
+    assert_eq!(origin, Point::new(10.0, 8.0), "inside the textarea padding");
+    let mut list = DisplayList::new();
+    editor.paint(
+        &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+        &layout(&editor),
+        VisualState::NONE.set(VisualState::FOCUSED, true),
+    );
+    let selection = tokens.color(ColorRole::Primary).with_alpha(0.25);
+    let caret = tokens.color(ColorRole::Foreground);
+    let fills: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::FillRect { rect, color } => Some((*rect, *color)),
+            _ => None,
+        })
+        .collect();
+    assert!(fills.iter().any(|(_, color)| *color == selection));
+    assert!(
+        fills
+            .iter()
+            .any(|(rect, color)| *color == caret && rect.size.width == 1.0)
+    );
 }

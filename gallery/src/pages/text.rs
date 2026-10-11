@@ -4,11 +4,11 @@
 use crate::page::{Column, Env, Page, field_semantics, node, paint_field, pressed, type_into};
 use choscorui::controls::{
     DateInput, InputMask, NumberInput, ShortcutModifiers, TextEditor, TextEditorInput, TextField,
-    TextFieldChange, TextFieldInput, ValidationState,
+    TextFieldChange, TextFieldInput, ValidationState, VisualState,
 };
 use choscorui::core::{
-    CivilDate, ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, Size, TextLayout, TextShaper, TextStyle, Tree,
+    CivilDate, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, Size, TextLayout, TextShaper, TextStyle, Tree,
     grapheme_boundaries,
 };
 
@@ -273,9 +273,9 @@ impl TextEditorPage {
             .ok();
     }
 
-    fn origin(&self, tree: &Tree) -> Point {
+    fn origin(&self, tree: &Tree, env: &Env<'_>) -> Point {
         let bounds = tree.bounds(self.node).unwrap_or_default();
-        Point::new(bounds.origin.x + 10.0, bounds.origin.y + 10.0)
+        TextEditor::content_origin(bounds, env.styles(), env.tokens)
     }
 
     fn input(&mut self, tree: &mut Tree, input: TextEditorInput, env: &Env<'_>) -> bool {
@@ -287,8 +287,8 @@ impl TextEditorPage {
         changed
     }
 
-    fn local(&self, tree: &Tree, position: Point) -> Point {
-        let origin = self.origin(tree);
+    fn local(&self, tree: &Tree, position: Point, env: &Env<'_>) -> Point {
+        let origin = self.origin(tree, env);
         Point::new(position.x - origin.x, position.y - origin.y)
     }
 }
@@ -307,33 +307,13 @@ impl Page for TextEditorPage {
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         let bounds = tree.bounds(self.node).unwrap_or_default();
-        env.panel(list, bounds);
-        if tree.focus() == Some(self.node) {
-            env.focus_ring(list, bounds);
-        }
         let Some(layout) = &self.layout else {
             return;
         };
-        let origin = self.origin(tree);
-        list.push_clip(bounds);
-        let selection = choscorui::core::lerp_color(
-            env.tokens.color(ColorRole::Card),
-            env.tokens.color(ColorRole::Primary),
-            0.35,
-        );
-        for rect in self.editor.selection_rects(layout) {
-            list.fill_rect(rect.translate(origin.x, origin.y), selection);
-        }
-        let _ = layout.draw(list, origin, env.tokens.color(ColorRole::Foreground));
-        if tree.focus() == Some(self.node)
-            && let Some(caret) = self.editor.caret_rect(layout)
-        {
-            list.fill_rect(
-                caret.translate(origin.x, origin.y),
-                env.tokens.color(ColorRole::Foreground),
-            );
-        }
-        let _ = list.pop_clip();
+        let host = VisualState::NONE
+            .set(VisualState::FOCUSED, tree.focus() == Some(self.node))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(self.node));
+        self.editor.paint(&mut env.cx(list, bounds), layout, host);
     }
 
     fn semantics(&self, _tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
@@ -355,7 +335,7 @@ impl Page for TextEditorPage {
                 let _ = tree.set_focus(Some(self.node));
                 let _ = tree.set_pointer_capture(Some(self.node));
                 self.dragging = true;
-                let local = self.local(tree, position);
+                let local = self.local(tree, position, env);
                 self.input(
                     tree,
                     TextEditorInput::PointerDown {
@@ -367,7 +347,7 @@ impl Page for TextEditorPage {
                 )
             }
             PointerEvent::Move { position } if self.dragging => {
-                let local = self.local(tree, position);
+                let local = self.local(tree, position, env);
                 self.input(tree, TextEditorInput::PointerDrag { position: local }, env)
             }
             PointerEvent::Up { .. } if self.dragging => {
