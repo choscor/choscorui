@@ -12,10 +12,10 @@ This is the checklist for publishing a choscorui release on macOS, the only supp
 
 1. Bump `version` in every `Cargo.toml`, including `samples/notes`; all crates share one version. Then run `cargo update -w` and `(cd samples/notes && cargo update -w)`.
 2. Generate the change list: `scripts/release-notes.sh <previous-tag> HEAD`.
-3. In [CHANGELOG.md](../CHANGELOG.md), rename **Unreleased** to the version and date.
+3. Draft the release notes in an ignored file, such as `dist/release-notes-<version>.md`. There is no changelog file; these notes become the GitHub Release text.
    - Write highlights by hand.
-   - Paste the generated list.
    - Fill in **Breaking changes**, **Deprecated**, **Known limitations**, and **Upgrading** (see [VERSIONING.md](VERSIONING.md)).
+   - Paste the generated list.
 4. If any golden file changed since the last tag (`git diff <previous-tag> -- crates/choscorui/tests/golden`), describe the behavior change under Breaking changes.
 
 ## 3. Automated gates (local, on the release machine)
@@ -66,11 +66,10 @@ Record each result in the release issue:
 
 ## 6. Publish
 
-1. Commit the version bump and changelog: `chore(release): <version>`.
+1. Commit the version bump: `chore(release): <version>`.
 2. Tag the commit: `git tag -s v<version> -m "choscorui <version>"`.
 3. Push the tag.
-4. Create the release and attach `choscorui-<version>-macos-universal.zip` and its `.sha256`. The changelog section for this version is the release text.
-5. Add a new **Unreleased** heading to `CHANGELOG.md`.
+4. Create the release and attach `choscorui-<version>-macos-universal.zip` and its `.sha256`. The release notes from step 2 are the release text.
 
 ## Security fixes
 
