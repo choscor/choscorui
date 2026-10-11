@@ -15,7 +15,7 @@ pub use paint::{
     Content, EstimatedText, PaintContext, ShapedText, TextAlign, TextLine, TextMeasure, align_x,
     content_rect, draw_icon, draw_text, fill_shape, paint_box, paint_slot,
 };
-pub(crate) use paint::{choice_size, paint_choice};
+pub(crate) use paint::{choice_size, join_segment, paint_choice};
 pub use recipe::{DefaultRecipe, Recipe, StyleCacheStats, StyleQuery, Styles};
 pub use resolved::{Corners, Cursor, Edges, ResolvedStyle, Ring, Sides};
 pub use state::VisualState;

@@ -5,8 +5,8 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, inputs, navigation, popups, range, recipes, selection,
-    shell, statics, system, text,
+    containers, data, datetime, dialogs, form, inputs, navigation, popups, range, recipes,
+    selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -34,6 +34,10 @@ pub const PAGES: &[PageInfo] = &[
         Inputs,
         inputs::key_sequence
     ),
+    page!("switch", "Switch", Inputs, form::switch),
+    page!("toggle", "Toggle", Inputs, form::toggle),
+    page!("toggle-group", "Toggle group", Inputs, form::toggle_group),
+    page!("kbd", "Keyboard key", Static, form::kbd),
     page!("radio", "Radio group", Selection, selection::radio),
     page!("tabs", "Tabs", Selection, selection::tabs),
     page!("combobox", "Combobox", Selection, selection::combobox),
@@ -168,6 +172,11 @@ pub const PAGES: &[PageInfo] = &[
 pub const SHOWN: &[(&str, &str)] = &[
     ("Label", "label"),
     ("Separator", "separator"),
+    ("Kbd", "kbd"),
+    ("Switch", "switch"),
+    ("Toggle", "toggle"),
+    ("ToggleGroup", "toggle-group"),
+    ("ToggleItem", "toggle-group"),
     ("SeparatorOrientation", "separator"),
     ("Button", "button"),
     ("ButtonVariant", "button"),

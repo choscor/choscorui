@@ -1,0 +1,136 @@
+//! Shared behavior for the controls that mount through [`ControlHost`]:
+//! press tracking for button-like parts, roving focus over a row of
+//! items, and the semantic node builder.
+//!
+//! [`ControlHost`]: crate::ControlHost
+
+use crate::custom::{ControlContext, ControlEvent};
+use choscorui_core::{
+    EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState,
+};
+
+/// What [`Press::event`] did with an event.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum PressOutcome {
+    /// Not a press event; the control may handle it.
+    Ignored,
+    /// The press state changed, or the event was consumed.
+    Handled,
+    /// A click or an activation key completed at this point.
+    Activated(Option<Point>),
+}
+
+/// Press tracking for a button-like control. A primary press inside the
+/// bounds captures the pointer, and a release inside activates. Space and
+/// Enter activate on key-down without repeat.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Press {
+    pub pressed: bool,
+}
+
+impl Press {
+    pub fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> PressOutcome {
+        if cx.phase() != EventPhase::Target {
+            return PressOutcome::Ignored;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                self.pressed = true;
+                cx.capture_pointer(true);
+                cx.request_paint();
+                PressOutcome::Handled
+            }
+            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                cx.request_paint();
+                if cx.bounds().contains(*position) {
+                    PressOutcome::Activated(Some(*position))
+                } else {
+                    PressOutcome::Handled
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Space | Key::Enter,
+                repeat: false,
+            }) => PressOutcome::Activated(None),
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                cx.request_paint();
+                PressOutcome::Handled
+            }
+            _ => PressOutcome::Ignored,
+        }
+    }
+}
+
+/// The reply for a press outcome that the control has acted on.
+pub(crate) fn reply(outcome: PressOutcome) -> EventReply {
+    match outcome {
+        PressOutcome::Ignored => EventReply::Continue,
+        PressOutcome::Handled | PressOutcome::Activated(_) => EventReply::Stop,
+    }
+}
+
+/// The key-down key of `event`, repeats included.
+pub(crate) fn key_down(event: &ControlEvent) -> Option<Key> {
+    match event {
+        ControlEvent::Key(KeyEvent::Down { key, .. }) => Some(*key),
+        _ => None,
+    }
+}
+
+/// The item a roving-focus key moves to among `count` items, or `None`
+/// for other keys. Arrow keys along `horizontal` follow reading order
+/// and wrap; Home and End go to the ends.
+pub(crate) fn rove(
+    key: Key,
+    current: usize,
+    count: usize,
+    horizontal: bool,
+    rtl: bool,
+) -> Option<usize> {
+    if count == 0 {
+        return None;
+    }
+    let (next, previous) = match (horizontal, rtl) {
+        (true, false) => (Key::ArrowRight, Key::ArrowLeft),
+        (true, true) => (Key::ArrowLeft, Key::ArrowRight),
+        (false, _) => (Key::ArrowDown, Key::ArrowUp),
+    };
+    match key {
+        Key::Home => Some(0),
+        Key::End => Some(count - 1),
+        key if key == next => Some((current + 1) % count),
+        key if key == previous => Some((current + count - 1) % count),
+        _ => None,
+    }
+}
+
+/// The index of the first rectangle that contains `point`.
+pub(crate) fn hit(rects: &[Rect], point: Point) -> Option<usize> {
+    rects.iter().position(|rect| rect.contains(point))
+}
+
+/// A semantic node with `role`, `name`, and `actions`, and default state.
+pub(crate) fn node(
+    role: SemanticRole,
+    name: impl Into<String>,
+    actions: Vec<SemanticAction>,
+) -> SemanticNode {
+    SemanticNode {
+        role,
+        name: name.into(),
+        description: String::new(),
+        value: None,
+        state: SemanticState::default(),
+        relations: Vec::new(),
+        actions,
+        text: None,
+    }
+}

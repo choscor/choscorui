@@ -1,0 +1,101 @@
+//! Keyboard key caps, alone or in a group.
+
+use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
+use crate::hosted;
+use crate::style::{
+    Content, ControlKind, KbdVariant, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign,
+    TextMeasure,
+};
+use choscorui_core::{EventReply, Measured, Rect, SemanticNode, SemanticRole, Size};
+
+/// One or more key caps, such as `⌘` `K`. Caps sit in reading order with
+/// the group gap between them. The control does not take focus.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Kbd {
+    keys: Vec<String>,
+    variant: KbdVariant,
+}
+
+impl Kbd {
+    /// One key cap.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self::group([key.into()])
+    }
+
+    /// A group of key caps.
+    pub fn group(keys: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            keys: keys.into_iter().collect(),
+            variant: KbdVariant::Default,
+        }
+    }
+
+    #[must_use]
+    pub fn with_variant(mut self, variant: KbdVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    pub fn keys(&self) -> &[String] {
+        &self.keys
+    }
+
+    fn styles(&self, resolve: impl Fn(StyleQuery) -> ResolvedStyle) -> (ResolvedStyle, f64) {
+        let cap = resolve(StyleQuery::new(ControlKind::Kbd, Slot::Root).variant(self.variant));
+        let group = resolve(StyleQuery::new(ControlKind::Kbd, Slot::Group));
+        (cap, group.gap)
+    }
+
+    fn cap_sizes(&self, cap: &ResolvedStyle, text: &dyn TextMeasure) -> Vec<Size> {
+        self.keys
+            .iter()
+            .map(|key| Content::label(key).size(cap, text))
+            .collect()
+    }
+}
+
+impl CustomControl for Kbd {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let (cap, gap) = self.styles(|query| cx.style(query));
+        let sizes = self.cap_sizes(&cap, cx.text);
+        let width = sizes.iter().map(|size| size.width).sum::<f64>()
+            + gap * sizes.len().saturating_sub(1) as f64;
+        let height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+        Measured {
+            size: Size::new(width, height),
+            baseline: None,
+        }
+    }
+
+    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
+        EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let (cap, gap) = self.styles(|query| cx.style(query));
+        let bounds = cx.bounds;
+        let mut x = if cx.rtl {
+            bounds.max_x()
+        } else {
+            bounds.origin.x
+        };
+        for (key, size) in self.keys.iter().zip(self.cap_sizes(&cap, cx.text)) {
+            let left = if cx.rtl { x - size.width } else { x };
+            let y = bounds.origin.y + (bounds.size.height - size.height) / 2.0;
+            let rect = Rect::from_xywh(left, y, size.width, size.height);
+            cx.slot(rect, &cap, |cx, inner| {
+                cx.label(inner, key, &cap, TextAlign::Center);
+            });
+            let step = size.width + gap;
+            x += if cx.rtl { -step } else { step };
+        }
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        hosted::node(SemanticRole::StaticText, self.keys.join(" "), Vec::new())
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+}

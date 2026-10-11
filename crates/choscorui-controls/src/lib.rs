@@ -102,10 +102,13 @@ pub use dialogs::{
 mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod custom;
+mod form;
+mod hosted;
 pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,
 };
+pub use form::{Kbd, Switch, Toggle, ToggleGroup, ToggleItem};
 mod dock;
 pub use dock::{
     DockArea, DockArrangement, DockError, DockFocus, DockLayout, DockPanel, DockRestoreReport,

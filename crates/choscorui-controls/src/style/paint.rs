@@ -1,6 +1,8 @@
 //! The general slot painter and text helpers that every control uses.
 
-use super::{ControlKind, Corners, ResolvedStyle, Slot, StyleQuery, Styles, VisualState};
+use super::{
+    ControlKind, Corners, Orientation, ResolvedStyle, Slot, StyleQuery, Styles, VisualState,
+};
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Paint, Path, Point, Rect, Shadow, Size,
     StrokeStyle, TextRun, TextShaper, TypeSpec,
@@ -440,6 +442,45 @@ impl<'a> PaintContext<'a> {
     /// The width of `text` in `style`.
     pub fn measure(&self, text: &str, style: &ResolvedStyle) -> f64 {
         self.text.width(text, &style.text)
+    }
+}
+
+/// Joins segment `index` of `count` into one bar: inner corners turn
+/// square, and each segment after the first grows back over the border
+/// before it, so neighbors share one line.
+pub(crate) fn join_segment(
+    style: &mut ResolvedStyle,
+    rect: &mut Rect,
+    index: usize,
+    count: usize,
+    orientation: Orientation,
+    rtl: bool,
+) {
+    let last = index + 1 >= count;
+    let corners = &mut style.radius;
+    match orientation {
+        Orientation::Horizontal => {
+            if index > 0 {
+                (corners.top_start, corners.bottom_start) = (0.0, 0.0);
+                rect.size.width += style.border_width;
+                if !rtl {
+                    rect.origin.x -= style.border_width;
+                }
+            }
+            if !last {
+                (corners.top_end, corners.bottom_end) = (0.0, 0.0);
+            }
+        }
+        Orientation::Vertical => {
+            if index > 0 {
+                (corners.top_start, corners.top_end) = (0.0, 0.0);
+                rect.origin.y -= style.border_width;
+                rect.size.height += style.border_width;
+            }
+            if !last {
+                (corners.bottom_start, corners.bottom_end) = (0.0, 0.0);
+            }
+        }
     }
 }
 

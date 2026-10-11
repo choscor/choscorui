@@ -75,6 +75,10 @@ in parentheses is the role that the macOS backend gives to that
 | Validators | [`NumberInput`](#numberinput-inputmask-and-dateinput) | Locale-aware number validation. |
 | Validators | [`InputMask`](#numberinput-inputmask-and-dateinput) | Fixed-format text mask. |
 | Validators | [`DateInput`](#numberinput-inputmask-and-dateinput) | Locale-aware short date validation. |
+| Form | [`Switch`](#switch) | On or off setting with a sliding thumb. |
+| Form | [`Toggle`](#toggle-and-togglegroup) | Button that stays on or off. |
+| Form | [`ToggleGroup`](#toggle-and-togglegroup) | Row or column of toggles with one or many on. |
+| Form | [`Kbd`](#kbd) | Keyboard key caps for shortcuts. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1380,6 +1384,93 @@ semantic node. A `TextField` shows their `ValidationState`.
 [input_rules.rs](../crates/choscorui-controls/tests/input_rules.rs) and
 [properties.rs](../crates/choscorui-controls/tests/properties.rs) pin this
 behavior.
+
+### Switch
+
+- A click anywhere on the control, Space, or Enter flips the value. Each
+  flip emits `Changed(Bool)`.
+- The track comes first and the label after it. In a right-to-left layout,
+  the track is at the right edge.
+- The thumb rests at the start of the track while off, and at the end while
+  on. In a right-to-left layout, the ends change places.
+- `with_size` takes `Default` or `Sm`.
+
+| Size | Track | Thumb |
+| --- | --- | --- |
+| `Default` | 32 × 18.4 pt | 16 pt |
+| `Sm` | 24 × 14 pt | 12 pt |
+
+| State | Track fill |
+| --- | --- |
+| Off | `input` (80% in dark themes) |
+| On | `primary` |
+| Disabled | 50% opacity on the track and the thumb |
+
+| Field | `Switch::semantics` |
+| --- | --- |
+| Role | `Checkbox` (AXCheckBox), description "switch" |
+| Name / value | label / - |
+| State | checked, disabled |
+| Actions | `Activate` and `Focus` while enabled |
+
+### Toggle and ToggleGroup
+
+- **`Toggle`.** A click, Space, or Enter flips the value and emits
+  `Changed(Bool)`. `with_icon` adds an icon before the label.
+- **`ToggleGroup`.** A single-selection group keeps at most one item on. A
+  flip of the on item turns it off. A multiple-selection group flips each
+  item on its own. Each flip emits `Changed(Indices)`.
+- **Keys.** The group is one tab stop. The arrow keys along the orientation
+  move focus over the enabled items and wrap. Home and End go to the first
+  and the last item. In a right-to-left row, ArrowLeft moves forward.
+- Space or Enter flips the focused item. A disabled item gets no focus and
+  no clicks.
+- `with_spacing(0.0)` joins the items: inner corners are square and the
+  borders overlap. Other values leave that gap between items.
+
+| Size | Height and minimum width |
+| --- | --- |
+| `Sm` | 32 pt |
+| `Default` | 36 pt |
+| `Lg` | 40 pt |
+
+| Variant | Look |
+| --- | --- |
+| `Default` | Transparent; `muted` on hover and while on |
+| `Outline` | `input` border and an extra-small shadow; `muted` on hover and while on |
+
+| Field | `Toggle::semantics` | `ToggleGroup::semantics` |
+| --- | --- | --- |
+| Role | `Button` (AXButton), description "toggle" | `RadioGroup` for single selection, `Group` for multiple |
+| Name / value | label / - | name / labels of the on items, joined with ", " |
+| Description | "toggle" | label of the focused item |
+| State | checked, disabled | disabled |
+| Actions | `Activate` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
+
+`SetValue` with an item label flips that item. An unknown label returns
+false.
+
+### Kbd
+
+- `Kbd::new` shows one key cap. `Kbd::group` shows one cap for each key,
+  4 pt apart.
+- A `Kbd` takes no focus and gets no input.
+
+| Variant | Fill | Text |
+| --- | --- | --- |
+| `Default` | `muted` | `muted-foreground` |
+| `Inverted` | `background` at 20% (10% in dark themes) | `background` |
+
+Each cap is 20 pt high and at least 20 pt wide, with 4 pt side padding and
+extra-small medium text.
+
+| Field | `Kbd::semantics` |
+| --- | --- |
+| Role | `StaticText` (AXStaticText) |
+| Name / value | keys joined with spaces / - |
+| Actions | none |
+
+[form.rs](../crates/choscorui-controls/tests/form.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

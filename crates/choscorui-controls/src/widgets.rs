@@ -6,7 +6,7 @@
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
     Content, ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, Styles,
-    TextAlign, ToggleVariant, VisualState, content_rect, fill_shape,
+    TextAlign, ToggleVariant, VisualState, content_rect, fill_shape, join_segment,
 };
 use crate::{
     CommandId, CommandRegistry, IntegerRange, NumberInput, STEPPER_WIDTH, Shortcut,
@@ -862,33 +862,15 @@ impl ButtonGroup {
             .variant(ToggleVariant::Outline)
             .state(state);
         let mut style = cx.style(query);
-        let last = index + 1 >= self.members.len();
         let mut rect = cx.bounds;
-        let corners = &mut style.radius;
-        match self.orientation {
-            Orientation::Horizontal => {
-                if index > 0 {
-                    (corners.top_start, corners.bottom_start) = (0.0, 0.0);
-                    rect.size.width += style.border_width;
-                    if !cx.rtl {
-                        rect.origin.x -= style.border_width;
-                    }
-                }
-                if !last {
-                    (corners.top_end, corners.bottom_end) = (0.0, 0.0);
-                }
-            }
-            Orientation::Vertical => {
-                if index > 0 {
-                    (corners.top_start, corners.top_end) = (0.0, 0.0);
-                    rect.origin.y -= style.border_width;
-                    rect.size.height += style.border_width;
-                }
-                if !last {
-                    (corners.bottom_start, corners.bottom_end) = (0.0, 0.0);
-                }
-            }
-        }
+        join_segment(
+            &mut style,
+            &mut rect,
+            index,
+            self.members.len(),
+            self.orientation,
+            cx.rtl,
+        );
         cx.slot(rect, &style, |cx, inner| {
             cx.label(inner, label, &style, TextAlign::Center);
         });
