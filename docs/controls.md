@@ -43,6 +43,7 @@ in parentheses is the role that the macOS backend gives to that
 | Text | [`Combobox`](#combobox-and-fontchooser) | List choice with optional typed text and completion. |
 | Text | [`FontChooser`](#combobox-and-fontchooser) | Font family combobox with a fallback. |
 | Range | [`Slider`](#slider) | Integer value along a track. |
+| Range | [`RangeSlider`](#rangeslider) | Low and high values along one track. |
 | Range | [`SpinBox`](#spinbox) | Integer value with step buttons. |
 | Range | [`DecimalSpinBox`](#decimalspinbox) | Locale-aware decimal value with text editing. |
 | Range | [`Dial`](#dial) | Rotary integer value. |
@@ -690,6 +691,30 @@ the description "Not installed; using" with the fallback name.
 
 [range_controls.rs](../crates/choscorui-controls/tests/range_controls.rs) pins
 this behavior.
+
+### RangeSlider
+
+- A `RangeSlider` has a low and a high thumb on one track. Values snap to
+  the step and stay inside the bounds. The thumbs do not cross.
+- Each thumb is a tab stop. Tab moves from the low thumb to the high thumb,
+  and Shift+Tab moves back. Tab from the high thumb leaves the slider.
+- **Keys.** The arrow keys move the active thumb by one step. In a row,
+  ArrowRight (ArrowLeft in right-to-left layouts) and ArrowUp move it up.
+  PageUp and PageDown move ten steps. Home and End go to the bounds.
+- A press moves the nearer thumb to the press, and a drag moves it. Each
+  change emits `Changed(Range(low, high))`.
+- The track and the thumbs use the `Slider` recipe. The `primary` band
+  runs between the thumbs. The active thumb shows the hover and focus ring.
+
+| Field | `RangeSlider::semantics` |
+| --- | --- |
+| Role | `Slider` (AXSlider) |
+| Name / value | name / low and high joined with an en dash |
+| Description | value of the active thumb |
+| State | disabled |
+| Actions | `Increment`, `Decrement`, and `Focus` while enabled; they move the active thumb |
+
+[range_slider.rs](../crates/choscorui-controls/tests/range_slider.rs) pins this behavior.
 
 ### SpinBox
 
@@ -1710,8 +1735,9 @@ list are the same.
   focusable when the control's `focusable` returns true.
 - `dispatch_pointer` routes a pointer event through the capture, target,
   and bubble phases. A press on a focusable control focuses it.
-- `dispatch_key` routes a key event through the tree. `dispatch_text` gives
-  committed text to the focused control.
+- `dispatch_key` routes a key event through the tree and returns whether a
+  control stopped it. `dispatch_text` gives committed text to the focused
+  control.
 - `move_focus` sends `FocusChanged` to the old and the new control.
 - The host sends `Hover(true)` and `Hover(false)` to each control on the
   path under the pointer when the path changes.

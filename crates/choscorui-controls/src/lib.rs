@@ -111,7 +111,8 @@ pub use custom::{
 };
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
-    InputGroupAddon, InputOtp, Kbd, Select, Switch, Textarea, Toggle, ToggleGroup, ToggleItem,
+    InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,
+    ToggleItem,
 };
 pub use listbox::ListEntry;
 mod dock;

@@ -1425,7 +1425,7 @@ mod tests {
         let english = localizer("en");
         let ctx = ctx(&english, Theme::Dark);
         let found = matching_pages("SLID", &ctx);
-        assert_eq!(found, [index("slider")]);
+        assert_eq!(found, [index("slider"), index("range-slider")]);
         assert_eq!(matching_pages("tool-button", &ctx), [index("tool-button")]);
         assert_eq!(matching_pages("", &ctx).len(), PAGES.len());
         assert!(matching_pages("no such control", &ctx).is_empty());

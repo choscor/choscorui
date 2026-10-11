@@ -593,7 +593,8 @@ impl ControlHost {
 
     /// Routes a key event to the focused control, through its ancestors.
     /// Focus outside an open modal moves into it first.
-    pub fn dispatch_key(&mut self, tree: &mut Tree, event: KeyEvent) {
+    /// Returns true when a control stopped the event.
+    pub fn dispatch_key(&mut self, tree: &mut Tree, event: KeyEvent) -> bool {
         if let Some(modal) = self.modal(tree)
             && !tree
                 .focus()
@@ -604,9 +605,13 @@ impl ControlHost {
                 self.move_focus(tree, Some(modal));
             }
         }
+        let mut stopped = false;
         tree.dispatch_key(event, |tree, node, phase, event| {
-            self.deliver(tree, node, phase, &ControlEvent::Key(event))
+            let reply = self.deliver(tree, node, phase, &ControlEvent::Key(event));
+            stopped |= reply == EventReply::Stop;
+            reply
         });
+        stopped
     }
 
     /// Moves keyboard focus forward or back, inside an open modal.

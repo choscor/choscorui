@@ -200,14 +200,15 @@ impl Page for HostedPage {
         self.host.set_time(env.now.as_secs_f64());
         self.host.set_modifiers(modifiers);
         let focus = tree.focus();
-        if !focus.is_some_and(|id| self.host.contains(id))
-            || matches!(event, KeyEvent::Down { key: Key::Tab, .. })
-        {
+        if !focus.is_some_and(|id| self.host.contains(id)) {
             return false;
         }
-        self.host.dispatch_key(tree, event);
+        // Tab moves focus between pages' nodes unless a control keeps it,
+        // as a range slider does between its thumbs.
+        let tab = matches!(event, KeyEvent::Down { key: Key::Tab, .. });
+        let stopped = self.host.dispatch_key(tree, event);
         self.host.take_messages();
-        true
+        stopped || !tab
     }
 
     fn text(&mut self, tree: &mut Tree, text: &str, env: &Env<'_>) -> bool {

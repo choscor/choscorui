@@ -65,6 +65,7 @@ page.tabs = Tabs
 page.combobox = Combobox
 page.font-chooser = Font chooser
 page.slider = Slider
+page.range-slider = Range slider
 page.spin-box = Spin box
 page.decimal-spin-box = Decimal spin box
 page.progress = Progress

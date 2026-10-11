@@ -63,6 +63,7 @@ page.tabs = Thẻ
 page.combobox = Hộp tổ hợp
 page.font-chooser = Chọn phông chữ
 page.slider = Thanh trượt
+page.range-slider = Thanh trượt khoảng
 page.spin-box = Ô số tăng giảm
 page.decimal-spin-box = Ô số thập phân
 page.progress = Thanh tiến trình

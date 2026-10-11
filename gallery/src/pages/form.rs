@@ -6,7 +6,7 @@ use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
     AddonAlign, CalendarMode, ControlSize, CustomControl, DatePicker, FieldOrientation, FieldPart,
     FieldText, Input, InputGroup, InputGroupAddon, InputOtp, Kbd, KbdVariant, ListEntry,
-    Orientation, Select, Switch, TextField, Textarea, Toggle, ToggleGroup, ToggleItem,
+    Orientation, RangeSlider, Select, Switch, TextField, Textarea, Toggle, ToggleGroup, ToggleItem,
     ToggleVariant, ValidationState,
 };
 use choscorui::core::{CivilDate, Icon, NodeId, Tree};
@@ -416,6 +416,25 @@ pub fn date_picker(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Pa
         (
             "Several dates",
             vec![boxed(picker("Meeting days", CalendarMode::Multiple))],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn range_slider(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![
+        (
+            "Horizontal",
+            vec![boxed(RangeSlider::new(
+                "Price", 0.0, 100.0, 5.0, 25.0, 75.0,
+            ))],
+        ),
+        (
+            "Vertical",
+            vec![boxed(
+                RangeSlider::new("Temperature", 0.0, 40.0, 1.0, 18.0, 24.0)
+                    .with_orientation(Orientation::Vertical),
+            )],
         ),
     ];
     HostedPage::build(tree, parent, rows)

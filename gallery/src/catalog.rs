@@ -55,6 +55,7 @@ pub const PAGES: &[PageInfo] = &[
         selection::font_chooser
     ),
     page!("slider", "Slider", Range, range::slider),
+    page!("range-slider", "Range slider", Range, form::range_slider),
     page!("spin-box", "Spin box", Range, range::spin_box),
     page!(
         "decimal-spin-box",
@@ -180,6 +181,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Label", "label"),
     ("Separator", "separator"),
     ("Kbd", "kbd"),
+    ("RangeSlider", "range-slider"),
     ("CalendarMode", "date-picker"),
     ("DatePicker", "date-picker"),
     ("Field", "field"),
