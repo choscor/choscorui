@@ -284,6 +284,11 @@ pins this behavior.
 - The button runs only a known command that is enabled. A checkable button flips
   the command's checked state and returns `Toggled`.
 - Menu opening does not read the command state.
+- **`ToolButton` look.** `paint` uses the `Toggle` look: transparent, and
+  `muted` on hover or while checked. `visual_state` adds the command's
+  checked and disabled state to the host's flags.
+- An `Instant` menu adds a chevron at the end. A `Split` menu adds a 1 pt
+  divider and a chevron in `arrow_width`.
 - **`ButtonGroup::toggle`.** A member that is not in the group, or that is
   disabled, does nothing. An exclusive group checks only the clicked
   member. A click on the checked member does nothing.
@@ -433,6 +438,9 @@ this behavior.
 - `finish` with nothing recorded cancels.
 - A `Key::Other` key does nothing. This includes a press of a modifier key
   only.
+- **Look.** `paint` draws the `Input` box with one `Kbd` key cap per
+  chord. While it records, the chords so far show. An empty sequence
+  shows the placeholder in the `Input` placeholder style.
 
 | Field | `KeySequenceEdit::semantics` |
 | --- | --- |
@@ -478,6 +486,10 @@ behavior.
 - ArrowUp and ArrowDown move the header focus and stop at the ends. Home
   and End go to the first and the last header.
 - Space or Enter opens the focused page.
+- **Look.** `paint` uses the `Accordion` recipe: a bottom border under each
+  item, the title, and a chevron that points up on the open page.
+  `header_height` is one line of text and 16 pt above and below. The host
+  paints the page.
 
 | Field | `ToolBox::header_semantics`, one node per header |
 | --- | --- |
@@ -701,6 +713,9 @@ this behavior.
   `SetValue` replaces the text, then commits.
 - `set_locale` formats the text again and keeps the value.
 - The control has no disabled state.
+- **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
+  start and the steppers at the end. `stepper_rect` returns the stepper
+  column. An invalid text sets the `invalid` flag.
 
 | Field | `DecimalSpinBox::semantics` |
 | --- | --- |
@@ -1253,6 +1268,8 @@ The items publish their own semantics.
   clamped to the minimum and the maximum. `release` ends the drag.
 - In right-to-left layouts, the grip sits at the bottom-left and grows to
   the left.
+- `SizeGrip::paint` strokes three diagonal lines toward the corner in the
+  `SizeGrip` foreground.
 
 These types have no semantic node.
 

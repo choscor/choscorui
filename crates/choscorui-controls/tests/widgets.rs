@@ -517,3 +517,119 @@ fn button_group_joins_members_with_square_inner_corners() {
     );
     assert_eq!(group.orientation(), Orientation::Horizontal);
 }
+
+fn texts(list: &DisplayList) -> Vec<&str> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn tool_and_editor_widgets_paint_from_recipes() {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let run = |bounds, paint: &dyn Fn(&mut PaintContext<'_>)| {
+        let mut list = DisplayList::new();
+        paint(&mut PaintContext::new(
+            &mut list,
+            bounds,
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ));
+        list
+    };
+    let muted = tokens.color(ColorRole::Muted);
+    let fills = |list: &DisplayList, color| {
+        list.commands().iter().any(|command| match command {
+            DisplayCommand::FillRoundedRect { color: c, .. }
+            | DisplayCommand::FillRect { color: c, .. } => *c == color,
+            _ => false,
+        })
+    };
+
+    // A checked checkable tool button fills `muted`; a split one adds a divider.
+    let mut commands = CommandRegistry::new();
+    commands
+        .insert(CommandId(1), CommandState::default())
+        .unwrap();
+    commands.set_checked(CommandId(1), true).unwrap();
+    let mut bold = ToolButton::new("Bold", CommandId(1));
+    bold.checkable = true;
+    let state = bold.visual_state(&commands, VisualState::NONE);
+    assert!(state.checked());
+    let list = run(rect(0.0, 0.0, 72.0, 32.0), &|cx| bold.paint(cx, state));
+    assert!(fills(&list, muted));
+    assert_eq!(texts(&list), ["Bold"]);
+    let mut undo = ToolButton::new("Undo", CommandId(1));
+    undo.menu = ToolButtonMenu::Split;
+    let list = run(rect(0.0, 0.0, 96.0, 32.0), &|cx| {
+        undo.paint(cx, VisualState::NONE)
+    });
+    let border = tokens.color(ColorRole::Border);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRect { rect, color } if *color == border && rect.size.width <= 1.0
+    )));
+
+    // The decimal spin box paints its text and steppers inside the input.
+    let spin = DecimalSpinBox::new(
+        "Price",
+        Locale::parse("en-US").unwrap(),
+        (0.0, 100.0),
+        0.5,
+        2,
+        12.5,
+    );
+    let steppers = DecimalSpinBox::stepper_rect(rect(0.0, 0.0, 200.0, 36.0), false);
+    assert_eq!(steppers.max_x(), 200.0);
+    let rtl = DecimalSpinBox::stepper_rect(rect(0.0, 0.0, 200.0, 36.0), true);
+    assert_eq!(rtl.origin.x, 0.0);
+    let list = run(rect(0.0, 0.0, 200.0, 36.0), &|cx| {
+        spin.paint(cx, VisualState::NONE)
+    });
+    assert_eq!(texts(&list), [spin.text()]);
+
+    // The tool box paints every title and one chevron per header.
+    let toolbox = ToolBox::new(vec!["General".into(), "Advanced".into()]);
+    let height = toolbox.header_height(&styles, &tokens);
+    assert_eq!(
+        height,
+        20.0 + 32.0,
+        "one small line and 16 pt above and below"
+    );
+    let list = run(rect(0.0, 0.0, 300.0, 300.0), &|cx| {
+        toolbox.paint(cx, height, false)
+    });
+    assert_eq!(texts(&list), ["General", "Advanced"]);
+
+    // The size grip strokes three lines toward the corner.
+    let grip = SizeGrip::new(Size::new(10.0, 10.0), Size::new(100.0, 100.0), false);
+    let list = run(rect(0.0, 0.0, 12.0, 12.0), &|cx| grip.paint(cx));
+    let strokes = list
+        .commands()
+        .iter()
+        .filter(|command| matches!(command, DisplayCommand::StrokePath { .. }))
+        .count();
+    assert_eq!(strokes, 3);
+
+    // The key sequence edit shows a placeholder, then one key cap per chord.
+    let mut edit = KeySequenceEdit::new(2);
+    let bounds = rect(0.0, 0.0, 240.0, 36.0);
+    let list = run(bounds, &|cx| edit.paint(cx, VisualState::NONE, "Record"));
+    assert_eq!(texts(&list), ["Record"]);
+    edit.start();
+    edit.press(
+        Key::Character('k'),
+        ShortcutModifiers {
+            command: true,
+            ..ShortcutModifiers::default()
+        },
+    );
+    let list = run(bounds, &|cx| edit.paint(cx, VisualState::NONE, "Record"));
+    assert_eq!(texts(&list).len(), 1);
+    assert_eq!(texts(&list), ["⌘K"]);
+}

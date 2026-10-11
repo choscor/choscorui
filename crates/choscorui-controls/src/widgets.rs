@@ -3,17 +3,18 @@
 //! numeric (LCD) display, focus frame, size grip, and key-sequence capture.
 //! Each documents its value, keyboard, and accessibility contract.
 
+use crate::range_controls::paint_stepper_field;
 use crate::style::{
-    ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, TextAlign,
-    ToggleVariant, VisualState, content_rect, fill_shape,
+    Content, ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, Styles,
+    TextAlign, ToggleVariant, VisualState, content_rect, fill_shape,
 };
 use crate::{
-    CommandId, CommandRegistry, IntegerRange, NumberInput, Shortcut, ShortcutModifiers,
-    ValidationState,
+    CommandId, CommandRegistry, IntegerRange, NumberInput, STEPPER_WIDTH, Shortcut,
+    ShortcutModifiers, ValidationState,
 };
 use choscorui_core::{
-    Color, ColorRole, DisplayList, Icon, Key, Locale, NodeId, Path, Point, RadiusScale, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    Color, ColorRole, DesignTokens, DisplayList, Icon, Key, Locale, NodeId, Path, Point,
+    RadiusScale, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -358,6 +359,33 @@ impl DecimalSpinBox {
             _ => false,
         }
     }
+
+    /// The flags the input recipe reads: the host's focus flags in
+    /// `host`, and invalid while the text does not parse.
+    pub fn visual_state(&self, host: VisualState) -> VisualState {
+        host.set(
+            VisualState::INVALID,
+            matches!(self.validation(), ValidationState::Invalid(_)),
+        )
+    }
+
+    /// The stepper column at the end of `bounds`, in reading order.
+    pub fn stepper_rect(bounds: Rect, rtl: bool) -> Rect {
+        let width = STEPPER_WIDTH.min(bounds.size.width);
+        let x = if rtl {
+            bounds.origin.x
+        } else {
+            bounds.max_x() - width
+        };
+        Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height)
+    }
+
+    /// Paints the input box, the edited text, and the steppers, like
+    /// [`crate::SpinBox::paint`].
+    pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
+        let steppers = Self::stepper_rect(cx.bounds, cx.rtl);
+        paint_stepper_field(cx, &self.text, self.visual_state(host), steppers);
+    }
 }
 
 // --------------------------------------------------------------------- Dial
@@ -680,6 +708,98 @@ impl ToolButton {
             text: None,
         }
     }
+
+    /// The flags the toggle recipe reads: the host's flags in `host`, with
+    /// the command's checked and disabled state.
+    pub fn visual_state(&self, commands: &CommandRegistry, host: VisualState) -> VisualState {
+        let state = commands.state(self.command).unwrap_or_default();
+        host.set(VisualState::CHECKED, self.checkable && state.checked)
+            .set(VisualState::DISABLED, !state.enabled)
+    }
+
+    /// Paints the button with the `Toggle` look: transparent, and `muted`
+    /// on hover or while checked. A menu adds a chevron at the end; a split
+    /// menu also adds a divider before the arrow.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        let style = cx.style(StyleQuery::new(ControlKind::Toggle, Slot::Root).state(state));
+        let rule = cx.style(StyleQuery::new(ControlKind::ButtonGroup, Slot::Separator));
+        let bounds = cx.bounds;
+        let arrow = match self.menu {
+            ToolButtonMenu::None => 0.0,
+            ToolButtonMenu::Instant => style.icon_size,
+            ToolButtonMenu::Split => self.arrow_width,
+        }
+        .min(bounds.size.width);
+        // Instant menus keep the chevron inside the padding; a split arrow
+        // spans the button's end edge.
+        let split = self.menu == ToolButtonMenu::Split;
+        let (label_bounds, arrow_rect) = if arrow == 0.0 {
+            (bounds, None)
+        } else if split {
+            let x = if cx.rtl {
+                bounds.origin.x
+            } else {
+                bounds.max_x() - arrow
+            };
+            let label_x = if cx.rtl {
+                bounds.origin.x + arrow
+            } else {
+                bounds.origin.x
+            };
+            (
+                Rect::from_xywh(
+                    label_x,
+                    bounds.origin.y,
+                    bounds.size.width - arrow,
+                    bounds.size.height,
+                ),
+                Some(Rect::from_xywh(
+                    x,
+                    bounds.origin.y,
+                    arrow,
+                    bounds.size.height,
+                )),
+            )
+        } else {
+            (bounds, None)
+        };
+        cx.slot(bounds, &style, |cx, inner| {
+            let mut label = content_rect(label_bounds, &style, cx.rtl);
+            label.size.height = inner.size.height;
+            label.origin.y = inner.origin.y;
+            if !split && arrow > 0.0 {
+                let x = if cx.rtl {
+                    inner.origin.x
+                } else {
+                    inner.max_x() - arrow
+                };
+                cx.icon(
+                    Rect::from_xywh(x, inner.origin.y, arrow, inner.size.height),
+                    Icon::ChevronDown,
+                    &style,
+                );
+                label.size.width = (inner.size.width - arrow - style.gap).max(0.0);
+                if cx.rtl {
+                    label.origin.x = inner.max_x() - label.size.width;
+                }
+            }
+            cx.label(label, &self.label, &style, TextAlign::Center);
+        });
+        if let Some(rect) = arrow_rect {
+            let rule_x = if cx.rtl { rect.max_x() } else { rect.origin.x };
+            let inset = style.padding.block_start.max(rect.size.height / 4.0);
+            let line = Rect::from_xywh(
+                rule_x - rule.min_width / 2.0,
+                rect.origin.y + inset,
+                rule.min_width,
+                (rect.size.height - 2.0 * inset).max(0.0),
+            );
+            cx.list.fill_rect(line, rule.background);
+            let mut chevron = style;
+            chevron.icon_size = style.icon_size.min(arrow);
+            cx.icon(rect, Icon::ChevronDown, &chevron);
+        }
+    }
 }
 
 /// Exclusive or non-exclusive group of checkable commands (for example
@@ -977,6 +1097,63 @@ impl ToolBox {
             })
             .collect()
     }
+
+    /// The header height of the `Accordion` trigger: one line of text and
+    /// its padding.
+    pub fn header_height(&self, styles: &Styles, tokens: &DesignTokens) -> f64 {
+        let style = styles.resolve(
+            tokens,
+            StyleQuery::new(ControlKind::Accordion, Slot::Trigger),
+        );
+        style.text.line_height + style.padding.vertical()
+    }
+
+    /// Paints the headers with the `Accordion` look: a bottom border under
+    /// each item, the title, and a chevron that points up on the open page.
+    /// `focus_visible` rings the focused header. The host paints the page.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, header_height: f64, focus_visible: bool) {
+        let (headers, page) = self.layout(cx.bounds, header_height);
+        let query = |slot| StyleQuery::new(ControlKind::Accordion, slot);
+        let item = cx.style(query(Slot::Item));
+        let icon = cx.style(query(Slot::Icon));
+        for (index, (header, title)) in headers.into_iter().zip(&self.titles).enumerate() {
+            let open = index == self.current;
+            let mut extent = header;
+            if open {
+                extent.size.height += page.size.height;
+            }
+            cx.slot(extent, &item, |_, _| {});
+            let state = VisualState::NONE.set(VisualState::OPEN, open).set(
+                VisualState::FOCUS_VISIBLE,
+                focus_visible && index == self.focused,
+            );
+            let trigger = cx.style(query(Slot::Trigger).state(state));
+            cx.slot(header, &trigger, |cx, inner| {
+                let width = icon.icon_size.min(inner.size.width);
+                let x = if cx.rtl {
+                    inner.origin.x
+                } else {
+                    inner.max_x() - width
+                };
+                let chevron = if open {
+                    Icon::ChevronUp
+                } else {
+                    Icon::ChevronDown
+                };
+                cx.icon(
+                    Rect::from_xywh(x, inner.origin.y, width, inner.size.height),
+                    chevron,
+                    &icon,
+                );
+                let mut text = inner;
+                text.size.width = (inner.size.width - width - trigger.gap).max(0.0);
+                if cx.rtl {
+                    text.origin.x = inner.max_x() - text.size.width;
+                }
+                cx.label(text, title, &trigger, TextAlign::Start);
+            });
+        }
+    }
 }
 
 // ----------------------------------------------------------- NumericDisplay
@@ -1208,6 +1385,31 @@ impl SizeGrip {
     pub fn release(&mut self) {
         self.start = None;
     }
+
+    /// Paints three diagonal grip lines toward the corner in the context's
+    /// bounds, in the `SizeGrip` color.
+    pub fn paint(&self, cx: &mut PaintContext<'_>) {
+        let style = cx.style(StyleQuery::new(ControlKind::SizeGrip, Slot::Root));
+        let bounds = cx.bounds;
+        let size = bounds.size.width.min(bounds.size.height);
+        let (corner_x, sign) = if self.rtl {
+            (bounds.origin.x, 1.0)
+        } else {
+            (bounds.max_x(), -1.0)
+        };
+        let bottom = bounds.max_y();
+        for step in 1..=3 {
+            let reach = size * step as f64 / 3.0;
+            let _ = cx.list.stroke_path(
+                Path::line(
+                    Point::new(corner_x + sign * reach, bottom),
+                    Point::new(corner_x, bottom - reach),
+                ),
+                choscorui_core::Paint::Solid(style.foreground),
+                choscorui_core::StrokeStyle::new(1.0),
+            );
+        }
+    }
 }
 
 // ----------------------------------------------------------- KeySequenceEdit
@@ -1313,6 +1515,45 @@ impl KeySequenceEdit {
             actions: vec![SemanticAction::Activate, SemanticAction::Focus],
             text: None,
         }
+    }
+
+    /// Paints the input box with one `Kbd` key cap per chord, or
+    /// `placeholder` when the sequence is empty. While recording, the
+    /// chords so far show. `host` carries focus flags.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState, placeholder: &str) {
+        let input = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(host));
+        let muted = cx.style(StyleQuery::new(ControlKind::Input, Slot::Placeholder));
+        let cap = cx.style(StyleQuery::new(ControlKind::Kbd, Slot::Root));
+        let group = cx.style(StyleQuery::new(ControlKind::Kbd, Slot::Group));
+        let chords = self.recording.as_ref().unwrap_or(&self.committed);
+        let bounds = cx.bounds;
+        cx.slot(bounds, &input, |cx, inner| {
+            if chords.is_empty() {
+                cx.label(inner, placeholder, &muted, TextAlign::Start);
+                return;
+            }
+            let mut x = if cx.rtl {
+                inner.max_x()
+            } else {
+                inner.origin.x
+            };
+            let height = cap.min_height.min(inner.size.height);
+            let y = inner.origin.y + (inner.size.height - height) / 2.0;
+            for chord in chords {
+                let text = shortcut_text(*chord);
+                let width = Content::label(&text).size(&cap, cx.text).width;
+                let left = if cx.rtl { x - width } else { x };
+                let rect = Rect::from_xywh(left, y, width, height);
+                cx.slot(rect, &cap, |cx, inner| {
+                    cx.label(inner, &text, &cap, TextAlign::Center);
+                });
+                x = if cx.rtl {
+                    x - width - group.gap
+                } else {
+                    x + width + group.gap
+                };
+            }
+        });
     }
 }
 

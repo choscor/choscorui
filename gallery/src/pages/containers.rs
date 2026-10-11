@@ -3,13 +3,13 @@
 
 use crate::page::{Align, Column, Env, Page, PageState, Push, node, pressed, sem, split};
 use choscorui::controls::{
-    DockArea, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox, PanelId, Resizable,
-    ResizableInput, ScrollArea, ScrollAreaInput, ShortcutModifiers, SizeGrip, SplitOrientation,
-    StackPage, StackedContainer, ToolBox,
+    ControlKind, DockArea, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox, PanelId,
+    Resizable, ResizableInput, ScrollArea, ScrollAreaInput, ShortcutModifiers, SizeGrip, Slot,
+    SplitOrientation, StackPage, StackedContainer, StyleQuery, TextAlign, ToolBox,
 };
 use choscorui::core::{
-    ColorRole, DisplayList, Key, KeyEvent, NodeId, Paint, Path, Point, PointerButton, PointerEvent,
-    Rect, ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, StrokeStyle, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
+    ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 
 // ---------------------------------------------------------------------------
@@ -820,6 +820,7 @@ pub struct ToolBoxPage {
     headers: Vec<NodeId>,
     page: NodeId,
     toolbox: ToolBox,
+    header_height: f64,
 }
 
 pub fn tool_box(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
@@ -833,6 +834,7 @@ pub fn tool_box(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page
         container,
         headers,
         page,
+        header_height: 0.0,
         toolbox: ToolBox::new(
             TOOL_PAGES
                 .iter()
@@ -845,7 +847,7 @@ pub fn tool_box(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page
 impl ToolBoxPage {
     fn arrange(&self, tree: &mut Tree) {
         let bounds = tree.bounds(self.container).unwrap_or_default();
-        let (headers, page) = self.toolbox.layout(bounds, 30.0);
+        let (headers, page) = self.toolbox.layout(bounds, self.header_height);
         for (id, rect) in self.headers.iter().zip(headers) {
             let _ = tree.set_bounds(*id, rect);
         }
@@ -865,40 +867,29 @@ impl Page for ToolBoxPage {
             env.rtl(),
         )[0];
         let _ = tree.set_bounds(self.container, rect);
+        self.header_height = self.toolbox.header_height(env.styles(), env.tokens);
         self.arrange(tree);
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        let focused = tree.focus() == Some(self.container);
-        for (index, id) in self.headers.iter().enumerate() {
-            let rect = tree.bounds(*id).unwrap_or_default();
-            let open = index == self.toolbox.current();
-            list.fill_rect(rect.inset(1.0), env.mix(if open { 0.16 } else { 0.08 }));
-            let marker = if open {
-                "▾"
-            } else if env.rtl() {
-                "◂"
-            } else {
-                "▸"
-            };
-            env.text(
-                list,
-                rect.inset(10.0),
-                &format!("{marker}  {}", TOOL_PAGES[index].0),
-                env.body(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Leading,
-            );
-            if focused && index == self.toolbox.focused() {
-                env.focus_ring(list, rect.inset(2.0));
-            }
-        }
+        let container = tree.bounds(self.container).unwrap_or_default();
+        self.toolbox.paint(
+            &mut env.cx(list, container),
+            self.header_height,
+            tree.focus_visible(self.container),
+        );
         let page = tree.bounds(self.page).unwrap_or_default();
-        env.panel(list, page);
-        env.caption(
-            list,
-            Rect::new(page.origin, Size::new(page.size.width, 40.0)).inset(10.0),
+        let mut cx = env.cx(list, page);
+        let style = cx.style(StyleQuery::new(ControlKind::Accordion, Slot::Content));
+        let text = Rect::new(
+            page.origin,
+            Size::new(page.size.width, style.text.line_height),
+        );
+        cx.label(
+            text,
             TOOL_PAGES[self.toolbox.current()].1,
+            &style,
+            TextAlign::Start,
         );
     }
 
@@ -1482,27 +1473,9 @@ impl Page for SizeGripPage {
             Align::Center,
         );
         let grip = tree.bounds(self.grip_node).unwrap_or_default();
-        for step in 1..=3 {
-            let inset = step as f64 * 4.0;
-            let (from, to) = if self.grip.rtl {
-                (
-                    Point::new(grip.origin.x + inset, grip.max_y() - 2.0),
-                    Point::new(grip.origin.x + 2.0, grip.max_y() - inset),
-                )
-            } else {
-                (
-                    Point::new(grip.max_x() - inset, grip.max_y() - 2.0),
-                    Point::new(grip.max_x() - 2.0, grip.max_y() - inset),
-                )
-            };
-            let _ = list.stroke_path(
-                Path::line(from, to),
-                Paint::Solid(env.mix(0.5)),
-                StrokeStyle::new(1.0),
-            );
-        }
+        self.grip.paint(&mut env.cx(list, grip.inset(2.0)));
         if tree.focus() == Some(self.grip_node) {
-            env.focus_ring(list, grip);
+            FocusFrame.paint(&mut env.cx(list, grip), tree);
         }
     }
 

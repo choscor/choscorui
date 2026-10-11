@@ -1,13 +1,12 @@
 //! Range controls: sliders, spin boxes, progress, scroll bars, dials, and
 //! numeric displays.
 
-use crate::page::{
-    Align, Clicks, Column, Env, Page, Push, node, paint_field, pressed, sem, type_into,
-};
+use crate::page::{Align, Clicks, Column, Env, Page, Push, node, pressed, sem, type_into};
 use choscorui::controls::{
-    DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, Progress, ScrollBar,
-    ScrollBarInput, ScrollOrientation, ShortcutModifiers, Slider, SliderInput, SliderOrientation,
-    SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction, VisualState,
+    ControlKind, DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, Progress,
+    ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, Slider, SliderInput,
+    SliderOrientation, SliderSemanticAction, Slot, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
+    StyleQuery, TextAlign, ValidationState, VisualState,
 };
 use choscorui::core::{
     ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
@@ -827,16 +826,18 @@ impl Page for DecimalSpinBoxPage {
                 Point::new(bounds.origin.x, bounds.max_y() + 2.0),
                 Size::new(bounds.size.width + 200.0, 16.0),
             );
-            paint_field(
-                env,
-                list,
-                bounds,
-                spin.text(),
-                "",
-                tree.focus() == Some(*id),
-                &spin.validation(),
-                Some(message),
-            );
+            let host = VisualState::NONE
+                .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+            spin.paint(&mut env.cx(list, bounds), host);
+            let (slot, text) = match spin.validation() {
+                ValidationState::Invalid(message) => (Slot::Error, message),
+                ValidationState::Intermediate => (Slot::Description, "Incomplete".to_owned()),
+                ValidationState::Valid => (Slot::Description, "Valid".to_owned()),
+            };
+            let mut cx = env.cx(list, message);
+            let style = cx.style(StyleQuery::new(ControlKind::Field, slot));
+            cx.label(message, &text, &style, TextAlign::Start);
         }
     }
 

@@ -1,15 +1,15 @@
 //! Buttons and other momentary or toggled inputs.
 
-use crate::page::{Align, Clicks, Column, Env, Page, node, pressed, sem, split};
+use crate::page::{Clicks, Column, Env, Page, node, pressed, sem, split};
 use choscorui::controls::{
     Button, ButtonGroup, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId,
-    CommandRegistry, CommandState, InputText, KeySequenceChange, KeySequenceEdit,
+    CommandRegistry, CommandState, KeySequenceChange, KeySequenceEdit,
     SemanticAction as ControlAction, Shortcut, ShortcutModifiers, ShortcutScope, ToolButton,
     ToolButtonAction, ToolButtonMenu, VisualState, shortcut_text,
 };
 use choscorui::core::{
-    ColorRole, DisplayList, Icon, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Tree,
+    DisplayList, Icon, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, Tree,
 };
 
 const HELLO: CommandId = CommandId(1);
@@ -428,57 +428,12 @@ impl Page for ToolButtonPage {
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         for (id, button) in &self.buttons {
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let checked = self
-                .commands
-                .state(button.command)
-                .is_ok_and(|state| state.checked);
-            let fill = if checked {
-                choscorui::core::lerp_color(
-                    env.tokens.color(ColorRole::Card),
-                    env.tokens.color(ColorRole::Primary),
-                    0.45,
-                )
-            } else {
-                env.mix(0.08)
-            };
-            let _ = list.fill_rounded_rect(bounds, 4.0, fill);
-            let mut label_rect = bounds;
-            if button.menu != ToolButtonMenu::None {
-                let arrow = button.arrow_width;
-                label_rect.size.width -= arrow;
-                let arrow_rect = Rect::new(
-                    choscorui::core::Point::new(bounds.max_x() - arrow, bounds.origin.y),
-                    choscorui::core::Size::new(arrow, bounds.size.height),
-                );
-                if button.menu == ToolButtonMenu::Split {
-                    list.fill_rect(
-                        Rect::new(
-                            arrow_rect.origin,
-                            choscorui::core::Size::new(1.0, bounds.size.height),
-                        ),
-                        env.mix(0.3),
-                    );
-                }
-                env.text(
-                    list,
-                    arrow_rect,
-                    "▾",
-                    env.small(),
-                    env.tokens.color(ColorRole::Foreground),
-                    Align::Center,
-                );
-            }
-            env.text(
-                list,
-                label_rect,
-                &button.label,
-                env.body(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
-            if tree.focus() == Some(*id) {
-                env.focus_ring(list, bounds);
-            }
+            let host = VisualState::NONE
+                .set(VisualState::DISABLED, !env.enabled)
+                .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+            let state = button.visual_state(&self.commands, host);
+            button.paint(&mut env.cx(list, bounds), state);
         }
         env.caption(
             list,
@@ -823,14 +778,13 @@ impl Page for KeySequencePage {
                 VisualState::FOCUS_VISIBLE,
                 focused || self.edit.is_recording(),
             );
-        let text = if self.edit.is_recording() {
-            "Recording… press keys, Escape cancels".to_owned()
-        } else if self.edit.sequence().is_empty() {
-            "Click or press Return to record".to_owned()
+        let placeholder = if self.edit.is_recording() {
+            "Recording… press keys, Escape cancels"
         } else {
-            self.edit.text()
+            "Click or press Return to record"
         };
-        InputText::new(&text).paint(&mut env.cx(list, field), state);
+        self.edit
+            .paint(&mut env.cx(list, field), state, placeholder);
         let examples = tree.bounds(self.examples).unwrap_or_default();
         let (top, bottom) = halves(examples);
         env.caption(list, top, &format!("Last change: {:?}", self.last));
