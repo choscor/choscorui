@@ -2,6 +2,16 @@
 
 Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (phase 10) and Linux (phase 11) are out of this delivery's scope. `Done` cites the code or test that proves it. `Manual` names an automated proxy plus the hands-on check a person must still perform on hardware.
 
+**macOS development is complete (2026-10-12).** Every item is implemented and passes its automated checks. What remains is human verification only. These checks are listed under `Manual` below and in [RELEASING.md](RELEASING.md#5-manual-gates):
+
+- text selection highlight over the Hebrew line and the wrapped paragraph
+- dragging from TextEdit and Finder
+- Vietnamese Telex and Japanese Romaji input sources
+- VoiceOver walks: gallery editing, a button after a theme switch, the accessibility checklist, the stress gallery, and two notes windows
+- notification delivery and click, and Finder document open, in a signed bundle
+- a notarized archive with real credentials, then a fresh install on a clean account and on Intel hardware
+- the budget run on each additional Mac model
+
 ## Phase 0 — contract, support matrix, benchmarks
 
 | Item | Status | Evidence |
