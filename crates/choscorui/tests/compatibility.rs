@@ -9,7 +9,7 @@
 
 use choscorui::controls::{
     Button, ButtonVariant, Checkbox, ComboBox, ComboItem, CommandId, ControlSize, EstimatedText,
-    IntegerRange, ItemView, PaintContext, ProgressBar, Slider, SliderOrientation, SpinBox, Styles,
+    IntegerRange, ItemView, PaintContext, Progress, Slider, SliderOrientation, SpinBox, Styles,
     TextField, TextItemDelegate, VisualState,
 };
 use choscorui::core::{
@@ -202,7 +202,7 @@ fn control_semantics() {
     writeln!(
         out,
         "{:?}",
-        ProgressBar::new("Tải", 3, 10).unwrap().semantics()
+        Progress::new("Tải", 3, 10).unwrap().semantics()
     )
     .unwrap();
     let mut combo = ComboBox::new("Thành phố", false);

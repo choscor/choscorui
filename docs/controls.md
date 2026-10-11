@@ -32,7 +32,7 @@ in parentheses is the role that the macOS backend gives to that
 | Basic | [`MnemonicTable`](#mnemonictable-and-parse_mnemonic) | Mnemonic keys for the labels in a window or dialog. |
 | Basic | [`Label`](#label-and-separator) | Static text. |
 | Basic | [`Separator`](#label-and-separator) | Decorative line. |
-| Basic | [`ProgressBar`](#progressbar) | Determinate or indeterminate progress. |
+| Basic | [`Progress`](#progress) | Determinate or indeterminate progress. |
 | Basic | [`NumericDisplay`](#numericdisplay) | Seven-segment number display. |
 | Basic | [`KeySequenceEdit`](#keysequenceedit) | Records a keyboard shortcut. |
 | Basic | [`GroupBox`](#groupbox-and-stackedcontainer) | Titled group of related controls. |
@@ -115,7 +115,7 @@ only the missing-node rule below applies, with `TreeError`. The
 
 Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and
-`ProgressBar` take no input.
+`Progress` take no input.
 
 ```mermaid
 flowchart LR
@@ -373,17 +373,21 @@ behavior.
 [static_controls.rs](../crates/choscorui-controls/tests/static_controls.rs) pins
 this behavior.
 
-### ProgressBar
+### Progress
 
 - `new` fails with `RangeError::InvalidMaximum` when the maximum is zero.
   The value clamps to the maximum.
 - `set_value` and `set_indeterminate` invalidate `PAINT` and `SEMANTICS`
   only when the value changed.
 - `needs_frame(visible)` is true only for a visible indeterminate bar.
-  `ProgressStyle::paint_indeterminate` repeats every `INDETERMINATE_PERIOD`
-  seconds.
+- `ProgressBar` is a deprecated alias of `Progress`.
+- **Look.** `paint` draws a 6 pt `muted` track with full rounding, and a
+  `primary` indicator from the start in reading order. An indeterminate
+  bar sweeps a segment of 30% of the width once every
+  `INDETERMINATE_PERIOD` seconds at the context time. With reduced
+  motion, the segment stays in the middle.
 
-| Field | `ProgressBar::semantics` |
+| Field | `Progress::semantics` |
 | --- | --- |
 | Role | `ProgressIndicator` (AXProgressIndicator) |
 | Name / value | label / whole percent, for example `30%`; none when indeterminate |
@@ -600,6 +604,14 @@ the description "Not installed; using" with the fallback name.
 - PageUp and PageDown do nothing. Right-to-left layouts do not mirror
   the arrow keys.
 - A vertical slider has its minimum at the bottom.
+- `set_direction(Rtl)` puts the minimum of a horizontal slider at the
+  right for pointer input. `paint` mirrors from the context direction.
+- A pointer press focuses without the focus ring.
+- **Look.** `paint` draws a 6 pt `muted` track, a `primary` range, and a
+  16 pt white thumb with a `primary` edge and a small shadow. On hover,
+  drag, or keyboard focus, the thumb has a 4 pt ring in `ring` at 50%. The
+  thumb stays inside the bounds at both ends. A disabled slider has 50%
+  opacity.
 
 | Field | `Slider::semantics` |
 | --- | --- |
@@ -613,9 +625,13 @@ this behavior.
 
 ### SpinBox
 
-- A primary press focuses the spin box. A press in the trailing quarter
-  increments in the top half or decrements in the bottom half. It steps once, on
-  the press.
+- A primary press focuses the spin box. A press in the stepper column
+  increments in the top half or decrements in the bottom half. It steps
+  once, on the press.
+- The stepper column is `STEPPER_WIDTH` wide at the end of the bounds.
+  `set_direction(Rtl)` puts it at the left.
+- **Look.** `paint` uses the `Input` look: the value at the start, and up
+  and down chevrons in `muted-foreground` in the stepper column.
 - ArrowUp and ArrowDown step. Home and End go to the bounds. PageUp and
   PageDown do nothing.
 - Values clamp and do not wrap.

@@ -1,15 +1,14 @@
 use choscorui_controls::{
     ButtonGroup, Calendar, CommandId, CommandLink, CommandRegistry, CommandState, DateTimeEdit,
     DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange,
-    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, PaintContext, ProgressBar,
-    ProgressStyle, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip,
-    Styles, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
+    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, PaintContext, Progress,
+    ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox,
+    ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, Color, DesignTokens, DisplayCommand, DisplayList, Key,
     Locale, Point, Rect, SemanticAction, SemanticRole, Size, Tree,
 };
-use std::time::Duration;
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(w, h))
@@ -43,30 +42,37 @@ fn indeterminate_progress_animates_only_while_visible() {
     let id = tree
         .attach(tree.root(), rect(0.0, 0.0, 100.0, 10.0))
         .unwrap();
-    let mut progress = ProgressBar::new("Copying", 3, 10).unwrap();
+    let mut progress = Progress::new("Copying", 3, 10).unwrap();
     assert!(!progress.needs_frame(true));
     progress.set_indeterminate(&mut tree, id).unwrap();
     assert!(progress.needs_frame(true));
     assert!(!progress.needs_frame(false));
     assert_eq!(progress.semantics().value, None);
-    let style = ProgressStyle {
-        track: Color::rgba8(0, 0, 0, 255),
-        fill: Color::rgba8(0, 0, 255, 255),
-        indeterminate: Color::rgba8(0, 255, 0, 255),
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let paint = |tokens: &DesignTokens, time: f64| {
+        let mut list = DisplayList::new();
+        progress.paint(
+            &mut PaintContext::new(
+                &mut list,
+                rect(0.0, 0.0, 100.0, 10.0),
+                tokens,
+                &styles,
+                &EstimatedText,
+            )
+            .time(time),
+        );
+        list
     };
-    let mut a = DisplayList::new();
-    let mut b = DisplayList::new();
-    style.paint_indeterminate(
-        &mut a,
-        rect(0.0, 0.0, 100.0, 10.0),
-        Duration::from_millis(100),
-    );
-    style.paint_indeterminate(
-        &mut b,
-        rect(0.0, 0.0, 100.0, 10.0),
-        Duration::from_millis(700),
-    );
+    let (a, b) = (paint(&tokens, 0.1), paint(&tokens, 0.7));
     assert_ne!(a.commands(), b.commands());
+    let mut reduced = tokens;
+    reduced.motion.reduced = true;
+    assert_eq!(
+        paint(&reduced, 0.1).commands(),
+        paint(&reduced, 0.7).commands(),
+        "reduced motion holds the segment still"
+    );
 }
 
 #[test]

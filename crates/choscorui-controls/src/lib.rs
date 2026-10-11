@@ -11,11 +11,14 @@ pub use text_field::{
     TextFieldSemantics, TextFieldStyle, TextFieldVisualState, ValidationKind, ValidationState,
 };
 mod range_controls;
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `ProgressBar` alias for one release"
+)]
+pub use range_controls::ProgressBar;
 pub use range_controls::{
-    INDETERMINATE_PERIOD, IntegerRange, ProgressBar, ProgressStyle, ProgressVisualState,
-    RangeError, Slider, SliderInput, SliderOrientation, SliderSemanticAction, SliderStyle,
-    SliderVisualState, SpinBox, SpinBoxInput, SpinBoxSemanticAction, SpinBoxStyle,
-    SpinBoxVisualState,
+    INDETERMINATE_PERIOD, IntegerRange, Progress, RangeError, STEPPER_WIDTH, Slider, SliderInput,
+    SliderOrientation, SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
 };
 mod selection_controls;
 #[expect(

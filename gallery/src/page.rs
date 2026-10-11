@@ -4,9 +4,8 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HeaderStyle, HostEnv, MenuStyle,
-    PaintContext, ProgressStyle, ScrollAreaStyle, ShortcutModifiers, SliderStyle, SpinBoxStyle,
-    SplitterStyle, Styles, TextFieldStyle, TextFieldVisualState, TextItemDelegate, TextMeasure,
-    ValidationState,
+    PaintContext, ScrollAreaStyle, ShortcutModifiers, SplitterStyle, Styles, TextFieldStyle,
+    TextFieldVisualState, TextItemDelegate, TextMeasure, ValidationState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -359,40 +358,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn slider_style(&self) -> SliderStyle {
-        SliderStyle {
-            track: self.mix(0.2),
-            fill: self.tokens.color(ColorRole::Primary),
-            thumb: self.tokens.color(ColorRole::Foreground),
-            disabled: self.mix(0.08),
-            focus: self.tokens.color(ColorRole::Primary),
-            track_thickness: 4.0,
-            thumb_size: 16.0,
-        }
-    }
-
-    pub fn spin_box_style(&self) -> SpinBoxStyle {
-        SpinBoxStyle {
-            background: self.mix(0.06),
-            buttons: self.mix(0.18),
-            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.4),
-            focus: self.tokens.color(ColorRole::Primary),
-            button_width: 22.0,
-        }
-    }
-
-    pub fn progress_style(&self) -> ProgressStyle {
-        ProgressStyle {
-            track: self.mix(0.15),
-            fill: self.tokens.color(ColorRole::Primary),
-            indeterminate: lerp_color(
-                self.tokens.color(ColorRole::Card),
-                self.tokens.color(ColorRole::Primary),
-                0.7,
-            ),
-        }
     }
 
     pub fn field_style(&self) -> TextFieldStyle {

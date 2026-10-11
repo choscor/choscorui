@@ -5,7 +5,7 @@ use crate::page::{
     Align, Clicks, Column, Env, Page, Push, node, paint_field, pressed, sem, type_into,
 };
 use choscorui::controls::{
-    DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, ProgressBar, ScrollBar,
+    DecimalSpinBox, Dial, IntegerRange, NumberBase, NumericDisplay, Progress, ScrollBar,
     ScrollBarInput, ScrollOrientation, ShortcutModifiers, Slider, SliderInput, SliderOrientation,
     SliderSemanticAction, SpinBox, SpinBoxInput, SpinBoxSemanticAction,
 };
@@ -59,6 +59,7 @@ pub fn slider(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
         let caption = caption(tree, parent);
         let id = node(tree, parent, true);
         let mut slider = Slider::new(label, range, orientation);
+        slider.set_direction(env.direction);
         let _ = slider.set_enabled(tree, id, enabled && env.enabled);
         sliders.push((caption, id, slider, label));
     }
@@ -70,9 +71,9 @@ impl Page for SliderPage {
         let mut column = Column::new(bounds, env);
         for (caption, id, slider, _) in &self.sliders {
             let _ = tree.set_bounds(*caption, column.row(20.0));
-            let rect = match slider.visual_state(tree, *id).orientation {
-                SliderOrientation::Horizontal => column.cells(28.0, &[320.0])[0],
-                SliderOrientation::Vertical => column.cells(140.0, &[28.0])[0],
+            let rect = match slider.orientation() {
+                SliderOrientation::Horizontal => column.cells(16.0, &[320.0])[0],
+                SliderOrientation::Vertical => column.cells(140.0, &[16.0])[0],
             };
             let _ = tree.set_bounds(*id, rect);
         }
@@ -85,11 +86,8 @@ impl Page for SliderPage {
                 tree.bounds(*caption).unwrap_or_default(),
                 &format!("{label}: {}", slider.value()),
             );
-            env.slider_style().paint(
-                list,
-                tree.bounds(*id).unwrap_or_default(),
-                slider.visual_state(tree, *id),
-            );
+            let bounds = tree.bounds(*id).unwrap_or_default();
+            slider.paint(&mut env.cx(list, bounds), tree, *id);
         }
     }
 
@@ -179,6 +177,7 @@ pub fn spin_box(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page>
         let caption = caption(tree, parent);
         let id = node(tree, parent, true);
         let mut spin = SpinBox::new(label, range);
+        spin.set_direction(env.direction);
         let _ = spin.set_enabled(tree, id, enabled && env.enabled);
         boxes.push((caption, id, spin, label));
     }
@@ -190,7 +189,7 @@ impl Page for SpinBoxPage {
         let mut column = Column::new(bounds, env);
         for (caption, id, _, _) in &self.boxes {
             let _ = tree.set_bounds(*caption, column.row(20.0));
-            let _ = tree.set_bounds(*id, column.cells(30.0, &[140.0])[0]);
+            let _ = tree.set_bounds(*id, column.cells(36.0, &[140.0])[0]);
         }
     }
 
@@ -198,44 +197,7 @@ impl Page for SpinBoxPage {
         for (caption, id, spin, label) in &self.boxes {
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), label);
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let style = env.spin_box_style();
-            style.paint(list, bounds, spin.visual_state(tree, *id));
-            let text = Rect::new(
-                Point::new(bounds.origin.x + 8.0, bounds.origin.y),
-                Size::new(
-                    (bounds.size.width * 0.75 - 12.0).max(0.0),
-                    bounds.size.height,
-                ),
-            );
-            env.text(
-                list,
-                text,
-                &env.locale.format_integer(i64::from(spin.value())),
-                env.body(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
-            let arrows = Rect::new(
-                Point::new(bounds.origin.x + bounds.size.width * 0.75, bounds.origin.y),
-                Size::new(bounds.size.width * 0.25, bounds.size.height),
-            );
-            let (up, down) = crate::pages::inputs::halves(arrows);
-            env.text(
-                list,
-                up,
-                "▲",
-                env.small() * 0.8,
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
-            env.text(
-                list,
-                down,
-                "▼",
-                env.small() * 0.8,
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
+            spin.paint(&mut env.cx(list, bounds), tree, *id);
         }
     }
 
@@ -311,9 +273,9 @@ impl Page for SpinBoxPage {
 
 /// Determinate and indeterminate progress, with buttons to drive them.
 pub struct ProgressPage {
-    determinate: (NodeId, ProgressBar),
-    complete: (NodeId, ProgressBar),
-    indeterminate: (NodeId, ProgressBar),
+    determinate: (NodeId, Progress),
+    complete: (NodeId, Progress),
+    indeterminate: (NodeId, Progress),
     captions: [NodeId; 3],
     advance: Push,
     reset: Push,
@@ -328,14 +290,14 @@ pub fn progress_bar(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn P
     let bar = |tree: &mut Tree, value| {
         (
             node(tree, parent, false),
-            ProgressBar::new("Download", value, 100).expect("maximum is non-zero"),
+            Progress::new("Download", value, 100).expect("maximum is non-zero"),
         )
     };
     let determinate = bar(tree, 35);
     let complete = bar(tree, 100);
     let indeterminate = (
         node(tree, parent, false),
-        ProgressBar::indeterminate("Indexing"),
+        Progress::indeterminate("Indexing"),
     );
     Box::new(ProgressPage {
         determinate,
@@ -377,7 +339,6 @@ impl Page for ProgressPage {
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        let style = env.progress_style();
         for (caption, (id, bar)) in
             self.captions
                 .iter()
@@ -389,11 +350,7 @@ impl Page for ProgressPage {
             };
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), &text);
             let bounds = tree.bounds(*id).unwrap_or_default();
-            if bar.value().is_some() {
-                style.paint(list, bounds, bar.visual_state());
-            } else {
-                style.paint_indeterminate(list, bounds, env.now);
-            }
+            bar.paint(&mut env.cx(list, bounds));
         }
         self.advance.paint(tree, list, env);
         self.reset.paint(tree, list, env);

@@ -1,11 +1,14 @@
 use choscorui_controls::{
-    IntegerRange, ProgressBar, ProgressStyle, RangeError, Slider, SliderInput, SliderOrientation,
-    SliderSemanticAction, SliderStyle, SpinBox, SpinBoxInput, SpinBoxSemanticAction, SpinBoxStyle,
+    ControlKind, EstimatedText, IntegerRange, PaintContext, Progress, RangeError, Recipe,
+    ResolvedStyle, Slider, SliderInput, SliderOrientation, SliderSemanticAction, SpinBox,
+    SpinBoxInput, SpinBoxSemanticAction, StyleQuery, Styles,
 };
 use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticRole, Size, Tree,
+    Color, ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent,
+    LayoutDirection, Point, PointerButton, PointerEvent, RecipeSet, Rect, SemanticAction,
+    SemanticRole, Size, Tree,
 };
+use std::rc::Rc;
 
 fn setup() -> (Tree, choscorui_core::NodeId) {
     let mut tree = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(240.0, 120.0)));
@@ -198,17 +201,17 @@ fn spin_box_uses_steps_home_end_and_semantic_actions() {
 
 #[test]
 fn progress_is_noninteractive_and_supports_indeterminate_mode() {
-    let determinate = ProgressBar::new("Download", 25, 100).unwrap();
+    let determinate = Progress::new("Download", 25, 100).unwrap();
     let semantics = determinate.semantics();
     assert_eq!(semantics.role, SemanticRole::ProgressIndicator);
     assert_eq!(semantics.value.as_deref(), Some("25%"));
     assert!(semantics.actions.is_empty());
-    let indeterminate = ProgressBar::indeterminate("Loading");
+    let indeterminate = Progress::indeterminate("Loading");
     assert_eq!(indeterminate.semantics().value, None);
 
     let (mut tree, id) = setup();
     tree.detach(id).unwrap();
-    let mut detached = ProgressBar::new("Work", 1, 10).unwrap();
+    let mut detached = Progress::new("Work", 1, 10).unwrap();
     assert_eq!(
         detached.set_value(&mut tree, id, 2, 10),
         Err(RangeError::MissingNode)
@@ -216,7 +219,18 @@ fn progress_is_noninteractive_and_supports_indeterminate_mode() {
 }
 
 #[test]
-fn styles_are_swappable_without_changing_control_values() {
+fn recipes_are_swappable_without_changing_control_values() {
+    struct Flat;
+    impl Recipe for Flat {
+        fn resolve(&self, _: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+            Some(ResolvedStyle {
+                background: Color::rgba8(30, 100, 220, 255),
+                min_width: 12.0,
+                min_height: 4.0,
+                ..ResolvedStyle::new(tokens)
+            })
+        }
+    }
     let (tree, id) = setup();
     let slider = Slider::new(
         "Volume",
@@ -224,35 +238,125 @@ fn styles_are_swappable_without_changing_control_values() {
         SliderOrientation::Horizontal,
     );
     let spin = SpinBox::new("Guests", IntegerRange::new(1, 10, 4, 1, 3).unwrap());
-    let progress = ProgressBar::new("Work", 40, 100).unwrap();
-    let slider_style = SliderStyle {
-        track: Color::rgba8(10, 10, 10, 255),
-        fill: Color::rgba8(30, 100, 220, 255),
-        thumb: Color::rgba8(255, 255, 255, 255),
-        disabled: Color::rgba8(90, 90, 90, 255),
-        focus: Color::rgba8(255, 200, 0, 255),
-        track_thickness: 4.0,
-        thumb_size: 12.0,
-    };
-    let spin_style = SpinBoxStyle {
-        background: Color::rgba8(20, 20, 20, 255),
-        buttons: Color::rgba8(60, 60, 60, 255),
-        disabled: Color::rgba8(90, 90, 90, 255),
-        focus: Color::rgba8(255, 200, 0, 255),
-        button_width: 24.0,
-    };
-    let progress_style = ProgressStyle {
-        track: Color::rgba8(10, 10, 10, 255),
-        fill: Color::rgba8(30, 100, 220, 255),
-        indeterminate: Color::rgba8(100, 160, 255, 255),
-    };
-    let mut list = DisplayList::new();
+    let progress = Progress::new("Work", 40, 100).unwrap();
+    let tokens = DesignTokens::light();
+    let mut custom = Styles::new();
+    for kind in [
+        ControlKind::Slider,
+        ControlKind::Input,
+        ControlKind::Progress,
+    ] {
+        custom.set_recipe(RecipeSet::DEFAULT, kind, Rc::new(Flat));
+    }
     let bounds = tree.bounds(id).unwrap();
-    slider_style.paint(&mut list, bounds, slider.visual_state(&tree, id));
-    spin_style.paint(&mut list, bounds, spin.visual_state(&tree, id));
-    progress_style.paint(&mut list, bounds, progress.visual_state());
-    assert!(!list.commands().is_empty());
+    for styles in [Styles::new(), custom] {
+        let mut list = DisplayList::new();
+        let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+        slider.paint(&mut cx, &tree, id);
+        spin.paint(&mut cx, &tree, id);
+        progress.paint(&mut cx);
+        assert!(!list.commands().is_empty());
+        assert!(list.is_balanced());
+    }
     assert_eq!(slider.value(), 40);
     assert_eq!(spin.value(), 4);
     assert_eq!(progress.value(), Some((40, 100)));
+}
+
+#[test]
+fn slider_paints_range_and_thumb_at_the_value_and_mirrors_in_rtl() {
+    let (mut tree, id) = setup();
+    tree.set_bounds(id, Rect::new(Point::new(0.0, 0.0), Size::new(200.0, 16.0)))
+        .unwrap();
+    let mut slider = Slider::new(
+        "Volume",
+        IntegerRange::new(0, 100, 25, 5, 20).unwrap(),
+        SliderOrientation::Horizontal,
+    );
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let primary = tokens.color(ColorRole::Primary);
+    let range_of = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .find_map(|command| match command {
+                DisplayCommand::FillRoundedRect { rect, color, .. }
+                | DisplayCommand::FillRect { rect, color }
+                    if *color == primary =>
+                {
+                    Some(*rect)
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let mut ltr = DisplayList::new();
+    slider.paint(
+        &mut PaintContext::new(
+            &mut ltr,
+            tree.bounds(id).unwrap(),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        &tree,
+        id,
+    );
+    let range = range_of(&ltr);
+    assert_eq!((range.origin.x, range.size.width), (0.0, 50.0));
+    assert_eq!(range.size.height, 6.0, "the track is 6 pt thick");
+
+    let mut rtl = DisplayList::new();
+    slider.paint(
+        &mut PaintContext::new(
+            &mut rtl,
+            tree.bounds(id).unwrap(),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        )
+        .rtl(true),
+        &tree,
+        id,
+    );
+    let range = range_of(&rtl);
+    assert_eq!((range.origin.x, range.size.width), (150.0, 50.0));
+
+    // Pointer input follows the same direction.
+    slider.set_direction(LayoutDirection::Rtl);
+    slider
+        .handle(
+            &mut tree,
+            id,
+            SliderInput::Pointer(PointerEvent::Down {
+                position: Point::new(50.0, 8.0),
+                button: PointerButton::Primary,
+            }),
+        )
+        .unwrap();
+    assert_eq!(slider.value(), 75);
+    assert!(slider.visual_state(&tree, id).pressed());
+    assert!(
+        !slider.visual_state(&tree, id).focus_visible(),
+        "a pointer press focuses without the ring"
+    );
+}
+
+#[test]
+fn spin_box_steppers_sit_at_the_end_in_reading_order() {
+    let (mut tree, id) = setup();
+    let bounds = Rect::new(Point::new(0.0, 0.0), Size::new(120.0, 36.0));
+    tree.set_bounds(id, bounds).unwrap();
+    let mut spin = SpinBox::new("Guests", IntegerRange::new(1, 10, 4, 1, 3).unwrap());
+    assert_eq!(spin.stepper_rect(bounds).origin.x, 96.0);
+    spin.set_direction(LayoutDirection::Rtl);
+    assert_eq!(spin.stepper_rect(bounds).origin.x, 0.0);
+    let up = |y| {
+        SpinBoxInput::Pointer(PointerEvent::Down {
+            position: Point::new(10.0, y),
+            button: PointerButton::Primary,
+        })
+    };
+    assert_eq!(spin.handle(&mut tree, id, up(5.0)).unwrap(), Some(5));
+    assert_eq!(spin.handle(&mut tree, id, up(30.0)).unwrap(), Some(4));
 }

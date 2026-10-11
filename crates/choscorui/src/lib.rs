@@ -78,13 +78,12 @@ pub use choscorui_compose::{
 pub use choscorui_controls::{
     Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandError, CommandId,
     CommandRegistry, CommandState, ControlContext, ControlEvent, ControlHost, ControlKind,
-    ControlSize, CustomControl, GroupBox, IntegerRange, Label, PaintContext, ProgressBar,
-    ProgressStyle, RadioGroup, RadioInput, RadioOption, Recipe, ResolvedStyle,
-    SemanticAction as ControlAction, Separator, SeparatorOrientation, Shortcut, ShortcutModifiers,
-    ShortcutScope, Slider, SliderInput, SliderOrientation, SliderStyle, SpinBox, SpinBoxInput,
-    SpinBoxStyle, SplitOrientation, Splitter, SplitterInput, SplitterStyle, StackPage,
-    StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField, TextFieldChange,
-    TextFieldInput, TextFieldStyle, VisualState,
+    ControlSize, CustomControl, GroupBox, IntegerRange, Label, PaintContext, Progress, RadioGroup,
+    RadioInput, RadioOption, Recipe, ResolvedStyle, SemanticAction as ControlAction, Separator,
+    SeparatorOrientation, Shortcut, ShortcutModifiers, ShortcutScope, Slider, SliderInput,
+    SliderOrientation, SpinBox, SpinBoxInput, SplitOrientation, Splitter, SplitterInput,
+    SplitterStyle, StackPage, StackedContainer, StyleQuery, Styles, Tab, TabInput, Tabs, TextField,
+    TextFieldChange, TextFieldInput, TextFieldStyle, VisualState,
 };
 pub use choscorui_core::{
     AccessibilityPreferences, Axis, Color, Constraints, CrossAlign, DesignTokens, Dirty,

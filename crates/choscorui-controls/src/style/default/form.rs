@@ -224,6 +224,12 @@ fn radio(cx: &Cx) -> ResolvedStyle {
 fn input(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Placeholder => muted_text(cx, TextSize::Sm),
+        Slot::Icon => {
+            // Stepper chevrons and other glyphs inside the field.
+            let mut style = muted_text(cx, TextSize::Sm);
+            style.icon_size = 16.0;
+            style
+        }
         _ => {
             let mut style = field_box(cx);
             style.cursor = Cursor::Text;
