@@ -4,8 +4,8 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, ControlKind, EstimatedText, HostEnv, InputText,
-    PaintContext, ShortcutModifiers, Slot, StyleQuery, Styles, TextMeasure, ValidationState,
-    VisualState, paint_box,
+    PaintContext, ShortcutModifiers, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
+    ValidationState, VisualState, paint_box,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, FontWeight, Key, KeyEvent,
@@ -693,26 +693,14 @@ pub fn paint_field(
         .caret(caret)
         .paint(&mut env.cx(list, rect), state);
     if let Some(message_rect) = message_rect {
-        let (message, color) = match validation {
-            ValidationState::Valid => (
-                "Valid".to_owned(),
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
-            ),
-            ValidationState::Intermediate => {
-                ("Incomplete".to_owned(), Color::rgba8(200, 140, 30, 255))
-            }
-            ValidationState::Invalid(message) => {
-                (message.clone(), env.tokens.color(ColorRole::Destructive))
-            }
+        let (slot, message) = match validation {
+            ValidationState::Valid => (Slot::Description, "Valid"),
+            ValidationState::Intermediate => (Slot::Description, "Incomplete"),
+            ValidationState::Invalid(message) => (Slot::Error, message.as_str()),
         };
-        env.text(
-            list,
-            message_rect,
-            &message,
-            env.small(),
-            color,
-            Align::Leading,
-        );
+        let mut cx = env.cx(list, message_rect);
+        let style = cx.style(StyleQuery::new(ControlKind::Field, slot));
+        cx.label(message_rect, message, &style, TextAlign::Start);
     }
 }
 

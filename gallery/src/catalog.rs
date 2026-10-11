@@ -262,6 +262,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("dialog_key_button", "alert-dialog"),
     ("InputDialog", "input-dialog"),
     ("InputKind", "input-dialog"),
+    ("ColorChannel", "color-picker"),
     ("ColorPicker", "color-picker"),
     ("FontDialog", "font-dialog"),
     ("Toolbar", "toolbar"),

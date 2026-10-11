@@ -6,9 +6,10 @@ use crate::page::{
 };
 use crate::pages::selection::{ComboField, POPUP_SPACE, families};
 use choscorui::controls::{
-    AlertDialog, ColorPicker, ComboChange, ComboInput, DialogButton, DialogButtonRole, DialogId,
-    DialogStack, FontDialog, InputDialog, InputKind, Modality, ShortcutModifiers, ValidationState,
-    dialog_key_button, order_dialog_buttons,
+    AlertDialog, Button, ButtonVariant, ColorChannel, ColorPicker, ComboChange, ComboInput,
+    CommandId, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog, InputDialog,
+    InputKind, Modality, ShortcutModifiers, ValidationState, VisualState, dialog_key_button,
+    order_dialog_buttons,
 };
 use choscorui::core::{
     Color, ColorRole, DisplayList, FontSlant, FontWeight, Key, KeyEvent, NodeId, Point,
@@ -623,7 +624,6 @@ pub struct ColorPickerPage {
     swatch: NodeId,
     accept: Push,
     picker: ColorPicker,
-    alpha: f64,
     dragging: Option<usize>,
 }
 
@@ -641,7 +641,6 @@ pub fn color_picker(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn P
         swatch,
         accept,
         picker,
-        alpha: 1.0,
         dragging: None,
     })
 }
@@ -649,27 +648,11 @@ pub fn color_picker(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn P
 impl ColorPickerPage {
     /// Channel `index` as a fraction of its range.
     fn fraction(&self, index: usize) -> f64 {
-        let (hue, saturation, value) = self.picker.hsv();
-        match index {
-            0 => hue / 360.0,
-            1 => saturation,
-            2 => value,
-            _ => self.alpha,
-        }
+        self.picker.channel(ColorChannel::ALL[index])
     }
 
     fn set_fraction(&mut self, index: usize, fraction: f64) {
-        let fraction = fraction.clamp(0.0, 1.0);
-        let (hue, saturation, value) = self.picker.hsv();
-        match index {
-            0 => self.picker.set_hsv(fraction * 359.99, saturation, value),
-            1 => self.picker.set_hsv(hue, fraction, value),
-            2 => self.picker.set_hsv(hue, saturation, fraction),
-            _ => {
-                self.alpha = fraction;
-                self.picker.set_alpha(fraction);
-            }
-        }
+        self.picker.set_channel(ColorChannel::ALL[index], fraction);
         self.hex_text = self.picker.hex();
         self.hex_state = ValidationState::Valid;
     }
@@ -678,15 +661,15 @@ impl ColorPickerPage {
     pub fn set_hex(&mut self, text: &str) -> ValidationState {
         self.hex_text = text.to_owned();
         self.hex_state = self.picker.set_hex(text);
-        if self.hex_state == ValidationState::Valid {
-            self.alpha = f64::from(self.picker.color().alpha) / 255.0;
-        }
         self.hex_state.clone()
     }
 
-    fn bar_fraction(&self, tree: &Tree, index: usize, x: f64) -> f64 {
+    /// The fraction at `x` on bar `index`; bars fill from the end in
+    /// right-to-left layouts.
+    fn bar_fraction(&self, tree: &Tree, index: usize, x: f64, rtl: bool) -> f64 {
         let rect = tree.bounds(self.bars[index]).unwrap_or_default();
-        (x - rect.origin.x) / rect.size.width.max(1.0)
+        let fraction = (x - rect.origin.x) / rect.size.width.max(1.0);
+        if rtl { 1.0 - fraction } else { fraction }
     }
 }
 
@@ -723,38 +706,11 @@ impl Page for ColorPickerPage {
                     if index == 0 { "°" } else { "%" }
                 ),
             );
-            // A stepped gradient along the channel.
-            let (hue, saturation, value) = self.picker.hsv();
-            let steps = 24;
-            for step in 0..steps {
-                let t = step as f64 / (steps - 1) as f64;
-                let mut sample = ColorPicker::new(self.picker.color());
-                match index {
-                    0 => sample.set_hsv(t * 359.99, 1.0, 1.0),
-                    1 => sample.set_hsv(hue, t, value.max(0.2)),
-                    2 => sample.set_hsv(hue, saturation, t),
-                    _ => sample.set_alpha(t),
-                }
-                let width = rect.size.width / steps as f64;
-                list.fill_rect(
-                    Rect::new(
-                        Point::new(rect.origin.x + step as f64 * width, rect.origin.y),
-                        Size::new(width + 0.5, rect.size.height),
-                    ),
-                    sample.color(),
-                );
-            }
-            let x = rect.origin.x + self.fraction(index) * rect.size.width;
-            let knob = Rect::new(
-                Point::new(x - 3.0, rect.origin.y - 3.0),
-                Size::new(6.0, rect.size.height + 6.0),
-            );
-            let _ = list.fill_rounded_rect(knob, 3.0, env.tokens.color(ColorRole::Card));
-            let _ =
-                list.stroke_rounded_rect(knob, 3.0, env.tokens.color(ColorRole::Foreground), 1.0);
-            if tree.focus() == Some(*id) {
-                env.focus_ring(list, rect);
-            }
+            let state = VisualState::NONE
+                .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+            self.picker
+                .paint_channel(&mut env.cx(list, rect), ColorChannel::ALL[index], state);
         }
         let hex = tree.bounds(self.hex).unwrap_or_default();
         paint_field(
@@ -768,8 +724,7 @@ impl Page for ColorPickerPage {
             None,
         );
         let swatch = tree.bounds(self.swatch).unwrap_or_default();
-        let _ = list.fill_rounded_rect(swatch, 6.0, self.picker.color());
-        let _ = list.stroke_rounded_rect(swatch, 6.0, env.mix(0.3), 1.0);
+        self.picker.paint_swatch(&mut env.cx(list, swatch));
         self.accept.paint(tree, list, env);
         let recent_row = Rect::new(
             Point::new(hex.origin.x, hex.max_y() + 12.0),
@@ -783,7 +738,7 @@ impl Page for ColorPickerPage {
                 ),
                 Size::new(20.0, 20.0),
             );
-            let _ = list.fill_rounded_rect(chip, 4.0, *color);
+            ColorPicker::new(*color).paint_swatch(&mut env.cx(list, chip));
         }
         if let ValidationState::Invalid(message) = &self.hex_state {
             env.text(
@@ -830,7 +785,7 @@ impl Page for ColorPickerPage {
         tree: &mut Tree,
         event: PointerEvent,
         _modifiers: ShortcutModifiers,
-        _env: &Env<'_>,
+        env: &Env<'_>,
     ) -> bool {
         if self.accept.pointer(tree, event) {
             self.picker.accept();
@@ -853,13 +808,13 @@ impl Page for ColorPickerPage {
                 let _ = tree.set_focus(Some(self.bars[index]));
                 let _ = tree.set_pointer_capture(Some(self.bars[index]));
                 self.dragging = Some(index);
-                let fraction = self.bar_fraction(tree, index, position.x);
+                let fraction = self.bar_fraction(tree, index, position.x, env.rtl());
                 self.set_fraction(index, fraction);
                 true
             }
             PointerEvent::Move { position } => match self.dragging {
                 Some(index) => {
-                    let fraction = self.bar_fraction(tree, index, position.x);
+                    let fraction = self.bar_fraction(tree, index, position.x, env.rtl());
                     self.set_fraction(index, fraction);
                     true
                 }
@@ -1062,21 +1017,20 @@ impl Page for FontDialogPage {
             None,
         );
         let style = self.dialog.style();
-        self.bold.paint(tree, list, env);
-        self.italic.paint(tree, list, env);
+        // A style that is on shows as a secondary (filled) button.
         for (push, on) in [
             (&self.bold, style.weight >= FontWeight::BOLD),
             (&self.italic, style.slant == FontSlant::Italic),
         ] {
-            if on {
-                let rect = tree.bounds(push.node).unwrap_or_default();
-                let _ = list.stroke_rounded_rect(
-                    rect,
-                    env.tokens.radius.min(8.0),
-                    env.tokens.color(ColorRole::Primary),
-                    2.0,
-                );
-            }
+            let rect = tree.bounds(push.node).unwrap_or_default();
+            let variant = if on {
+                ButtonVariant::Secondary
+            } else {
+                ButtonVariant::Outline
+            };
+            Button::new(push.label.clone(), CommandId(0))
+                .with_variant(variant)
+                .paint(&mut env.cx(list, rect), tree, push.node);
         }
         let preview = tree.bounds(self.preview).unwrap_or_default();
         env.panel(list, preview);

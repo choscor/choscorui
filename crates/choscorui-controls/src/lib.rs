@@ -95,8 +95,9 @@ mod dialogs;
 )]
 pub use dialogs::MessageDialog;
 pub use dialogs::{
-    AlertDialog, ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog,
-    InputDialog, InputKind, InputValue, Modality, dialog_key_button, order_dialog_buttons,
+    AlertDialog, ColorChannel, ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack,
+    FontDialog, InputDialog, InputKind, InputValue, Modality, dialog_key_button,
+    order_dialog_buttons,
 };
 mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};

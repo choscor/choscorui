@@ -1,11 +1,12 @@
 use choscorui_controls::{
-    AlertDialog, ColorPicker, ComboInput, DialogButton, DialogButtonRole, DialogStack, FontDialog,
-    InputDialog, InputKind, InputValue, Modality, ValidationState, order_dialog_buttons,
+    AlertDialog, ColorChannel, ColorPicker, ComboInput, DialogButton, DialogButtonRole,
+    DialogStack, FontDialog, InputDialog, InputKind, InputValue, Modality, ValidationState,
+    order_dialog_buttons,
 };
-use choscorui_controls::{ButtonVariant, EstimatedText, PaintContext, Styles};
+use choscorui_controls::{ButtonVariant, EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
-    Color, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Key, Locale, Point,
-    Rect, SemanticRole, Size, TextStyle, Tree,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Key,
+    Locale, Point, Rect, SemanticRole, Size, TextStyle, Tree,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -257,4 +258,46 @@ fn alert_dialog_measures_places_buttons_and_paints_from_the_recipe() {
         })
         .collect();
     assert_eq!(texts, ["Unsaved", "Save changes?", "Changes are lost."]);
+}
+
+#[test]
+fn color_picker_channels_round_trip_and_paint_a_slider_thumb() {
+    let mut picker = ColorPicker::new(Color::rgba8(255, 0, 0, 255));
+    picker.set_channel(ColorChannel::Saturation, 0.5);
+    assert_eq!(picker.channel(ColorChannel::Saturation), 0.5);
+    picker.set_channel(ColorChannel::Alpha, 2.0);
+    assert_eq!(picker.channel(ColorChannel::Alpha), 1.0, "fractions clamp");
+    picker.set_channel(ColorChannel::Hue, 1.0);
+    assert!(
+        picker.channel(ColorChannel::Hue) < 1.0,
+        "a full turn stops short"
+    );
+
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut list = DisplayList::new();
+    picker.paint_channel(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 240.0, 18.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        ColorChannel::Value,
+        VisualState::NONE,
+    );
+    let segments = list
+        .commands()
+        .iter()
+        .filter(|command| matches!(command, DisplayCommand::FillRect { .. }))
+        .count();
+    assert_eq!(segments, 24);
+    let primary = tokens.color(ColorRole::Primary);
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::StrokeRoundedRect { color, .. } if *color == primary
+        )),
+        "the slider thumb has a primary border"
+    );
 }

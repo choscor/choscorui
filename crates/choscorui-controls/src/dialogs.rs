@@ -9,11 +9,11 @@
 
 use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
-    TextMeasure,
+    TextMeasure, VisualState,
 };
 use crate::{ComboChange, ComboInput, FontChooser, NumberInput, ValidationState};
 use choscorui_core::{
-    Color, DesignTokens, FontSlant, FontWeight, Key, Locale, NodeId, Rect, SemanticAction,
+    Color, DesignTokens, FontSlant, FontWeight, Key, Locale, NodeId, Point, Rect, SemanticAction,
     SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
@@ -227,6 +227,19 @@ impl DialogStack {
     }
 }
 
+/// One channel a [`ColorPicker`] edits as a fraction from 0 to 1.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ColorChannel {
+    Hue,
+    Saturation,
+    Value,
+    Alpha,
+}
+
+impl ColorChannel {
+    pub const ALL: [Self; 4] = [Self::Hue, Self::Saturation, Self::Value, Self::Alpha];
+}
+
 /// Color chooser model: HSV editing with RGB and hex text, alpha, and
 /// recent colors. All channels are kept in floating point so repeated
 /// edits do not drift.
@@ -285,6 +298,85 @@ impl ColorPicker {
     }
     pub fn set_alpha(&mut self, alpha: f64) {
         self.alpha = alpha.clamp(0.0, 1.0);
+    }
+
+    /// `channel` as a fraction of its range.
+    pub fn channel(&self, channel: ColorChannel) -> f64 {
+        match channel {
+            ColorChannel::Hue => self.hue / 360.0,
+            ColorChannel::Saturation => self.saturation,
+            ColorChannel::Value => self.value,
+            ColorChannel::Alpha => self.alpha,
+        }
+    }
+
+    /// Sets `channel` from a fraction of its range, clamped to 0..=1.
+    pub fn set_channel(&mut self, channel: ColorChannel, fraction: f64) {
+        let fraction = fraction.clamp(0.0, 1.0);
+        match channel {
+            // A full turn would wrap back to red, so the hue stops short.
+            ColorChannel::Hue => self.hue = fraction * 359.99,
+            ColorChannel::Saturation => self.saturation = fraction,
+            ColorChannel::Value => self.value = fraction,
+            ColorChannel::Alpha => self.alpha = fraction,
+        }
+    }
+
+    /// Paints `channel` in the context's bounds: a stepped gradient of the
+    /// channel inside an `Input` border, and the `Slider` thumb at the
+    /// current value. `state` carries focus flags for the thumb.
+    pub fn paint_channel(
+        &self,
+        cx: &mut PaintContext<'_>,
+        channel: ColorChannel,
+        state: VisualState,
+    ) {
+        const STEPS: usize = 24;
+        let bounds = cx.bounds;
+        let frame = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let width = bounds.size.width / STEPS as f64;
+        for step in 0..STEPS {
+            let mut sample = self.clone();
+            let t = step as f64 / (STEPS - 1) as f64;
+            if channel == ColorChannel::Hue {
+                sample.set_hsv(0.0, 1.0, 1.0);
+            }
+            sample.set_channel(channel, t);
+            let x = if cx.rtl {
+                bounds.max_x() - (step + 1) as f64 * width
+            } else {
+                bounds.origin.x + step as f64 * width
+            };
+            cx.list.fill_rect(
+                Rect::from_xywh(x, bounds.origin.y, width + 0.5, bounds.size.height),
+                sample.color(),
+            );
+        }
+        let _ = cx
+            .list
+            .stroke_rect(bounds, frame.border, frame.border_width);
+        let thumb = cx.style(StyleQuery::new(ControlKind::Slider, Slot::Thumb).state(state));
+        let fraction = self.channel(channel);
+        let along = bounds.size.width * if cx.rtl { 1.0 - fraction } else { fraction };
+        let center = Point::new(bounds.origin.x + along, bounds.center().y);
+        let rect = Rect::from_xywh(
+            center.x - thumb.min_width / 2.0,
+            center.y - thumb.min_height / 2.0,
+            thumb.min_width,
+            thumb.min_height,
+        );
+        cx.slot(rect, &thumb, |_, _| {});
+    }
+
+    /// Paints a swatch of the current color in the context's bounds,
+    /// framed like an `Input`.
+    pub fn paint_swatch(&self, cx: &mut PaintContext<'_>) {
+        let frame = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let mut swatch = frame;
+        swatch.background = self.color();
+        swatch.shadow = choscorui_core::ShadowLayers::NONE;
+        let bounds = cx.bounds;
+        cx.slot(bounds, &swatch, |_, _| {});
     }
 
     /// `#RRGGBB`, or `#RRGGBBAA` when not opaque.

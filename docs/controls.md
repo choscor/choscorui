@@ -1180,6 +1180,12 @@ own semantics.
   `Invalid` and changes nothing.
 - A gray keeps the previous hue. `accept` puts the color at the front of
   the recent list.
+- `channel` and `set_channel` edit one `ColorChannel` as a fraction from 0
+  to 1. The hue stops short of a full turn.
+- **Look.** `paint_channel` draws a stepped gradient of the channel in an
+  `Input` border, with the `Slider` thumb at the value. The gradient
+  fills from the end in right-to-left layouts.
+- `paint_swatch` fills the color in the `Input` frame.
 - **`FontDialog::set_size`** accepts 1 to 4096 points. Other sizes are
   `Invalid`.
 - `FontDialog` uses a `FontChooser`. A missing family resolves to
