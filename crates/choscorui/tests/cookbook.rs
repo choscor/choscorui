@@ -4,8 +4,8 @@
 use choscorui::controls::{
     Button, ButtonInput, CommandId, CommandRegistry, CommandState, ControlKind, Corners, Edges,
     EstimatedText, ItemDelegate, ItemState, ItemView, PaintContext, Recipe, ResolvedStyle,
-    Shortcut, ShortcutModifiers, ShortcutScope, Slot, StyleQuery, Styles, TextField,
-    TextFieldInput, ValidationKind, ValidationState,
+    Shortcut, ShortcutModifiers, ShortcutScope, Slot, StyleQuery, Styles, TextAlign, TextField,
+    TextFieldInput, ValidationKind, ValidationState, VisualState,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, ItemModel, Key, Locale,
@@ -158,34 +158,32 @@ struct BadgeDelegate;
 impl ItemDelegate for BadgeDelegate {
     fn paint_cell(
         &self,
-        list: &mut DisplayList,
-        rect: Rect,
+        cx: &mut PaintContext<'_>,
         model: &dyn ItemModel,
         key: ItemKey,
         column: usize,
         state: ItemState,
     ) {
-        let tokens = DesignTokens::light();
+        let rect = cx.bounds;
+        let primary = cx.tokens.color(ColorRole::Primary);
         if state.selected {
-            list.fill_rect(rect, tokens.color(ColorRole::Primary).with_alpha(0.2));
+            cx.list.fill_rect(rect, primary.with_alpha(0.2));
         }
         if let Value::Text(text) = model.data(key, column, Role::Display) {
-            let _ = list.draw_text(
-                Point::new(rect.origin.x + 28.0, rect.origin.y + rect.size.height * 0.7),
-                &text,
-                "Helvetica",
-                13.0,
-                tokens.color(ColorRole::Foreground),
-            );
+            let style = cx.style(StyleQuery::new(ControlKind::Badge, Slot::Root));
             let badge = rect.size.height - 8.0;
-            let _ = list.fill_rounded_rect(
-                Rect::new(
-                    Point::new(rect.origin.x + 4.0, rect.origin.y + 4.0),
-                    Size::new(badge, badge),
-                ),
-                badge / 2.0,
-                tokens.color(ColorRole::Primary),
+            let dot = Rect::from_xywh(rect.origin.x + 4.0, rect.origin.y + 4.0, badge, badge);
+            let _ = cx
+                .list
+                .fill_rounded_rect(dot, badge / 2.0, style.background);
+            let label = Rect::from_xywh(
+                dot.max_x() + 4.0,
+                rect.origin.y,
+                rect.size.width - badge - 12.0,
+                rect.size.height,
             );
+            let body = cx.style(StyleQuery::new(ControlKind::Label, Slot::Root));
+            cx.label(label, &text, &body, TextAlign::Start);
         }
     }
 }
@@ -202,7 +200,15 @@ fn custom_delegate_paints_realized_rows() {
     view.arrange(&mut tree, node, rect(0.0, 0.0, 200.0, 66.0))
         .unwrap();
     let mut list = DisplayList::new();
-    view.paint(&mut list, &model, &BadgeDelegate, &[], false);
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut cx = PaintContext::new(
+        &mut list,
+        rect(0.0, 0.0, 200.0, 66.0),
+        &tokens,
+        &styles,
+        &EstimatedText,
+    );
+    view.paint(&mut cx, &model, &BadgeDelegate, &[], VisualState::NONE);
     let texts = list
         .commands()
         .iter()

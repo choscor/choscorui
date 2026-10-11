@@ -4,7 +4,7 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HostEnv, InputText, PaintContext,
-    ShortcutModifiers, Styles, TextItemDelegate, TextMeasure, ValidationState, VisualState,
+    ShortcutModifiers, Styles, TextMeasure, ValidationState, VisualState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
@@ -357,19 +357,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn item_delegate(&self) -> TextItemDelegate {
-        TextItemDelegate {
-            font_family: FONT.into(),
-            font_size: self.body(),
-            text: self.tokens.color(ColorRole::Foreground),
-            selected_text: self.on_accent(),
-            selection: self.tokens.color(ColorRole::Primary),
-            inactive_selection: self.mix(0.3),
-            focus: self.tokens.color(ColorRole::Primary),
-            ..TextItemDelegate::default()
-        }
     }
 }
 

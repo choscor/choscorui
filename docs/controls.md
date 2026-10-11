@@ -877,6 +877,16 @@ behavior.
   `Collapse`, and `ShowMenu` act on the item.
 - The view keeps the selection by `ItemKey` across sort and filter. It has
   no disabled state.
+- **Look.** `paint` calls the delegate once per realized cell with a
+  context for the cell. `TextItemDelegate` uses the `ListView` recipe, and
+  `TextItemDelegate::table()` uses the `Table` recipe:
+
+| Part | Slot | List value | Table value |
+| --- | --- | --- | --- |
+| Row | `Row` | radius sm; `muted` fill when selected, `accent` fill and `accent-foreground` text when selected in a focused view | 1 pt `border` bottom line; `muted` fill when selected |
+| Text | `Cell` | sm `foreground` text, 8 pt padding | as list |
+| Disclosure | `Indicator` | 16 pt `muted-foreground` chevron, one indent per depth | as list |
+| Focus | `Root` | the focus ring on the current item while focus is visible | as list |
 
 | Field | `ItemView::semantics` | `ItemView::item_semantics` |
 | --- | --- | --- |

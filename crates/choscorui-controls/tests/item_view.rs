@@ -3,7 +3,7 @@ use choscorui_controls::{
     HeaderInput, HeaderView, ItemModifiers, ItemView, ItemViewInput, TextItemDelegate,
     ValidationState, ViewLayout, undo_history, undo_steps_to,
 };
-use choscorui_controls::{EstimatedText, PaintContext, Styles};
+use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemData, ItemKey, ItemModel, Key,
     ListStore, Locale, ModelError, NodeId, Paint, Point, Rect, Role, SelectionMode, SemanticAction,
@@ -78,7 +78,20 @@ fn hundred_thousand_rows_keep_realized_nodes_bounded_while_scrolling() {
     assert!(tree.children(id).unwrap().len() <= bound);
 
     let mut list = DisplayList::new();
-    view.paint(&mut list, &model, &TextItemDelegate::default(), &[], true);
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    view.paint(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 300.0, 200.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        &model,
+        &TextItemDelegate::default(),
+        &[],
+        VisualState::FOCUSED,
+    );
     assert!(list.len() < 100, "painting is proportional to the viewport");
 }
 

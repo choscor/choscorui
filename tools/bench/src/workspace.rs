@@ -5,13 +5,14 @@
 //! bench.
 
 use choscorui_controls::{
-    CanvasInput, CanvasView, CommandId, DockArea, DockLayout, DockPanel, DockTarget, InputDialog,
-    InputKind, ItemView, ItemViewInput, PanelId, StatusBar, TextItemDelegate, Toolbar, ToolbarItem,
-    compose_main_window,
+    CanvasInput, CanvasView, CommandId, DockArea, DockLayout, DockPanel, DockTarget, EstimatedText,
+    InputDialog, InputKind, ItemView, ItemViewInput, PaintContext, PanelId, StatusBar, Styles,
+    TextItemDelegate, Toolbar, ToolbarItem, VisualState, compose_main_window,
 };
 use choscorui_core::{
-    Color, DisplayList, ItemShape, ItemStyle, LayoutDirection, Locale, MatchMode, NodeId, Point,
-    Rect, Scene, SceneItem, SemanticRole, Size, SortFilterProxy, StringListModel, TextFilter, Tree,
+    Color, DesignTokens, DisplayList, ItemShape, ItemStyle, LayoutDirection, Locale, MatchMode,
+    NodeId, Point, Rect, Scene, SceneItem, SemanticRole, Size, SortFilterProxy, StringListModel,
+    TextFilter, Tree,
 };
 
 pub const RECORDS: usize = 100_000;
@@ -34,6 +35,8 @@ pub struct Workspace {
     pub proxy: SortFilterProxy,
     pub view: ItemView,
     pub delegate: TextItemDelegate,
+    pub tokens: DesignTokens,
+    pub styles: Styles,
     pub scene: Scene,
     pub canvas: CanvasView,
     pub dock: DockLayout,
@@ -173,6 +176,8 @@ impl Workspace {
             proxy,
             view,
             delegate: TextItemDelegate::default(),
+            tokens: DesignTokens::light(),
+            styles: Styles::new(),
             scene,
             canvas,
             dock,
@@ -368,12 +373,27 @@ impl Workspace {
             list.fill_rect(*splitter, Color::rgba8(210, 210, 215, 255));
         }
         let view = self.proxy.view(&self.model);
+        let state = VisualState::NONE
+            .set(
+                VisualState::FOCUSED,
+                self.tree.focus() == Some(self.list_node),
+            )
+            .set(
+                VisualState::FOCUS_VISIBLE,
+                self.tree.focus_visible(self.list_node),
+            );
         self.view.paint(
-            &mut list,
+            &mut PaintContext::new(
+                &mut list,
+                self.list_rect,
+                &self.tokens,
+                &self.styles,
+                &EstimatedText,
+            ),
             &view,
             &self.delegate,
             &[],
-            self.tree.focus() == Some(self.list_node),
+            state,
         );
         let _ = self.canvas.paint(&mut self.scene, &mut list);
         list.fill_rect(self.status_rect, chrome);

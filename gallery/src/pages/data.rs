@@ -8,7 +8,8 @@ use crate::page::{
 use choscorui::controls::{
     CanvasInput, CanvasView, CellEdit, ColumnBrowser, DataMapper, DefaultEditorFactory,
     HeaderColumn, HeaderInput, HeaderView, ItemModifiers, ItemView, ItemViewInput,
-    ItemViewResponse, ShortcutModifiers, ValidationState, ViewLayout, undo_history, undo_steps_to,
+    ItemViewResponse, ShortcutModifiers, TextItemDelegate, ValidationState, ViewLayout,
+    VisualState, undo_history, undo_steps_to,
 };
 use choscorui::core::{
     Color, ColorRole, DisplayList, ItemData, ItemKey, ItemModel, ItemShape, ItemStyle, Key,
@@ -184,12 +185,21 @@ impl ListBox {
         columns: &[f64],
     ) {
         env.panel(list, self.rect);
-        let focused = tree.focus() == Some(self.node);
-        self.view
-            .paint(list, model, &env.item_delegate(), columns, focused);
-        if focused {
-            env.focus_ring(list, self.rect);
-        }
+        let state = VisualState::NONE
+            .set(VisualState::FOCUSED, tree.focus() == Some(self.node))
+            .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(self.node));
+        let delegate = if columns.is_empty() {
+            TextItemDelegate::default()
+        } else {
+            TextItemDelegate::table()
+        };
+        self.view.paint(
+            &mut env.cx(list, self.rect),
+            model,
+            &delegate,
+            columns,
+            state,
+        );
     }
 }
 

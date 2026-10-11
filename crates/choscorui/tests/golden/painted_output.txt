@@ -173,12 +173,12 @@ StrokePath { path: Path { elements: [MoveTo(Point { x: 75.33333333333333, y: 24.
 # item view
 PushClip(Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 200.0, height: 60.0 } })
 PushClip(Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 14.899999999999999 }, text: "Hà Nội", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 24.0, y: 14.899999999999999 }, text: "Hà Nội", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 PushClip(Rect { origin: Point { x: 0.0, y: 20.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 34.9 }, text: "Huế", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 24.0, y: 34.9 }, text: "Huế", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 PushClip(Rect { origin: Point { x: 0.0, y: 40.0 }, size: Size { width: 200.0, height: 20.0 } })
-DrawText { baseline: Point { x: 20.0, y: 54.9 }, text: "Đà Lạt", font_family: "Helvetica", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 30, green: 30, blue: 35, alpha: 255 } }
+DrawText { baseline: Point { x: 24.0, y: 54.9 }, text: "Đà Lạt", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 PopClip

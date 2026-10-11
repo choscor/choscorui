@@ -6,11 +6,15 @@
 //! keyed by [`ItemKey`] and survive sorting, filtering, and incremental
 //! model updates.
 
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, TextLine, VisualState, content_rect, draw_text,
+    paint_box,
+};
 use choscorui_core::{
-    Color, DisplayList, ItemKey, ItemModel, Key, NodeId, Point, Rect, Role, Selection,
-    SelectionCommand, SelectionMode, SemanticAction, SemanticChange, SemanticCollection,
-    SemanticError, SemanticNode, SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError,
-    fold_for_search, visible_keys,
+    Icon, ItemKey, ItemModel, Key, NodeId, Point, Rect, Role, Selection, SelectionCommand,
+    SelectionMode, SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode,
+    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, fold_for_search,
+    visible_keys,
 };
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -86,22 +90,26 @@ pub struct RealizedItem {
     pub bounds: Rect,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ItemState {
     pub selected: bool,
     pub current: bool,
     pub focused: bool,
+    /// The view has keyboard focus: the current item shows the ring.
+    pub focus_visible: bool,
     pub depth: usize,
+    /// The indent of one tree level, from [`ItemView::set_indent`].
+    pub indent: f64,
     pub has_children: bool,
     pub expanded: bool,
 }
 
-/// Paints one item or cell. Implementations never mutate the view.
+/// Paints one item or cell in the context's bounds. Implementations never
+/// mutate the view.
 pub trait ItemDelegate {
     fn paint_cell(
         &self,
-        list: &mut DisplayList,
-        rect: Rect,
+        cx: &mut PaintContext<'_>,
         model: &dyn ItemModel,
         key: ItemKey,
         column: usize,
@@ -765,28 +773,31 @@ impl ItemView {
     }
 
     /// Paints realized items clipped to the viewport. `columns` are table
-    /// column widths; empty means one column spanning the item.
+    /// column widths; empty means one column spanning the item. `state`
+    /// carries the view's focus flags.
     pub fn paint(
         &self,
-        list: &mut DisplayList,
+        cx: &mut PaintContext<'_>,
         model: &dyn ItemModel,
         delegate: &dyn ItemDelegate,
         columns: &[f64],
-        focused: bool,
+        state: VisualState,
     ) {
-        list.push_clip(self.viewport);
+        cx.list.push_clip(self.viewport);
         for item in &self.realized {
             let has_children = model.has_children(item.key);
-            let state = ItemState {
+            let item_state = ItemState {
                 selected: self.selection.is_selected(item.key),
                 current: self.selection.current() == Some(item.key),
-                focused,
+                focused: state.focused(),
+                focus_visible: state.focus_visible(),
                 depth: item.depth,
+                indent: self.indent,
                 has_children,
                 expanded: self.expanded.contains(&item.key),
             };
             if columns.is_empty() {
-                delegate.paint_cell(list, item.bounds, model, item.key, 0, state);
+                delegate.paint_cell(&mut cx.at(item.bounds), model, item.key, 0, item_state);
             } else {
                 let mut x = item.bounds.origin.x;
                 for (column, width) in columns.iter().enumerate() {
@@ -794,40 +805,37 @@ impl ItemView {
                         Point::new(x, item.bounds.origin.y),
                         Size::new(*width, item.bounds.size.height),
                     );
-                    delegate.paint_cell(list, rect, model, item.key, column, state);
+                    delegate.paint_cell(&mut cx.at(rect), model, item.key, column, item_state);
                     x += width;
                 }
             }
         }
-        let _ = list.pop_clip();
+        let _ = cx.list.pop_clip();
     }
 }
 
-/// Default text delegate: selection fill, focus outline on the current
-/// item, tree disclosure triangle, and single-line text.
-#[derive(Clone, Debug)]
+/// Default text delegate with the list or table look: the row fill for
+/// hover and selection, the focus ring on the current item, a tree
+/// disclosure chevron, and single-line text.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextItemDelegate {
-    pub font_family: String,
-    pub font_size: f64,
-    pub text: Color,
-    pub selected_text: Color,
-    pub selection: Color,
-    pub inactive_selection: Color,
-    pub focus: Color,
-    pub indent: f64,
+    /// `ListView` for lists and trees, `Table` for table rows.
+    pub kind: ControlKind,
 }
 
 impl Default for TextItemDelegate {
     fn default() -> Self {
         Self {
-            font_family: "Helvetica".into(),
-            font_size: 14.0,
-            text: Color::rgba8(30, 30, 35, 255),
-            selected_text: Color::rgba8(255, 255, 255, 255),
-            selection: Color::rgba8(40, 110, 220, 255),
-            inactive_selection: Color::rgba8(200, 200, 205, 255),
-            focus: Color::rgba8(40, 110, 220, 255),
-            indent: 16.0,
+            kind: ControlKind::ListView,
+        }
+    }
+}
+
+impl TextItemDelegate {
+    /// The delegate with the table row look.
+    pub fn table() -> Self {
+        Self {
+            kind: ControlKind::Table,
         }
     }
 }
@@ -835,68 +843,61 @@ impl Default for TextItemDelegate {
 impl ItemDelegate for TextItemDelegate {
     fn paint_cell(
         &self,
-        list: &mut DisplayList,
-        rect: Rect,
+        cx: &mut PaintContext<'_>,
         model: &dyn ItemModel,
         key: ItemKey,
         column: usize,
         state: ItemState,
     ) {
-        if state.selected {
-            list.fill_rect(
-                rect,
-                if state.focused {
-                    self.selection
-                } else {
-                    self.inactive_selection
-                },
-            );
-        }
-        let mut x = rect.origin.x + 4.0;
+        let rect = cx.bounds;
+        let flags = VisualState::NONE
+            .set(VisualState::SELECTED, state.selected)
+            .set(VisualState::HIGHLIGHTED, state.selected && state.focused);
+        let query = |slot| StyleQuery::new(self.kind, slot).state(flags);
+        let (row, cell, indicator) = (
+            cx.style(query(Slot::Row)),
+            cx.style(query(Slot::Cell)),
+            cx.style(query(Slot::Indicator)),
+        );
+        paint_box(cx.list, rect, &row, cx.rtl);
+        let mut text = content_rect(rect, &cell, cx.rtl);
         if column == 0 {
-            x += state.depth as f64 * self.indent;
-            if state.has_children {
-                let mid = rect.origin.y + rect.size.height / 2.0;
-                let mut path = choscorui_core::Path::new();
-                if state.expanded {
-                    path.move_to(Point::new(x, mid - 3.0))
-                        .line_to(Point::new(x + 8.0, mid - 3.0))
-                        .line_to(Point::new(x + 4.0, mid + 3.0))
-                        .close();
+            let indent = state.depth as f64 * state.indent;
+            let mut start = |width: f64| {
+                let width = width.min(text.size.width);
+                let x = if cx.rtl {
+                    text.max_x() - width
                 } else {
-                    path.move_to(Point::new(x + 1.0, mid - 4.0))
-                        .line_to(Point::new(x + 7.0, mid))
-                        .line_to(Point::new(x + 1.0, mid + 4.0))
-                        .close();
+                    text.origin.x
+                };
+                if !cx.rtl {
+                    text.origin.x += width;
                 }
-                let _ = list.fill_path(
-                    path,
-                    choscorui_core::Paint::Solid(self.text),
-                    choscorui_core::FillRule::NonZero,
-                );
-            }
-            x += self.indent;
-        }
-        let text = model.data(key, column, Role::Display).to_display_string();
-        if !text.is_empty() {
-            let baseline = rect.origin.y + rect.size.height / 2.0 + self.font_size * 0.35;
-            let color = if state.selected && state.focused {
-                self.selected_text
-            } else {
-                self.text
+                text.size.width -= width;
+                Rect::from_xywh(x, text.origin.y, width, text.size.height)
             };
-            list.push_clip(rect);
-            let _ = list.draw_text(
-                Point::new(x, baseline),
-                &text,
-                &self.font_family,
-                self.font_size,
-                color,
-            );
-            let _ = list.pop_clip();
+            start(indent);
+            let disclosure = start(state.indent);
+            if state.has_children {
+                let icon = match (state.expanded, cx.rtl) {
+                    (true, _) => Icon::ChevronDown,
+                    (false, false) => Icon::ChevronRight,
+                    (false, true) => Icon::ChevronLeft,
+                };
+                cx.icon(disclosure, icon, &indicator);
+            }
         }
-        if state.current && state.focused && column == 0 {
-            let _ = list.stroke_rect(rect, self.focus, 1.0);
+        let label = model.data(key, column, Role::Display).to_display_string();
+        if !label.is_empty() {
+            cx.list.push_clip(rect);
+            let line = TextLine::new(&label, &cell, cx.rtl).color(row.foreground);
+            draw_text(cx.list, text, &line, cx.text);
+            let _ = cx.list.pop_clip();
+        }
+        if state.current && state.focus_visible && column == 0 {
+            let focus = StyleQuery::new(self.kind, Slot::Root).state(VisualState::FOCUS_VISIBLE);
+            let ring = cx.style(focus);
+            cx.slot(rect, &ring, |_, _| {});
         }
     }
 }

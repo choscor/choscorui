@@ -354,7 +354,19 @@ fn painted_output() {
     view.arrange(&mut tree, node, rect(0.0, 0.0, 200.0, 60.0))
         .unwrap();
     let mut list = DisplayList::new();
-    view.paint(&mut list, &model, &TextItemDelegate::default(), &[], true);
+    view.paint(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 200.0, 60.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        &model,
+        &TextItemDelegate::default(),
+        &[],
+        VisualState::FOCUSED,
+    );
     writeln!(out, "# item view").unwrap();
     for command in list.commands() {
         writeln!(out, "{command:?}").unwrap();

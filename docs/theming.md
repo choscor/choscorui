@@ -333,50 +333,48 @@ struct BadgeDelegate;
 impl ItemDelegate for BadgeDelegate {
     fn paint_cell(
         &self,
-        list: &mut DisplayList,
-        rect: Rect,
+        cx: &mut PaintContext<'_>,
         model: &dyn ItemModel,
         key: ItemKey,
         column: usize,
         state: ItemState,
     ) {
-        let tokens = DesignTokens::light();
+        let rect = cx.bounds;
+        let primary = cx.tokens.color(ColorRole::Primary);
         if state.selected {
-            list.fill_rect(rect, tokens.accent.with_alpha(0.2));
+            cx.list.fill_rect(rect, primary.with_alpha(0.2));
         }
         if let Value::Text(text) = model.data(key, column, Role::Display) {
-            let _ = list.draw_text(
-                Point::new(rect.origin.x + 28.0, rect.origin.y + rect.size.height * 0.7),
-                &text,
-                "Helvetica",
-                13.0,
-                tokens.content,
-            );
+            let style = cx.style(StyleQuery::new(ControlKind::Badge, Slot::Root));
             let badge = rect.size.height - 8.0;
-            let _ = list.fill_rounded_rect(
-                Rect::new(
-                    Point::new(rect.origin.x + 4.0, rect.origin.y + 4.0),
-                    Size::new(badge, badge),
-                ),
-                badge / 2.0,
-                tokens.accent,
+            let dot = Rect::from_xywh(rect.origin.x + 4.0, rect.origin.y + 4.0, badge, badge);
+            let _ = cx.list.fill_rounded_rect(dot, badge / 2.0, style.background);
+            let label = Rect::from_xywh(
+                dot.max_x() + 4.0,
+                rect.origin.y,
+                rect.size.width - badge - 12.0,
+                rect.size.height,
             );
+            let body = cx.style(StyleQuery::new(ControlKind::Label, Slot::Root));
+            cx.label(label, &text, &body, TextAlign::Start);
         }
     }
 }
 ```
 
-Give the delegate to `ItemView::paint`:
+Give the delegate to `ItemView::paint`, with a context for the view and the
+view's focus flags:
 
 ```rust
-view.paint(&mut list, &model, &BadgeDelegate, &[], false);
+view.paint(&mut cx, &model, &BadgeDelegate, &[], VisualState::NONE);
 ```
 
-`ItemState` has the fields `selected`, `current`, `focused`, `depth`,
-`has_children`, and `expanded`. Thus the delegate also paints tree disclosure
-and focus rings. Accessibility names come from the model's
-`Role::Accessibility` and `Role::Display` data, not from the painted cell. For
-cell editing, use `EditorFactory` (see [controls.md](controls.md)).
+`ItemState` has the fields `selected`, `current`, `focused`,
+`focus_visible`, `depth`, `indent`, `has_children`, and `expanded`. Thus the
+delegate also paints tree disclosure and focus rings. Accessibility names
+come from the model's `Role::Accessibility` and `Role::Display` data, not
+from the painted cell. For cell editing, use `EditorFactory` (see
+[controls.md](controls.md)).
 
 ### Custom validation
 
