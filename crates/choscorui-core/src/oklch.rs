@@ -22,6 +22,61 @@ impl Color {
     }
 }
 
+impl Color {
+    /// The OKLab coordinates (lightness, a, b) of the opaque color.
+    pub fn to_oklab(self) -> (f64, f64, f64) {
+        let linear = |channel: u8| {
+            let c = f64::from(channel) / 255.0;
+            if c <= 0.040_45 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let (r, g, b) = (linear(self.red), linear(self.green), linear(self.blue));
+        let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
+        let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
+        let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b).cbrt();
+        (
+            0.210_454_255_3 * l + 0.793_617_785_0 * m - 0.004_072_046_8 * s,
+            1.977_998_495_1 * l - 2.428_592_205_0 * m + 0.450_593_709_9 * s,
+            0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766_0 * s,
+        )
+    }
+
+    /// CSS `color-mix(in oklab, self, other t)`: `t` of `other` mixed into
+    /// `self` in OKLab, with alpha mixed linearly. For the near-gray roles
+    /// of the palettes this matches a mix in OKLCH.
+    pub fn mix(self, other: Color, t: f64) -> Color {
+        let t = if t.is_finite() {
+            t.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let (l1, a1, b1) = self.to_oklab();
+        let (l2, a2, b2) = other.to_oklab();
+        let lerp = |x: f64, y: f64| x + (y - x) * t;
+        let (l, a, b) = (lerp(l1, l2), lerp(a1, a2), lerp(b1, b2));
+        let chroma = (a * a + b * b).sqrt();
+        let hue = b.atan2(a).to_degrees();
+        let alpha = lerp(f64::from(self.alpha), f64::from(other.alpha)) / 255.0;
+        Color::from_oklch(l, chroma, hue, alpha)
+    }
+
+    /// `self` drawn over the opaque `background`.
+    pub fn over(self, background: Color) -> Color {
+        let alpha = f64::from(self.alpha) / 255.0;
+        let blend = |top: u8, bottom: u8| {
+            (f64::from(top) * alpha + f64::from(bottom) * (1.0 - alpha)).round() as u8
+        };
+        Color::rgb8(
+            blend(self.red, background.red),
+            blend(self.green, background.green),
+            blend(self.blue, background.blue),
+        )
+    }
+}
+
 /// Linear light to an eight-bit sRGB channel.
 fn encode(linear: f64) -> u8 {
     let linear = if linear.is_finite() {
@@ -76,6 +131,22 @@ mod tests {
         let color = Color::from_oklch(0.577, 0.245, 27.325, 1.0);
         let near = |x: u8, y: u8| x.abs_diff(y) <= 1;
         assert!(near(color.red, 0xe7) && near(color.green, 0x00) && near(color.blue, 0x0b));
+    }
+
+    #[test]
+    fn oklab_round_trips_and_mixes() {
+        let color = Color::from_oklch(0.6, 0.118, 184.704, 1.0);
+        let (l, a, b) = color.to_oklab();
+        let back = Color::from_oklch(l, (a * a + b * b).sqrt(), b.atan2(a).to_degrees(), 1.0);
+        assert_eq!(back, color);
+        assert_eq!(Color::WHITE.mix(Color::BLACK, 0.0), Color::WHITE);
+        assert_eq!(Color::WHITE.mix(Color::BLACK, 1.0), Color::BLACK);
+        let gray = Color::WHITE.mix(Color::BLACK, 0.5);
+        assert_eq!((gray.red, gray.red), (gray.green, gray.blue));
+        assert_eq!(
+            Color::rgba8(0, 0, 0, 128).over(Color::WHITE),
+            Color::rgb8(127, 127, 127)
+        );
     }
 
     #[test]

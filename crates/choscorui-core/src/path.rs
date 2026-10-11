@@ -125,6 +125,59 @@ impl Path {
         path
     }
 
+    /// A rectangle with its own radius per corner, clockwise from the top
+    /// left. Each radius is clamped so that adjacent corners fit.
+    pub fn rounded_rect_corners(rect: Rect, radii: [f64; 4]) -> Self {
+        let half = (rect.size.width.min(rect.size.height) / 2.0).max(0.0);
+        let [tl, tr, br, bl] = radii.map(|r| {
+            if r.is_finite() {
+                r.clamp(0.0, half)
+            } else {
+                0.0
+            }
+        });
+        if tl == tr && tr == br && br == bl {
+            return Self::rounded_rect(rect, tl);
+        }
+        let (l, t, r, b) = (rect.min_x(), rect.min_y(), rect.max_x(), rect.max_y());
+        let mut path = Self::new();
+        path.move_to(Point::new(l + tl, t))
+            .line_to(Point::new(r - tr, t));
+        if tr > 0.0 {
+            path.cubic_to(
+                Point::new(r - tr + tr * KAPPA, t),
+                Point::new(r, t + tr - tr * KAPPA),
+                Point::new(r, t + tr),
+            );
+        }
+        path.line_to(Point::new(r, b - br));
+        if br > 0.0 {
+            path.cubic_to(
+                Point::new(r, b - br + br * KAPPA),
+                Point::new(r - br + br * KAPPA, b),
+                Point::new(r - br, b),
+            );
+        }
+        path.line_to(Point::new(l + bl, b));
+        if bl > 0.0 {
+            path.cubic_to(
+                Point::new(l + bl - bl * KAPPA, b),
+                Point::new(l, b - bl + bl * KAPPA),
+                Point::new(l, b - bl),
+            );
+        }
+        path.line_to(Point::new(l, t + tl));
+        if tl > 0.0 {
+            path.cubic_to(
+                Point::new(l, t + tl - tl * KAPPA),
+                Point::new(l + tl - tl * KAPPA, t),
+                Point::new(l + tl, t),
+            );
+        }
+        path.close();
+        path
+    }
+
     pub fn ellipse(rect: Rect) -> Self {
         let c = rect.center();
         let (rx, ry) = (rect.size.width / 2.0, rect.size.height / 2.0);

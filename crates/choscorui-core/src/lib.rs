@@ -52,7 +52,7 @@ pub use undo::{UndoGroup, UndoStack};
 mod theme;
 pub use theme::{
     AccessibilityPreferences, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens,
-    FULL_RADIUS, FontFamily, MotionTokens, Oklch, Palette, RadiusScale, RoleOverrides,
+    FULL_RADIUS, FontFamily, MotionTokens, Oklch, Palette, RadiusScale, RecipeSet, RoleOverrides,
     ShadowLayers, ShadowScale, TextPreset, TextSize, ThemeError, ThemeInvalidation, ThemeOverride,
     ThemeResolver, Tracking, TypeSpec, palette_source,
 };

@@ -148,12 +148,36 @@ control publishes. A dash means that the field is empty.
 - `handle_with_commands` reads the enabled state from the
   `CommandRegistry` first. A command that becomes disabled during a press
   cancels the press.
-- **Recipes.** `ButtonStyle`, `PillButtonRecipe`, and `CommandLinkRecipe`
-  implement `ButtonRecipe`. `paint_button` paints the slots in
-  `Slot::ORDER`. A recipe reads only `ButtonVisualState` and design tokens,
-  so a recipe swap does not change behavior.
-- `CommandLinkRecipe` paints an arrow icon, a hover fill, and a focus ring.
-  The application paints the title and the description into the content rectangle.
+- **Look.** `with_variant` takes a `ButtonVariant`: `Default`,
+  `Destructive`, `Outline`, `Secondary`, `Ghost`, or `Link`. `with_size`
+  takes a `ControlSize`. `with_icon` and `with_trailing_icon` add icons.
+- `paint` resolves the `Button` recipe for the `visual_state` and paints
+  the box, the icons, and the label. A recipe reads only the style query and
+  the tokens, so a recipe swap does not change behavior.
+- `set_expanded` keeps the open look while a popup is open. `set_invalid`
+  shows the invalid ring.
+- `CommandLink` paints an arrow, a title, and a description in an outline
+  item row. A `Button` on the same node gives the behavior.
+
+| Size | Height | Inline padding | Gap | Radius | Icon |
+| --- | --- | --- | --- | --- | --- |
+| `Xs` | 24 | 8 | 4 | min(md, 8) | 12 |
+| `Sm` | 32 | 10 | 4 | min(md, 10) | 16 |
+| `Default` | 36 | 10 | 6 | md | 16 |
+| `Lg` | 40 | 10 | 6 | md | 16 |
+| `IconXs`, `IconSm`, `Icon`, `IconLg` | 24, 32, 36, 40 square | 0 | 0 | as the text size | 12, 16, 16, 16 |
+
+| Variant | Rest | Hover |
+| --- | --- | --- |
+| `Default` | `primary` fill, `primary-foreground` text | `primary` at 80% |
+| `Outline` | `background` fill, `border` edge, extra-small shadow; dark: `input` at 30%, `input` edge | `muted`; dark: `input` at 50% |
+| `Secondary` | `secondary` fill | `secondary` mixed with 5% `foreground` |
+| `Ghost` | transparent | `muted`; dark: `muted` at 50% |
+| `Destructive` | `destructive` at 10% (dark 20%), `destructive` text | 20% (dark 30%) |
+| `Link` | `primary` text | underline |
+
+All variants use the small medium text. A pressed button moves down 1 pt.
+A disabled button has 50% opacity.
 
 | Field | `semantics(tree, id).shared()` |
 | --- | --- |

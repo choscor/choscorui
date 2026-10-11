@@ -7,8 +7,8 @@ use crate::stats::Results;
 use crate::sys::{self, mib};
 use crate::workspace::Workspace;
 use choscorui_controls::{
-    ButtonDecoration, ButtonRecipe, ButtonStyle, ButtonVisualState, PillButtonRecipe, TextEditor,
-    TextEditorInput, paint_button,
+    Button, ButtonVariant, CommandId, EstimatedText, PaintContext, Styles, TextEditor,
+    TextEditorInput, VisualState,
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayList, Point, Rect, Size, TextLayoutCache, TextStyle,
@@ -253,38 +253,19 @@ fn paint_theme(
         tree.bounds(tree.root()).unwrap(),
         tokens.color(ColorRole::Background),
     );
-    // Structurally distinct themes, as in the gallery: flat railed buttons
-    // in dark, elevated pills in light.
-    let flat = ButtonStyle {
-        normal: tokens.color(ColorRole::Primary),
-        hover: tokens.color(ColorRole::Primary),
-        pressed: tokens.color(ColorRole::Destructive),
-        disabled: Color::rgba8(90, 90, 90, 255),
-        focus: tokens.color(ColorRole::Foreground),
-        decoration: ButtonDecoration::LeadingRail {
-            width: tokens.spacing,
-            color: tokens.color(ColorRole::Destructive),
-        },
+    // Structurally distinct looks: outline buttons in dark, filled
+    // buttons in light, through the cached default recipe.
+    let variant = if light {
+        ButtonVariant::Default
+    } else {
+        ButtonVariant::Outline
     };
-    let pill = PillButtonRecipe { emphasized: false };
-    let recipe: &dyn ButtonRecipe = if light { &pill } else { &flat };
-    let state = ButtonVisualState {
-        enabled: true,
-        hovered: false,
-        pressed: false,
-        focused: false,
-    };
+    let styles = Styles::new();
     for (i, node) in nodes.iter().enumerate() {
         let bounds = tree.bounds(*node).unwrap();
-        paint_button(recipe, &mut list, bounds, state, tokens, |list, slots| {
-            let _ = list.draw_text(
-                Point::new(slots.content.origin.x, slots.content.max_y() - 8.0),
-                &format!("Item {i}"),
-                "Helvetica",
-                12.0,
-                slots.content_color,
-            );
-        });
+        let button = Button::new(format!("Item {i}"), CommandId(i as u64)).with_variant(variant);
+        let mut cx = PaintContext::new(&mut list, bounds, tokens, &styles, &EstimatedText);
+        button.paint_state(&mut cx, VisualState::NONE);
     }
     list
 }

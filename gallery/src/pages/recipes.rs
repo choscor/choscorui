@@ -1,70 +1,99 @@
 //! Extension points: swappable button recipes and an application-defined
 //! control mounted through `ControlHost`.
 
-use crate::page::{Align, Column, Env, Page, node, sem};
+use crate::page::{Column, Env, Page, node, sem};
 use choscorui::controls::{
-    Button, ButtonInput, ButtonRecipe, CommandId, CommandLinkRecipe, ContentAlignment,
-    ControlContext, ControlEvent, ControlHost, CustomControl, PillButtonRecipe, ShortcutModifiers,
-    paint_button,
+    Button, ButtonInput, ButtonVariant, CommandId, CommandLink, ControlContext, ControlEvent,
+    ControlHost, ControlKind, CustomControl, Edges, PaintContext, Recipe, ResolvedStyle,
+    ShortcutModifiers, StyleQuery, Styles,
 };
 use choscorui::core::{
     ColorRole, Constraints, DesignTokens, DisplayList, EventReply, Key, KeyEvent, LayoutDirection,
-    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
-    SemanticRole, SemanticState, Size, Tree,
+    Measured, NodeId, Point, PointerButton, PointerEvent, RecipeSet, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
+use std::rc::Rc;
 
 /// Which recipe paints a demo button.
 #[derive(Clone, Copy)]
-enum Recipe {
-    Flat,
-    Pill,
-    Emphasized,
+enum Look {
+    Default,
+    Custom,
+    Destructive,
     CommandLink,
 }
 
-const RECIPE_BUTTONS: [(Recipe, &str, &str); 4] = [
+const RECIPE_BUTTONS: [(Look, &str, &str); 4] = [
+    (Look::Default, "Default", "The default button recipe"),
     (
-        Recipe::Flat,
-        "Flat style",
-        "The default ButtonStyle used as a recipe",
+        Look::Custom,
+        "Square",
+        "An application recipe registered for the button kind",
     ),
+    (Look::Destructive, "Delete", "The destructive variant"),
     (
-        Recipe::Pill,
-        "Pill",
-        "Rounded, elevated, with an icon badge",
-    ),
-    (Recipe::Emphasized, "Delete", "The pill recipe, emphasized"),
-    (
-        Recipe::CommandLink,
+        Look::CommandLink,
         "Continue setup",
         "Command link: a title and a description",
     ),
 ];
 
+/// An application look: square corners, a primary edge, no shadow.
+struct Square;
+
+impl Recipe for Square {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        let mut style = ResolvedStyle::new(tokens);
+        style.border = tokens.color(ColorRole::Primary);
+        style.border_width = if query.state.focus_visible() {
+            2.0
+        } else {
+            1.0
+        };
+        style.foreground = tokens.color(ColorRole::Primary);
+        style.min_height = tokens.space(9.0);
+        style.padding = Edges::axes(tokens.space(3.0), 0.0);
+        if query.state.interactive_hover() || query.state.pressed() {
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.12);
+        }
+        if query.state.disabled() {
+            style.opacity = 0.5;
+        }
+        Some(style)
+    }
+}
+
 /// The same button behavior painted by different recipes. Recipes never
 /// see input or semantics, so every button behaves identically.
 pub struct ButtonRecipesPage {
-    buttons: Vec<(NodeId, Button, Recipe, &'static str, &'static str)>,
+    buttons: Vec<(NodeId, Button, Look, &'static str, &'static str)>,
     status: NodeId,
     last: String,
+    custom: Styles,
 }
 
 pub fn button_recipes(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let buttons = RECIPE_BUTTONS
         .iter()
         .enumerate()
-        .map(|(index, (recipe, title, description))| {
+        .map(|(index, (look, title, description))| {
             let id = node(tree, parent, true);
             let mut button = Button::new(*title, CommandId(index as u64 + 1));
+            if matches!(look, Look::Destructive) {
+                button = button.with_variant(ButtonVariant::Destructive);
+            }
             let _ = button.set_enabled(tree, id, env.enabled);
-            (id, button, *recipe, *title, *description)
+            (id, button, *look, *title, *description)
         })
         .collect();
     let status = node(tree, parent, false);
+    let mut custom = Styles::new();
+    custom.set_recipe(RecipeSet::DEFAULT, ControlKind::Button, Rc::new(Square));
     Box::new(ButtonRecipesPage {
         buttons,
         status,
         last: "Each button runs the same behavior.".into(),
+        custom,
     })
 }
 
@@ -89,7 +118,7 @@ impl Page for ButtonRecipesPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
         for (id, _, recipe, _, _) in &self.buttons {
-            let height = if matches!(recipe, Recipe::CommandLink) {
+            let height = if matches!(recipe, Look::CommandLink) {
                 56.0
             } else {
                 40.0
@@ -100,53 +129,22 @@ impl Page for ButtonRecipesPage {
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        let flat = env.button_style();
-        let pill = PillButtonRecipe { emphasized: false };
-        let emphasized = PillButtonRecipe { emphasized: true };
-        for (id, button, recipe, title, description) in &self.buttons {
+        for (id, button, look, title, description) in &self.buttons {
             let bounds = tree.bounds(*id).unwrap_or_default();
             let state = button.visual_state(tree, *id);
-            let painter: &dyn ButtonRecipe = match recipe {
-                Recipe::Flat => &flat,
-                Recipe::Pill => &pill,
-                Recipe::Emphasized => &emphasized,
-                Recipe::CommandLink => &CommandLinkRecipe,
-            };
-            paint_button(painter, list, bounds, state, env.tokens, |list, layout| {
-                let align = match layout.alignment {
-                    ContentAlignment::Leading => Align::Leading,
-                    ContentAlignment::Center => Align::Center,
-                };
-                if matches!(recipe, Recipe::CommandLink) {
-                    let half = layout.content.size.height / 2.0;
-                    let top = Rect::new(
-                        layout.content.origin,
-                        Size::new(layout.content.size.width, half),
-                    );
-                    let bottom = Rect::new(
-                        Point::new(layout.content.origin.x, layout.content.origin.y + half),
-                        top.size,
-                    );
-                    env.text(list, top, title, env.body(), layout.content_color, align);
-                    env.text(
-                        list,
-                        bottom,
-                        description,
-                        env.small(),
-                        env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
-                        align,
-                    );
-                } else {
-                    env.text(
-                        list,
-                        layout.content,
-                        title,
-                        env.body(),
-                        layout.content_color,
-                        align,
-                    );
+            match look {
+                Look::Default | Look::Destructive => {
+                    button.paint_state(&mut env.cx(list, bounds), state)
                 }
-            });
+                Look::Custom => {
+                    let mut cx = PaintContext::new(list, bounds, env.tokens, &self.custom, env)
+                        .rtl(env.rtl());
+                    button.paint_state(&mut cx, state);
+                }
+                Look::CommandLink => {
+                    CommandLink::new(*title, *description).paint(&mut env.cx(list, bounds), state);
+                }
+            }
         }
         env.caption(
             list,

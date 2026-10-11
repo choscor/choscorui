@@ -1,13 +1,13 @@
 use choscorui_controls::{
-    ButtonGroup, ButtonVisualState, Calendar, CommandId, CommandLinkRecipe, CommandRegistry,
-    CommandState, DateTimeEdit, DateTimeField, DateTimeKind, DecimalSpinBox, Dial, FocusFrame,
-    IntegerRange, KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, ProgressBar,
+    ButtonGroup, Calendar, CommandId, CommandLink, CommandRegistry, CommandState, DateTimeEdit,
+    DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange,
+    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, PaintContext, ProgressBar,
     ProgressStyle, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip,
-    ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, paint_button,
+    Styles, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, Color, DesignTokens, DisplayList, Key, Locale, Point,
-    Rect, SemanticAction, SemanticRole, Size, Tree,
+    CivilDate, CivilDateTime, CivilTime, Color, DesignTokens, DisplayCommand, DisplayList, Key,
+    Locale, Point, Rect, SemanticAction, SemanticRole, Size, Tree,
 };
 use std::time::Duration;
 
@@ -173,22 +173,27 @@ fn tool_buttons_groups_and_command_links() {
     assert_eq!(align.checked(&commands), vec![CommandId(3)]);
 
     let mut list = DisplayList::new();
-    let state = ButtonVisualState {
-        enabled: true,
-        hovered: true,
-        pressed: false,
-        focused: true,
-    };
-    let layout = paint_button(
-        &CommandLinkRecipe,
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let link = CommandLink::new("Cài đặt", "Mở cài đặt hệ thống");
+    let mut cx = PaintContext::new(
         &mut list,
         rect(0.0, 0.0, 300.0, 56.0),
-        state,
-        &DesignTokens::light(),
-        |_, _| {},
+        &tokens,
+        &styles,
+        &EstimatedText,
     );
-    assert!(layout.icon.is_some());
-    assert!(list.len() >= 3);
+    link.paint(
+        &mut cx,
+        VisualState::HOVERED.with(VisualState::FOCUS_VISIBLE),
+    );
+    let texts = list
+        .commands()
+        .iter()
+        .filter(|command| matches!(command, DisplayCommand::DrawText { .. }))
+        .count();
+    assert_eq!(texts, 2, "title and description");
+    assert!(list.len() >= 4, "box, arrow, and two lines");
 }
 
 #[test]

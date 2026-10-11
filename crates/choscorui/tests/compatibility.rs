@@ -8,13 +8,13 @@
 //! review the golden diff and note it in the release notes.
 
 use choscorui::controls::{
-    Button, ButtonDecoration, ButtonStyle, ButtonVisualState, Checkbox, ComboBox, ComboItem,
-    IntegerRange, ItemView, PillButtonRecipe, ProgressBar, Slider, SliderOrientation, SpinBox,
-    TextField, TextItemDelegate, paint_button,
+    Button, ButtonVariant, Checkbox, ComboBox, ComboItem, CommandId, ControlSize, EstimatedText,
+    IntegerRange, ItemView, PaintContext, ProgressBar, Slider, SliderOrientation, SpinBox, Styles,
+    TextField, TextItemDelegate, VisualState,
 };
 use choscorui::core::{
     AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, CrossAlign,
-    DesignTokens, DisplayList, FormLayout, GridLayout, Insets, ItemKey, LayoutDirection,
+    DesignTokens, DisplayList, FormLayout, GridLayout, Icon, Insets, ItemKey, LayoutDirection,
     LinearLayout, NodeId, Point, Rect, SemanticRole, Size, StringListModel, ThemeOverride,
     ThemeResolver, Tree,
 };
@@ -301,44 +301,47 @@ fn theme_resolution() {
 fn painted_output() {
     let mut out = String::new();
     let tokens = DesignTokens::light();
-    let bounds = rect(10.0, 10.0, 120.0, 32.0);
+    let bounds = rect(10.0, 10.0, 120.0, 36.0);
+    let styles = Styles::new();
     let states = [
-        ButtonVisualState {
-            enabled: true,
-            hovered: false,
-            pressed: false,
-            focused: true,
-        },
-        ButtonVisualState {
-            enabled: false,
-            hovered: false,
-            pressed: false,
-            focused: false,
-        },
+        ("rest", VisualState::NONE),
+        ("hovered", VisualState::HOVERED),
+        ("pressed", VisualState::PRESSED),
+        (
+            "focus-visible",
+            VisualState::FOCUS_VISIBLE.with(VisualState::FOCUSED),
+        ),
+        ("disabled", VisualState::DISABLED),
+        ("invalid", VisualState::INVALID),
     ];
-    let flat = ButtonStyle {
-        normal: tokens.color(ColorRole::Primary),
-        hover: tokens.color(ColorRole::Primary),
-        pressed: tokens.color(ColorRole::Destructive),
-        disabled: Color::rgba8(90, 90, 90, 255),
-        focus: tokens.color(ColorRole::Foreground),
-        decoration: ButtonDecoration::LeadingRail {
-            width: tokens.spacing,
-            color: tokens.color(ColorRole::Destructive),
-        },
-    };
-    for state in states {
-        for (name, recipe) in [
-            ("flat", &flat as &dyn choscorui::controls::ButtonRecipe),
-            ("pill", &PillButtonRecipe { emphasized: true }),
-        ] {
-            let mut list = DisplayList::new();
-            let slots = paint_button(recipe, &mut list, bounds, state, &tokens, |_, _| {});
-            writeln!(out, "# {name} {state:?}\nslots {slots:?}").unwrap();
-            for command in list.commands() {
-                writeln!(out, "{command:?}").unwrap();
-            }
+    let mut paint_button = |button: &Button, state: VisualState, label: String| {
+        let mut list = DisplayList::new();
+        let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+        button.paint_state(&mut cx, state);
+        writeln!(out, "# {label}").unwrap();
+        for command in list.commands() {
+            writeln!(out, "{command:?}").unwrap();
         }
+    };
+    for variant in ButtonVariant::ALL {
+        for (name, state) in states {
+            let button = Button::new("Save", CommandId(1)).with_variant(*variant);
+            paint_button(
+                &button,
+                state,
+                format!("button {} default {name}", variant.name()),
+            );
+        }
+    }
+    for size in ControlSize::ALL {
+        let button = Button::new("Save", CommandId(1))
+            .with_size(size)
+            .with_icon(Icon::Check);
+        paint_button(
+            &button,
+            VisualState::NONE,
+            format!("button default {} rest", size.name()),
+        );
     }
 
     let model = StringListModel::from_strings(["Hà Nội", "Huế", "Đà Lạt"]);

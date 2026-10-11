@@ -1,9 +1,5 @@
-use choscorui_controls::{
-    Button, ButtonDecoration, ButtonInput, ButtonStyle, CommandId, SemanticAction,
-};
-use choscorui_core::{
-    Color, Dirty, DisplayList, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect, Size, Tree,
-};
+use choscorui_controls::{Button, ButtonInput, CommandId, SemanticAction};
+use choscorui_core::{Dirty, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect, Size, Tree};
 use choscorui_core::{SemanticAction as CoreSemanticAction, SemanticRole};
 
 fn setup() -> (Tree, choscorui_core::NodeId, Button) {
@@ -40,7 +36,7 @@ fn pointer_capture_cancels_outside_and_activates_after_return() {
             ButtonInput::Pointer(PointerEvent::Move { position: outside }),
         )
         .unwrap();
-    assert!(!button.visual_state(&tree, id).pressed);
+    assert!(!button.visual_state(&tree, id).pressed());
     assert_eq!(
         button
             .handle(
@@ -132,7 +128,7 @@ fn keyboard_and_semantic_actions_share_command() {
             .unwrap(),
         None
     );
-    assert!(button.visual_state(&tree, id).pressed);
+    assert!(button.visual_state(&tree, id).pressed());
     assert_eq!(
         button
             .handle(
@@ -218,52 +214,4 @@ fn enabled_change_invalidates_paint_and_semantics() {
     assert!(dirty.contains(Dirty::PAINT));
     assert!(dirty.contains(Dirty::SEMANTICS));
     assert!(!dirty.contains(Dirty::LAYOUT));
-}
-
-#[test]
-fn structural_recipe_swap_preserves_button_behavior() {
-    let (mut tree, id, mut button) = setup();
-    tree.set_focus(Some(id)).unwrap();
-    let base = ButtonStyle {
-        normal: Color::rgba8(10, 20, 30, 255),
-        hover: Color::rgba8(20, 30, 40, 255),
-        pressed: Color::rgba8(5, 10, 15, 255),
-        disabled: Color::rgba8(80, 80, 80, 255),
-        focus: Color::rgba8(255, 255, 255, 255),
-        decoration: ButtonDecoration::Plain,
-    };
-    let mut plain = DisplayList::new();
-    base.paint(
-        &mut plain,
-        tree.bounds(id).unwrap(),
-        button.visual_state(&tree, id),
-    );
-    let mut rail = DisplayList::new();
-    ButtonStyle {
-        decoration: ButtonDecoration::LeadingRail {
-            width: 6.0,
-            color: Color::rgba8(240, 180, 20, 255),
-        },
-        ..base
-    }
-    .paint(
-        &mut rail,
-        tree.bounds(id).unwrap(),
-        button.visual_state(&tree, id),
-    );
-    assert!(rail.commands().len() > plain.commands().len());
-    assert_eq!(
-        button
-            .handle(
-                &mut tree,
-                id,
-                ButtonInput::Key(KeyEvent::Down {
-                    key: Key::Enter,
-                    repeat: false
-                })
-            )
-            .unwrap(),
-        Some(CommandId(7))
-    );
-    assert_eq!(button.semantics(&tree, id).role, "button");
 }

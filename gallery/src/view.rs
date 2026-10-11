@@ -6,8 +6,8 @@ use crate::catalog::PAGES;
 use crate::page::{Align, Category, Desktop, Env, MeasureCache, Page, PageState, sem, split};
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use choscorui::controls::{
-    Button, ButtonInput, Checkbox, CheckboxInput, CommandId, PillButtonRecipe, ShortcutModifiers,
-    TextField, TextFieldChange, TextFieldInput, paint_button,
+    Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlSize,
+    ShortcutModifiers, TextField, TextFieldChange, TextFieldInput,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId,
@@ -687,23 +687,18 @@ impl GalleryView {
             if bounds.size.width <= 0.0 {
                 continue;
             }
-            paint_button(
-                &PillButtonRecipe { emphasized: active },
-                &mut list,
-                bounds,
-                button.visual_state(&self.tree, id),
-                &tokens,
-                |list, slots| {
-                    env.text(
-                        list,
-                        slots.content,
-                        &label,
-                        env.small(),
-                        slots.content_color,
-                        Align::Center,
-                    );
-                },
-            );
+            let variant = if active {
+                ButtonVariant::Default
+            } else {
+                ButtonVariant::Outline
+            };
+            Button::new(label, CommandId(0))
+                .with_variant(variant)
+                .with_size(ControlSize::Sm)
+                .paint_state(
+                    &mut env.cx(&mut list, bounds),
+                    button.visual_state(&self.tree, id),
+                );
         }
         let toggle = self.tree.bounds(self.enabled_node).unwrap_or_default();
         env.checkbox_style().paint(

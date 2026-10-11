@@ -140,10 +140,10 @@ Controls do not own nodes. You attach a node, keep the state object of the contr
 
 ## Use a control
 
-Each control has the same shape. It handles input, it gives a visual state to a style or recipe, and it gives its semantics:
+Each control has the same shape. It handles input, it paints through the recipe for its visual state, and it gives its semantics:
 
 ```rust
-use choscorui::controls::{PillButtonRecipe, paint_button};
+use choscorui::controls::{EstimatedText, PaintContext, Styles};
 use choscorui::prelude::*;
 
 const SAVE: CommandId = CommandId(1);
@@ -159,18 +159,11 @@ if let Some(command) =
     run(command);
 }
 
-// Paint: a recipe draws the visual state.
-let state = button.visual_state_with_commands(&tree, node, &commands)?;
+// Paint: the button recipe draws the visual state.
+let styles = Styles::new();
 let bounds = tree.bounds(node).unwrap_or_default();
-paint_button(&PillButtonRecipe::default(), &mut list, bounds, state, &tokens, |list, slots| {
-    let _ = list.draw_text(
-        Point::new(slots.content.origin.x, slots.content.origin.y + 18.0),
-        "Save",
-        "Helvetica",
-        13.0,
-        slots.content_color,
-    );
-});
+let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+button.paint(&mut cx, &tree, node);
 
 // Semantics: the node goes into the semantic tree.
 let semantic = button.semantics_with_commands(&tree, node, &commands)?.shared();

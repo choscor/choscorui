@@ -2,22 +2,23 @@
 
 use crate::page::{Align, Clicks, Column, Env, Page, node, pressed, sem};
 use choscorui::controls::{
-    Button, ButtonDecoration, ButtonGroup, ButtonInput, Checkbox, CheckboxInput, CommandId,
+    Button, ButtonGroup, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId,
     CommandRegistry, CommandState, KeySequenceChange, KeySequenceEdit,
     SemanticAction as ControlAction, Shortcut, ShortcutModifiers, ShortcutScope, ToolButton,
     ToolButtonAction, ToolButtonMenu, shortcut_text,
 };
 use choscorui::core::{
-    ColorRole, DisplayList, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
+    ColorRole, DisplayList, Icon, Key, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction,
     SemanticNode, SemanticRole, Tree,
 };
 
 const HELLO: CommandId = CommandId(1);
 const ARCHIVE: CommandId = CommandId(2);
 
-/// Plain, railed, and command-driven buttons plus a window shortcut.
+/// Buttons in several variants, a command-driven button, and a window
+/// shortcut.
 pub struct ButtonPage {
-    buttons: Vec<(NodeId, Button, ButtonDecoration)>,
+    buttons: Vec<(NodeId, Button)>,
     toggle_node: NodeId,
     toggle: Checkbox,
     status: NodeId,
@@ -52,27 +53,21 @@ pub fn button(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
             HELLO,
         )
         .expect("shortcut is free");
-    let rail = ButtonDecoration::LeadingRail {
-        width: 4.0,
-        color: env.tokens.color(ColorRole::Primary),
-    };
     let mut buttons = Vec::new();
-    for (label, command, decoration) in [
-        ("Say hello (⌘↩)", HELLO, ButtonDecoration::Plain),
-        ("Railed hello", HELLO, rail),
-        (
-            "Archive (command disabled)",
-            ARCHIVE,
-            ButtonDecoration::Plain,
-        ),
+    for button in [
+        Button::new("Say hello (⌘↩)", HELLO),
+        Button::new("Outline hello", HELLO)
+            .with_variant(ButtonVariant::Outline)
+            .with_icon(Icon::Send),
+        Button::new("Archive (command disabled)", ARCHIVE).with_variant(ButtonVariant::Destructive),
     ] {
         let id = node(tree, parent, true);
-        buttons.push((id, Button::new(label, command), decoration));
+        buttons.push((id, button));
     }
     let toggle_node = node(tree, parent, true);
     let mut toggle = Checkbox::new("Enable the Archive command", false);
     let status = node(tree, parent, false);
-    for (id, button, _) in &mut buttons {
+    for (id, button) in &mut buttons {
         let _ = button.set_enabled(tree, *id, env.enabled);
     }
     let _ = toggle.set_enabled(tree, toggle_node, env.enabled);
@@ -111,7 +106,7 @@ impl ButtonPage {
 impl Page for ButtonPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        for (id, _, _) in &self.buttons {
+        for (id, _) in &self.buttons {
             let cell = column.cells(36.0, &[260.0])[0];
             let _ = tree.set_bounds(*id, cell);
         }
@@ -120,21 +115,12 @@ impl Page for ButtonPage {
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        for (id, button, decoration) in &self.buttons {
+        for (id, button) in &self.buttons {
             let bounds = tree.bounds(*id).unwrap_or_default();
             let state = button
                 .visual_state_with_commands(tree, *id, &self.commands)
                 .expect("button commands are registered");
-            let mut style = env.button_style();
-            style.decoration = *decoration;
-            style.paint(list, bounds, state);
-            let name = button.semantics(tree, *id).name;
-            let color = if state.enabled {
-                env.tokens.color(ColorRole::Foreground)
-            } else {
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
-            };
-            env.text(list, bounds, &name, env.body(), color, Align::Center);
+            button.paint_state(&mut env.cx(list, bounds), state);
         }
         let toggle = tree.bounds(self.toggle_node).unwrap_or_default();
         env.checkbox_style().paint(
@@ -158,7 +144,7 @@ impl Page for ButtonPage {
         let mut nodes: Vec<_> = self
             .buttons
             .iter()
-            .map(|(id, button, _)| {
+            .map(|(id, button)| {
                 let semantics = button
                     .semantics_with_commands(tree, *id, &self.commands)
                     .expect("button commands are registered");
@@ -189,7 +175,7 @@ impl Page for ButtonPage {
     ) -> bool {
         let mut changed = false;
         for index in 0..self.buttons.len() {
-            let (id, button, _) = &mut self.buttons[index];
+            let (id, button) = &mut self.buttons[index];
             let command = button
                 .handle_with_commands(tree, *id, ButtonInput::Pointer(event), &self.commands)
                 .ok()
@@ -221,7 +207,7 @@ impl Page for ButtonPage {
         let focus = tree.focus();
         let mut consumed = false;
         for index in 0..self.buttons.len() {
-            let (id, button, _) = &mut self.buttons[index];
+            let (id, button) = &mut self.buttons[index];
             if focus == Some(*id) || matches!(event, KeyEvent::Up { .. }) {
                 consumed |= focus == Some(*id);
                 let command = button
@@ -262,10 +248,10 @@ impl Page for ButtonPage {
                 .flatten();
             return self.toggled(value);
         }
-        let Some(index) = self.buttons.iter().position(|(id, _, _)| *id == node) else {
+        let Some(index) = self.buttons.iter().position(|(id, _)| *id == node) else {
             return false;
         };
-        let (id, button, _) = &mut self.buttons[index];
+        let (id, button) = &mut self.buttons[index];
         let command = button
             .handle_with_commands(
                 tree,

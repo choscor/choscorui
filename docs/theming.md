@@ -123,40 +123,51 @@ stays in effect. Invalid tokens include a negative or non-finite size, a
 `0..=1`. A `text_scale` that is not positive and finite returns
 `ThemeError::InvalidPreferences`.
 
-## Visual recipes and slots
+## Style recipes
 
-A visual recipe sets the appearance of a control and is separate from its
-behavior. A `ButtonRecipe` has two methods. `layout` returns a `SlotLayout`,
-and `paint_slot` paints one `Slot`.
+The `choscorui_controls::style` module holds one recipe system for every
+control. A recipe maps a `StyleQuery` and the tokens to a `ResolvedStyle`.
 
-`paint_button` paints the slots in the order of `Slot::ORDER`:
+A `StyleQuery` has these keys:
 
-1. `Background`
-2. `Icon`
-3. `Content`
-4. `Indicator`, which shows focus
-5. `Overlay`, which shows the pressed or disabled state
+- `kind`: the `ControlKind`, for example `Button` or `Select`.
+- `slot`: the part of the control, for example `Root`, `Trigger`, `Thumb`, or
+  `Item`.
+- `variant`: the control's variant enum, for example `ButtonVariant::Outline`.
+- `size`: a `ControlSize`. A control uses the subset that its reference
+  defines.
+- `state`: a `VisualState` bitset of hovered, pressed, focus-visible,
+  disabled, invalid, checked, indeterminate, selected, open, highlighted, and
+  focused.
 
-After the `Content` slot, `paint_button` calls your closure. The closure draws
-the label into `SlotLayout::content` with the recipe's alignment and color.
+A `ResolvedStyle` holds every visual value of one slot. These include the
+background, foreground, border, corner radii, shadows, ring, logical padding,
+minimum size, gap, text, icon size, opacity, cursor, and duration.
 
-A recipe receives only the `ButtonVisualState` (`enabled`, `hovered`,
-`pressed`, `focused`) and the resolved tokens. It cannot read input, focus,
-commands, or semantics. Thus a change of recipe at runtime does not change
-activation, keyboard handling, focus, or the accessibility tree. The tests in
-[recipe.rs](../crates/choscorui-controls/tests/recipe.rs) pin this rule.
+`Styles` is the registry and the cache:
 
-The toolkit has two built-in recipes:
+- `Styles::resolve` returns the style of a query. It caches the result by the
+  token fingerprint and the query, so paint does not compute a style again
+  for each node.
+- `Styles::set_recipe` registers a `Rc<dyn Recipe>` for one control kind in a
+  `RecipeSet`. A scope selects the set with the `recipes` token in a
+  `ThemeOverride`. Use `RecipeSet::DEFAULT` to replace a look globally.
+- A recipe returns `None` for a query that it does not style. The default
+  recipe then styles that query.
 
-- `ButtonStyle` paints a flat, square fill with an optional leading rail. It
-  has leading content and focus bars at the top and bottom.
-- `PillButtonRecipe` paints a rounded, elevated button with a trailing icon
-  badge and centered content. It has an outset focus ring and an overlay for
-  the pressed and disabled states.
+A recipe sees only the query and the tokens. It cannot read input, focus,
+commands, or semantics.
 
-Other controls take a style struct with one color for each state. Examples
-are `CheckboxStyle`, `TextFieldStyle`, `SliderStyle`, and `TabStyle`. Make
-these styles from tokens in the same way.
+The default recipe gives each control the reference values. The focus-visible
+state sets the border to `ring` and adds a 3 pt ring at the ring alpha. The
+invalid state uses a `destructive` ring at 20% (40% in dark) and a
+`destructive` border. The disabled state sets the opacity to 50%. With
+`motion.reduced`, every duration is zero.
+
+`paint_slot` is the general slot painter. It paints the drop shadows, the
+ring, the background, the inset shadows, and the border, in that order. Then
+it calls a closure with the box inside the padding. `draw_text` and
+`draw_icon` draw the content of a slot.
 
 ## Animation
 
@@ -268,70 +279,46 @@ change. `set_instance` gives an override to one node in the same way.
 
 ### A custom button look
 
-Implement `ButtonRecipe` to change how a button paints. The recipe sees only
-the visual state and the tokens:
+Implement `Recipe` to change how a control paints. The recipe sees only the
+style query and the tokens. Return `None` for a slot that the default recipe
+must style:
 
 ```rust
 struct OutlineRecipe;
 
-impl ButtonRecipe for OutlineRecipe {
-    fn layout(&self, bounds: Rect, state: ButtonVisualState, tokens: &DesignTokens) -> SlotLayout {
-        SlotLayout {
-            content: bounds.inset(tokens.spacing),
-            alignment: ContentAlignment::Center,
-            icon: None,
-            content_color: if state.enabled {
-                tokens.accent
-            } else {
-                tokens.content.with_alpha(0.4)
-            },
+impl Recipe for OutlineRecipe {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        if query.slot != Slot::Root {
+            return None;
         }
-    }
-
-    fn paint_slot(&self, slot: Slot, list: &mut DisplayList, context: &SlotContext<'_>) {
-        let tokens = context.tokens;
-        match slot {
-            Slot::Background if context.state.pressed => {
-                let _ = list.fill_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    tokens.accent.with_alpha(0.15),
-                );
-            }
-            Slot::Indicator => {
-                let width = if context.state.focused {
-                    tokens.border_width * 2.0
-                } else {
-                    tokens.border_width
-                };
-                let _ = list.stroke_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    context.layout.content_color,
-                    width,
-                );
-            }
-            _ => {}
+        let mut style = ResolvedStyle::new(tokens);
+        style.foreground = tokens.color(ColorRole::Primary);
+        style.border = tokens.color(ColorRole::Primary);
+        style.border_width = if query.state.focus_visible() { 2.0 } else { 1.0 };
+        style.radius = Corners::all(tokens.radius);
+        style.padding = Edges::axes(tokens.space(3.0), 0.0);
+        style.min_height = tokens.space(9.0);
+        if query.state.pressed() {
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15);
         }
+        if query.state.disabled() {
+            style.opacity = 0.5;
+        }
+        Some(style)
     }
 }
 ```
 
-Paint the button with `paint_button`. The last argument draws the label:
+Register the recipe for the button kind. Then paint the button through a
+`PaintContext`:
 
 ```rust
-let state = button.visual_state(&tree, node);
-paint_button(
-    &OutlineRecipe,
-    &mut outline,
-    rect(10.0, 10.0, 120.0, 32.0),
-    state,
-    &tokens,
-    |_, _| {},
-);
+styles.set_recipe(RecipeSet::DEFAULT, ControlKind::Button, Rc::new(OutlineRecipe));
+let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+button.paint(&mut cx, &tree, node);
 ```
 
-The test paints the same button with `PillButtonRecipe` and gets different
+The test paints the same button with the default recipe and gets different
 display commands. Then it presses Enter, and the button still returns its
 command.
 

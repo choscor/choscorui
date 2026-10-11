@@ -41,7 +41,7 @@ Dependencies: `unicode-segmentation` only. See [Dependency rule](#dependency-rul
 
 ### choscorui-controls
 
-`choscorui-controls` contains the behavior of each control: input, focus, value, validation, and semantics. Painting is separate, through styles and recipes such as `ButtonRecipe` and `paint_button`. The crate also has `CommandRegistry` with shortcut scopes, the item views, dialogs, popups, the toolbar and status bar, `DockLayout`, `CanvasView`, and the `CustomControl` extension point. The [controls reference](controls.md) lists each control.
+`choscorui-controls` contains the behavior of each control: input, focus, value, validation, and semantics. Painting is separate. The `style` module resolves a `ResolvedStyle` for each control kind, slot, variant, size, and visual state through a cached `Recipe`, and `paint_slot` paints it. The crate also has `CommandRegistry` with shortcut scopes, the item views, dialogs, popups, the toolbar and status bar, `DockLayout`, `CanvasView`, and the `CustomControl` extension point. The [controls reference](controls.md) lists each control.
 
 Dependencies: `choscorui-core` only.
 

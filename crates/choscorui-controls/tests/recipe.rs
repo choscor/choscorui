@@ -1,37 +1,43 @@
+//! A recipe changes only how a control paints. Swapping recipes or themes
+//! in the middle of an interaction leaves activation, focus, keyboard
+//! handling, and semantics unchanged.
+
 use choscorui_controls::{
-    Button, ButtonDecoration, ButtonInput, ButtonRecipe, ButtonStyle, ButtonVisualState, CommandId,
-    ContentAlignment, PillButtonRecipe, SemanticAction, Slot, SlotContext, SlotLayout,
-    paint_button,
+    Button, ButtonInput, ButtonVariant, CommandId, ControlKind, Corners, EstimatedText,
+    PaintContext, Recipe, ResolvedStyle, SemanticAction, Slot, StyleQuery, Styles,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent, NodeId, Point,
-    Rect, Size, ThemeInvalidation, ThemeResolver, Tree,
+    Color, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent, NodeId, Point, RecipeSet,
+    Rect, ShadowLayers, Size, ThemeInvalidation, ThemeOverride, ThemeResolver, Tree,
 };
-use std::cell::RefCell;
+use std::rc::Rc;
 
 fn setup() -> (Tree, NodeId, Button) {
     let mut tree = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(300.0, 100.0)));
     let id = tree
         .attach(
             tree.root(),
-            Rect::new(Point::new(10.0, 10.0), Size::new(200.0, 44.0)),
+            Rect::new(Point::new(10.0, 10.0), Size::new(200.0, 36.0)),
         )
         .unwrap();
     tree.set_focusable(id, true).unwrap();
     (tree, id, Button::new("Run", CommandId(7)))
 }
 
-fn flat() -> ButtonStyle {
-    ButtonStyle {
-        normal: Color::rgba8(40, 140, 230, 255),
-        hover: Color::rgba8(80, 170, 245, 255),
-        pressed: Color::rgba8(20, 95, 175, 255),
-        disabled: Color::rgba8(90, 90, 90, 255),
-        focus: Color::rgba8(255, 255, 255, 255),
-        decoration: ButtonDecoration::LeadingRail {
-            width: 6.0,
-            color: Color::rgba8(230, 70, 90, 255),
-        },
+/// A flat look: square corners, no shadow, a thick leading rail as border.
+struct Flat;
+
+impl Recipe for Flat {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        let mut style = ResolvedStyle::new(tokens);
+        style.background = Color::rgba8(40, 140, 230, 255);
+        style.radius = Corners::ZERO;
+        style.shadow = ShadowLayers::NONE;
+        style.min_height = 44.0;
+        if query.state.pressed() {
+            style.background = Color::rgba8(20, 95, 175, 255);
+        }
+        Some(style)
     }
 }
 
@@ -41,7 +47,7 @@ fn kinds(list: &DisplayList) -> Vec<&'static str> {
         .map(|command| match command {
             DisplayCommand::FillRect { .. } => "rect",
             DisplayCommand::FillRoundedRect { .. } => "rounded",
-            DisplayCommand::StrokeRoundedRect { .. } => "ring",
+            DisplayCommand::StrokeRoundedRect { .. } => "stroke",
             DisplayCommand::DrawShadow { .. } => "shadow",
             DisplayCommand::DrawText { .. } => "text",
             _ => "other",
@@ -50,34 +56,33 @@ fn kinds(list: &DisplayList) -> Vec<&'static str> {
 }
 
 fn paint(
-    recipe: &dyn ButtonRecipe,
-    state: ButtonVisualState,
+    button: &Button,
+    tree: &Tree,
+    id: NodeId,
     tokens: &DesignTokens,
+    styles: &Styles,
 ) -> DisplayList {
     let mut list = DisplayList::new();
-    let bounds = Rect::new(Point::new(10.0, 10.0), Size::new(200.0, 44.0));
-    paint_button(recipe, &mut list, bounds, state, tokens, |list, layout| {
-        list.draw_text(
-            Point::new(layout.content.origin.x, layout.content.origin.y + 20.0),
-            "Run",
-            "Helvetica",
-            16.0,
-            layout.content_color,
-        )
-        .unwrap();
-    });
+    let mut cx = PaintContext::new(
+        &mut list,
+        tree.bounds(id).unwrap(),
+        tokens,
+        styles,
+        &EstimatedText,
+    );
+    button.paint(&mut cx, tree, id);
     list
 }
 
 #[test]
 fn swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantics() {
-    let (mut tree, id, mut button) = setup();
+    let (mut tree, id, button) = setup();
+    let mut button = button.with_variant(ButtonVariant::Outline);
     let mut themes = ThemeResolver::new(DesignTokens::dark());
-    let pill = PillButtonRecipe::default();
-    let style = flat();
-    let mut recipe: &dyn ButtonRecipe = &style;
+    let mut styles = Styles::new();
 
-    tree.set_focus(Some(id)).unwrap();
+    tree.focus_next(false).unwrap();
+    assert!(tree.focus_visible(id));
     let before = button.semantics(&tree, id);
     let down = KeyEvent::Down {
         key: Key::Space,
@@ -87,8 +92,19 @@ fn swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantic
         .handle(&mut tree, id, ButtonInput::Key(down))
         .unwrap();
     let state = button.visual_state(&tree, id);
-    assert!(state.pressed && state.focused);
-    let flat_list = paint(recipe, state, &themes.resolve(&tree, id).unwrap());
+    assert!(state.pressed() && state.focus_visible());
+    let default_list = paint(
+        &button,
+        &tree,
+        id,
+        &themes.resolve(&tree, id).unwrap(),
+        &styles,
+    );
+    assert!(
+        kinds(&default_list).contains(&"shadow"),
+        "outline elevation"
+    );
+    assert!(kinds(&default_list).contains(&"stroke"), "focus ring");
 
     // Switch theme and recipe while the key is still held.
     assert_eq!(
@@ -97,13 +113,16 @@ fn swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantic
             .unwrap(),
         ThemeInvalidation::Paint
     );
-    recipe = &pill;
-    let tokens = themes.resolve(&tree, id).unwrap();
-    let pill_list = paint(recipe, button.visual_state(&tree, id), &tokens);
-    assert_ne!(kinds(&flat_list), kinds(&pill_list));
-    assert!(!kinds(&flat_list).contains(&"rounded"));
-    assert!(kinds(&pill_list).contains(&"ring"), "focus ring indicator");
-    assert!(kinds(&pill_list).contains(&"shadow"), "elevation");
+    styles.set_recipe(RecipeSet::DEFAULT, ControlKind::Button, Rc::new(Flat));
+    let flat_list = paint(
+        &button,
+        &tree,
+        id,
+        &themes.resolve(&tree, id).unwrap(),
+        &styles,
+    );
+    assert_ne!(kinds(&default_list), kinds(&flat_list));
+    assert!(!kinds(&flat_list).contains(&"shadow"));
 
     // The held Space still activates exactly once after the swap.
     let up = KeyEvent::Up { key: Key::Space };
@@ -126,51 +145,40 @@ fn swapping_recipes_mid_interaction_keeps_activation_focus_keyboard_and_semantic
 }
 
 #[test]
-fn slots_paint_in_order_and_layouts_differ_structurally() {
-    struct Recorder(RefCell<Vec<Slot>>);
-    impl ButtonRecipe for Recorder {
-        fn layout(&self, bounds: Rect, _: ButtonVisualState, tokens: &DesignTokens) -> SlotLayout {
-            SlotLayout {
-                content: bounds,
-                alignment: ContentAlignment::Leading,
-                icon: None,
-                content_color: tokens.color(ColorRole::Foreground),
-            }
-        }
-        fn paint_slot(&self, slot: Slot, _: &mut DisplayList, _: &SlotContext<'_>) {
-            self.0.borrow_mut().push(slot);
-        }
-    }
-    let recorder = Recorder(RefCell::new(Vec::new()));
-    let state = ButtonVisualState {
-        enabled: true,
-        hovered: false,
-        pressed: false,
-        focused: false,
-    };
-    let list = paint(&recorder, state, &DesignTokens::dark());
-    assert_eq!(*recorder.0.borrow(), Slot::ORDER);
-    assert_eq!(kinds(&list), vec!["text"], "label drawn by the caller");
-
-    let tokens = DesignTokens::light();
-    let bounds = Rect::new(Point::new(0.0, 0.0), Size::new(200.0, 44.0));
-    let pill = PillButtonRecipe::default().layout(bounds, state, &tokens);
-    let flat_layout = flat().layout(bounds, state, &tokens);
-    assert_eq!(pill.alignment, ContentAlignment::Center);
-    assert_eq!(flat_layout.alignment, ContentAlignment::Leading);
-    assert!(pill.icon.is_some() && flat_layout.icon.is_none());
-    assert!(pill.content.size.width < flat_layout.content.size.width);
-
-    // Disabled pill adds an overlay; unfocused flat has no indicator bars.
-    let disabled = ButtonVisualState {
-        enabled: false,
-        ..state
-    };
-    let pill_disabled = paint(&PillButtonRecipe::default(), disabled, &tokens);
-    assert_eq!(kinds(&pill_disabled).last(), Some(&"rounded"));
-    assert!(!kinds(&pill_disabled).contains(&"shadow"));
-    assert_eq!(
-        kinds(&paint(&flat(), state, &tokens)),
-        vec!["rect", "rect", "text"]
+fn a_scope_selects_its_recipe_set() {
+    let (mut tree, id, button) = setup();
+    let mut themes = ThemeResolver::new(DesignTokens::light());
+    let mut styles = Styles::new();
+    let set = RecipeSet(3);
+    styles.set_recipe(set, ControlKind::Button, Rc::new(Flat));
+    let outside = paint(
+        &button,
+        &tree,
+        id,
+        &themes.resolve(&tree, id).unwrap(),
+        &styles,
     );
+    themes
+        .set_scope(
+            &mut tree,
+            id,
+            ThemeOverride {
+                recipes: Some(set),
+                ..ThemeOverride::default()
+            },
+        )
+        .unwrap();
+    let inside = paint(
+        &button,
+        &tree,
+        id,
+        &themes.resolve(&tree, id).unwrap(),
+        &styles,
+    );
+    assert!(kinds(&outside).contains(&"rounded"));
+    assert_eq!(kinds(&inside).first(), Some(&"rect"), "square fill");
+    // The query the recipe saw holds only visual keys.
+    let query = button.query(button.visual_state(&tree, id));
+    assert_eq!(query.slot, Slot::Root);
+    assert_eq!(query.kind, ControlKind::Button);
 }

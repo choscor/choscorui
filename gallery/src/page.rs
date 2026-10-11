@@ -3,16 +3,16 @@
 //! category files.
 
 use choscorui::controls::{
-    Button, ButtonDecoration, ButtonInput, ButtonStyle, CheckboxStyle, CommandId, HeaderStyle,
-    MenuStyle, ProgressStyle, RadioStyle, ScrollAreaStyle, ShortcutModifiers, SliderStyle,
-    SpinBoxStyle, SplitterStyle, TabStyle, TextFieldStyle, TextFieldVisualState, TextItemDelegate,
-    ValidationState,
+    Button, ButtonInput, ButtonVariant, CheckboxStyle, CommandId, EstimatedText, HeaderStyle,
+    MenuStyle, PaintContext, ProgressStyle, RadioStyle, ScrollAreaStyle, ShortcutModifiers,
+    SliderStyle, SpinBoxStyle, SplitterStyle, Styles, TabStyle, TextFieldStyle,
+    TextFieldVisualState, TextItemDelegate, TextMeasure, ValidationState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
     LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
     SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle,
-    Tree, lerp_color,
+    Tree, TypeSpec, lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
@@ -158,15 +158,52 @@ pub struct Env<'a> {
     pub measure_cache: &'a MeasureCache,
 }
 
-/// Remembers text widths so painting does not reshape every frame.
+/// Text, size and tracking bits, weight, and family of a measured line.
+type SpecKey = (String, u64, u16, &'static str);
+
+/// Remembers text widths and resolved styles so painting does not reshape
+/// text or resolve recipes every frame.
 #[derive(Default)]
 pub struct MeasureCache {
     widths: RefCell<HashMap<(String, u64), f64>>,
+    specs: RefCell<HashMap<SpecKey, f64>>,
+    pub styles: Styles,
 }
 
 impl MeasureCache {
     pub fn clear(&self) {
         self.widths.borrow_mut().clear();
+        self.specs.borrow_mut().clear();
+    }
+}
+
+impl TextMeasure for Env<'_> {
+    fn width(&self, text: &str, spec: &TypeSpec) -> f64 {
+        if text.is_empty() {
+            return 0.0;
+        }
+        let key = (
+            text.to_owned(),
+            spec.size.to_bits() ^ spec.tracking.to_bits(),
+            spec.weight.0,
+            spec.family.name(),
+        );
+        if let Some(width) = self.measure_cache.specs.borrow().get(&key) {
+            return *width;
+        }
+        let width = self
+            .shaper
+            .shape(text, &spec.text_style(), None)
+            .map_or_else(
+                |_| EstimatedText.width(text, spec),
+                |layout| layout.size().width,
+            );
+        let mut specs = self.measure_cache.specs.borrow_mut();
+        if specs.len() > 4096 {
+            specs.clear();
+        }
+        specs.insert(key, width);
+        width
     }
 }
 
@@ -178,6 +215,14 @@ pub enum Align {
 }
 
 impl Env<'_> {
+    /// A paint context for `bounds` with this page's tokens, styles,
+    /// direction, and time.
+    pub fn cx<'b>(&'b self, list: &'b mut DisplayList, bounds: Rect) -> PaintContext<'b> {
+        PaintContext::new(list, bounds, self.tokens, &self.measure_cache.styles, self)
+            .rtl(self.rtl())
+            .time(self.now.as_secs_f64())
+    }
+
     /// Text and glyph color on an accent fill. Every theme's accent is a
     /// saturated mid-tone, so white keeps contrast in light and dark modes.
     pub fn on_accent(&self) -> Color {
@@ -301,21 +346,6 @@ impl Env<'_> {
             self.tokens.color(ColorRole::Primary),
             2.0,
         );
-    }
-
-    pub fn button_style(&self) -> ButtonStyle {
-        ButtonStyle {
-            normal: self.mix(0.08),
-            hover: self.mix(0.16),
-            pressed: lerp_color(
-                self.tokens.color(ColorRole::Card),
-                self.tokens.color(ColorRole::Primary),
-                0.5,
-            ),
-            disabled: self.tokens.color(ColorRole::Card).with_alpha(0.45),
-            focus: self.tokens.color(ColorRole::Primary),
-            decoration: ButtonDecoration::Plain,
-        }
     }
 
     pub fn checkbox_style(&self) -> CheckboxStyle {
@@ -649,7 +679,8 @@ impl Push {
     pub fn new(tree: &mut Tree, parent: NodeId, label: impl Into<String>, env: &Env<'_>) -> Self {
         let label = label.into();
         let node = node(tree, parent, true);
-        let mut button = Button::new(label.clone(), CommandId(0));
+        let mut button =
+            Button::new(label.clone(), CommandId(0)).with_variant(ButtonVariant::Outline);
         let _ = button.set_enabled(tree, node, env.enabled);
         Self {
             node,
@@ -694,14 +725,8 @@ impl Push {
         let Some(bounds) = tree.bounds(self.node).filter(|b| b.size.width > 0.0) else {
             return;
         };
-        let state = self.button.visual_state(tree, self.node);
-        env.button_style().paint(list, bounds, state);
-        let color = if state.enabled {
-            env.tokens.color(ColorRole::Foreground)
-        } else {
-            env.tokens.color(ColorRole::Foreground).with_alpha(0.4)
-        };
-        env.text(list, bounds, &self.label, env.body(), color, Align::Center);
+        self.button
+            .paint(&mut env.cx(list, bounds), tree, self.node);
     }
 
     pub fn semantics(&self, tree: &Tree) -> (NodeId, SemanticNode) {

@@ -3,13 +3,16 @@
 //! numeric (LCD) display, focus frame, size grip, and key-sequence capture.
 //! Each documents its value, keyboard, and accessibility contract.
 
+use crate::style::{
+    ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
+};
 use crate::{
-    ButtonRecipe, ButtonVisualState, CommandId, CommandRegistry, ContentAlignment, IntegerRange,
-    NumberInput, Shortcut, ShortcutModifiers, Slot, SlotContext, SlotLayout, ValidationState,
+    CommandId, CommandRegistry, IntegerRange, NumberInput, Shortcut, ShortcutModifiers,
+    ValidationState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayList, Key, Locale, NodeId, Path, Point, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    Color, ColorRole, DisplayList, Icon, Key, Locale, NodeId, Path, Point, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -671,79 +674,63 @@ impl ButtonGroup {
     }
 }
 
-/// Command-link button recipe: an arrow glyph, a title, and a description
-/// line, with hover fill and focus ring. Paint the title and description
-/// into the content rect (top and bottom halves).
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CommandLinkRecipe;
+/// The look of a command link: an arrow, a title, and a description line
+/// in an item row. Behavior comes from a [`crate::Button`] on the same
+/// node.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CommandLink {
+    pub title: String,
+    pub description: String,
+}
 
-impl ButtonRecipe for CommandLinkRecipe {
-    fn layout(&self, bounds: Rect, _: ButtonVisualState, tokens: &DesignTokens) -> SlotLayout {
-        let icon = Rect::new(
-            Point::new(
-                bounds.origin.x + tokens.spacing,
-                bounds.origin.y + tokens.spacing,
-            ),
-            Size::new(20.0, 20.0),
-        );
-        SlotLayout {
-            content: Rect::new(
-                Point::new(icon.origin.x + 28.0, bounds.origin.y + tokens.spacing),
-                Size::new(
-                    (bounds.size.width - tokens.spacing * 2.0 - 28.0).max(0.0),
-                    (bounds.size.height - tokens.spacing * 2.0).max(0.0),
-                ),
-            ),
-            alignment: ContentAlignment::Leading,
-            icon: Some(icon),
-            content_color: tokens.color(ColorRole::Primary),
+impl CommandLink {
+    pub fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            description: description.into(),
         }
     }
-    fn paint_slot(&self, slot: Slot, list: &mut DisplayList, context: &SlotContext<'_>) {
-        let tokens = context.tokens;
-        match slot {
-            Slot::Background if context.state.hovered || context.state.pressed => {
-                let _ = list.fill_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    tokens
-                        .color(ColorRole::Card)
-                        .with_alpha(if context.state.pressed { 0.9 } else { 0.6 }),
-                );
-            }
-            Slot::Icon => {
-                if let Some(icon) = context.layout.icon {
-                    let mid = icon.origin.y + icon.size.height / 2.0;
-                    let mut path = Path::new();
-                    path.move_to(Point::new(icon.origin.x + 2.0, mid))
-                        .line_to(Point::new(icon.origin.x + 16.0, mid))
-                        .move_to(Point::new(icon.origin.x + 10.0, mid - 6.0))
-                        .line_to(Point::new(icon.origin.x + 16.0, mid))
-                        .line_to(Point::new(icon.origin.x + 10.0, mid + 6.0));
-                    let _ = list.stroke_path(
-                        path,
-                        choscorui_core::Paint::Solid(tokens.color(ColorRole::Primary)),
-                        choscorui_core::StrokeStyle::new(2.0),
-                    );
-                }
-            }
-            Slot::Indicator if context.state.focused => {
-                let _ = list.stroke_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    tokens.color(ColorRole::Primary),
-                    2.0,
-                );
-            }
-            Slot::Overlay if !context.state.enabled => {
-                let _ = list.fill_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    tokens.color(ColorRole::Background).with_alpha(0.5),
-                );
-            }
-            _ => {}
-        }
+
+    /// Paints the link in `state`; hover and press highlight the row.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        let query = StyleQuery::new(ControlKind::Item, Slot::Root)
+            .variant(ItemVariant::Outline)
+            .state(state.set(VisualState::HIGHLIGHTED, true));
+        let root = cx.style(query);
+        let media = cx.style(query.slot(Slot::Media));
+        let mut title = cx.style(query.slot(Slot::Title));
+        title.foreground = cx.tokens.color(ColorRole::Primary);
+        let description = cx.style(query.slot(Slot::Description));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &root, |cx, inner| {
+            let icon = media.icon_size;
+            let (left, right) = if cx.rtl {
+                (inner.max_x() - icon, inner.origin.x)
+            } else {
+                (inner.origin.x, inner.origin.x + icon + root.gap)
+            };
+            let arrow = if cx.rtl {
+                Icon::ArrowLeft
+            } else {
+                Icon::ArrowRight
+            };
+            let mut arrow_style = media;
+            arrow_style.foreground = title.foreground;
+            cx.icon(
+                Rect::from_xywh(left, inner.origin.y, icon, title.text.line_height),
+                arrow,
+                &arrow_style,
+            );
+            let text = Rect::from_xywh(
+                right,
+                inner.origin.y,
+                (inner.size.width - icon - root.gap).max(0.0),
+                title.text.line_height,
+            );
+            cx.label(text, &self.title, &title, TextAlign::Start);
+            let below = text.translate(0.0, title.text.line_height + 4.0);
+            cx.label(below, &self.description, &description, TextAlign::Start);
+        });
     }
 }
 

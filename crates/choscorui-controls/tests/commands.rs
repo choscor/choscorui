@@ -96,10 +96,10 @@ fn command_bound_button_reads_current_state_without_manual_sync() {
             .enabled
     );
     assert!(
-        !button
+        button
             .visual_state_with_commands(&tree, node, &commands)
             .unwrap()
-            .enabled
+            .disabled()
     );
     assert_eq!(
         button

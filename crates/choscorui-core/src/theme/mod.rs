@@ -89,6 +89,18 @@ pub struct DesignTokens {
     pub font_mono: FontFamily,
     pub motion: MotionTokens,
     pub contrast: Contrast,
+    /// The recipe set that paints controls. Controls map it to their
+    /// registered recipes; [`RecipeSet::DEFAULT`] is the built-in look.
+    pub recipes: RecipeSet,
+}
+
+/// Names a set of control recipes, so that one scope can paint with
+/// replaced recipes. The set itself lives with the controls.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RecipeSet(pub u32);
+
+impl RecipeSet {
+    pub const DEFAULT: Self = Self(0);
 }
 
 impl DesignTokens {
@@ -108,6 +120,7 @@ impl DesignTokens {
             font_mono: FontFamily::SYSTEM_MONO,
             motion: MotionTokens::default(),
             contrast: Contrast::Normal,
+            recipes: RecipeSet::DEFAULT,
         }
     }
 
@@ -192,6 +205,31 @@ impl DesignTokens {
         color.with_alpha(self.ring_alpha)
     }
 
+    /// A fingerprint of every token, for caches keyed by theme.
+    pub fn fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (self.base, self.scheme, self.palette).hash(&mut hasher);
+        for value in [
+            self.radius,
+            self.spacing,
+            self.border_width,
+            self.ring_width,
+            self.ring_alpha,
+            self.text_scale,
+            self.motion.easing.x1,
+            self.motion.easing.y1,
+            self.motion.easing.x2,
+            self.motion.easing.y2,
+        ] {
+            value.to_bits().hash(&mut hasher);
+        }
+        (self.font_sans, self.font_mono, self.recipes).hash(&mut hasher);
+        (self.motion.duration_ms, self.motion.reduced).hash(&mut hasher);
+        (self.contrast == Contrast::High).hash(&mut hasher);
+        hasher.finish()
+    }
+
     /// The duration of a standard transition, zero with reduced motion.
     pub fn duration(&self) -> std::time::Duration {
         std::time::Duration::from_millis(u64::from(self.motion.duration_ms))
@@ -216,6 +254,7 @@ pub struct ThemeOverride {
     pub font_mono: Option<FontFamily>,
     pub motion: Option<MotionTokens>,
     pub contrast: Option<Contrast>,
+    pub recipes: Option<RecipeSet>,
 }
 
 impl ThemeOverride {
@@ -445,6 +484,9 @@ fn apply(mut tokens: DesignTokens, values: ThemeOverride) -> DesignTokens {
     }
     if let Some(value) = values.contrast {
         tokens.contrast = value;
+    }
+    if let Some(value) = values.recipes {
+        tokens.recipes = value;
     }
     tokens
 }

@@ -2,16 +2,17 @@
 //! test is one recipe; keep the document's snippets in sync with these bodies.
 
 use choscorui::controls::{
-    Button, ButtonInput, ButtonRecipe, ButtonVisualState, CommandId, CommandRegistry, CommandState,
-    ContentAlignment, ItemDelegate, ItemState, ItemView, PillButtonRecipe, Shortcut,
-    ShortcutModifiers, ShortcutScope, Slot, SlotContext, SlotLayout, TextField, TextFieldInput,
-    ValidationKind, ValidationState, paint_button,
+    Button, ButtonInput, CommandId, CommandRegistry, CommandState, ControlKind, Corners, Edges,
+    EstimatedText, ItemDelegate, ItemState, ItemView, PaintContext, Recipe, ResolvedStyle,
+    Shortcut, ShortcutModifiers, ShortcutScope, Slot, StyleQuery, Styles, TextField,
+    TextFieldInput, ValidationKind, ValidationState,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, ItemModel, Key, Locale,
-    Point, Rect, Role, SemanticRole, Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
-    Value,
+    Point, RecipeSet, Rect, Role, SemanticRole, Size, StringListModel, ThemeOverride,
+    ThemeResolver, Tree, Value,
 };
+use std::rc::Rc;
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
@@ -83,48 +84,32 @@ fn scoped_override_restyles_one_subtree() {
     );
 }
 
-// Recipe: a custom button recipe (outline style).
+// Recipe: a custom button look.
 struct OutlineRecipe;
 
-impl ButtonRecipe for OutlineRecipe {
-    fn layout(&self, bounds: Rect, state: ButtonVisualState, tokens: &DesignTokens) -> SlotLayout {
-        SlotLayout {
-            content: bounds.inset(tokens.spacing),
-            alignment: ContentAlignment::Center,
-            icon: None,
-            content_color: if state.enabled {
-                tokens.color(ColorRole::Primary)
-            } else {
-                tokens.color(ColorRole::Foreground).with_alpha(0.4)
-            },
+impl Recipe for OutlineRecipe {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        if query.slot != Slot::Root {
+            return None;
         }
-    }
-
-    fn paint_slot(&self, slot: Slot, list: &mut DisplayList, context: &SlotContext<'_>) {
-        let tokens = context.tokens;
-        match slot {
-            Slot::Background if context.state.pressed => {
-                let _ = list.fill_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    tokens.color(ColorRole::Primary).with_alpha(0.15),
-                );
-            }
-            Slot::Indicator => {
-                let width = if context.state.focused {
-                    tokens.border_width * 2.0
-                } else {
-                    tokens.border_width
-                };
-                let _ = list.stroke_rounded_rect(
-                    context.bounds,
-                    tokens.radius,
-                    context.layout.content_color,
-                    width,
-                );
-            }
-            _ => {}
+        let mut style = ResolvedStyle::new(tokens);
+        style.foreground = tokens.color(ColorRole::Primary);
+        style.border = tokens.color(ColorRole::Primary);
+        style.border_width = if query.state.focus_visible() {
+            2.0
+        } else {
+            1.0
+        };
+        style.radius = Corners::all(tokens.radius);
+        style.padding = Edges::axes(tokens.space(3.0), 0.0);
+        style.min_height = tokens.space(9.0);
+        if query.state.pressed() {
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15);
         }
+        if query.state.disabled() {
+            style.opacity = 0.5;
+        }
+        Some(style)
     }
 }
 
@@ -133,30 +118,26 @@ fn custom_recipe_changes_paint_but_not_behavior() {
     let tokens = brand(false);
     let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
     let node = tree
-        .attach(tree.root(), rect(10.0, 10.0, 120.0, 32.0))
+        .attach(tree.root(), rect(10.0, 10.0, 120.0, 36.0))
         .unwrap();
     tree.set_focusable(node, true).unwrap();
     let mut button = Button::new("Save", CommandId(1));
-    let state = button.visual_state(&tree, node);
-    let mut outline = DisplayList::new();
-    let mut pill = DisplayList::new();
-    paint_button(
-        &OutlineRecipe,
-        &mut outline,
-        rect(10.0, 10.0, 120.0, 32.0),
-        state,
-        &tokens,
-        |_, _| {},
+    let paint = |styles: &Styles, tree: &Tree, button: &Button| {
+        let mut list = DisplayList::new();
+        let bounds = tree.bounds(node).unwrap();
+        let mut cx = PaintContext::new(&mut list, bounds, &tokens, styles, &EstimatedText);
+        button.paint(&mut cx, tree, node);
+        list
+    };
+    let mut styles = Styles::new();
+    let default_look = paint(&styles, &tree, &button);
+    styles.set_recipe(
+        RecipeSet::DEFAULT,
+        ControlKind::Button,
+        Rc::new(OutlineRecipe),
     );
-    paint_button(
-        &PillButtonRecipe::default(),
-        &mut pill,
-        rect(10.0, 10.0, 120.0, 32.0),
-        state,
-        &tokens,
-        |_, _| {},
-    );
-    assert_ne!(outline.commands(), pill.commands());
+    let outline = paint(&styles, &tree, &button);
+    assert_ne!(outline.commands(), default_look.commands());
     // Behavior belongs to the control, whatever paints it.
     tree.set_focus(Some(node)).unwrap();
     let enter = choscorui::core::KeyEvent::Down {
