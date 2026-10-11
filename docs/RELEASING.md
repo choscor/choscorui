@@ -4,7 +4,7 @@ This is the checklist for publishing a choscorui release on macOS, the only supp
 
 ## 1. Preconditions
 
-- [ ] `LICENSE` (MIT) and `NOTICE` are current, and the archive contains both (see [LICENSES.md](LICENSES.md)).
+- [ ] `LICENSE-MIT`, `LICENSE-APACHE`, and `NOTICE` are current, and the archive contains all three (see [LICENSES.md](LICENSES.md)).
 - [ ] The license audit has been re-run: `cargo tree --workspace -e normal --prefix none | sort -u`, `otool -L` on the packaged binaries, and the archive contents all match [LICENSES.md](LICENSES.md).
 - [ ] CI is green on `main` for both `macos-15` (arm64) and `macos-15-intel`.
 

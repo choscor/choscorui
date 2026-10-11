@@ -6,6 +6,7 @@ All notable changes to choscorui. The versioning policy is in [docs/VERSIONING.m
 
 ### Highlights
 
+- **License.** Dual licensed under MIT OR Apache-2.0 (previously MIT only).
 - **Safe facade.** Applications depend on `choscorui` alone. It forbids `unsafe`, exposes no native handles, and groups the API into `prelude`, `core`, `controls`, `compose`, and `platform`, plus `capabilities()`.
 - **macOS backend.** Built on hand-written AppKit, Core Graphics, and Core Text FFI, with these features:
   - Multiple windows, native menus, context menus, and dialogs.
@@ -47,7 +48,7 @@ All notable changes to choscorui. The versioning policy is in [docs/VERSIONING.m
 
 ### Upgrading
 
-This is the first release, so there is nothing to migrate. For later releases:
+This is the first release, so there is no code to migrate. The license changed from MIT to MIT OR Apache-2.0: you may now use choscorui under either license. For later releases:
 - Breaking changes are listed under **Breaking changes**, and deprecations under **Deprecated**, each with its replacement.
 - If a golden file changes in `crates/choscorui/tests/golden/`, the notes describe the behavior change.
 - New code should use `choscorui::prelude` and the facade modules rather than the flat root re-exports, which are kept only for compatibility.

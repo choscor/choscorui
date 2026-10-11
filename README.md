@@ -97,3 +97,9 @@ lines, so either limit becomes stricter as those prototype files are split.
 `bylaw.toml` keeps `choscorui-core` at the base of the workspace, permits the
 composition, controls, render, and platform crates to depend only on core, prevents libraries
 from depending on the gallery composition root, and rejects crate cycles.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in choscorui by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

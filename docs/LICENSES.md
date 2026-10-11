@@ -4,7 +4,7 @@ Last checked on 2026-10-08 against `Cargo.lock` (workspace and `samples/notes`),
 
 ## Project license
 
-choscorui is released under the MIT license ([`LICENSE`](../LICENSE)). The workspace sets `license = "MIT"` in `[workspace.package]`, every crate inherits it with `license.workspace = true`, and `samples/notes` declares it directly. `scripts/macos/package.sh` copies `LICENSE` and `NOTICE` into every archive.
+choscorui is dual licensed under `MIT OR Apache-2.0` ([`LICENSE-MIT`](../LICENSE-MIT) and [`LICENSE-APACHE`](../LICENSE-APACHE)), at the user's option. The workspace sets `license = "MIT OR Apache-2.0"` in `[workspace.package]`, every crate inherits it with `license.workspace = true`, and `samples/notes` declares it directly. `scripts/macos/package.sh` copies `LICENSE-MIT`, `LICENSE-APACHE`, and `NOTICE` into every archive.
 
 ## Rust crates in the build graph
 
