@@ -1,13 +1,14 @@
 //! Shared behavior for the controls that mount through [`ControlHost`]:
 //! press tracking for button-like parts, roving focus over a row of
-//! items, and the semantic node builder.
+//! items, the semantic node builder, and the popup reveal animation.
 //!
 //! [`ControlHost`]: crate::ControlHost
 
 use crate::custom::{ControlContext, ControlEvent};
+use crate::style::PaintContext;
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    DesignTokens, EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Transform,
 };
 
 /// What [`Press::event`] did with an event.
@@ -132,5 +133,79 @@ pub(crate) fn node(
         relations: Vec::new(),
         actions,
         text: None,
+    }
+}
+
+/// The open and close animation of a popup: fade, zoom from 95%, and a
+/// slide from the side it opens toward. Reduced motion skips it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Reveal {
+    pub open: bool,
+    /// When `open` last changed, in host time.
+    pub changed_at: f64,
+}
+
+impl Default for Reveal {
+    /// Closed since long ago: nothing animates.
+    fn default() -> Self {
+        Self {
+            open: false,
+            changed_at: f64::NEG_INFINITY,
+        }
+    }
+}
+
+impl Reveal {
+    pub fn set(&mut self, open: bool, time: f64) {
+        if self.open != open {
+            self.open = open;
+            self.changed_at = time;
+        }
+    }
+
+    /// How far the popup is shown at `time`, from 0 (hidden) to 1, after
+    /// easing.
+    pub fn progress(&self, tokens: &DesignTokens, duration_ms: u32, time: f64) -> f64 {
+        let linear = if tokens.motion.reduced || duration_ms == 0 {
+            1.0
+        } else {
+            ((time - self.changed_at) * 1000.0 / f64::from(duration_ms)).clamp(0.0, 1.0)
+        };
+        let eased = tokens.motion.easing.solve(linear);
+        if self.open { eased } else { 1.0 - eased }
+    }
+
+    /// True while the animation runs at `time`.
+    pub fn animating(&self, duration_ms: u32, time: f64) -> bool {
+        (time - self.changed_at) * 1000.0 < f64::from(duration_ms)
+    }
+
+    /// Paints `content` for `rect` at `progress`, sliding `slide` points
+    /// in from the offset `(dx, dy)` direction.
+    pub fn paint(
+        cx: &mut PaintContext<'_>,
+        rect: Rect,
+        progress: f64,
+        slide: (f64, f64),
+        content: impl FnOnce(&mut PaintContext<'_>),
+    ) {
+        if progress >= 1.0 {
+            content(cx);
+            return;
+        }
+        let scale = 0.95 + 0.05 * progress;
+        let center = rect.center();
+        let rest = 1.0 - progress;
+        let transform = Transform::translate(-center.x, -center.y)
+            .then(Transform::scale(scale, scale))
+            .then(Transform::translate(
+                center.x + slide.0 * rest,
+                center.y + slide.1 * rest,
+            ));
+        let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
+        let _ = cx.list.push_transform(transform);
+        content(cx);
+        let _ = cx.list.pop_transform();
+        let _ = cx.list.pop_opacity();
     }
 }

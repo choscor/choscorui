@@ -22,6 +22,8 @@ pub struct Harness {
     pub styles: Styles,
     pub direction: LayoutDirection,
     pub node: NodeId,
+    /// Host time in seconds for input and paint.
+    pub time: f64,
 }
 
 pub fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -49,6 +51,7 @@ impl Harness {
             styles: Styles::new(),
             direction,
             node,
+            time: 0.0,
         };
         let size = harness.measure();
         harness.place(rect(10.0, 10.0, size.width, size.height));
@@ -56,7 +59,15 @@ impl Harness {
     }
 
     pub fn env(&self) -> HostEnv<'_> {
-        HostEnv::new(&self.themes, &self.styles, &EstimatedText).direction(self.direction)
+        HostEnv::new(&self.themes, &self.styles, &EstimatedText)
+            .direction(self.direction)
+            .time(self.time)
+    }
+
+    /// Sets the time that input and paint see.
+    pub fn set_time(&mut self, time: f64) {
+        self.time = time;
+        self.host.set_time(time);
     }
 
     pub fn measure(&mut self) -> Size {

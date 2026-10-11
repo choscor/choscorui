@@ -51,6 +51,7 @@ page.switch = Công tắc
 page.toggle = Nút bật tắt
 page.toggle-group = Nhóm nút bật tắt
 page.kbd = Phím bàn phím
+page.select = Hộp chọn
 page.radio = Nhóm nút chọn
 page.tabs = Thẻ
 page.combobox = Hộp tổ hợp

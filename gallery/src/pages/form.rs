@@ -4,8 +4,8 @@
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    ControlSize, CustomControl, Kbd, KbdVariant, Orientation, Switch, Toggle, ToggleGroup,
-    ToggleItem, ToggleVariant,
+    ControlSize, CustomControl, Kbd, KbdVariant, ListEntry, Orientation, Select, Switch, Toggle,
+    ToggleGroup, ToggleItem, ToggleVariant,
 };
 use choscorui::core::{Icon, NodeId, Tree};
 
@@ -101,6 +101,71 @@ pub fn toggle_group(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn 
                         .with_orientation(Orientation::Vertical),
                 ),
             ],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
+fn fruits() -> Vec<ListEntry> {
+    vec![
+        ListEntry::group("Fruits"),
+        ListEntry::option("Apple"),
+        ListEntry::option("Banana"),
+        ListEntry::option("Blueberry"),
+        ListEntry::disabled("Grapes"),
+        ListEntry::option("Pineapple"),
+        ListEntry::Separator,
+        ListEntry::group("Vegetables"),
+        ListEntry::option("Carrot"),
+        ListEntry::option("Leek"),
+    ]
+}
+
+pub fn select(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let mut chosen = Select::new("Fruit", fruits()).with_placeholder("Select a fruit");
+    chosen.set_selected(Some(2));
+    let mut invalid = Select::new("Required fruit", fruits()).with_placeholder("Select a fruit");
+    invalid.set_invalid(true);
+    let zones = [
+        "Eastern Time",
+        "Central Time",
+        "Mountain Time",
+        "Pacific Time",
+        "Alaska Time",
+        "Hawaii Time",
+        "Greenwich Mean Time",
+        "Central European Time",
+        "Eastern European Time",
+        "India Standard Time",
+        "China Standard Time",
+        "Japan Standard Time",
+    ];
+    let rows: Vec<Row> = vec![
+        (
+            "Default size",
+            vec![
+                boxed(Select::new("Fruit", fruits()).with_placeholder("Select a fruit")),
+                boxed(chosen),
+            ],
+        ),
+        (
+            "Small size",
+            vec![boxed(
+                Select::new("Small fruit", fruits())
+                    .with_placeholder("Select a fruit")
+                    .with_size(ControlSize::Sm),
+            )],
+        ),
+        ("Invalid", vec![boxed(invalid)]),
+        (
+            "Scrolling list",
+            vec![boxed(
+                Select::new(
+                    "Time zone",
+                    zones.iter().map(|zone| ListEntry::option(*zone)).collect(),
+                )
+                .with_placeholder("Select a time zone"),
+            )],
         ),
     ];
     HostedPage::build(tree, parent, rows)

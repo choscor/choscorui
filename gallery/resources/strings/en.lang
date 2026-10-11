@@ -53,6 +53,7 @@ page.switch = Switch
 page.toggle = Toggle
 page.toggle-group = Toggle group
 page.kbd = Keyboard key
+page.select = Select
 page.radio = Radio group
 page.tabs = Tabs
 page.combobox = Combobox

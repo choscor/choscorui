@@ -4,6 +4,8 @@
 
 use crate::page::{Column, Env, Page, node};
 use choscorui::controls::{ControlHost, CustomControl, ShortcutModifiers};
+use std::cell::Cell;
+
 use choscorui::core::{
     Constraints, DisplayList, Key, KeyEvent, NodeId, Point, PointerEvent, Rect, SemanticAction,
     SemanticNode, Size, ThemeResolver, Tree,
@@ -17,6 +19,8 @@ pub struct HostedPage {
     /// Each row's caption node, caption, and control nodes.
     rows: Vec<(NodeId, &'static str, Vec<NodeId>)>,
     enabled: bool,
+    /// Whether a control still animated at the last paint.
+    busy: Cell<bool>,
 }
 
 impl HostedPage {
@@ -40,6 +44,7 @@ impl HostedPage {
             host,
             rows,
             enabled: true,
+            busy: Cell::new(false),
         })
     }
 
@@ -112,6 +117,8 @@ impl Page for HostedPage {
         }
         let themes = ThemeResolver::new(*env.tokens);
         self.host.paint(tree, list, &env.host(&themes));
+        self.busy
+            .set(self.host.animating(tree, env.now.as_secs_f64()));
     }
 
     fn semantics(&self, _tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
@@ -125,8 +132,9 @@ impl Page for HostedPage {
         tree: &mut Tree,
         event: PointerEvent,
         _modifiers: ShortcutModifiers,
-        _env: &Env<'_>,
+        env: &Env<'_>,
     ) -> bool {
+        self.host.set_time(env.now.as_secs_f64());
         self.host.dispatch_pointer(tree, event);
         // The page reads values through semantics; drop the change reports.
         self.host.take_messages();
@@ -138,8 +146,9 @@ impl Page for HostedPage {
         tree: &mut Tree,
         event: KeyEvent,
         _modifiers: ShortcutModifiers,
-        _env: &Env<'_>,
+        env: &Env<'_>,
     ) -> bool {
+        self.host.set_time(env.now.as_secs_f64());
         let focus = tree.focus();
         if !focus.is_some_and(|id| self.host.contains(id))
             || matches!(event, KeyEvent::Down { key: Key::Tab, .. })
@@ -151,7 +160,8 @@ impl Page for HostedPage {
         true
     }
 
-    fn text(&mut self, tree: &mut Tree, text: &str, _env: &Env<'_>) -> bool {
+    fn text(&mut self, tree: &mut Tree, text: &str, env: &Env<'_>) -> bool {
+        self.host.set_time(env.now.as_secs_f64());
         let handled = self.host.dispatch_text(tree, text);
         self.host.take_messages();
         handled
@@ -163,11 +173,17 @@ impl Page for HostedPage {
         node: NodeId,
         action: SemanticAction,
         value: Option<&str>,
-        _env: &Env<'_>,
+        env: &Env<'_>,
     ) -> bool {
+        self.host.set_time(env.now.as_secs_f64());
         let performed = self.host.perform(tree, node, action, value);
         self.host.take_messages();
         performed
+    }
+
+    #[cfg(target_os = "macos")]
+    fn tick(&mut self, _env: &Env<'_>) -> bool {
+        self.busy.get()
     }
 
     fn native_disabled(&self) -> bool {

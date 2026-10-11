@@ -197,7 +197,9 @@ pub trait CustomControl {
         None
     }
 
-    /// Paints the open popup above every control, without a clip.
+    /// Paints the open popup above every control, without a clip. The
+    /// host also calls it while the control animates, so a popup can
+    /// animate its close.
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
         let _ = cx;
     }
@@ -695,7 +697,8 @@ impl ControlHost {
             else {
                 continue;
             };
-            if control.overlay().is_none() {
+            // A closing popup still animates after its overlay is gone.
+            if control.overlay().is_none() && !control.animating(env.time) {
                 continue;
             }
             let tokens = env.tokens(tree, *node);

@@ -79,6 +79,7 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`Toggle`](#toggle-and-togglegroup) | Button that stays on or off. |
 | Form | [`ToggleGroup`](#toggle-and-togglegroup) | Row or column of toggles with one or many on. |
 | Form | [`Kbd`](#kbd) | Keyboard key caps for shortcuts. |
+| Form | [`Select`](#select-and-listentry) | Trigger with a popup list of options. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1472,6 +1473,52 @@ extra-small medium text.
 
 [form.rs](../crates/choscorui-controls/tests/form.rs) pins this behavior.
 
+### Select and ListEntry
+
+- A `ListEntry` is an option, a disabled option, a group caption, or a
+  separator.
+- A primary press on the trigger opens or closes the list. A release on an
+  enabled option chooses it and closes the list.
+- The list opens 4 pt below the trigger, aligned with its leading edge. It
+  is at least as wide as the trigger. Past eight options it scrolls.
+- **Keys while closed.** ArrowDown, ArrowUp, Enter, or Space opens the
+  list. Typed text chooses the first matching option.
+- **Keys while open.** ArrowUp and ArrowDown move the highlight over the
+  enabled options and stop at the ends. Home and End go to the first and
+  the last option.
+- Enter or Space chooses the highlighted option. Escape closes the list and
+  emits `Dismissed`. Tab closes the list and moves focus.
+- Typed text highlights the first matching option after the highlight.
+  Characters typed within 1 second build one search. A repeated character
+  cycles through the options that start with it.
+- The highlight scrolls into view. The wheel and the scroll buttons at the
+  ends also scroll the list.
+- The list fades in, zooms from 95%, and slides 8 pt down over 100 ms,
+  the content `motion_ms`. It fades out the same way. Reduced motion shows and hides it
+  at once.
+- Messages: `OpenChanged` when the list opens or closes, and
+  `Changed(Index)` when the choice changes.
+
+| Part | Value |
+| --- | --- |
+| Trigger height | 36 pt (`Default`), 32 pt (`Sm`) |
+| Trigger | `input` border, extra-small shadow, chevron at the end |
+| List | `popover` fill, 1 pt `foreground` ring at 10%, medium shadow, 4 pt padding, at least 144 pt wide |
+| Option | 32 pt high; `accent` fill while highlighted; check mark at the end when chosen |
+| Group caption | extra-small `muted-foreground` text |
+
+| Field | `Select::semantics` |
+| --- | --- |
+| Role | `ComboBox` (AXComboBox) |
+| Name / value | name / chosen label, or the placeholder |
+| Description | highlighted label while open |
+| State | expanded, invalid, disabled |
+| Actions | `ShowMenu`, `Expand` or `Collapse`, `SetValue`, and `Focus` while enabled |
+
+`SetValue` with the label of an enabled option chooses it.
+
+[select.rs](../crates/choscorui-controls/tests/select.rs) pins this behavior.
+
 ### CustomControl and ControlHost
 
 - `ControlHost::mount` creates a child node for the control. The node is
@@ -1490,7 +1537,8 @@ extra-small medium text.
 - A disabled control gets no input, leaves keyboard traversal, paints with
   `DISABLED`, and publishes no actions.
 - `paint` clips each control to its bounds in tree order. Then it paints
-  each open overlay without a clip.
+  each open overlay without a clip. It also paints the overlay of a control
+  that animates, so a closing popup can fade out.
 - `layout` runs the layout engine with the controls as leaves, then calls
   `arrange` on each control.
 - `take_messages` returns the `ControlMessage` values that controls
