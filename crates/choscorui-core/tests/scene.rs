@@ -139,11 +139,27 @@ fn large_scene_queries_scale_with_area() {
     let window = rect(3000.0, 3000.0, 300.0, 300.0);
     let visible = scene.items_in_rect(window);
     assert_eq!(visible.len(), 100);
-    let start = std::time::Instant::now();
-    for _ in 0..100 {
-        scene.items_in_rect(window);
-    }
-    assert!(start.elapsed().as_millis() < 500, "{:?}", start.elapsed());
+    // Compare against a whole-scene query in the same process rather than a
+    // wall-clock budget, so parallel test load cannot fail the check. The
+    // fastest of several runs filters out scheduling noise.
+    let everything = rect(0.0, 0.0, 12_000.0, 7_500.0);
+    assert_eq!(scene.items_in_rect(everything).len(), 100_000);
+    let fastest = |scene: &mut Scene, area: Rect| {
+        (0..5)
+            .map(|_| {
+                let start = std::time::Instant::now();
+                scene.items_in_rect(area);
+                start.elapsed()
+            })
+            .min()
+            .unwrap()
+    };
+    let small = fastest(&mut scene, window);
+    let full = fastest(&mut scene, everything);
+    assert!(
+        small * 20 < full,
+        "a 1/1000-area query took {small:?}, the whole scene {full:?}"
+    );
     let mut list = DisplayList::new();
     assert_eq!(scene.paint(&mut list, window).unwrap(), 100);
     let hit = scene.hit_test(Point::new(3005.0, 3005.0)).unwrap();
