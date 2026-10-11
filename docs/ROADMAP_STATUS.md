@@ -26,7 +26,7 @@ Tracks every [roadmap](ROADMAP.md) item for the macOS-only delivery. Windows (ph
 | Timers, cancellation, posted-work ordering | Done | `Application::schedule_once`/`schedule_repeating`; core `WorkQueue` (`notify.rs`) |
 | Panic containment at every callback | Done | `catch_unwind` in each `extern "C"` callback; `window_smoke` panic case |
 | Teardown releases native resources after final callback | Done | `Drop for Window`/`Application`; [FFI.md](FFI.md) |
-| Gate: scale changes across displays | Manual | Proxy: `ScaleChanged` event and `backing_scale_factor` in `window_smoke`. Manual: drag the gallery between a 1x and a 2x display. |
+| Gate: scale changes across displays | Done | `display_scale_smoke` (opt-in, `CHOSCORUI_RUN_MACOS_DISPLAYS=1`, needs a 1x and a 2x display) moves a real window across connected screens. Run on 2026-10-12 with the reference M4 built-in Retina panel (2x) and a ViewSonic VX2780 QHD (1x): 1→2→1 each delivered `ScaleChanged` with the new scale, kept the 320×240 logical content size, and repainted. Rendering at both scales is pinned by the phase 4 1x/2x golden fixtures. |
 
 ## Phase 2 — geometry, tree, routing
 
