@@ -22,7 +22,7 @@ jobs:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Toolchains
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
@@ -50,7 +50,7 @@ jobs:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Smoke tests
         env:
           CHOSCORUI_RUN_MACOS_SMOKE: "1"
@@ -72,14 +72,14 @@ jobs:
     needs: native
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Targets
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - name: Universal archive (ad-hoc signed)
         run: CHOSCORUI_UNIVERSAL=1 scripts/macos/package.sh
       - name: Install, run core scenarios, uninstall
         run: scripts/macos/install-check.sh dist/choscorui-*-macos-universal.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: choscorui-macos-universal
           path: |
