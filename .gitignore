@@ -3,3 +3,16 @@
 !/quality/baseline.json
 /samples/*/target/
 /dist/
+.DS_Store
+
+# Local configuration, credentials, logs
+.env
+.env.*
+*.[lL][oO][gG]
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local screenshots (all PNG files)
+*.[pP][nN][gG]
