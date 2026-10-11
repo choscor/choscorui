@@ -4,13 +4,13 @@
 use crate::page::{Column, Env, Page, node, sem};
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CommandId, CommandLink, ControlContext, ControlEvent,
-    ControlHost, ControlKind, CustomControl, Edges, PaintContext, Recipe, ResolvedStyle,
-    ShortcutModifiers, StyleQuery, Styles,
+    ControlHost, ControlKind, ControlMessage, ControlValue, CustomControl, Edges, MeasureContext,
+    PaintContext, Recipe, ResolvedStyle, ShortcutModifiers, StyleQuery, Styles,
 };
 use choscorui::core::{
-    ColorRole, Constraints, DesignTokens, DisplayList, EventReply, Key, KeyEvent, LayoutDirection,
-    Measured, NodeId, Point, PointerButton, PointerEvent, RecipeSet, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    ColorRole, Constraints, DesignTokens, DisplayList, EventReply, Key, KeyEvent, Measured, NodeId,
+    Point, PointerButton, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, Size, ThemeResolver, Tree,
 };
 use std::rc::Rc;
 
@@ -240,6 +240,9 @@ impl StarRating {
             return false;
         }
         self.value = value;
+        context.emit(ControlMessage::Changed(ControlValue::Number(f64::from(
+            value,
+        ))));
         context.request_paint();
         context.request_semantics();
         true
@@ -247,9 +250,9 @@ impl StarRating {
 }
 
 impl CustomControl for StarRating {
-    fn measure(&mut self, constraints: Constraints, _direction: LayoutDirection) -> Measured {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         Measured {
-            size: constraints.constrain(Size::new(5.0 * 32.0, 32.0)),
+            size: cx.constraints.constrain(Size::new(5.0 * 32.0, 32.0)),
             baseline: None,
         }
     }
@@ -290,6 +293,11 @@ impl CustomControl for StarRating {
                 self.set(context, value);
                 EventReply::Stop
             }
+            ControlEvent::Hover(false) => {
+                self.hover = None;
+                context.request_paint();
+                EventReply::Continue
+            }
             ControlEvent::FocusChanged(_) => {
                 context.request_paint();
                 EventReply::Continue
@@ -298,7 +306,8 @@ impl CustomControl for StarRating {
         }
     }
 
-    fn paint(&self, list: &mut DisplayList, bounds: Rect, tokens: &DesignTokens, focused: bool) {
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let (bounds, tokens) = (cx.bounds, cx.tokens);
         let width = bounds.size.width / 5.0;
         let shown = self.hover.unwrap_or(self.value);
         for star in 1..=5u8 {
@@ -314,7 +323,7 @@ impl CustomControl for StarRating {
             } else {
                 tokens.color(ColorRole::Foreground).with_alpha(0.25)
             };
-            let _ = list.draw_text(
+            let _ = cx.list.draw_text(
                 Point::new(cell.origin.x + 4.0, cell.origin.y + cell.size.height * 0.8),
                 "★",
                 crate::page::FONT,
@@ -322,8 +331,8 @@ impl CustomControl for StarRating {
                 color,
             );
         }
-        if focused {
-            let _ = list.stroke_rounded_rect(
+        if cx.state.focus_visible() {
+            let _ = cx.list.stroke_rounded_rect(
                 bounds.inset(1.0),
                 4.0,
                 tokens.color(ColorRole::Primary),
@@ -392,11 +401,12 @@ pub fn custom_control(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dy
 impl Page for CustomControlPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
+        let themes = ThemeResolver::new(*env.tokens);
         for (caption, id, _) in &self.ratings {
             let _ = tree.set_bounds(*caption, column.row(20.0));
             let size = self
                 .host
-                .measure(*id, Constraints::UNBOUNDED, env.direction)
+                .measure(tree, *id, Constraints::UNBOUNDED, &env.host(&themes))
                 .map_or(Size::new(160.0, 32.0), |measured| measured.size);
             let _ = tree.set_bounds(*id, column.cells(size.height, &[size.width])[0]);
         }
@@ -406,7 +416,8 @@ impl Page for CustomControlPage {
         for (caption, _, name) in &self.ratings {
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), name);
         }
-        self.host.paint(tree, list, env.tokens);
+        self.host
+            .paint(tree, list, &env.host(&ThemeResolver::new(*env.tokens)));
     }
 
     fn semantics(&self, _tree: &Tree, _env: &Env<'_>) -> Vec<(NodeId, SemanticNode)> {
@@ -424,6 +435,8 @@ impl Page for CustomControlPage {
         _env: &Env<'_>,
     ) -> bool {
         self.host.dispatch_pointer(tree, event);
+        // The page reads ratings through semantics; drop the change reports.
+        self.host.take_messages();
         true
     }
 
@@ -441,6 +454,7 @@ impl Page for CustomControlPage {
             return false;
         }
         self.host.dispatch_key(tree, event);
+        self.host.take_messages();
         true
     }
 
@@ -452,7 +466,9 @@ impl Page for CustomControlPage {
         value: Option<&str>,
         _env: &Env<'_>,
     ) -> bool {
-        self.host.perform(tree, node, action, value)
+        let performed = self.host.perform(tree, node, action, value);
+        self.host.take_messages();
+        performed
     }
 }
 

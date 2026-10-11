@@ -4,15 +4,15 @@
 
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, CheckboxStyle, CommandId, EstimatedText, HeaderStyle,
-    MenuStyle, PaintContext, ProgressStyle, RadioStyle, ScrollAreaStyle, ShortcutModifiers,
-    SliderStyle, SpinBoxStyle, SplitterStyle, Styles, TabStyle, TextFieldStyle,
+    HostEnv, MenuStyle, PaintContext, ProgressStyle, RadioStyle, ScrollAreaStyle,
+    ShortcutModifiers, SliderStyle, SpinBoxStyle, SplitterStyle, Styles, TabStyle, TextFieldStyle,
     TextFieldVisualState, TextItemDelegate, TextMeasure, ValidationState,
 };
 use choscorui::core::{
     BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
     LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
     SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle,
-    Tree, TypeSpec, lerp_color,
+    ThemeResolver, Tree, TypeSpec, lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
@@ -220,6 +220,14 @@ impl Env<'_> {
     pub fn cx<'b>(&'b self, list: &'b mut DisplayList, bounds: Rect) -> PaintContext<'b> {
         PaintContext::new(list, bounds, self.tokens, &self.measure_cache.styles, self)
             .rtl(self.rtl())
+            .time(self.now.as_secs_f64())
+    }
+
+    /// The environment a `ControlHost` measures, arranges, and paints
+    /// with: `themes`, this page's styles and text, direction, and time.
+    pub fn host<'b>(&'b self, themes: &'b ThemeResolver) -> HostEnv<'b> {
+        HostEnv::new(themes, &self.measure_cache.styles, self)
+            .direction(self.direction)
             .time(self.now.as_secs_f64())
     }
 

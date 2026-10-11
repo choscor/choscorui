@@ -273,6 +273,10 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("CustomControl", "custom-control"),
     ("ControlContext", "custom-control"),
     ("ControlEvent", "custom-control"),
+    ("ControlMessage", "custom-control"),
+    ("ControlValue", "custom-control"),
+    ("HostEnv", "custom-control"),
+    ("MeasureContext", "custom-control"),
 ];
 
 /// Public names of `choscorui-controls` without a page, with the reason.

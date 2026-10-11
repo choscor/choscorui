@@ -334,6 +334,12 @@ impl ThemeResolver {
         }
     }
 
+    /// The application tokens with accessibility preferences applied,
+    /// without scope overrides.
+    pub fn application(&self) -> DesignTokens {
+        apply_accessibility(self.application, self.accessibility)
+    }
+
     pub fn resolve(&self, tree: &Tree, id: NodeId) -> Result<DesignTokens, ThemeError> {
         if !tree.contains(id) {
             return Err(ThemeError::MissingNode);

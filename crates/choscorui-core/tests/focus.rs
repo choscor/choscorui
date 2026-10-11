@@ -107,3 +107,24 @@ fn keyboard_focus_shows_the_ring_and_a_pointer_press_does_not() {
     assert!(!tree.focus_visible(a));
     assert!(!tree.focus_visible(b));
 }
+
+#[test]
+fn scoped_traversal_stays_inside_the_subtree() {
+    let mut tree = tree();
+    let root = tree.root();
+    let outside = tree.attach(root, Rect::default()).unwrap();
+    let scope = tree.attach(root, Rect::default()).unwrap();
+    let first = tree.attach(scope, Rect::default()).unwrap();
+    let second = tree.attach(scope, Rect::default()).unwrap();
+    for node in [outside, first, second] {
+        tree.set_focusable(node, true).unwrap();
+    }
+    tree.set_focus(Some(outside)).unwrap();
+
+    assert_eq!(tree.focus_next_within(scope, false), Some(first));
+    assert_eq!(tree.focus_next_within(scope, false), Some(second));
+    assert_eq!(tree.focus_next_within(scope, false), Some(first), "wraps");
+    assert_eq!(tree.focus_next_within(scope, true), Some(second));
+    assert!(tree.is_within(second, scope) && tree.is_within(scope, scope));
+    assert!(!tree.is_within(outside, scope));
+}

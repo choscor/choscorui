@@ -368,6 +368,18 @@ impl Tree {
         self.nodes.get(&id).and_then(|node| node.parent)
     }
 
+    /// True when `id` is `ancestor` or lies in its subtree.
+    pub fn is_within(&self, id: NodeId, ancestor: NodeId) -> bool {
+        let mut current = Some(id);
+        while let Some(node) = current {
+            if node == ancestor {
+                return true;
+            }
+            current = self.parent(node);
+        }
+        false
+    }
+
     pub fn children(&self, id: NodeId) -> Option<&[NodeId]> {
         self.nodes.get(&id).map(|node| node.children.as_slice())
     }
@@ -655,9 +667,20 @@ impl Tree {
 
     /// Moves focus to the next (or previous) opted-in node, wrapping at ends.
     pub fn focus_next(&mut self, reverse: bool) -> Option<NodeId> {
+        self.focus_next_within(self.root, reverse)
+    }
+
+    /// Moves focus to the next (or previous) opted-in node inside the
+    /// subtree of `scope`, wrapping at its ends. A modal overlay uses its
+    /// own node as the scope, so traversal stays inside it. Focus outside
+    /// the scope moves to its first (or last) node.
+    pub fn focus_next_within(&mut self, scope: NodeId, reverse: bool) -> Option<NodeId> {
+        if !self.contains(scope) {
+            return None;
+        }
         self.set_input_modality(InputModality::Keyboard);
         let mut order = Vec::new();
-        let mut pending = vec![self.root];
+        let mut pending = vec![scope];
         while let Some(id) = pending.pop() {
             let node = self.nodes.get(&id).expect("attached child must exist");
             if !node.visible {
@@ -753,6 +776,20 @@ impl Tree {
             return;
         };
         self.dispatch_path(target, event, &mut handler);
+    }
+
+    /// Dispatches one pointer event along the path to `target`, which the
+    /// caller chose, for example a control host that routes overlays and
+    /// modal scopes first. A missing target is ignored.
+    pub fn dispatch_pointer_to(
+        &mut self,
+        target: NodeId,
+        event: PointerEvent,
+        mut handler: impl FnMut(&mut Self, NodeId, EventPhase, PointerEvent) -> EventReply,
+    ) {
+        if self.contains(target) {
+            self.dispatch_path(target, event, &mut handler);
+        }
     }
 
     /// Sends navigation keys to the focused node. Character insertion and IME

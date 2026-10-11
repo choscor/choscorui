@@ -356,33 +356,58 @@ You can write a control in safe Rust. Implement the `CustomControl` trait, and m
 
 | Method | When the host calls it | Contract |
 | --- | --- | --- |
-| `measure(constraints, direction)` | During layout, through `ControlHost::measure` | Returns a `Measured` size and an optional baseline. The host clamps the size to the constraints |
-| `event(context, event)` | When the host routes a `ControlEvent`: `Pointer`, `Key`, `Text`, or `FocusChanged` | Returns `EventReply::Stop` to consume the event. `context.phase()` gives the dispatch phase |
-| `paint(list, bounds, tokens, focused)` | When `ControlHost::paint` walks the visible mounted nodes in tree order | Draws only into the `DisplayList`, with the resolved `DesignTokens`. The host clips it to its bounds |
+| `measure(cx)` | During layout, through `ControlHost::measure` | Returns a `Measured` size and an optional baseline. The host clamps the size to `cx.constraints` |
+| `arrange(cx, bounds)` | After layout and theme changes, through `ControlHost::arrange` | Records the geometry of the parts, so that input hits the same parts that paint draws. The default does nothing |
+| `event(context, event)` | When the host routes a `ControlEvent` | Returns `EventReply::Stop` to consume the event. `context.phase()` gives the dispatch phase |
+| `paint(cx)` | When `ControlHost::paint` walks the visible mounted nodes in tree order | Draws into `cx.list` inside `cx.bounds`. The host clips the control to its bounds |
+| `overlay()` | During routing and painting | Returns the rectangle of an open popup, or `None`. The default is `None` |
+| `paint_overlay(cx)` | After every control paints, for each control with an overlay | Draws the popup without a clip |
+| `modal()` | During routing | Returns `true` while a modal overlay is open. The default is `false` |
 | `semantics()` | When `ControlHost::sync_semantics` finds the node dirty for semantics, or when `force` is `true` | Returns the role, name, value, state, and supported actions as a `SemanticNode` |
 | `perform(context, action, value)` | When `ControlHost::perform` routes an action from assistive technology | Runs only for an action that `semantics()` lists. Returns `true` when it applied the action |
 | `focusable()` | At mount time | Defaults to `true`. A focusable control takes focus when the user presses it |
+| `set_enabled(enabled)` | When `ControlHost::set_enabled` runs | Updates the control state. The host stops input to a disabled control |
+| `animating(time)` | When `ControlHost::animating` runs | Returns `true` while the control needs another frame |
+
+`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags from the host.
+
+The host sends these `ControlEvent` values:
+
+| Event | When |
+| --- | --- |
+| `Pointer` | A pointer event hits the control, its overlay, or a descendant |
+| `Key` | A key event goes to the focused control or a descendant |
+| `Text` | The focused control gets committed text |
+| `FocusChanged` | The control gets or loses focus |
+| `Hover` | The pointer enters or leaves the control, a descendant, or its overlay |
+| `Dismiss` | A press lands outside the control and its open overlay |
 
 The `ControlContext` lets the control do these things during `event` and `perform`:
 
 - Request paint, layout, or semantics updates with `request_paint`, `request_layout`, and `request_semantics`.
 - Take focus with `request_focus`.
 - Capture the pointer for a drag with `capture_pointer(true)`.
+- Read the host time with `time`.
+- Report a `ControlMessage` to the application with `emit`.
 
 `ControlHost` owns the controls by `NodeId`:
 
 - `mount` attaches a new child node and `unmount` detaches it.
 - `prune` drops the controls whose nodes another part of the application detached.
 - `dispatch_pointer`, `dispatch_key`, and `dispatch_text` route input. A press on a focusable control moves focus to it, and the host sends `FocusChanged` to the old and new controls.
+- An open overlay gets pointer events inside its rectangle first.
+- While a control is modal, pointer events outside its subtree go to it. `focus_next` and `dispatch_key` keep focus inside the subtree.
+- `set_enabled` disables a control. A disabled control gets no input, leaves keyboard traversal, and publishes no actions.
+- `take_messages` returns the messages that controls emitted, in order. Call it after each dispatch.
 - `sync_semantics` keeps the paint and layout requests on the node for your frame loop.
 
-To use `ControlHost::measure` with the layout engine, give `LayoutEngine::layout` a closure:
+`HostEnv` holds the `ThemeResolver`, the `Styles`, the text measurement, the direction, and the time. The host resolves the tokens of each node through the theme scopes. `ControlHost::layout` runs the `LayoutEngine` and then arranges the controls. Mounted controls measure themselves, and your `LeafMeasure` measures the other leaves:
 
 ```rust
-engine.layout(&mut tree, root, bounds, &mut |node, constraints, direction| {
-    host.measure(node, constraints, direction)
-        .unwrap_or(Measured::new(Size::default()))
+let env = HostEnv::new(&themes, &styles, &EstimatedText);
+host.layout(&mut engine, &mut tree, root, bounds, &env, &mut |_, _, _| {
+    Measured::new(Size::default())
 })?;
 ```
 
-[custom.rs](../crates/choscorui-controls/tests/custom.rs) is a complete example. It is a star-rating control that handles pointer, key, and text input, focus, painting, semantics, and the `Increment` and `Decrement` actions.
+[custom.rs](../crates/choscorui-controls/tests/custom.rs) is a complete example. It is a star-rating control that handles pointer, key, and text input, focus, painting, semantics, messages, and the `Increment` and `Decrement` actions. The same file tests hover, overlays, modal scopes, and disabled controls.

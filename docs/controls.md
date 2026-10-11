@@ -1180,6 +1180,20 @@ behavior.
 - `dispatch_key` routes a key event through the tree. `dispatch_text` gives
   committed text to the focused control.
 - `move_focus` sends `FocusChanged` to the old and the new control.
+- The host sends `Hover(true)` and `Hover(false)` to each control on the
+  path under the pointer when the path changes.
+- An open overlay gets pointer events inside its rectangle first. A press
+  outside the overlay sends `Dismiss` to its control.
+- While a control is modal, pointer events outside its subtree go to it,
+  and focus traversal stays inside its subtree.
+- A disabled control gets no input, leaves keyboard traversal, paints with
+  `DISABLED`, and publishes no actions.
+- `paint` clips each control to its bounds in tree order. Then it paints
+  each open overlay without a clip.
+- `layout` runs the layout engine with the controls as leaves, then calls
+  `arrange` on each control.
+- `take_messages` returns the `ControlMessage` values that controls
+  emitted, in order.
 - `sync_semantics` publishes the semantics of controls with a `SEMANTICS`
   flag, or of all controls with `force`.
 - `perform` routes an assistive action only when the control's

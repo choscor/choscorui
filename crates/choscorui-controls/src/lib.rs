@@ -69,7 +69,10 @@ pub use dialogs::{
 mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod custom;
-pub use custom::{ControlContext, ControlEvent, ControlHost, CustomControl};
+pub use custom::{
+    ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
+    HostEnv, MeasureContext,
+};
 mod dock;
 pub use dock::{
     DockArea, DockArrangement, DockError, DockLayout, DockPanel, DockRestoreReport, DockTarget,
