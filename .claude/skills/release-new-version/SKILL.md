@@ -6,9 +6,9 @@ description: Release choscorui from one verified tag with a signed, notarized ma
 
 # Release choscorui
 
-Work from the repository root. Read [the release checklist](../../../docs/RELEASING.md),
-[the versioning policy](../../../docs/VERSIONING.md), and
-[the contribution checks](../../../CONTRIBUTING.md). Follow the checklist's order;
+Work from the repository root. Read [the release procedure](../../../docs/releasing.md),
+[the versioning policy](../../../docs/versioning.md), and
+[the contribution checks](../../../CONTRIBUTING.md). Follow the procedure's order;
 this skill adds the decisions and safeguards around it.
 
 ## Scope and local configuration
@@ -17,9 +17,8 @@ Determine the requested version and whether the user wants preparation only, a
 packaged candidate, or the full release. A request to release end to end
 authorizes the release commit, tag push, and GitHub release; carry it through
 without repeatedly requesting the same permission. Preparation alone does not
-authorize tags or a GitHub release. Creating this skill does not authorize
-running it. If scope is missing, prepare the notes and verified archive before
-asking for the publication decision.
+authorize tags or a GitHub release. If scope is missing, prepare the notes and
+verified archive before asking for the publication decision.
 
 Use the checked-out repository and its configured Git remote; never embed a
 maintainer's checkout path, username, email, team ID, signing identity, or
@@ -29,7 +28,7 @@ environment variables, outside Git.
 
 ## Prepare the version
 
-Require `X.Y.Z` with no leading zeros, following VERSIONING.md: before 1.0 a
+Require `X.Y.Z` with no leading zeros, following versioning.md: before 1.0 a
 breaking change bumps `Y`. If no version was given and none is unambiguous, ask.
 Inspect Git status and the remote branch; fetch and check for divergence before
 release mutations. Do not reset, stash, discard, or commit unrelated work.
@@ -58,7 +57,8 @@ diff, with related changes merged. Then add, only when substantiated:
 - `## Deprecated`: deprecated items and their replacements.
 - `## Security`: verified security fixes ([SECURITY.md](../../../SECURITY.md)).
 - `## Known limitations`: current limits and workarounds, consistent with
-  [SUPPORT_MATRIX.md](../../../docs/SUPPORT_MATRIX.md).
+  [platform-macos.md](../../../docs/platform-macos.md) and
+  [controls.md](../../../docs/controls.md).
 - `## Upgrading`: migrations, raised MSRV, or required user actions.
 
 Then paste the generated change list. Finish with `## Download` naming the
@@ -68,16 +68,16 @@ draft to the user while the checks run and incorporate their edits.
 
 ## Verify and package
 
-Run every automated gate in RELEASING.md section 3 on the release machine,
+Run every check in the "Automated checks" section of releasing.md on the release machine,
 including the native smoke tests one at a time and the bench budget check on the
 reference machine. Resolve failures before packaging; do not weaken checks, add
 retries, or raise timeouts as the only fix. For an authorized full release,
 commit the version bump as `chore(release): X.Y.Z` so packaging captures a clean
 commit.
 
-Build, sign, notarize, staple, and check the archive as in RELEASING.md section 4
-with `CHOSCORUI_UNIVERSAL=1`, the Developer ID identity, and the notary profile
-from the local environment. Never bypass signing or notarization. Run
+Build, sign, notarize, staple, and check the archive as in the "Signed and
+notarized archive" section of releasing.md, with `CHOSCORUI_UNIVERSAL=1`, the
+Developer ID identity, and the notary profile from the local environment. Never bypass signing or notarization. Run
 `scripts/macos/install-check.sh` on the result.
 
 The public attachments are exactly `choscorui-X.Y.Z-macos-universal.zip` and its
@@ -85,15 +85,6 @@ The public attachments are exactly `choscorui-X.Y.Z-macos-universal.zip` and its
 archive and notes for credentials, personal paths, and copied maintainer
 configuration; if one is found, fix the source and rebuild rather than editing
 the signed archive.
-
-## Manual gates
-
-The manual gates in RELEASING.md section 5 need a person: fresh machine, Intel
-hardware, input methods, the external accessibility tree, VoiceOver,
-notifications, and budgets on other hardware. List each with its status for the
-release issue. Never mark one passed from automated evidence, and do not publish
-while any is unsigned-off unless the user explicitly decides to and the notes
-say so under Known limitations.
 
 ## Tag and publish
 
@@ -113,6 +104,7 @@ assets; a faulty shipped version is fixed with a higher version.
 ## Report
 
 Report the version and exact source commit, automated checks and their outcomes,
-the status of each manual gate, the archive SHA-256, the tag push result, and the
-GitHub release link or draft status. Distinguish completed steps from pending
-ones.
+the archive SHA-256, the tag push result, and the GitHub release link or draft
+status. Distinguish completed steps from pending ones. Never report real input
+methods, VoiceOver, a notarized clean-machine install, Intel hardware, or budgets
+on other hardware as verified from automated evidence.
