@@ -86,6 +86,7 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`InputOtp`](#inputotp) | One-time code input with one character per slot. |
 | Form | [`FieldText`](#field-and-fieldtext) | Legend, label, title, description, error, or separator of a form field. |
 | Form | [`Field`](#field-and-fieldtext) | Stacked, side-by-side, or responsive layout of a form field. |
+| Form | [`DatePicker`](#datepicker) | Button with a calendar popover for one date, several dates, or a range. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -890,12 +891,20 @@ behavior.
   recipe.
 - The selected day fills `primary`, and today fills `muted`. Days outside
   the month are muted. `CalendarFocus` names the part that rings.
+- **Modes.** `with_mode` sets the `CalendarMode`. In `Single` mode the
+  selected day is the value. In `Multiple` and `Range` modes the selected
+  day is the keyboard cursor, and `activate` or Enter or Space chooses.
+- `Multiple` adds or removes the day. `Range` sets the start, then the end.
+  A day before the start, or a third activation, starts a new range.
+- Chosen days fill `primary`. A range's middle days fill `muted` with
+  square corners, and a muted band joins its two ends. The ring follows the
+  cursor.
 
 | Field | `DateTimeEdit::semantics` | `Calendar::semantics` | `Calendar::cell_semantics` |
 | --- | --- | --- | --- |
 | Role | `SpinButton` (AXIncrementor) | `Table` (AXTable) | `Cell` (AXCell) |
-| Name / value | name / long date, short time, or both | name / selected long date | long date / day number |
-| State | invalid when out of range; the description names the focused field | the description is the month title | selected; disabled outside the range |
+| Name / value | name / long date, short time, or both | name / chosen long dates (a range joins its ends with an en dash) | long date / day number |
+| State | invalid when out of range; the description names the focused field | the description is the month title | selected when chosen; disabled outside the range |
 | Actions | `Increment`, `Decrement`, `Focus` | `Focus` | `Activate` when enabled |
 
 `DateTimeEdit` has no handler for these actions. The host maps them to
@@ -1662,6 +1671,38 @@ list are the same.
 | Actions | none |
 
 [field.rs](../crates/choscorui-controls/tests/field.rs) pins this behavior.
+
+### DatePicker
+
+- The trigger is an outline button with a calendar icon and the chosen
+  dates, or the placeholder. It is at least 240 pt wide.
+- A press on the trigger, Enter, Space, or ArrowDown opens the calendar 4
+  pt below the trigger. It fades, zooms, and slides in like a select list.
+- **Keys while open.** The calendar keys move the cursor and do not choose.
+  Enter or Space chooses the cursor day. Escape closes and emits
+  `Dismissed`. Tab closes and moves focus.
+- A press on a day chooses it, and the month buttons change the shown
+  month.
+- A `Single` picker closes after a choice and emits `Changed(Date)`.
+  `Multiple` and `Range` pickers stay open and emit `Changed(Dates)`.
+- `with_today` marks today. `set_dates` sets the value; a single picker
+  keeps the first date.
+
+| Part | Value |
+| --- | --- |
+| Trigger | outline button, 36 pt high, 8 pt gap after the icon |
+| Popover | `popover` fill, `lg` radius, medium shadow, no padding |
+| Calendar | 12 pt padding, 32 pt cells |
+
+| Field | `DatePicker::semantics` |
+| --- | --- |
+| Role | `Button` (AXButton) |
+| Name / value | name / chosen dates, or the placeholder |
+| Description | the cursor day while open |
+| State | expanded, disabled |
+| Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
+
+[date_picker.rs](../crates/choscorui-controls/tests/date_picker.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

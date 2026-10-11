@@ -54,6 +54,7 @@ page.toggle = Toggle
 page.toggle-group = Toggle group
 page.kbd = Keyboard key
 page.select = Select
+page.date-picker = Date picker
 page.input = Input
 page.input-group = Input group
 page.textarea = Textarea

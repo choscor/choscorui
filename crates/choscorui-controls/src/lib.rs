@@ -85,8 +85,8 @@ pub use widgets::{
 };
 mod datetime_controls;
 pub use datetime_controls::{
-    Calendar, CalendarCell, CalendarFocus, CalendarLayout, DateTimeEdit, DateTimeField,
-    DateTimeKind,
+    Calendar, CalendarCell, CalendarFocus, CalendarLayout, CalendarMode, DateTimeEdit,
+    DateTimeField, DateTimeKind,
 };
 mod dialogs;
 #[expect(
@@ -110,8 +110,8 @@ pub use custom::{
     HostEnv, MeasureContext,
 };
 pub use form::{
-    AddonContent, Field, FieldGap, FieldPart, FieldText, Input, InputGroup, InputGroupAddon,
-    InputOtp, Kbd, Select, Switch, Textarea, Toggle, ToggleGroup, ToggleItem,
+    AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
+    InputGroupAddon, InputOtp, Kbd, Select, Switch, Textarea, Toggle, ToggleGroup, ToggleItem,
 };
 pub use listbox::ListEntry;
 mod dock;

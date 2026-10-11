@@ -392,6 +392,22 @@ pub struct Calendar {
     shown: (i32, u8),
     minimum: Option<CivilDate>,
     maximum: Option<CivilDate>,
+    mode: CalendarMode,
+    /// The chosen days of a `Multiple` calendar, in order, or the start
+    /// and end of a `Range` calendar.
+    chosen: Vec<CivilDate>,
+}
+
+/// How a calendar chooses days.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CalendarMode {
+    /// One day: the selected day.
+    #[default]
+    Single,
+    /// Any set of days. Activation adds or removes a day.
+    Multiple,
+    /// A start and an end day. Activation sets the start, then the end.
+    Range,
 }
 
 /// Where [`Calendar::layout`] places the caption, the month buttons, the
@@ -432,6 +448,103 @@ impl Calendar {
             shown: (selected.year(), selected.month()),
             minimum: None,
             maximum: None,
+            mode: CalendarMode::Single,
+            chosen: Vec::new(),
+        }
+    }
+
+    /// Chooses days as `mode` says. In `Multiple` and `Range` modes the
+    /// selected day is the keyboard cursor, and activation chooses.
+    #[must_use]
+    pub fn with_mode(mut self, mode: CalendarMode) -> Self {
+        self.mode = mode;
+        self.chosen.clear();
+        self
+    }
+
+    pub fn mode(&self) -> CalendarMode {
+        self.mode
+    }
+
+    /// The chosen days: the selected day in `Single` mode, the set in
+    /// `Multiple` mode, and the start and end (when set) in `Range` mode.
+    pub fn dates(&self) -> Vec<CivilDate> {
+        match self.mode {
+            CalendarMode::Single => vec![self.selected],
+            _ => self.chosen.clone(),
+        }
+    }
+
+    /// Activates `date` as a click or Enter would. In `Single` mode it
+    /// selects the day. In `Multiple` mode it adds or removes it. In
+    /// `Range` mode it sets the start, or the end after the start; an
+    /// earlier day or a third activation starts again. Returns true when
+    /// the chosen days changed.
+    pub fn activate(&mut self, date: CivilDate) -> bool {
+        if !self.allowed(date) {
+            return false;
+        }
+        match self.mode {
+            CalendarMode::Single => return self.select(date),
+            CalendarMode::Multiple => match self.chosen.iter().position(|day| *day == date) {
+                Some(index) => {
+                    self.chosen.remove(index);
+                }
+                None => {
+                    self.chosen.push(date);
+                    self.chosen.sort();
+                }
+            },
+            CalendarMode::Range => match self.chosen.as_slice() {
+                [start] if date >= *start => self.chosen.push(date),
+                _ => self.chosen = vec![date],
+            },
+        }
+        self.selected = date;
+        self.shown = (date.year(), date.month());
+        true
+    }
+
+    /// Replaces the chosen days of a `Multiple` or `Range` calendar.
+    pub fn set_dates(&mut self, dates: &[CivilDate]) {
+        if self.mode == CalendarMode::Single {
+            if let Some(date) = dates.first() {
+                self.select(*date);
+            }
+            return;
+        }
+        let mut dates: Vec<CivilDate> =
+            dates.iter().copied().filter(|d| self.allowed(*d)).collect();
+        dates.sort();
+        dates.dedup();
+        if self.mode == CalendarMode::Range && dates.len() > 2 {
+            dates = vec![dates[0], dates[dates.len() - 1]];
+        }
+        self.chosen = dates;
+    }
+
+    fn is_chosen(&self, date: CivilDate) -> bool {
+        match self.mode {
+            CalendarMode::Single => date == self.selected,
+            CalendarMode::Multiple => self.chosen.contains(&date),
+            CalendarMode::Range => match self.chosen.as_slice() {
+                [start] => date == *start,
+                [start, end] => date >= *start && date <= *end,
+                _ => false,
+            },
+        }
+    }
+
+    /// The range role of `date` in a `Range` calendar.
+    fn range_day(&self, date: CivilDate) -> Option<CalendarDay> {
+        if self.mode != CalendarMode::Range {
+            return None;
+        }
+        match self.chosen.as_slice() {
+            [start] | [start, _] if date == *start => Some(CalendarDay::RangeStart),
+            [_, end] if date == *end => Some(CalendarDay::RangeEnd),
+            [start, end] if date > *start && date < *end => Some(CalendarDay::RangeMiddle),
+            _ => None,
         }
     }
     pub fn set_range(&mut self, minimum: Option<CivilDate>, maximum: Option<CivilDate>) {
@@ -468,7 +581,7 @@ impl Calendar {
             .map(|date| CalendarCell {
                 date: *date,
                 in_month: date.month() == self.shown.1,
-                selected: *date == self.selected,
+                selected: self.is_chosen(*date),
                 enabled: self.allowed(*date),
             })
             .collect()
@@ -499,6 +612,9 @@ impl Calendar {
             Key::ArrowDown => self.selected.add_days(7),
             Key::PageUp => self.selected.add_months(-1),
             Key::PageDown => self.selected.add_months(1),
+            Key::Enter | Key::Space if self.mode != CalendarMode::Single => {
+                return self.activate(self.selected);
+            }
             Key::Home | Key::End => {
                 let first = i64::from(self.locale.data().first_weekday);
                 let weekday = i64::from(self.selected.weekday().0);
@@ -596,20 +712,46 @@ impl Calendar {
         for (name, rect) in self.weekday_headers().iter().zip(&layout.weekdays) {
             cx.label(*rect, name, &weekday, TextAlign::Center);
         }
+        let band = cx.style(query(Slot::Range));
+        let ranged = matches!(self.chosen.as_slice(), [_, _]);
         for (cell, rect) in self.cells().iter().zip(&layout.days) {
-            let variant = if !cell.in_month {
+            let range = self.range_day(cell.date);
+            let variant = if let Some(range) = range {
+                range
+            } else if !cell.in_month {
                 CalendarDay::Outside
             } else if Some(cell.date) == today {
                 CalendarDay::Today
             } else {
                 CalendarDay::Default
             };
+            // A muted band joins the two ends of a range.
+            let half = rect.size.width / 2.0;
+            let trailing = (range == Some(CalendarDay::RangeStart)) != cx.rtl;
+            if ranged && matches!(range, Some(CalendarDay::RangeStart | CalendarDay::RangeEnd)) {
+                let x = if trailing {
+                    rect.origin.x + half
+                } else {
+                    rect.origin.x
+                };
+                let mut fill = band;
+                fill.radius = crate::style::Corners::ZERO;
+                cx.slot(
+                    Rect::from_xywh(x, rect.origin.y, half, rect.size.height),
+                    &fill,
+                    |_, _| {},
+                );
+            }
+            let cursor = cell.date == self.selected;
             let state = VisualState::NONE
-                .set(VisualState::SELECTED, cell.selected)
+                .set(
+                    VisualState::SELECTED,
+                    cell.selected && range != Some(CalendarDay::RangeMiddle),
+                )
                 .set(VisualState::DISABLED, !cell.enabled)
                 .set(
                     VisualState::FOCUS_VISIBLE,
-                    cell.selected && focus == CalendarFocus::Grid,
+                    cursor && focus == CalendarFocus::Grid,
                 );
             let style = cx.style(query(Slot::Day).variant(variant).state(state));
             let day = cell.date.day().to_string();
@@ -619,12 +761,23 @@ impl Calendar {
         }
     }
 
+    /// The chosen days as text: a list of long dates, or a range with an
+    /// en dash between its ends.
+    pub fn value_text(&self) -> String {
+        let dates = self.dates();
+        let long: Vec<String> = dates.iter().map(|d| d.format_long(&self.locale)).collect();
+        match self.mode {
+            CalendarMode::Range => long.join(" – "),
+            _ => long.join(", "),
+        }
+    }
+
     pub fn semantics(&self, name: &str) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::Table,
             name: name.to_owned(),
             description: self.title(),
-            value: Some(self.selected.format_long(&self.locale)),
+            value: Some(self.value_text()),
             state: SemanticState::default(),
             relations: Vec::new(),
             actions: vec![SemanticAction::Focus],

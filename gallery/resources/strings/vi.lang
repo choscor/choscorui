@@ -52,6 +52,7 @@ page.toggle = Nút bật tắt
 page.toggle-group = Nhóm nút bật tắt
 page.kbd = Phím bàn phím
 page.select = Hộp chọn
+page.date-picker = Bộ chọn ngày
 page.input = Ô nhập
 page.input-group = Nhóm ô nhập
 page.textarea = Vùng văn bản

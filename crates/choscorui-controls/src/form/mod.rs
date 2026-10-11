@@ -1,6 +1,7 @@
 //! Form controls that mount through the control host: switches, toggles,
 //! toggle groups, key caps, selects, text inputs, and code inputs.
 
+mod date_picker;
 mod field;
 mod input;
 mod input_group;
@@ -12,6 +13,7 @@ mod switch;
 mod textarea;
 mod toggle;
 
+pub use date_picker::DatePicker;
 pub use field::{Field, FieldGap, FieldPart, FieldText};
 pub use input::Input;
 pub use input_group::{AddonContent, InputGroup, InputGroupAddon};

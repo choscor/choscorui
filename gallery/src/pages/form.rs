@@ -4,11 +4,12 @@
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    AddonAlign, ControlSize, CustomControl, FieldOrientation, FieldPart, FieldText, Input,
-    InputGroup, InputGroupAddon, InputOtp, Kbd, KbdVariant, ListEntry, Orientation, Select, Switch,
-    TextField, Textarea, Toggle, ToggleGroup, ToggleItem, ToggleVariant, ValidationState,
+    AddonAlign, CalendarMode, ControlSize, CustomControl, DatePicker, FieldOrientation, FieldPart,
+    FieldText, Input, InputGroup, InputGroupAddon, InputOtp, Kbd, KbdVariant, ListEntry,
+    Orientation, Select, Switch, TextField, Textarea, Toggle, ToggleGroup, ToggleItem,
+    ToggleVariant, ValidationState,
 };
-use choscorui::core::{Icon, NodeId, Tree};
+use choscorui::core::{CivilDate, Icon, NodeId, Tree};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
     Box::new(control)
@@ -388,6 +389,36 @@ pub fn field(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
         ),
     ];
     HostedPage::build_fields(tree, parent, rows)
+}
+
+pub fn date_picker(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
+    let today = CivilDate::new(2026, 10, 12).expect("the demo date is valid");
+    let picker = |name: &str, mode| {
+        DatePicker::new(name, env.locale.clone(), today)
+            .with_mode(mode)
+            .with_placeholder("Pick a date")
+            .with_today(today)
+    };
+    let mut chosen = picker("Due date", CalendarMode::Single);
+    chosen.set_dates(&[today]);
+    let rows: Vec<Row> = vec![
+        (
+            "Single date",
+            vec![
+                boxed(picker("Start date", CalendarMode::Single)),
+                boxed(chosen),
+            ],
+        ),
+        (
+            "Date range",
+            vec![boxed(picker("Stay", CalendarMode::Range))],
+        ),
+        (
+            "Several dates",
+            vec![boxed(picker("Meeting days", CalendarMode::Multiple))],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
 }
 
 pub fn kbd(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
