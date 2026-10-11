@@ -417,7 +417,7 @@ impl Page for ProgressPage {
     }
 
     #[cfg(target_os = "macos")]
-    fn tick(&mut self, _env: &Env<'_>) -> bool {
+    fn tick(&mut self, _tree: &mut Tree, _env: &Env<'_>) -> bool {
         self.indeterminate.1.needs_frame(true)
     }
 

@@ -369,7 +369,7 @@ You can write a control in safe Rust. Implement the `CustomControl` trait, and m
 | `set_enabled(enabled)` | When `ControlHost::set_enabled` runs | Updates the control state. The host stops input to a disabled control |
 | `animating(time)` | When `ControlHost::animating` runs | Returns `true` while the control needs another frame |
 
-`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags from the host.
+`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `MeasureContext::viewport` is the window area that an overlay must fit in. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags from the host.
 
 The host sends these `ControlEvent` values:
 

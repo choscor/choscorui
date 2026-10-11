@@ -6,7 +6,7 @@ mod field;
 mod input;
 mod input_group;
 mod kbd;
-mod measured;
+pub(crate) mod measured;
 mod otp;
 mod range_slider;
 mod select;

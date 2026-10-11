@@ -145,6 +145,11 @@ pub const PAGES: &[PageInfo] = &[
         overlay::context_menu
     ),
     page!("menubar", "Menu bar", Popups, overlay::menubar),
+    page!("popover", "Popover", Popups, overlay::popover),
+    page!("hover-card", "Hover card", Popups, overlay::hover_card),
+    page!("dialog", "Dialog", Dialogs, overlay::dialog),
+    page!("sheet", "Sheet", Dialogs, overlay::sheet),
+    page!("drawer", "Drawer", Dialogs, overlay::drawer),
     page!(
         "alert-dialog",
         "Alert dialog",
@@ -190,6 +195,9 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Kbd", "kbd"),
     ("ContextMenu", "context-menu"),
     ("Menubar", "menubar"),
+    ("Popover", "popover"),
+    ("Dialog", "dialog"),
+    ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
     ("CalendarMode", "date-picker"),
     ("DatePicker", "date-picker"),
@@ -385,10 +393,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ),
     ("Ring", "focus ring of a resolved style"),
     ("ShapedText", "text measurement backed by a shaper"),
-    (
-        "SheetSide",
-        "variant key of sheets and drawers; read by recipes",
-    ),
     ("Sides", "border sides of a resolved style"),
     ("SidebarVariant", "variant key of sidebars; read by recipes"),
     ("Slot", "part key of style queries"),
@@ -539,6 +543,14 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("ToolbarLayout", "geometry returned by Toolbar::layout"),
     ("ToolButtonAction", "result of ToolButton input"),
     ("TOOLTIP_DELAY", "timing constant of TooltipController"),
+    (
+        "HOVER_CARD_OPEN_DELAY",
+        "timing constant of Popover::hover_card",
+    ),
+    (
+        "HOVER_CARD_CLOSE_DELAY",
+        "timing constant of Popover::hover_card",
+    ),
     ("TOOLTIP_GRACE", "timing constant of TooltipController"),
     (
         "TYPE_AHEAD_TIMEOUT",

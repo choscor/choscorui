@@ -1,7 +1,7 @@
 //! Form field text parts and the field layout: legends, labels, titles,
 //! descriptions, errors, and separators, stacked or side by side.
 
-use super::measured::measured_layout;
+use super::measured::{measured_layout, paint_wrapped};
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
 use crate::style::{
@@ -150,16 +150,7 @@ impl CustomControl for FieldText {
         }
         let text = self.text.as_str();
         cx.slot(bounds, &style, |cx, inner| {
-            let layout = measured_layout(text, &style.text, inner.size.width.max(1.0), cx.text);
-            for line in layout.lines() {
-                let rect = Rect::from_xywh(
-                    inner.origin.x,
-                    inner.origin.y + line.baseline - style.text.baseline(),
-                    inner.size.width,
-                    style.text.line_height,
-                );
-                cx.label(rect, &text[line.bytes.clone()], &style, TextAlign::Start);
-            }
+            paint_wrapped(cx, inner, text, &style, TextAlign::Start);
         });
     }
 

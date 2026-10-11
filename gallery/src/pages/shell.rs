@@ -529,7 +529,7 @@ impl Page for StatusBarPage {
     }
 
     #[cfg(target_os = "macos")]
-    fn tick(&mut self, env: &Env<'_>) -> bool {
+    fn tick(&mut self, _tree: &mut Tree, env: &Env<'_>) -> bool {
         let before = self.status.text().to_owned();
         self.status.poll(env.now);
         before != self.status.text()

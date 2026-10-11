@@ -388,7 +388,7 @@ pub trait Page: AsAny {
     }
     /// Advances timers; returns whether to repaint.
     #[cfg(target_os = "macos")]
-    fn tick(&mut self, _env: &Env<'_>) -> bool {
+    fn tick(&mut self, _tree: &mut Tree, _env: &Env<'_>) -> bool {
         false
     }
     /// True when the page's controls paint their own disabled state.

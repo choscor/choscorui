@@ -90,6 +90,8 @@ in parentheses is the role that the macOS backend gives to that
 | Form | [`DatePicker`](#datepicker) | Button with a calendar popover for one date, several dates, or a range. |
 | Overlay | [`ContextMenu`](#contextmenu-and-menubar) | Area that opens a menu at the pointer on a secondary click. |
 | Overlay | [`Menubar`](#contextmenu-and-menubar) | Row of menu titles inside the window. |
+| Overlay | [`Popover`](#popover) | Button with a floating panel; `Popover::hover_card` opens it on hover. |
+| Overlay | [`Dialog`](#dialog) | Button with a modal panel; `Dialog::sheet` and `Dialog::drawer` slide it in from an edge. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1773,6 +1775,85 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 
 [menus.rs](../crates/choscorui-controls/tests/menus.rs) pins this behavior.
 
+### Popover
+
+- The trigger is an outline button. A press, Enter, or Space opens or
+  closes the panel. Escape closes it and emits `Dismissed`. A press
+  outside the panel closes it.
+- The panel is 4 pt below the trigger and centered on it. It moves to stay
+  inside the window, and opens above the trigger when only that side
+  fits. It fades, zooms, and slides in like a select list.
+- **`Popover::hover_card`.** The trigger is a link. Enter or Space emits
+  `Activated`. The panel opens when the pointer rests on the link for
+  `HOVER_CARD_OPEN_DELAY` (0.7 s). It closes
+  `HOVER_CARD_CLOSE_DELAY` (0.3 s) after the pointer leaves the link and
+  the panel.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Trigger | `Button` `Root` | outline, or link for a hover card; default size |
+| Panel | `Popover` `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, 288 pt wide, 16 pt padding |
+| Hover card panel | `HoverCard` `Content` | as the popover panel, radius lg, 256 pt wide |
+| Title | `Title` | sm medium `foreground` text |
+| Description | `Description` | sm `muted-foreground` text, 4 pt below the title |
+
+| Field | `Popover::semantics` |
+| --- | --- |
+| Role | `Button` (AXButton), or `Link` (AXLink) for a hover card |
+| Name / value | trigger text / - |
+| Description | the title and the description while open |
+| State | expanded (not for a hover card), disabled |
+| Actions | `Activate`, `Expand` or `Collapse` (not for a hover card), and `Focus` while enabled |
+
+[overlays.rs](../crates/choscorui-controls/tests/overlays.rs) pins this behavior.
+
+### Dialog
+
+- The trigger is an outline button. A press, Enter, Space, or `Activate`
+  opens the panel. The control is modal while the panel is open.
+- **Focus.** The first footer button has focus when the panel opens. Tab
+  and Shift+Tab cycle through the footer buttons and the close button.
+  Enter or Space activates the focused part. Focus stays on the control,
+  so it returns to the trigger when the panel closes.
+- A footer button emits `ItemActivated(index)` and closes the panel. The
+  close button, Escape, a press outside the panel, and `Dismiss` close it
+  and emit `Dismissed`.
+- `with_close(label)` shows the close button with `label` as its name. A
+  drawer has no close button.
+- **`Dialog::new`.** The panel is centered in the window. It is 448 pt
+  wide, or the window width less 32 pt. The footer buttons are a row at the
+  end. The panel fades and zooms in.
+- **`Dialog::sheet(side, …)`.** The panel fills the window along `side`.
+  A left or right sheet is 75% of the window width, at most 384 pt. The
+  footer buttons stack at the bottom. The panel slides in from its edge.
+- **`Dialog::drawer(side, …)`.** As a sheet, but a top or bottom drawer is
+  only as tall as its content, at most 80% of the window. A bottom drawer
+  has a handle. A drag toward the edge moves the panel. A release after
+  more than a quarter of its size dismisses it; a shorter drag snaps back.
+- A scrim at 10% black covers the window behind the panel and fades with
+  it.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Dialog panel | `Dialog` `Root` | `popover` fill, 1 pt ring at 10% `foreground`, radius xl, 24 pt padding and gap |
+| Sheet panel | `Sheet` `Root` | `popover` fill, 1 pt `border` on the inner side, shadow lg, 200 ms |
+| Drawer panel | `Drawer` `Root` | as the sheet panel, radius xl on the inner corners, no shadow, 450 ms |
+| Header | `Header` | 16 pt padding in a sheet or drawer |
+| Footer | `Footer` | 8 pt gap; 16 pt padding in a sheet or drawer |
+| Close | `Close` | ghost icon-sm button, 16 pt inside the top-end corner |
+| Handle | `Drawer` `Handle` | 100 by 6 pt `muted` bar, 16 pt below the top |
+| Scrim | `Overlay` | black at 10%, 4 pt backdrop blur |
+
+| Field | `Dialog::semantics` closed | `Dialog::semantics` open |
+| --- | --- | --- |
+| Role | `Button` (AXButton) | `Dialog` (AXGroup) |
+| Name / value | trigger text / - | title / the focused part's label |
+| Description | - | the description |
+| State | expanded false, disabled | expanded |
+| Actions | `Activate` and `Focus` while enabled | `Activate` (the focused part), `Dismiss`, and `Focus` |
+
+[overlays.rs](../crates/choscorui-controls/tests/overlays.rs) pins this behavior.
+
 ### CustomControl and ControlHost
 
 - `ControlHost::mount` creates a child node for the control. The node is
@@ -1804,6 +1885,11 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   `semantics()` lists that action.
 - `set_modifiers` sets the modifier keys that `ControlContext::modifiers`
   reports with later events.
+- `advance(tree, time)` sets the host time. It sends `Timer` to each
+  control whose `deadline` is at or before `time`. `next_deadline` returns
+  the earliest deadline, so the frame loop can wait for it.
+- `MeasureContext::viewport` is the root node's bounds. Overlays fit their
+  panels in it.
 
 The semantics come from the control's own `semantics`. The
 [guide](guide.md) shows how to write a custom control.

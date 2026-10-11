@@ -233,8 +233,10 @@ impl Page for HostedPage {
     }
 
     #[cfg(target_os = "macos")]
-    fn tick(&mut self, _env: &Env<'_>) -> bool {
-        self.busy.get()
+    fn tick(&mut self, tree: &mut Tree, env: &Env<'_>) -> bool {
+        // A control timer, such as a hover card's delay, needs a repaint.
+        let fired = self.host.advance(tree, env.now.as_secs_f64());
+        fired || self.busy.get()
     }
 
     fn native_disabled(&self) -> bool {

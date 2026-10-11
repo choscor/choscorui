@@ -116,7 +116,9 @@ pub use form::{
     ToggleItem,
 };
 pub use listbox::ListEntry;
-pub use overlay::{ContextMenu, Menubar};
+pub use overlay::{
+    ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY, Menubar, Popover,
+};
 mod dock;
 pub use dock::{
     DockArea, DockArrangement, DockError, DockFocus, DockLayout, DockPanel, DockRestoreReport,

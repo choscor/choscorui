@@ -1318,7 +1318,7 @@ impl GalleryView {
         self.sync(ctx);
         let tokens = ctx.theme.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
-        self.page.tick(&env)
+        self.page.tick(&mut self.tree, &env)
     }
 
     /// Releases pointer capture and armed presses when the window loses

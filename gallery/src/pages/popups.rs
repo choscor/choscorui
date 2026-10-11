@@ -554,7 +554,7 @@ impl Page for TooltipPage {
     }
 
     #[cfg(target_os = "macos")]
-    fn tick(&mut self, env: &Env<'_>) -> bool {
+    fn tick(&mut self, _tree: &mut Tree, env: &Env<'_>) -> bool {
         let before = self.tooltips.visible().is_some();
         self.tooltips.poll(env.now);
         before != self.tooltips.visible().is_some()

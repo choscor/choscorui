@@ -1,8 +1,8 @@
 //! Line layout from measured advances, for hosted controls that wrap text
 //! without a shaper.
 
-use crate::style::TextMeasure;
-use choscorui_core::{CaretStop, LayoutLine, TextLayout, TypeSpec, grapheme_boundaries};
+use crate::style::{PaintContext, ResolvedStyle, TextAlign, TextMeasure};
+use choscorui_core::{CaretStop, LayoutLine, Rect, TextLayout, TypeSpec, grapheme_boundaries};
 
 /// Lays out `text` in lines no wider than `width`, breaking after spaces
 /// and at line breaks, with advances from `measure`. Each line is one
@@ -100,4 +100,42 @@ pub(crate) fn measured_layout(
     style.line_height = spec.line_height / (spec.size * 1.2);
     TextLayout::from_lines(text, style, Some(width.max(1.0)), lines)
         .expect("measured lines cover the text in order")
+}
+
+/// The height of `text` wrapped in `width` with `spec`: zero for empty
+/// text, else the line count times the line height.
+pub(crate) fn wrapped_height(
+    text: &str,
+    spec: &TypeSpec,
+    width: f64,
+    measure: &dyn TextMeasure,
+) -> f64 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    let lines = measured_layout(text, spec, width.max(1.0), measure)
+        .lines()
+        .len()
+        .max(1);
+    lines as f64 * spec.line_height
+}
+
+/// Paints `text` wrapped in `rect`, one label per line.
+pub(crate) fn paint_wrapped(
+    cx: &mut PaintContext<'_>,
+    rect: Rect,
+    text: &str,
+    style: &ResolvedStyle,
+    align: TextAlign,
+) {
+    let layout = measured_layout(text, &style.text, rect.size.width.max(1.0), cx.text);
+    for line in layout.lines() {
+        let line_rect = Rect::from_xywh(
+            rect.origin.x,
+            rect.origin.y + line.baseline - style.text.baseline(),
+            rect.size.width,
+            style.text.line_height,
+        );
+        cx.label(line_rect, &text[line.bytes.clone()], style, align);
+    }
 }

@@ -29,6 +29,8 @@ pub enum ControlEvent {
     /// A press landed outside the control and its open overlay, or a modal
     /// overlay opened above it: close transient popups.
     Dismiss,
+    /// The host time reached the control's [`CustomControl::deadline`].
+    Timer,
 }
 
 /// A value a control reports in [`ControlMessage::Changed`].
@@ -109,6 +111,8 @@ impl<'a> HostEnv<'a> {
 /// What a control reads while it measures or arranges.
 pub struct MeasureContext<'a> {
     pub constraints: Constraints,
+    /// The root node's bounds: the window area that overlays fit in.
+    pub viewport: Rect,
     pub direction: LayoutDirection,
     pub tokens: &'a DesignTokens,
     pub styles: &'a Styles,
@@ -251,6 +255,12 @@ pub trait CustomControl {
         let _ = time;
         false
     }
+
+    /// The host time at which the control wants a [`ControlEvent::Timer`],
+    /// for delays such as a hover card's.
+    fn deadline(&self) -> Option<f64> {
+        None
+    }
 }
 
 /// Owns mounted controls by node.
@@ -359,7 +369,8 @@ impl ControlHost {
         env: &HostEnv<'_>,
     ) -> Option<Measured> {
         let tokens = env.tokens(tree, node);
-        self.measure_with(node, constraints, env.direction, &tokens, env)
+        let viewport = tree.bounds(tree.root()).unwrap_or_default();
+        self.measure_with(node, constraints, env.direction, &tokens, viewport, env)
     }
 
     fn measure_with(
@@ -368,11 +379,13 @@ impl ControlHost {
         constraints: Constraints,
         direction: LayoutDirection,
         tokens: &DesignTokens,
+        viewport: Rect,
         env: &HostEnv<'_>,
     ) -> Option<Measured> {
         let control = self.controls.get_mut(&node)?;
         let cx = MeasureContext {
             constraints,
+            viewport,
             direction,
             tokens,
             styles: env.styles,
@@ -404,13 +417,14 @@ impl ControlHost {
             .filter(|node| tree.is_within(**node, root) && tree.visible(**node) == Some(true))
             .map(|node| (*node, env.tokens(tree, *node)))
             .collect();
-        let mut measure = |node: NodeId, constraints: Constraints, direction| match tokens
-            .get(&node)
-            .and_then(|tokens| self.measure_with(node, constraints, direction, tokens, env))
-        {
-            Some(measured) => measured,
-            None => leaves.measure(node, constraints, direction),
-        };
+        let viewport = tree.bounds(tree.root()).unwrap_or_default();
+        let mut measure =
+            |node: NodeId, constraints: Constraints, direction| match tokens.get(&node).and_then(
+                |tokens| self.measure_with(node, constraints, direction, tokens, viewport, env),
+            ) {
+                Some(measured) => measured,
+                None => leaves.measure(node, constraints, direction),
+            };
         engine.layout(tree, root, bounds, &mut measure)?;
         self.arrange(tree, env);
         Ok(())
@@ -419,6 +433,7 @@ impl ControlHost {
     /// Lets every visible control record its part geometry for its
     /// current bounds. Call after layout and after theme changes.
     pub fn arrange(&mut self, tree: &Tree, env: &HostEnv<'_>) {
+        let viewport = tree.bounds(tree.root()).unwrap_or_default();
         for (node, control) in &mut self.controls {
             let Some(bounds) = tree.bounds(*node) else {
                 continue;
@@ -429,6 +444,7 @@ impl ControlHost {
             let tokens = env.tokens(tree, *node);
             let cx = MeasureContext {
                 constraints: Constraints::tight(bounds.size),
+                viewport,
                 direction: env.direction,
                 tokens: &tokens,
                 styles: env.styles,
@@ -732,6 +748,35 @@ impl ControlHost {
                 .time(env.time);
             control.paint_overlay(&mut cx);
         }
+    }
+
+    /// Sets the host time and sends [`ControlEvent::Timer`] to each
+    /// visible control whose deadline is at or before `time`. Returns
+    /// true when a timer fired.
+    pub fn advance(&mut self, tree: &mut Tree, time: f64) -> bool {
+        self.time = time;
+        let due: Vec<NodeId> = self
+            .paint_order(tree)
+            .into_iter()
+            .filter(|node| {
+                self.controls
+                    .get(node)
+                    .and_then(|control| control.deadline())
+                    .is_some_and(|deadline| deadline <= time)
+            })
+            .collect();
+        for node in &due {
+            self.deliver(tree, *node, EventPhase::Target, &ControlEvent::Timer);
+        }
+        !due.is_empty()
+    }
+
+    /// The earliest deadline of a visible control.
+    pub fn next_deadline(&self, tree: &Tree) -> Option<f64> {
+        self.paint_order(tree)
+            .into_iter()
+            .filter_map(|node| self.controls.get(&node)?.deadline())
+            .reduce(f64::min)
     }
 
     /// True while any visible control animates at `time`.

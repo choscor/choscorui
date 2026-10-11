@@ -3,7 +3,10 @@
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
-use choscorui::controls::{CommandId, ContextMenu, CustomControl, MenuCheck, MenuItem, Menubar};
+use choscorui::controls::{
+    ButtonVariant, CommandId, ContextMenu, CustomControl, Dialog, MenuCheck, MenuItem, Menubar,
+    Popover, SheetSide,
+};
 use choscorui::core::{NodeId, Tree};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
@@ -81,6 +84,82 @@ pub fn menubar(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page>
     HostedPage::build(tree, parent, rows)
 }
 
+pub fn popover(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![(
+        "Press the button",
+        vec![boxed(Popover::new(
+            "Open popover",
+            "Dimensions",
+            "Set the dimensions for the layer.",
+        ))],
+    )];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn hover_card(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![(
+        "Rest the pointer on the link",
+        vec![boxed(Popover::hover_card(
+            "@nextjs",
+            "@nextjs",
+            "The React Framework – created and maintained by @vercel. Joined December 2021.",
+        ))],
+    )];
+    HostedPage::build(tree, parent, rows)
+}
+
+fn profile(dialog: Dialog) -> Dialog {
+    dialog
+        .with_action("Cancel", ButtonVariant::Outline)
+        .with_action("Save changes", ButtonVariant::Default)
+        .with_close("Close")
+}
+
+const PROFILE: &str = "Make changes to your profile here. Click save when you're done.";
+
+pub fn dialog(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![(
+        "Modal dialog",
+        vec![boxed(profile(Dialog::new(
+            "Edit profile",
+            "Edit profile",
+            PROFILE,
+        )))],
+    )];
+    HostedPage::build(tree, parent, rows)
+}
+
+const SIDES: [(SheetSide, &str); 4] = [
+    (SheetSide::Top, "Top"),
+    (SheetSide::Right, "Right"),
+    (SheetSide::Bottom, "Bottom"),
+    (SheetSide::Left, "Left"),
+];
+
+pub fn sheet(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let sheets = SIDES
+        .into_iter()
+        .map(|(side, label)| boxed(profile(Dialog::sheet(side, label, "Edit profile", PROFILE))))
+        .collect();
+    let rows: Vec<Row> = vec![("Sides", sheets)];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn drawer(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let drawers = SIDES
+        .into_iter()
+        .map(|(side, label)| {
+            boxed(
+                Dialog::drawer(side, label, "Move goal", "Set your daily activity goal.")
+                    .with_action("Submit", ButtonVariant::Default)
+                    .with_action("Cancel", ButtonVariant::Outline),
+            )
+        })
+        .collect();
+    let rows: Vec<Row> = vec![("Directions; drag toward the edge to dismiss", drawers)];
+    HostedPage::build(tree, parent, rows)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::pages::hosted::HostedPage;
@@ -97,12 +176,32 @@ mod tests {
         for (id, name, role) in [
             ("menubar", "Main menu", SemanticRole::Menu),
             ("context-menu", "Page actions", SemanticRole::Group),
+            ("popover", "Open popover", SemanticRole::Button),
         ] {
             let mut h = Harness::new(id);
             let node = h.node(name, Some(role));
             assert!(h.act(node, SemanticAction::Focus));
             assert!(h.press(Key::Enter));
             assert_eq!(expanded(&mut h, node), Some(true), "{id}");
+            assert!(h.press(Key::Escape));
+            assert_eq!(expanded(&mut h, node), Some(false), "{id}");
+        }
+    }
+
+    #[test]
+    fn dialogs_open_from_the_keyboard_and_close_on_escape() {
+        for (id, name) in [
+            ("dialog", "Edit profile"),
+            ("sheet", "Right"),
+            ("drawer", "Bottom"),
+        ] {
+            let mut h = Harness::new(id);
+            let node = h.node(name, Some(SemanticRole::Button));
+            assert!(h.act(node, SemanticAction::Focus));
+            assert!(h.press(Key::Enter));
+            let page = h.get::<HostedPage>();
+            let role = page.host.get(node).unwrap().semantics().role;
+            assert_eq!(role, SemanticRole::Dialog, "{id}");
             assert!(h.press(Key::Escape));
             assert_eq!(expanded(&mut h, node), Some(false), "{id}");
         }
