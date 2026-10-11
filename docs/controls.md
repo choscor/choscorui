@@ -62,8 +62,8 @@ in parentheses is the role that the macOS backend gives to that
 | Popups and dialogs | [`TooltipController`](#tooltipcontroller) | Hover tooltips with delay and grace time. |
 | Popups and dialogs | [`DialogStack`](#dialogstack-and-dialogkeys) | Modal and modeless dialogs in a window. |
 | Popups and dialogs | [`DialogKeys`](#dialogstack-and-dialogkeys) | Default and cancel keys for a window or dialog. |
-| Popups and dialogs | [`MessageDialog`](#messagedialog-and-inputdialog) | Message with ordered buttons. |
-| Popups and dialogs | [`InputDialog`](#messagedialog-and-inputdialog) | One validated value. |
+| Popups and dialogs | [`AlertDialog`](#alertdialog-and-inputdialog) | Alert with ordered buttons. |
+| Popups and dialogs | [`InputDialog`](#alertdialog-and-inputdialog) | One validated value. |
 | Popups and dialogs | [`ColorPicker`](#colorpicker-and-fontdialog) | Color model with HSV, hex, and alpha. |
 | Popups and dialogs | [`FontDialog`](#colorpicker-and-fontdialog) | Font family, size, weight, and slant. |
 | Window chrome | [`Toolbar`](#toolbar) | Toolbar with roving focus and overflow. |
@@ -1092,7 +1092,7 @@ The node has a `DescribedBy` relation to its target.
 [navigation.rs](../crates/choscorui-controls/tests/navigation.rs) pin this
 behavior.
 
-### MessageDialog and InputDialog
+### AlertDialog and InputDialog
 
 - **Button keys.** Enter triggers the `Accept` button and Escape triggers
   the `Reject` button (`dialog_key_button`). Enter never triggers a
@@ -1101,6 +1101,20 @@ behavior.
   far left, then Discard, a flexible gap, other actions, Reject, and the
   default button.
 - In right-to-left layouts, `order_dialog_buttons` mirrors the whole row.
+- `MessageDialog` is a deprecated alias of `AlertDialog`.
+- **Look.** `measure` sizes the panel, and `button_rects` places the
+  buttons in platform order. `paint_overlay` draws the scrim, and `paint`
+  draws the panel and its text. The host paints each button with
+  `button_variant`: default for `Accept`, destructive for `Destructive`,
+  and outline for the rest.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Scrim | `Overlay` | black at 10% |
+| Panel | `Root` | `popover` fill, 1 pt ring at 10% `foreground`, radius xl, padding 24 pt, at most 512 pt wide (320 pt at size sm) |
+| Title | `Title` | lg medium `foreground` text |
+| Message and detail | `Description` | sm `muted-foreground` text, 6 pt apart |
+| Buttons | `Footer` | 8 pt apart, 24 pt below the text, at the end of the row |
 - **`InputDialog`.** Enter returns the value only when it is valid. Escape
   returns `Err(())`. `can_accept` is true only for a valid value.
 - For the text, integer, and decimal kinds, empty text is `Intermediate`.
@@ -1109,7 +1123,7 @@ behavior.
 - An integer outside the range is `Invalid`. A choice must match one
   option exactly.
 
-| Field | `MessageDialog::semantics` |
+| Field | `AlertDialog::semantics` |
 | --- | --- |
 | Role | `Dialog` (AXGroup) |
 | Name / value | title / -; the message and the detail are the description |

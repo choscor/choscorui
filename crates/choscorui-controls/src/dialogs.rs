@@ -1,16 +1,20 @@
 //! Custom-drawn dialog contracts: platform button ordering, modal and
 //! modeless dialog stacking with focus restoration, and the color, font,
-//! single-value input, and message dialog models.
+//! single-value input, and alert dialog models.
 //!
 //! Native dialogs (open/save/directory panels and alerts) live in the
 //! macOS backend (`choscorui_macos::{FileDialogSpec, AlertSpec}`); the
 //! dialogs here are drawn by the toolkit and use the same ordering and
 //! keyboard rules so both kinds behave alike.
 
+use crate::style::{
+    ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
+    TextMeasure,
+};
 use crate::{ComboChange, ComboInput, FontChooser, NumberInput, ValidationState};
 use choscorui_core::{
-    Color, FontSlant, FontWeight, Key, Locale, NodeId, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, TextStyle, Tree, TreeError,
+    Color, DesignTokens, FontSlant, FontWeight, Key, Locale, NodeId, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -571,16 +575,20 @@ impl InputDialog {
     }
 }
 
-/// Custom-drawn message dialog with ordered buttons and keyboard rules.
+/// Custom-drawn alert dialog with ordered buttons and keyboard rules.
 #[derive(Clone, Debug, PartialEq)]
-pub struct MessageDialog {
+pub struct AlertDialog {
     pub title: String,
     pub message: String,
     pub detail: Option<String>,
     pub buttons: Vec<DialogButton>,
 }
 
-impl MessageDialog {
+/// Deprecated name of [`AlertDialog`].
+#[deprecated(since = "0.1.0", note = "renamed to `AlertDialog`")]
+pub type MessageDialog = AlertDialog;
+
+impl AlertDialog {
     pub fn new(
         title: impl Into<String>,
         message: impl Into<String>,
@@ -607,6 +615,140 @@ impl MessageDialog {
     pub fn handle_key(&self, key: Key) -> Option<usize> {
         dialog_key_button(&self.buttons, key)
     }
+
+    /// The button look of a role: the default button for Accept, the
+    /// destructive button for Destructive, and outline for the rest.
+    pub fn button_variant(role: DialogButtonRole) -> ButtonVariant {
+        match role {
+            DialogButtonRole::Accept => ButtonVariant::Default,
+            DialogButtonRole::Destructive => ButtonVariant::Destructive,
+            _ => ButtonVariant::Outline,
+        }
+    }
+
+    fn texts(&self) -> impl Iterator<Item = (Slot, &str)> {
+        [
+            (Slot::Title, self.title.as_str()),
+            (Slot::Description, &self.message),
+        ]
+        .into_iter()
+        .chain(
+            self.detail
+                .as_deref()
+                .map(|detail| (Slot::Description, detail)),
+        )
+    }
+
+    fn button_size(
+        &self,
+        index: usize,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+    ) -> Size {
+        let button = &self.buttons[index];
+        let query = StyleQuery::new(ControlKind::Button, Slot::Root)
+            .variant(Self::button_variant(button.role));
+        Content::label(&button.title).size(&styles.resolve(tokens, query), text)
+    }
+
+    /// The panel size inside `available`: the padding, the title, the
+    /// message and detail lines, and the button row.
+    pub fn measure(
+        &self,
+        available: Size,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+    ) -> Size {
+        let style = |slot| styles.resolve(tokens, StyleQuery::new(ControlKind::AlertDialog, slot));
+        let (panel, header) = (style(Slot::Root), style(Slot::Header));
+        let lines: Vec<f64> = self
+            .texts()
+            .map(|(slot, _)| style(slot).text.line_height)
+            .collect();
+        let gaps = lines.len().saturating_sub(1) as f64 * header.gap;
+        let row = (0..self.buttons.len())
+            .map(|index| self.button_size(index, styles, tokens, text).height)
+            .fold(0.0, f64::max);
+        let width = available.width.min(panel.max_width);
+        let height = panel.padding.vertical() + lines.iter().sum::<f64>() + gaps + panel.gap + row;
+        Size::new(width, height.min(available.height))
+    }
+
+    /// The rect of each button in a panel at `panel`, by index into
+    /// `buttons`. Help and Discard sit at the start of the row, and the
+    /// rest at the end, in platform order.
+    pub fn button_rects(
+        &self,
+        panel: Rect,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+        rtl: bool,
+    ) -> Vec<(usize, Rect)> {
+        let root = styles.resolve(
+            tokens,
+            StyleQuery::new(ControlKind::AlertDialog, Slot::Root),
+        );
+        let footer = styles.resolve(
+            tokens,
+            StyleQuery::new(ControlKind::AlertDialog, Slot::Footer),
+        );
+        let (order, gap) = order_dialog_buttons(&self.buttons, rtl);
+        let sizes: Vec<Size> = order
+            .iter()
+            .map(|index| self.button_size(*index, styles, tokens, text))
+            .collect();
+        let row_height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+        let y = panel.max_y() - root.padding.block_end - row_height;
+        let (left, right) = (
+            panel.origin.x + root.padding.inline_start,
+            panel.max_x() - root.padding.inline_end,
+        );
+        let mut rects = Vec::with_capacity(order.len());
+        let mut x = left;
+        for (index, size) in order.iter().zip(&sizes).take(gap) {
+            rects.push((*index, Rect::from_xywh(x, y, size.width, row_height)));
+            x += size.width + footer.gap;
+        }
+        let trailing: f64 = sizes[gap..].iter().map(|size| size.width).sum::<f64>()
+            + sizes.len().saturating_sub(gap).saturating_sub(1) as f64 * footer.gap;
+        let mut x = right - trailing;
+        for (index, size) in order.iter().zip(&sizes).skip(gap) {
+            rects.push((*index, Rect::from_xywh(x, y, size.width, row_height)));
+            x += size.width + footer.gap;
+        }
+        rects
+    }
+
+    /// Paints the scrim of a modal alert over the context's bounds. Paint
+    /// it before the panel.
+    pub fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        let style = cx.style(StyleQuery::new(ControlKind::AlertDialog, Slot::Overlay));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |_, _| {});
+    }
+
+    /// Paints the panel, the title, and the message lines in the context's
+    /// bounds. The host paints the buttons at [`AlertDialog::button_rects`]
+    /// with [`AlertDialog::button_variant`].
+    pub fn paint(&self, cx: &mut PaintContext<'_>) {
+        let query = |slot| StyleQuery::new(ControlKind::AlertDialog, slot);
+        let (panel, header) = (cx.style(query(Slot::Root)), cx.style(query(Slot::Header)));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &panel, |cx, inner| {
+            let mut y = inner.origin.y;
+            for (slot, line) in self.texts() {
+                let style = cx.style(query(slot));
+                let height = style.text.line_height;
+                let rect = Rect::from_xywh(inner.origin.x, y, inner.size.width, height);
+                cx.label(rect, line, &style, TextAlign::Start);
+                y += height + header.gap;
+            }
+        });
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::Dialog,

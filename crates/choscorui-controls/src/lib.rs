@@ -86,9 +86,14 @@ pub use widgets::{
 mod datetime_controls;
 pub use datetime_controls::{Calendar, CalendarCell, DateTimeEdit, DateTimeField, DateTimeKind};
 mod dialogs;
+#[expect(
+    deprecated,
+    reason = "re-exports the deprecated `MessageDialog` alias for one release"
+)]
+pub use dialogs::MessageDialog;
 pub use dialogs::{
-    ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog, InputDialog,
-    InputKind, InputValue, MessageDialog, Modality, dialog_key_button, order_dialog_buttons,
+    AlertDialog, ColorPicker, DialogButton, DialogButtonRole, DialogId, DialogStack, FontDialog,
+    InputDialog, InputKind, InputValue, Modality, dialog_key_button, order_dialog_buttons,
 };
 mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};

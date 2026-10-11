@@ -2,14 +2,13 @@
 //! dialogs with validation, the color picker, and the font dialog.
 
 use crate::page::{
-    Align, Column, Env, Page, Push, field_semantics, node, paint_field, pressed, sem, split,
-    type_into,
+    Align, Column, Env, Page, Push, field_semantics, node, paint_field, pressed, sem, type_into,
 };
 use crate::pages::selection::{ComboField, POPUP_SPACE, families};
 use choscorui::controls::{
-    ColorPicker, ComboChange, ComboInput, DialogButton, DialogButtonRole, DialogId, DialogStack,
-    FontDialog, InputDialog, InputKind, MessageDialog, Modality, ShortcutModifiers,
-    ValidationState, dialog_key_button, order_dialog_buttons,
+    AlertDialog, ColorPicker, ComboChange, ComboInput, DialogButton, DialogButtonRole, DialogId,
+    DialogStack, FontDialog, InputDialog, InputKind, Modality, ShortcutModifiers, ValidationState,
+    dialog_key_button, order_dialog_buttons,
 };
 use choscorui::core::{
     Color, ColorRole, DisplayList, FontSlant, FontWeight, Key, KeyEvent, NodeId, Point,
@@ -18,20 +17,20 @@ use choscorui::core::{
 };
 
 // ---------------------------------------------------------------------------
-// Message dialog
+// Alert dialog
 
 /// One open custom dialog: its root node, buttons in display order, and
 /// the stack id.
 struct OpenDialog {
     id: DialogId,
-    dialog: MessageDialog,
+    dialog: AlertDialog,
     buttons: Vec<(usize, Push)>,
 }
 
 /// Opens a modal "save changes" alert or a modeless note. While the modal
 /// alert is open, input outside it is blocked; Return chooses Save and
 /// Escape chooses Cancel.
-pub struct MessageDialogPage {
+pub struct AlertDialogPage {
     open_modal: Push,
     open_modeless: Push,
     root: NodeId,
@@ -41,8 +40,8 @@ pub struct MessageDialogPage {
     last: String,
 }
 
-fn save_alert() -> MessageDialog {
-    let mut dialog = MessageDialog::new(
+fn save_alert() -> AlertDialog {
+    let mut dialog = AlertDialog::new(
         "Unsaved changes",
         "Do you want to save the changes you made to “Notes.txt”?",
         vec![
@@ -56,21 +55,21 @@ fn save_alert() -> MessageDialog {
     dialog
 }
 
-fn info_note() -> MessageDialog {
-    MessageDialog::new(
+fn info_note() -> AlertDialog {
+    AlertDialog::new(
         "Tip",
         "This note is modeless: the rest of the page keeps working.",
         vec![DialogButton::new("OK", DialogButtonRole::Accept)],
     )
 }
 
-pub fn message_dialog(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
+pub fn alert_dialog(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
     let open_modal = Push::new(tree, parent, "Close document…", env);
     let open_modeless = Push::new(tree, parent, "Show tip", env);
     let status = node(tree, parent, false);
     let root = node(tree, parent, false);
     let _ = tree.set_visible(root, false);
-    Box::new(MessageDialogPage {
+    Box::new(AlertDialogPage {
         open_modal,
         open_modeless,
         root,
@@ -81,7 +80,7 @@ pub fn message_dialog(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn
     })
 }
 
-impl MessageDialogPage {
+impl AlertDialogPage {
     /// Opens the modal alert (`true`) or the modeless note.
     pub fn open(&mut self, tree: &mut Tree, modal: bool, env: &Env<'_>) {
         self.close(tree);
@@ -90,10 +89,12 @@ impl MessageDialogPage {
         let buttons: Vec<(usize, Push)> = order
             .into_iter()
             .map(|index| {
-                (
-                    index,
-                    Push::new(tree, self.root, dialog.buttons[index].title.clone(), env),
-                )
+                let button = &dialog.buttons[index];
+                let mut push = Push::new(tree, self.root, button.title.clone(), env);
+                push.button = push
+                    .button
+                    .with_variant(AlertDialog::button_variant(button.role));
+                (index, push)
             })
             .collect();
         let _ = tree.set_visible(self.root, true);
@@ -154,14 +155,10 @@ impl MessageDialogPage {
             .parent(self.root)
             .and_then(|p| tree.bounds(p))
             .unwrap_or_default();
-        let size = Size::new(
-            420.0,
-            if open.dialog.detail.is_some() {
-                170.0
-            } else {
-                130.0
-            },
-        );
+        let available = Size::new((page.size.width - 32.0).max(0.0), page.size.height);
+        let size = open
+            .dialog
+            .measure(available, env.styles(), env.tokens, env);
         let rect = Rect::new(
             Point::new(
                 page.origin.x + (page.size.width - size.width).max(0.0) / 2.0,
@@ -170,33 +167,13 @@ impl MessageDialogPage {
             size,
         );
         let _ = tree.set_bounds(self.root, rect);
-        let row = Rect::new(
-            Point::new(rect.origin.x + 16.0, rect.max_y() - 46.0),
-            Size::new(rect.size.width - 32.0, 30.0),
-        );
-        // Help and Discard sit at the leading edge; the rest at the
-        // trailing edge, after a flexible gap.
-        let (_, gap) = order_dialog_buttons(&open.dialog.buttons, env.rtl());
-        let mut widths: Vec<f64> = open.buttons.iter().map(|_| 96.0).collect();
-        let help = open
-            .buttons
-            .iter()
-            .map(|(index, _)| open.dialog.buttons[*index].role == DialogButtonRole::Help);
-        for (width, help) in widths.iter_mut().zip(help) {
-            if help {
-                *width = 30.0;
+        let rects = open
+            .dialog
+            .button_rects(rect, env.styles(), env.tokens, env, env.rtl());
+        for (index, push) in &open.buttons {
+            if let Some((_, cell)) = rects.iter().find(|(i, _)| i == index) {
+                let _ = tree.set_bounds(push.node, *cell);
             }
-        }
-        widths.insert(gap, 0.0);
-        let cells = split(row, &widths, 8.0, false);
-        let cells: Vec<Rect> = cells
-            .into_iter()
-            .enumerate()
-            .filter(|(index, _)| *index != gap)
-            .map(|(_, cell)| cell)
-            .collect();
-        for ((_, push), cell) in open.buttons.iter().zip(cells) {
-            let _ = tree.set_bounds(push.node, cell);
         }
     }
 
@@ -212,7 +189,7 @@ impl MessageDialogPage {
     }
 }
 
-impl Page for MessageDialogPage {
+impl Page for AlertDialogPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
         let cells = column.cells(30.0, &[150.0, 110.0]);
@@ -237,51 +214,11 @@ impl Page for MessageDialogPage {
         if self.stack.active_modal().is_some()
             && let Some(page) = tree.parent(self.root).and_then(|p| tree.bounds(p))
         {
-            list.fill_rect(page, Color::rgba8(0, 0, 0, 40));
+            open.dialog.paint_overlay(&mut env.cx(list, page));
         }
-        let _ = list.draw_shadow(
-            rect,
-            10.0,
-            choscorui::core::Shadow {
-                offset: Point::new(0.0, 4.0),
-                blur: 16.0,
-                color: Color::rgba8(0, 0, 0, 80),
-                spread: 0.0,
-                inset: false,
-            },
-        );
-        let _ = list.fill_rounded_rect(rect, 10.0, env.tokens.color(ColorRole::Card));
-        let inner = rect.inset(16.0);
-        env.text(
-            list,
-            Rect::new(inner.origin, Size::new(inner.size.width, 22.0)),
-            &open.dialog.message,
-            env.body(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Leading,
-        );
-        if let Some(detail) = &open.dialog.detail {
-            env.caption(
-                list,
-                Rect::new(
-                    Point::new(inner.origin.x, inner.origin.y + 30.0),
-                    Size::new(inner.size.width, 20.0),
-                ),
-                detail,
-            );
-        }
-        let default = dialog_key_button(&open.dialog.buttons, Key::Enter);
-        for (index, push) in &open.buttons {
+        open.dialog.paint(&mut env.cx(list, rect));
+        for (_, push) in &open.buttons {
             push.paint(tree, list, env);
-            if Some(*index) == default {
-                let bounds = tree.bounds(push.node).unwrap_or_default();
-                let _ = list.stroke_rounded_rect(
-                    bounds,
-                    env.tokens.radius.min(8.0),
-                    env.tokens.color(ColorRole::Primary),
-                    2.0,
-                );
-            }
         }
     }
 
@@ -1311,18 +1248,15 @@ mod tests {
     use crate::pages::tests::Harness;
 
     #[test]
-    fn message_dialog_opens_modally_and_escape_cancels_it() {
-        let mut h = Harness::new("message-dialog");
+    fn alert_dialog_opens_modally_and_escape_cancels_it() {
+        let mut h = Harness::new("alert-dialog");
         let open = h.node("Close document…", None);
         h.act(open, SemanticAction::Activate);
         let Harness { tree, page, .. } = &mut h;
-        let page = page
-            .as_any_mut()
-            .downcast_mut::<MessageDialogPage>()
-            .unwrap();
+        let page = page.as_any_mut().downcast_mut::<AlertDialogPage>().unwrap();
         assert!(page.current.is_some());
         assert!(page.press_key(tree, Key::Escape).is_some());
-        assert!(h.get::<MessageDialogPage>().current.is_none());
+        assert!(h.get::<AlertDialogPage>().current.is_none());
     }
 
     #[test]

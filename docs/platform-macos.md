@@ -118,7 +118,7 @@ The file and alert dialogs are AppKit panels. Their appearance, accessibility, a
 
 Use the native file panels in sandboxed applications. The panel gives the application access to the file that the user selects.
 
-[`docs/controls.md`](controls.md) describes the dialogs that ChoscorUI draws itself, for example `MessageDialog` and `ColorPicker`.
+[`docs/controls.md`](controls.md) describes the dialogs that ChoscorUI draws itself, for example `AlertDialog` and `ColorPicker`.
 
 ## Clipboard and drag and drop
 

@@ -1,9 +1,11 @@
 use choscorui_controls::{
-    ColorPicker, ComboInput, DialogButton, DialogButtonRole, DialogStack, FontDialog, InputDialog,
-    InputKind, InputValue, MessageDialog, Modality, ValidationState, order_dialog_buttons,
+    AlertDialog, ColorPicker, ComboInput, DialogButton, DialogButtonRole, DialogStack, FontDialog,
+    InputDialog, InputKind, InputValue, Modality, ValidationState, order_dialog_buttons,
 };
+use choscorui_controls::{ButtonVariant, EstimatedText, PaintContext, Styles};
 use choscorui_core::{
-    Color, FontSlant, FontWeight, Key, Locale, Point, Rect, SemanticRole, Size, TextStyle, Tree,
+    Color, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Key, Locale, Point,
+    Rect, SemanticRole, Size, TextStyle, Tree,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -33,8 +35,8 @@ fn buttons_follow_macos_order_and_mirror_in_rtl() {
 }
 
 #[test]
-fn message_dialog_keys_never_return_into_destructive() {
-    let dialog = MessageDialog::new("Unsaved", "Save changes?", save_buttons());
+fn alert_dialog_keys_never_return_into_destructive() {
+    let dialog = AlertDialog::new("Unsaved", "Save changes?", save_buttons());
     assert_eq!(dialog.handle_key(Key::Enter), Some(0));
     assert_eq!(dialog.handle_key(Key::Escape), Some(1));
     assert_eq!(dialog.handle_key(Key::Space), None);
@@ -42,7 +44,7 @@ fn message_dialog_keys_never_return_into_destructive() {
     let (layout, _) = dialog.layout(false);
     assert_eq!(layout.last().unwrap().title, "Save");
 
-    let delete = MessageDialog::new(
+    let delete = AlertDialog::new(
         "Delete",
         "Delete 3 files?",
         vec![
@@ -213,4 +215,46 @@ fn input_dialog_validates_each_kind() {
     assert_eq!(choice.validate().1, Some(InputValue::Choice(1)));
     choice.set_text("Huge");
     assert!(!choice.can_accept());
+}
+
+#[test]
+fn alert_dialog_measures_places_buttons_and_paints_from_the_recipe() {
+    let mut dialog = AlertDialog::new("Unsaved", "Save changes?", save_buttons());
+    dialog.detail = Some("Changes are lost.".into());
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let size = dialog.measure(Size::new(800.0, 600.0), &styles, &tokens, &EstimatedText);
+    assert_eq!(size.width, 512.0, "the alert's maximum width");
+    let panel = Rect::new(Point::new(0.0, 0.0), size);
+    let rects = dialog.button_rects(panel, &styles, &tokens, &EstimatedText, false);
+    let rect_of = |index| rects.iter().find(|(i, _)| *i == index).unwrap().1;
+    // Help starts the row at the 24 pt padding; Save ends it.
+    assert_eq!(rect_of(3).origin.x, 24.0);
+    assert_eq!(rect_of(0).max_x(), 512.0 - 24.0);
+    assert_eq!(rect_of(0).max_y(), size.height - 24.0);
+    assert!(
+        rect_of(1).max_x() < rect_of(0).origin.x,
+        "Cancel before Save"
+    );
+    assert_eq!(
+        AlertDialog::button_variant(DialogButtonRole::Destructive),
+        ButtonVariant::Destructive
+    );
+
+    let mut list = DisplayList::new();
+    dialog.paint(&mut PaintContext::new(
+        &mut list,
+        panel,
+        &tokens,
+        &styles,
+        &EstimatedText,
+    ));
+    let texts: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["Unsaved", "Save changes?", "Changes are lost."]);
 }
