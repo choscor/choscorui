@@ -16,3 +16,7 @@
 
 # Local screenshots (all PNG files)
 *.[pP][nN][gG]
+
+# Local Claude Code state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
