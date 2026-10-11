@@ -6,3 +6,9 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
+
+# One codegen unit with whole-program LTO keeps the release executables
+# inside the size budget in docs/performance.md.
+[profile.release]
+lto = true
+codegen-units = 1
