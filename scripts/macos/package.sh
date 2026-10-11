@@ -1,14 +1,15 @@
 #!/bin/sh
 # Builds release app bundles for the gallery, the stress gallery, and the
 # notes sample, signs them, optionally notarizes them, and writes
-# dist/choscorui-<version>/ (apps, install.sh, uninstall.sh, README.md) and
-# a zip of it with a SHA-256 checksum.
+# dist/choscorui-<version>/ (apps, install.sh, uninstall.sh, README.md,
+# licenses, and THIRD-PARTY-NOTICES.txt) and a zip of it with a SHA-256
+# checksum.
 #
 # Environment:
 #   CHOSCORUI_SIGN_IDENTITY  codesign identity ("Developer ID Application: …").
 #                            Unset: ad-hoc signature (runs locally, not
 #                            distributable).
-#   CHOSCORUI_NOTARY_PROFILE notarytool keychain profile (see RELEASING.md).
+#   CHOSCORUI_NOTARY_PROFILE notarytool keychain profile (see docs/releasing.md).
 #                            Set together with a Developer ID identity to
 #                            notarize and staple.
 #   CHOSCORUI_UNIVERSAL=1    build arm64 + x86_64 and merge with lipo
@@ -96,11 +97,11 @@ echo "$apps" | while IFS='|' read -r name package dir bundle_id executable resou
 done
 
 cp "$root/scripts/macos/install.sh" "$root/scripts/macos/uninstall.sh" "$stage/"
-cp "$root/docs/INSTALL.md" "$stage/README.md"
-# The project license and third-party notices travel with the binaries.
-for notice in "$root"/LICENSE* "$root"/NOTICE*; do
-    [ -f "$notice" ] && cp "$notice" "$stage/"
-done
+cp "$root/scripts/macos/archive-readme.md" "$stage/README.md"
+# The project licenses and the notices of the statically linked
+# third-party code travel with the binaries.
+cp "$root/LICENSE-MIT" "$root/LICENSE-APACHE" "$stage/"
+cp "$root/scripts/macos/third-party-notices.txt" "$stage/THIRD-PARTY-NOTICES.txt"
 
 archive="$dist/choscorui-$version-macos-$arch.zip"
 pack() {

@@ -56,6 +56,9 @@ fi
 ditto -x -k "$archive" "$work/download"
 package=$(find "$work/download" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 apps="$work/Applications"
+for file in README.md LICENSE-MIT LICENSE-APACHE THIRD-PARTY-NOTICES.txt; do
+    check "archive contains $file" test -f "$package/$file"
+done
 export CHOSCORUI_INSTALL_DIR="$apps"
 
 check "install.sh installs three signed apps" "$package/install.sh"
