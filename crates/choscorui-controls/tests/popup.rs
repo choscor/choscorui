@@ -443,3 +443,49 @@ fn combobox_paints_trigger_and_popup_from_the_recipe() {
         DisplayCommand::FillRoundedRect { color, .. } if *color == accent
     )));
 }
+
+#[test]
+fn tooltip_bubble_centers_above_the_anchor_and_paints_inverted() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
+    let target = tree
+        .attach(tree.root(), rect(100.0, 100.0, 80.0, 30.0))
+        .unwrap();
+    let mut tips = TooltipController::new();
+    tips.hover(
+        target,
+        "Copy",
+        rect(100.0, 100.0, 80.0, 30.0),
+        Duration::ZERO,
+    );
+    tips.poll(TOOLTIP_DELAY);
+    let tip = tips.visible().unwrap();
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let bounds = rect(0.0, 0.0, 400.0, 300.0);
+    let placed = tip.place(
+        bounds,
+        &styles,
+        &tokens,
+        &EstimatedText,
+        LayoutDirection::Ltr,
+    );
+    assert_eq!(placed.placement, Placement::Above);
+    let center = placed.rect.origin.x + placed.rect.size.width / 2.0;
+    assert!((center - 140.0).abs() < 1e-9, "centered on the anchor");
+    assert_eq!(placed.rect.max_y(), 100.0 - 5.0, "room for the arrow");
+
+    let mut list = DisplayList::new();
+    tip.paint(
+        &mut PaintContext::new(&mut list, placed.rect, &tokens, &styles, &EstimatedText),
+        placed.placement,
+    );
+    let inverse = tokens.color(ColorRole::Foreground);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRoundedRect { color, .. } if *color == inverse
+    )));
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, color, .. }
+            if text == "Copy" && *color == tokens.color(ColorRole::Background)
+    )));
+}

@@ -1055,6 +1055,11 @@ Separators have no node.
   counts as a leave.
 - `interrupt` (a press, a key, or a scroll) hides the tooltip until the
   pointer goes to another target.
+- **Look.** `VisibleTooltip::place` centers the bubble above the anchor,
+  and flips it below when it does not fit. `paint` uses the `Tooltip`
+  recipe. The bubble has a `foreground` fill and xs `background` text. It
+  has radius md and 12 by 6 pt padding, and is at most 320 pt wide. A 10 pt
+  wide arrow points to the anchor.
 
 | Field | `TooltipController::semantics`, while visible |
 | --- | --- |

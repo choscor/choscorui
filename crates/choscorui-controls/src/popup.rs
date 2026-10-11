@@ -6,9 +6,12 @@
 //! reach the control underneath); deactivating the window closes all
 //! popups; closing restores keyboard focus to the popup's owner.
 
+use crate::style::{
+    Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
+};
 use choscorui_core::{
-    LayoutDirection, NodeId, Point, Rect, SemanticNode, SemanticRole, SemanticState, Size, Tree,
-    TreeError,
+    DesignTokens, FillRule, LayoutDirection, NodeId, Paint, Path, Point, Rect, SemanticNode,
+    SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::time::Duration;
 
@@ -255,6 +258,76 @@ pub struct VisibleTooltip {
     pub target: NodeId,
     pub text: String,
     pub anchor: Rect,
+}
+
+impl VisibleTooltip {
+    /// The size of the bubble: the text in the `Tooltip` recipe, at most
+    /// its maximum width.
+    pub fn size(&self, styles: &Styles, tokens: &DesignTokens, text: &dyn TextMeasure) -> Size {
+        let style = styles.resolve(tokens, StyleQuery::new(ControlKind::Tooltip, Slot::Root));
+        let size = Content::label(&self.text).size(&style, text);
+        Size::new(size.width.min(style.max_width), size.height)
+    }
+
+    /// Places the bubble above the anchor, centered, with room for the
+    /// arrow. It flips below when it does not fit inside `bounds`.
+    pub fn place(
+        &self,
+        bounds: Rect,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+        direction: LayoutDirection,
+    ) -> PopupPlacement {
+        let size = self.size(styles, tokens, text);
+        let arrow = styles.resolve(
+            tokens,
+            StyleQuery::new(ControlKind::Tooltip, Slot::Indicator),
+        );
+        let reach = arrow.min_height / 2.0;
+        let center = self.anchor.origin.x + self.anchor.size.width / 2.0;
+        let anchor = Rect::from_xywh(
+            center - size.width / 2.0,
+            self.anchor.origin.y - reach,
+            size.width,
+            self.anchor.size.height + 2.0 * reach,
+        );
+        place_popup(anchor, size, bounds, Placement::Above, direction)
+    }
+
+    /// Paints the bubble in the context's bounds, from
+    /// [`VisibleTooltip::place`], with the arrow toward the anchor.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, placement: Placement) {
+        let query = |slot| StyleQuery::new(ControlKind::Tooltip, slot);
+        let (bubble, arrow) = (
+            cx.style(query(Slot::Root)),
+            cx.style(query(Slot::Indicator)),
+        );
+        let rect = cx.bounds;
+        // The arrow is a triangle half the indicator's height, at the
+        // anchor's center and clamped inside the bubble's corners.
+        let half = arrow.min_width / 2.0;
+        let corner = bubble.radius.top_start;
+        let x = (self.anchor.origin.x + self.anchor.size.width / 2.0)
+            .clamp(rect.origin.x + corner + half, rect.max_x() - corner - half);
+        let reach = arrow.min_height / 2.0;
+        let (base, tip) = if placement == Placement::Below {
+            (rect.origin.y, rect.origin.y - reach)
+        } else {
+            (rect.max_y(), rect.max_y() + reach)
+        };
+        let mut path = Path::new();
+        path.move_to(Point::new(x - half, base))
+            .line_to(Point::new(x, tip))
+            .line_to(Point::new(x + half, base))
+            .close();
+        let _ = cx
+            .list
+            .fill_path(path, Paint::Solid(arrow.background), FillRule::NonZero);
+        cx.slot(rect, &bubble, |cx, inner| {
+            cx.label(inner, &self.text, &bubble, TextAlign::Center);
+        });
+    }
 }
 
 /// Hover tooltips with show delay, warm-up grace between targets, and

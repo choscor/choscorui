@@ -1,13 +1,14 @@
 //! Popups: a command-backed popup menu with a submenu, and hover tooltips.
 
-use crate::page::{Align, Column, Env, Page, Push, node, pressed, sem};
+use crate::page::{Column, Env, Page, Push, node, pressed, sem};
 use choscorui::controls::{
     CommandId, CommandRegistry, CommandState, DropdownMenu, MenuCheck, MenuItem, MenuResponse,
-    Placement, PopupPress, PopupStack, ShortcutModifiers, TooltipController, place_popup,
+    Placement, PopupPlacement, PopupPress, PopupStack, ShortcutModifiers, TooltipController,
+    place_popup,
 };
 use choscorui::core::{
-    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size, Tree,
+    DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, Size, Tree,
 };
 
 const CUT: CommandId = CommandId(1);
@@ -434,19 +435,9 @@ impl TooltipPage {
             .hover(self.pushes[index].node, TIPS[index].1, anchor, now);
     }
 
-    fn tip_rect(&self, env: &Env<'_>) -> Option<Rect> {
+    fn tip_placement(&self, env: &Env<'_>) -> Option<PopupPlacement> {
         let tip = self.tooltips.visible()?;
-        let size = Size::new(env.measure(&tip.text, env.small()) + 16.0, 24.0);
-        Some(
-            place_popup(
-                tip.anchor,
-                size,
-                self.bounds,
-                Placement::Below,
-                env.direction,
-            )
-            .rect,
-        )
+        Some(tip.place(self.bounds, env.styles(), env.tokens, env, env.direction))
     }
 }
 
@@ -459,7 +450,10 @@ impl Page for TooltipPage {
         for (push, cell) in self.pushes.iter().zip(cells) {
             let _ = tree.set_bounds(push.node, cell);
         }
-        let rect = self.tip_rect(env).unwrap_or_default();
+        let rect = self
+            .tip_placement(env)
+            .map(|placed| placed.rect)
+            .unwrap_or_default();
         let _ = tree.set_bounds(self.tip, rect);
         let _ = tree.set_visible(self.tip, self.tooltips.visible().is_some());
     }
@@ -473,16 +467,8 @@ impl Page for TooltipPage {
             Rect::new(self.bounds.origin, Size::new(self.bounds.size.width, 20.0)),
             "Hover a button and wait; move to the next one to see the grace period.",
         );
-        if let (Some(tip), Some(rect)) = (self.tooltips.visible(), self.tip_rect(env)) {
-            let _ = list.fill_rounded_rect(rect, 4.0, env.tokens.color(ColorRole::Foreground));
-            env.text(
-                list,
-                rect,
-                &tip.text,
-                env.small(),
-                env.tokens.color(ColorRole::Background),
-                Align::Center,
-            );
+        if let (Some(tip), Some(placed)) = (self.tooltips.visible(), self.tip_placement(env)) {
+            tip.paint(&mut env.cx(list, placed.rect), placed.placement);
         }
     }
 
