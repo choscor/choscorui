@@ -857,6 +857,9 @@ behavior.
 - A value outside the range is `Intermediate`. Enter (or `commit`) clamps
   it into the range.
 - `set_locale` keeps the focused field.
+- **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
+  start and the steppers at the end. A value out of range sets the
+  `invalid` flag.
 
 **Calendar:**
 
@@ -868,6 +871,11 @@ behavior.
   mirrored in right-to-left layouts.
 - The host chooses the date, for example on Enter. `show_month` changes the
   shown month and keeps the selection.
+- **Look.** `layout` places a caption row, a weekday row, and six weeks of
+  32 pt cells. Columns follow reading order. `paint` uses the `Calendar`
+  recipe.
+- The selected day fills `primary`, and today fills `muted`. Days outside
+  the month are muted. `CalendarFocus` names the part that rings.
 
 | Field | `DateTimeEdit::semantics` | `Calendar::semantics` | `Calendar::cell_semantics` |
 | --- | --- | --- | --- |

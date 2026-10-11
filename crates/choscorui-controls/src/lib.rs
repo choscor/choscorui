@@ -84,7 +84,10 @@ pub use widgets::{
     ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_text,
 };
 mod datetime_controls;
-pub use datetime_controls::{Calendar, CalendarCell, DateTimeEdit, DateTimeField, DateTimeKind};
+pub use datetime_controls::{
+    Calendar, CalendarCell, CalendarFocus, CalendarLayout, DateTimeEdit, DateTimeField,
+    DateTimeKind,
+};
 mod dialogs;
 #[expect(
     deprecated,

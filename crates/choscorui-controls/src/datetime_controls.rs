@@ -6,10 +6,15 @@
 //! sections. Values outside the minimum/maximum are reported as
 //! `Intermediate` while typing and clamped on commit.
 
-use crate::ValidationState;
+use crate::range_controls::paint_stepper_field;
+use crate::style::{
+    CalendarDay, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
+};
+use crate::{STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, DateOrder, Key, Locale, SemanticAction, SemanticNode,
-    SemanticRole, SemanticState, days_in_month, month_grid, month_name, weekday_short_name,
+    CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, Icon, Key, Locale, Point, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid,
+    month_name, weekday_short_name,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -322,6 +327,29 @@ impl DateTimeEdit {
         }
     }
 
+    /// The flags the input recipe reads: the host's focus flags in
+    /// `host`, and invalid while the value is out of range.
+    pub fn visual_state(&self, host: VisualState) -> VisualState {
+        host.set(
+            VisualState::INVALID,
+            self.validation() != ValidationState::Valid,
+        )
+    }
+
+    /// Paints the `Input` box with the text and the steppers, like
+    /// [`crate::SpinBox::paint`]. `host` carries focus flags.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
+        let bounds = cx.bounds;
+        let width = STEPPER_WIDTH.min(bounds.size.width);
+        let x = if cx.rtl {
+            bounds.origin.x
+        } else {
+            bounds.max_x() - width
+        };
+        let steppers = Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height);
+        paint_stepper_field(cx, &self.text(), self.visual_state(host), steppers);
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::SpinButton,
@@ -364,6 +392,28 @@ pub struct Calendar {
     shown: (i32, u8),
     minimum: Option<CivilDate>,
     maximum: Option<CivilDate>,
+}
+
+/// Where [`Calendar::layout`] places the caption, the month buttons, the
+/// weekday names, and the 42 day cells.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalendarLayout {
+    pub caption: Rect,
+    pub previous: Rect,
+    pub next: Rect,
+    pub weekdays: Vec<Rect>,
+    pub days: Vec<Rect>,
+}
+
+/// The calendar part that shows a keyboard focus ring.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CalendarFocus {
+    #[default]
+    None,
+    Previous,
+    Next,
+    /// The day grid; the ring is on the selected day.
+    Grid,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -470,6 +520,103 @@ impl Calendar {
     pub fn show_month(&mut self, delta: i32) {
         let total = self.shown.0 * 12 + i32::from(self.shown.1) - 1 + delta;
         self.shown = (total.div_euclid(12), (total.rem_euclid(12) + 1) as u8);
+    }
+
+    /// The edge of one day cell in the `Calendar` recipe.
+    pub fn cell_size(styles: &Styles, tokens: &DesignTokens) -> f64 {
+        styles
+            .resolve(tokens, StyleQuery::new(ControlKind::Calendar, Slot::Day))
+            .min_width
+    }
+
+    /// The calendar size: seven cells wide; a caption row, a weekday row,
+    /// and six weeks high.
+    pub fn size(styles: &Styles, tokens: &DesignTokens) -> Size {
+        let cell = Self::cell_size(styles, tokens);
+        Size::new(cell * 7.0, cell * 8.0)
+    }
+
+    /// Places the parts from `origin`. Columns follow reading order, and
+    /// the previous-month button is at the start of the caption row.
+    pub fn layout(
+        origin: Point,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        rtl: bool,
+    ) -> CalendarLayout {
+        let cell = Self::cell_size(styles, tokens);
+        let column = |index: usize| {
+            let slot = if rtl { 6 - index } else { index };
+            origin.x + slot as f64 * cell
+        };
+        let at = |index: usize, row: usize| {
+            Rect::from_xywh(column(index), origin.y + row as f64 * cell, cell, cell)
+        };
+        CalendarLayout {
+            caption: Rect::from_xywh(origin.x + cell, origin.y, cell * 5.0, cell),
+            previous: at(0, 0),
+            next: at(6, 0),
+            weekdays: (0..7).map(|index| at(index, 1)).collect(),
+            days: (0..42).map(|index| at(index % 7, 2 + index / 7)).collect(),
+        }
+    }
+
+    /// Paints the caption, the month buttons, the weekday names, and the
+    /// days in `layout`. `today` gets the `muted` fill, days outside the
+    /// month are muted, and the selected day fills `primary`.
+    pub fn paint(
+        &self,
+        cx: &mut PaintContext<'_>,
+        layout: &CalendarLayout,
+        today: Option<CivilDate>,
+        focus: CalendarFocus,
+    ) {
+        let query = |slot| StyleQuery::new(ControlKind::Calendar, slot);
+        let caption = cx.style(query(Slot::Caption));
+        cx.label(layout.caption, &self.title(), &caption, TextAlign::Center);
+        let (back, forward) = if cx.rtl {
+            (Icon::ChevronRight, Icon::ChevronLeft)
+        } else {
+            (Icon::ChevronLeft, Icon::ChevronRight)
+        };
+        for (rect, slot, icon, part) in [
+            (
+                layout.previous,
+                Slot::Previous,
+                back,
+                CalendarFocus::Previous,
+            ),
+            (layout.next, Slot::Next, forward, CalendarFocus::Next),
+        ] {
+            let state = VisualState::NONE.set(VisualState::FOCUS_VISIBLE, focus == part);
+            let style = cx.style(query(slot).state(state));
+            cx.slot(rect, &style, |cx, inner| cx.icon(inner, icon, &style));
+        }
+        let weekday = cx.style(query(Slot::Weekday));
+        for (name, rect) in self.weekday_headers().iter().zip(&layout.weekdays) {
+            cx.label(*rect, name, &weekday, TextAlign::Center);
+        }
+        for (cell, rect) in self.cells().iter().zip(&layout.days) {
+            let variant = if !cell.in_month {
+                CalendarDay::Outside
+            } else if Some(cell.date) == today {
+                CalendarDay::Today
+            } else {
+                CalendarDay::Default
+            };
+            let state = VisualState::NONE
+                .set(VisualState::SELECTED, cell.selected)
+                .set(VisualState::DISABLED, !cell.enabled)
+                .set(
+                    VisualState::FOCUS_VISIBLE,
+                    cell.selected && focus == CalendarFocus::Grid,
+                );
+            let style = cx.style(query(Slot::Day).variant(variant).state(state));
+            let day = cell.date.day().to_string();
+            cx.slot(*rect, &style, |cx, inner| {
+                cx.label(inner, &day, &style, TextAlign::Center);
+            });
+        }
     }
 
     pub fn semantics(&self, name: &str) -> SemanticNode {

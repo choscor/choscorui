@@ -211,6 +211,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("InputMask", "input-mask"),
     ("DateInput", "date-input"),
     ("Calendar", "calendar"),
+    ("CalendarFocus", "calendar"),
+    ("CalendarLayout", "calendar"),
     ("CalendarCell", "calendar"),
     ("DateTimeEdit", "date-time-edit"),
     ("DateTimeKind", "date-time-edit"),

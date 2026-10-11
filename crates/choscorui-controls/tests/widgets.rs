@@ -1,9 +1,10 @@
 use choscorui_controls::{
-    ButtonGroup, Calendar, CommandId, CommandLink, CommandRegistry, CommandState, DateTimeEdit,
-    DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange,
-    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, Orientation, PaintContext,
-    Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles,
-    ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
+    ButtonGroup, Calendar, CalendarFocus, CommandId, CommandLink, CommandRegistry, CommandState,
+    DateTimeEdit, DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame,
+    IntegerRange, KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, Orientation,
+    PaintContext, Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers,
+    SizeGrip, Styles, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState,
+    VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
@@ -632,4 +633,70 @@ fn tool_and_editor_widgets_paint_from_recipes() {
     let list = run(bounds, &|cx| edit.paint(cx, VisualState::NONE, "Record"));
     assert_eq!(texts(&list).len(), 1);
     assert_eq!(texts(&list), ["⌘K"]);
+}
+
+#[test]
+fn calendar_and_date_edit_paint_from_the_recipe() {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let en = Locale::parse("en-US").unwrap();
+    let selected = CivilDate::new(2026, 10, 12).unwrap();
+    let calendar = Calendar::new(en.clone(), selected);
+    assert_eq!(Calendar::size(&styles, &tokens), Size::new(224.0, 256.0));
+    let layout = Calendar::layout(Point::new(0.0, 0.0), &styles, &tokens, false);
+    assert_eq!(layout.previous.origin.x, 0.0);
+    assert_eq!(layout.days.len(), 42);
+    assert_eq!(layout.days[0], rect(0.0, 64.0, 32.0, 32.0));
+    let rtl = Calendar::layout(Point::new(0.0, 0.0), &styles, &tokens, true);
+    assert_eq!(rtl.previous.origin.x, 192.0, "the previous button mirrors");
+    assert_eq!(rtl.days[0].origin.x, 192.0);
+
+    let mut list = DisplayList::new();
+    calendar.paint(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 224.0, 256.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        &layout,
+        Some(CivilDate::new(2026, 10, 1).unwrap()),
+        CalendarFocus::Grid,
+    );
+    let shown = texts(&list);
+    assert_eq!(shown[0], "October 2026");
+    assert_eq!(shown.len(), 1 + 7 + 42);
+    let (primary, muted) = (
+        tokens.color(ColorRole::Primary),
+        tokens.color(ColorRole::Muted),
+    );
+    let fills = |color| {
+        list.commands().iter().any(|command| {
+            matches!(command, DisplayCommand::FillRoundedRect { color: c, .. } if *c == color)
+        })
+    };
+    assert!(fills(primary), "the selected day fills primary");
+    assert!(fills(muted), "today fills muted");
+
+    let edit = DateTimeEdit::new(
+        "Due",
+        en,
+        DateTimeKind::Date,
+        CivilDateTime {
+            date: selected,
+            time: CivilTime::new(9, 0, 0).unwrap(),
+        },
+    );
+    let mut list = DisplayList::new();
+    edit.paint(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 200.0, 36.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        VisualState::NONE,
+    );
+    assert_eq!(texts(&list), [edit.text()]);
 }

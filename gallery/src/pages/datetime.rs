@@ -1,12 +1,13 @@
 //! Dates and times: the month calendar and sectioned date/time editors.
 
-use crate::page::{Align, Column, Env, Page, Push, node, paint_field, pressed, split};
+use crate::page::{Column, Env, Page, Push, node, pressed};
 use choscorui::controls::{
-    Calendar, CalendarCell, DateTimeEdit, DateTimeKind, ShortcutModifiers, ValidationState,
+    Calendar, CalendarCell, CalendarFocus, CalendarLayout, ControlKind, DateTimeEdit, DateTimeKind,
+    ShortcutModifiers, Slot, StyleQuery, TextAlign, ValidationState, VisualState,
 };
 use choscorui::core::{
-    CivilDate, CivilDateTime, CivilTime, ColorRole, DisplayList, Key, KeyEvent, NodeId, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, Size, Tree,
+    CivilDate, CivilDateTime, CivilTime, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, Size, Tree,
 };
 
 fn date(year: i32, month: u8, day: u8) -> CivilDate {
@@ -29,12 +30,13 @@ pub struct CalendarPage {
     next: Push,
     calendar: Calendar,
     chosen: Option<CivilDate>,
+    origin: Point,
 }
 
 pub fn calendar(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
-    let previous = Push::new(tree, parent, if env.rtl() { "›" } else { "‹" }, env);
+    let previous = Push::new(tree, parent, "Previous month", env);
     let title = node(tree, parent, false);
-    let next = Push::new(tree, parent, if env.rtl() { "‹" } else { "›" }, env);
+    let next = Push::new(tree, parent, "Next month", env);
     let grid = node(tree, parent, true);
     let cells = (0..42).map(|_| node(tree, grid, false)).collect();
     let mut calendar = Calendar::new(env.locale.clone(), date(2026, 10, 12));
@@ -47,98 +49,55 @@ pub fn calendar(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page>
         next,
         calendar,
         chosen: None,
+        origin: Point::default(),
     })
 }
 
-const CELL: f64 = 40.0;
+/// The day the demo treats as today.
+const TODAY: (i32, u8, u8) = (2026, 10, 12);
+
+impl CalendarPage {
+    fn layout_of(&self, env: &Env<'_>) -> CalendarLayout {
+        Calendar::layout(self.origin, env.styles(), env.tokens, env.rtl())
+    }
+}
 
 impl Page for CalendarPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        let header = column.cells(30.0, &[36.0, CELL * 7.0 - 72.0 - 2.0 * column.gap, 36.0]);
-        let _ = tree.set_bounds(self.previous.node, header[0]);
-        let _ = tree.set_bounds(self.title, header[1]);
-        let _ = tree.set_bounds(self.next.node, header[2]);
-        column.space(20.0);
-        let grid = column.cells(CELL * 6.0, &[CELL * 7.0])[0];
+        let size = Calendar::size(env.styles(), env.tokens);
+        let area = column.cells(size.height, &[size.width])[0];
+        self.origin = area.origin;
+        let layout = self.layout_of(env);
+        let _ = tree.set_bounds(self.previous.node, layout.previous);
+        let _ = tree.set_bounds(self.title, layout.caption);
+        let _ = tree.set_bounds(self.next.node, layout.next);
+        let first = layout.days[0];
+        let grid = Rect::new(
+            Point::new(area.origin.x, first.origin.y),
+            Size::new(area.size.width, first.size.height * 6.0),
+        );
         let _ = tree.set_bounds(self.grid, grid);
-        for (index, cell) in self.cells.iter().enumerate() {
-            let row = Rect::new(
-                Point::new(grid.origin.x, grid.origin.y + (index / 7) as f64 * CELL),
-                Size::new(grid.size.width, CELL),
-            );
-            let rect = split(row, &[CELL; 7], 0.0, env.rtl())[index % 7];
-            let _ = tree.set_bounds(*cell, rect);
+        for (cell, rect) in self.cells.iter().zip(&layout.days) {
+            let _ = tree.set_bounds(*cell, *rect);
         }
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        self.previous.paint(tree, list, env);
-        self.next.paint(tree, list, env);
-        let title = tree.bounds(self.title).unwrap_or_default();
-        env.text(
-            list,
-            title,
-            &self.calendar.title(),
-            env.body(),
-            env.tokens.color(ColorRole::Foreground),
-            Align::Center,
-        );
+        let layout = self.layout_of(env);
+        let focus = if tree.focus_visible(self.grid) {
+            CalendarFocus::Grid
+        } else if tree.focus_visible(self.previous.node) {
+            CalendarFocus::Previous
+        } else if tree.focus_visible(self.next.node) {
+            CalendarFocus::Next
+        } else {
+            CalendarFocus::None
+        };
+        let today = CivilDate::new(TODAY.0, TODAY.1, TODAY.2).ok();
         let grid = tree.bounds(self.grid).unwrap_or_default();
-        let headers = Rect::new(
-            Point::new(grid.origin.x, grid.origin.y - 22.0),
-            Size::new(grid.size.width, 20.0),
-        );
-        for (name, rect) in
-            self.calendar
-                .weekday_headers()
-                .iter()
-                .zip(split(headers, &[CELL; 7], 0.0, env.rtl()))
-        {
-            env.text(
-                list,
-                rect,
-                name,
-                env.small(),
-                env.tokens.color(ColorRole::Foreground).with_alpha(0.6),
-                Align::Center,
-            );
-        }
-        env.panel(list, grid);
-        let focused = tree.focus() == Some(self.grid);
-        for (cell, id) in self.calendar.cells().iter().zip(&self.cells) {
-            let rect = tree.bounds(*id).unwrap_or_default().inset(3.0);
-            let mut color = env.tokens.color(ColorRole::Foreground);
-            if cell.selected {
-                let _ = list.fill_rounded_rect(
-                    rect,
-                    rect.size.height / 2.0,
-                    env.tokens.color(ColorRole::Primary),
-                );
-                color = env.on_accent();
-                if focused {
-                    env.focus_ring(list, rect);
-                }
-            } else if Some(cell.date) == self.chosen {
-                let _ = list.stroke_rounded_rect(
-                    rect,
-                    rect.size.height / 2.0,
-                    env.tokens.color(ColorRole::Primary),
-                    1.5,
-                );
-            }
-            if !cell.in_month || !cell.enabled || !env.enabled {
-                color = color.with_alpha(0.35);
-            }
-            env.text(
-                list,
-                rect,
-                &cell.date.day().to_string(),
-                env.body(),
-                color,
-                Align::Center,
-            );
-        }
+        self.calendar
+            .paint(&mut env.cx(list, grid), &layout, today, focus);
         if let Some(chosen) = self.chosen {
             let below = Rect::new(
                 Point::new(grid.origin.x, grid.max_y() + 8.0),
@@ -320,26 +279,24 @@ impl Page for DateTimeEditPage {
             let note = format!("{label} — editing {:?}", edit.focused_field());
             env.caption(list, tree.bounds(*caption).unwrap_or_default(), &note);
             let bounds = tree.bounds(*id).unwrap_or_default();
-            let validation = match edit.validation() {
-                ValidationState::Intermediate => {
-                    ValidationState::Invalid("Outside the allowed range; Return clamps it".into())
-                }
-                other => other,
-            };
             let message = Rect::new(
                 Point::new(bounds.origin.x, bounds.max_y() + 2.0),
                 Size::new(bounds.size.width + 240.0, 16.0),
             );
-            paint_field(
-                env,
-                list,
-                bounds,
-                &edit.text(),
-                "",
-                tree.focus() == Some(*id),
-                &validation,
-                Some(message),
-            );
+            let host = VisualState::NONE
+                .set(VisualState::FOCUSED, tree.focus() == Some(*id))
+                .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(*id));
+            edit.paint(&mut env.cx(list, bounds), host);
+            if edit.validation() != ValidationState::Valid {
+                let mut cx = env.cx(list, message);
+                let style = cx.style(StyleQuery::new(ControlKind::Field, Slot::Error));
+                cx.label(
+                    message,
+                    "Outside the allowed range; Return clamps it",
+                    &style,
+                    TextAlign::Start,
+                );
+            }
         }
     }
 
