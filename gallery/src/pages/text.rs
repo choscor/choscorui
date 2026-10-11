@@ -1,9 +1,7 @@
 //! Text entry: single-line fields, the multi-line editor, and structured
 //! inputs (numbers, masks, dates) with validation feedback.
 
-use crate::page::{
-    Column, Env, FONT, Page, field_semantics, node, paint_field, pressed, type_into,
-};
+use crate::page::{Column, Env, Page, field_semantics, node, paint_field, pressed, type_into};
 use choscorui::controls::{
     DateInput, InputMask, NumberInput, ShortcutModifiers, TextEditor, TextEditorInput, TextField,
     TextFieldChange, TextFieldInput, ValidationState,
@@ -251,7 +249,7 @@ pub struct TextEditorPage {
 }
 
 fn editor_style(env: &Env<'_>) -> TextStyle {
-    TextStyle::new(FONT, env.body()).with_line_height(1.3)
+    TextStyle::new(env.font(), env.body()).with_line_height(1.3)
 }
 
 pub fn text_editor(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {

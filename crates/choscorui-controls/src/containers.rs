@@ -1,7 +1,10 @@
-use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState, fill_shape};
+use crate::style::{
+    ControlKind, ControlSize, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
+    fill_shape,
+};
 use choscorui_core::{
-    Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRelation,
-    SemanticRole, SemanticState, Size, Tree, TreeError,
+    DesignTokens, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
+    SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -350,6 +353,45 @@ impl GroupBox {
             actions: Vec::new(),
             text: None,
         }
+    }
+
+    /// The members' area in `bounds`: under the title, inside the small
+    /// `Card` padding.
+    pub fn content_rect(&self, bounds: Rect, styles: &Styles, tokens: &DesignTokens) -> Rect {
+        let card = |slot| {
+            styles.resolve(
+                tokens,
+                StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm),
+            )
+        };
+        let (root, header, title) = (card(Slot::Root), card(Slot::Header), card(Slot::Title));
+        let top = root.padding.block_start + title.text.line_height + root.gap;
+        Rect::from_xywh(
+            bounds.origin.x + header.padding.inline_start,
+            bounds.origin.y + top,
+            (bounds.size.width - header.padding.horizontal()).max(0.0),
+            (bounds.size.height - top - root.padding.block_end).max(0.0),
+        )
+    }
+
+    /// Paints the small `Card` surface and the title in the context's
+    /// bounds. The host paints the members.
+    pub fn paint(&self, cx: &mut PaintContext<'_>) {
+        let card = |slot| StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm);
+        let (root, header, title) = (
+            cx.style(card(Slot::Root)),
+            cx.style(card(Slot::Header)),
+            cx.style(card(Slot::Title)),
+        );
+        let bounds = cx.bounds;
+        cx.slot(bounds, &root, |_, _| {});
+        let line = Rect::from_xywh(
+            bounds.origin.x + header.padding.inline_start,
+            bounds.origin.y + root.padding.block_start,
+            (bounds.size.width - header.padding.horizontal()).max(0.0),
+            title.text.line_height,
+        );
+        cx.label(line, &self.label, &title, TextAlign::Start);
     }
 }
 

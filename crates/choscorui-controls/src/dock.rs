@@ -6,6 +6,9 @@
 //! provided. Documents use tabs in the central area or separate native
 //! windows, which is what macOS users expect.
 
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
+};
 use choscorui_core::{
     Key, Point, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
@@ -134,6 +137,36 @@ pub struct GroupFrame {
     pub content: Rect,
     pub tabs: Vec<PanelId>,
     pub active: PanelId,
+}
+
+impl GroupFrame {
+    /// The tab at `index` in the tab bar. Tabs share the bar equally, in
+    /// reading order.
+    pub fn tab_rect(&self, index: usize, rtl: bool) -> Rect {
+        let count = self.tabs.len().max(1);
+        let width = self.tab_bar.size.width / count as f64;
+        let slot = if rtl {
+            count.saturating_sub(index + 1)
+        } else {
+            index
+        };
+        Rect::new(
+            Point::new(
+                self.tab_bar.origin.x + slot as f64 * width,
+                self.tab_bar.origin.y,
+            ),
+            Size::new(width, self.tab_bar.size.height),
+        )
+    }
+}
+
+/// The dock part that shows a keyboard focus ring.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DockFocus {
+    #[default]
+    None,
+    Tab(PanelId),
+    Splitter(DockArea),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -503,6 +536,78 @@ impl DockLayout {
             groups,
             splitters,
             floating: self.floating.clone(),
+        }
+    }
+
+    /// Paints the groups and splitters of `arrangement`. Each group gets a
+    /// `border` outline and a line-variant `Tabs` bar; the active tab is
+    /// underlined. Splitters use the `Resizable` handle. The host paints
+    /// the center and the panel contents.
+    pub fn paint(
+        &self,
+        cx: &mut PaintContext<'_>,
+        arrangement: &DockArrangement,
+        focus: DockFocus,
+    ) {
+        let tabs = |slot, state| {
+            StyleQuery::new(ControlKind::Tabs, slot)
+                .variant(TabsVariant::Line)
+                .state(state)
+        };
+        let border = cx
+            .style(StyleQuery::new(ControlKind::Separator, Slot::Root))
+            .background;
+        for group in &arrangement.groups {
+            let _ = cx.list.stroke_rect(group.rect, border, 1.0);
+            let bar = group.tab_bar;
+            cx.list.fill_rect(
+                Rect::new(
+                    Point::new(bar.origin.x, bar.max_y() - 1.0),
+                    Size::new(bar.size.width, 1.0),
+                ),
+                border,
+            );
+            for (index, panel) in group.tabs.iter().enumerate() {
+                let rect = group.tab_rect(index, cx.rtl);
+                let state = VisualState::NONE
+                    .set(VisualState::SELECTED, *panel == group.active)
+                    .set(VisualState::FOCUS_VISIBLE, focus == DockFocus::Tab(*panel));
+                let trigger = cx.style(tabs(Slot::Trigger, state));
+                let title = self.panel(*panel).map_or("", |panel| panel.title.as_str());
+                cx.slot(rect, &trigger, |cx, inner| {
+                    cx.label(inner, title, &trigger, TextAlign::Center);
+                });
+                let indicator = cx.style(tabs(Slot::Indicator, state));
+                let line = Rect::new(
+                    Point::new(rect.origin.x, rect.max_y() - indicator.min_height),
+                    Size::new(rect.size.width, indicator.min_height),
+                );
+                cx.list.fill_rect(line, indicator.background);
+            }
+        }
+        for (area, rect) in &arrangement.splitters {
+            let state = VisualState::NONE.set(
+                VisualState::FOCUS_VISIBLE,
+                focus == DockFocus::Splitter(*area),
+            );
+            let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle).state(state));
+            let center = rect.center();
+            let divider = if area.horizontal() {
+                Rect::from_xywh(
+                    center.x - line.min_width / 2.0,
+                    rect.origin.y,
+                    line.min_width,
+                    rect.size.height,
+                )
+            } else {
+                Rect::from_xywh(
+                    rect.origin.x,
+                    center.y - line.min_height / 2.0,
+                    rect.size.width,
+                    line.min_height,
+                )
+            };
+            cx.slot(divider, &line, |_, _| {});
         }
     }
 

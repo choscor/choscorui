@@ -505,7 +505,7 @@ impl Page for ScrollBarPage {
                     "Line {:02} — a long line that extends past the right edge of the view so the horizontal bar matters",
                     line + 1
                 ),
-                crate::page::FONT,
+                env.font(),
                 env.body(),
                 env.tokens.color(ColorRole::Foreground),
             );

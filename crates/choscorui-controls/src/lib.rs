@@ -104,8 +104,8 @@ pub use custom::{
 };
 mod dock;
 pub use dock::{
-    DockArea, DockArrangement, DockError, DockLayout, DockPanel, DockRestoreReport, DockTarget,
-    GroupFrame, PanelId, PanelLocation,
+    DockArea, DockArrangement, DockError, DockFocus, DockLayout, DockPanel, DockRestoreReport,
+    DockTarget, GroupFrame, PanelId, PanelLocation,
 };
 mod shell;
 pub use shell::{

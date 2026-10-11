@@ -1,8 +1,11 @@
 use choscorui_controls::{
-    ContainerError, GroupBox, Resizable, ResizableInput, SplitOrientation, StackPage,
-    StackedContainer,
+    ContainerError, EstimatedText, GroupBox, PaintContext, Resizable, ResizableInput,
+    SplitOrientation, StackPage, StackedContainer, Styles,
 };
-use choscorui_core::{Dirty, Key, KeyEvent, Point, Rect, SemanticAction, SemanticRole, Size, Tree};
+use choscorui_core::{
+    ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent, Point, Rect,
+    SemanticAction, SemanticRole, Size, Tree,
+};
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
@@ -241,4 +244,36 @@ fn stack_rejects_detached_focus_target_without_changing_page_or_focus() {
     );
     assert_eq!(pages.current(), first);
     assert_eq!(tree.focus(), Some(first_focus));
+}
+
+#[test]
+fn group_box_paints_a_small_card_with_its_title() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 200.0));
+    let group = tree
+        .attach(tree.root(), rect(0.0, 0.0, 400.0, 124.0))
+        .unwrap();
+    let member = tree.attach(group, rect(16.0, 60.0, 100.0, 36.0)).unwrap();
+    let box_control = GroupBox::new("Account", group, None, vec![member]).unwrap();
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let bounds = rect(0.0, 0.0, 400.0, 124.0);
+    // 16 pt padding, a 21 pt title line, and a 16 pt gap.
+    let content = box_control.content_rect(bounds, &styles, &tokens);
+    assert_eq!(content, rect(16.0, 53.0, 368.0, 55.0));
+    let mut list = DisplayList::new();
+    box_control.paint(&mut PaintContext::new(
+        &mut list,
+        bounds,
+        &tokens,
+        &styles,
+        &EstimatedText,
+    ));
+    let card = tokens.color(ColorRole::Card);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRoundedRect { color, .. } if *color == card
+    )));
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, .. } if text == "Account"
+    )));
 }

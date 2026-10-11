@@ -456,6 +456,9 @@ this behavior.
 - **`GroupBox`.** `new` rejects an empty member list and duplicate nodes.
   `install` checks that the members and the title are descendants of the
   container.
+- **`GroupBox` look.** `paint` draws the small `Card` surface and the
+  title. `content_rect` returns the members' area under the title, inside
+  the card padding.
 - **`StackedContainer`.** `install` shows the current page and hides the
   others.
 - `select(panel)` hides the old page and shows the new page. It fails for
@@ -1247,6 +1250,10 @@ The items publish their own semantics.
 - `arrange` keeps the center at least 80 points wide and high.
 - `save` and `restore` keep the layout as text. `restore` reports unknown
   keys and changes nothing on an error.
+- **Look.** `paint` outlines each group in `border` and draws a
+  line-variant `Tabs` bar. The active tab is underlined. Splitters use
+  the `Resizable` handle. `DockFocus` names the part that rings.
+- `GroupFrame::tab_rect` shares the tab bar equally, in reading order.
 
 | Field | `DockLayout::panel_semantics` | `DockLayout::splitter_semantics` |
 | --- | --- | --- |

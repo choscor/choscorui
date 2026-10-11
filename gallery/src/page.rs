@@ -3,22 +3,21 @@
 //! category files.
 
 use choscorui::controls::{
-    Button, ButtonInput, ButtonVariant, CommandId, EstimatedText, HostEnv, InputText, PaintContext,
-    ShortcutModifiers, Styles, TextMeasure, ValidationState, VisualState,
+    Button, ButtonInput, ButtonVariant, CommandId, ControlKind, EstimatedText, HostEnv, InputText,
+    PaintContext, ShortcutModifiers, Slot, StyleQuery, Styles, TextMeasure, ValidationState,
+    VisualState, paint_box,
 };
 use choscorui::core::{
-    BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent,
-    LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, TextShaper, TextStyle,
-    ThemeResolver, Tree, TypeSpec, grapheme_boundaries, lerp_color,
+    BackendCapabilities, Color, ColorRole, DesignTokens, DisplayList, FontWeight, Key, KeyEvent,
+    LayoutDirection, Locale, NodeId, Point, PointerButton, PointerEvent, RadiusScale, Rect,
+    SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
+    TextShaper, TextSize, TextStyle, ThemeResolver, Tree, TypeSpec, grapheme_boundaries,
+    lerp_color,
 };
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
-
-/// The font every page draws with.
-pub const FONT: &str = "Helvetica";
 
 /// Sidebar groups, in display order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -255,7 +254,7 @@ impl Env<'_> {
         }
         let width = self
             .shaper
-            .shape(text, &TextStyle::new(FONT, size), None)
+            .shape(text, &TextStyle::new(self.font(), size), None)
             .map_or(text.chars().count() as f64 * size * 0.55, |layout| {
                 layout.size().width
             });
@@ -267,12 +266,19 @@ impl Env<'_> {
         width
     }
 
-    pub fn body(&self) -> f64 {
-        (16.0_f64 * 0.8).round()
+    /// The theme's sans font family name.
+    pub fn font(&self) -> &'static str {
+        self.tokens.font_sans.name()
     }
 
+    /// The theme's small text size, for body labels.
+    pub fn body(&self) -> f64 {
+        self.tokens.text(TextSize::Sm, FontWeight::NORMAL).size
+    }
+
+    /// The theme's extra-small text size, for captions.
     pub fn small(&self) -> f64 {
-        (16.0_f64 * 0.7).round()
+        self.tokens.text(TextSize::Xs, FontWeight::NORMAL).size
     }
 
     /// Draws one line of `text` vertically centered in `rect`, aligned in
@@ -301,7 +307,7 @@ impl Env<'_> {
             Some(false) => rect.max_x() - width,
         };
         let baseline = rect.origin.y + rect.size.height / 2.0 + size * 0.35;
-        let _ = list.draw_text(Point::new(x, baseline), text, FONT, size, color);
+        let _ = list.draw_text(Point::new(x, baseline), text, self.font(), size, color);
     }
 
     /// A body-sized label in the content color.
@@ -316,25 +322,24 @@ impl Env<'_> {
         );
     }
 
-    /// A small, dimmed caption.
+    /// A small caption in `muted-foreground`.
     pub fn caption(&self, list: &mut DisplayList, rect: Rect, text: &str) {
         self.text(
             list,
             rect,
             text,
             self.small(),
-            self.tokens.color(ColorRole::Foreground).with_alpha(0.65),
+            self.tokens.color(ColorRole::MutedForeground),
             Align::Leading,
         );
     }
 
-    /// A rounded surface panel behind a group of controls.
+    /// A surface behind a group of controls, with the `Card` look.
     pub fn panel(&self, list: &mut DisplayList, rect: Rect) {
-        let _ = list.fill_rounded_rect(
-            rect,
-            self.tokens.radius.min(8.0),
-            self.tokens.color(ColorRole::Card),
-        );
+        let style = self
+            .styles()
+            .resolve(self.tokens, StyleQuery::new(ControlKind::Card, Slot::Root));
+        paint_box(list, rect, &style, self.rtl());
     }
 
     /// Surface color mixed toward content, for hover and pressed fills.
@@ -346,17 +351,12 @@ impl Env<'_> {
         )
     }
 
-    /// A two-pixel accent ring around a focused rectangle.
+    /// The theme's focus ring around a focused rectangle, at radius md.
     pub fn focus_ring(&self, list: &mut DisplayList, rect: Rect) {
-        let _ = list.stroke_rounded_rect(
-            Rect::new(
-                Point::new(rect.origin.x - 2.0, rect.origin.y - 2.0),
-                Size::new(rect.size.width + 4.0, rect.size.height + 4.0),
-            ),
-            self.tokens.radius.min(8.0),
-            self.tokens.color(ColorRole::Primary),
-            2.0,
-        );
+        let tokens = self.tokens;
+        let color = tokens.ring_color(tokens.color(ColorRole::Ring));
+        let radius = tokens.radius(RadiusScale::Md);
+        let _ = list.draw_ring(rect, radius, tokens.ring_width, color);
     }
 }
 

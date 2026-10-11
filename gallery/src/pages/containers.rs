@@ -3,13 +3,13 @@
 
 use crate::page::{Align, Column, Env, Page, PageState, Push, node, pressed, sem, split};
 use choscorui::controls::{
-    ControlKind, DockArea, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox, PanelId,
-    Resizable, ResizableInput, ScrollArea, ScrollAreaInput, ShortcutModifiers, SizeGrip, Slot,
-    SplitOrientation, StackPage, StackedContainer, StyleQuery, TextAlign, ToolBox,
+    ControlKind, DockArea, DockFocus, DockLayout, DockPanel, DockTarget, FocusFrame, GroupBox,
+    PanelId, Resizable, ResizableInput, ScrollArea, ScrollAreaInput, ShortcutModifiers, SizeGrip,
+    Slot, SplitOrientation, StackPage, StackedContainer, StyleQuery, TextAlign, ToolBox,
 };
 use choscorui::core::{
-    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
-    ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, Tree,
+    ColorRole, DisplayList, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, RadiusScale,
+    Rect, ScrollViewport, SemanticAction, SemanticNode, SemanticRole, Size, Tree,
 };
 
 // ---------------------------------------------------------------------------
@@ -48,20 +48,18 @@ pub fn group_box(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page
 impl Page for GroupBoxPage {
     fn layout(&mut self, tree: &mut Tree, bounds: Rect, env: &Env<'_>) {
         let mut column = Column::new(bounds, env);
-        for (container, title, _, _, pushes) in &self.groups {
-            let rect = column.cells(110.0, &[400.0])[0];
+        for (container, title, group, _, pushes) in &self.groups {
+            let rect = column.cells(124.0, &[400.0])[0];
             let _ = tree.set_bounds(*container, rect);
+            let content = group.content_rect(rect, env.styles(), env.tokens);
             let _ = tree.set_bounds(
                 *title,
                 Rect::new(
-                    Point::new(rect.origin.x + 12.0, rect.origin.y),
-                    Size::new(rect.size.width - 24.0, 20.0),
+                    rect.origin,
+                    Size::new(rect.size.width, content.origin.y - rect.origin.y),
                 ),
             );
-            let row = Rect::new(
-                Point::new(rect.origin.x + 16.0, rect.origin.y + 44.0),
-                Size::new(rect.size.width - 32.0, 30.0),
-            );
+            let row = Rect::new(content.origin, Size::new(content.size.width, 36.0));
             let widths = vec![110.0; pushes.len()];
             for (push, cell) in pushes.iter().zip(split(row, &widths, 8.0, env.rtl())) {
                 let _ = tree.set_bounds(push.node, cell);
@@ -71,30 +69,9 @@ impl Page for GroupBoxPage {
     }
 
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
-        for (container, title, _, label, pushes) in &self.groups {
+        for (container, _, group, _, pushes) in &self.groups {
             let rect = tree.bounds(*container).unwrap_or_default();
-            let frame = Rect::new(
-                Point::new(rect.origin.x, rect.origin.y + 10.0),
-                Size::new(rect.size.width, rect.size.height - 10.0),
-            );
-            let _ = list.stroke_rounded_rect(frame, env.tokens.radius.min(8.0), env.mix(0.3), 1.0);
-            let title_rect = tree.bounds(*title).unwrap_or_default();
-            let width = env.measure(label, env.small()) + 12.0;
-            let x = if env.rtl() {
-                title_rect.max_x() - width
-            } else {
-                title_rect.origin.x
-            };
-            let chip = Rect::new(Point::new(x, title_rect.origin.y), Size::new(width, 20.0));
-            list.fill_rect(chip, env.tokens.color(ColorRole::Background));
-            env.text(
-                list,
-                chip,
-                label,
-                env.small(),
-                env.tokens.color(ColorRole::Foreground),
-                Align::Center,
-            );
+            group.paint(&mut env.cx(list, rect));
             for push in pushes {
                 push.paint(tree, list, env);
             }
@@ -721,8 +698,11 @@ impl Page for ScrollAreaPage {
                 {
                     continue;
                 }
-                let shade = ((row + column) % 5) as f64 * 0.05 + 0.08;
-                let _ = list.fill_rounded_rect(tile, 6.0, env.mix(shade));
+                let _ = list.fill_rounded_rect(
+                    tile,
+                    env.tokens.radius(RadiusScale::Md),
+                    env.tokens.color(ColorRole::Muted),
+                );
                 env.text(
                     list,
                     tile,
@@ -1029,6 +1009,7 @@ pub struct DockPage {
     reset: Push,
     dock: DockLayout,
     note: Option<String>,
+    rtl: bool,
 }
 
 pub fn dock(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
@@ -1059,6 +1040,7 @@ pub fn dock(tree: &mut Tree, parent: NodeId, env: &Env<'_>) -> Box<dyn Page> {
         }
     }
     Box::new(DockPage {
+        rtl: env.rtl(),
         area,
         tabs,
         splitters,
@@ -1116,14 +1098,7 @@ impl DockPage {
         for (panel, id) in &self.tabs {
             let placed = arrangement.groups.iter().find_map(|group| {
                 let index = group.tabs.iter().position(|tab| tab == panel)?;
-                let width = group.tab_bar.size.width / group.tabs.len().max(1) as f64;
-                Some(Rect::new(
-                    Point::new(
-                        group.tab_bar.origin.x + index as f64 * width,
-                        group.tab_bar.origin.y,
-                    ),
-                    Size::new(width, group.tab_bar.size.height),
-                ))
+                Some(group.tab_rect(index, self.rtl))
             });
             let _ = tree.set_visible(*id, placed.is_some());
             let _ = tree.set_bounds(*id, placed.unwrap_or_default());
@@ -1190,54 +1165,27 @@ impl Page for DockPage {
             env.tokens.color(ColorRole::Foreground).with_alpha(0.5),
             Align::Center,
         );
+        let focus = self
+            .tabs
+            .iter()
+            .find(|(_, id)| tree.focus_visible(*id))
+            .map(|(panel, _)| DockFocus::Tab(*panel))
+            .or_else(|| {
+                self.splitters
+                    .iter()
+                    .find(|(_, id)| tree.focus_visible(*id))
+                    .map(|(area, _)| DockFocus::Splitter(*area))
+            })
+            .unwrap_or_default();
+        self.dock
+            .paint(&mut env.cx(list, bounds), &arrangement, focus);
         for group in &arrangement.groups {
-            list.fill_rect(group.tab_bar, env.mix(0.1));
-            let _ = list.stroke_rect(group.rect, env.mix(0.2), 1.0);
-            for (panel, id) in &self.tabs {
-                if !group.tabs.contains(panel) {
-                    continue;
-                }
-                let rect = tree.bounds(*id).unwrap_or_default();
-                if *panel == group.active {
-                    list.fill_rect(rect, env.mix(0.22));
-                }
-                let title = self
-                    .dock
-                    .panel(*panel)
-                    .map(|p| p.title.as_str())
-                    .unwrap_or("");
-                env.text(
-                    list,
-                    rect,
-                    title,
-                    env.small(),
-                    env.tokens.color(ColorRole::Foreground),
-                    Align::Center,
-                );
-                if tree.focus() == Some(*id) {
-                    env.focus_ring(list, rect.inset(2.0));
-                }
-            }
             let title = self
                 .dock
                 .panel(group.active)
                 .map(|p| p.title.as_str())
                 .unwrap_or("");
             env.caption(list, group.content.inset(8.0), &format!("{title} panel"));
-        }
-        for (area, rect) in &arrangement.splitters {
-            let focused = self
-                .splitters
-                .iter()
-                .any(|(a, id)| a == area && tree.focus() == Some(*id));
-            list.fill_rect(
-                *rect,
-                if focused {
-                    env.tokens.color(ColorRole::Primary)
-                } else {
-                    env.mix(0.25)
-                },
-            );
         }
         if let Some(note) = &self.note {
             let below = Rect::new(
@@ -1463,7 +1411,6 @@ impl Page for SizeGripPage {
     fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &Env<'_>) {
         let window = tree.bounds(self.window).unwrap_or_default();
         env.panel(list, window);
-        let _ = list.stroke_rounded_rect(window, env.tokens.radius.min(8.0), env.mix(0.3), 1.0);
         env.text(
             list,
             window,

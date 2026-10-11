@@ -326,7 +326,7 @@ impl CustomControl for StarRating {
             let _ = cx.list.draw_text(
                 Point::new(cell.origin.x + 4.0, cell.origin.y + cell.size.height * 0.8),
                 "★",
-                crate::page::FONT,
+                cx.tokens.font_sans.name(),
                 cell.size.height * 0.8,
                 color,
             );

@@ -1,11 +1,11 @@
 use choscorui_controls::{
-    CommandId, CommandRegistry, CommandState, DockArea, DockError, DockLayout, DockPanel,
-    DockTarget, MenuItem, PanelId, PanelLocation, StatusBar, Toolbar, ToolbarArea, ToolbarItem,
-    compose_main_window,
+    CommandId, CommandRegistry, CommandState, DockArea, DockError, DockFocus, DockLayout,
+    DockPanel, DockTarget, EstimatedText, MenuItem, PaintContext, PanelId, PanelLocation,
+    StatusBar, Styles, Toolbar, ToolbarArea, ToolbarItem, compose_main_window,
 };
 use choscorui_core::{
-    Key, LayoutDirection, Point, Rect, SemanticRole, SettingValue, Settings, SettingsSchema, Size,
-    Tree,
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point, Rect,
+    SemanticRole, SettingValue, Settings, SettingsSchema, Size, Tree,
 };
 use std::time::Duration;
 
@@ -393,4 +393,58 @@ fn main_window_composition_places_shell_regions() {
     assert_eq!(frames.content, rect(40.0, 68.0, 960.0, 610.0));
     let bare = compose_main_window(rect(0.0, 0.0, 10.0, 10.0), &[], None);
     assert_eq!(bare.content, rect(0.0, 0.0, 10.0, 10.0));
+}
+
+#[test]
+fn dock_paints_line_tabs_and_mirrors_tab_order() {
+    let mut dock = DockLayout::new(32.0);
+    for (id, key, title) in [(PanelId(1), "files", "Files"), (PanelId(2), "find", "Find")] {
+        dock.add(
+            id,
+            DockPanel::new(key, title),
+            DockTarget::Tab {
+                area: DockArea::Left,
+                group: 0,
+            },
+        )
+        .unwrap();
+    }
+    let arrangement = dock.arrange(rect(0.0, 0.0, 600.0, 400.0));
+    let group = &arrangement.groups[0];
+    assert_eq!(group.tab_rect(0, false).origin.x, group.tab_bar.origin.x);
+    assert_eq!(group.tab_rect(0, true).max_x(), group.tab_bar.max_x());
+
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut list = DisplayList::new();
+    dock.paint(
+        &mut PaintContext::new(
+            &mut list,
+            rect(0.0, 0.0, 600.0, 400.0),
+            &tokens,
+            &styles,
+            &EstimatedText,
+        ),
+        &arrangement,
+        DockFocus::Splitter(DockArea::Left),
+    );
+    let texts: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["Files", "Find"]);
+    // The active tab is underlined in `foreground`; the focused splitter rings.
+    let foreground = tokens.color(ColorRole::Foreground);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRect { color, rect } if *color == foreground && rect.size.height == 2.0
+    )));
+    assert!(
+        list.commands()
+            .iter()
+            .any(|command| matches!(command, DisplayCommand::StrokeRoundedRect { .. }))
+    );
 }

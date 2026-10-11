@@ -236,6 +236,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("DockLayout", "dock"),
     ("DockPanel", "dock"),
     ("DockArea", "dock"),
+    ("DockFocus", "dock"),
     ("DockTarget", "dock"),
     ("PanelId", "dock"),
     ("SizeGrip", "size-grip"),
