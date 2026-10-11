@@ -58,7 +58,7 @@ Core tests run on the workspace with `cargo test --workspace`; formatting and li
 
 ## Install, release, and security
 
-Prebuilt demo apps ship as a zip with `install.sh` and `uninstall.sh` ([install notes](docs/INSTALL.md)). Build one with `scripts/macos/package.sh`, and check it end to end with `scripts/macos/install-check.sh dist/choscorui-*-macos-*.zip`. Release steps and manual gates are in [RELEASING.md](docs/RELEASING.md), changes are in the [changelog](CHANGELOG.md), and vulnerability reporting is in [SECURITY.md](SECURITY.md).
+Prebuilt demo apps ship as a zip with `install.sh` and `uninstall.sh` ([install notes](docs/INSTALL.md)). Build one with `scripts/macos/package.sh`, and check it end to end with `scripts/macos/install-check.sh dist/choscorui-*-macos-*.zip`. Release steps and manual gates are in [RELEASING.md](docs/RELEASING.md), changes are in the [changelog](CHANGELOG.md), and vulnerability reporting is in [SECURITY.md](SECURITY.md). Contribution policy is in [CONTRIBUTING.md](CONTRIBUTING.md); bugs and suggestions go in issues.
 
 ## Static analysis
 
