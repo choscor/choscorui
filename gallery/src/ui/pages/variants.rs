@@ -138,7 +138,7 @@ fn expectations() -> Vec<Expect> {
         Expect {
             sizes: SMALL,
             states: &[S::INVALID],
-            ..expect("select", K::NativeSelect)
+            ..expect("native-select", K::NativeSelect)
         },
         Expect {
             states: &[S::INVALID],
@@ -374,7 +374,7 @@ fn every_page_paints_each_variant_size_and_state_of_its_control() {
 fn every_overlay_and_disclosure_opens_from_the_keyboard() {
     let triggers = [
         ("select", "Fruit", Key::Enter),
-        ("select", "Status", Key::Enter),
+        ("native-select", "Status", Key::Enter),
         (
             "combobox",
             "City (editable, prefix completion)",

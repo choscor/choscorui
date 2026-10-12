@@ -1,5 +1,6 @@
-//! Form components: switches, toggles, selects, text inputs, code inputs,
-//! fields, date pickers, range sliders, and keyboard keys.
+//! Form components: switches, toggles, selects, native selects, text
+//! inputs, code inputs, fields, date pickers, range sliders, and keyboard
+//! keys.
 
 use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
@@ -224,28 +225,6 @@ pub fn select(_: &PageCx) -> AnyView {
             Select::new(t!(key), fruits, cx.state(selected).binding())
                 .with(move |select| select.with_placeholder(placeholder.clone()))
         };
-        // Default and small, then invalid.
-        let native = |key: &'static str, size: ControlSize, invalid: bool| {
-            Configured::custom(ControlKind::NativeSelect, move |env| {
-                let mut select = controls::Select::native(
-                    text(env, key),
-                    vec![
-                        ListEntry::option(text(env, "select.todo")),
-                        ListEntry::option(text(env, "select.in_progress")),
-                        ListEntry::option(text(env, "select.done")),
-                    ],
-                )
-                .with_placeholder(text(env, "select.status_placeholder"))
-                .with_size(size);
-                select.set_invalid(invalid);
-                select
-            })
-        };
-        let native = row((
-            native("select.status", ControlSize::Default, false),
-            native("select.small_status", ControlSize::Sm, false),
-            native("select.required_status", ControlSize::Default, true),
-        ));
         let zone_placeholder = text(cx.env(), "select.zone_placeholder");
         let zones = Select::new(
             t!("select.zone"),
@@ -278,10 +257,46 @@ pub fn select(_: &PageCx) -> AnyView {
                     select
                 }),
             ),
-            section(t!("select.native"), native),
             section(t!("select.scrolling"), zones),
         ))
     })
+}
+
+/// A status select with the native look, named by the catalog string
+/// `key`.
+fn native_select(key: &'static str, size: ControlSize, invalid: bool) -> impl View {
+    Configured::custom(ControlKind::NativeSelect, move |env| {
+        let mut select = controls::Select::native(
+            text(env, key),
+            vec![
+                ListEntry::option(text(env, "select.todo")),
+                ListEntry::option(text(env, "select.in_progress")),
+                ListEntry::option(text(env, "select.done")),
+            ],
+        )
+        .with_placeholder(text(env, "select.status_placeholder"))
+        .with_size(size);
+        select.set_invalid(invalid);
+        select
+    })
+}
+
+/// The native look of `Select`: default and small, then invalid.
+pub fn native_select_page(_: &PageCx) -> AnyView {
+    column((
+        section(
+            t!("switch.default"),
+            native_select("select.status", ControlSize::Default, false),
+        ),
+        section(
+            t!("switch.small"),
+            native_select("select.small_status", ControlSize::Sm, false),
+        ),
+        section(
+            t!("select.invalid"),
+            native_select("select.required_status", ControlSize::Default, true),
+        ),
+    ))
 }
 
 /// The invalid username sample of the input and field pages.
@@ -648,6 +663,7 @@ pub fn page(id: &str) -> Option<Build> {
         "toggle" => toggle,
         "toggle-group" => toggle_group,
         "select" => select,
+        "native-select" => native_select_page,
         "date-picker" => date_picker,
         "input" => input_page,
         "input-group" => input_group_page,
@@ -732,8 +748,18 @@ mod tests {
     fn selects_show_their_starting_choice() {
         let mut page = Harness::new("select");
         assert!(page.host.find("Time zone").is_some());
-        assert!(page.host.find("Status").is_some());
         let required = page.node("Required fruit");
+        assert!(page.host.semantic(required).unwrap().state.invalid);
+
+        let mut page = Harness::new("native-select");
+        for name in ["Status", "Small status"] {
+            assert_eq!(
+                page.value(name).as_deref(),
+                Some("Select a status"),
+                "{name}"
+            );
+        }
+        let required = page.node("Required status");
         assert!(page.host.semantic(required).unwrap().state.invalid);
     }
 }

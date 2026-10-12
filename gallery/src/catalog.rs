@@ -28,6 +28,7 @@ pub const PAGES: &[PageInfo] = &[
     page!("toggle", "Toggle", Inputs),
     page!("toggle-group", "Toggle group", Inputs),
     page!("select", "Select", Selection),
+    page!("native-select", "Native select", Selection),
     page!("date-picker", "Date picker", DateTime),
     page!("input", "Input", Text),
     page!("input-group", "Input group", Text),
