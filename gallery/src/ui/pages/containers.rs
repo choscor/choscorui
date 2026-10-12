@@ -1,7 +1,7 @@
 //! Containers: group boxes, splitters, stacks, scroll areas, tool boxes,
 //! docking, size grips, and focus frames.
 
-mod dock;
+pub(crate) mod dock;
 mod grip;
 mod scroll;
 mod tool_box;

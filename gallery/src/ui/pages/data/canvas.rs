@@ -20,8 +20,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 pub const CANVAS_ITEMS: usize = 20_000;
-const CANVAS_COLUMNS: usize = 200;
-const CANVAS_SPACING: f64 = 40.0;
+pub const CANVAS_COLUMNS: usize = 200;
+pub const CANVAS_SPACING: f64 = 40.0;
 
 /// The scene area that holds every item.
 fn canvas_extent() -> Rect {

@@ -21,7 +21,7 @@ const OUTLINE: PanelId = PanelId(2);
 const INSPECTOR: PanelId = PanelId(3);
 const CONSOLE: PanelId = PanelId(4);
 
-fn default_dock() -> DockLayout {
+pub(crate) fn default_dock() -> DockLayout {
     let mut dock = DockLayout::new(24.0);
     let tab = |area| DockTarget::Tab { area, group: 0 };
     for (id, key, title, target) in [
@@ -60,7 +60,7 @@ fn restored(saved: &str) -> (DockLayout, Option<String>) {
 }
 
 /// Moves the console between the bottom and right areas.
-fn move_console(dock: &mut DockLayout) -> bool {
+pub(crate) fn move_console(dock: &mut DockLayout) -> bool {
     let to_right = matches!(
         dock.location(CONSOLE),
         Some(PanelLocation::Docked {

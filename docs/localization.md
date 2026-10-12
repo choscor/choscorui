@@ -151,8 +151,9 @@ When the language changes, do these steps:
    `LayoutDirection`.
 
 Keep user data during the change, for example text field contents,
-selection, and scroll position. Only the labels change. `GalleryView` in the
-gallery keeps the filter text and its caret when the language changes.
+selection, and scroll position. Only the labels change. The gallery keeps the
+language in a state value. When it changes, the views update their labels and
+keep the filter text.
 
 ## Right-to-left layout
 

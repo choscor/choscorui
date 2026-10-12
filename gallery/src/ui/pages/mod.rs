@@ -137,7 +137,12 @@ pub mod tests {
     fn every_page_in(tokens: DesignTokens) {
         for tag in ["en", "ar"] {
             for enabled in [true, false] {
-                for page in PAGES.iter().filter(|page| super::find(page.id).is_some()) {
+                for page in PAGES {
+                    assert!(
+                        super::find(page.id).is_some(),
+                        "page `{}` has no view",
+                        page.id
+                    );
                     let context = format!(
                         "page `{}` ({:?} {:?}, {tag}, enabled: {enabled})",
                         page.id, tokens.base, tokens.scheme

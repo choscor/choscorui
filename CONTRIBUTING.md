@@ -90,7 +90,7 @@ cargo bylaw check
 
 The gallery shows each public name of `choscorui-controls`. A test fails when a name is not in the gallery.
 
-1. Add a page to the category file in `gallery/src/pages/`.
+1. Add a view function to the category file in `gallery/src/ui/pages/`. Return it from the `page` function of that file.
 2. Add the page to `PAGES` in `gallery/src/catalog.rs`.
 3. Add each new export name to `SHOWN`, or to `EXEMPT` with a reason.
 4. Run `cargo test -p choscorui-gallery`.

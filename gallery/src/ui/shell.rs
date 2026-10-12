@@ -5,7 +5,6 @@ use crate::catalog::PAGES;
 use crate::page::{Category, Desktop};
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use crate::ui::page::{PageCx, PageStore};
-use crate::view::Theme;
 use choscorui::compose::Property;
 use choscorui::compose::view::{
     Alignment, AnyView, Binding, Button, Checkbox, Divider, Dynamic, Either, ForEach, Frame,
@@ -13,11 +12,58 @@ use choscorui::compose::view::{
     VerticalAlignment, View, ViewExt,
 };
 use choscorui::controls::{ButtonVariant, ControlSize};
-use choscorui::core::{BaseColor, Catalog, ColorRole, Locale, Space, TextPreset, fold_for_search};
+use choscorui::core::{
+    BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, Locale, Space, TextPreset,
+    fold_for_search,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
 const SIDEBAR_WIDTH: f64 = 248.0;
+
+/// The application-wide appearance.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Theme {
+    Dark,
+    Light,
+    /// The brand theme carried over from the notes sample: light, with a
+    /// teal accent and rounder corners.
+    Brand,
+}
+
+impl Theme {
+    pub const ALL: [Theme; 3] = [Self::Dark, Self::Light, Self::Brand];
+
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+            Self::Brand => "brand",
+        }
+    }
+
+    pub fn parse(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|theme| theme.id() == id)
+    }
+
+    /// The tokens of this theme over `base`.
+    pub fn tokens(self, base: BaseColor) -> DesignTokens {
+        match self {
+            Self::Dark => DesignTokens::new(base, ColorScheme::Dark),
+            Self::Light => DesignTokens::new(base, ColorScheme::Light),
+            Self::Brand => {
+                let light = DesignTokens::new(base, ColorScheme::Light);
+                DesignTokens {
+                    palette: light
+                        .palette
+                        .with(ColorRole::Primary, Color::rgba8(0, 128, 128, 255)),
+                    radius: 8.0,
+                    ..light
+                }
+            }
+        }
+    }
+}
 
 /// What a window asks the application to do.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

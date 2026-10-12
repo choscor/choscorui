@@ -1,20 +1,20 @@
 //! The macOS application around [`GalleryRoot`]: the menu bar, windows,
 //! desktop integration, and settings.
 
-use crate::app::MacDesktop;
 use crate::catalog::PAGES;
-use crate::page::PageState;
+use crate::page::{Desktop, PageState};
 use crate::settings::{self, Saved};
-use crate::strings::{self, LANGUAGE_NAMES, LANGUAGES};
+use crate::strings::{self, LANGUAGE_NAMES, LANGUAGES, Source};
 use crate::ui::page::PageStore;
-use crate::ui::shell::{GalleryRoot, Request, Shared, WindowState, matching_pages};
-use crate::view::Theme;
+use crate::ui::shell::{GalleryRoot, Request, Shared, Theme, WindowState, matching_pages};
 use choscorui::compose::Runtime;
 use choscorui::compose::view::Env;
-use choscorui::core::{Settings, Size, WindowGeometry};
+use choscorui::core::{BackendCapabilities, Settings, Size, WindowGeometry};
 use choscorui::platform::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
-    MenuShortcutModifiers, MenuSpec, WindowOptions, screen_visible_frames,
+    MenuShortcutModifiers, MenuSpec, NotificationPermission, StatusItem, WindowOptions,
+    notification_permission, post_notification, request_notification_permission,
+    screen_visible_frames, url_handler,
 };
 use choscorui::{App, AppContext, AppError, Scene, WindowId};
 use std::cell::RefCell;
@@ -45,12 +45,52 @@ pub fn language_command(tag: &str) -> MenuCommandId {
     MenuCommandId(LANGUAGE_BASE + index as u64)
 }
 
+/// Desktop integration through the safe macOS API.
+#[derive(Default)]
+pub struct MacDesktop {
+    status_item: RefCell<Option<StatusItem>>,
+}
+
+impl Desktop for MacDesktop {
+    fn capabilities(&self) -> BackendCapabilities {
+        choscorui::capabilities()
+    }
+
+    fn toggle_status_item(&self, title: &str) -> Result<bool, String> {
+        let mut slot = self.status_item.borrow_mut();
+        if slot.take().is_some() {
+            return Ok(false);
+        }
+        *slot = Some(StatusItem::new(title).map_err(|error| error.to_string())?);
+        Ok(true)
+    }
+
+    fn url_handler(&self, url: &str) -> Result<Option<String>, String> {
+        url_handler(url)
+            .map(|app| {
+                app.map(|path| {
+                    path.file_stem().map_or_else(
+                        || path.display().to_string(),
+                        |stem| stem.to_string_lossy().into_owned(),
+                    )
+                })
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    fn notify(&self, title: &str, body: &str) -> Result<(), String> {
+        if notification_permission() == NotificationPermission::NotRequested {
+            request_notification_permission().map_err(|error| error.to_string())?;
+        }
+        post_notification("com.choscor.gallery.demo", title, body)
+            .map_err(|error| error.to_string())
+    }
+}
+
 /// What the application was asked at launch.
 pub struct Launch {
     /// A page id from the command line.
     pub page: Option<usize>,
-    /// Quit (saving settings) after this long.
-    pub autoclose: Option<Duration>,
 }
 
 /// The application state that outlives single windows.
@@ -67,6 +107,10 @@ pub struct Gallery {
     pub session: RefCell<Saved>,
     /// Translation and settings problems found at launch.
     pub notes: Vec<String>,
+    /// Where the translations came from.
+    pub source: Source,
+    /// The errors that windows' views reported.
+    pub errors: Rc<RefCell<Vec<String>>>,
 }
 
 impl Gallery {
@@ -383,7 +427,7 @@ impl Gallery {
 /// Starts the gallery: loads translations and settings, opens the main
 /// window, and installs the menu bar.
 pub fn start(launch: &Launch) -> Result<(Rc<Gallery>, AppContext), AppError> {
-    let (catalog, _, mut notes) = strings::load(&strings::resources_dir());
+    let (catalog, source, mut notes) = strings::load(&strings::resources_dir());
     let (settings, issues) = settings::load(settings::path());
     notes.extend(issues);
     let mut session = Saved::read(&settings);
@@ -416,15 +460,22 @@ pub fn start(launch: &Launch) -> Result<(Rc<Gallery>, AppContext), AppError> {
         settings: RefCell::new(settings),
         session: RefCell::new(session.clone()),
         notes,
+        source,
+        errors: Rc::default(),
     });
     let locale = shared.clone();
     let tokens = (shared.theme.clone(), shared.base.clone());
     let (menu, commands, ticks) = (gallery.clone(), gallery.clone(), gallery.clone());
+    let errors = gallery.errors.clone();
     let mut cx = app
         .env(Env::new(catalog, move || locale.locale()))
         .tokens(move || tokens.0.get().tokens(tokens.1.get()))
         .commands(move || menu.menu(), move |cx, id| commands.command(cx, id))
         .on_tick(move |cx| ticks.tick(cx))
+        .on_error(move |_, error| {
+            eprintln!("choscorui-gallery: {error}");
+            errors.borrow_mut().push(error.to_string());
+        })
         .start()?;
     gallery.open(
         &mut cx,
@@ -439,18 +490,31 @@ pub fn start(launch: &Launch) -> Result<(Rc<Gallery>, AppContext), AppError> {
 
 /// Runs the gallery until the user quits, the last window closes, or the
 /// autoclose time passes; then saves the settings.
-pub fn run(launch: Launch) -> Result<(), AppError> {
-    let (gallery, mut cx) = start(&launch)?;
-    for note in &gallery.notes {
-        eprintln!("choscorui-gallery: {note}");
-    }
+pub fn run(gallery: &Gallery, cx: &mut AppContext, autoclose: Option<Duration>) {
     while cx.pump() {
-        if launch.autoclose.is_some_and(|after| cx.elapsed() >= after) {
+        if autoclose.is_some_and(|after| cx.elapsed() >= after) {
             break;
         }
     }
-    if let Err(error) = gallery.save(&mut cx) {
+    if let Err(error) = gallery.save(cx) {
         eprintln!("choscorui-gallery: settings not saved: {error}");
     }
-    Ok(())
+}
+
+/// Pumps until the main window presents its first frame and returns the
+/// time from `entered` to that frame, or `None` when no window opened.
+pub fn first_frame(
+    gallery: &Gallery,
+    cx: &mut AppContext,
+    entered: std::time::Instant,
+) -> Option<Duration> {
+    loop {
+        let main = (*gallery.main.borrow())?;
+        if let Some(paint) = cx.window(main).and_then(|window| window.last_paint()) {
+            return Some(paint.finished - entered);
+        }
+        if !cx.pump() {
+            return None;
+        }
+    }
 }

@@ -5,7 +5,7 @@
 use crate::catalog::PAGES;
 use crate::page::PageState;
 use crate::strings::LANGUAGES;
-use crate::view::Theme;
+use crate::ui::shell::Theme;
 use choscorui::core::{
     BaseColor, LoadReport, SettingValue, Settings, SettingsError, SettingsSchema, WindowGeometry,
 };

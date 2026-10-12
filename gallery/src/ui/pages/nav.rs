@@ -127,6 +127,7 @@ struct SidebarPage;
 
 impl View for SidebarPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let none = cx.state(None);
         let mut make = |name: &str, variant: SidebarVariant, collapse: SidebarCollapse| {
             let selected = cx.state(Some(1));
             Sidebar::new(
@@ -138,36 +139,6 @@ impl View for SidebarPage {
             .with(move |sidebar| sidebar.with_variant(variant).with_collapse(collapse))
         };
         let row = |sidebars| HStack::new(sidebars).spacing(Space::S4);
-        let first = row(vec![
-            make(
-                "Off-canvas sidebar",
-                SidebarVariant::Sidebar,
-                SidebarCollapse::Offcanvas,
-            ),
-            make(
-                "Icon sidebar",
-                SidebarVariant::Sidebar,
-                SidebarCollapse::Icon,
-            ),
-            make(
-                "Fixed sidebar",
-                SidebarVariant::Sidebar,
-                SidebarCollapse::None,
-            ),
-        ]);
-        let second = row(vec![
-            make(
-                "Floating sidebar",
-                SidebarVariant::Floating,
-                SidebarCollapse::Icon,
-            ),
-            make(
-                "Inset sidebar",
-                SidebarVariant::Inset,
-                SidebarCollapse::Icon,
-            ),
-        ]);
-        let none = cx.state(None);
         let right = Sidebar::new(
             "Right sidebar",
             "Toggle sidebar",
@@ -175,10 +146,48 @@ impl View for SidebarPage {
             none.binding(),
         )
         .with(|sidebar| sidebar.with_side(SheetSide::Right));
+        // Two sidebars fit side by side in the narrowest content area.
+        let first = row(vec![
+            make(
+                "Off-canvas sidebar",
+                SidebarVariant::Sidebar,
+                SidebarCollapse::Offcanvas,
+            )
+            .into_any(),
+            make(
+                "Icon sidebar",
+                SidebarVariant::Sidebar,
+                SidebarCollapse::Icon,
+            )
+            .into_any(),
+        ]);
+        let second = row(vec![
+            make(
+                "Fixed sidebar",
+                SidebarVariant::Sidebar,
+                SidebarCollapse::None,
+            )
+            .into_any(),
+            make(
+                "Floating sidebar",
+                SidebarVariant::Floating,
+                SidebarCollapse::Icon,
+            )
+            .into_any(),
+        ]);
+        let third = row(vec![
+            make(
+                "Inset sidebar",
+                SidebarVariant::Inset,
+                SidebarCollapse::Icon,
+            )
+            .into_any(),
+            right.into_any(),
+        ]);
         column((
-            section("Sidebar: off-canvas, icons, fixed", first),
-            section("Floating and inset", second),
-            section("Right side", right),
+            section("Sidebar: off-canvas and icons", first),
+            section("Fixed and floating", second),
+            section("Inset, and on the right side", third),
         ))
     }
 }

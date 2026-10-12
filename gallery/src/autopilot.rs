@@ -2,78 +2,57 @@
 //! `CHOSCORUI_GALLERY_AUTOPILOT=1`: every page, themes, a second
 //! language, windows, large data, the canvas, structured input, settings
 //! and dock restore, desktop capabilities, translations, and window
-//! release. One line per check, then `OK (0 failures)` or
-//! `FAILED (<n> failures)`.
+//! release. The checks drive the views through their semantics, as
+//! assistive technology does. One line per check, then `OK (0 failures)`
+//! or `FAILED (<n> failures)`.
 
-use crate::app::{self, Gallery};
 use crate::catalog::PAGES;
-use crate::page::{Env, Page};
-use crate::pages::containers::DockPage;
-use crate::pages::data::{CANVAS_ITEMS, CanvasPage, ItemViewPage, RECORDS};
-use crate::pages::datetime::DateTimeEditPage;
-use crate::pages::system::capability_rows;
-use crate::pages::text::RulePage;
 use crate::settings::{self, Saved};
 use crate::strings::Source;
-use crate::view::{GalleryView, Theme};
-use choscorui::controls::{DateTimeField, ValidationState};
+use crate::ui::app::{self, Gallery};
+use crate::ui::pages::containers::dock::{default_dock, move_console};
+use crate::ui::pages::data::RECORDS;
+use crate::ui::pages::data::canvas::{CANVAS_COLUMNS, CANVAS_ITEMS, CANVAS_SPACING};
+use crate::ui::pages::datetime::{LIMITED, date_time, today};
+use crate::ui::pages::system::capability_rows;
+use crate::ui::shell::{Theme, WindowState};
+use choscorui::compose::view::ViewHost;
+use choscorui::controls::{DateTimeEdit, DateTimeKind, ShortcutModifiers};
 use choscorui::core::{
-    BaseColor, CivilDate, CivilDateTime, CivilTime, Key, Point, PointerButton, PointerEvent,
-    Support, Tree,
+    BaseColor, Key, KeyEvent, Locale, NodeId, Point, PointerButton, PointerEvent, SemanticAction,
+    SemanticNode, SemanticRole, Support, WheelUnit,
 };
-use choscorui::platform::{Application, Modifiers, WindowEvent};
+use choscorui::{AppContext, WindowId};
 use std::time::{Duration, Instant};
 
-/// Upper bound on realized rows while scrolling 100k records; anything
-/// near the record count means virtualization broke.
+/// The most semantic nodes that paging through the 100k records may add.
 const REALIZED_ROW_LIMIT: usize = 200;
 
-fn settle(app: &Application, gallery: &mut Gallery) {
+/// The most semantic nodes the window may publish on the canvas page.
+const CANVAS_NODE_LIMIT: usize = 400;
+
+/// Runs the event loop for a short while.
+fn settle(cx: &mut AppContext) {
     let deadline = Instant::now() + Duration::from_millis(200);
-    while Instant::now() < deadline {
-        gallery.pump(app, Duration::from_millis(10));
-    }
+    while Instant::now() < deadline && cx.pump() {}
 }
 
-/// Pumps until window `index` presents a frame after `before`.
-fn painted_after(app: &Application, gallery: &mut Gallery, index: usize, before: usize) -> bool {
+fn paint_count(cx: &mut AppContext, id: WindowId) -> usize {
+    cx.window(id).map_or(0, |window| window.paint_count())
+}
+
+/// Pumps until window `id` presents a frame after `before`.
+fn painted_after(cx: &mut AppContext, id: WindowId, before: usize) -> bool {
     let deadline = Instant::now() + Duration::from_secs(3);
     while Instant::now() < deadline {
-        gallery.pump(app, Duration::from_millis(5));
-        if gallery
-            .windows
-            .get(index)
-            .is_some_and(|entry| entry.window.paint_count() > before)
-        {
+        if paint_count(cx, id) > before {
             return true;
+        }
+        if !cx.pump() {
+            return false;
         }
     }
     false
-}
-
-fn paint_count(gallery: &Gallery, index: usize) -> usize {
-    gallery
-        .windows
-        .get(index)
-        .map_or(0, |entry| entry.window.paint_count())
-}
-
-fn click(gallery: &mut Gallery, app: &Application, index: usize, at: Point) {
-    let events = [
-        PointerEvent::Down {
-            position: at,
-            button: PointerButton::Primary,
-        },
-        PointerEvent::Up {
-            position: at,
-            button: PointerButton::Primary,
-        },
-    ]
-    .map(|event| WindowEvent::Pointer {
-        event,
-        modifiers: Modifiers::default(),
-    });
-    gallery.deliver(app, index, events.to_vec(), Vec::new());
 }
 
 fn page_index(id: &str) -> usize {
@@ -83,64 +62,101 @@ fn page_index(id: &str) -> usize {
         .expect("autopilot pages exist")
 }
 
-/// Shows page `id` in window 0 (if it is not already shown) and runs `f`
-/// on it.
-fn with_page<P: Page + 'static, R>(
-    gallery: &mut Gallery,
-    id: &str,
-    f: impl FnOnce(&mut Tree, &mut P, &Env<'_>) -> R,
-) -> Option<R> {
-    if gallery.page_of(0) != Some(id) {
-        gallery.select(0, page_index(id));
-    }
-    gallery
-        .with_page(0, |tree, page, env| {
-            page.as_any_mut()
-                .downcast_mut::<P>()
-                .map(|page| f(tree, page, env))
-        })
-        .flatten()
+fn host(cx: &mut AppContext, id: WindowId) -> &mut ViewHost {
+    cx.host(id).expect("the autopilot window is open")
 }
 
-/// Builds fresh views from `saved`, as a relaunch would, and checks what
-/// they restore.
-fn rebuild(gallery: &Gallery, saved: &Saved) -> bool {
-    let ctx = gallery.ctx();
-    let start = settings::start_page(None, saved.page.as_deref());
-    let mut view = GalleryView::new(
-        app::DEFAULT_SIZE,
-        start,
-        &saved.filter,
-        saved.state.clone(),
-        &ctx,
-    );
-    let zoom = view.with_page(&ctx, |_, page, _| {
-        page.as_any_mut()
-            .downcast_mut::<CanvasPage>()
-            .map(|canvas| canvas.zoom())
-    });
-    let canvas_ok = view.selected_id() == "canvas"
-        && view.filter_text() == saved.filter
-        && zoom.is_some_and(|zoom| (zoom - saved.state.canvas_zoom).abs() < 1e-9);
-    let mut docked = GalleryView::new(
-        app::DEFAULT_SIZE,
-        page_index("dock"),
-        "",
-        saved.state.clone(),
-        &ctx,
-    );
-    let dock = docked.with_page(&ctx, |_, page, _| {
-        page.as_any_mut()
-            .downcast_mut::<DockPage>()
-            .map(|dock| dock.save())
-    });
-    if !canvas_ok {
-        println!(
-            "     rebuilt canvas: page {} zoom {zoom:?}",
-            view.selected_id()
-        );
+/// The published semantics of the node named `name`.
+fn semantic(host: &mut ViewHost, name: &str) -> Option<SemanticNode> {
+    let node = host.find(name)?;
+    host.semantic(node)
+}
+
+/// The canvas control. The sidebar button and the page title have the
+/// same name.
+fn canvas_node(host: &mut ViewHost) -> Option<NodeId> {
+    host.semantics()
+        .0
+        .into_iter()
+        .find(|entry| entry.node.name == "Canvas" && entry.node.role == SemanticRole::List)
+        .map(|entry| entry.id)
+}
+
+/// Performs `action` with `value` on the node named `name`.
+fn act(host: &mut ViewHost, name: &str, action: SemanticAction, value: Option<&str>) -> bool {
+    let Some(node) = host.find(name) else {
+        println!("     no node named {name:?}");
+        return false;
+    };
+    let done = host.perform(node, action, value);
+    host.layout();
+    done
+}
+
+fn press(host: &mut ViewHost, key: Key, modifiers: ShortcutModifiers) {
+    host.key(KeyEvent::Down { key, repeat: false }, modifiers);
+    host.key(KeyEvent::Up { key }, modifiers);
+    host.layout();
+}
+
+fn wheel(host: &mut ViewHost, at: Point, delta: Point, modifiers: ShortcutModifiers) {
+    let event = PointerEvent::Wheel {
+        position: at,
+        delta,
+        unit: WheelUnit::Points,
+    };
+    host.pointer(event, modifiers);
+    host.layout();
+}
+
+fn drag(host: &mut ViewHost, from: Point, to: Point) {
+    let (none, button) = (ShortcutModifiers::default(), PointerButton::Primary);
+    let down = PointerEvent::Down {
+        position: from,
+        button,
+    };
+    host.pointer(down, none);
+    host.pointer(PointerEvent::Move { position: to }, none);
+    let up = PointerEvent::Up {
+        position: to,
+        button,
+    };
+    host.pointer(up, none);
+    host.layout();
+}
+
+/// Enters `text` in the field named `field` and returns whether the
+/// field then reads as valid and whether it flags an error.
+fn enter(host: &mut ViewHost, field: &str, text: &str) -> Option<(bool, bool)> {
+    if !act(host, field, SemanticAction::SetValue, Some(text)) {
+        return None;
     }
-    canvas_ok && dock.as_deref() == Some(saved.state.dock.as_str())
+    let node = semantic(host, field)?;
+    Some((
+        !node.state.invalid && node.description == "Valid",
+        node.state.invalid,
+    ))
+}
+
+/// The state of window `id`.
+fn state(gallery: &Gallery, id: WindowId) -> WindowState {
+    gallery.windows.borrow()[&id].clone()
+}
+
+/// Shows page `page` in window `id` and waits for its frame.
+fn show(cx: &mut AppContext, gallery: &Gallery, id: WindowId, page: &str) -> bool {
+    let index = page_index(page);
+    let window = state(gallery, id);
+    if window.page.get() == index {
+        return true;
+    }
+    let (before, errors) = (paint_count(cx, id), gallery.errors.borrow().len());
+    window.page.set(index);
+    let painted = painted_after(cx, id, before);
+    if gallery.errors.borrow().len() > errors {
+        println!("     page {page} reported an error");
+    }
+    painted
 }
 
 /// A version 1 file (page under `page`) loads through the migration.
@@ -161,7 +177,147 @@ fn migrates() -> bool {
             .any(|issue| issue.contains("migrated from version 1"))
 }
 
-pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
+/// What the limited date/time editor reads at `hour`:00 on the demo day.
+fn limited_at(hour: u8) -> Option<String> {
+    let locale = Locale::parse("en").expect("valid tag");
+    DateTimeEdit::new(
+        LIMITED,
+        locale,
+        DateTimeKind::DateTime,
+        date_time(today(), hour, 0),
+    )
+    .semantics()
+    .value
+}
+
+/// Steps the limited editor to its hour field, then jumps outside the
+/// range both ways; Return clamps. Returns whether the jump was flagged
+/// and the two clamped values.
+fn clamp_hours(host: &mut ViewHost) -> Option<(bool, Option<String>, Option<String>)> {
+    let none = ShortcutModifiers::default();
+    if !act(host, LIMITED, SemanticAction::Focus, None) {
+        return None;
+    }
+    for _ in 0..5 {
+        if semantic(host, LIMITED)?.description == "Hour field" {
+            break;
+        }
+        press(host, Key::ArrowRight, none);
+    }
+    press(host, Key::End, none);
+    let flagged = semantic(host, LIMITED)?.state.invalid;
+    press(host, Key::Enter, none);
+    let high = semantic(host, LIMITED)?.value;
+    press(host, Key::Home, none);
+    press(host, Key::Enter, none);
+    Some((flagged, high, semantic(host, LIMITED)?.value))
+}
+
+/// The record count that the item view readout shows.
+fn record_matches(host: &mut ViewHost) -> Option<usize> {
+    let suffix = format!(" of {RECORDS} records");
+    host.semantics()
+        .0
+        .into_iter()
+        .find_map(|entry| entry.node.name.strip_suffix(&suffix)?.parse().ok())
+}
+
+/// Searches the 100k records for "7" and pages through the matches.
+/// Returns all records, the matches, the most nodes that paging added,
+/// and the most paint commands of a frame.
+fn search_records(host: &mut ViewHost) -> Option<(usize, usize, usize, usize)> {
+    let all = record_matches(host)?;
+    if !act(host, "Search records", SemanticAction::SetValue, Some("7"))
+        || !act(host, "Records", SemanticAction::Focus, None)
+    {
+        return None;
+    }
+    let matches = record_matches(host)?;
+    let baseline = host.semantics().0.len();
+    let (mut nodes, mut commands) = (0, 0);
+    for _ in 0..2_000 {
+        press(host, Key::PageDown, ShortcutModifiers::default());
+        nodes = nodes.max(host.semantics().0.len().saturating_sub(baseline));
+        commands = commands.max(host.paint().len());
+    }
+    Some((all, matches, nodes, commands))
+}
+
+/// Zooms the canvas to 2x about its origin, pans it, hit-tests item 201,
+/// and rubber-band selects. Returns the hit item, whether the readout
+/// shows 4 selected at 200%, the paint commands, and the published nodes.
+fn exercise_canvas(host: &mut ViewHost) -> Option<(Option<String>, bool, usize, usize)> {
+    let canvas = canvas_node(host)?;
+    let bounds = host.tree().bounds(canvas)?;
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    // Command and the wheel zoom about the pointer: e^(-0.01 dy).
+    let doubling = Point::new(0.0, -100.0 * std::f64::consts::LN_2);
+    wheel(host, bounds.origin, doubling, command);
+    // Pan so item 0 sits 100 points inside the canvas.
+    let inside = Point::new(bounds.origin.x + 10.0, bounds.origin.y + 10.0);
+    let pan = Point::new(-100.0, -100.0);
+    wheel(host, inside, pan, ShortcutModifiers::default());
+    let center = |index: usize| {
+        let scene = |offset: usize| (offset as f64 * CANVAS_SPACING + 14.0 + 50.0) * 2.0;
+        Point::new(
+            bounds.origin.x + scene(index % CANVAS_COLUMNS),
+            bounds.origin.y + scene(index / CANVAS_COLUMNS),
+        )
+    };
+    let hit = center(201);
+    drag(host, hit, hit);
+    let named = host.semantic(canvas)?.value;
+    // Items are 28 units square on a 40-unit grid; start and end the band
+    // 18 units outside them so the press lands on empty space. The band
+    // spans items 0, 1, 200 and 201 and stops short of column 2.
+    let margin = 18.0 * 2.0;
+    let (from, to) = (center(0), center(201));
+    drag(
+        host,
+        Point::new(from.x - margin, from.y - margin),
+        Point::new(to.x + margin, to.y + margin),
+    );
+    let selected = host.find("Zoom 200% · 4 selected").is_some();
+    let painted = host.paint().len();
+    Some((named, selected, painted, host.semantics().0.len()))
+}
+
+/// Opens windows from `saved`, as a relaunch would, and checks what they
+/// restore: the page, filter, and canvas zoom, then the dock.
+fn restores(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext, saved: &Saved) -> bool {
+    let start = settings::start_page(None, saved.page.as_deref());
+    let Some(canvas) = gallery.open(cx, start, &saved.filter, &saved.state, None) else {
+        return false;
+    };
+    let dock = gallery.open(cx, page_index("dock"), "", &saved.state, None);
+    settle(cx);
+    let window = state(gallery, canvas);
+    let zoom = format!("Zoom {:.0}%", saved.state.canvas_zoom * 100.0);
+    let host = host(cx, canvas);
+    let shown = canvas_node(host)
+        .and_then(|node| host.semantic(node))
+        .map(|node| node.description);
+    let canvas_ok = PAGES[window.page.get()].id == "canvas"
+        && window.filter.get() == saved.filter
+        && (window.store.canvas_zoom.get() - saved.state.canvas_zoom).abs() < 1e-9
+        && shown.as_deref() == Some(zoom.as_str());
+    if !canvas_ok {
+        println!(
+            "     rebuilt canvas: page {} zoom {shown:?}",
+            PAGES[window.page.get()].id
+        );
+    }
+    let dock_ok = dock.is_some_and(|id| state(gallery, id).store.dock.get() == saved.state.dock);
+    for id in [Some(canvas), dock].into_iter().flatten() {
+        gallery.close(cx, id);
+    }
+    canvas_ok && dock_ok
+}
+
+pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     let mut failures = 0;
     let mut check = |name: &str, ok: bool| {
         println!("{} {name}", if ok { "ok  " } else { "FAIL" });
@@ -170,6 +326,9 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
     for note in &gallery.notes {
         println!("     note: {note}");
     }
+    let shared = gallery.shared.clone();
+    // The rule fields carry the locale in their names; start in English.
+    shared.language.set("en");
 
     // Translations.
     let vi_file = !gallery.notes.iter().any(|note| note.contains("vi.lang"));
@@ -183,28 +342,20 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
             Source::BuiltInEnglish => true,
         },
     );
-
     check(
         "capabilities report multiple windows",
         choscorui::capabilities().multiple_windows == Support::Supported,
     );
-    let before = paint_count(gallery, 0);
-    check(
-        "first window painted",
-        painted_after(app, gallery, 0, before.saturating_sub(1)),
-    );
+    let Some(main) = *gallery.main.borrow() else {
+        check("first window painted", false);
+        return failures;
+    };
+    check("first window painted", painted_after(cx, main, 0));
 
-    // Every page, selected through the sidebar model and presented.
+    // Every page, selected through the window state and presented.
     let mut unpainted = Vec::new();
-    for (index, page) in PAGES.iter().enumerate() {
-        // The page shown at launch has already been presented.
-        let before = if gallery.page_of(0) == Some(page.id) {
-            0
-        } else {
-            paint_count(gallery, 0)
-        };
-        gallery.select(0, index);
-        if !painted_after(app, gallery, 0, before) || gallery.page_of(0) != Some(page.id) {
+    for page in PAGES {
+        if !show(cx, gallery, main, page.id) {
             unpainted.push(page.id);
         }
     }
@@ -217,16 +368,17 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
     );
 
     // Theme change through the state bar repaints.
-    let before = paint_count(gallery, 0);
-    let brand = gallery.windows[0].view.theme_button(Theme::Brand).center();
-    click(gallery, app, 0, brand);
+    let before = paint_count(cx, main);
+    let brand = shared.text("theme.brand", &[]);
+    let pressed = act(host(cx, main), &brand, SemanticAction::Activate, None);
     check(
         "the Brand theme button restyles and repaints",
-        gallery.theme == Theme::Brand && painted_after(app, gallery, 0, before),
+        pressed && shared.theme.get() == Theme::Brand && painted_after(cx, main, before),
     );
+    settle(cx);
     check(
         "the View menu checks the active theme",
-        gallery.menu().is_some_and(|menu| {
+        cx.menu().is_some_and(|menu| {
             menu.model()
                 .state(app::theme_command(Theme::Brand))
                 .is_ok_and(|state| state.checked)
@@ -235,195 +387,183 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
 
     // A base color swatch restyles and repaints. The swatch differs from
     // the base that the settings file restored.
-    let base = if gallery.base == BaseColor::Mauve {
+    let base = if shared.base.get() == BaseColor::Mauve {
         BaseColor::Olive
     } else {
         BaseColor::Mauve
     };
-    let before = paint_count(gallery, 0);
-    let swatch = gallery.windows[0].view.base_button(base).center();
-    click(gallery, app, 0, swatch);
+    let before = paint_count(cx, main);
+    let swatch = shared.text(&format!("base.{}", base.id()), &[]);
+    let pressed = act(host(cx, main), &swatch, SemanticAction::Activate, None);
     check(
         "a base color swatch restyles and repaints",
-        gallery.base == base && painted_after(app, gallery, 0, before),
+        pressed && shared.base.get() == base && painted_after(cx, main, before),
     );
 
     // The Enabled toggle disables the page and enables it again.
-    let toggle = gallery.windows[0].view.enabled_toggle().center();
-    click(gallery, app, 0, toggle);
-    let disabled = !gallery.windows[0].view.enabled();
-    click(gallery, app, 0, toggle);
+    let enabled = shared.text("state.enabled", &[]);
+    let window = state(gallery, main);
+    act(host(cx, main), &enabled, SemanticAction::Activate, None);
+    let disabled = !window.enabled.get();
+    act(host(cx, main), &enabled, SemanticAction::Activate, None);
     check(
         "the Enabled toggle disables and re-enables the page",
-        disabled && gallery.windows[0].view.enabled(),
+        disabled && window.enabled.get(),
     );
 
     // Structured inputs reject invalid values.
-    let numbers = with_page::<RulePage, _>(gallery, "number-input", |_, page, _| {
+    show(cx, gallery, main, "number-input");
+    let amount = "Amount (0 – 1,000,000,000; 2 decimals, locale en)";
+    let quantity = "Quantity (1 – 10,000; whole numbers)";
+    let numbers = {
+        let host = host(cx, main);
         (
-            page.enter(0, "12abc"),
-            page.enter(1, "0"),
-            page.enter(1, "12"),
+            enter(host, amount, "12abc"),
+            enter(host, quantity, "0"),
+            enter(host, quantity, "12"),
         )
-    });
-    check(
-        "number input rejects letters and out-of-range values",
-        numbers.is_some_and(|(letters, low, ok)| {
-            letters != ValidationState::Valid
-                && low != ValidationState::Valid
-                && ok == ValidationState::Valid
-        }),
-    );
-    // The plate mask `>AA-99999` needs two letters first.
-    let mask = with_page::<RulePage, _>(gallery, "input-mask", |_, page, _| {
-        (
-            page.enter(1, "12"),
-            page.enter(1, "a"),
-            page.enter(1, "ab12345"),
-        )
-    });
-    check(
-        "input mask rejects characters its format forbids",
-        mask.is_some_and(|(digits, partial, full)| {
-            matches!(digits, ValidationState::Invalid(_))
-                && partial == ValidationState::Intermediate
-                && full == ValidationState::Valid
-        }),
-    );
-    let dates = with_page::<RulePage, _>(gallery, "date-input", |_, page, _| {
-        (page.enter(0, "not a date"), page.enter(1, "1/1/2025"))
-    });
-    check(
-        "date input rejects text and dates outside 2026",
-        dates.is_some_and(|(text, outside)| {
-            matches!(text, ValidationState::Invalid(_)) && outside != ValidationState::Valid
-        }),
-    );
-    let limited = with_page::<DateTimeEditPage, _>(gallery, "date-time-edit", |_, page, _| {
-        let edit = page.limited_mut();
-        for _ in 0..edit.fields().len() {
-            if edit.focused_field() == DateTimeField::Hour {
-                break;
-            }
-            edit.handle_key(Key::ArrowRight);
-        }
-        // End and Home jump to 23 and 0, outside the range; Return clamps.
-        edit.handle_key(Key::End);
-        let flagged = edit.validation() != ValidationState::Valid;
-        edit.handle_key(Key::Enter);
-        let high = edit.value();
-        edit.handle_key(Key::Home);
-        edit.handle_key(Key::Enter);
-        (flagged, high, edit.value())
-    });
-    let at = |hour| CivilDateTime {
-        date: CivilDate::new(2026, 10, 12).expect("valid date"),
-        time: CivilTime::new(hour, 0, 0).expect("valid time"),
     };
     check(
+        "number input rejects letters and out-of-range values",
+        matches!(
+            numbers,
+            (Some((false, _)), Some((false, _)), Some((true, false)))
+        ),
+    );
+    // The plate mask `>AA-99999` needs two letters first.
+    show(cx, gallery, main, "input-mask");
+    let plate = "Licence plate, mask >AA-99999 (uppercased)";
+    let mask = {
+        let host = host(cx, main);
+        let digits = enter(host, plate, "12");
+        let partial = enter(host, plate, "a");
+        let incomplete = semantic(host, plate).map(|node| node.description);
+        (digits, partial, incomplete, enter(host, plate, "ab12345"))
+    };
+    check(
+        "input mask rejects characters its format forbids",
+        matches!(mask, (Some((false, true)), Some((false, false)), Some(ref text), Some((true, false))) if text == "Incomplete"),
+    );
+    show(cx, gallery, main, "date-input");
+    let dates = {
+        let host = host(cx, main);
+        (
+            enter(host, "Any date (mm/dd/yyyy)", "not a date"),
+            enter(host, "A date in 2026", "1/1/2025"),
+        )
+    };
+    check(
+        "date input rejects text and dates outside 2026",
+        matches!(dates, (Some((false, true)), Some((false, _)))),
+    );
+    show(cx, gallery, main, "date-time-edit");
+    let limited = clamp_hours(host(cx, main));
+    check(
         "date/time edit clamps to its 09:00 – 17:00 range",
-        limited.is_some_and(|(flagged, high, low)| flagged && high == at(17) && low == at(9)),
+        limited.is_some_and(|(flagged, high, low)| {
+            flagged && high == limited_at(17) && low == limited_at(9)
+        }),
     );
 
-    // 100k records: search, then page through with bounded realization.
-    let large = with_page::<ItemViewPage, _>(gallery, "item-view", |tree, page, _| {
-        let all = page.matches();
-        page.search(tree, "7");
-        let matches = page.matches();
-        let mut peak = page.realized();
-        for _ in 0..2_000 {
-            page.page_down(tree);
-            peak = peak.max(page.realized());
-        }
-        (all, matches, peak)
-    });
-    if let Some((all, matches, peak)) = large {
-        println!("     {all} records, {matches} match \"7\", at most {peak} rows realized");
+    // 100k records: search, then page through with bounded work.
+    show(cx, gallery, main, "item-view");
+    let large = search_records(host(cx, main));
+    if let Some((all, matches, nodes, commands)) = large {
+        println!(
+            "     {all} records, {matches} match \"7\", at most {nodes} more nodes and {commands} paint commands"
+        );
     }
     check(
-        "100k-record search keeps realized rows bounded over 2,000 Page Downs",
-        large.is_some_and(|(all, matches, peak)| {
-            all == RECORDS && matches > 0 && matches < all && peak > 0 && peak <= REALIZED_ROW_LIMIT
+        "100k-record search keeps published rows and painting bounded over 2,000 Page Downs",
+        large.is_some_and(|(all, matches, nodes, commands)| {
+            all == RECORDS
+                && matches > 0
+                && matches < all
+                && nodes <= REALIZED_ROW_LIMIT
+                && commands < RECORDS / 20
         }),
     );
 
     // Canvas: zoomed hit test, rubber band, culling, bounded semantics.
-    let canvas = with_page::<CanvasPage, _>(gallery, "canvas", |tree, page, _| {
-        page.set_zoom(tree, 2.0);
-        let hit = page.hit(page.item_center(201));
-        let from = page.item_center(0);
-        let to = page.item_center(201);
-        // Items are 28 units square on a 40-unit grid; start and end the
-        // band 18 units outside them so the press lands on empty space.
-        let margin = 18.0 * page.zoom();
-        let selected = page.rubber_band(
-            tree,
-            Point::new(from.x - margin, from.y - margin),
-            Point::new(to.x + margin, to.y + margin),
-        );
-        (page.zoom(), hit, selected, page.realized())
-    });
-    let before = paint_count(gallery, 0);
-    gallery.refresh(0);
-    let presented = painted_after(app, gallery, 0, before);
-    let painted = with_page::<CanvasPage, _>(gallery, "canvas", |_, page, _| page.painted());
+    window.store.canvas_zoom.set(1.0);
+    show(cx, gallery, main, "canvas");
+    let canvas = exercise_canvas(host(cx, main));
     check(
         "canvas hit-tests at 2x zoom and rubber-band selects",
-        canvas.as_ref().is_some_and(|(zoom, hit, selected, _)| {
-            // The band spans items 0, 1, 200 and 201 (two columns, two rows)
-            // and stops short of column 2, which starts at 80 units.
-            (*zoom - 2.0).abs() < 1e-9 && hit.as_deref() == Some("Node 201") && *selected == 4
-        }),
+        canvas
+            .as_ref()
+            .is_some_and(|(hit, selected, _, _)| hit.as_deref() == Some("Node 201") && *selected),
     );
     check(
         "canvas culls painting and keeps semantics bounded",
-        presented
-            && painted.is_some_and(|painted| painted > 0 && painted < CANVAS_ITEMS)
-            && canvas.is_some_and(|(_, _, _, realized)| realized > 0 && realized <= 400),
+        canvas.is_some_and(|(_, _, painted, nodes)| {
+            painted > 0 && painted < CANVAS_ITEMS && nodes <= CANVAS_NODE_LIMIT
+        }),
     );
 
     // Dock: the arrangement round-trips through the page state.
-    let dock = with_page::<DockPage, _>(gallery, "dock", |tree, page, _| {
-        let moved = page.move_console(tree);
-        (moved, page.save())
-    });
-    let saved_dock = gallery.windows[0].view.page_state().dock;
+    window.store.dock.set(String::new());
+    show(cx, gallery, main, "dock");
+    let moved = act(
+        host(cx, main),
+        "Move Console",
+        SemanticAction::Activate,
+        None,
+    );
+    let mut expected_dock = default_dock();
+    let saved_dock = window.store.dock.get();
     check(
         "dock moves a panel and persists the arrangement",
-        dock.is_some_and(|(moved, text)| moved && !text.is_empty() && text == saved_dock),
+        moved
+            && move_console(&mut expected_dock)
+            && !saved_dock.is_empty()
+            && saved_dock == expected_dock.save(),
     );
 
     // Vietnamese relabels the window and rebuilds the menu bar.
-    gallery.run_command(app, app::language_command("vi"));
-    settle(app, gallery);
-    let view = &gallery.windows[0].view;
-    let file_title = gallery.ctx().text("menu.file", &[]);
+    gallery.command(cx, app::language_command("vi"));
+    settle(cx);
+    let file_title = shared.text("menu.file", &[]);
+    let title = shared.window_title(window.page.get());
+    let menu_ok = cx
+        .menu()
+        .is_some_and(|menu| menu.model().menus()[1].title == file_title);
     check(
         "Vietnamese rebuilds the menu bar and window title",
         file_title != "File"
-            && gallery
-                .menu()
-                .is_some_and(|menu| menu.model().menus()[1].title == file_title)
-            && gallery.windows[0].window.title() == view.window_title(&gallery.ctx()),
+            && menu_ok
+            && cx
+                .window(main)
+                .is_some_and(|native| native.title() == title),
     );
 
     // A second window through File > New Window.
-    let via_menu = gallery
+    let via_menu = cx
         .menu()
         .is_some_and(|menu| menu.perform_action(app::NEW_WINDOW).unwrap_or(false));
-    settle(app, gallery);
-    let second_painted = painted_after(app, gallery, 1, 0);
+    settle(cx);
+    let second = cx.windows().into_iter().find(|id| *id != main);
+    let second_painted = second.is_some_and(|id| painted_after(cx, id, 0));
     check(
         "File > New Window opens a second painted window",
-        via_menu && gallery.window_count() == 2 && app.window_count() == 2 && second_painted,
+        via_menu
+            && cx.windows().len() == 2
+            && cx.application().window_count() == 2
+            && second_painted,
     );
 
     // Settings: save, reload from disk, rebuild, and compare.
-    with_page::<CanvasPage, _>(gallery, "canvas", |tree, page, _| page.set_zoom(tree, 2.5));
-    gallery.set_filter(0, "canvas");
-    let expected = gallery.session();
-    let saved = gallery.save();
-    let path = gallery.settings.path().map(std::path::Path::to_path_buf);
+    window.store.canvas_zoom.set(2.5);
+    show(cx, gallery, main, "canvas");
+    window.filter.set("canvas".to_owned());
+    settle(cx);
+    let expected = gallery.session(cx);
+    let saved = gallery.save(cx);
+    let path = gallery
+        .settings
+        .borrow()
+        .path()
+        .map(std::path::Path::to_path_buf);
     let reloaded = path.clone().map(|path| {
         let (settings, issues) = settings::load(Some(path));
         (Saved::read(&settings), issues)
@@ -451,23 +591,29 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
             && expected.state.dock == saved_dock
             && expected.window.is_some(),
     );
-    let rebuilt = reloaded.map(|(saved, _)| rebuild(gallery, &saved));
+    let rebuilt = reloaded.map(|(saved, _)| restores(gallery, cx, &saved));
     check(
-        "a rebuilt window restores the page, filter, canvas zoom, and dock",
+        "rebuilt windows restore the page, filter, canvas zoom, and dock",
         rebuilt.is_some_and(|ok| ok),
     );
     check("a version 1 settings file migrates", migrates());
+    let errors = gallery.errors.borrow().clone();
+    for error in &errors {
+        println!("     view error: {error}");
+    }
+    check("no view reported an error", errors.is_empty());
 
     // Teardown: closing every window releases it.
-    while gallery.window_count() > 0 {
-        gallery.run_command(app, app::CLOSE_WINDOW);
-        settle(app, gallery);
+    for id in cx.windows() {
+        gallery.close(cx, id);
+        settle(cx);
     }
     let deadline = Instant::now() + Duration::from_secs(3);
-    while app.window_count() > 0 && Instant::now() < deadline {
-        app.dispatch_next_event(Duration::from_millis(20));
+    while cx.application().window_count() > 0 && Instant::now() < deadline {
+        cx.application()
+            .dispatch_next_event(Duration::from_millis(20));
     }
-    let left = app.window_count();
+    let left = cx.application().window_count();
     if left > 0 {
         println!("     {left} native windows still tracked");
     }
@@ -477,14 +623,12 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
     // AppKit keeps its status bar windows in `NSApp.windows` after a status
     // item is removed.
     let capabilities = choscorui::capabilities();
-    let rows = capability_rows(&capabilities);
-    for (name, support) in &rows {
+    for (name, support) in capability_rows(&capabilities) {
         println!("     {name}: {support:?}");
     }
     let status = if capabilities.status_items.is_supported() {
-        use crate::page::Desktop;
-        gallery.desktop.toggle_status_item("autopilot") == Ok(true)
-            && gallery.desktop.toggle_status_item("autopilot") == Ok(false)
+        shared.desktop.toggle_status_item("autopilot") == Ok(true)
+            && shared.desktop.toggle_status_item("autopilot") == Ok(false)
     } else {
         true
     };

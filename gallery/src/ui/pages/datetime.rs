@@ -14,7 +14,7 @@ fn date(year: i32, month: u8, day: u8) -> CivilDate {
     CivilDate::new(year, month, day).expect("demo dates are valid")
 }
 
-fn date_time(day: CivilDate, hour: u8, minute: u8) -> CivilDateTime {
+pub(crate) fn date_time(day: CivilDate, hour: u8, minute: u8) -> CivilDateTime {
     CivilDateTime {
         date: day,
         time: CivilTime::new(hour, minute, 0).expect("demo times are valid"),
@@ -22,7 +22,7 @@ fn date_time(day: CivilDate, hour: u8, minute: u8) -> CivilDateTime {
 }
 
 /// The day the demo treats as today.
-fn today() -> CivilDate {
+pub(crate) fn today() -> CivilDate {
     date(2026, 10, 12)
 }
 
@@ -63,7 +63,7 @@ pub fn calendar(_: &PageCx) -> AnyView {
 
 /// The label of the range-limited editor; scripted checks find it by this
 /// name.
-const LIMITED: &str = "Meeting (Oct 2026, 09:00 – 17:00 on the 12th)";
+pub(crate) const LIMITED: &str = "Meeting (Oct 2026, 09:00 – 17:00 on the 12th)";
 
 /// The office hours that the limited editor allows.
 fn limits() -> (CivilDateTime, CivilDateTime) {
