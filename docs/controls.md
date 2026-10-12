@@ -1456,6 +1456,9 @@ pin this behavior.
 - **In a view.** The `context_menu` and `dropdown_menu` view modifiers
   show a `HostedDropdownMenu` in an anchored layer. `Command` runs the
   chosen action and closes the layer, and `Dismissed` closes it.
+  `MenuChoice::checkbox` and `MenuChoice::radio` make check rows. The
+  command state of a check row follows its binding when the menu opens.
+  Its `Command` sets the binding and closes the layer.
 - **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
   shortcut text, and `destructive` sets the destructive look.
   `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`
@@ -1523,6 +1526,11 @@ the actions are `Activate` and `Focus`.
   view host, so the grace time applies between views. Keyboard focus in
   the view starts the delay as a hover does. Escape hides the tooltip and
   stops there.
+  The bubble fades in, zooms from 95%, and slides 8 pt from its anchor,
+  in the motion time of the `Tooltip` recipe. It goes out the same way.
+  Reduced motion shows and hides it at once. While the bubble shows, a
+  child of the wrapper publishes `semantics`, with the `DescribedBy`
+  relation to the view.
 - **Look.** `VisibleTooltip::place` centers the bubble above the anchor,
   and flips it below when it does not fit. `paint` uses the `Tooltip`
   recipe. The bubble has a `foreground` fill and xs `background` text. It
@@ -2416,6 +2424,14 @@ is disabled. `set_value` returns false.
   more than a quarter of its size dismisses it; a shorter drag snaps back.
 - A scrim at 10% black covers the window behind the panel and fades with
   it.
+- **In a view.** The `dialog`, `alert_dialog`, `sheet`, and `drawer` view
+  modifiers show view content in a panel of the same kind and recipe.
+  Their `title` names the `Dialog` node of the panel and follows the
+  locale. The panel and the scrim move as in this control, in the motion
+  time of the panel's `Root` slot. A view drawer follows a drag in the
+  same way. A closed panel takes no input and publishes no node, and it
+  unmounts when its motion ends. Reduced motion shows and removes the
+  panel at once.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |

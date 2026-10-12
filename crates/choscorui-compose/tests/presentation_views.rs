@@ -1,16 +1,17 @@
 //! Headless tests of the form view and the presentation modifiers: the
 //! form layout in both directions, tooltips, context and dropdown menus,
-//! and toasts.
+//! toasts, and dialog and drawer panels.
 
-use choscorui_compose::Runtime;
 use choscorui_compose::view::{
     Button, Cx, Env, Form, FormRow, MenuChoice, State, Text, VStack, View, ViewError, ViewExt,
     ViewHost,
 };
-use choscorui_controls::{EstimatedText, ShortcutModifiers, Toast, ToastPosition};
+use choscorui_compose::{Property, Runtime, t};
+use choscorui_controls::{EstimatedText, SheetSide, ShortcutModifiers, Toast, ToastPosition};
 use choscorui_core::{
-    AccessibilityPreferences, Catalog, DesignTokens, Key, KeyEvent, Locale, NodeId, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
+    AccessibilityPreferences, Catalog, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent,
+    Locale, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticRelation,
+    SemanticRole, Size,
 };
 use std::rc::Rc;
 
@@ -579,4 +580,436 @@ fn toast_without_a_toaster_reports_an_error() {
     let post = node(&mut host, "Post");
     host.perform(post, SemanticAction::Activate, None);
     assert_eq!(host.take_errors(), vec![ViewError::NoToaster]);
+}
+
+// ---------------------------------------------------------------------------
+// Dialog, sheet, and drawer panels
+
+/// The opacity at which the first text `text` paints in `list`, or `None`
+/// when it does not paint.
+fn text_opacity(list: &DisplayList, text: &str) -> Option<f64> {
+    let mut stack = vec![1.0];
+    for command in list.commands() {
+        match command {
+            DisplayCommand::PushOpacity(opacity) => {
+                let current = stack.last().copied().unwrap_or(1.0);
+                stack.push(current * opacity);
+            }
+            DisplayCommand::PopOpacity => {
+                stack.pop();
+            }
+            DisplayCommand::DrawText { text: drawn, .. } if drawn == text => {
+                return stack.last().copied();
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// A button that opens a dialog with a close button.
+struct Confirm;
+
+impl View for Confirm {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let open = cx.state(false);
+        VStack::new((
+            Button::new("Open", move || open.set(true)),
+            Text::new(move || format!("open {}", open.get())),
+        ))
+        .dialog(open.binding(), t!("confirm.title"), move || {
+            VStack::new((
+                Text::new("Body"),
+                Button::new("Close", move || open.set(false)),
+            ))
+        })
+    }
+}
+
+fn catalog() -> Catalog {
+    let (en, vi) = (Locale::parse("en").unwrap(), Locale::parse("vi").unwrap());
+    let mut catalog = Catalog::new();
+    catalog.insert(&en, "confirm.title", "Delete file");
+    catalog.insert(&vi, "confirm.title", "Xóa tệp");
+    catalog
+}
+
+/// A host of `view` whose locale `locale` changes at run time.
+fn live_host(view: impl View, locale: &Property<Locale>, runtime: Runtime) -> ViewHost {
+    let live = locale.clone();
+    let mut host = ViewHost::new(
+        Size::new(600.0, 400.0),
+        DesignTokens::light(),
+        Env::new(Rc::new(catalog()), move || live.get()),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(view);
+    host.layout();
+    assert_eq!(host.take_errors(), Vec::new());
+    host
+}
+
+fn host_with_catalog(view: impl View) -> ViewHost {
+    let runtime = Runtime::new();
+    let locale = runtime.property(Locale::parse("en").unwrap());
+    live_host(view, &locale, runtime)
+}
+
+fn activate(host: &mut ViewHost, name: &str) {
+    let node = node(host, name);
+    assert!(host.perform(node, SemanticAction::Activate, None));
+    host.layout();
+}
+
+#[test]
+fn dialog_is_named_by_its_title_and_follows_the_locale() {
+    let runtime = Runtime::new();
+    let locale = runtime.property(Locale::parse("en").unwrap());
+    let mut host = live_host(Confirm, &locale, runtime);
+    activate(&mut host, "Open");
+    let panel = node(&mut host, "Delete file");
+    assert_eq!(host.semantic(panel).unwrap().role, SemanticRole::Dialog);
+    let body = node(&mut host, "Body");
+    let (snapshot, _) = host.semantics();
+    let entry = snapshot.iter().find(|entry| entry.id == body).unwrap();
+    assert_eq!(entry.parent, Some(panel), "the dialog holds its content");
+    locale.set(Locale::parse("vi").unwrap());
+    host.flush();
+    assert_eq!(host.find("Xóa tệp"), Some(panel), "the same node renames");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn dialog_animates_in_and_out_with_the_host_time() {
+    let mut host = host_with_catalog(Confirm);
+    host.advance(1.0);
+    let open = node(&mut host, "Open");
+    host.focus(Some(open));
+    activate(&mut host, "Open");
+    assert_eq!(text_opacity(&host.paint(), "Body"), Some(0.0));
+    host.advance(1.05);
+    let half = text_opacity(&host.paint(), "Body").unwrap();
+    assert!(half > 0.0 && half < 1.0, "half way: {half}");
+    assert!(host.needs_frame(), "the motion asks for frames");
+    host.advance(1.2);
+    assert_eq!(text_opacity(&host.paint(), "Body"), Some(1.0));
+    assert!(!host.needs_frame());
+    // Closing hides the dialog from assistive technology and returns
+    // focus at once, and the panel fades out before it unmounts.
+    host.advance(2.0);
+    let body = node(&mut host, "Body");
+    activate(&mut host, "Close");
+    assert!(shown(&mut host, "open false"));
+    assert!(!shown(&mut host, "Body"));
+    assert_eq!(host.tree().focus(), Some(open));
+    assert!(host.tree().contains(body));
+    assert_eq!(text_opacity(&host.paint(), "Body"), Some(1.0));
+    host.advance(2.05);
+    let half = text_opacity(&host.paint(), "Body").unwrap();
+    assert!(half > 0.0 && half < 1.0, "half way out: {half}");
+    let due = host.next_deadline().expect("the close has an end");
+    assert!((due - 2.1).abs() < 1e-6, "due at {due}");
+    host.advance(due);
+    host.layout();
+    assert!(!host.tree().contains(body), "the panel unmounted");
+    assert_eq!(text_opacity(&host.paint(), "Body"), None);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn a_closing_dialog_lets_presses_through() {
+    let mut host = host_with_catalog(Confirm);
+    host.advance(1.0);
+    activate(&mut host, "Open");
+    let open = bounds(&mut host, "Open").center();
+    press(&mut host, Key::Escape);
+    assert!(shown(&mut host, "open false"));
+    for event in [
+        PointerEvent::Down {
+            position: open,
+            button: PointerButton::Primary,
+        },
+        PointerEvent::Up {
+            position: open,
+            button: PointerButton::Primary,
+        },
+    ] {
+        pointer(&mut host, event);
+    }
+    assert!(shown(&mut host, "open true"), "the press opened it again");
+    assert!(shown(&mut host, "Body"));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn dialog_shows_and_closes_at_once_with_reduced_motion() {
+    let mut host = host_with_catalog(Confirm);
+    host.set_accessibility(AccessibilityPreferences {
+        reduced_motion: true,
+        ..AccessibilityPreferences::default()
+    });
+    host.advance(1.0);
+    activate(&mut host, "Open");
+    assert_eq!(text_opacity(&host.paint(), "Body"), Some(1.0));
+    assert!(!host.needs_frame());
+    let body = node(&mut host, "Body");
+    activate(&mut host, "Close");
+    assert!(!host.tree().contains(body), "no closing motion");
+    assert_eq!(host.next_deadline(), None);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+/// A drawer at the leading edge.
+struct Filters;
+
+impl View for Filters {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let open = cx.state(true);
+        VStack::new((
+            Button::new("Show filters", move || open.set(true)),
+            Text::new(move || format!("open {}", open.get())),
+        ))
+        .drawer(open.binding(), SheetSide::Left, "Filters", || {
+            Text::new("Only unread messages")
+        })
+    }
+}
+
+fn drag(host: &mut ViewHost, from: Point, to: Point) {
+    for event in [
+        PointerEvent::Down {
+            position: from,
+            button: PointerButton::Primary,
+        },
+        PointerEvent::Move { position: to },
+        PointerEvent::Up {
+            position: to,
+            button: PointerButton::Primary,
+        },
+    ] {
+        pointer(host, event);
+    }
+}
+
+#[test]
+fn drawer_sits_at_its_side_and_a_drag_dismisses_it() {
+    let mut host = host(Filters);
+    host.advance(1.0);
+    let panel = bounds(&mut host, "Filters");
+    assert_eq!(panel.min_x(), 0.0, "the drawer sits at the leading edge");
+    assert_eq!(panel.size.height, 400.0);
+    let start = bounds(&mut host, "Only unread messages").center();
+    // A short drag springs back.
+    let short = Point::new(start.x - panel.size.width * 0.1, start.y);
+    drag(&mut host, start, short);
+    assert!(shown(&mut host, "open true"));
+    // The panel follows the drag toward its edge.
+    pointer(
+        &mut host,
+        PointerEvent::Down {
+            position: start,
+            button: PointerButton::Primary,
+        },
+    );
+    let far = Point::new(start.x - panel.size.width * 0.5, start.y);
+    pointer(&mut host, PointerEvent::Move { position: far });
+    let moved = host.paint().commands().iter().any(|command| {
+        matches!(command, DisplayCommand::PushTransform(transform)
+            if (transform.tx + panel.size.width * 0.5).abs() < 1e-6)
+    });
+    assert!(moved, "the panel moves with the pointer");
+    pointer(
+        &mut host,
+        PointerEvent::Up {
+            position: far,
+            button: PointerButton::Primary,
+        },
+    );
+    assert!(shown(&mut host, "open false"), "a long drag dismisses");
+    assert!(!shown(&mut host, "Filters"));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn drawer_sides_mirror_in_right_to_left_layouts() {
+    let mut host = host_in(Filters, "ar");
+    let panel = bounds(&mut host, "Filters");
+    assert_eq!(panel.max_x(), 600.0, "the leading edge is at the right");
+    let start = bounds(&mut host, "Only unread messages").center();
+    drag(
+        &mut host,
+        start,
+        Point::new(start.x + panel.size.width * 0.5, start.y),
+    );
+    assert!(shown(&mut host, "open false"));
+}
+
+// ---------------------------------------------------------------------------
+// Tooltip semantics and motion
+
+/// Hovers the view named `name` from host time `from` until its tooltip
+/// shows.
+fn hover_until_shown(host: &mut ViewHost, name: &str, from: f64) {
+    let center = bounds(host, name).center();
+    host.advance(from);
+    pointer(host, PointerEvent::Move { position: center });
+    host.advance(from + 0.6);
+    host.layout();
+}
+
+fn leave(host: &mut ViewHost) {
+    pointer(
+        host,
+        PointerEvent::Move {
+            position: Point::new(5.0, 395.0),
+        },
+    );
+}
+
+/// The published tooltip nodes.
+fn tooltip_entries(host: &mut ViewHost) -> Vec<choscorui_core::SemanticEntry> {
+    let (snapshot, _) = host.semantics();
+    snapshot
+        .into_iter()
+        .filter(|entry| entry.node.role == SemanticRole::Tooltip)
+        .collect()
+}
+
+#[test]
+fn tooltip_publishes_its_node_while_it_shows() {
+    let mut host = host(toolbar());
+    let save = node(&mut host, "Save");
+    assert!(tooltip_entries(&mut host).is_empty());
+    hover_until_shown(&mut host, "Save", 10.0);
+    let tips = tooltip_entries(&mut host);
+    assert_eq!(tips.len(), 1, "{tips:?}");
+    assert_eq!(tips[0].node.name, "Save the file");
+    assert_eq!(
+        tips[0].node.relations,
+        vec![SemanticRelation::DescribedBy(save)]
+    );
+    leave(&mut host);
+    assert!(tooltip_entries(&mut host).is_empty());
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn tooltip_fades_in_and_out_with_the_host_time() {
+    let mut host = host(toolbar());
+    hover_until_shown(&mut host, "Save", 10.0);
+    assert_eq!(text_opacity(&host.paint(), "Save the file"), None);
+    host.advance(10.65);
+    let half = text_opacity(&host.paint(), "Save the file").unwrap();
+    assert!(half > 0.0 && half < 1.0, "half way: {half}");
+    host.advance(10.8);
+    assert_eq!(text_opacity(&host.paint(), "Save the file"), Some(1.0));
+    host.advance(11.0);
+    leave(&mut host);
+    host.advance(11.05);
+    let half = text_opacity(&host.paint(), "Save the file").unwrap();
+    assert!(half > 0.0 && half < 1.0, "half way out: {half}");
+    assert!(host.needs_frame());
+    host.advance(11.2);
+    assert_eq!(text_opacity(&host.paint(), "Save the file"), None);
+}
+
+#[test]
+fn tooltip_shows_and_hides_at_once_with_reduced_motion() {
+    let mut host = host(toolbar());
+    host.set_accessibility(AccessibilityPreferences {
+        reduced_motion: true,
+        ..AccessibilityPreferences::default()
+    });
+    hover_until_shown(&mut host, "Save", 10.0);
+    assert_eq!(text_opacity(&host.paint(), "Save the file"), Some(1.0));
+    leave(&mut host);
+    assert_eq!(text_opacity(&host.paint(), "Save the file"), None);
+}
+
+// ---------------------------------------------------------------------------
+// Checkbox and radio menu rows
+
+struct ViewMenu;
+
+impl View for ViewMenu {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let open = cx.state(false);
+        let bookmarks = cx.state(false);
+        let zoom = cx.state(0_u8);
+        VStack::new((
+            Button::new("View", move || open.set(true)).dropdown_menu(
+                open.binding(),
+                vec![
+                    MenuChoice::checkbox("Show bookmarks", bookmarks.binding()),
+                    MenuChoice::separator(),
+                    MenuChoice::radio("Small", zoom.binding(), 1),
+                    MenuChoice::radio("Large", zoom.binding(), 2),
+                ],
+            ),
+            Text::new(move || format!("open {}", open.get())),
+            Text::new(move || format!("bookmarks {}", bookmarks.get())),
+            Text::new(move || format!("zoom {}", zoom.get())),
+        ))
+    }
+}
+
+/// Opens the menu of the view named `name` at host time `time`.
+fn open_menu(host: &mut ViewHost, name: &str, time: f64) -> NodeId {
+    host.advance(time);
+    activate(host, name);
+    host.advance(time + 1.0);
+    focused_menu(host)
+}
+
+/// The vertical centers of the radio dots: 8 pt round fills.
+fn dots(list: &DisplayList) -> Vec<f64> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::FillRoundedRect { rect, .. } if rect.size.width == 8.0 => {
+                Some(rect.center().y)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn checkbox_and_radio_rows_set_their_bindings() {
+    let mut host = host(ViewMenu);
+    let view = node(&mut host, "View");
+    host.focus(Some(view));
+    open_menu(&mut host, "View", 1.0);
+    assert!(dots(&host.paint()).is_empty(), "no radio row is chosen");
+    press(&mut host, Key::ArrowDown);
+    press(&mut host, Key::Enter);
+    assert!(shown(&mut host, "bookmarks true"));
+    assert!(
+        shown(&mut host, "open false"),
+        "a check row closes the menu"
+    );
+    assert_eq!(host.tree().focus(), Some(view));
+    // The checkbox flips back.
+    open_menu(&mut host, "View", 3.0);
+    press(&mut host, Key::ArrowDown);
+    press(&mut host, Key::Enter);
+    assert!(shown(&mut host, "bookmarks false"));
+    // A radio row sets the selection, and its dot shows.
+    open_menu(&mut host, "View", 5.0);
+    press(&mut host, Key::End);
+    press(&mut host, Key::Enter);
+    assert!(shown(&mut host, "zoom 2"));
+    open_menu(&mut host, "View", 7.0);
+    let large = dots(&host.paint());
+    assert_eq!(large.len(), 1);
+    press(&mut host, Key::End);
+    press(&mut host, Key::ArrowUp);
+    press(&mut host, Key::Enter);
+    assert!(shown(&mut host, "zoom 1"));
+    open_menu(&mut host, "View", 9.0);
+    let small = dots(&host.paint());
+    assert_eq!(small.len(), 1, "one radio row of the group is chosen");
+    assert!(small[0] < large[0], "the dot moved one row up");
+    assert_eq!(host.take_errors(), Vec::new());
 }

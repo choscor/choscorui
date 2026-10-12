@@ -15,7 +15,7 @@ use super::text::TextContent;
 use super::widgets::Items;
 use choscorui_controls::{
     CommandId, CommandState, ControlContext, ControlEvent, ControlKind, ControlMessage,
-    CustomControl, DropdownMenu, MeasureContext, MenuItem, PaintContext, Variant,
+    CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext, Variant,
 };
 use choscorui_core::{
     EventPhase, EventReply, Measured, NodeId, Point, PointerButton, PointerEvent, SemanticNode,
@@ -24,16 +24,21 @@ use choscorui_core::{
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+/// Whether a check row shows its mark.
+type Checked = Rc<dyn Fn() -> bool>;
+
 /// What a menu row is.
 #[derive(Clone)]
 enum Row {
     Action(Live<TextContent>, Rc<dyn Fn()>),
+    /// A row with a check mark or a radio dot while `Checked` is true.
+    Check(Live<TextContent>, MenuCheck, Checked, Rc<dyn Fn()>),
     Submenu(Live<TextContent>, Vec<MenuChoice>),
     Separator,
 }
 
-/// One row of a menu that a view presents: an action, a submenu, or a
-/// separator. Labels take literal text or a catalog string (`t!`), and
+/// One row of a menu that a view presents: an action, a checkbox or
+/// radio row, a submenu, or a separator. Labels take literal text or a catalog string (`t!`), and
 /// follow the locale.
 #[derive(Clone)]
 pub struct MenuChoice {
@@ -56,6 +61,37 @@ impl MenuChoice {
     /// A row that runs `action` and closes the menu.
     pub fn action<M>(label: impl IntoLive<TextContent, M>, action: impl Fn() + 'static) -> Self {
         Self::new(Row::Action(label.into_live(), Rc::new(action)))
+    }
+
+    /// A row with a check mark while `checked` is true. Choosing it flips
+    /// `checked` and closes the menu.
+    pub fn checkbox<M>(label: impl IntoLive<TextContent, M>, checked: Binding<bool>) -> Self {
+        Self::new(Row::Check(
+            label.into_live(),
+            MenuCheck::Checkbox,
+            Rc::new(move || checked.get()),
+            Rc::new(move || checked.update(|on| *on = !*on)),
+        ))
+    }
+
+    /// A row of a radio group with a dot while `selection` is `value`.
+    /// Choosing it sets `selection` to `value` and closes the menu. The
+    /// rows that share `selection` make one group.
+    pub fn radio<T, M>(
+        label: impl IntoLive<TextContent, M>,
+        selection: Binding<T>,
+        value: T,
+    ) -> Self
+    where
+        T: Clone + PartialEq + 'static,
+    {
+        let chosen = value.clone();
+        Self::new(Row::Check(
+            label.into_live(),
+            MenuCheck::Radio,
+            Rc::new(move || selection.try_get().is_ok_and(|current| current == chosen)),
+            Rc::new(move || selection.set(value.clone())),
+        ))
     }
 
     /// A row that opens `items` beside the menu.
@@ -95,37 +131,43 @@ impl MenuChoice {
 /// The actions of a built menu, by command id less one.
 type Actions = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
 
-/// Converts `choices` to menu items in `env`. Each action gets the next
-/// command id; `actions` and `disabled` collect them.
+/// Converts `choices` to menu items in `env`. Each action and check row
+/// gets the next command id; `actions` collects their actions, and
+/// `states` the commands that are disabled or checked.
 fn build(
     choices: &[MenuChoice],
     env: &Env,
     actions: &mut Vec<Rc<dyn Fn()>>,
-    disabled: &mut Vec<CommandId>,
+    states: &mut Vec<(CommandId, CommandState)>,
 ) -> Vec<MenuItem> {
     choices
         .iter()
-        .map(|choice| match &choice.row {
-            Row::Action(label, action) => {
-                actions.push(action.clone());
-                let command = CommandId(actions.len() as u64);
-                if choice.disabled.get() {
-                    disabled.push(command);
+        .map(|choice| {
+            let (label, check, checked, action) = match &choice.row {
+                Row::Action(label, action) => (label, MenuCheck::None, false, action),
+                Row::Check(label, check, checked, action) => (label, *check, checked(), action),
+                Row::Submenu(label, items) => {
+                    return MenuItem::submenu(
+                        label.get().resolve(env),
+                        build(items, env, actions, states),
+                    );
                 }
-                let mut item = MenuItem::action(label.get().resolve(env), command);
-                if let Some(shortcut) = &choice.shortcut {
-                    item = item.with_shortcut(shortcut.clone());
-                }
-                if choice.destructive {
-                    item = item.destructive();
-                }
-                item
+                Row::Separator => return MenuItem::Separator,
+            };
+            actions.push(action.clone());
+            let command = CommandId(actions.len() as u64);
+            let enabled = !choice.disabled.get();
+            if !enabled || checked {
+                states.push((command, CommandState { enabled, checked }));
             }
-            Row::Submenu(label, items) => MenuItem::submenu(
-                label.get().resolve(env),
-                build(items, env, actions, disabled),
-            ),
-            Row::Separator => MenuItem::Separator,
+            let mut item = MenuItem::action(label.get().resolve(env), command).with_check(check);
+            if let Some(shortcut) = &choice.shortcut {
+                item = item.with_shortcut(shortcut.clone());
+            }
+            if choice.destructive {
+                item = item.destructive();
+            }
+            item
         })
         .collect()
 }
@@ -155,8 +197,9 @@ fn name_of(inner: &Inner, node: NodeId) -> String {
         .unwrap_or_default()
 }
 
-/// The menu content: a hosted dropdown menu of `items`. A chosen action
-/// sets `presented` to false and runs; Escape sets it to false.
+/// The menu content: a hosted dropdown menu of `items`. A chosen row
+/// sets `presented` to false and runs its action; Escape sets it to
+/// false.
 fn menu_content(
     name: String,
     items: Rc<dyn Items<MenuChoice>>,
@@ -168,18 +211,14 @@ fn menu_content(
         let (name, items) = (name.clone(), items.clone());
         Configured::custom(ControlKind::Menu, move |env| {
             let mut list = Vec::new();
-            let mut disabled = Vec::new();
-            let items = build(&items.items(env), env, &mut list, &mut disabled);
+            let mut states = Vec::new();
+            let items = build(&items.items(env), env, &mut list, &mut states);
             *built.borrow_mut() = list;
             let mut menu = DropdownMenu::new(items).hosted(name.clone());
-            for command in disabled {
-                let off = CommandState {
-                    enabled: false,
-                    checked: false,
-                };
-                // Every action of the menu has a command, so this cannot
+            for (command, state) in states {
+                // Every row of the menu has a command, so this cannot
                 // fail.
-                let _ = menu.set_command(command, off);
+                let _ = menu.set_command(command, state);
             }
             menu
         })
@@ -205,7 +244,7 @@ pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoi
     Modifier::Present(Rc::new(move |cx: &mut Cx<'_>, anchor| {
         let name = name_of(cx.inner, anchor);
         let content = menu_content(name, items.clone(), presented);
-        mount_presentation(cx, Anchor::Node(anchor), presented, MENU, content);
+        mount_presentation(cx, Anchor::Node(anchor), presented, (MENU, None), content);
     }))
 }
 
@@ -300,7 +339,7 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
             }));
             let name = name_of(cx.inner, view);
             let content = menu_content(name, items, open);
-            mount_presentation(cx, Anchor::Point(point), open, MENU, content);
+            mount_presentation(cx, Anchor::Point(point), open, (MENU, None), content);
         }),
     })
 }

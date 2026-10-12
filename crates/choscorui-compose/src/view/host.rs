@@ -13,7 +13,7 @@ use super::state::{Binding, Live, Memo, State};
 use crate::reactive::{ReactiveError, Runtime, Subscription};
 use choscorui_controls::{
     ControlHost, ControlKind, ControlMessage, CustomControl, HostEnv, ShortcutModifiers, Styles,
-    TextMeasure, TooltipController,
+    TextMeasure,
 };
 use choscorui_core::{
     Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, GridPlacement, InputModality,
@@ -183,8 +183,16 @@ pub(crate) struct NodeData {
     pub silent: bool,
     /// The tooltip text of a tooltip wrapper.
     pub tip: Option<Rc<RefCell<String>>>,
+    /// The node of a tooltip wrapper that publishes its tooltip.
+    pub bubble: Option<NodeId>,
+    /// The tooltip wrapper and the view whose tooltip this node publishes
+    /// while it shows.
+    pub describes: Option<(NodeId, NodeId)>,
     /// Opens the context menu of the view, for the `ShowMenu` action.
     pub show_menu: Option<MenuOpener>,
+    /// The open and close motion of a presented panel, which moves the
+    /// node and its subtree when it paints.
+    pub motion: Option<Rc<super::motion::Motion>>,
 }
 
 /// The axes along which a view takes all the space it is offered, as a
@@ -269,7 +277,10 @@ pub(crate) struct Inner {
     pub lazies: BTreeMap<NodeId, LazyHook>,
     /// The hover and focus tooltips of every tooltip wrapper, shared so
     /// that a second tooltip follows the first without a delay.
-    pub tooltips: Rc<RefCell<TooltipController>>,
+    pub tooltips: Rc<RefCell<super::tooltip::Tooltips>>,
+    /// The node that published the shown tooltip at the last semantics
+    /// update.
+    tooltip_node: Option<NodeId>,
     /// The context menu that the last secondary press opens: the one of
     /// the innermost view, which sees the press last.
     pub menu_press: MenuPress,
@@ -1000,6 +1011,7 @@ impl ViewHost {
             anchors: HashMap::new(),
             lazies: BTreeMap::new(),
             tooltips: Rc::default(),
+            tooltip_node: None,
             menu_press: Rc::default(),
         };
         let mut host = Self {
@@ -1456,6 +1468,7 @@ impl ViewHost {
         if !removed.is_empty() {
             changes.push(SemanticChange::Tree);
         }
+        self.sync_tooltip_node();
         let all = std::mem::take(&mut self.inner.semantic_all);
         let mut candidates: Vec<NodeId> = if all {
             let mut nodes: Vec<NodeId> = self.inner.nodes.keys().copied().collect();
@@ -1493,11 +1506,31 @@ impl ViewHost {
         (self.inner.semantics.snapshot(&self.inner.tree), changes)
     }
 
+    /// Marks the nodes that publish the shown tooltip, before and now,
+    /// when it changed.
+    fn sync_tooltip_node(&mut self) {
+        let inner = &mut self.inner;
+        let shown = inner
+            .tooltips
+            .borrow()
+            .showing()
+            .and_then(|wrapper| inner.nodes.get(&wrapper))
+            .and_then(|data| data.bubble);
+        if shown == inner.tooltip_node {
+            return;
+        }
+        let before = std::mem::replace(&mut inner.tooltip_node, shown);
+        inner.semantic_dirty.extend(before.into_iter().chain(shown));
+    }
+
     /// The semantic node that `node` publishes, if any.
     fn semantic_node(&self, node: NodeId) -> Option<SemanticNode> {
         let data = self.inner.nodes.get(&node)?;
         if data.silent || data.access.hidden || self.hidden_by_ancestor(node) {
             return None;
+        }
+        if let Some((wrapper, view)) = data.describes {
+            return self.inner.tooltips.borrow().semantics(wrapper, view);
         }
         let mut semantic = match self.inner.controls.get(node) {
             Some(control) => {

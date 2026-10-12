@@ -291,7 +291,7 @@ macro_rules! modifiers {
     )*
     present {$(
         $(#[$pdoc:meta])*
-        fn $pname:ident ($($parg:ident : $pty:ty),*) => $presentation:expr;
+        fn $pname:ident $(<$($pgeneric:ident),*>)? ($($parg:ident : $pty:ty),*) => $presentation:expr;
     )*}) => {
         /// The modifiers of every view. Each returns a [`Styled`] view;
         /// on a `Styled` view, it appends to the same list.
@@ -304,7 +304,7 @@ macro_rules! modifiers {
             )*
             $(
                 $(#[$pdoc])*
-                fn $pname<C: View>(self, presented: Binding<bool>, $($parg: $pty,)* content: impl Fn() -> C + 'static) -> Styled<Self> {
+                fn $pname<C: View $($(, $pgeneric)*)?>(self, presented: Binding<bool>, $($parg: $pty,)* content: impl Fn() -> C + 'static) -> Styled<Self> {
                     present(Styled::new(self), presented, $presentation, content)
                 }
             )*
@@ -321,7 +321,7 @@ macro_rules! modifiers {
             )*
             $(
                 $(#[$pdoc])*
-                pub fn $pname<C: View>(self, presented: Binding<bool>, $($parg: $pty,)* content: impl Fn() -> C + 'static) -> Self {
+                pub fn $pname<C: View $($(, $pgeneric)*)?>(self, presented: Binding<bool>, $($parg: $pty,)* content: impl Fn() -> C + 'static) -> Self {
                     present(self, presented, $presentation, content)
                 }
             )*
@@ -435,41 +435,45 @@ modifiers! {
     present {
         /// Shows `content` in a dialog while `presented` is true. Escape
         /// or a press outside the dialog sets `presented` to false.
-        fn dialog() => Presentation {
+        /// `title` names the dialog for assistive technology.
+        fn dialog<M>(title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Dialog,
             variant: Variant::default(),
             placement: Placement::Center,
             surface: true,
-        };
+        }, Some(title.into_live()));
         /// Shows `content` in an alert dialog, which asks the user to
-        /// confirm or cancel.
-        fn alert_dialog() => Presentation {
+        /// confirm or cancel. `title` names it.
+        fn alert_dialog<M>(title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::AlertDialog,
             variant: Variant::default(),
             placement: Placement::Center,
             surface: true,
-        };
-        /// Shows `content` in a sheet along the `side` edge.
-        fn sheet(side: SheetSide) => Presentation {
+        }, Some(title.into_live()));
+        /// Shows `content` in a sheet along the `side` edge. `title`
+        /// names it.
+        fn sheet<M>(side: SheetSide, title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Sheet,
             variant: side.into(),
             placement: Placement::Edge(side),
             surface: true,
-        };
-        /// Shows `content` in a drawer along the bottom edge.
-        fn drawer() => Presentation {
+        }, Some(title.into_live()));
+        /// Shows `content` in a drawer along the `side` edge. A pointer
+        /// drag toward the edge past a quarter of its size sets
+        /// `presented` to false. `title` names it.
+        fn drawer<M>(side: SheetSide, title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Drawer,
-            variant: SheetSide::Bottom.into(),
-            placement: Placement::Edge(SheetSide::Bottom),
+            variant: side.into(),
+            placement: Placement::Edge(side),
             surface: true,
-        };
+        }, Some(title.into_live()));
         /// Shows `content` in a popover next to the view.
-        fn popover() => Presentation {
+        fn popover() => (Presentation {
             kind: ControlKind::Popover,
             variant: Variant::default(),
             placement: Placement::Anchored,
             surface: true,
-        };
+        }, None);
     }
 }
 

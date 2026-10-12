@@ -17,6 +17,7 @@ mod layout;
 mod lazy;
 mod menus;
 mod modifier;
+mod motion;
 mod paint;
 mod present;
 mod scope;

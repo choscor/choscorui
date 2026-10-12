@@ -84,7 +84,8 @@ The `view` module is the declarative view layer:
 - `Dynamic` and `Branch` are the scopes of `Option`, `Either`, and `AnyView`: keyed scopes with one child that go through `plan_keyed`. The key of a `Branch` child is the value of its key closure, so the child stays while the key stays. A view value has no identity to compare, so the key of a `Dynamic` child is each run, and each run replaces that child.
 - `ForEach` compares its item keys with `plan_keyed`. An item can make many nodes, so the plan moves the nodes of each item as one fragment, without a wrapper node.
 - Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus. Menus use the same layer, next to the view or at the pointer.
-- The `tooltip` and `context_menu` modifiers wrap the view in a control that watches its hover, presses, and keys. The wrapper publishes no semantic node.
+- The layer and its panel animate through the controls' `Reveal`. On close, the layer leaves hit testing, focus traversal, and the semantic tree at once. It unmounts when its close motion ends.
+- The `tooltip` and `context_menu` modifiers wrap the view in a control that watches its hover, presses, and keys. The wrapper publishes no semantic node. A child of a tooltip wrapper publishes the `Tooltip` node while the tooltip shows.
 - The `toaster` modifier mounts a `Toaster` above the window content and puts its queue in the environment.
 - `Form` lowers onto the two-column form grid of the core layout engine.
 - `ViewHost` runs layout, paint, semantics, and input for a mounted view. A window backend calls it for each frame, and tests drive it without a window.

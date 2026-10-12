@@ -490,6 +490,7 @@ fn dialog_traps_focus_closes_on_escape_and_returns_focus() {
             let open = cx.state(false);
             VStack::new((tap("open", move || open.set(true)), tap("other", || {}))).dialog(
                 open.binding(),
+                "Confirm",
                 move || {
                     VStack::new((
                         tap("confirm", move || open.set(false)),
@@ -536,7 +537,7 @@ fn sheet_and_popover_close_on_a_press_outside() {
             let content = move || tap("inside", move || {});
             let base = VStack::new(tap("anchor", || {}));
             if self.sheet {
-                Either::Left(base.sheet(open.binding(), SheetSide::Right, content))
+                Either::Left(base.sheet(open.binding(), SheetSide::Right, "Settings", content))
             } else {
                 Either::Right(base.popover(open.binding(), content))
             }

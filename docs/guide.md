@@ -257,11 +257,13 @@ let greeting = Text::new(t!("greeting", name = "Linh"));
 
 A presentation modifier shows content while a `Binding<bool>` is true:
 
-- `.dialog(presented, content)` and `.alert_dialog(presented, content)` show a centered dialog.
-- `.sheet(presented, side, content)` and `.drawer(presented, content)` show a panel along an edge.
+- `.dialog(presented, title, content)` and `.alert_dialog(presented, title, content)` show a centered dialog.
+- `.sheet(presented, side, title, content)` and `.drawer(presented, side, title, content)` show a panel along an edge.
 - `.popover(presented, content)` shows a popover next to the view.
 
-Escape or a press outside the dialog sets the binding to false. Focus moves into the dialog and returns to the view after it closes.
+The `title` takes literal text or a catalog string. It is the accessible name of the panel, and it follows the locale. Escape or a press outside the dialog sets the binding to false. A drag on a drawer toward its edge, past a quarter of its size, also sets it to false. Focus moves into the dialog and returns to the view after it closes.
+
+A dialog fades in and zooms from 95%. A sheet or a drawer slides in from its edge, and the scrim fades with the panel. The motion uses the duration of the recipe of the panel. A closed panel takes no input and has no accessibility node, and it unmounts when its motion ends. With reduced motion, panels show and close at once.
 
 ```rust
 use choscorui::prelude::*;
@@ -273,7 +275,7 @@ impl View for Delete {
         let asking = cx.state(false);
         Button::new("Delete", move || asking.set(true))
             .variant(ButtonVariant::Destructive)
-            .alert_dialog(asking.binding(), move || {
+            .alert_dialog(asking.binding(), "Delete this file?", move || {
                 VStack::new((
                     Text::new("Delete this file?"),
                     Button::new("Cancel", move || asking.set(false)),
@@ -286,11 +288,11 @@ impl View for Delete {
 
 ### Tooltips
 
-`.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It also shows after keyboard focus moves into the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one.
+`.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It also shows after keyboard focus moves into the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one. While the tooltip shows, a `Tooltip` accessibility node holds the text, with a `DescribedBy` relation to the view. The tooltip fades, zooms, and slides in and out, and shows and hides at once with reduced motion.
 
 ### Menus
 
-A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.
+A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::checkbox(label, checked)` shows a check mark while the `Binding<bool>` is true, and a choice flips it. `MenuChoice::radio(label, selection, value)` shows a dot while `selection` is `value`, and a choice sets it. The radio rows of one binding make a group. A check row closes the menu as an action does. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.
 
 - `.context_menu(items)` opens a menu at the pointer on a secondary click or a Control-click on the view. The `ShowMenu` action of assistive technology opens it at the center of the view. Of nested context menus, the innermost one opens.
 - `.dropdown_menu(presented, items)` shows a menu below the view while `presented` is true. A chosen row or Escape sets `presented` to false.
@@ -614,6 +616,8 @@ For a new interactive control, implement the `CustomControl` trait in safe Rust 
 | `focusable()` | At mount time | Defaults to `true`. A focusable control takes focus when the user presses it |
 | `set_enabled(enabled)` | When `.disabled` changes | Updates the control state. A disabled control gets no input |
 | `animating(time)` | On each frame | Returns `true` while the control needs another frame |
+
+`Reveal` gives the open and close motion of the built-in popups. `progress` gives the eased share at a time, and `paint` or `transform` zooms from 95% and slides. Reduced motion skips the motion.
 
 `MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags.
 

@@ -105,6 +105,15 @@ impl Painter<'_, '_> {
             {
                 pushed.push(Pop::Transform);
             }
+            if let Some(motion) = &data.motion {
+                let (opacity, transform) = motion.effect(&tokens, bounds, self.env.time);
+                if opacity < 1.0 && self.list.push_opacity(opacity.max(0.0)).is_ok() {
+                    pushed.push(Pop::Opacity);
+                }
+                if transform != Transform::IDENTITY && self.list.push_transform(transform).is_ok() {
+                    pushed.push(Pop::Transform);
+                }
+            }
             let radius = decor
                 .radius
                 .map_or(0.0, |corner| corner.resolve(&tokens, bounds));
