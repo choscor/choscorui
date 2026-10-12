@@ -68,7 +68,11 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-compose
 
-`choscorui-compose` gives declarative composition in Rust. `Reconciler` applies a keyed `Element` description to a `Tree` and keeps each `NodeId` when a keyed element stays. `Runtime` holds typed `Property` values and `PropertyBinding` connections. `Runtime::track` records the properties that a closure reads. `Runtime::computed` and `Runtime::effect` use it to compute again only when a value that they read changes. `StateMachine` applies named states and animated transitions through `AnimationClock`.
+`choscorui-compose` gives declarative composition in Rust. `Reconciler` applies a keyed `Element` description to a `Tree` and keeps each `NodeId` when a keyed element stays. An `Element` can have a `ControlKind` and a `Properties` set. When the kind of a key changes, the key gets a new node. When only its properties change, the key keeps its node and the `ReconcileReport` counts it as updated.
+
+`plan_keyed` is the keyed diff of one child list. It finds the children to keep, create, and remove, finds duplicate keys, and counts the minimum number of moves. `Reconciler` uses it for each child list. `ForEach` uses it for its items, so both paths keep nodes, focus, and semantics for the keys that stay.
+
+`Runtime` holds typed `Property` values and `PropertyBinding` connections. `Runtime::track` records the properties that a closure reads. `Runtime::computed` and `Runtime::effect` use it to compute again only when a value that they read changes. `StateMachine` applies named states and animated transitions through `AnimationClock`.
 
 The `view` module is the declarative view layer:
 
@@ -77,7 +81,8 @@ The `view` module is the declarative view layer:
 - A live property is a `Live` value: a fixed value or a closure. A closure runs again only when a value that it read changes, and it updates only its own node.
 - `Styled` holds the modifiers of a view in one ordered list. A layout modifier after a paint modifier wraps the view in a new node.
 - Every visual leaf is a `CustomControl` in a `ControlHost`. Environment modifiers become `ThemeResolver` scopes. Local paint modifiers on a control become a recipe set for that instance.
-- `Dynamic` mounts the view that a closure returns again when its reads change. `ForEach` keeps the nodes of keys that stay.
+- `Dynamic` mounts the view that a closure returns again when its reads change. It is the scope of `Option`, `Either`, and `AnyView`: a keyed scope with one child. A view value has no identity to compare, so each run replaces that child.
+- `ForEach` compares its item keys with `plan_keyed`. An item can make many nodes, so the plan moves the nodes of each item as one fragment, without a wrapper node.
 - Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus.
 - `ViewHost` runs layout, paint, semantics, and input for a mounted view. A window backend calls it for each frame, and tests drive it without a window.
 

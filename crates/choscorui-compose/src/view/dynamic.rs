@@ -2,6 +2,15 @@
 //! again whenever the state the closure read changes, and `ForEach`
 //! reconciles keyed children. Both keep their nodes at their place among
 //! their siblings.
+//!
+//! `ForEach` compares its old and new item keys with [`plan_keyed`], the
+//! keyed diff of the `Reconciler`. An item can make many nodes or none, so
+//! the plan works on the item fragments and not on single nodes.
+//!
+//! `Dynamic` is the scope of `Option`, `Either`, and `AnyView`. It is a
+//! keyed scope with one child whose key is each run of the closure. A view
+//! value has no identity that a run can compare, so each run removes the
+//! old child and creates the new child.
 
 use super::View;
 use super::env::Env;
@@ -10,9 +19,9 @@ use super::host::{Cx, Inner, ScopeId, ViewError};
 use super::scope;
 use super::state::{IntoLive, Live};
 use crate::reactive::Runtime;
+use crate::reconcile::plan_keyed;
 use choscorui_core::NodeId;
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -144,48 +153,48 @@ where
             };
             Runtime::untracked(|| {
                 let old = std::mem::take(&mut *entries.borrow_mut());
-                let mut reusable: HashMap<K, Entry<K, T>> = old
-                    .into_iter()
-                    .map(|entry| (entry.key.clone(), entry))
-                    .collect();
-                let mut seen = HashSet::new();
-                let mut next = Vec::with_capacity(items.len());
-                for item in items {
-                    let item_key = key(&item);
-                    if !seen.insert(item_key.clone()) {
-                        inner.report(ViewError::DuplicateKey(format!("{item_key:?}")));
-                        continue;
-                    }
-                    match reusable.remove(&item_key) {
-                        Some(entry) if entry.item == item => next.push(entry),
-                        stale => {
-                            if let Some(entry) = stale {
-                                inner.dispose_scope(entry.scope);
-                                let nodes = inner.fragments.remove(entry.fragment);
-                                inner.remove_nodes(&nodes);
-                            }
-                            let item_fragment = inner.fragments.child(fragment);
-                            let scope = mount_in(
-                                inner,
-                                owner,
-                                parent,
-                                item_fragment,
-                                env.clone(),
-                                view(&item),
-                            );
-                            next.push(Entry {
-                                key: item_key,
-                                item,
-                                fragment: item_fragment,
-                                scope,
-                            });
-                        }
+                let old_keys: Vec<K> = old.iter().map(|entry| entry.key.clone()).collect();
+                let new_keys: Vec<K> = items.iter().map(|item| key(item)).collect();
+                // A kept key whose value changed mounts again.
+                let plan = plan_keyed(&old_keys, &new_keys, |old_index, new_index| {
+                    old[old_index].item == items[new_index]
+                });
+                for duplicate in &plan.duplicates {
+                    inner.report(ViewError::DuplicateKey(format!("{duplicate:?}")));
+                }
+                let mut old: Vec<Option<Entry<K, T>>> = old.into_iter().map(Some).collect();
+                for index in &plan.removed {
+                    if let Some(entry) = old[*index].take() {
+                        inner.dispose_scope(entry.scope);
+                        let nodes = inner.fragments.remove(entry.fragment);
+                        inner.remove_nodes(&nodes);
                     }
                 }
-                for (_, entry) in reusable {
-                    inner.dispose_scope(entry.scope);
-                    let nodes = inner.fragments.remove(entry.fragment);
-                    inner.remove_nodes(&nodes);
+                let mut items: Vec<Option<T>> = items.into_iter().map(Some).collect();
+                let mut next = Vec::with_capacity(plan.children.len());
+                for child in plan.children {
+                    if let Some(entry) = child.reuse.and_then(|index| old[index].take()) {
+                        next.push(entry);
+                        continue;
+                    }
+                    let Some(item) = items[child.index].take() else {
+                        continue;
+                    };
+                    let item_fragment = inner.fragments.child(fragment);
+                    let scope = mount_in(
+                        inner,
+                        owner,
+                        parent,
+                        item_fragment,
+                        env.clone(),
+                        view(&item),
+                    );
+                    next.push(Entry {
+                        key: child.key,
+                        item,
+                        fragment: item_fragment,
+                        scope,
+                    });
                 }
                 let order: Vec<FragmentId> = next.iter().map(|entry| entry.fragment).collect();
                 inner.fragments.reorder(fragment, &order);

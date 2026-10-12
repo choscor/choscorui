@@ -129,7 +129,7 @@ impl View for Settings {
 To change the structure of the tree, use these views:
 
 - `Dynamic::new(choose)` mounts the view that `choose` returns. When state that `choose` read changes, it unmounts the old view and mounts the new one.
-- `ForEach::new(items, key, view)` mounts one view for each item. Items keep their nodes by key, so an insert mounts only the new item.
+- `ForEach::new(items, key, view)` mounts one view for each item. Items keep their nodes, focus, and semantics by key, so an insert mounts only the new item. An item whose value changes under the same key mounts again. A duplicate key reports `ViewError::DuplicateKey`, and only the first item with that key stays.
 - `Either::Left` and `Either::Right` give one type to two branches.
 
 ## Layout
