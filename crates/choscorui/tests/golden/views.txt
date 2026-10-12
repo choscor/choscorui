@@ -1,0 +1,46 @@
+# padding then background layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 174.5, y: 130.0 }, size: Size { width: 51.0, height: 40.0 } } -
+    Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } } StaticText "Text"
+# padding then background paint
+FillRect { rect: Rect { origin: Point { x: 174.5, y: 130.0 }, size: Size { width: 51.0, height: 40.0 } }, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+PushClip(Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } })
+DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+# background then padding layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 174.5, y: 130.0 }, size: Size { width: 51.0, height: 40.0 } } -
+    Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } } StaticText "Text"
+# background then padding paint
+FillRect { rect: Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } }, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+PushClip(Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } })
+DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+# stack en layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 133.64999999999998, y: 132.0 }, size: Size { width: 132.70000000000002, height: 36.0 } } -
+    Rect { origin: Point { x: 133.64999999999998, y: 132.0 }, size: Size { width: 58.50000000000001, height: 36.0 } } Button "First"
+    Rect { origin: Point { x: 200.14999999999998, y: 132.0 }, size: Size { width: 66.2, height: 36.0 } } Button "Second"
+# form en layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 0.0, y: 98.75 }, size: Size { width: 400.0, height: 102.5 } } -
+    Rect { origin: Point { x: 69.30000000000001, y: 115.5 }, size: Size { width: 30.800000000000004, height: 19.25 } } StaticText "Name"
+    Rect { origin: Point { x: 112.10000000000001, y: 98.75 }, size: Size { width: 287.9, height: 36.0 } } -
+      Rect { origin: Point { x: 112.10000000000001, y: 98.75 }, size: Size { width: 287.9, height: 36.0 } } Button "first field"
+    Rect { origin: Point { x: 0.0, y: 162.75 }, size: Size { width: 100.10000000000001, height: 38.5 } } StaticText "Email address"
+    Rect { origin: Point { x: 112.10000000000001, y: 165.25 }, size: Size { width: 287.9, height: 36.0 } } -
+      Rect { origin: Point { x: 112.10000000000001, y: 165.25 }, size: Size { width: 287.9, height: 36.0 } } Button "second field"
+# stack ar layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 133.64999999999998, y: 132.0 }, size: Size { width: 132.70000000000002, height: 36.0 } } -
+    Rect { origin: Point { x: 207.85000000000002, y: 132.0 }, size: Size { width: 58.50000000000001, height: 36.0 } } Button "First"
+    Rect { origin: Point { x: 133.65000000000003, y: 132.0 }, size: Size { width: 66.2, height: 36.0 } } Button "Second"
+# form ar layout
+Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
+  Rect { origin: Point { x: 0.0, y: 98.75 }, size: Size { width: 400.0, height: 102.5 } } -
+    Rect { origin: Point { x: 299.9, y: 115.5 }, size: Size { width: 30.800000000000004, height: 19.25 } } StaticText "Name"
+    Rect { origin: Point { x: 0.0, y: 98.75 }, size: Size { width: 287.9, height: 36.0 } } -
+      Rect { origin: Point { x: 0.0, y: 98.75 }, size: Size { width: 287.9, height: 36.0 } } Button "first field"
+    Rect { origin: Point { x: 299.9, y: 162.75 }, size: Size { width: 100.10000000000001, height: 38.5 } } StaticText "Email address"
+    Rect { origin: Point { x: 0.0, y: 165.25 }, size: Size { width: 287.9, height: 36.0 } } -
+      Rect { origin: Point { x: 0.0, y: 165.25 }, size: Size { width: 287.9, height: 36.0 } } Button "second field"

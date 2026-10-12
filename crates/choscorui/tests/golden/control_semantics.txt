@@ -176,3 +176,7 @@ text-editor Ltr: role TextField name "Notes" value Some("Hi") state SemanticStat
 text-editor Rtl: role TextField name "Notes" value Some("Hi") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
 canvas Ltr: role List name "Diagram" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
 canvas Rtl: role List name "Diagram" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
+tooltip on button en: role Button name "Lưu" description "Lưu tệp" actions [Activate, Focus]
+tooltip shown en: role Tooltip name "Lưu tệp" relations ["DescribedBy(Button \"Lưu\")"]
+tooltip on button ar: role Button name "Lưu" description "Lưu tệp" actions [Activate, Focus]
+tooltip shown ar: role Tooltip name "Lưu tệp" relations ["DescribedBy(Button \"Lưu\")"]

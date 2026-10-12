@@ -9,7 +9,9 @@
 //!
 //! The hosted controls come from the catalog that the controls contract
 //! tests use, so a control added there is pinned here too. The
-//! `painted_slots` module pins the default recipe of every control kind.
+//! `painted_slots` module pins the default recipe of every control kind,
+//! and the `views` module pins views mounted through the compose
+//! `ViewHost`.
 
 use choscorui::controls::{
     Alert, AlertVariant, Avatar, Badge, BadgeVariant, Bubble, BubbleVariant, Button, ButtonVariant,
@@ -33,6 +35,8 @@ use std::path::PathBuf;
 mod catalog;
 #[path = "compatibility/painted_slots.rs"]
 mod painted_slots;
+#[path = "compatibility/views.rs"]
+mod views;
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
@@ -255,7 +259,15 @@ fn control_semantics() {
             .unwrap();
         }
     }
+    views::tooltip_semantics(&mut out);
     golden("control_semantics", &out);
+}
+
+/// Views mounted through the compose `ViewHost`: modifier order, and a
+/// stack and a form in both directions.
+#[test]
+fn views() {
+    golden("views", &views::record());
 }
 
 /// Every token of `tokens`, one per line, colors as `#rrggbbaa`.
