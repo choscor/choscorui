@@ -55,8 +55,8 @@ mod theme;
 pub use theme::{
     AccessibilityPreferences, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens,
     FULL_RADIUS, FontFamily, MotionTokens, Oklch, Palette, RadiusScale, RecipeSet, RoleOverrides,
-    ShadowLayers, ShadowScale, TextPreset, TextSize, ThemeError, ThemeInvalidation, ThemeOverride,
-    ThemeResolver, Tracking, TypeSpec, palette_source,
+    ShadowLayers, ShadowScale, Space, TextPreset, TextSize, ThemeError, ThemeInvalidation,
+    ThemeOverride, ThemeResolver, Tracking, TypeSpec, palette_source,
 };
 mod locale;
 pub use locale::{
@@ -162,7 +162,7 @@ impl Rect {
 }
 
 /// A stable identity for a node during its lifetime. IDs are never reused by a tree.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeId(u64);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -298,6 +298,12 @@ impl Dirty {
 
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    /// The work of both values.
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 
     fn insert(&mut self, other: Self) {

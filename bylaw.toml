@@ -61,7 +61,7 @@ from = "controls"
 may_depend_on = ["core"]
 [[rule.dependencies]]
 from = "compose"
-may_depend_on = ["core"]
+may_depend_on = ["core", "controls"]
 [[rule.dependencies]]
 from = "render"
 may_depend_on = ["core"]

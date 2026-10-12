@@ -6,4 +6,5 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+choscorui-controls = { path = "../choscorui-controls" }
 choscorui-core = { path = "../choscorui-core" }

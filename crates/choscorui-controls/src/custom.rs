@@ -261,6 +261,23 @@ pub trait CustomControl {
     fn deadline(&self) -> Option<f64> {
         None
     }
+
+    /// Takes a value from the application, of the kind that the control
+    /// reports in [`ControlMessage::Changed`]. Returns false when the
+    /// control has no such value or the value does not fit. The control
+    /// emits no message for it.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let _ = value;
+        false
+    }
+
+    /// Opens or closes the control's popup, dialog, or disclosure at host
+    /// `time`, as the user would, but without a message. Returns false
+    /// when the control has nothing to open.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        let _ = (open, time);
+        false
+    }
 }
 
 /// Owns mounted controls by node.
@@ -716,24 +733,46 @@ impl ControlHost {
     /// Paints visible mounted controls in tree order, each clipped to its
     /// bounds, then every open overlay above them.
     pub fn paint(&self, tree: &Tree, list: &mut DisplayList, env: &HostEnv<'_>) {
-        let rtl = env.direction == LayoutDirection::Rtl;
         let order = self.paint_order(tree);
         for node in &order {
-            let (Some(control), Some(bounds)) = (self.controls.get(node), tree.bounds(*node))
-            else {
-                continue;
-            };
             let tokens = env.tokens(tree, *node);
-            list.push_clip(bounds);
-            let mut cx = PaintContext::new(list, bounds, &tokens, env.styles, env.text)
-                .rtl(rtl)
-                .state(self.visual_state(tree, *node))
-                .time(env.time);
-            control.paint(&mut cx);
-            let _ = list.pop_clip();
+            self.paint_node(tree, *node, list, env, &tokens);
         }
-        for node in &order {
-            let (Some(control), Some(bounds)) = (self.controls.get(node), tree.bounds(*node))
+        self.paint_overlays(tree, list, env);
+    }
+
+    /// Paints one mounted control with `tokens`, clipped to its bounds.
+    /// A host that walks the tree itself, for example to paint
+    /// decorations between controls, calls this for each control and then
+    /// [`ControlHost::paint_overlays`]. Returns false when `node` has no
+    /// control.
+    pub fn paint_node(
+        &self,
+        tree: &Tree,
+        node: NodeId,
+        list: &mut DisplayList,
+        env: &HostEnv<'_>,
+        tokens: &DesignTokens,
+    ) -> bool {
+        let (Some(control), Some(bounds)) = (self.controls.get(&node), tree.bounds(node)) else {
+            return false;
+        };
+        list.push_clip(bounds);
+        let mut cx = PaintContext::new(list, bounds, tokens, env.styles, env.text)
+            .rtl(env.direction == LayoutDirection::Rtl)
+            .state(self.visual_state(tree, node))
+            .time(env.time);
+        control.paint(&mut cx);
+        let _ = list.pop_clip();
+        true
+    }
+
+    /// Paints every open overlay, and every closing one that still
+    /// animates, above the controls, in tree order.
+    pub fn paint_overlays(&self, tree: &Tree, list: &mut DisplayList, env: &HostEnv<'_>) {
+        let rtl = env.direction == LayoutDirection::Rtl;
+        for node in self.paint_order(tree) {
+            let (Some(control), Some(bounds)) = (self.controls.get(&node), tree.bounds(node))
             else {
                 continue;
             };
@@ -741,12 +780,46 @@ impl ControlHost {
             if control.overlay().is_none() && !control.animating(env.time) {
                 continue;
             }
-            let tokens = env.tokens(tree, *node);
+            let tokens = env.tokens(tree, node);
             let mut cx = PaintContext::new(list, bounds, &tokens, env.styles, env.text)
                 .rtl(rtl)
-                .state(self.visual_state(tree, *node))
+                .state(self.visual_state(tree, node))
                 .time(env.time);
             control.paint_overlay(&mut cx);
+        }
+    }
+
+    /// Gives the control a value from the application, as
+    /// [`CustomControl::set_value`] describes. When the control takes it,
+    /// the node is marked for layout, paint, and semantics.
+    pub fn set_value(&mut self, tree: &mut Tree, node: NodeId, value: &ControlValue) -> bool {
+        let taken = self
+            .controls
+            .get_mut(&node)
+            .is_some_and(|control| control.set_value(value));
+        if taken {
+            Self::mark(tree, node);
+        }
+        taken
+    }
+
+    /// Opens or closes the control's popup, dialog, or disclosure from the
+    /// application, as [`CustomControl::set_open`] describes.
+    pub fn set_open(&mut self, tree: &mut Tree, node: NodeId, open: bool) -> bool {
+        let time = self.time;
+        let taken = self
+            .controls
+            .get_mut(&node)
+            .is_some_and(|control| control.set_open(open, time));
+        if taken {
+            Self::mark(tree, node);
+        }
+        taken
+    }
+
+    fn mark(tree: &mut Tree, node: NodeId) {
+        for flag in [Dirty::LAYOUT, Dirty::PAINT, Dirty::SEMANTICS] {
+            let _ = tree.invalidate(node, flag);
         }
     }
 

@@ -106,6 +106,38 @@ impl Styles {
         self.cache.borrow_mut().clear();
     }
 
+    /// The recipe registered for `kind` in `set`, if any.
+    pub fn recipe(&self, set: RecipeSet, kind: ControlKind) -> Option<Rc<dyn Recipe>> {
+        self.recipes.get(&(set, kind)).cloned()
+    }
+
+    /// Registers in `to` every recipe that `from` has, so that a new set
+    /// starts as a copy of an existing one.
+    pub fn copy_set(&mut self, from: RecipeSet, to: RecipeSet) {
+        let copies: Vec<_> = self
+            .recipes
+            .iter()
+            .filter(|((set, _), _)| *set == from)
+            .map(|((_, kind), recipe)| (*kind, recipe.clone()))
+            .collect();
+        for (kind, recipe) in copies {
+            self.recipes.insert((to, kind), recipe);
+        }
+        self.cache.borrow_mut().clear();
+    }
+
+    /// Removes every recipe of `set`.
+    pub fn remove_set(&mut self, set: RecipeSet) {
+        self.recipes.retain(|(candidate, _), _| *candidate != set);
+        self.cache.borrow_mut().clear();
+    }
+
+    /// Forgets resolved styles, after a registered recipe changed what it
+    /// returns.
+    pub fn clear_cache(&self) {
+        self.cache.borrow_mut().clear();
+    }
+
     /// Removes a registered recipe; the kind paints with the default again.
     pub fn remove_recipe(&mut self, set: RecipeSet, kind: ControlKind) -> bool {
         self.cache.borrow_mut().clear();

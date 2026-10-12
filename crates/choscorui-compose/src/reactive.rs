@@ -238,6 +238,17 @@ impl Runtime {
         (result, reads)
     }
 
+    /// Runs `operation` without recording its reads in any enclosing
+    /// [`Runtime::track`].
+    pub fn untracked<R>(operation: impl FnOnce() -> R) -> R {
+        // No runtime has key 0, so the reads go nowhere.
+        TRACKING.with(|frames| frames.borrow_mut().push((0, Vec::new())));
+        let frame = TrackFrame;
+        let result = operation();
+        drop(frame);
+        result
+    }
+
     /// Calls `callback` once after each flush in which one of `sources`
     /// changed. Unknown sources are ignored.
     pub fn observe(&self, sources: &[u64], callback: impl Fn() + 'static) -> Subscription {

@@ -36,6 +36,41 @@ impl RadiusScale {
     }
 }
 
+/// A step of the spacing scale, in units of the spacing token.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Space {
+    S0,
+    S1,
+    S2,
+    S3,
+    S4,
+    S5,
+    S6,
+    S8,
+    S10,
+    S12,
+    S16,
+}
+
+impl Space {
+    /// The number of spacing units.
+    pub const fn units(self) -> f64 {
+        match self {
+            Self::S0 => 0.0,
+            Self::S1 => 1.0,
+            Self::S2 => 2.0,
+            Self::S3 => 3.0,
+            Self::S4 => 4.0,
+            Self::S5 => 5.0,
+            Self::S6 => 6.0,
+            Self::S8 => 8.0,
+            Self::S10 => 10.0,
+            Self::S12 => 12.0,
+            Self::S16 => 16.0,
+        }
+    }
+}
+
 /// Large enough to round any control into a pill; painters clamp a radius
 /// to half the shorter side.
 pub const FULL_RADIUS: f64 = 9999.0;

@@ -18,7 +18,7 @@ mod scale;
 
 pub use palette::{BaseColor, ColorRole, ColorScheme, Oklch, Palette, source as palette_source};
 pub use scale::{
-    FULL_RADIUS, FontFamily, RadiusScale, ShadowLayers, ShadowScale, TextPreset, TextSize,
+    FULL_RADIUS, FontFamily, RadiusScale, ShadowLayers, ShadowScale, Space, TextPreset, TextSize,
     Tracking, TypeSpec,
 };
 
@@ -157,6 +157,11 @@ impl DesignTokens {
     /// `units` steps of the spacing unit.
     pub fn space(&self, units: f64) -> f64 {
         self.spacing * units
+    }
+
+    /// The length of a step of the spacing scale.
+    pub fn gap(&self, step: Space) -> f64 {
+        self.space(step.units())
     }
 
     /// The sans text spec of `size` at `weight`, scaled by the text scale.
@@ -428,6 +433,39 @@ impl ThemeResolver {
         overrides: ThemeOverride,
     ) -> Result<ThemeInvalidation, ThemeError> {
         self.set_scope(tree, id, overrides)
+    }
+
+    /// Drops the scopes of nodes that are no longer in `tree`.
+    pub fn prune(&mut self, tree: &Tree) {
+        self.scopes.retain(|node, _| tree.contains(*node));
+    }
+
+    /// Whether `id` has scope overrides.
+    pub fn has_scope(&self, id: NodeId) -> bool {
+        self.scopes.contains_key(&id)
+    }
+
+    /// The application tokens before accessibility preferences, where a
+    /// tree walk with [`ThemeResolver::scoped`] starts.
+    pub fn base(&self) -> DesignTokens {
+        self.application
+    }
+
+    /// `parent`'s tokens with `id`'s own overrides, if any, still before
+    /// accessibility. A tree walk carries these from parent to child and
+    /// calls [`ThemeResolver::finish`] for each node it paints, so it
+    /// resolves each node once.
+    pub fn scoped(&self, parent: &DesignTokens, id: NodeId) -> DesignTokens {
+        match self.scopes.get(&id) {
+            Some(overrides) => apply(*parent, *overrides),
+            None => *parent,
+        }
+    }
+
+    /// Tokens from [`ThemeResolver::scoped`] with the accessibility
+    /// preferences applied, as [`ThemeResolver::resolve`] returns them.
+    pub fn finish(&self, tokens: DesignTokens) -> DesignTokens {
+        apply_accessibility(tokens, self.accessibility)
     }
 
     pub fn remove_scope(

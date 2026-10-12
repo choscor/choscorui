@@ -63,7 +63,18 @@ Dependencies: `choscorui-core` only.
 
 `choscorui-compose` gives declarative composition in Rust. `Reconciler` applies a keyed `Element` description to a `Tree` and keeps each `NodeId` when a keyed element stays. `Runtime` holds typed `Property` values and `PropertyBinding` connections. `Runtime::track` records the properties that a closure reads. `Runtime::computed` and `Runtime::effect` use it to compute again only when a value that they read changes. `StateMachine` applies named states and animated transitions through `AnimationClock`.
 
-Dependencies: `choscorui-core` only.
+The `view` module is the declarative view layer:
+
+- A `View` returns other views from `body`, or creates nodes in its hidden `mount`. The tree is built once.
+- `Cx` creates `State`, `Memo`, and effects. `State`, `Binding`, and `Memo` are `Copy` handles. A stale handle reports `ReactiveError::Disposed` and does not panic.
+- A live property is a `Live` value: a fixed value or a closure. A closure runs again only when a value that it read changes, and it updates only its own node.
+- `Styled` holds the modifiers of a view in one ordered list. A layout modifier after a paint modifier wraps the view in a new node.
+- Every visual leaf is a `CustomControl` in a `ControlHost`. Environment modifiers become `ThemeResolver` scopes. Local paint modifiers on a control become a recipe set for that instance.
+- `Dynamic` mounts the view that a closure returns again when its reads change. `ForEach` keeps the nodes of keys that stay.
+- Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus.
+- `ViewHost` runs layout, paint, semantics, and input for a mounted view. A window backend calls it for each frame, and tests drive it without a window.
+
+Dependencies: `choscorui-core` and `choscorui-controls`.
 
 ### choscorui-render
 
@@ -103,7 +114,8 @@ The benchmark depends directly on `choscorui-core`, `choscorui-controls`, and `c
 `bylaw.toml` defines the rules between crates, and `cargo bylaw check` enforces them:
 
 - `choscorui-core` is the lowest layer.
-- `choscorui-controls`, `choscorui-compose`, `choscorui-render`, `choscorui-macos`, `choscorui-windows`, and `choscorui-linux` can depend only on `choscorui-core`.
+- `choscorui-controls`, `choscorui-render`, `choscorui-macos`, `choscorui-windows`, and `choscorui-linux` can depend only on `choscorui-core`.
+- `choscorui-compose` can depend only on core and controls. Its views configure and mount controls.
 - The facade can depend only on core, controls, compose, and macos.
 - No library crate depends on the gallery.
 - The workspace crates have no dependency cycles.
@@ -124,6 +136,7 @@ flowchart BT
     bench["choscorui-bench (tools/bench)"]
     controls --> core
     compose --> core
+    compose --> controls
     render --> core
     macos --> core
     windows --> core

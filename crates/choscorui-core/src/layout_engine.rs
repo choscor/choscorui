@@ -219,8 +219,9 @@ pub struct LayoutStyle {
     /// when the parent stack overflows.
     pub shrink: bool,
     pub align_self: Option<ItemAlign>,
-    /// Inline-axis alignment inside a grid cell: `Start` is the leading edge
-    /// (left in LTR, right in RTL). Defaults to `Stretch`.
+    /// Inline-axis alignment inside a grid cell or an overlay: `Start` is
+    /// the leading edge (left in LTR, right in RTL). A grid cell defaults
+    /// to `Stretch`; an overlay child defaults to its `align_self`.
     pub justify_self: Option<ItemAlign>,
     pub grid: GridPlacement,
     /// `None` inherits the parent's direction.
@@ -1156,22 +1157,23 @@ impl LayoutEngine {
                         direction,
                         leaves,
                     )?;
-                    let child_rect = match child_style.align_self.unwrap_or(ItemAlign::Stretch) {
-                        ItemAlign::Stretch => content,
-                        ItemAlign::Center => Rect::from_xywh(
-                            content.min_x() + (content.size.width - m.size.width) / 2.0,
-                            content.min_y() + (content.size.height - m.size.height) / 2.0,
-                            m.size.width,
-                            m.size.height,
-                        ),
-                        ItemAlign::End => Rect::from_xywh(
-                            content.max_x() - m.size.width,
-                            content.max_y() - m.size.height,
-                            m.size.width,
-                            m.size.height,
-                        ),
-                        ItemAlign::Start | ItemAlign::Baseline => Rect::new(content.origin, m.size),
-                    };
+                    let vertical = child_style.align_self.unwrap_or(ItemAlign::Stretch);
+                    let horizontal = child_style.justify_self.unwrap_or(vertical);
+                    let (x, width) = overlay_axis(
+                        horizontal,
+                        content.min_x(),
+                        content.size.width,
+                        m.size.width,
+                        direction == LayoutDirection::Rtl,
+                    );
+                    let (y, height) = overlay_axis(
+                        vertical,
+                        content.min_y(),
+                        content.size.height,
+                        m.size.height,
+                        false,
+                    );
+                    let child_rect = Rect::from_xywh(x, y, width, height);
                     self.arrange_node(tree, child, child_rect, direction, leaves, out)?;
                 }
             }
@@ -1200,6 +1202,20 @@ impl LayoutEngine {
             }
         }
         Ok(())
+    }
+}
+
+/// The start and extent of an overlay child along one axis. `Start` is
+/// the leading edge, which is the right edge when `mirrored`.
+fn overlay_axis(align: ItemAlign, start: f64, space: f64, size: f64, mirrored: bool) -> (f64, f64) {
+    let end = start + space - size;
+    match align {
+        ItemAlign::Stretch => (start, space),
+        ItemAlign::Center => (start + (space - size) / 2.0, size),
+        ItemAlign::End if mirrored => (start, size),
+        ItemAlign::End => (end, size),
+        ItemAlign::Start | ItemAlign::Baseline if mirrored => (end, size),
+        ItemAlign::Start | ItemAlign::Baseline => (start, size),
     }
 }
 

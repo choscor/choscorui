@@ -266,6 +266,17 @@ impl SemanticTree {
         })
     }
 
+    /// Removes the semantic node of `id`, which stays in the tree.
+    /// Returns true when there was one.
+    pub fn remove(&mut self, id: NodeId) -> bool {
+        self.collections.remove(&id);
+        self.item_indices.remove(&id);
+        if self.focus == Some(id) {
+            self.focus = None;
+        }
+        self.nodes.remove(&id).is_some()
+    }
+
     pub fn supports(&self, id: NodeId, action: SemanticAction) -> bool {
         self.nodes
             .get(&id)
