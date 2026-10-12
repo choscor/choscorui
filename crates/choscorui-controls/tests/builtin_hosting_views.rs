@@ -125,6 +125,77 @@ fn a_hosted_item_view_takes_a_selection_and_focus_action() {
     assert!(h.messages().is_empty());
 }
 
+/// A table of `count` 20 pt rows in a 100 pt and an 80 pt column, with a
+/// total row and a caption.
+fn stock(count: usize) -> ItemView {
+    let model = StringListModel::from_strings((0..count).map(|row| format!("Item {row}")));
+    let mut view = ItemView::new("Stock", SemanticRole::Table, 20.0)
+        .with_model(Box::new(model), Box::new(TextItemDelegate::table()))
+        .with_footer(vec![vec!["Total".into(), count.to_string()]])
+        .with_caption("Items on hand");
+    assert!(view.set_column_widths(vec![100.0, 80.0]));
+    view
+}
+
+/// The baseline of the text run `label` in `list`.
+fn baseline(list: &DisplayList, label: &str) -> Point {
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawText { text, baseline, .. } if text == label => Some(*baseline),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no text {label}"))
+}
+
+#[test]
+fn a_hosted_table_paints_its_footer_under_the_rows_and_then_its_caption() {
+    let h = Harness::new(stock(3));
+    let semantics = h.semantics();
+    assert_eq!(semantics.role, SemanticRole::Table);
+    assert_eq!(semantics.description, "Items on hand. Total, 3");
+    let list = h.paint();
+    // Three 20 pt rows from y = 10 put the footer row at y = 70.
+    let (total, count) = (baseline(&list, "Total"), baseline(&list, "3"));
+    assert!(total.y > 70.0 && total.y < 90.0, "{total:?}");
+    assert_eq!(total.y, count.y);
+    assert!(count.x >= 110.0, "the count is in the second column");
+    let caption = baseline(&list, "Items on hand");
+    assert!(caption.y > 90.0);
+    assert!(caption.x > total.x, "the caption is centered");
+    let muted = DesignTokens::light().color(choscorui_core::ColorRole::Muted);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillRect { color, .. } if *color == muted.with_alpha(0.5)
+    )));
+}
+
+#[test]
+fn a_hosted_table_footer_stays_under_a_full_viewport_and_takes_no_selection() {
+    let mut h = Harness::new(stock(50));
+    let list = h.paint();
+    let total = baseline(&list, "Total");
+    let caption = baseline(&list, "Items on hand");
+    assert!(total.y < caption.y && caption.y < h.bounds().max_y());
+    // The rows clip to the viewport, which stops above the footer row.
+    let clips: Vec<f64> = list
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::PushClip(rect) => Some(rect.max_y()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        clips
+            .iter()
+            .any(|bottom| *bottom < total.y && *bottom > total.y - 20.0),
+        "{clips:?} {total:?}"
+    );
+    h.click(Point::new(total.x, total.y - 4.0));
+    assert!(h.messages().is_empty());
+}
+
 fn header() -> HeaderView {
     HeaderView::new(vec![
         HeaderColumn {

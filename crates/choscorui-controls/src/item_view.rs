@@ -10,8 +10,8 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::style::{
-    ControlKind, PaintContext, Slot, StyleQuery, TextLine, VisualState, content_rect, draw_text,
-    paint_box,
+    ControlKind, PaintContext, Slot, StyleQuery, TextAlign, TextLine, VisualState, content_rect,
+    draw_text, paint_box,
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Measured, NodeId, Point,
@@ -149,6 +149,10 @@ pub struct ItemView {
     /// Whether a hosted view takes its row height from the `ListView` row
     /// recipe in each arrange.
     styled_rows: bool,
+    /// The text under a hosted table, after its footer rows.
+    caption: String,
+    /// The cells of each footer row of a hosted table, one per column.
+    footer: Vec<Vec<String>>,
 }
 
 /// The height of a `ListView` row: the minimum height of the row recipe,
@@ -192,7 +196,28 @@ impl ItemView {
             source: None,
             last_press: None,
             styled_rows: false,
+            caption: String::new(),
+            footer: Vec::new(),
         }
+    }
+
+    /// Adds a caption that a hosted view paints under its rows and its
+    /// footer, with the `Caption` slot of the delegate's recipe. The
+    /// caption describes the view for assistive technology.
+    #[must_use]
+    pub fn with_caption(mut self, caption: impl Into<String>) -> Self {
+        self.caption = caption.into();
+        self
+    }
+
+    /// Adds footer rows, for example totals, that a hosted view paints
+    /// under its rows with the `Footer` slot of the `Table` recipe. Each
+    /// row has one cell for each column. The footer rows do not scroll and
+    /// take no selection.
+    #[must_use]
+    pub fn with_footer(mut self, rows: Vec<Vec<String>>) -> Self {
+        self.footer = rows;
+        self
     }
 
     /// Makes a hosted view take its row height from the `ListView` row
@@ -763,10 +788,24 @@ impl ItemView {
 
     /// Semantic node for the view container.
     pub fn semantics(&self) -> SemanticNode {
+        // A hosted view publishes no row nodes, so the description also
+        // reads the footer rows after the caption.
+        let footer = self.footer.iter().map(|row| {
+            row.iter()
+                .filter(|cell| !cell.is_empty())
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
+        let description = std::iter::once(self.caption.clone())
+            .chain(footer)
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(". ");
         SemanticNode {
             role: self.role,
             name: self.name.clone(),
-            description: String::new(),
+            description,
             value: None,
             state: SemanticState {
                 selected: None,
@@ -1082,6 +1121,70 @@ impl ItemView {
     }
 }
 
+impl ItemView {
+    /// The `Caption` style of the delegate's recipe: `Table` for a table,
+    /// `ListView` otherwise.
+    fn caption_query(&self) -> StyleQuery {
+        let kind = if self.role == SemanticRole::Table {
+            ControlKind::Table
+        } else {
+            ControlKind::ListView
+        };
+        StyleQuery::new(kind, Slot::Caption)
+    }
+
+    fn footer_height(&self) -> f64 {
+        self.footer.len() as f64 * self.row_height
+    }
+
+    /// The caption line and the space above and below it, or zero without
+    /// a caption.
+    fn caption_height(&self, cx: &MeasureContext<'_>) -> f64 {
+        if self.caption.is_empty() {
+            return 0.0;
+        }
+        let style = cx.style(self.caption_query());
+        style.text.line_height + style.padding.vertical()
+    }
+
+    /// Paints the footer rows right under the last row, or at the bottom
+    /// of the viewport when the rows fill it, then the caption.
+    fn paint_footer(&self, cx: &mut PaintContext<'_>, columns: &[f64]) {
+        let view = self.viewport;
+        let mut top = view.origin.y + self.content_height().min(view.size.height);
+        if !self.footer.is_empty() {
+            let query = |slot| StyleQuery::new(ControlKind::Table, slot);
+            let (footer, cell) = (cx.style(query(Slot::Footer)), cx.style(query(Slot::Cell)));
+            let area = Rect::from_xywh(view.origin.x, top, view.size.width, self.footer_height());
+            paint_box(cx.list, area, &footer, cx.rtl);
+            for row in &self.footer {
+                let widths = if columns.is_empty() {
+                    vec![view.size.width]
+                } else {
+                    columns.to_vec()
+                };
+                let mut x = view.origin.x;
+                for (text, width) in row.iter().zip(widths) {
+                    let rect = Rect::from_xywh(x, top, width, self.row_height);
+                    let line = TextLine::new(text, &footer, cx.rtl);
+                    cx.list.push_clip(rect);
+                    draw_text(cx.list, content_rect(rect, &cell, cx.rtl), &line, cx.text);
+                    let _ = cx.list.pop_clip();
+                    x += width;
+                }
+                top += self.row_height;
+            }
+        }
+        if !self.caption.is_empty() {
+            let style = cx.style(self.caption_query());
+            let height = style.text.line_height + style.padding.vertical();
+            let rect = Rect::from_xywh(view.origin.x, top, view.size.width, height);
+            let inner = content_rect(rect, &style, cx.rtl);
+            cx.label(inner, &self.caption, &style, TextAlign::Center);
+        }
+    }
+}
+
 impl CustomControl for ItemView {
     /// A view takes the offered size; unbounded, it is as wide as a medium
     /// container and ten rows high.
@@ -1098,17 +1201,21 @@ impl CustomControl for ItemView {
         let height = if max.height.is_finite() {
             max.height
         } else {
-            self.row_height * 10.0
+            self.row_height * 10.0 + self.footer_height() + self.caption_height(cx)
         };
         Measured::new(Size::new(width, height))
     }
 
+    /// The rows take the bounds above the footer rows and the caption.
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         if self.styled_rows {
             self.row_height = list_row_height(cx);
         }
         self.sync_source();
-        self.viewport = bounds;
+        let below = self.footer_height() + self.caption_height(cx);
+        let mut viewport = bounds;
+        viewport.size.height = (bounds.size.height - below).max(0.0);
+        self.viewport = viewport;
         self.clamp_offset();
     }
 
@@ -1196,6 +1303,7 @@ impl CustomControl for ItemView {
             state,
             rows,
         );
+        self.paint_footer(cx, &source.columns);
     }
 
     fn semantics(&self) -> SemanticNode {

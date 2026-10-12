@@ -1374,11 +1374,14 @@ pin this behavior.
 | Text | `Cell` | sm `foreground` text, 8 pt padding | as list |
 | Disclosure | `Indicator` | 16 pt `muted-foreground` chevron, one indent per depth | as list |
 | Focus | `Root` | the focus ring on the current item while focus is visible | as list |
+| Footer rows | `Footer` of `Table` | - | sm medium `foreground` text with the `Cell` padding, `muted` fill at 50%, 1 pt `border` top line |
+| Caption | `Caption` | sm `muted-foreground` text, centered, 16 pt above | as list |
 
 | Field | `ItemView::semantics` | `ItemView::item_semantics` |
 | --- | --- | --- |
 | Role | `List` (AXList), `Tree` (AXOutline), or `Table` (AXTable) | `ListItem` (AXGroup), `TreeItem` (AXRow), or `Row` (AXRow) |
 | Name / value | name / - | accessibility or display text of column 0 / other columns, joined |
+| Description | the caption, then the cells of each footer row | - |
 | State | - | selected; expanded when the item has children |
 | Actions | `Focus` | `Activate`, `Focus`, `Expand` or `Collapse`, `ShowMenu` |
 
@@ -1394,6 +1397,16 @@ text for type-ahead. A secondary press selects the row, but no message
 reports the context menu. Rows that the model must fetch are not reported.
 `with_styled_rows` makes a hosted view take its row height from the
 `ListView` row recipe each time that it measures and arranges.
+
+- `with_footer(rows)` adds footer rows, for example totals, with one cell
+  for each column. A hosted view paints them right under the last row,
+  or under the viewport when the rows fill it.
+- Footer rows have the row height. They do not scroll, and they take no
+  press or selection.
+- `with_caption(text)` adds a caption under the footer rows. The caption
+  describes the view.
+- A hosted view publishes no row nodes. Thus its description reads the
+  caption, then the cells of each footer row.
 
 **As a view.** `List::new(name, model, selection)` mounts a hosted view
 with a `TextItemDelegate` and styled rows. `selection` follows the

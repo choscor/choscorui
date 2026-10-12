@@ -93,6 +93,11 @@ const PRODUCT_NAMES: [&str; 12] = [
     "Hủ tiếu",
 ];
 
+/// The quantity of product `index`.
+fn quantity(index: usize) -> i64 {
+    ((index * 7) % 50) as i64
+}
+
 fn products(env: &Env, count: usize) -> TreeStore<Product> {
     let mut store = TreeStore::new(4);
     store.set_headers((0..COLUMNS.len()).map(|column| column_title(env, column)));
@@ -110,7 +115,7 @@ fn products(env: &Env, count: usize) -> TreeStore<Product> {
                 i / PRODUCT_NAMES.len() + 1
             )
         },
-        quantity: ((i * 7) % 50) as i64,
+        quantity: quantity(i),
         price: 1.5 + (i * 13 % 40) as f64 * 0.75,
         in_stock: i % 4 != 3,
         stock_text: stock_text.clone(),
@@ -152,12 +157,15 @@ fn header_bar(
 // ---------------------------------------------------------------------------
 // Header view
 
-/// A sortable, resizable table header over 60 products.
+/// A sortable, resizable table header over 60 products, with a total
+/// row and a caption.
 struct HeaderViewPage;
 
 impl View for HeaderViewPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let model = SharedModel::proxied(products(cx.env(), 60));
+        let count = 60;
+        let total: i64 = (0..count).map(quantity).sum();
+        let model = SharedModel::proxied(products(cx.env(), count));
         let header = product_header(cx.env());
         let widths = cx.state(header.borrow().widths());
         let revision = cx.state(0_u64);
@@ -175,7 +183,12 @@ impl View for HeaderViewPage {
                 SemanticRole::Table,
                 &shown,
                 TextItemDelegate::table(),
-            );
+            )
+            .with_footer(vec![vec![
+                env.text("header-view.total", &[]),
+                total.to_string(),
+            ]])
+            .with_caption(env.text("header-view.caption", &[]));
             view.set_column_widths(widths.get());
             Handle::new(view)
         })
