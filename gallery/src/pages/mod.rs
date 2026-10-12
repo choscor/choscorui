@@ -5,6 +5,7 @@ pub mod data;
 pub mod datetime;
 pub mod dialogs;
 pub mod display;
+pub mod feedback;
 pub mod form;
 pub mod hosted;
 pub mod inputs;

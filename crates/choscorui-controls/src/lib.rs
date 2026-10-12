@@ -103,6 +103,7 @@ mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod custom;
 mod data;
+mod feedback;
 mod form;
 mod hosted;
 mod listbox;
@@ -116,6 +117,7 @@ pub use data::{
     Avatar, AvatarGroup, Badge, Card, Carousel, Chart, ChartKind, ChartSeries, DataTable,
     StatusText,
 };
+pub use feedback::{Alert, Empty, Skeleton, Spinner};
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
     InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,

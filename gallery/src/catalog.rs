@@ -5,8 +5,8 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, display, form, inputs, nav, navigation, overlay, popups,
-    range, recipes, selection, shell, statics, system, text,
+    containers, data, datetime, dialogs, display, feedback, form, inputs, nav, navigation, overlay,
+    popups, range, recipes, selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -64,6 +64,10 @@ pub const PAGES: &[PageInfo] = &[
         range::decimal_spin_box
     ),
     page!("progress", "Progress", Range, range::progress),
+    page!("alert", "Alert", Static, feedback::alert),
+    page!("spinner", "Spinner", Static, feedback::spinner),
+    page!("skeleton", "Skeleton", Static, feedback::skeleton),
+    page!("empty", "Empty", Static, feedback::empty),
     page!("scroll-bar", "Scroll bar", Range, range::scroll_bar),
     page!("dial", "Dial", Range, range::dial),
     page!(
@@ -233,6 +237,11 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Chart", "chart"),
     ("ChartKind", "chart"),
     ("ChartSeries", "chart"),
+    ("Alert", "alert"),
+    ("AlertVariant", "alert"),
+    ("Spinner", "spinner"),
+    ("Skeleton", "skeleton"),
+    ("Empty", "empty"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -381,7 +390,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "AddonAlign",
         "variant key of input group addons; read by recipes",
     ),
-    ("AlertVariant", "variant key of alerts; read by recipes"),
     (
         "AttachmentState",
         "variant key of attachments; read by recipes",

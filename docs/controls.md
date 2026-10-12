@@ -104,6 +104,10 @@ in parentheses is the role that the macOS backend gives to that
 | Data | [`Carousel`](#carousel) | Slides that move one at a time and snap. |
 | Data | [`DataTable`](#datatable) | Sorted, filtered, selectable, and paged rows of an item model. |
 | Data | [`Chart`](#chart) | Area, bar, line, pie, radar, and radial charts of app data. |
+| Feedback | [`Alert`](#alert) | Callout with an icon, a title, and actions. |
+| Feedback | [`Spinner`](#spinner-and-skeleton) | Spinning loader icon. |
+| Feedback | [`Skeleton`](#spinner-and-skeleton) | Pulsing placeholder block. |
+| Feedback | [`Empty`](#empty) | Centered empty state with media and actions. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2255,6 +2259,88 @@ behavior.
 | Actions | `Focus` |
 
 [chart.rs](../crates/choscorui-controls/tests/chart.rs) pins this behavior.
+
+### Alert
+
+- The icon sits at the start, and the title and the description wrap
+  beside it. `AlertVariant::Destructive` colors the text and the icon.
+- `with_action(label, variant)` adds a button at the top end. The buttons
+  are tab stops. Enter, Space, a click, or `Activate` emits
+  `ItemActivated(index)`.
+- An alert without actions takes no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | `card` fill, 1 pt `border`, radius lg, padding 16 by 12 pt, 2 pt gap |
+| Icon | `Icon` | 16 pt in the text color, 2 pt down; 12 pt from the text |
+| Title | `Title` | sm medium text; `destructive` for `Destructive` |
+| Description | `Description` | sm `muted-foreground` text; 90% `destructive` for `Destructive` |
+| Actions | `Action` | 10 pt from the top, 12 pt from the end; 8 pt apart |
+
+| Field | `Alert::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | title / description |
+| Description | the label of the focused action |
+| State | disabled |
+| Actions | `Activate` and `Focus` with actions while enabled |
+
+[feedback.rs](../crates/choscorui-controls/tests/feedback.rs) pins this
+behavior.
+
+### Spinner and Skeleton
+
+- A spinner turns the loader icon once per second.
+- A skeleton is a muted block that pulses between full and half opacity
+  every 2 s. `Skeleton::new(label, width, height)` with a zero width fills
+  the width it is given. `circle()` rounds it fully.
+- With reduced motion, the recipe motion is zero: the spinner does not
+  turn and the skeleton does not pulse. Neither asks for animation frames
+  then.
+- Neither takes focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Spinner | `Spinner` `Root` | 16 pt icon, 1000 ms turn |
+| Skeleton | `Skeleton` `Root` | `muted` fill, radius md, 2000 ms pulse |
+
+| Field | `Spinner::semantics`, `Skeleton::semantics` |
+| --- | --- |
+| Role | `ProgressIndicator` (AXProgressIndicator) |
+| Name / value | label / none |
+| Actions | none |
+
+[feedback.rs](../crates/choscorui-controls/tests/feedback.rs) pins this
+behavior.
+
+### Empty
+
+- The media, the title, the description, and the buttons sit centered in
+  a column. The text wraps at 384 pt.
+- `with_icon(icon)` shows the icon in a muted box. `with_avatar(avatar)`
+  shows an avatar.
+- The buttons are tab stops. Enter, Space, a click, or `Activate` emits
+  `ItemActivated(index)`.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | 48 pt padding, 16 pt gap, radius lg |
+| Header | `Header` | 8 pt gap, at most 384 pt wide |
+| Icon media | `Media` | 40 pt `muted` box, radius lg, 24 pt icon, 8 pt below |
+| Title | `Title` | lg medium text, tight tracking |
+| Description | `Description` | sm `muted-foreground` text, 1.625 line height |
+| Buttons | `Content` | 16 pt below the header; buttons 8 pt apart |
+
+| Field | `Empty::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | title / description |
+| Description | the label of the focused button |
+| State | disabled |
+| Actions | `Activate` and `Focus` with buttons while enabled |
+
+[feedback.rs](../crates/choscorui-controls/tests/feedback.rs) pins this
+behavior.
 
 ### CustomControl and ControlHost
 

@@ -58,12 +58,17 @@ impl Avatar {
         StyleQuery::new(ControlKind::Avatar, slot).size(size)
     }
 
+    /// The diameter of this avatar.
+    pub(crate) fn side(&self, cx: &MeasureContext<'_>) -> f64 {
+        Self::diameter(cx, self.size)
+    }
+
     fn diameter(cx: &MeasureContext<'_>, size: ControlSize) -> f64 {
         cx.style(Self::query(size, Slot::Root)).min_width
     }
 
     /// Paints the avatar in the circle `rect`.
-    fn paint_at(&self, cx: &mut PaintContext<'_>, rect: Rect) {
+    pub(crate) fn paint_at(&self, cx: &mut PaintContext<'_>, rect: Rect) {
         match &self.image {
             Some(image) => {
                 if cx.list.push_clip_path(Path::ellipse(rect)).is_ok() {
