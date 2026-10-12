@@ -29,8 +29,9 @@ pub use layout::{
 };
 mod layout_engine;
 pub use layout_engine::{
-    Constraints, EngineError, GridPlacement, ItemAlign, LayoutEngine, LayoutKind, LayoutStats,
-    LayoutStyle, LeafMeasure, Length, MainAlign, Measured, Track,
+    ChildMeasure, Constraints, CustomLayout, EngineError, GridPlacement, ItemAlign, LayoutEngine,
+    LayoutKind, LayoutStats, LayoutStyle, LeafMeasure, Length, MainAlign, Measured, SharedLayout,
+    Track,
 };
 mod scroll;
 pub use scroll::ScrollViewport;

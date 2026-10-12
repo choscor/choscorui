@@ -14,6 +14,7 @@
 
 use crate::{CrossAlign, Insets, LayoutDirection, NodeId, Point, Rect, Size, Tree};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Minimum and maximum size a parent offers a child. `max` may be infinite.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -179,6 +180,62 @@ impl GridPlacement {
     }
 }
 
+/// Measures the children of a [`LayoutKind::Custom`] node for its
+/// [`CustomLayout`].
+pub trait ChildMeasure {
+    /// The number of children that take part in layout.
+    fn len(&self) -> usize;
+
+    /// True when no child takes part in layout.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Measures child `index` within `constraints`. An index out of range
+    /// measures as zero.
+    fn measure(&mut self, index: usize, constraints: Constraints) -> Measured;
+}
+
+/// A layout that the built-in containers cannot express, such as a stack
+/// that changes its axis with the width it gets.
+pub trait CustomLayout {
+    /// Measures the children through `children` and places them in a
+    /// content box that `space` limits. Returns the content size and one
+    /// rectangle for each child, relative to the content box origin.
+    /// While a parent measures, `space.max` can be infinite. When the
+    /// engine arranges the node, `space` is tight. The layout mirrors
+    /// itself in a right-to-left `direction`.
+    fn layout(
+        &self,
+        space: Constraints,
+        direction: LayoutDirection,
+        children: &mut dyn ChildMeasure,
+    ) -> (Size, Vec<Rect>);
+}
+
+/// A [`CustomLayout`] that a [`LayoutStyle`] can hold. Two are equal when
+/// they share the same layout object.
+#[derive(Clone)]
+pub struct SharedLayout(Rc<dyn CustomLayout>);
+
+impl SharedLayout {
+    pub fn new(layout: impl CustomLayout + 'static) -> Self {
+        Self(Rc::new(layout))
+    }
+}
+
+impl PartialEq for SharedLayout {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::addr_eq(Rc::as_ptr(&self.0), Rc::as_ptr(&other.0))
+    }
+}
+
+impl std::fmt::Debug for SharedLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SharedLayout")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum LayoutKind {
     /// Sized by [`LeafMeasure`]; children, if any, are not laid out.
@@ -201,6 +258,8 @@ pub enum LayoutKind {
     /// One content child measured unbounded along `axis` and offset by the
     /// node's scroll offset.
     Scroll { axis: crate::Axis },
+    /// Children that a [`CustomLayout`] measures and places.
+    Custom(SharedLayout),
 }
 
 /// Per-node layout input.
@@ -802,6 +861,12 @@ impl LayoutEngine {
                 }
                 Measured::new(size)
             }
+            LayoutKind::Custom(layout) => {
+                let children = self.laid_out_children(tree, node);
+                let (size, _) =
+                    self.run_custom(tree, layout, &children, inner, direction, leaves)?;
+                Measured::new(size)
+            }
         };
         let size = own.constrain(Size::new(
             content.size.width + pad_w,
@@ -1274,8 +1339,86 @@ impl LayoutEngine {
                     self.arrange_node(tree, child, child_rect, direction, leaves, out)?;
                 }
             }
+            LayoutKind::Custom(layout) => {
+                let children = self.laid_out_children(tree, node);
+                let (_, rects) =
+                    self.run_custom(tree, layout, &children, tight, direction, leaves)?;
+                for (index, child) in children.iter().enumerate() {
+                    let rect = rects.get(index).copied().filter(|rect| rect.is_finite());
+                    let child_rect = rect.map_or(Rect::new(content.origin, Size::ZERO), |rect| {
+                        Rect::new(
+                            Point::new(
+                                content.min_x() + rect.origin.x,
+                                content.min_y() + rect.origin.y,
+                            ),
+                            rect.size,
+                        )
+                    });
+                    self.arrange_node(tree, *child, child_rect, direction, leaves, out)?;
+                }
+            }
         }
         Ok(())
+    }
+
+    /// Runs a custom layout over `children` within `space`. A size that
+    /// is not finite becomes zero, and the first failed child measure is
+    /// the error.
+    fn run_custom(
+        &mut self,
+        tree: &Tree,
+        layout: &SharedLayout,
+        children: &[NodeId],
+        space: Constraints,
+        direction: LayoutDirection,
+        leaves: &mut dyn LeafMeasure,
+    ) -> Result<(Size, Vec<Rect>), EngineError> {
+        let mut measure = Children {
+            engine: self,
+            tree,
+            nodes: children,
+            direction,
+            leaves,
+            error: None,
+        };
+        let (size, rects) = layout.0.layout(space, direction, &mut measure);
+        if let Some(error) = measure.error {
+            return Err(error);
+        }
+        let finite = |value: f64| if value.is_finite() { value } else { 0.0 };
+        Ok((Size::new(finite(size.width), finite(size.height)), rects))
+    }
+}
+
+/// The children of a custom layout node, measured through the engine.
+struct Children<'a, 'b> {
+    engine: &'a mut LayoutEngine,
+    tree: &'a Tree,
+    nodes: &'a [NodeId],
+    direction: LayoutDirection,
+    leaves: &'a mut (dyn LeafMeasure + 'b),
+    error: Option<EngineError>,
+}
+
+impl ChildMeasure for Children<'_, '_> {
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn measure(&mut self, index: usize, constraints: Constraints) -> Measured {
+        let Some(node) = self.nodes.get(index).copied() else {
+            return Measured::new(Size::ZERO);
+        };
+        match self
+            .engine
+            .measure_node(self.tree, node, constraints, self.direction, self.leaves)
+        {
+            Ok(measured) => measured,
+            Err(error) => {
+                self.error.get_or_insert(error);
+                Measured::new(Size::ZERO)
+            }
+        }
     }
 }
 

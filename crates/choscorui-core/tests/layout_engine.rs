@@ -1,6 +1,7 @@
 use choscorui_core::{
-    Constraints, EngineError, GridPlacement, Insets, ItemAlign, LayoutDirection, LayoutEngine,
-    LayoutKind, LayoutStyle, Length, MainAlign, Measured, NodeId, Point, Rect, Size, Track, Tree,
+    ChildMeasure, Constraints, CustomLayout, EngineError, GridPlacement, Insets, ItemAlign,
+    LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length, MainAlign, Measured, NodeId,
+    Point, Rect, SharedLayout, Size, Track, Tree,
 };
 use std::collections::HashMap;
 
@@ -634,4 +635,133 @@ fn layout_places_only_what_changed() {
     engine.invalidate_all();
     run(&mut tree, &mut engine, &mut text, Size::new(400.0, 3000.0));
     assert_eq!(engine.placed().len(), 201);
+}
+
+/// Children in a row at `breakpoint` points wide or more, and in a column
+/// below. The row mirrors in right-to-left layouts.
+struct Switching {
+    breakpoint: f64,
+}
+
+impl CustomLayout for Switching {
+    fn layout(
+        &self,
+        space: Constraints,
+        direction: LayoutDirection,
+        children: &mut dyn ChildMeasure,
+    ) -> (Size, Vec<Rect>) {
+        let width = space.max.width;
+        let loose = Constraints::loose(Size::new(width, f64::INFINITY));
+        let sizes: Vec<Size> = (0..children.len())
+            .map(|index| children.measure(index, loose).size)
+            .collect();
+        let mut rects = Vec::new();
+        let mut cursor = 0.0;
+        if width >= self.breakpoint {
+            for size in &sizes {
+                let x = if direction == LayoutDirection::Rtl {
+                    width - cursor - size.width
+                } else {
+                    cursor
+                };
+                rects.push(Rect::new(Point::new(x, 0.0), *size));
+                cursor += size.width;
+            }
+            let height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+            (Size::new(width, height), rects)
+        } else {
+            for size in &sizes {
+                rects.push(Rect::new(Point::new(0.0, cursor), *size));
+                cursor += size.height;
+            }
+            (Size::new(width, cursor), rects)
+        }
+    }
+}
+
+#[test]
+fn a_custom_layout_places_children_and_follows_the_width() {
+    let (mut tree, mut engine, mut text) = setup();
+    let root = tree.root();
+    engine
+        .set_style(
+            &tree,
+            root,
+            LayoutStyle::column(0.0).with_padding(Insets::all(10.0)),
+        )
+        .unwrap();
+    let custom = LayoutStyle {
+        kind: LayoutKind::Custom(SharedLayout::new(Switching { breakpoint: 300.0 })),
+        ..LayoutStyle::default()
+    };
+    let node = add(&mut tree, &mut engine, root, custom);
+    let first = add(&mut tree, &mut engine, node, LayoutStyle::leaf());
+    let second = add(&mut tree, &mut engine, node, LayoutStyle::leaf());
+    text.texts.insert(first, "abcdefghij".into());
+    text.texts.insert(second, "abcde".into());
+
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 300.0));
+    assert_eq!(
+        tree.bounds(first),
+        Some(Rect::from_xywh(10.0, 10.0, 70.0, 16.0))
+    );
+    assert_eq!(
+        tree.bounds(second),
+        Some(Rect::from_xywh(80.0, 10.0, 35.0, 16.0))
+    );
+    assert_eq!(tree.bounds(node).unwrap().size, Size::new(380.0, 16.0));
+
+    // Narrower than the breakpoint, the same children stack.
+    run(&mut tree, &mut engine, &mut text, Size::new(250.0, 300.0));
+    assert_eq!(
+        tree.bounds(first),
+        Some(Rect::from_xywh(10.0, 10.0, 70.0, 16.0))
+    );
+    assert_eq!(
+        tree.bounds(second),
+        Some(Rect::from_xywh(10.0, 26.0, 35.0, 16.0))
+    );
+    assert_eq!(tree.bounds(node).unwrap().size, Size::new(230.0, 32.0));
+
+    // The layout gets the direction and mirrors itself.
+    let mut style = engine.style(root).cloned().unwrap();
+    style.direction = Some(LayoutDirection::Rtl);
+    engine.set_style(&tree, root, style).unwrap();
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 300.0));
+    assert_eq!(tree.bounds(first).unwrap().max_x(), 390.0);
+    assert_eq!(tree.bounds(second).unwrap().max_x(), 320.0);
+}
+
+#[test]
+fn a_custom_layout_reports_a_failed_child_measure() {
+    let (mut tree, mut engine, mut text) = setup();
+    let root = tree.root();
+    let custom = LayoutStyle {
+        kind: LayoutKind::Custom(SharedLayout::new(Switching { breakpoint: 300.0 })),
+        ..LayoutStyle::default()
+    };
+    engine.set_style(&tree, root, custom).unwrap();
+    let grid = add(
+        &mut tree,
+        &mut engine,
+        root,
+        LayoutStyle::grid(vec![Track::Auto], vec![Track::Auto], 0.0),
+    );
+    let cell = LayoutStyle::leaf().with_cell(GridPlacement::cell(3, 0));
+    let outside = add(&mut tree, &mut engine, grid, cell);
+    let mut measure = |node, c, _| text.measure(node, c);
+    let result = engine.layout(
+        &mut tree,
+        root,
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        &mut measure,
+    );
+    assert_eq!(result.err(), Some(EngineError::InvalidPlacement(outside)));
+}
+
+#[test]
+fn shared_layouts_are_equal_only_to_themselves() {
+    let layout = SharedLayout::new(Switching { breakpoint: 1.0 });
+    assert_eq!(layout, layout.clone());
+    assert_ne!(layout, SharedLayout::new(Switching { breakpoint: 1.0 }));
 }

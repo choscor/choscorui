@@ -37,7 +37,7 @@ Dependencies: `choscorui-core`, `choscorui-controls`, `choscorui-compose`, and, 
 - **Retained tree:** `Tree`, `NodeId`, `Dirty`, `EventPhase`, and `EventReply`.
 - **Geometry and input:** `Point`, `Size`, `Rect`, `Transform`, `PointerEvent`, `KeyEvent`, and `DragEvent`.
 - **Painting:** `DisplayList`, `DisplayCommand`, `Path`, `Image`, `blur_pixels`, and the `damage` function.
-- **Layout:** `LinearLayout`, `GridLayout`, `FormLayout`, `ScrollViewport`, `UniformStack`, `LayoutEngine`, `Constraints`, and `LeafMeasure`.
+- **Layout:** `LinearLayout`, `GridLayout`, `FormLayout`, `ScrollViewport`, `UniformStack`, `LayoutEngine`, `Constraints`, `LeafMeasure`, and the `CustomLayout` trait for containers that the built-in kinds cannot express.
 - **Text:** `TextBuffer`, `TextLayoutCache`, the `TextShaper` trait, `RichDocument`, and `RichLayout`.
 - **Models:** `ItemModel`, `ListStore`, `TreeStore`, `Selection`, `SortFilterProxy`, and `FileSystemModel`.
 - **Theme and motion:** `DesignTokens`, `ThemeResolver`, `AccessibilityPreferences`, and `AnimationClock`.
