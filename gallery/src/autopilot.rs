@@ -72,13 +72,15 @@ fn semantic(host: &mut ViewHost, name: &str) -> Option<SemanticNode> {
     host.semantic(node)
 }
 
-/// The canvas control. The sidebar button and the page title have the
-/// same name.
+/// The canvas control: the list whose description reports the zoom. The
+/// sidebar button and the page title share its name, which is translated.
 fn canvas_node(host: &mut ViewHost) -> Option<NodeId> {
     host.semantics()
         .0
         .into_iter()
-        .find(|entry| entry.node.name == "Canvas" && entry.node.role == SemanticRole::List)
+        .find(|entry| {
+            entry.node.role == SemanticRole::List && entry.node.description.starts_with("Zoom ")
+        })
         .map(|entry| entry.id)
 }
 
@@ -623,8 +625,8 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     // AppKit keeps its status bar windows in `NSApp.windows` after a status
     // item is removed.
     let capabilities = choscorui::capabilities();
-    for (name, support) in capability_rows(&capabilities) {
-        println!("     {name}: {support:?}");
+    for (key, support) in capability_rows(&capabilities) {
+        println!("     {}: {support:?}", shared.text(key, &[]));
     }
     let status = if capabilities.status_items.is_supported() {
         shared.desktop.toggle_status_item("autopilot") == Ok(true)
