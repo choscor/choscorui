@@ -709,5 +709,6 @@ fn control_labels_follow_the_locale_on_the_same_node() {
     assert_eq!(host.find("Lưu"), Some(save));
     assert_eq!(host.find("Mạng"), Some(wifi));
     assert_eq!(host.tree().focus(), Some(save));
+    assert_eq!(host.semantic(wifi).unwrap().state.checked, Some(true));
     assert_eq!(host.take_errors(), Vec::new());
 }
