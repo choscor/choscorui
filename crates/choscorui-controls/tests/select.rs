@@ -156,6 +156,135 @@ fn long_lists_scroll_to_keep_the_highlight_in_view() {
     assert!(!painted.contains(&"Alpha".to_string()), "scrolled out");
 }
 
+fn letters() -> Harness {
+    let names = [
+        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India",
+        "Juliett", "Kilo", "Lima",
+    ];
+    let entries = names.iter().map(|name| ListEntry::option(*name)).collect();
+    let select = Select::new("Letter", entries)
+        .with_size(ControlSize::Sm)
+        .with_placeholder("Letter");
+    let mut h = Harness::new(select);
+    h.click(h.bounds().center());
+    h.set_time(1.0);
+    h.messages();
+    h
+}
+
+/// The first row the list paints.
+fn first_row(h: &Harness) -> String {
+    texts(&h.paint())[1].clone()
+}
+
+/// A point on the scroll-down button: the bottom edge of the open list.
+fn down_button(h: &Harness) -> Point {
+    let frame = overlay(h).unwrap();
+    Point::new(frame.center().x, frame.max_y() - 4.0 - 2.0)
+}
+
+/// A point on the scroll-up button: the top edge of the open list.
+fn up_button(h: &Harness) -> Point {
+    let frame = overlay(h).unwrap();
+    Point::new(frame.center().x, frame.origin.y + 4.0 + 2.0)
+}
+
+/// Sets the time and fires the control's due deadline.
+fn advance(h: &mut Harness, time: f64) {
+    h.set_time(time);
+    h.host.advance(&mut h.tree, time);
+}
+
+#[test]
+fn pressing_a_scroll_button_scrolls_one_row() {
+    let mut h = letters();
+    assert_eq!(first_row(&h), "Alpha");
+    h.click(down_button(&h));
+    assert!(
+        h.messages().is_empty(),
+        "a press on the button does not choose"
+    );
+    h.click(down_button(&h));
+    assert_eq!(first_row(&h), "Bravo", "Alpha scrolled out");
+    h.click(up_button(&h));
+    h.click(up_button(&h));
+    assert_eq!(first_row(&h), "Alpha");
+}
+
+#[test]
+fn hovering_a_scroll_button_scrolls_over_time_until_the_end() {
+    let mut h = letters();
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+    h.hover(down_button(&h));
+    let deadline = h.host.next_deadline(&h.tree).expect("a row step waits");
+    assert!(deadline > 1.0 && deadline < 1.2);
+    assert_eq!(first_row(&h), "Alpha", "no step before the interval");
+    let mut time = 1.0;
+    let mut steps = 0;
+    while let Some(next) = h.host.next_deadline(&h.tree) {
+        time = next;
+        advance(&mut h, time);
+        steps += 1;
+        assert!(steps < 20, "the scroll stops at the end");
+    }
+    assert_eq!(steps, 4, "four rows bring Lima into view");
+    let painted = texts(&h.paint());
+    assert_eq!(painted.last().map(String::as_str), Some("Lima"));
+    assert!(!painted.contains(&"Alpha".to_string()));
+
+    // Hovering the scroll-up button scrolls back.
+    h.hover(up_button(&h));
+    advance(&mut h, time + 1.0);
+    let next = h.host.next_deadline(&h.tree).expect("the scroll goes on");
+    advance(&mut h, next);
+    assert!(!texts(&h.paint()).contains(&"Lima".to_string()));
+}
+
+#[test]
+fn leaving_a_scroll_button_stops_the_scroll() {
+    let mut h = letters();
+    h.hover(down_button(&h));
+    advance(&mut h, 1.1);
+    let painted = texts(&h.paint());
+    // Moving onto a row stops the scroll.
+    let frame = overlay(&h).unwrap();
+    h.hover(frame.center());
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+    advance(&mut h, 5.0);
+    assert_eq!(texts(&h.paint()), painted);
+
+    // Leaving the control stops it too.
+    h.hover(down_button(&h));
+    assert!(h.host.next_deadline(&h.tree).is_some());
+    h.hover(Point::new(700.0, 500.0));
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+}
+
+#[test]
+fn scroll_buttons_show_only_when_the_list_scrolls() {
+    // A short list has no scroll buttons: its last row takes the press.
+    let mut h = Harness::new(fruit());
+    h.click(h.bounds().center());
+    h.set_time(1.0);
+    h.messages();
+    let frame = overlay(&h).unwrap();
+    let last = Point::new(frame.center().x, frame.max_y() - 4.0 - 2.0);
+    h.hover(last);
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+    h.click(last);
+    assert_eq!(
+        h.messages()[0],
+        ControlMessage::Changed(ControlValue::Index(Some(7)))
+    );
+
+    // A long list at its top shows only the scroll-down button.
+    let mut h = letters();
+    h.hover(up_button(&h));
+    assert_eq!(h.host.next_deadline(&h.tree), None, "no scroll-up button");
+    h.hover(down_button(&h));
+    assert!(h.host.next_deadline(&h.tree).is_some());
+}
+
 #[test]
 fn the_list_fades_and_zooms_in_and_reduced_motion_skips_it() {
     let mut h = Harness::new(fruit());

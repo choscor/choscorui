@@ -2048,7 +2048,11 @@ extra-small medium text.
   Characters typed within 1 second build one search. A repeated character
   cycles through the options that start with it.
 - The highlight scrolls into view. The wheel and the scroll buttons at the
-  ends also scroll the list.
+  ends also scroll the list. A scroll button shows only while the list can
+  scroll in its direction.
+- A press on a scroll button scrolls one row. While the pointer stays on
+  a scroll button, the list scrolls one row each 50 ms. The scroll stops
+  when the pointer leaves the button or the list reaches its end.
 - The list fades in, zooms from 95%, and slides 8 pt down over 100 ms,
   the content `motion_ms`. It fades out the same way. Reduced motion shows and hides it
   at once.
@@ -2063,7 +2067,7 @@ extra-small medium text.
 | Option | 32 pt high; `accent` fill while highlighted; check mark at the end when chosen |
 | Group caption | extra-small `muted-foreground` text |
 | Dark hover | `input` at 50% fill on the trigger |
-| Scroll buttons | 24 pt `popover` bars at the ends of the list |
+| Scroll buttons | 24 pt `popover` bars at the ends of the list; hover scrolls one row each 50 ms |
 | Native trigger | 36 pt (`Sm`: 32 pt), 10 pt start and 32 pt end padding, chevron 10 pt from the end |
 
 | Field | `Select::semantics` |

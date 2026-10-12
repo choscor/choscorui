@@ -13,8 +13,13 @@ use choscorui_core::{
     SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
 };
 
+/// How long the pointer rests on a scroll button before the list moves
+/// one more row, in seconds.
+const SCROLL_REPEAT_SECONDS: f64 = 0.05;
+
 /// A select: a trigger that shows the chosen option, and a popup list
-/// below it. The list scrolls past eight options.
+/// below it. The list scrolls past eight options. While the pointer is
+/// on a scroll button, the list scrolls one row per interval.
 #[derive(Clone, Debug)]
 pub struct Select {
     name: String,
@@ -30,6 +35,9 @@ pub struct Select {
     line: f64,
     /// True for the native-select look of the trigger.
     native: bool,
+    /// The direction of the scroll button under the pointer and the
+    /// host time of its next row step.
+    auto_scroll: Option<(f64, f64)>,
 }
 
 impl Select {
@@ -46,6 +54,7 @@ impl Select {
             motion_ms: 0,
             line: 0.0,
             native: false,
+            auto_scroll: None,
         }
     }
 
@@ -137,6 +146,7 @@ impl Select {
             return false;
         }
         self.reveal.set(open, time);
+        self.auto_scroll = None;
         if open {
             let start = self.selected.or_else(|| self.list.options().next());
             self.list.highlight(start);
@@ -191,6 +201,7 @@ impl Select {
                 EventReply::Stop
             }
             PointerEvent::Move { position } if open => {
+                self.hover_scroll(cx.time(), self.list.scroll_button(position));
                 if let Some(index) = self.list.hit(position)
                     && self.list.highlighted != Some(index)
                 {
@@ -214,6 +225,32 @@ impl Select {
             }
             _ => EventReply::Continue,
         }
+    }
+
+    /// Starts, keeps, or stops the scroll that a hovered scroll button
+    /// drives. `direction` is the button under the pointer, if any.
+    fn hover_scroll(&mut self, time: f64, direction: Option<f64>) {
+        self.auto_scroll = match (direction, self.auto_scroll) {
+            (Some(direction), Some((current, at))) if direction == current => Some((current, at)),
+            (Some(direction), _) => Some((direction, time + SCROLL_REPEAT_SECONDS)),
+            (None, _) => None,
+        };
+    }
+
+    /// Scrolls one row for the hovered scroll button. The scroll stops
+    /// at the end of the list, where the button goes away.
+    fn step_scroll(&mut self, cx: &mut ControlContext<'_>) {
+        let Some((direction, _)) = self.auto_scroll else {
+            return;
+        };
+        self.list.scroll_by(direction * self.line);
+        let end = if direction < 0.0 {
+            self.list.scroll <= 0.0
+        } else {
+            self.list.scroll >= self.list.max_scroll()
+        };
+        self.auto_scroll = (!end).then(|| (direction, cx.time() + SCROLL_REPEAT_SECONDS));
+        cx.request_paint();
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
@@ -322,6 +359,14 @@ impl CustomControl for Select {
                 self.change_open(cx, false);
                 EventReply::Continue
             }
+            ControlEvent::Hover(false) => {
+                self.auto_scroll = None;
+                EventReply::Continue
+            }
+            ControlEvent::Timer => {
+                self.step_scroll(cx);
+                EventReply::Stop
+            }
             _ => EventReply::Continue,
         }
     }
@@ -386,6 +431,12 @@ impl CustomControl for Select {
 
     fn animating(&self, time: f64) -> bool {
         self.reveal.animating(self.motion_ms, time)
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.auto_scroll
+            .filter(|_| self.reveal.open)
+            .map(|(_, at)| at)
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -454,6 +505,7 @@ impl CustomControl for Select {
         self.enabled = enabled;
         if !enabled {
             self.reveal = Reveal::default();
+            self.auto_scroll = None;
         }
     }
 
