@@ -45,6 +45,12 @@ pub use app::{App, AppContext, AppError, Scene, WindowId};
 
 pub use choscorui_core::{BackendCapabilities, Support};
 
+/// The examples in `docs/guide.md`, compiled and run as doctests so that
+/// the guide stays correct.
+#[cfg(all(doctest, target_os = "macos"))]
+#[doc = include_str!("../../../docs/guide.md")]
+pub struct GuideExamples;
+
 /// What the current backend provides. Without a backend (an unsupported
 /// OS) every capability is `Unsupported`.
 pub fn capabilities() -> BackendCapabilities {

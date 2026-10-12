@@ -130,6 +130,69 @@ stays in effect. Invalid tokens include a negative or non-finite size, a
 `0..=1`. A `text_scale` that is not positive and finite returns
 `ThemeError::InvalidPreferences`.
 
+## Style views
+
+Views take their look from modifiers. A modifier takes a typed token or a raw
+value. Typed tokens include `ColorRole`, `Space`, `RadiusScale`, and
+`TextPreset`. Raw values include a `Color` or a number of points. Tokens resolve against the theme of
+the view, so the same view follows light, dark, and each base color.
+
+There are two kinds of styling modifiers:
+
+- **Local modifiers** change only the view that they wrap: `background`,
+  `foreground`, `border`, `corner_radius`, `shadow`, `opacity`, `text_style`,
+  `font_weight`, `tracking`, `clip_shape`, and `ring`.
+- **Environment modifiers** change every descendant: `theme`,
+  `color_scheme`, `tint`, `token`, `recipe`, `button_variant`,
+  `control_size`, `disabled`, `locale`, and `layout_direction`.
+
+An environment modifier becomes a scope in the `ThemeResolver`. A change
+invalidates only that subtree, for paint or for layout as
+`ThemeInvalidation` tells. A modifier argument can be a closure that reads
+state, so a theme can change at run time.
+
+### Precedence
+
+One property can come from five layers. The higher layer wins:
+
+1. The application theme, from `App::tokens` or `ViewHost::set_tokens`.
+2. Environment modifiers, from the outermost view to the innermost.
+3. The control's own argument, such as `Button::variant` or `.size`.
+4. Local modifiers on the view.
+5. The accessibility preferences, which always apply last.
+
+```mermaid
+flowchart LR
+    A["Application theme"] --> B["Environment modifiers, outer to inner"]
+    B --> C["Control argument"]
+    C --> D["Local modifiers"]
+    D --> E["Accessibility preferences"]
+```
+
+For example, `.button_variant(ButtonVariant::Outline)` on a stack gives every
+button inside it the outline look. A button with its own `.variant(...)`
+keeps that variant. With high contrast, the border of each button still
+reaches 3:1, whatever the modifiers say. The test
+`style_precedence_ends_with_accessibility` in
+[views.rs](../crates/choscorui-compose/tests/views.rs) pins this order.
+
+### Reusable styles
+
+There is no separate style language. To reuse a look, write a function that
+takes a view and returns it with modifiers, or register a recipe with
+`.recipe(kind, recipe)`:
+
+```rust
+use choscorui::prelude::*;
+
+fn callout(content: impl View) -> impl View {
+    content
+        .padding(Space::S4)
+        .background(ColorRole::Muted)
+        .corner_radius(choscorui::core::RadiusScale::Lg)
+}
+```
+
 ## Style recipes
 
 The `choscorui_controls::style` module holds one recipe system for every

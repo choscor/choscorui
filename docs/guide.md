@@ -1,6 +1,6 @@
 # Build an application
 
-This guide tells how to build a desktop application with ChoscorUI. Each section names the types to use and links to a working example. The [gallery](../gallery/src/main.rs) is a complete application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
+This guide tells how to build a desktop application with ChoscorUI. You describe each window as a tree of views, and the toolkit updates only what the changed state affects. Each section names the types to use and links to a working example. The [gallery](../gallery/src/main.rs) is a complete application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
 
 ## Requirements
 
@@ -10,7 +10,7 @@ This guide tells how to build a desktop application with ChoscorUI. Each section
 | Xcode Command Line Tools | a release with the macOS 15 SDK | `xcode-select --install` |
 | Rust | 1.88 or later, edition 2024 | `rustup toolchain install 1.88` |
 
-The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. On other operating systems the facade compiles, but `choscorui::platform` does not exist. [platform-macos.md](platform-macos.md) describes the supported backend.
+The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. On other operating systems the facade compiles, but `App` and `choscorui::platform` do not exist. [platform-macos.md](platform-macos.md) describes the supported backend.
 
 To run the gallery, use these commands from the repository root:
 
@@ -33,209 +33,274 @@ Depend only on `choscorui`. The other crates are internal and can change in any 
 
 | Module | Contents |
 | --- | --- |
-| `choscorui::prelude` | The types that most applications use first |
-| `choscorui::core` | Geometry, retained tree, layout, text, models, themes, semantics, settings, locale, and resources |
-| `choscorui::controls` | Controls, item views, dialogs, popups, toolbar, status bar, and docking |
-| `choscorui::compose` | Declarative composition, reactive bindings, and state machines |
+| `choscorui::prelude` | `App`, the views, the modifiers, state, and the types that views use |
+| `choscorui::core` | Geometry, text, models, themes, semantics, settings, locale, and resources |
+| `choscorui::controls` | The controls that the views host, and the hosted control types |
+| `choscorui::compose` | The view runtime, reactive state, and state machines |
 | `choscorui::platform` | The macOS backend: application, windows, menus, dialogs, clipboard, and desktop integration |
 | `choscorui::capabilities()` | What the current backend supports |
 
 [versioning.md](versioning.md) tells which parts are stable.
 
-## The application loop
+## Your first application
 
-ChoscorUI does not own your main loop. You make an `Application` on the main thread, open windows, and read events:
+An application is a `View` tree in a window. `App` opens the windows, runs the event loop, sends input to the views, and draws a frame when something changed:
+
+```rust,no_run
+use choscorui::prelude::*;
+
+struct Counter;
+
+impl View for Counter {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let count = cx.state(0);
+        VStack::new((
+            Text::new(move || format!("Count: {}", count.get())),
+            Button::new("Increment", move || count.update(|n| *n += 1)),
+        ))
+        .spacing(Space::S4)
+        .padding(Space::S6)
+    }
+}
+
+fn main() -> Result<(), choscorui::AppError> {
+    App::new()
+        .window(WindowOptions::new("Counter", 400.0, 300.0), || Counter)
+        .run()
+}
+```
+
+- `App::window` opens a window with the view that the closure makes. The closure runs again for each new window of that scene.
+- `App::run` returns when the last window closes.
+- `App::start` returns an `AppContext` instead, and you call `AppContext::pump` in your own loop. The [app smoke test](../crates/choscorui/tests/app_smoke.rs) uses it.
+
+## Views and components
+
+A view describes a part of the screen. A component is your own type that implements `View::body` and returns other views. `body` runs once, when the component mounts. It does not run again when state changes. Instead, each value that reads state is a closure, and the toolkit runs that closure again when the state changes.
+
+The toolkit gives these views:
+
+| Group | Views |
+| --- | --- |
+| Layout | `VStack`, `HStack`, `ZStack`, `Grid`, `Group`, `ScrollView`, `Spacer`, `Divider` |
+| Text | `Text`, `Kbd`, `Badge` |
+| Structure | `Dynamic`, `ForEach`, `Either`, `AnyView`, `Empty` |
+| Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
+| Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `EmptyState`, `Skeleton`, `Spinner` |
+| Navigation | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Menubar`, `Sidebar`, `Command` |
+| Drawing | `Canvas`, `ControlView`, `Configured` |
+
+A tuple of views is one view, so a stack takes a tuple of its children. To keep two branches of different types in one place, use `Either` or `.into_any()`. [controls.md](controls.md) gives the behavior and accessibility semantics of each control.
+
+## State and bindings
+
+State lives in the reactive runtime. A view reads it in a closure, and the toolkit records what each closure read:
+
+- `cx.state(initial)` makes a `State<T>` that belongs to the component. It is `Copy`, and it ends when the component unmounts.
+- `cx.memo(compute)` makes a `Memo<T>`, a value that the toolkit computes again only when its inputs change.
+- `cx.effect(run)` runs a closure now and again after each change to what it read.
+- `Runtime::property(initial)` makes a `Property<T>` that is not part of one component. Use it for state that several windows share.
+- `Binding<T>` gives a control read and write access to a value. `State::binding` makes one, and `Binding::new(get, set)` makes one from two closures. `Binding::map` focuses on one field.
+
+A view argument accepts a plain value or a closure. A plain value never changes. A closure is live: when state that it read changes, only that one property updates. The rest of the tree stays as it is.
 
 ```rust
 use choscorui::prelude::*;
-use std::time::Duration;
 
-fn paint(size: Size) -> DisplayList {
-    let tokens = DesignTokens::light();
-    let mut list = DisplayList::new();
-    list.fill_rect(Rect::new(Point::new(0.0, 0.0), size), tokens.background);
-    list.draw_text(Point::new(24.0, 48.0), "Xin chào", "Helvetica", 24.0, tokens.content)
-        .expect("valid text command");
-    list
-}
+struct Settings;
 
-fn main() {
-    let app = Application::new().expect("call on the main thread");
-    let mut window = app
-        .create_window(WindowOptions::new("Hello", 640.0, 400.0))
-        .expect("create the window");
-    window.set_display_list(paint(window.content_size()));
-    window.show();
-    app.activate();
-    'run: loop {
-        app.dispatch_next_event(Duration::from_millis(250));
-        for event in window.take_events() {
-            match event {
-                WindowEvent::Closing => break 'run,
-                WindowEvent::Resized { size, .. } => window.set_display_list(paint(size)),
-                _ => {}
-            }
-        }
+impl View for Settings {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let wifi = cx.state(true);
+        let volume = cx.state(40);
+        let range = IntegerRange::new(0, 100, 40, 1, 10).expect("a valid range");
+        VStack::new((
+            Switch::new("Wi-Fi", wifi.binding()),
+            Slider::new("Volume", range, volume.binding()),
+            Text::new(move || format!("Volume {}", volume.get())).hidden(move || !wifi.get()),
+        ))
+        .alignment(HorizontalAlignment::Leading)
+        .spacing(Space::S3)
     }
 }
 ```
 
-- `Application::dispatch_next_event(timeout)` waits for one native event and dispatches it. It returns `false` when no event arrived before the timeout.
-- `Window::take_events` drains the queue of `WindowEvent` values: resize, scale change, focus, pointer, key, text, IME, occlusion, drag, and close.
-- `Window::set_display_list` replaces the content of the window. It repaints only the region that changed.
-- `Window::last_paint` tells when the last paint finished and how long it took.
-- `Application::window_count` counts the native windows that are open or not yet released. Leak checks use it.
+To change the structure of the tree, use these views:
 
-Each `Window` is independent. Usually each window has its own `Tree`, and the windows share the models, commands, themes, and localizer. In the gallery, `Gallery::pump` reads the events of each window and sends them to the view of that window.
+- `Dynamic::new(choose)` mounts the view that `choose` returns. When state that `choose` read changes, it unmounts the old view and mounts the new one.
+- `ForEach::new(items, key, view)` mounts one view for each item. Items keep their nodes by key, so an insert mounts only the new item.
+- `Either::Left` and `Either::Right` give one type to two branches.
+
+## Layout
+
+Stacks place their children along one axis:
+
+| View or modifier | Use |
+| --- | --- |
+| `VStack`, `HStack` | A column or a row, with `.spacing`, `.alignment`, and `.distribution` |
+| `ZStack` | Children on top of each other, with an `Alignment` |
+| `Grid` | Columns of `GridItem::Fixed`, `GridItem::Flexible`, or `GridItem::Fit` |
+| `Spacer` | Flexible space that pushes its siblings apart |
+| `ScrollView` | Content that scrolls when it is larger than the space |
+| `.padding(edges)` | Space around the view, from a `Space` token or `Edges` |
+| `.frame(Frame)` | A fixed, minimum, or maximum size, with the content aligned in it |
+| `.layout_priority(share)` | A share of the leftover space along the stack |
+
+A view is as large as its content. A `Spacer`, a `ScrollView`, a `Divider`, or a frame with an infinite maximum is flexible. A stack that holds a flexible view becomes flexible too, so it takes the space that its parent offers. A fixed width or height stops this along that axis. Layout mirrors in a right-to-left locale: leading is on the right.
+
+```rust
+use choscorui::prelude::*;
+
+fn toolbar() -> impl View {
+    HStack::new((
+        Text::new("Inbox").text_style(TextPreset::H4),
+        Spacer::new(),
+        Button::new("Compose", || {}).size(ControlSize::Sm),
+    ))
+    .padding(Space::S3)
+    .frame(Frame::new().max_width(f64::INFINITY))
+}
+```
+
+## Styling and theming
+
+Visual values come from the design tokens. Modifiers take a token role or a token scale, so the view follows the theme:
+
+- Color: `.foreground`, `.background`, `.border`, `.ring`, and `.tint` take a `ColorRole` or a `Color`.
+- Shape: `.corner_radius`, `.shadow`, `.opacity`, and `.clip_shape`.
+- Text: `.text_style(TextPreset)`, `.font_weight`, and `.tracking`.
+- Controls: `.button_variant` and `.control_size` set a default for the controls inside the view. A control's own `.variant` or `.size` wins.
+- Theme: `.theme((BaseColor, ColorScheme))`, `.color_scheme`, and `.token(role, fill)` change the tokens of a subtree.
+- Recipes: `.recipe(kind, recipe)` paints the controls of one kind in the subtree with your recipe.
+
+`App::tokens` sets the tokens of every window. Give it a closure to change the theme at run time. [theming.md](theming.md) describes the tokens, the recipes, and the precedence of the styling modifiers.
+
+## Text and localization
+
+`Text::new` shows a plain string, a closure, or a catalog string. A catalog string updates when the locale changes:
+
+- `Localized::new("id")` reads the translation of `id`.
+- `.arg(name, value)` gives an argument, and `.count(n)` selects the plural form.
+- `t!("id", name = value)` is the short form.
+
+`App::env(Env::new(catalog, locale))` gives every window its catalog and locale. Give `Env::new` a closure for the locale to change the language at run time. `.locale(...)` changes the locale of one subtree. [localization.md](localization.md) describes catalogs, plural forms, and right-to-left layout. [text.md](text.md) describes text shaping and editing.
+
+```rust
+use choscorui::prelude::*;
+use std::rc::Rc;
+
+let mut catalog = Catalog::new();
+let english = Locale::parse("en").expect("valid tag");
+catalog.insert(&english, "greeting", "Hello, {name}");
+let env = Env::new(Rc::new(catalog), english);
+assert_eq!(env.text("greeting", &[("name", "Linh")]), "Hello, Linh");
+let greeting = Text::new(t!("greeting", name = "Linh"));
+```
+
+## Dialogs, sheets, and popovers
+
+A presentation modifier shows content while a `Binding<bool>` is true:
+
+- `.dialog(presented, content)` and `.alert_dialog(presented, content)` show a centered dialog.
+- `.sheet(presented, side, content)` and `.drawer(presented, content)` show a panel along an edge.
+- `.popover(presented, content)` shows a popover next to the view.
+
+Escape or a press outside the dialog sets the binding to false. Focus moves into the dialog and returns to the view after it closes.
+
+```rust
+use choscorui::prelude::*;
+
+struct Delete;
+
+impl View for Delete {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let asking = cx.state(false);
+        Button::new("Delete", move || asking.set(true))
+            .variant(ButtonVariant::Destructive)
+            .alert_dialog(asking.binding(), move || {
+                VStack::new((
+                    Text::new("Delete this file?"),
+                    Button::new("Cancel", move || asking.set(false)),
+                ))
+                .spacing(Space::S4)
+            })
+    }
+}
+```
+
+## Accessibility
+
+Each control publishes its role, name, value, state, and actions. You do not build the semantic tree. A static text node is named by its text. Use these modifiers when the default is not enough:
+
+- `.accessibility_label`, `.accessibility_value`, and `.accessibility_hint` replace what assistive technology reads.
+- `.accessibility_hidden(true)` hides decoration.
+- `.focusable(false)` takes a view out of the keyboard order, and `.focused(binding)` moves focus.
+
+Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disables every control in a subtree, and a disabled control leaves the keyboard order.
+
+## Commands, shortcuts, and menus
+
+`App::commands(menu, handler)` installs the native menu bar:
+
+- `menu` returns a `MenuBarModel`. When state that it read changes, the toolkit builds the menu bar again. Use this for check marks and for a new language.
+- `handler` gets the `AppContext` and the `MenuCommandId` of each command that the user chooses.
+- A menu item with a Command-key shortcut runs from the keyboard. Views do not get Command-key chords.
+
+`.keyboard_shortcut(key, modifiers, action)` runs an action while focus is in the view, or anywhere when no closer view declares the same keys. `.on_submit(action)` runs when a control commits its input, for example Return in a text input.
+
+```rust,no_run
+use choscorui::prelude::*;
+
+const QUIT: MenuCommandId = MenuCommandId(1);
+
+fn menu() -> Result<MenuBarModel, choscorui::platform::MenuError> {
+    MenuBarModel::new(vec![MenuSpec::new(
+        "Notes",
+        vec![MenuEntry::command(QUIT, MenuItemState::new("Quit Notes"))],
+    )])
+}
+
+fn main() -> Result<(), choscorui::AppError> {
+    App::new()
+        .window(WindowOptions::new("Notes", 640.0, 480.0), || Text::new("Notes"))
+        .commands(menu, |app, command| {
+            if command == QUIT {
+                app.quit();
+            }
+        })
+        .run()
+}
+```
+
+## Windows
+
+A `Scene` is a window description: the options, a closure that makes the root view, and an optional live title. `App::scene` opens one at launch. During the run, `AppContext` manages the windows:
+
+- `AppContext::open(scene)` opens a window and returns its `WindowId`. `AppContext::close(id)` closes it.
+- `AppContext::active` gives the key window, and `AppContext::windows` lists the open windows.
+- `AppContext::window(id)` gives the native `Window`, for example for its geometry.
+- `AppContext::host(id)` gives the `ViewHost` of the window.
+
+Windows share the runtime, so a `Property` from `App::runtime` updates every window that reads it. `App::on_tick` runs a closure once on each turn of the event loop. Use it for work that is not part of a view, for example to save settings.
 
 ### Threads and timers
 
 The UI types work only on the main thread. They are not `Send`.
 
-- **Work from other threads.** Call `Application::poster` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
+- **Work from other threads.** Call `Application::poster` on `AppContext::application` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
 - **Timers.** `Application::schedule_once` and `Application::schedule_repeating` return a `Timer`. When you drop the `Timer`, the timer stops.
 - **Panics.** A panic in a posted task, a timer, or a menu callback does not unwind into AppKit. The toolkit counts each such panic.
 
-```rust
-let poster = app.poster();
-std::thread::spawn(move || {
-    let total = 6 * 7; // slow work on a worker thread
-    let _ = poster.post(move || println!("result: {total}"));
-});
-let tick = app.schedule_repeating(Duration::from_secs(1), || println!("tick"))?;
-drop(tick); // stops the timer
-```
-
 [architecture.md](architecture.md#threading-model) gives the full threading model.
-
-## Retained tree and identity
-
-`Tree` owns the structure of the UI. `Tree::attach(parent, bounds)` returns a `NodeId`. A `NodeId` keeps its identity until you detach the node, and the tree never uses it again. The tree gives:
-
-- **Bounds** in absolute logical points.
-- **Hit testing.** `hit_test(point)` returns the deepest visible node and tests the last child first.
-- **Focus.** `set_focusable` lets a node take focus, and `set_focus` moves focus to a node.
-- **Focus order.** `focus_next(reverse)` moves focus in depth-first order and wraps at the ends. Connect Tab and Shift-Tab to it.
-- **Pointer capture** for drags, with `set_pointer_capture`.
-- **Dirty flags.** `invalidate(id, Dirty::PAINT)` marks work for a node. The flags are `Dirty::LAYOUT`, `Dirty::PAINT`, and `Dirty::SEMANTICS`.
-- **Dispatch.** `dispatch_pointer` and `dispatch_key` visit the capture, target, and bubble phases. A handler returns `EventReply::Stop` to end dispatch.
-
-Controls do not own nodes. You attach a node, keep the state object of the control next to it, and give both to the control.
-
-## Layout
-
-| Type | Use |
-| --- | --- |
-| `LinearLayout` | Rows or columns with fixed and weighted children, padding, spacing, cross alignment, and right-to-left order |
-| `GridLayout` | Fixed and flexible tracks, spans, and right-to-left columns |
-| `FormLayout` | Label and field pairs, with the labels aligned next to the field column |
-| `ScrollViewport` | Scrolling of a content subtree, with `scroll_by`, `scroll_to`, and `reveal` |
-| `LayoutEngine` | Measure and arrange with `LayoutStyle` and `Constraints`, with a cache for each node |
-| `compose_main_window` | Toolbar areas, status bar, and central content |
-| `DockLayout` | Docked, tabbed, and floating panels |
-
-`LinearLayout::apply(&mut tree, bounds)` writes bounds into the tree. If the layout cannot give each child its minimum size, it returns `LayoutError::InsufficientSpace` and moves no node. Your application then decides what to hide.
-
-`LayoutEngine` asks a `LeafMeasure` for the size of each leaf node. A closure with the signature `FnMut(NodeId, Constraints, LayoutDirection) -> Measured` is a `LeafMeasure`. Text sizes come from the text layout, which [text.md](text.md) describes. For custom controls, see [Write a custom control](#write-a-custom-control).
-
-## Use a control
-
-Each control has the same shape. It handles input, it paints through the recipe for its visual state, and it gives its semantics:
-
-```rust
-use choscorui::controls::{EstimatedText, PaintContext, Styles};
-use choscorui::prelude::*;
-
-const SAVE: CommandId = CommandId(1);
-
-let node = tree.attach(tree.root(), Rect::new(Point::new(16.0, 16.0), Size::new(96.0, 28.0)))?;
-tree.set_focusable(node, true)?;
-let mut button = Button::new("Save", SAVE);
-
-// Input: the method returns the command to run, if any.
-if let Some(command) =
-    button.handle_with_commands(&mut tree, node, ButtonInput::Pointer(event), &commands)?
-{
-    run(command);
-}
-
-// Paint: the button recipe draws the visual state.
-let styles = Styles::new();
-let bounds = tree.bounds(node).unwrap_or_default();
-let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
-button.paint(&mut cx, &tree, node);
-
-// Semantics: the node goes into the semantic tree.
-let semantic = button.semantics_with_commands(&tree, node, &commands)?.shared();
-semantics.set(node, semantic, &tree)?;
-```
-
-The control owns its behavior: input, focus, value, validation, and semantics. Painting is separate, so you can replace it. [controls.md](controls.md) lists each control and gives its behavior and accessibility semantics.
-
-### Publish semantics
-
-Keep one `SemanticTree` for each window:
-
-1. Call `SemanticTree::set` for each node that changed.
-2. Keep the `SemanticChange` values that `set` returns.
-3. Call `SemanticTree::sync_focus` to update the focus.
-4. Give `SemanticTree::snapshot` and the changes to `Window::set_accessibility`.
-5. Read `Window::take_accessibility_actions` after each event.
-6. Send each request to the control that owns the node.
-
-## Commands, shortcuts, and menus
-
-`CommandRegistry` holds the enabled and checked state of each command:
-
-- `CommandRegistry::activate(id)` returns the id only while the command is enabled.
-- A button with a command follows the command state, through `handle_with_commands` and `visual_state_with_commands`.
-- `CommandRegistry::bind_shortcut(scope, shortcut, command)` registers a key chord. Two bindings of one chord in the same scope return `CommandError::DuplicateShortcut`.
-- `CommandRegistry::resolve_shortcut` finds the command for a chord. The focused scope wins first, then the window scope, then the application scope.
-- A disabled command that wins a chord consumes it, so a less specific binding does not run.
-
-```rust
-let mut commands = CommandRegistry::new();
-commands.insert(SAVE, CommandState::default())?;
-let save = Shortcut {
-    key: Key::Character('s'),
-    modifiers: ShortcutModifiers { command: true, ..ShortcutModifiers::default() },
-};
-commands.bind_shortcut(ShortcutScope::Application, save, SAVE)?;
-if let Some(command) = commands.resolve_shortcut(save, window_id, tree.focus()) {
-    run(command);
-}
-```
-
-[shortcuts.rs](../crates/choscorui-controls/tests/shortcuts.rs) and [commands.rs](../crates/choscorui-controls/tests/commands.rs) pin this behavior.
-
-On macOS, the menu bar is native:
-
-1. Build a `MenuBarModel` from a list of `MenuSpec` values. AppKit shows the first menu as the application menu.
-2. Call `Application::install_main_menu` with the model. It returns a `MainMenu`.
-3. Read `MainMenu::take_activations` after each event.
-4. Run each command that it returns.
-5. Call `MainMenu::set_state` when the enabled or checked state of a command changes.
-
-A new call to `install_main_menu` replaces the old menu bar. Do this when the language changes. For a context menu, make a `ContextMenu` and call `Window::show_context_menu`. [platform-macos.md](platform-macos.md) describes menus, dialogs, and the clipboard.
-
-## Painting and theming
-
-You paint into a `DisplayList`. It holds rectangles, rounded rectangles, paths, text, images, shadows, clips, transforms, and opacity groups. The macOS backend replays it with Core Graphics and Core Text.
-
-Colors and metrics come from `DesignTokens`. `ThemeResolver` resolves them from the application theme, scoped overrides, node overrides, and the accessibility preferences of the user. `choscorui::platform::system_prefers_dark` reads the system appearance. `choscorui::platform::system_accessibility_preferences` reads the system accessibility display settings. [theming.md](theming.md) describes the resolution order, recipes, and customization.
-
-## Text and localization
-
-- [text.md](text.md) describes text shaping, text layout, editing, input methods, and rich text.
-- [localization.md](localization.md) describes locales, string catalogs, plural forms, number and date formats, resources, and right-to-left layout.
 
 ## Settings
 
 `choscorui::core::Settings` keeps settings for one user in a versioned text file. A `SettingsSchema` gives the current version, the default values, and the migrations.
 
 ```rust
-use choscorui::core::{SettingValue, Settings, SettingsSchema, user_settings_path};
+use choscorui::core::{SettingValue, Settings, SettingsError, SettingsSchema};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 fn upgrade_v1(values: &mut BTreeMap<String, SettingValue>) {
     if let Some(value) = values.remove("font") {
@@ -243,16 +308,18 @@ fn upgrade_v1(values: &mut BTreeMap<String, SettingValue>) {
     }
 }
 
-let schema = SettingsSchema::new(2)
-    .with_default("editor.font", SettingValue::Text("Menlo".into()))
-    .with_migration(1, upgrade_v1);
-let path = user_settings_path("com.example.editor").ok_or("no home directory")?;
-let (mut settings, report) = Settings::load_or_recover(schema, path)?;
-if let Some(aside) = &report.recovered_to {
-    eprintln!("the settings file was damaged; it moved to {}", aside.display());
+fn load(path: PathBuf) -> Result<Settings, SettingsError> {
+    let schema = SettingsSchema::new(2)
+        .with_default("editor.font", SettingValue::Text("Menlo".into()))
+        .with_migration(1, upgrade_v1);
+    let (mut settings, report) = Settings::load_or_recover(schema, path)?;
+    if let Some(aside) = &report.recovered_to {
+        eprintln!("the settings file was damaged; it moved to {}", aside.display());
+    }
+    settings.set("editor.font", SettingValue::Text("SF Mono".into()))?;
+    settings.save()?;
+    Ok(settings)
 }
-settings.set("editor.font", SettingValue::Text("SF Mono".into()))?;
-settings.save()?;
 ```
 
 - `user_settings_path(app_id)` returns the path of the settings file. The `app_id` is a reverse-DNS identifier, for example `com.example.editor`. [platform-macos.md](platform-macos.md) gives the location on macOS.
@@ -305,13 +372,16 @@ To keep the window position and size between launches, do these steps:
 3. Call `fit_to_screens` on the result with `screen_visible_frames()` and a minimum size.
 4. Call `Window::set_geometry` with the fitted frame.
 
-```rust
-use choscorui::core::{Size, WindowGeometry};
-use choscorui::platform::screen_visible_frames;
+```rust,no_run
+use choscorui::core::{Settings, Size, WindowGeometry};
+use choscorui::platform::{Error, Window, screen_visible_frames};
 
-if let Some(saved) = WindowGeometry::restore(&settings, "window.main") {
-    let frame = saved.fit_to_screens(&screen_visible_frames()?, Size::new(320.0, 240.0));
-    window.set_geometry(&WindowGeometry { frame, ..saved })?;
+fn restore(settings: &Settings, window: &mut Window) -> Result<(), Error> {
+    if let Some(saved) = WindowGeometry::restore(settings, "window.main") {
+        let frame = saved.fit_to_screens(&screen_visible_frames()?, Size::new(320.0, 240.0));
+        window.set_geometry(&WindowGeometry { frame, ..saved })?;
+    }
+    Ok(())
 }
 ```
 
@@ -342,72 +412,92 @@ To restore the state at launch:
 
 ## Test your UI without a window
 
-Only the native window needs the operating system. The tree, layout, controls, semantics, display lists, themes, and locales are plain Rust values, so most UI tests run without a window.
+Only the native window needs the operating system. `ViewHost` mounts a view tree with no window, so most UI tests run anywhere:
 
-1. Put the platform-independent state of each window in one struct, as `GalleryView` does in the gallery.
-2. Send synthetic events to the struct in a test.
-3. Examine its `DisplayList` and its `SemanticTree::snapshot`.
+1. Make a `ViewHost` with a size, tokens, an environment, a runtime, and a text measurement.
+2. Mount the view and call `layout`.
+3. Find nodes by their accessible name with `find`, and drive them with `perform`, `key`, `text`, or `pointer`.
+4. Examine `semantics`, `paint`, and `take_errors`.
 
-The facade test [external_app.rs](../crates/choscorui/tests/external_app.rs) builds a control tree through the facade with no window. To check native behavior, use a scripted run, as `CHOSCORUI_GALLERY_AUTOPILOT=1` does for the gallery.
+```rust
+use choscorui::controls::EstimatedText;
+use choscorui::core::SemanticAction;
+use choscorui::prelude::*;
+use std::rc::Rc;
 
-## Write a custom control
+struct Counter;
 
-You can write a control in safe Rust. Implement the `CustomControl` trait, and mount the control in a `ControlHost`. You need no platform code or FFI.
+impl View for Counter {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let count = cx.state(0);
+        VStack::new((
+            Text::new(move || format!("Count: {}", count.get())),
+            Button::new("Increment", move || count.update(|n| *n += 1)),
+        ))
+    }
+}
 
-| Method | When the host calls it | Contract |
+let env = Env::new(Rc::new(Catalog::new()), Locale::parse("en").expect("valid tag"));
+let mut host = ViewHost::new(
+    Size::new(400.0, 300.0),
+    DesignTokens::light(),
+    env,
+    Runtime::new(),
+    Rc::new(EstimatedText),
+);
+host.mount(Counter);
+host.layout();
+let button = host.find("Increment").expect("the button is named");
+assert!(host.perform(button, SemanticAction::Activate, None));
+host.layout();
+assert!(host.find("Count: 1").is_some());
+assert!(host.take_errors().is_empty());
+```
+
+[views.rs](../crates/choscorui-compose/tests/views.rs) has more examples. To check native behavior, use a scripted run, as `CHOSCORUI_GALLERY_AUTOPILOT=1` does for the gallery.
+
+## Draw and write custom controls
+
+`Canvas::new(draw)` draws with display-list commands in the space that the canvas gets. It fills the space it is offered, so give it a size with `.frame`. Give it a name with `.label` for assistive technology.
+
+```rust
+use choscorui::prelude::*;
+
+fn swatch() -> impl View {
+    Canvas::new(|ctx, size| {
+        let color = Fill::Role(ColorRole::Primary).resolve(ctx.tokens);
+        ctx.list.fill_rect(Rect::new(ctx.bounds.origin, size), color);
+    })
+    .label("Primary color")
+    .frame(Frame::size(48.0, 48.0))
+}
+```
+
+For a new interactive control, implement the `CustomControl` trait in safe Rust and mount it with `ControlView::new`. You need no platform code or FFI. `ControlView::value` and `ControlView::on_message` connect the control to state. `Configured::custom(kind, build)` mounts one of the hosted controls of `choscorui::controls` that has no view of its own.
+
+| Method | When the toolkit calls it | Contract |
 | --- | --- | --- |
-| `measure(cx)` | During layout, through `ControlHost::measure` | Returns a `Measured` size and an optional baseline. The host clamps the size to `cx.constraints` |
-| `arrange(cx, bounds)` | After layout and theme changes, through `ControlHost::arrange` | Records the geometry of the parts, so that input hits the same parts that paint draws. The default does nothing |
-| `event(context, event)` | When the host routes a `ControlEvent` | Returns `EventReply::Stop` to consume the event. `context.phase()` gives the dispatch phase |
-| `paint(cx)` | When `ControlHost::paint` walks the visible mounted nodes in tree order | Draws into `cx.list` inside `cx.bounds`. The host clips the control to its bounds |
+| `measure(cx)` | During layout | Returns a `Measured` size and an optional baseline. The toolkit clamps the size to `cx.constraints` |
+| `arrange(cx, bounds)` | After layout and theme changes | Records the geometry of the parts, so that input hits the same parts that paint draws. The default does nothing |
+| `event(context, event)` | When input goes to the control | Returns `EventReply::Stop` to consume the event. `context.phase()` gives the dispatch phase |
+| `paint(cx)` | When the window draws | Draws into `cx.list` inside `cx.bounds`. The toolkit clips the control to its bounds |
 | `overlay()` | During routing and painting | Returns the rectangle of an open popup, or `None`. The default is `None` |
 | `paint_overlay(cx)` | After every control paints, for each control with an overlay | Draws the popup without a clip |
 | `modal()` | During routing | Returns `true` while a modal overlay is open. The default is `false` |
-| `semantics()` | When `ControlHost::sync_semantics` finds the node dirty for semantics, or when `force` is `true` | Returns the role, name, value, state, and supported actions as a `SemanticNode` |
-| `perform(context, action, value)` | When `ControlHost::perform` routes an action from assistive technology | Runs only for an action that `semantics()` lists. Returns `true` when it applied the action |
+| `semantics()` | When the control asked for a semantics update | Returns the role, name, value, state, and supported actions as a `SemanticNode` |
+| `perform(context, action, value)` | When assistive technology asks for an action | Runs only for an action that `semantics()` lists. Returns `true` when it applied the action |
 | `focusable()` | At mount time | Defaults to `true`. A focusable control takes focus when the user presses it |
-| `set_enabled(enabled)` | When `ControlHost::set_enabled` runs | Updates the control state. The host stops input to a disabled control |
-| `animating(time)` | When `ControlHost::animating` runs | Returns `true` while the control needs another frame |
+| `set_enabled(enabled)` | When `.disabled` changes | Updates the control state. A disabled control gets no input |
+| `animating(time)` | On each frame | Returns `true` while the control needs another frame |
 
-`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `MeasureContext::viewport` is the window area that an overlay must fit in. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags from the host.
-
-The host sends these `ControlEvent` values:
-
-| Event | When |
-| --- | --- |
-| `Pointer` | A pointer event hits the control, its overlay, or a descendant |
-| `Key` | A key event goes to the focused control or a descendant |
-| `Text` | The focused control gets committed text |
-| `FocusChanged` | The control gets or loses focus |
-| `Hover` | The pointer enters or leaves the control, a descendant, or its overlay |
-| `Dismiss` | A press lands outside the control and its open overlay |
+`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags.
 
 The `ControlContext` lets the control do these things during `event` and `perform`:
 
 - Request paint, layout, or semantics updates with `request_paint`, `request_layout`, and `request_semantics`.
 - Take focus with `request_focus`.
 - Capture the pointer for a drag with `capture_pointer(true)`.
-- Read the host time with `time`.
-- Report a `ControlMessage` to the application with `emit`.
+- Read the time with `time`.
+- Report a `ControlMessage` to the view with `emit`.
 
-`ControlHost` owns the controls by `NodeId`:
-
-- `mount` attaches a new child node and `unmount` detaches it.
-- `prune` drops the controls whose nodes another part of the application detached.
-- `dispatch_pointer`, `dispatch_key`, and `dispatch_text` route input. A press on a focusable control moves focus to it, and the host sends `FocusChanged` to the old and new controls.
-- An open overlay gets pointer events inside its rectangle first.
-- While a control is modal, pointer events outside its subtree go to it. `focus_next` and `dispatch_key` keep focus inside the subtree.
-- `set_enabled` disables a control. A disabled control gets no input, leaves keyboard traversal, and publishes no actions.
-- `take_messages` returns the messages that controls emitted, in order. Call it after each dispatch.
-- `sync_semantics` keeps the paint and layout requests on the node for your frame loop.
-
-`HostEnv` holds the `ThemeResolver`, the `Styles`, the text measurement, the direction, and the time. The host resolves the tokens of each node through the theme scopes. `ControlHost::layout` runs the `LayoutEngine` and then arranges the controls. Mounted controls measure themselves, and your `LeafMeasure` measures the other leaves:
-
-```rust
-let env = HostEnv::new(&themes, &styles, &EstimatedText);
-host.layout(&mut engine, &mut tree, root, bounds, &env, &mut |_, _, _| {
-    Measured::new(Size::default())
-})?;
-```
-
-[custom.rs](../crates/choscorui-controls/tests/custom.rs) is a complete example. It is a star-rating control that handles pointer, key, and text input, focus, painting, semantics, messages, and the `Increment` and `Decrement` actions. The same file tests hover, overlays, modal scopes, and disabled controls.
+[custom.rs](../crates/choscorui-controls/tests/custom.rs) is a complete control. It is a star-rating control that handles pointer, key, and text input, focus, painting, semantics, messages, and the `Increment` and `Decrement` actions.
