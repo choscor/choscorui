@@ -19,6 +19,14 @@ in parentheses is the role that the macOS backend gives to that
 
 ## Control catalog
 
+The catalog covers each component in the reference sidebar. Two sidebar
+entries are rules, not controls. Direction is `LayoutDirection` (see
+[right-to-left layout](localization.md#right-to-left-layout)). Typography
+is the `TextPreset` styles in [Label and Separator](#label-and-separator).
+The form entry beside the components links to form library guides, not
+to a control. [`Field`](#field-and-fieldtext) and the compose
+[`Form`](guide.md#form-fields) view cover it.
+
 | Group | Control | Purpose |
 | --- | --- | --- |
 | Basic | [`Button`](#button) | Momentary push button that returns a `CommandId`. |
