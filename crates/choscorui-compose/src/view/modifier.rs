@@ -724,7 +724,7 @@ fn layout_node(inner: &mut Inner, target: &mut Target) -> NodeId {
     target.node
 }
 
-fn update_style(inner: &mut Inner, node: NodeId, change: impl FnOnce(&mut LayoutStyle)) {
+pub(super) fn update_style(inner: &mut Inner, node: NodeId, change: impl FnOnce(&mut LayoutStyle)) {
     let mut style = inner.engine.style(node).cloned().unwrap_or_default();
     change(&mut style);
     if let Err(error) = inner.engine.set_style(&inner.tree, node, style) {

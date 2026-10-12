@@ -888,6 +888,21 @@ fn a_divider_spans_the_frame_around_its_stack() {
 }
 
 #[test]
+fn wrapping_text_gives_up_width_in_a_full_row() {
+    use choscorui_compose::view::{Frame, ViewExt};
+    let long = "a status line long enough to need more than one line in this row";
+    // `host` asserts that the layout reports no error.
+    let mut host = host(HStack::new((
+        Text::new("fixed").frame(Frame::new().width(300.0)),
+        Text::new(long),
+    )));
+    let line = bounds(&mut host, "fixed").size.height;
+    let text = bounds(&mut host, long);
+    assert!(text.max_x() <= 400.0 + 1e-9, "{text:?}");
+    assert!(text.size.height > line, "{text:?} wraps");
+}
+
+#[test]
 fn a_long_column_paints_and_relayouts_only_what_it_must() {
     use choscorui_compose::view::ScrollView;
     let rows: Vec<usize> = (0..2_000).collect();

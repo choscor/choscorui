@@ -4,6 +4,7 @@
 use super::View;
 use super::env::{Env, Fill};
 use super::host::Cx;
+use super::modifier::update_style;
 use super::state::{IntoLive, Live, State};
 use choscorui_controls::{
     ControlContext, ControlEvent, CustomControl, MeasureContext, PaintContext, TextAlign, TextLine,
@@ -334,6 +335,10 @@ impl View for Text {
         }));
         let node = cx.control(Box::new(TextLeaf { data: data.clone() }));
         cx.inner.data(node).text = true;
+        if self.wrap {
+            // Wrapping text gives up width to its stack and takes more lines.
+            update_style(cx.inner, node, |style| style.shrink = true);
+        }
         let content = self.content;
         let shared = data.clone();
         let content_env = env.clone();

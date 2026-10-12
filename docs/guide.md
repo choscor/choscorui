@@ -148,6 +148,8 @@ Stacks place their children along one axis:
 
 A view is as large as its content. A `Spacer`, a `ScrollView`, a `Divider`, or a frame with an infinite maximum is flexible. A stack that holds a flexible view becomes flexible too, so it takes the space that its parent offers. A fixed width or height stops this along that axis. Layout mirrors in a right-to-left locale: leading is on the right.
 
+When a row has too little width, a wrapping `Text` becomes narrower and takes more lines. Use `Text::single_line` or `.fixed_size()` to keep the text on one line. A row that still cannot fit reports a layout error.
+
 ```rust
 use choscorui::prelude::*;
 
