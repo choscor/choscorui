@@ -523,6 +523,43 @@ fn scroll_content_measures_unbounded_and_offset_clamps() {
 }
 
 #[test]
+fn a_nested_scroll_node_moves_its_content_when_its_offset_changes() {
+    let (mut tree, mut engine, mut text) = setup();
+    let root = tree.root();
+    engine
+        .set_style(&tree, root, LayoutStyle::column(0.0))
+        .unwrap();
+    let scroll = add(
+        &mut tree,
+        &mut engine,
+        root,
+        LayoutStyle {
+            kind: LayoutKind::Scroll {
+                axis: choscorui_core::Axis::Vertical,
+            },
+            ..LayoutStyle::default()
+        }
+        .with_size(Length::Points(200.0), Length::Points(100.0)),
+    );
+    let list = add(&mut tree, &mut engine, scroll, LayoutStyle::column(0.0));
+    let rows: Vec<NodeId> = (0..50)
+        .map(|_| {
+            add(
+                &mut tree,
+                &mut engine,
+                list,
+                LayoutStyle::leaf().with_size(Length::Auto, Length::Points(20.0)),
+            )
+        })
+        .collect();
+    run(&mut tree, &mut engine, &mut text, Size::new(200.0, 100.0));
+    assert_eq!(tree.bounds(rows[10]).unwrap().origin.y, 200.0);
+    engine.set_scroll_offset(scroll, Point::new(0.0, 200.0));
+    run(&mut tree, &mut engine, &mut text, Size::new(200.0, 100.0));
+    assert_eq!(tree.bounds(rows[10]).unwrap().origin.y, 0.0);
+}
+
+#[test]
 fn styles_and_bounds_are_validated() {
     let (mut tree, mut engine, _) = setup();
     let root = tree.root();

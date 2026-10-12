@@ -468,6 +468,9 @@ pub struct LayoutEngine {
     /// The nodes that the last layout placed.
     placed: Vec<NodeId>,
     scroll_offsets: HashMap<NodeId, Point>,
+    /// Scroll nodes whose offset changed since the last layout. The next
+    /// layout arranges the path from the root to each of them again.
+    scrolled: Vec<NodeId>,
     content_sizes: HashMap<NodeId, Size>,
     strict: bool,
     stats: LayoutStats,
@@ -491,6 +494,7 @@ impl LayoutEngine {
             arranged: HashMap::new(),
             placed: Vec::new(),
             scroll_offsets: HashMap::new(),
+            scrolled: Vec::new(),
             content_sizes: HashMap::new(),
             strict: cfg!(debug_assertions),
             stats: LayoutStats::default(),
@@ -554,9 +558,11 @@ impl LayoutEngine {
     }
 
     /// Scrolling changes placement only; cached measurements stay valid.
+    /// The next layout arranges the scroll node and its ancestors again.
     pub fn set_scroll_offset(&mut self, node: NodeId, offset: Point) {
         if self.scroll_offsets.insert(node, offset) != Some(offset) {
             self.arranged.remove(&node);
+            self.scrolled.push(node);
         }
     }
 
@@ -613,6 +619,13 @@ impl LayoutEngine {
             return Err(EngineError::InvalidBounds);
         }
         self.stats = LayoutStats::default();
+        for node in std::mem::take(&mut self.scrolled) {
+            let mut current = tree.parent(node);
+            while let Some(id) = current {
+                self.arranged.remove(&id);
+                current = tree.parent(id);
+            }
+        }
         let direction = self.inherited_direction(tree, root);
         let mut placements = Vec::new();
         let result = self
