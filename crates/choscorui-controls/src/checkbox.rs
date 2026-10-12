@@ -90,6 +90,14 @@ impl Checkbox {
         }
     }
 
+    /// The checkbox with the invalid state from the start, for a host
+    /// that has no tree to give [`Checkbox::set_invalid`].
+    #[must_use]
+    pub fn with_invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
+        self
+    }
+
     pub fn value(&self) -> bool {
         self.checked
     }

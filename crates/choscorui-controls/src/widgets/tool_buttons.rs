@@ -533,6 +533,17 @@ pub struct HostedButtonGroup {
 }
 
 impl HostedButtonGroup {
+    /// Enables or disables member `index`. A disabled member does not
+    /// take a click, a key, or an assistive action, and arrow keys skip
+    /// it in an exclusive group.
+    #[must_use]
+    pub fn with_enabled(mut self, index: usize, enabled: bool) -> Self {
+        if let Some(member) = self.group.members.get(index) {
+            let _ = self.commands.set_enabled(*member, enabled);
+        }
+        self
+    }
+
     fn checked_indices(&self) -> Vec<usize> {
         let checked = self.group.checked(&self.commands);
         (0..self.group.members.len())

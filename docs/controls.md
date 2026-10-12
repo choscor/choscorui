@@ -293,7 +293,8 @@ A disabled button has 50% opacity.
   `SetValue` clears it and reports the value, also when the value is the
   same.
 - `set_invalid(true)` shows the invalid ring and sets the invalid
-  semantic state.
+  semantic state. `with_invalid` sets it before the checkbox has a node,
+  for a control host.
 - **Look.** `paint` draws the box at the start of the bounds and the label
   after it. In right-to-left layouts, the box is at the right.
 
@@ -413,6 +414,8 @@ layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
 node for the whole group, with a label for each member. That node
 publishes the focused member as a checkable tool button. Arrow keys move
 the focus, and in an exclusive group they also move the check.
+`with_enabled(index, false)` disables a member: it takes no click, key,
+or action, and arrow keys skip it in an exclusive group.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 

@@ -50,3 +50,9 @@ fn a_hosted_checkbox_reports_and_takes_its_value() {
     assert_eq!(h.semantics().value.as_deref(), Some("mixed"));
     assert!(h.messages().is_empty());
 }
+
+#[test]
+fn a_hosted_checkbox_can_start_invalid() {
+    let h = Harness::new(Checkbox::new("Accept the terms", false).with_invalid(true));
+    assert!(h.semantics().state.invalid);
+}

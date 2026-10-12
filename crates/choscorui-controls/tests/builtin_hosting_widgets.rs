@@ -442,6 +442,27 @@ fn a_hosted_button_group_mirrors_and_toggles_members() {
 }
 
 #[test]
+fn a_hosted_button_group_skips_a_disabled_member() {
+    let mut h = Harness::new(alignment(true).hosted(labels()).with_enabled(1, false));
+    assert!(set_value(&mut h, ControlValue::Indices(vec![0])));
+    h.click(member(&h, 1));
+    assert_eq!(h.semantics().name, "Center");
+    assert!(h.semantics().state.disabled);
+    assert!(h.messages().is_empty());
+    h.focus();
+    h.key(Key::ArrowLeft);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().name, "Left");
+    assert_eq!(
+        h.messages(),
+        vec![
+            changed(ControlValue::Indices(vec![2])),
+            changed(ControlValue::Indices(vec![0])),
+        ]
+    );
+}
+
+#[test]
 fn a_hosted_command_link_activates_like_a_button() {
     let link = CommandLink::new("Install", "Add the app to the dock");
     let mut h = Harness::new(link.hosted(CommandId(3)));
