@@ -3,7 +3,7 @@
 
 mod alert;
 mod empty;
-mod loading;
+pub(crate) mod loading;
 mod toast;
 
 pub use alert::Alert;

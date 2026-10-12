@@ -11,7 +11,7 @@ use std::f64::consts::TAU;
 /// The rotation, in radians, of a spinner `time` seconds into a turn of
 /// `turn_ms` milliseconds. A zero turn, as with reduced motion, does not
 /// rotate.
-fn spin(time: f64, turn_ms: u32) -> f64 {
+pub(crate) fn spin(time: f64, turn_ms: u32) -> f64 {
     if turn_ms == 0 {
         return 0.0;
     }

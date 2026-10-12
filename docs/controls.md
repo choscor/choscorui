@@ -113,6 +113,11 @@ in parentheses is the role that the macOS backend gives to that
 | Layout | [`Collapsible`](#collapsible) | Section that shows or hides its items. |
 | Layout | [`Accordion`](#accordion) | Stacked sections that open under their headers. |
 | Layout | [`ItemGroup`](#item-and-itemgroup) | Rows of media, text, and actions. |
+| Chat | [`Message`](#message-and-bubble) | Avatar, header, bubbles, and footer of one chat message. |
+| Chat | [`Attachment`](#attachment) | File with media, a detail line, and a progress state. |
+| Chat | [`Marker`](#marker) | Muted line between messages. |
+| Chat | [`MessageScroller`](#messagescroller-and-conversation) | Virtualized messages that stick to the bottom. |
+| Chat | [`Questionnaire`](#questionnaire-and-question) | One question at a time with choices or a typed answer. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2508,6 +2513,175 @@ behavior.
 | Actions | `Activate` and `Focus` with stops while enabled |
 
 [layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
+behavior.
+
+### Message and Bubble
+
+- A `Message` stacks a header, its bubbles, and a footer beside an
+  optional avatar. The author names the message.
+- `align_end()` puts the avatar and the bubbles at the end, such as for
+  the messages of the current user. A right-to-left layout mirrors both
+  alignments.
+- A `Bubble` wraps its text. It is at most 80% of the content width,
+  except a ghost bubble.
+- `with_reactions(text)` shows a pill over the bottom end of the bubble.
+- `BubbleVariant` selects `Default`, `Secondary`, `Muted`, `Tinted`,
+  `Outline`, `Ghost`, or `Destructive`. A bubble under the pointer shows
+  the hover look.
+- A message takes no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Avatar gap | `Message` `Root` | 8 pt between the avatar and the content |
+| Content | `Message` `Content` | 10 pt between the header, the bubbles, and the footer |
+| Bubbles | `Message` `Group` | 8 pt between bubbles |
+| Header and footer | `Message` `Header`, `Footer` | xs medium `muted-foreground` text, 12 pt inline padding |
+| Bubble | `Bubble` `Content` | sm text, 1.625 line height, radius xl, 12 by 8 pt padding |
+| Default | `Bubble` `Content`, `Default` | `primary` fill, `primary-foreground` text; 80% fill on hover |
+| Tinted | `Bubble` `Content`, `Tinted` | `primary` hue at OKLCH lightness 0.93, 40% chroma |
+| Ghost | `Bubble` `Content`, `Ghost` | no box; full width |
+| Destructive | `Bubble` `Content`, `Destructive` | `destructive` text on a 10% `destructive` fill |
+| Reactions | `Bubble` `Badge` | `muted` pill, 3 pt `card` ring, 6 by 2 pt padding |
+| Width | `Bubble` `Root` | at most 80% of the content width |
+
+| Field | `Message::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | author / bubble texts |
+| Description | header and footer |
+| Actions | none |
+
+[chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
+behavior.
+
+### Attachment
+
+- The media box, the file name, and the detail line sit in a row.
+  `vertical()` stacks the media box over the text.
+- `AttachmentMedia` is an icon or an image that covers the media box.
+- `AttachmentState` selects `Idle`, `Uploading`, `Processing`, `Error`, or
+  `Done`. An uploading attachment shows a progress line from
+  `with_progress`. A processing one spins a loader in its media box. An
+  error shows the destructive border and detail text.
+- `with_remove(label)` adds a ghost remove button at the end. It is the
+  only tab stop. Enter, Space, a click, or `Dismiss` emits `Dismissed`.
+- The size is `Default`, `Sm`, or `Xs`.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | 1 pt `border`, radius xl, 10 by 8 pt padding, 8 pt gap; at least 160 pt wide, or 96 pt vertical |
+| Error | `Root`, `Error` | `destructive` border |
+| Media | `Media` | 40 pt `muted` box, radius lg, 16 pt icon; `Sm` 32, `Xs` 28; 60% while busy |
+| Name | `Title` | sm medium text; xs for `Sm` and `Xs` |
+| Detail | `Description` | xs `muted-foreground` text, 2 pt above; `destructive` for an error |
+| Progress | `Progress` | 2 pt `primary` line |
+| Remove | `Button` `Root`, `Ghost`, `IconXs` | ghost icon button with an X |
+
+| Field | `Attachment::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | file name / detail |
+| Description | the remove label |
+| State | invalid for an error, disabled |
+| Actions | `Dismiss` and `Focus` with a remove button while enabled |
+
+[chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
+behavior.
+
+### Marker
+
+- A marker is a short muted line between messages, such as a date.
+- The default and `Border` markers show an optional icon and the label at
+  the start. `Border` adds a line below.
+- The `Separator` marker centers the label between two lines.
+- It takes no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Marker | `Root` | sm `muted-foreground` text, 8 pt gap, at least 16 pt tall |
+| Border | `Root`, `Border` | 1 pt `border` line below, 8 pt padding below |
+| Icon | `Icon` | 16 pt `muted-foreground` icon |
+| Lines | `Separator` | 1 pt `border` lines, 4 pt from the label |
+
+| Field | `Marker::semantics` |
+| --- | --- |
+| Role | `StaticText` (AXStaticText) |
+| Name | the label |
+| Actions | none |
+
+[chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
+behavior.
+
+### MessageScroller and Conversation
+
+- The app pushes messages through a `Conversation` handle. Clones of the
+  handle share one queue. The scroller shows new messages at the next
+  `advance`.
+- Only the messages in view are measured and painted. A message keeps an
+  estimated height until it comes into view. Heights are in a Fenwick
+  tree, so a scroll does not scale with the conversation.
+- The scroller sticks to the bottom. While it shows the last message, new
+  messages and size changes keep the last message in view. After a scroll
+  up, the view stays put.
+- The wheel, ArrowUp, ArrowDown, Page Up, Page Down, Home, and End scroll
+  it. `Increment` and `Decrement` scroll one page.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Messages | `MessageScroller` `Viewport` | 32 pt between messages |
+| Focus ring | `ScrollArea` `Root` | focus ring while focus is visible |
+
+| Field | `MessageScroller::semantics` |
+| --- | --- |
+| Role | `ScrollArea` (AXScrollArea) |
+| Name / value | name / author and text of the last message |
+| State | disabled |
+| Actions | `Increment`, `Decrement`, and `Focus` while enabled |
+
+[chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
+behavior.
+
+### Questionnaire and Question
+
+- A questionnaire shows one `Question` at a time, under an optional
+  progress line from `with_progress`.
+- `Question::choice` takes one option and `Question::multiple` takes any
+  number. Each row shows a check box, the option, and its number key.
+- `Question::freeform` takes typed text. Enter in the text runs Next or
+  Submit.
+- The answer and the buttons are tab stops. ArrowUp and ArrowDown move
+  between choices. Space, Enter, a click, or the number keys 1 to 9 pick
+  one.
+- Previous sits at the start. Skip, and Next or Submit, sit at the end.
+- A `required()` question has no Skip button. Next or Submit on an
+  unanswered required question shows the error line from
+  `QuestionnaireLabels`.
+- Picking emits `Changed(Indices)`, and typing emits `Changed(Text)`.
+  Moving to a question emits `Changed(Index(question))`. Submit, or Skip
+  on the last question, emits `Activated`.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Buttons gap | `Root` | 24 pt above the buttons |
+| Progress | `Progress` | xs `muted-foreground` text, 20 pt above the title (`Item` gap) |
+| Title | `Title` | base semibold text, 20 pt below |
+| Choices | `Group` | 12 pt between rows |
+| Choice row | `Choice` | sm text, 1 pt `input` border, radius md, 16 by 14 pt padding, shadow xs; `muted` fill when checked |
+| Check box | `Indicator` | 16 pt box, radius 4 pt, `primary` fill when checked |
+| Number key | `Shortcut` | 20 pt key cap, 10 pt mono text |
+| Text answer | `Input` | input box, 36 pt tall |
+| Error | `Error` | sm `destructive` text |
+| Buttons | `Action` | 8 pt gap, 36 pt tall |
+
+| Field | `Questionnaire::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / current question |
+| Description | the focused option, button, or typed text |
+| State | invalid, disabled |
+| Actions | `Activate` and `Focus` while enabled; `SetValue` for a freeform question |
+
+[chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.
 
 ### CustomControl and ControlHost

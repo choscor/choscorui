@@ -31,6 +31,7 @@ pub use selection_controls::TabSet;
 pub use selection_controls::{
     RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
 };
+mod chat;
 mod containers;
 pub use containers::{
     ContainerError, GroupBox, Resizable, ResizableInput, SplitOrientation, StackPage,
@@ -103,13 +104,17 @@ mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod custom;
 mod data;
-mod feedback;
+pub(crate) mod feedback;
 mod form;
 mod hosted;
 mod layout;
 mod listbox;
 mod nav;
 mod overlay;
+pub use chat::{
+    Attachment, AttachmentMedia, Bubble, Conversation, Marker, Message, MessageScroller,
+    ProgressText, Question, Questionnaire, QuestionnaireLabels,
+};
 pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,

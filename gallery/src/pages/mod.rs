@@ -1,5 +1,6 @@
 //! Page builders grouped by category.
 
+pub mod chat;
 pub mod containers;
 pub mod data;
 pub mod datetime;

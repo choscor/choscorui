@@ -5,8 +5,8 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, display, feedback, form, inputs, nav, navigation, overlay,
-    popups, range, recipes, sections, selection, shell, statics, system, text,
+    chat, containers, data, datetime, dialogs, display, feedback, form, inputs, nav, navigation,
+    overlay, popups, range, recipes, sections, selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -112,6 +112,21 @@ pub const PAGES: &[PageInfo] = &[
     page!("carousel", "Carousel", Data, display::carousel),
     page!("data-table", "Data table", Data, display::data_table),
     page!("chart", "Chart", Data, display::chart),
+    page!("message", "Message", Data, chat::message),
+    page!("attachment", "Attachment", Data, chat::attachment),
+    page!("marker", "Marker", Data, chat::marker),
+    page!(
+        "message-scroller",
+        "Message scroller",
+        Data,
+        chat::message_scroller
+    ),
+    page!(
+        "questionnaire",
+        "Questionnaire",
+        Inputs,
+        chat::questionnaire
+    ),
     page!("group-box", "Group box", Containers, containers::group_box),
     page!("resizable", "Resizable", Containers, containers::resizable),
     page!(
@@ -270,6 +285,20 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("ItemGroup", "item"),
     ("ItemMedia", "item"),
     ("ItemVariant", "item"),
+    ("Message", "message"),
+    ("Bubble", "message"),
+    ("BubbleVariant", "message"),
+    ("Attachment", "attachment"),
+    ("AttachmentMedia", "attachment"),
+    ("AttachmentState", "attachment"),
+    ("Marker", "marker"),
+    ("MarkerVariant", "marker"),
+    ("MessageScroller", "message-scroller"),
+    ("Conversation", "message-scroller"),
+    ("Questionnaire", "questionnaire"),
+    ("Question", "questionnaire"),
+    ("QuestionnaireLabels", "questionnaire"),
+    ("ProgressText", "questionnaire"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -419,14 +448,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "variant key of input group addons; read by recipes",
     ),
     (
-        "AttachmentState",
-        "variant key of attachments; read by recipes",
-    ),
-    (
-        "BubbleVariant",
-        "variant key of chat bubbles; read by recipes",
-    ),
-    (
         "CalendarDay",
         "variant key of calendar day cells; read by recipes",
     ),
@@ -454,10 +475,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "variant key of field rows; read by recipes",
     ),
     ("KbdVariant", "variant key of key caps; read by recipes"),
-    (
-        "MarkerVariant",
-        "variant key of chat markers; read by recipes",
-    ),
     (
         "MenuItemVariant",
         "variant key of menu items; read by recipes",
