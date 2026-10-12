@@ -185,6 +185,17 @@ changes as `ControlMessage` values:
 | `HostedResizable` | `Changed(Number)` with the position | `Number` |
 | `HostedStack` | - | `Index(Some(page))` |
 | `StatusBar`, `ScrollArea`, `HostedGroupBox` | - | - |
+| `Combobox`, `FontChooser` | `Changed(Index)`, `Changed(Text)` when editable, `OpenChanged`, `Dismissed` on Escape | `Index`, or `Text` when editable |
+| `TextEditor` | `Changed(Text)` | `Text` |
+| `ScrollBar`, `DecimalSpinBox` | `Changed(Number)` | `Number` |
+| `HostedDial` | `Changed(Number)` | `Number`, rounded |
+| `HostedToolButton` | `Command(id)`, `Changed(Bool)` when checkable, `OpenChanged` for a menu | `Bool` when checkable |
+| `HostedButtonGroup` | `Changed(Indices)` | `Indices`, exactly one when exclusive |
+| `HostedCommandLink` | `Activated` | - |
+| `ToolBox` | `Changed(Index)` | `Index` |
+| `HostedNumericDisplay` | - | a whole `Number` |
+| `KeySequenceEdit` | `Changed(Text)`, for example `⌘K, ⇧⌘S` | `Text` in that form |
+| `SizeGrip` | `Changed(Range(width, height))` | - |
 
 Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and

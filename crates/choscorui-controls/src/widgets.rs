@@ -23,7 +23,10 @@ use std::f64::consts::PI;
 mod key_sequence;
 mod tool_buttons;
 pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_text};
-pub use tool_buttons::{ButtonGroup, CommandLink, ToolButton, ToolButtonAction, ToolButtonMenu};
+pub use tool_buttons::{
+    ButtonGroup, CommandLink, HostedButtonGroup, HostedCommandLink, HostedToolButton, ToolButton,
+    ToolButtonAction, ToolButtonMenu,
+};
 
 // ---------------------------------------------------------------- ScrollBar
 

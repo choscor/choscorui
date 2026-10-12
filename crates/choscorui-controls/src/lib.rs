@@ -85,6 +85,9 @@ pub use widgets::{
     NumberBase, NumericDisplay, ScrollBar, ScrollBarInput, ScrollOrientation, SizeGrip, ToolBox,
     ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_text,
 };
+pub use widgets::{
+    HostedButtonGroup, HostedCommandLink, HostedDial, HostedNumericDisplay, HostedToolButton,
+};
 mod datetime_controls;
 pub use datetime_controls::{
     Calendar, CalendarCell, CalendarFocus, CalendarLayout, CalendarMode, DateTimeEdit,
