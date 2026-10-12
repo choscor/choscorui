@@ -40,15 +40,30 @@ impl Harness {
         control: impl CustomControl + 'static,
         direction: LayoutDirection,
     ) -> Self {
+        Self::mount(
+            Box::new(control),
+            ThemeResolver::new(DesignTokens::light()),
+            Styles::new(),
+            direction,
+        )
+    }
+
+    /// Mounts `control` with `themes` and `styles` at its natural size.
+    pub fn mount(
+        control: Box<dyn CustomControl>,
+        themes: ThemeResolver,
+        styles: Styles,
+        direction: LayoutDirection,
+    ) -> Self {
         let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 600.0));
         let mut host = ControlHost::new();
         let root = tree.root();
-        let node = host.mount(&mut tree, root, Box::new(control)).unwrap();
+        let node = host.mount(&mut tree, root, control).unwrap();
         let mut harness = Self {
             tree,
             host,
-            themes: ThemeResolver::new(DesignTokens::light()),
-            styles: Styles::new(),
+            themes,
+            styles,
             direction,
             node,
             time: 0.0,

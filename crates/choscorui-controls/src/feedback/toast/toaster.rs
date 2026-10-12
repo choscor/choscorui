@@ -495,7 +495,8 @@ impl Toaster {
     fn presence(&self, entry: &Entry, time: f64) -> f64 {
         let motion = self.motion();
         if motion <= 0.0 {
-            return 1.0;
+            // Without motion, a closing toast is gone at once.
+            return if entry.leaving.is_some() { 0.0 } else { 1.0 };
         }
         let enter = ((time - entry.born) / motion).clamp(0.0, 1.0);
         let exit = entry.leaving.map_or(1.0, |leaving| {
@@ -757,7 +758,7 @@ impl CustomControl for Toaster {
         let motion = self.motion();
         self.entries.iter().any(|entry| {
             time - entry.born < motion
-                || entry.leaving.is_some()
+                || entry.leaving.is_some_and(|leaving| time - leaving < motion)
                 || (entry.toast.variant == ToastVariant::Loading && self.turn_ms > 0)
         })
     }
