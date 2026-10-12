@@ -7,8 +7,19 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 
-# One codegen unit with whole-program LTO keeps the release executables
-# inside the size budget in docs/performance.md.
+# One codegen unit with whole-program LTO, no symbol table, and size
+# optimization for the view code keep the release executables inside the
+# size budget in docs/performance.md. Core, controls, and the backend keep
+# full optimization for the paint, layout, and input paths.
 [profile.release]
 lto = true
 codegen-units = 1
+strip = "symbols"
+
+[profile.release.package.choscorui-compose]
+opt-level = "z"
+
+# This override drops the inherited `strip`, so it sets it again.
+[profile.release.package.choscorui-gallery]
+opt-level = "z"
+strip = "symbols"

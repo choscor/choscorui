@@ -52,7 +52,5 @@ windows.leaked_native_windows <= 0
 windows.missed_present <= 0
 windows.idle_cpu_percent_after_close <= 3
 
-# Release executable size (unstripped). The gallery shows the full component
-# catalog with views; the library code alone is about 1.8 MiB. The limit is
-# 18 % above the measured 5.10 MiB.
-size.choscorui-gallery_mib <= 6
+# Release executable size, as the release profile builds it.
+size.choscorui-gallery_mib <= 3

@@ -34,7 +34,7 @@ For each sampled metric, the report gives the median, the p95, the maximum, the 
 > **Caution:** The benchmark windows are foreground AppKit windows. Do not run the benchmark at the same time as a smoke test or the gallery.
 
 1. Build the release binaries with `cargo build --release -p choscorui-gallery -p choscorui-bench`.
-   The release profile uses whole-program LTO and one codegen unit. This keeps the gallery inside its size budget.
+   The release profile uses whole-program LTO, one codegen unit, and no symbol table. Compose and the gallery are optimized for size, because each view type compiles its own mount. Core, controls, and the backend keep full optimization. This keeps the gallery inside its size budget.
 2. Run all scenarios with `target/release/choscorui-bench`.
 
 The driver accepts these options:
@@ -71,7 +71,7 @@ The baselines are from the reference machine, measured on 2026-10-08. The `views
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
-| `startup.gallery.first_frame_ms.p95` | 126 ms | ≤ 250 |
+| `startup.gallery.first_frame_ms.p95` | 134 ms | ≤ 250 |
 | `startup.stress.first_frame_ms.p95` | 223–245 ms | ≤ 400 |
 | `idle.paints` | 0 | ≤ 0 |
 | `idle.cpu_percent` | 0.10 % | ≤ 1 |
@@ -85,11 +85,11 @@ The baselines are from the reference machine, measured on 2026-10-08. The `views
 | `document.present_ms.p95` | 20.7 ms | ≤ 33 |
 | `document.shape_ms.p95` | 6.8 ms | ≤ 12 |
 | `theme.present_ms.p95` | 2.7–2.9 ms | ≤ 16.7 |
-| `views.present_ms.p95` | 6.5–7.2 ms, 10,000 rows | ≤ 16.7 |
+| `views.present_ms.p95` | 6.3–7.0 ms, 10,000 rows | ≤ 16.7 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 5.10 MiB, unstripped | ≤ 6 |
+| `size.choscorui-gallery_mib` | 2.85 MiB | ≤ 3 |
 
 These correctness counters have a budget of 0:
 
