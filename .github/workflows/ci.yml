@@ -38,7 +38,7 @@ jobs:
         run: cargo test --workspace --locked
 
   native:
-    name: native windows (${{ matrix.os }})
+    name: native macOS app (${{ matrix.os }})
     needs: check
     strategy:
       fail-fast: false
