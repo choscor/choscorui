@@ -8,7 +8,7 @@ use choscorui_macos::{Application, Error, ImeEvent, WindowEvent, WindowOptions};
 #[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 use std::{cell::Cell, rc::Rc};
 
@@ -323,12 +323,12 @@ fn main() {
         }
     });
     let poster = worker.join().unwrap();
-    for _ in 0..10 {
-        if received.lock().unwrap().len() == 3 {
-            break;
-        }
-        app.pump_once(Duration::from_millis(100));
-    }
+    pump_until(
+        &app,
+        Duration::from_millis(1000),
+        Duration::from_millis(100),
+        || received.lock().unwrap().len() == 3,
+    );
     assert_eq!(
         *received.lock().unwrap(),
         vec![(0, ui_thread), (1, ui_thread), (2, ui_thread)]
@@ -351,12 +351,12 @@ fn main() {
     poster
         .post(move || *completed.lock().unwrap() = true)
         .unwrap();
-    for _ in 0..10 {
-        if *completed_after_panic.lock().unwrap() {
-            break;
-        }
-        app.pump_once(Duration::from_millis(100));
-    }
+    pump_until(
+        &app,
+        Duration::from_millis(1000),
+        Duration::from_millis(100),
+        || *completed_after_panic.lock().unwrap(),
+    );
     assert!(*completed_after_panic.lock().unwrap());
     assert_eq!(app.posted_panic_count(), 1);
     std::panic::set_hook(previous_hook);
@@ -376,12 +376,12 @@ fn main() {
             fired_count.set(fired_count.get() + 1);
         })
         .unwrap();
-    for _ in 0..10 {
-        if timer_fires.get() == 1 {
-            break;
-        }
-        app.pump_once(Duration::from_millis(20));
-    }
+    pump_until(
+        &app,
+        Duration::from_millis(200),
+        Duration::from_millis(20),
+        || timer_fires.get() == 1,
+    );
     assert_eq!(timer_fires.get(), 1);
     assert!(!timer.is_active());
     assert_eq!(app.timer_panic_count(), 0);
@@ -390,12 +390,12 @@ fn main() {
     let failed_timer = app
         .schedule_once(Duration::from_millis(1), || panic!("timer failure"))
         .unwrap();
-    for _ in 0..10 {
-        if !failed_timer.is_active() {
-            break;
-        }
-        app.pump_once(Duration::from_millis(20));
-    }
+    pump_until(
+        &app,
+        Duration::from_millis(200),
+        Duration::from_millis(20),
+        || !failed_timer.is_active(),
+    );
     assert!(!failed_timer.is_active());
     assert_eq!(app.timer_panic_count(), 1);
     std::panic::set_hook(previous_hook);
@@ -415,15 +415,18 @@ fn main() {
         })
         .unwrap();
     *self_cancel.borrow_mut() = Some(repeating);
-    for _ in 0..50 {
-        if ticks.get() >= 3 {
-            break;
-        }
-        app.pump_once(Duration::from_millis(10));
-    }
-    for _ in 0..5 {
-        app.pump_once(Duration::from_millis(10));
-    }
+    pump_until(
+        &app,
+        Duration::from_millis(500),
+        Duration::from_millis(10),
+        || ticks.get() >= 3,
+    );
+    pump_until(
+        &app,
+        Duration::from_millis(50),
+        Duration::from_millis(10),
+        || false,
+    );
     assert_eq!(
         ticks.get(),
         3,
@@ -500,6 +503,21 @@ fn main() {
     drop(app);
     assert!(!pending.is_active());
     assert!(poster.post(|| {}).is_err());
+}
+
+/// Pumps the run loop until `done` returns true or `total` passes. One
+/// pump returns as soon as the run loop handles any source, so the wait
+/// counts elapsed time and not pumps.
+#[cfg(target_os = "macos")]
+fn pump_until(app: &Application, total: Duration, step: Duration, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + total;
+    while !done() {
+        let now = Instant::now();
+        if now >= deadline {
+            break;
+        }
+        app.pump_once(step.min(deadline - now));
+    }
 }
 
 #[cfg(target_os = "macos")]
