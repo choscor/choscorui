@@ -15,3 +15,8 @@ choscorui-macos = { path = "../choscorui-macos" }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 choscorui-render = { path = "../choscorui-render" }
+
+[[test]]
+name = "app_smoke"
+path = "tests/app_smoke.rs"
+harness = false

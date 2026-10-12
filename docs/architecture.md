@@ -12,12 +12,19 @@ The workspace has a safe facade, four platform-independent crates, and one crate
 
 | Module | Contents |
 | --- | --- |
-| `choscorui::prelude` | The types that most applications use first |
+| `choscorui::prelude` | The views, their modifiers and state, and `App` |
 | `choscorui::core` | All of `choscorui-core` |
 | `choscorui::controls` | All of `choscorui-controls` |
 | `choscorui::compose` | All of `choscorui-compose` |
 | `choscorui::platform` | All of `choscorui-macos`, only when the target OS is macOS |
 | `choscorui::capabilities()` | What the current backend supports |
+
+On macOS the facade also has `App`, the view-based entry point. `App` opens each window with a `ViewHost` that shares one `Runtime` with the other windows. Each turn of the event loop does these steps:
+
+1. Wait for a native event until the next timer or frame is due.
+2. Send menu commands to the `commands` handler.
+3. Route window events and accessibility requests to the views.
+4. Advance the timers. Then lay out, paint, and publish semantics for each window that needs a frame.
 
 The `platform` module has the attribute `#[cfg(target_os = "macos")]`. On other targets the module does not exist, and `capabilities()` returns `BackendCapabilities::none("headless")`. The crate root also re-exports a set of common types directly, and the aliases `Node` (for `NodeId`) and `Theme` (for `DesignTokens`).
 

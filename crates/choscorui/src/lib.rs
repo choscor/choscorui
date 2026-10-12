@@ -38,6 +38,11 @@ pub mod platform {
     pub use choscorui_macos::*;
 }
 
+#[cfg(target_os = "macos")]
+mod app;
+#[cfg(target_os = "macos")]
+pub use app::{App, AppContext, AppError, Scene, WindowId};
+
 pub use choscorui_core::{BackendCapabilities, Support};
 
 /// What the current backend provides. Without a backend (an unsupported
@@ -53,21 +58,26 @@ pub fn capabilities() -> BackendCapabilities {
     }
 }
 
-/// The types most applications start with.
+/// The types most applications start with: the views, their modifiers
+/// and state, and the [`App`] entry point.
 pub mod prelude {
-    pub use crate::{Event, Node, Theme, capabilities};
+    pub use crate::capabilities;
+    #[cfg(target_os = "macos")]
+    pub use crate::{App, AppContext, Scene, WindowId};
+    pub use choscorui_compose::Runtime;
+    pub use choscorui_compose::t;
+    pub use choscorui_compose::view::*;
     pub use choscorui_controls::{
-        Button, ButtonInput, Checkbox, CheckboxInput, CommandId, CommandRegistry, CommandState,
-        ItemView, Label, Shortcut, ShortcutModifiers, ShortcutScope, TextEditor, TextField,
-        TextFieldInput,
+        ButtonVariant, ControlKind, ControlSize, IntegerRange, SheetSide, TabsVariant,
     };
     pub use choscorui_core::{
-        Color, Constraints, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection,
-        LinearLayout, Point, PointerButton, PointerEvent, Rect, SemanticRole, SemanticTree, Size,
-        ThemeResolver, Tree,
+        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, Icon, LayoutDirection,
+        Locale, Point, Rect, Size, Space,
     };
     #[cfg(target_os = "macos")]
-    pub use choscorui_macos::{Application, Window, WindowEvent, WindowOptions};
+    pub use choscorui_macos::{
+        MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, WindowOptions,
+    };
 }
 
 pub use choscorui_compose::{
