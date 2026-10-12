@@ -235,6 +235,8 @@ control publishes. A dash means that the field is empty.
   shows the invalid ring.
 - `CommandLink` paints an arrow, a title, and a description in an outline
   item row. A `Button` on the same node gives the behavior.
+- `CommandLink::hosted` puts the link and a `Button` for a command on one
+  hosted node. The node adds the link description to the button semantics.
 
 | Size | Height | Inline padding | Gap | Radius | Icon |
 | --- | --- | --- | --- | --- | --- |
@@ -394,6 +396,13 @@ pins this behavior.
 `ButtonGroup` has no node of its own. Its members publish their own
 semantics.
 
+**In a control host.** `ToolButton::hosted` keeps the command state
+itself, because the host has no `CommandRegistry`. In right-to-left
+layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
+node for the whole group, with a label for each member. That node
+publishes the focused member as a checkable tool button. Arrow keys move
+the focus, and in an exclusive group they also move the check.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
 ### CommandRegistry and shortcuts
@@ -501,6 +510,8 @@ this behavior.
   lg, and 12 pt padding. Lit segments use the `Value` color, `foreground`.
   Unlit segments use the `Track` color, `muted`. Keyboard focus adds the
   focus ring.
+- In a control host, `NumericDisplay::hosted` adds the name. The hosted
+  node does not take focus.
 
 | Field | `NumericDisplay::semantics` |
 | --- | --- |
@@ -524,6 +535,10 @@ this behavior.
 - **Look.** `paint` draws the `Input` box with one `Kbd` key cap per
   chord. While it records, the chords so far show. An empty sequence
   shows the placeholder in the `Input` placeholder style.
+- **In a control host.** A click, Space, Enter, or `Activate` starts the
+  recording. While it records, the control takes every key. A loss of
+  focus calls `finish`. `with_name` and `with_placeholder` set the name
+  and the placeholder.
 
 | Field | `KeySequenceEdit::semantics` |
 | --- | --- |
@@ -585,6 +600,8 @@ behavior.
   item, the title, and a chevron that points up on the open page.
   `header_height` is one line of text and 16 pt above and below. The host
   paints the page.
+- In a control host, one node publishes the focused header. A click on a
+  header opens its page.
 
 | Field | `ToolBox::header_semantics`, one node per header |
 | --- | --- |
@@ -668,6 +685,11 @@ behavior.
 - **Look.** `paint` uses the `TextEditor` recipe: the textarea box, a
   `primary` selection at 25%, and a 1 pt caret while focused. The layout
   starts at `content_origin`, inside the padding.
+- **In a control host.** The editor lays out its text with the host text
+  measurement and paints each line. Right-to-left layouts mirror the
+  lines. Tab moves the focus, unless `set_tab_inserts(true)` is set.
+- In a host, Command+A selects all text. Command+Z undoes, Shift+Command+Z
+  redoes, and Command+X cuts.
 
 | Field | `TextEditor::semantics` |
 | --- | --- |
@@ -709,6 +731,9 @@ behavior.
 - **Disabled.** All input does nothing, and `set_enabled(false)` closes
   the popup.
 - `set_items` keeps the selection and the highlight by `ItemKey`.
+- **In a control host.** The popup shows at most eight suggestions, and
+  it animates. A click on a suggestion commits it. Backspace deletes the
+  last character of an editable combobox. Escape also reports `Dismissed`.
 - **`FontChooser`** is an editable combobox named "Font". A family that
   the system does not have resolves to the fallback family.
 - `ComboBox` is a deprecated alias of `Combobox`.
@@ -842,6 +867,10 @@ this behavior.
 - `handle_semantic` maps `Increment` and `Decrement` to the arrow keys.
   `SetValue` replaces the text, then commits.
 - `set_locale` formats the text again and keeps the value.
+- **In a control host.** A press on the upper or the lower half of the
+  steppers steps the value. Typed text replaces the text after focus or a
+  step, and then adds to it. Backspace deletes the last character. A loss
+  of focus commits valid text.
 - The control has no disabled state.
 - **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
   start and the steppers at the end. `stepper_rect` returns the stepper
@@ -865,6 +894,8 @@ this behavior.
   wrapping dial wraps at the ends.
 - PageUp and PageDown step by `page_step`. Home and End go to the bounds.
 - The dial has no disabled state.
+- In a control host, `Dial::hosted` adds the name. A press or a drag
+  points the dial at the pointer.
 - **Look.** `paint` uses the `Dial` recipe. A 6 pt `muted` track arc follows
   the sweep, and a 6 pt `primary` arc runs to the value. A 16 pt white thumb
   with a `primary` border sits at the value. Hover or keyboard focus rings
@@ -893,6 +924,7 @@ this behavior.
 - Semantic `Increment` and `Decrement` page one viewport.
 - The value stays in `0..=content - viewport`. The scroll bar has no focus
   and no disabled state.
+- In a control host, the bar captures the pointer during a thumb drag.
 - **Look.** `paint` uses the `ScrollArea` thumb, inset 1 pt in the bar. A
   drag changes the thumb to `muted-foreground` at 50% alpha. A bar that is
   not needed paints nothing.
@@ -1538,6 +1570,11 @@ splitter.
   the left.
 - `SizeGrip::paint` strokes three diagonal lines toward the corner in the
   `SizeGrip` foreground.
+- In a control host, a `SizeGrip` drag reports the new size as
+  `Changed(Range(width, height))`. The grip takes the direction of the
+  host, and its hosted node is hidden.
+- `FocusFrame` is not a hosted control. It paints outside its node, at
+  the node that has the focus.
 
 These types have no semantic node.
 

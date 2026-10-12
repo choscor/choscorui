@@ -3,20 +3,27 @@
 //! numeric (LCD) display, focus frame, size grip, and key-sequence capture.
 //! Each documents its value, keyboard, and accessibility contract.
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
+use crate::hosted;
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
-    Content, ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, Styles,
-    TextAlign, ToggleVariant, VisualState, content_rect, fill_shape, join_segment,
+    ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
+    fill_shape,
 };
-use crate::{
-    CommandId, CommandRegistry, IntegerRange, NumberInput, STEPPER_WIDTH, Shortcut,
-    ShortcutModifiers, ValidationState,
-};
+use crate::{IntegerRange, NumberInput, STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayList, Icon, Key, Locale, NodeId, Path, Point,
-    RadiusScale, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    Color, ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, Icon, Key, KeyEvent,
+    Locale, Measured, Path, Point, PointerButton, PointerEvent, RadiusScale, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, Tree, grapheme_boundaries,
 };
 use std::f64::consts::PI;
+
+mod key_sequence;
+mod tool_buttons;
+pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_text};
+pub use tool_buttons::{ButtonGroup, CommandLink, ToolButton, ToolButtonAction, ToolButtonMenu};
 
 // ---------------------------------------------------------------- ScrollBar
 
@@ -199,12 +206,16 @@ impl ScrollBar {
     /// Paints the thumb in the context's bounds with the `ScrollArea`
     /// scrollbar look. A bar that is not needed paints nothing.
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
+        self.paint_state(cx, self.visual_state());
+    }
+
+    /// Paints the thumb with the flags in `state`.
+    fn paint_state(&self, cx: &mut PaintContext<'_>, state: VisualState) {
         if !self.is_needed() {
             return;
         }
         let bounds = cx.bounds;
-        let query =
-            |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(self.visual_state());
+        let query = |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(state);
         let (bar, thumb) = (
             cx.style(query(Slot::Scrollbar)),
             cx.style(query(Slot::Thumb)),
@@ -227,6 +238,138 @@ impl ScrollBar {
         let rect = content_rect(rect, &bar, cx.rtl);
         fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
     }
+
+    /// The offset of `point` along the bar from the start of `bounds`.
+    fn along(&self, bounds: Rect, point: Point) -> f64 {
+        match self.orientation {
+            ScrollOrientation::Vertical => point.y - bounds.origin.y,
+            ScrollOrientation::Horizontal => point.x - bounds.origin.x,
+        }
+    }
+
+    /// Reports a value change in a host.
+    fn report(&self, cx: &mut ControlContext<'_>, changed: bool) {
+        if changed {
+            cx.emit(ControlMessage::Changed(ControlValue::Number(self.value)));
+            cx.request_semantics();
+        }
+        cx.request_paint();
+    }
+}
+
+/// The bar has no focus, as without a host. It captures the pointer
+/// during a thumb drag.
+impl CustomControl for ScrollBar {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let bar = cx.style(StyleQuery::new(ControlKind::ScrollArea, Slot::Scrollbar));
+        let max = cx.constraints.max;
+        let length = |max: f64| {
+            if max.is_finite() {
+                max
+            } else {
+                self.track_length
+            }
+        };
+        Measured::new(match self.orientation {
+            ScrollOrientation::Vertical => Size::new(bar.min_width, length(max.height)),
+            ScrollOrientation::Horizontal => Size::new(length(max.width), bar.min_height),
+        })
+    }
+
+    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+        let length = match self.orientation {
+            ScrollOrientation::Vertical => bounds.size.height,
+            ScrollOrientation::Horizontal => bounds.size.width,
+        };
+        self.set_range(self.content, self.viewport, length);
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let bounds = cx.bounds();
+        let input = match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if bounds.contains(*position) => ScrollBarInput::Press {
+                at: self.along(bounds, *position),
+            },
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.drag.is_some() => {
+                ScrollBarInput::Drag {
+                    at: self.along(bounds, *position),
+                }
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. })
+            | ControlEvent::FocusChanged(false)
+            | ControlEvent::Dismiss
+                if self.drag.is_some() =>
+            {
+                ScrollBarInput::Release
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                let changed = self.handle(ScrollBarInput::Key(*key));
+                self.report(cx, changed);
+                return if changed {
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
+                };
+            }
+            _ => return EventReply::Continue,
+        };
+        let changed = self.handle(input);
+        cx.capture_pointer(self.drag.is_some());
+        self.report(cx, changed);
+        EventReply::Stop
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state.with(self.visual_state());
+        self.paint_state(cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        ScrollBar::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if !matches!(
+            action,
+            SemanticAction::Increment | SemanticAction::Decrement
+        ) {
+            return false;
+        }
+        let changed = self.handle(ScrollBarInput::Semantic(action));
+        self.report(cx, changed);
+        true
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.drag = None;
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Number(value) if value.is_finite() => {
+                ScrollBar::set_value(self, *value);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 // ----------------------------------------------------------- DecimalSpinBox
@@ -243,6 +386,10 @@ pub struct DecimalSpinBox {
     value: f64,
     text: String,
     fraction_digits: usize,
+    /// In a control host: the direction, and true while typed text
+    /// replaces the text instead of appending to it.
+    rtl: bool,
+    fresh: bool,
 }
 
 impl DecimalSpinBox {
@@ -267,6 +414,8 @@ impl DecimalSpinBox {
             value,
             text,
             fraction_digits,
+            rtl: false,
+            fresh: true,
         }
     }
     pub fn value(&self) -> f64 {
@@ -385,6 +534,153 @@ impl DecimalSpinBox {
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
         let steppers = Self::stepper_rect(cx.bounds, cx.rtl);
         paint_stepper_field(cx, &self.text, self.visual_state(host), steppers);
+    }
+
+    /// Replaces the edited text in a host and repaints.
+    fn edit(&mut self, cx: &mut ControlContext<'_>, text: String) {
+        self.text = text;
+        self.fresh = false;
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// Reports a value change in a host. The next typed text replaces
+    /// the formatted value.
+    fn report(&mut self, cx: &mut ControlContext<'_>, changed: bool) {
+        if changed {
+            cx.emit(ControlMessage::Changed(ControlValue::Number(self.value)));
+            self.fresh = true;
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// Handles a key-down in a host.
+    fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        if key == Key::Backspace {
+            let end = if self.fresh {
+                0
+            } else {
+                let boundaries = grapheme_boundaries(&self.text);
+                boundaries.iter().rev().nth(1).copied().unwrap_or(0)
+            };
+            let text = self.text[..end].to_string();
+            self.edit(cx, text);
+            return EventReply::Stop;
+        }
+        let before = self.text.clone();
+        let changed = self.handle_key(key);
+        let handled = changed
+            || self.text != before
+            || matches!(
+                key,
+                Key::ArrowUp
+                    | Key::ArrowDown
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Home
+                    | Key::End
+                    | Key::Enter
+            );
+        if !handled {
+            return EventReply::Continue;
+        }
+        self.report(cx, changed);
+        EventReply::Stop
+    }
+}
+
+/// Typed text replaces the text after focus or a step, and then appends.
+/// Backspace deletes the last character. A loss of focus commits valid
+/// text.
+impl CustomControl for DecimalSpinBox {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let widest = [self.minimum, self.maximum]
+            .into_iter()
+            .map(|bound| cx.text.width(&self.input.format(bound), &style.text))
+            .fold(0.0, f64::max);
+        let width = style.padding.horizontal() + widest + STEPPER_WIDTH;
+        let height = (style.text.line_height + style.padding.vertical()).max(style.min_height);
+        Measured::new(Size::new(width.max(style.min_width), height))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.rtl = cx.rtl();
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                let steppers = Self::stepper_rect(cx.bounds(), self.rtl);
+                if steppers.contains(*position) {
+                    let up = position.y < steppers.center().y;
+                    let changed = self.handle_key(if up { Key::ArrowUp } else { Key::ArrowDown });
+                    self.report(cx, changed);
+                }
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.hosted_key(cx, *key),
+            ControlEvent::Text(text) => {
+                let text = if self.fresh {
+                    text.clone()
+                } else {
+                    format!("{}{text}", self.text)
+                };
+                self.edit(cx, text);
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(focused) => {
+                let changed = !focused && self.commit();
+                self.report(cx, changed);
+                self.fresh = true;
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let host = cx.state;
+        DecimalSpinBox::paint(self, cx, host);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        DecimalSpinBox::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        match action {
+            SemanticAction::Focus => cx.request_focus(),
+            SemanticAction::Increment | SemanticAction::Decrement | SemanticAction::SetValue => {
+                let changed = self.handle_semantic(action, value);
+                self.report(cx, changed);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Number(value) if value.is_finite() => {
+                DecimalSpinBox::set_value(self, *value);
+                self.fresh = true;
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -595,400 +891,158 @@ impl Dial {
         );
         cx.slot(knob, &thumb, |_, _| {});
     }
-}
 
-// ------------------------------------------------------ Tool and link buttons
-
-/// What a tool button does on press.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ToolButtonMenu {
-    None,
-    /// The whole button opens the menu.
-    Instant,
-    /// Click runs the command; the arrow (or Down key) opens the menu.
-    Split,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ToolButtonAction {
-    None,
-    Activated(CommandId),
-    Toggled(CommandId, bool),
-    OpenMenu,
-}
-
-/// Toolbar button: optionally checkable (the command's checked state) and
-/// optionally with a menu.
-#[derive(Clone, Debug)]
-pub struct ToolButton {
-    pub label: String,
-    pub command: CommandId,
-    pub checkable: bool,
-    pub menu: ToolButtonMenu,
-    /// Width of the split-menu arrow at the trailing edge.
-    pub arrow_width: f64,
-}
-
-impl ToolButton {
-    pub fn new(label: impl Into<String>, command: CommandId) -> Self {
-        Self {
-            label: label.into(),
-            command,
-            checkable: false,
-            menu: ToolButtonMenu::None,
-            arrow_width: 14.0,
+    /// The dial with `name`, for a control host.
+    pub fn hosted(self, name: impl Into<String>) -> HostedDial {
+        HostedDial {
+            dial: self,
+            name: name.into(),
+            dragging: false,
+            center: Point::new(0.0, 0.0),
         }
     }
+}
 
-    fn run(&self, commands: &mut CommandRegistry) -> ToolButtonAction {
-        let Ok(state) = commands.state(self.command) else {
-            return ToolButtonAction::None;
-        };
-        if !state.enabled {
-            return ToolButtonAction::None;
+/// A [`Dial`] with its name, mounted in a control host. `Dial` is `Copy`
+/// and takes its name in `semantics`, so it cannot keep the name itself.
+/// A press or a drag points the dial, and keys and assistive actions
+/// step it. It reports `Changed(Number)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostedDial {
+    dial: Dial,
+    name: String,
+    dragging: bool,
+    center: Point,
+}
+
+impl HostedDial {
+    fn report(&self, cx: &mut ControlContext<'_>, changed: bool) {
+        if changed {
+            let value = f64::from(self.dial.value());
+            cx.emit(ControlMessage::Changed(ControlValue::Number(value)));
+            cx.request_semantics();
         }
-        if self.checkable {
-            let checked = !state.checked;
-            let _ = commands.set_checked(self.command, checked);
-            ToolButtonAction::Toggled(self.command, checked)
-        } else {
-            ToolButtonAction::Activated(self.command)
-        }
+        cx.request_paint();
     }
 
-    /// A completed click at `x` within `bounds`.
-    pub fn click(&self, bounds: Rect, x: f64, commands: &mut CommandRegistry) -> ToolButtonAction {
-        match self.menu {
-            ToolButtonMenu::Instant => ToolButtonAction::OpenMenu,
-            ToolButtonMenu::Split
-                if x >= bounds.origin.x + bounds.size.width - self.arrow_width =>
-            {
-                ToolButtonAction::OpenMenu
+    fn release(&mut self, cx: &mut ControlContext<'_>) {
+        self.dragging = false;
+        cx.capture_pointer(false);
+        cx.request_paint();
+    }
+}
+
+impl CustomControl for HostedDial {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let side = cx.tokens.spacing * 16.0;
+        Measured::new(Size::new(side, side))
+    }
+
+    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+        self.center = bounds.center();
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                self.dragging = true;
+                cx.capture_pointer(true);
+                let changed = self.dial.point_to(self.center, *position);
+                self.report(cx, changed);
+                EventReply::Stop
             }
-            _ => self.run(commands),
-        }
-    }
-
-    pub fn handle_key(&self, key: Key, commands: &mut CommandRegistry) -> ToolButtonAction {
-        match key {
-            Key::Space | Key::Enter if self.menu == ToolButtonMenu::Instant => {
-                ToolButtonAction::OpenMenu
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.dragging => {
+                let changed = self.dial.point_to(self.center, *position);
+                self.report(cx, changed);
+                EventReply::Stop
             }
-            Key::Space | Key::Enter => self.run(commands),
-            Key::ArrowDown if self.menu != ToolButtonMenu::None => ToolButtonAction::OpenMenu,
-            _ => ToolButtonAction::None,
-        }
-    }
-
-    pub fn semantics(&self, commands: &CommandRegistry) -> SemanticNode {
-        let state = commands.state(self.command).unwrap_or_default();
-        let mut actions = Vec::new();
-        if state.enabled {
-            actions.push(SemanticAction::Activate);
-            if self.menu != ToolButtonMenu::None {
-                actions.push(SemanticAction::ShowMenu);
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.dragging => {
+                self.release(cx);
+                EventReply::Stop
             }
-        }
-        SemanticNode {
-            role: if self.checkable {
-                SemanticRole::Checkbox
-            } else {
-                SemanticRole::Button
-            },
-            name: self.label.clone(),
-            description: String::new(),
-            value: None,
-            state: SemanticState {
-                disabled: !state.enabled,
-                checked: self.checkable.then_some(state.checked),
-                ..SemanticState::default()
-            },
-            relations: Vec::new(),
-            actions,
-            text: None,
-        }
-    }
-
-    /// The flags the toggle recipe reads: the host's flags in `host`, with
-    /// the command's checked and disabled state.
-    pub fn visual_state(&self, commands: &CommandRegistry, host: VisualState) -> VisualState {
-        let state = commands.state(self.command).unwrap_or_default();
-        host.set(VisualState::CHECKED, self.checkable && state.checked)
-            .set(VisualState::DISABLED, !state.enabled)
-    }
-
-    /// Paints the button with the `Toggle` look: transparent, and `muted`
-    /// on hover or while checked. A menu adds a chevron at the end; a split
-    /// menu also adds a divider before the arrow.
-    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
-        let style = cx.style(StyleQuery::new(ControlKind::Toggle, Slot::Root).state(state));
-        let rule = cx.style(StyleQuery::new(ControlKind::ButtonGroup, Slot::Separator));
-        let bounds = cx.bounds;
-        let arrow = match self.menu {
-            ToolButtonMenu::None => 0.0,
-            ToolButtonMenu::Instant => style.icon_size,
-            ToolButtonMenu::Split => self.arrow_width,
-        }
-        .min(bounds.size.width);
-        // Instant menus keep the chevron inside the padding; a split arrow
-        // spans the button's end edge.
-        let split = self.menu == ToolButtonMenu::Split;
-        let (label_bounds, arrow_rect) = if arrow == 0.0 {
-            (bounds, None)
-        } else if split {
-            let x = if cx.rtl {
-                bounds.origin.x
-            } else {
-                bounds.max_x() - arrow
-            };
-            let label_x = if cx.rtl {
-                bounds.origin.x + arrow
-            } else {
-                bounds.origin.x
-            };
-            (
-                Rect::from_xywh(
-                    label_x,
-                    bounds.origin.y,
-                    bounds.size.width - arrow,
-                    bounds.size.height,
-                ),
-                Some(Rect::from_xywh(
-                    x,
-                    bounds.origin.y,
-                    arrow,
-                    bounds.size.height,
-                )),
-            )
-        } else {
-            (bounds, None)
-        };
-        cx.slot(bounds, &style, |cx, inner| {
-            let mut label = content_rect(label_bounds, &style, cx.rtl);
-            label.size.height = inner.size.height;
-            label.origin.y = inner.origin.y;
-            if !split && arrow > 0.0 {
-                let x = if cx.rtl {
-                    inner.origin.x
-                } else {
-                    inner.max_x() - arrow
-                };
-                cx.icon(
-                    Rect::from_xywh(x, inner.origin.y, arrow, inner.size.height),
-                    Icon::ChevronDown,
-                    &style,
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.dragging => {
+                self.release(cx);
+                EventReply::Continue
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                let changed = self.dial.handle_key(*key);
+                self.report(cx, changed);
+                let step = matches!(
+                    key,
+                    Key::ArrowUp
+                        | Key::ArrowDown
+                        | Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::PageUp
+                        | Key::PageDown
+                        | Key::Home
+                        | Key::End
                 );
-                label.size.width = (inner.size.width - arrow - style.gap).max(0.0);
-                if cx.rtl {
-                    label.origin.x = inner.max_x() - label.size.width;
+                if step {
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
                 }
             }
-            cx.label(label, &self.label, &style, TextAlign::Center);
-        });
-        if let Some(rect) = arrow_rect {
-            let rule_x = if cx.rtl { rect.max_x() } else { rect.origin.x };
-            let inset = style.padding.block_start.max(rect.size.height / 4.0);
-            let line = Rect::from_xywh(
-                rule_x - rule.min_width / 2.0,
-                rect.origin.y + inset,
-                rule.min_width,
-                (rect.size.height - 2.0 * inset).max(0.0),
-            );
-            cx.list.fill_rect(line, rule.background);
-            let mut chevron = style;
-            chevron.icon_size = style.icon_size.min(arrow);
-            cx.icon(rect, Icon::ChevronDown, &chevron);
-        }
-    }
-}
-
-/// Exclusive or non-exclusive group of checkable commands (for example
-/// text alignment buttons). Exclusive groups keep exactly one checked.
-#[derive(Clone, Debug)]
-pub struct ButtonGroup {
-    members: Vec<CommandId>,
-    exclusive: bool,
-    orientation: Orientation,
-}
-
-impl ButtonGroup {
-    pub fn new(members: Vec<CommandId>, exclusive: bool) -> Self {
-        Self {
-            members,
-            exclusive,
-            orientation: Orientation::Horizontal,
+            _ => EventReply::Continue,
         }
     }
 
-    /// Joins the members in a row (the default) or a column.
-    pub fn with_orientation(mut self, orientation: Orientation) -> Self {
-        self.orientation = orientation;
-        self
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state;
+        self.dial.paint(cx, state);
     }
 
-    pub fn orientation(&self) -> Orientation {
-        self.orientation
+    fn semantics(&self) -> SemanticNode {
+        self.dial.semantics(&self.name)
     }
 
-    pub fn members(&self) -> &[CommandId] {
-        &self.members
-    }
-
-    /// The flags the member recipe reads: the host's focus and hover flags
-    /// in `host`, with the command's checked and disabled state.
-    pub fn member_state(
-        &self,
-        commands: &CommandRegistry,
-        member: CommandId,
-        host: VisualState,
-    ) -> VisualState {
-        let state = commands.state(member).unwrap_or_default();
-        host.set(VisualState::CHECKED, state.checked)
-            .set(VisualState::DISABLED, !state.enabled)
-    }
-
-    /// Paints member `index` in the context's bounds with the outline
-    /// toggle look. Inner corners are square, and each member after the
-    /// first overlaps the border before it, so the members read as one
-    /// control.
-    pub fn paint_member(
-        &self,
-        cx: &mut PaintContext<'_>,
-        index: usize,
-        label: &str,
-        state: VisualState,
-    ) {
-        let query = StyleQuery::new(ControlKind::ToggleGroup, Slot::Item)
-            .variant(ToggleVariant::Outline)
-            .state(state);
-        let mut style = cx.style(query);
-        let mut rect = cx.bounds;
-        join_segment(
-            &mut style,
-            &mut rect,
-            index,
-            self.members.len(),
-            self.orientation,
-            cx.rtl,
-        );
-        cx.slot(rect, &style, |cx, inner| {
-            cx.label(inner, label, &style, TextAlign::Center);
-        });
-    }
-    pub fn checked(&self, commands: &CommandRegistry) -> Vec<CommandId> {
-        self.members
-            .iter()
-            .copied()
-            .filter(|id| commands.state(*id).is_ok_and(|state| state.checked))
-            .collect()
-    }
-    /// Applies a click on `member`. Exclusive groups ignore unchecking the
-    /// checked member.
-    pub fn toggle(&self, commands: &mut CommandRegistry, member: CommandId) -> bool {
-        if !self.members.contains(&member)
-            || !commands.state(member).is_ok_and(|state| state.enabled)
-        {
-            return false;
-        }
-        let checked = commands.state(member).is_ok_and(|state| state.checked);
-        if self.exclusive {
-            if checked {
-                return false;
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        let changed = match action {
+            SemanticAction::Increment => self.dial.handle_key(Key::ArrowUp),
+            SemanticAction::Decrement => self.dial.handle_key(Key::ArrowDown),
+            SemanticAction::SetValue => {
+                let Some(value) = value.and_then(|value| value.trim().parse::<i32>().ok()) else {
+                    return false;
+                };
+                let old = self.dial.range.value();
+                self.dial.range.set_value(value) != old
             }
-            for id in &self.members {
-                let _ = commands.set_checked(*id, *id == member);
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
             }
-        } else {
-            let _ = commands.set_checked(member, !checked);
-        }
+            _ => return false,
+        };
+        self.report(cx, changed);
         true
     }
-    /// Arrow-key movement within an exclusive group.
-    pub fn step(&self, commands: &mut CommandRegistry, forward: bool) -> Option<CommandId> {
-        let current = self.checked(commands).first().copied();
-        let index = current.and_then(|id| self.members.iter().position(|member| *member == id));
-        let count = self.members.len();
-        if count == 0 {
-            return None;
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.dragging = false;
         }
-        let mut next = match (index, forward) {
-            (Some(index), true) => (index + 1) % count,
-            (Some(index), false) => (index + count - 1) % count,
-            (None, _) => 0,
-        };
-        for _ in 0..count {
-            let id = self.members[next];
-            if commands.state(id).is_ok_and(|state| state.enabled) {
-                self.toggle(commands, id);
-                return Some(id);
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Number(value) if value.is_finite() => {
+                self.dial.range.set_value(value.round() as i32);
+                true
             }
-            next = if forward {
-                (next + 1) % count
-            } else {
-                (next + count - 1) % count
-            };
+            _ => false,
         }
-        None
-    }
-}
-
-/// The look of a command link: an arrow, a title, and a description line
-/// in an item row. Behavior comes from a [`crate::Button`] on the same
-/// node.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CommandLink {
-    pub title: String,
-    pub description: String,
-}
-
-impl CommandLink {
-    pub fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-            description: description.into(),
-        }
-    }
-
-    /// Paints the link in `state`; hover and press highlight the row.
-    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
-        let query = StyleQuery::new(ControlKind::Item, Slot::Root)
-            .variant(ItemVariant::Outline)
-            .state(state.set(VisualState::HIGHLIGHTED, true));
-        let root = cx.style(query);
-        let media = cx.style(query.slot(Slot::Media));
-        let mut title = cx.style(query.slot(Slot::Title));
-        title.foreground = cx.tokens.color(ColorRole::Primary);
-        let description = cx.style(query.slot(Slot::Description));
-        let bounds = cx.bounds;
-        cx.slot(bounds, &root, |cx, inner| {
-            let icon = media.icon_size;
-            let (left, right) = if cx.rtl {
-                (inner.max_x() - icon, inner.origin.x)
-            } else {
-                (inner.origin.x, inner.origin.x + icon + root.gap)
-            };
-            let arrow = if cx.rtl {
-                Icon::ArrowLeft
-            } else {
-                Icon::ArrowRight
-            };
-            let mut arrow_style = media;
-            arrow_style.foreground = title.foreground;
-            cx.icon(
-                Rect::from_xywh(left, inner.origin.y, icon, title.text.line_height),
-                arrow,
-                &arrow_style,
-            );
-            let text = Rect::from_xywh(
-                right,
-                inner.origin.y,
-                (inner.size.width - icon - root.gap).max(0.0),
-                title.text.line_height,
-            );
-            cx.label(text, &self.title, &title, TextAlign::Start);
-            let below = text.translate(0.0, title.text.line_height + 4.0);
-            cx.label(below, &self.description, &description, TextAlign::Start);
-        });
     }
 }
 
@@ -1002,6 +1056,11 @@ pub struct ToolBox {
     titles: Vec<String>,
     current: usize,
     focused: usize,
+    /// In a control host: the header height, the bounds, and the header
+    /// under a held press.
+    header: f64,
+    bounds: Rect,
+    pressed: Option<usize>,
 }
 
 impl ToolBox {
@@ -1010,6 +1069,9 @@ impl ToolBox {
             titles,
             current: 0,
             focused: 0,
+            header: 0.0,
+            bounds: Rect::default(),
+            pressed: None,
         }
     }
     pub fn current(&self) -> usize {
@@ -1134,6 +1196,145 @@ impl ToolBox {
                 }
                 cx.label(text, title, &trigger, TextAlign::Start);
             });
+        }
+    }
+
+    fn header_at(&self, point: Point) -> Option<usize> {
+        hosted::hit(&self.layout(self.bounds, self.header).0, point)
+    }
+
+    /// Opens `page` in a host and reports it.
+    fn open_page(&mut self, cx: &mut ControlContext<'_>, page: usize) {
+        if self.open(page) {
+            cx.emit(ControlMessage::Changed(ControlValue::Index(Some(page))));
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+}
+
+/// One node publishes the focused header. A click on a header opens its
+/// page. It reports `Changed(Index)` with the open page.
+impl CustomControl for ToolBox {
+    /// The headers, and all of the height that the constraints give for
+    /// the open page.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let max = cx.constraints.max;
+        let headers = self.header_height(cx.styles, cx.tokens) * self.titles.len() as f64;
+        let width = if max.width.is_finite() {
+            max.width
+        } else {
+            cx.tokens.spacing * 120.0
+        };
+        let height = if max.height.is_finite() {
+            max.height.max(headers)
+        } else {
+            headers
+        };
+        Measured::new(Size::new(width, height))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.header = self.header_height(cx.styles, cx.tokens);
+        self.bounds = bounds;
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                let Some(index) = self.header_at(*position) else {
+                    return EventReply::Continue;
+                };
+                self.pressed = Some(index);
+                self.focused = index;
+                cx.capture_pointer(true);
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
+                cx.capture_pointer(false);
+                let hit = self.header_at(*position);
+                if let Some(index) = self.pressed.take().filter(|index| hit == Some(*index)) {
+                    self.open_page(cx, index);
+                }
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                if !matches!(
+                    key,
+                    Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End | Key::Space | Key::Enter
+                ) {
+                    return EventReply::Continue;
+                }
+                if self.handle_key(*key) {
+                    let page = self.current;
+                    cx.emit(ControlMessage::Changed(ControlValue::Index(Some(page))));
+                }
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
+                if self.pressed.take().is_some() {
+                    cx.capture_pointer(false);
+                }
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let focus_visible = cx.state.focus_visible();
+        ToolBox::paint(self, cx, self.header, focus_visible);
+    }
+
+    /// The node of the focused header, as `header_semantics` gives it.
+    fn semantics(&self) -> SemanticNode {
+        self.header_semantics()
+            .into_iter()
+            .nth(self.focused)
+            .unwrap_or_else(|| hosted::node(SemanticRole::Group, "", Vec::new()))
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if !matches!(action, SemanticAction::Activate | SemanticAction::Expand) {
+            return false;
+        }
+        self.open_page(cx, self.focused);
+        true
+    }
+
+    fn focusable(&self) -> bool {
+        !self.titles.is_empty()
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.pressed = None;
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Index(Some(page)) if *page < self.titles.len() => {
+                self.open(*page);
+                true
+            }
+            _ => false,
         }
     }
 }
@@ -1284,6 +1485,67 @@ impl NumericDisplay {
             }
         }
     }
+
+    /// The display with `name`, for a control host.
+    pub fn hosted(self, name: impl Into<String>) -> HostedNumericDisplay {
+        HostedNumericDisplay {
+            display: self,
+            name: name.into(),
+        }
+    }
+}
+
+/// A [`NumericDisplay`] with its name, mounted in a control host.
+/// `NumericDisplay` is `Copy` and takes its name in `semantics`, so it
+/// cannot keep the name itself. It takes no input and reports nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostedNumericDisplay {
+    display: NumericDisplay,
+    name: String,
+}
+
+impl CustomControl for HostedNumericDisplay {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let query = |slot| StyleQuery::new(ControlKind::NumericDisplay, slot);
+        let (root, value) = (cx.style(query(Slot::Root)), cx.style(query(Slot::Value)));
+        let digits = cx.text.width("8", &value.text) * self.display.digits as f64;
+        let width = root.padding.horizontal() + digits;
+        let height = root.padding.vertical() + value.text.line_height;
+        Measured::new(Size::new(
+            width.max(root.min_width),
+            height.max(root.min_height),
+        ))
+    }
+
+    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
+        EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state;
+        self.display.paint(cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        self.display.semantics(&self.name)
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    /// Takes a whole `Number`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Number(value)
+                if value.fract() == 0.0 && value.abs() <= i64::MAX as f64 =>
+            {
+                self.display.set_value(*value as i64);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 // ------------------------------------------------------- FocusFrame, SizeGrip
@@ -1330,6 +1592,10 @@ pub struct SizeGrip {
     pub maximum: Size,
     pub rtl: bool,
     start: Option<(Point, Size)>,
+    /// In a control host: the window content size, and the last size the
+    /// drag reported.
+    viewport: Size,
+    reported: Option<Size>,
 }
 
 impl SizeGrip {
@@ -1339,6 +1605,8 @@ impl SizeGrip {
             maximum,
             rtl,
             start: None,
+            viewport: Size::new(0.0, 0.0),
+            reported: None,
         }
     }
     pub fn rect(&self, window: Size, extent: f64) -> Rect {
@@ -1392,187 +1660,84 @@ impl SizeGrip {
             );
         }
     }
+
+    fn end_drag(&mut self, cx: &mut ControlContext<'_>) {
+        self.release();
+        self.reported = None;
+        cx.capture_pointer(false);
+    }
 }
 
-// ----------------------------------------------------------- KeySequenceEdit
+/// A drag reports the new window content size as `Changed(Range(width,
+/// height))`. The grip takes the direction of the host and has no focus.
+/// Its node is hidden, because the grip has no semantic node.
+impl CustomControl for SizeGrip {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::SizeGrip, Slot::Root));
+        Measured::new(Size::new(style.min_width, style.min_height))
+    }
 
-/// Records up to `max_chords` shortcuts. Presses of keys without a
-/// `Key` mapping (`Key::Other`, which includes modifier-only presses) are
-/// ignored; Backspace with no modifiers clears; Escape cancels and keeps
-/// the previous sequence; recording finishes when full or on
-/// [`KeySequenceEdit::finish`] (for example after a pause or focus loss).
-#[derive(Clone, Debug, PartialEq)]
-pub struct KeySequenceEdit {
-    committed: Vec<Shortcut>,
-    recording: Option<Vec<Shortcut>>,
-    max_chords: usize,
-}
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.viewport = cx.viewport.size;
+        self.rtl = cx.rtl();
+    }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum KeySequenceChange {
-    None,
-    Recording,
-    Committed,
-    Cancelled,
-    Cleared,
-}
-
-impl KeySequenceEdit {
-    pub fn new(max_chords: usize) -> Self {
-        Self {
-            committed: Vec::new(),
-            recording: None,
-            max_chords: max_chords.clamp(1, 4),
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
         }
-    }
-    pub fn sequence(&self) -> &[Shortcut] {
-        &self.committed
-    }
-    pub fn is_recording(&self) -> bool {
-        self.recording.is_some()
-    }
-    pub fn start(&mut self) {
-        self.recording = Some(Vec::new());
-    }
-    pub fn press(&mut self, key: Key, modifiers: ShortcutModifiers) -> KeySequenceChange {
-        let Some(recording) = &mut self.recording else {
-            return KeySequenceChange::None;
-        };
-        let plain = modifiers == ShortcutModifiers::default();
-        match key {
-            Key::Escape if plain => {
-                self.recording = None;
-                KeySequenceChange::Cancelled
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                self.press(*position, self.viewport);
+                cx.capture_pointer(true);
+                EventReply::Stop
             }
-            Key::Backspace | Key::Delete if plain && recording.is_empty() => {
-                self.committed.clear();
-                self.recording = None;
-                KeySequenceChange::Cleared
-            }
-            Key::Other(_) => KeySequenceChange::None,
-            _ => {
-                recording.push(Shortcut { key, modifiers });
-                if recording.len() >= self.max_chords {
-                    self.finish()
-                } else {
-                    KeySequenceChange::Recording
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.start.is_some() => {
+                if let Some(size) = self
+                    .drag(*position)
+                    .filter(|size| self.reported != Some(*size))
+                {
+                    self.reported = Some(size);
+                    cx.emit(ControlMessage::Changed(ControlValue::Range(
+                        size.width,
+                        size.height,
+                    )));
                 }
+                EventReply::Stop
             }
-        }
-    }
-    pub fn finish(&mut self) -> KeySequenceChange {
-        match self.recording.take() {
-            Some(recording) if !recording.is_empty() => {
-                self.committed = recording;
-                KeySequenceChange::Committed
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.start.is_some() => {
+                self.end_drag(cx);
+                EventReply::Stop
             }
-            Some(_) => KeySequenceChange::Cancelled,
-            None => KeySequenceChange::None,
-        }
-    }
-    /// macOS-style text such as "⌃⌥⇧⌘S, ⌘K".
-    pub fn text(&self) -> String {
-        self.committed
-            .iter()
-            .map(|shortcut| shortcut_text(*shortcut))
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-    pub fn semantics(&self, name: &str, node: NodeId) -> SemanticNode {
-        let _ = node;
-        SemanticNode {
-            role: SemanticRole::TextField,
-            name: name.to_owned(),
-            description: if self.is_recording() {
-                "Recording shortcut; press Escape to cancel".into()
-            } else {
-                String::new()
-            },
-            value: Some(self.text()),
-            state: SemanticState {
-                read_only: true,
-                ..SemanticState::default()
-            },
-            relations: Vec::new(),
-            actions: vec![SemanticAction::Activate, SemanticAction::Focus],
-            text: None,
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.start.is_some() => {
+                self.end_drag(cx);
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
         }
     }
 
-    /// Paints the input box with one `Kbd` key cap per chord, or
-    /// `placeholder` when the sequence is empty. While recording, the
-    /// chords so far show. `host` carries focus flags.
-    pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState, placeholder: &str) {
-        let input = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(host));
-        let muted = cx.style(StyleQuery::new(ControlKind::Input, Slot::Placeholder));
-        let cap = cx.style(StyleQuery::new(ControlKind::Kbd, Slot::Root));
-        let group = cx.style(StyleQuery::new(ControlKind::Kbd, Slot::Group));
-        let chords = self.recording.as_ref().unwrap_or(&self.committed);
-        let bounds = cx.bounds;
-        cx.slot(bounds, &input, |cx, inner| {
-            if chords.is_empty() {
-                cx.label(inner, placeholder, &muted, TextAlign::Start);
-                return;
-            }
-            let mut x = if cx.rtl {
-                inner.max_x()
-            } else {
-                inner.origin.x
-            };
-            let height = cap.min_height.min(inner.size.height);
-            let y = inner.origin.y + (inner.size.height - height) / 2.0;
-            for chord in chords {
-                let text = shortcut_text(*chord);
-                let width = Content::label(&text).size(&cap, cx.text).width;
-                let left = if cx.rtl { x - width } else { x };
-                let rect = Rect::from_xywh(left, y, width, height);
-                cx.slot(rect, &cap, |cx, inner| {
-                    cx.label(inner, &text, &cap, TextAlign::Center);
-                });
-                x = if cx.rtl {
-                    x - width - group.gap
-                } else {
-                    x + width + group.gap
-                };
-            }
-        });
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        SizeGrip::paint(self, cx);
     }
-}
 
-/// macOS modifier glyphs in canonical order, then the key.
-pub fn shortcut_text(shortcut: Shortcut) -> String {
-    let mut text = String::new();
-    let modifiers = shortcut.modifiers;
-    if modifiers.control {
-        text.push('⌃');
+    fn semantics(&self) -> SemanticNode {
+        let mut node = hosted::node(SemanticRole::Group, "", Vec::new());
+        node.state.hidden = true;
+        node
     }
-    if modifiers.option {
-        text.push('⌥');
+
+    fn focusable(&self) -> bool {
+        false
     }
-    if modifiers.shift {
-        text.push('⇧');
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.release();
+            self.reported = None;
+        }
     }
-    if modifiers.command {
-        text.push('⌘');
-    }
-    let key = match shortcut.key {
-        Key::Character(character) => character.to_uppercase().to_string(),
-        Key::Enter => "↩".into(),
-        Key::Tab => "⇥".into(),
-        Key::Space => "Space".into(),
-        Key::Escape => "⎋".into(),
-        Key::Backspace => "⌫".into(),
-        Key::Delete => "⌦".into(),
-        Key::ArrowUp => "↑".into(),
-        Key::ArrowDown => "↓".into(),
-        Key::ArrowLeft => "←".into(),
-        Key::ArrowRight => "→".into(),
-        Key::Home => "↖".into(),
-        Key::End => "↘".into(),
-        Key::PageUp => "⇞".into(),
-        Key::PageDown => "⇟".into(),
-        other => format!("{other:?}"),
-    };
-    text.push_str(&key);
-    text
 }

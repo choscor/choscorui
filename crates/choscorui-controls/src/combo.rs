@@ -4,13 +4,21 @@
 //! suggestion survive item lists that update while the popup is open
 //! (for example asynchronous search results).
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
+use crate::hosted::Reveal;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
 };
 use choscorui_core::{
-    DesignTokens, Icon, ItemKey, Key, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, fold_for_search,
+    DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    Size, fold_for_search, grapheme_boundaries,
 };
+
+/// The most suggestions that the hosted popup shows.
+const POPUP_ROWS: usize = 8;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComboItem {
@@ -92,6 +100,11 @@ pub struct Combobox {
     text_before_open: String,
     enabled: bool,
     metrics: ComboMetrics,
+    /// The popup animation, its duration, and the trigger bounds in a
+    /// control host.
+    reveal: Reveal,
+    motion_ms: u32,
+    anchor: Rect,
 }
 
 /// Deprecated name of [`Combobox`].
@@ -113,6 +126,9 @@ impl Combobox {
             text_before_open: String::new(),
             enabled: true,
             metrics: ComboMetrics::resolve(&Styles::new(), &DesignTokens::light()),
+            reveal: Reveal::default(),
+            motion_ms: 0,
+            anchor: Rect::default(),
         }
     }
 
@@ -489,9 +505,13 @@ impl Combobox {
     /// Paints the open popup in the context's bounds, from
     /// [`Combobox::popup_rect`]. Paint it above other content.
     pub fn paint_popup(&self, cx: &mut PaintContext<'_>) {
-        if !self.open {
-            return;
+        if self.open {
+            self.paint_rows(cx);
         }
+    }
+
+    /// Paints the popup box and its rows in the context's bounds.
+    fn paint_rows(&self, cx: &mut PaintContext<'_>) {
         let popup = cx.bounds;
         let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
         let content = cx.style(query(Slot::Content));
@@ -642,5 +662,315 @@ impl FontChooser {
             node.state.invalid = true;
         }
         node
+    }
+}
+
+impl Combobox {
+    /// The index of the selected item in `items`.
+    fn selected_index(&self) -> Option<usize> {
+        let key = self.selected?;
+        self.items.iter().position(|item| item.key == key)
+    }
+
+    /// The text without its last grapheme, for Backspace in a host.
+    fn without_last_grapheme(&self) -> String {
+        let boundaries = grapheme_boundaries(&self.text);
+        let end = boundaries.iter().rev().nth(1).copied().unwrap_or(0);
+        self.text[..end].to_string()
+    }
+
+    /// The hosted popup below the trigger.
+    fn hosted_popup(&self) -> Rect {
+        self.popup_rect(self.anchor, POPUP_ROWS)
+    }
+
+    /// Reports the changes since `before` (text and selection) and the
+    /// open state to the host.
+    fn report(&mut self, cx: &mut ControlContext<'_>, before: (String, Option<ItemKey>)) {
+        let (text, selected) = before;
+        if self.editable && self.text != text {
+            cx.emit(ControlMessage::Changed(ControlValue::Text(
+                self.text.clone(),
+            )));
+        }
+        if self.selected != selected {
+            cx.emit(ControlMessage::Changed(ControlValue::Index(
+                self.selected_index(),
+            )));
+        }
+        if self.reveal.open != self.open {
+            self.reveal.set(self.open, cx.time());
+            cx.emit(ControlMessage::OpenChanged(self.open));
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// Maps a pointer event to an input, and replies.
+    fn pointer_input(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &PointerEvent,
+    ) -> (Option<ComboInput>, EventReply) {
+        let popup = self.hosted_popup();
+        match *event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => {
+                if self.open && popup.contains(position) {
+                    (None, EventReply::Stop)
+                } else if cx.bounds().contains(position) {
+                    cx.request_focus();
+                    (Some(ComboInput::Press), EventReply::Stop)
+                } else {
+                    (None, EventReply::Continue)
+                }
+            }
+            PointerEvent::Up { position, .. } if self.open => {
+                match self.suggestion_at(popup, position) {
+                    Some(index) => (Some(ComboInput::Choose(index)), EventReply::Stop),
+                    None => (None, EventReply::Continue),
+                }
+            }
+            PointerEvent::Move { position } if self.open => {
+                if let Some(index) = self.suggestion_at(popup, position) {
+                    let key = self.items[self.matches[index]].key;
+                    if self.highlighted != Some(key) {
+                        self.highlighted = Some(key);
+                        cx.request_paint();
+                    }
+                }
+                (None, EventReply::Continue)
+            }
+            _ => (None, EventReply::Continue),
+        }
+    }
+}
+
+impl CustomControl for Combobox {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
+        let (trigger, value) = (cx.style(query(Slot::Trigger)), cx.style(query(Slot::Value)));
+        let widest = self
+            .items
+            .iter()
+            .map(|item| cx.text.width(&item.text, &value.text))
+            .fold(cx.text.width(&self.text, &value.text), f64::max);
+        let width = trigger.padding.horizontal() + widest + trigger.gap + trigger.icon_size;
+        let height = (value.text.line_height + trigger.padding.vertical()).max(trigger.min_height);
+        Measured::new(Size::new(width.max(trigger.min_width), height))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.set_metrics(cx.styles, cx.tokens);
+        self.anchor = bounds;
+        self.motion_ms = cx
+            .style(StyleQuery::new(ControlKind::Combobox, Slot::Content).state(VisualState::OPEN))
+            .motion_ms;
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let before = (self.text.clone(), self.selected);
+        let (input, reply) = match event {
+            ControlEvent::Pointer(pointer) => self.pointer_input(cx, pointer),
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Backspace,
+                ..
+            }) if self.editable => (
+                Some(ComboInput::SetText(self.without_last_grapheme())),
+                EventReply::Stop,
+            ),
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                let input = ComboInput::Key {
+                    key: *key,
+                    alt: cx.modifiers().option,
+                };
+                (Some(input), EventReply::Continue)
+            }
+            ControlEvent::Text(text) if self.editable => {
+                (Some(ComboInput::Text(text.clone())), EventReply::Stop)
+            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
+                (Some(ComboInput::Dismiss), EventReply::Continue)
+            }
+            _ => (None, EventReply::Continue),
+        };
+        let Some(input) = input else {
+            return reply;
+        };
+        let escape = matches!(
+            input,
+            ComboInput::Key {
+                key: Key::Escape,
+                ..
+            }
+        );
+        let change = self.handle(input);
+        if change == ComboChange::None {
+            return reply;
+        }
+        self.report(cx, before);
+        if escape {
+            cx.emit(ControlMessage::Dismissed);
+        }
+        EventReply::Stop
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let host = cx.state;
+        Combobox::paint(self, cx, host, "");
+    }
+
+    fn overlay(&self) -> Option<Rect> {
+        self.open.then(|| self.hosted_popup())
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        let progress = self.reveal.progress(cx.tokens, self.motion_ms, cx.time);
+        if progress <= 0.0 {
+            return;
+        }
+        let popup = self.hosted_popup();
+        let slide = (0.0, -cx.tokens.spacing * 2.0);
+        let bounds = cx.bounds;
+        cx.bounds = popup;
+        Reveal::paint(cx, popup, progress, slide, |cx| self.paint_rows(cx));
+        cx.bounds = bounds;
+    }
+
+    fn animating(&self, time: f64) -> bool {
+        self.reveal.animating(self.motion_ms, time)
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        Combobox::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        if action == SemanticAction::Focus {
+            cx.request_focus();
+            return true;
+        }
+        let before = (self.text.clone(), self.selected);
+        let change = self.handle(ComboInput::Semantic(action, value.map(str::to_string)));
+        if change == ComboChange::None {
+            return false;
+        }
+        self.report(cx, before);
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        Combobox::set_enabled(self, enabled);
+        if !enabled {
+            self.reveal = Reveal::default();
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Index(index) => {
+                let key = index
+                    .and_then(|index| self.items.get(index))
+                    .map(|item| item.key);
+                if index.is_some() && key.is_none() {
+                    return false;
+                }
+                self.select(key);
+                true
+            }
+            ControlValue::Text(text) => {
+                let folded = fold_for_search(text);
+                let key = self
+                    .items
+                    .iter()
+                    .find(|item| fold_for_search(&item.text) == folded)
+                    .map(|item| item.key);
+                if key.is_none() && !self.editable {
+                    return false;
+                }
+                self.select(key);
+                self.text.clone_from(text);
+                self.refilter();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if open {
+            self.open_popup();
+        } else {
+            self.close();
+        }
+        self.reveal.set(self.open, time);
+        self.open == open
+    }
+}
+
+impl CustomControl for FontChooser {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        CustomControl::measure(&mut self.combo, cx)
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        CustomControl::arrange(&mut self.combo, cx, bounds);
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        self.combo.event(cx, event)
+    }
+
+    /// The trigger shows the invalid look while the family is missing.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let host = cx.state.set(VisualState::INVALID, self.is_missing());
+        self.combo.paint(cx, host, "");
+    }
+
+    fn overlay(&self) -> Option<Rect> {
+        self.combo.overlay()
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        self.combo.paint_overlay(cx);
+    }
+
+    fn animating(&self, time: f64) -> bool {
+        self.combo.animating(time)
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        FontChooser::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        self.combo.perform(cx, action, value)
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        CustomControl::set_enabled(&mut self.combo, enabled);
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        CustomControl::set_value(&mut self.combo, value)
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        self.combo.set_open(open, time)
     }
 }

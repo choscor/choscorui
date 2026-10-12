@@ -4,11 +4,21 @@
 //! [`TextEditor::caret_rect`] in its scroll area after each change.
 
 use super::text_field::TextComposition;
-use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, Styles, VisualState};
-use choscorui_core::{
-    DesignTokens, Dirty, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
-    SemanticRole, SemanticState, SemanticText, TextBuffer, TextLayout, TextMotion, Tree, TreeError,
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::form::input::default_width;
+use crate::form::measured::measured_layout;
+use crate::style::{
+    ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
+    VisualState, content_rect,
+};
+use choscorui_core::{
+    DesignTokens, Dirty, EventPhase, EventReply, Key, KeyEvent, Measured, NodeId, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    SemanticText, Size, TextBuffer, TextLayout, TextMotion, Tree, TreeError, TypeSpec,
+};
+use std::cell::RefCell;
 use std::ops::Range;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -75,6 +85,20 @@ pub struct TextEditor {
     dragging: Option<Range<usize>>,
     page_height: f64,
     tab_inserts: bool,
+    host: HostedText,
+}
+
+/// What the editor keeps in a control host, where it lays out its own
+/// text: the text width and type, the content rectangle, the direction,
+/// a held press, and the layout of the last paint.
+#[derive(Default)]
+struct HostedText {
+    width: f64,
+    spec: Option<TypeSpec>,
+    inner: Rect,
+    rtl: bool,
+    pressed: bool,
+    layout: RefCell<Option<TextLayout>>,
 }
 
 impl TextEditor {
@@ -89,6 +113,7 @@ impl TextEditor {
             dragging: None,
             page_height: 400.0,
             tab_inserts: false,
+            host: HostedText::default(),
         }
     }
 
@@ -169,6 +194,17 @@ impl TextEditor {
 
     pub(crate) fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// Replaces the whole value and drops marked text. The same value
+    /// keeps the selection.
+    fn replace_value(&mut self, text: &str) {
+        self.composition = None;
+        if text != self.buffer.as_str() {
+            let count = self.buffer.grapheme_count();
+            let _ = self.buffer.set_selection(0, count);
+            self.buffer.replace_selection(text);
+        }
     }
 
     /// Text to shape: the value with any marked text in place.
@@ -370,14 +406,7 @@ impl TextEditor {
                 }
             }
             TextEditorInput::CancelMarkedText => self.composition = None,
-            TextEditorInput::SetValue(text) => {
-                self.composition = None;
-                if text != self.buffer.as_str() {
-                    let count = self.buffer.grapheme_count();
-                    let _ = self.buffer.set_selection(0, count);
-                    self.buffer.replace_selection(&text);
-                }
-            }
+            TextEditorInput::SetValue(text) => self.replace_value(&text),
             TextEditorInput::Semantic(SemanticAction::SetValue, Some(text)) if editable => {
                 self.composition = None;
                 let count = self.buffer.grapheme_count();
@@ -572,5 +601,248 @@ impl TextEditor {
                 multiline: true,
             }),
         }
+    }
+}
+
+impl TextEditor {
+    fn query(slot: Slot, state: VisualState) -> StyleQuery {
+        StyleQuery::new(ControlKind::TextEditor, slot).state(state)
+    }
+
+    /// The layout of the text in the hosted width, with `measure`.
+    fn hosted_layout(&self, measure: &dyn TextMeasure) -> Option<TextLayout> {
+        let spec = self.host.spec?;
+        Some(measured_layout(
+            &self.layout_text(),
+            &spec,
+            self.host.width.max(1.0),
+            measure,
+        ))
+    }
+
+    /// The layout of the last paint, or an estimate when the text changed
+    /// after it.
+    fn current_layout(&self) -> Option<TextLayout> {
+        let text = self.layout_text();
+        let painted = self.host.layout.borrow().clone();
+        painted
+            .filter(|layout| layout.text() == text)
+            .or_else(|| self.hosted_layout(&EstimatedText))
+    }
+
+    /// `point` in layout coordinates. Right-to-left layouts mirror.
+    fn layout_point(&self, point: Point) -> Point {
+        let inner = self.host.inner;
+        let x = if self.host.rtl {
+            inner.max_x() - point.x
+        } else {
+            point.x - inner.origin.x
+        };
+        Point::new(x, point.y - inner.origin.y)
+    }
+
+    /// Applies `input` in a host and reports an edit.
+    fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
+        let Some(layout) = self.current_layout() else {
+            return;
+        };
+        let node = cx.node();
+        let change = self.handle(cx.tree_mut(), node, &layout, input);
+        if change == Ok(TextEditorChange::Edited) {
+            cx.emit(ControlMessage::Changed(ControlValue::Text(
+                self.value().to_string(),
+            )));
+        }
+    }
+
+    /// The input for a key-down in a host, or `None` for a key that the
+    /// editor leaves to the host, such as Tab for focus traversal.
+    fn key_input(&self, event: KeyEvent, cx: &ControlContext<'_>) -> Option<TextEditorInput> {
+        let KeyEvent::Down { key, .. } = event else {
+            return None;
+        };
+        let modifiers = cx.modifiers();
+        match (key, modifiers.command) {
+            (Key::Character('a'), true) => Some(TextEditorInput::SelectAll),
+            (Key::Character('z'), true) if modifiers.shift => Some(TextEditorInput::Redo),
+            (Key::Character('z'), true) => Some(TextEditorInput::Undo),
+            (Key::Character('x'), true) => Some(TextEditorInput::Cut),
+            (Key::Escape, _) | (_, true) => None,
+            (Key::Tab, _) if !self.tab_inserts => None,
+            _ => Some(TextEditorInput::Key {
+                event,
+                extend: modifiers.shift,
+                word: modifiers.option,
+            }),
+        }
+    }
+}
+
+impl CustomControl for TextEditor {
+    /// Grows with the lines of the text, in the default input width.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let root = cx.style(Self::query(Slot::Root, VisualState::NONE));
+        let spec = cx.style(Self::query(Slot::Text, VisualState::NONE)).text;
+        let width = default_width(cx, &root);
+        self.host.width = (width - root.padding.horizontal()).max(1.0);
+        self.host.spec = Some(spec);
+        let lines = self
+            .hosted_layout(cx.text)
+            .map_or(1, |layout| layout.lines().len().max(1));
+        let height = lines as f64 * spec.line_height + root.padding.vertical();
+        Measured::new(Size::new(width, height.max(root.min_height)))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let root = cx.style(Self::query(Slot::Root, VisualState::NONE));
+        let inner = content_rect(bounds, &root, cx.rtl());
+        self.host.inner = inner;
+        self.host.rtl = cx.rtl();
+        self.host.width = inner.size.width.max(1.0);
+        self.host.spec = Some(cx.style(Self::query(Slot::Text, VisualState::NONE)).text);
+        self.set_page_height(inner.size.height);
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                cx.request_focus();
+                let input = TextEditorInput::PointerDown {
+                    position: self.layout_point(*position),
+                    extend: cx.modifiers().shift,
+                    clicks: 1,
+                };
+                self.apply(cx, input);
+                self.host.pressed = true;
+                cx.capture_pointer(true);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.host.pressed => {
+                let position = self.layout_point(*position);
+                self.apply(cx, TextEditorInput::PointerDrag { position });
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.host.pressed => {
+                self.host.pressed = false;
+                cx.capture_pointer(false);
+                self.apply(cx, TextEditorInput::PointerUp);
+                EventReply::Stop
+            }
+            ControlEvent::Key(key) if cx.is_focused() => match self.key_input(*key, cx) {
+                Some(input) => {
+                    self.apply(cx, input);
+                    EventReply::Stop
+                }
+                None => EventReply::Continue,
+            },
+            ControlEvent::Text(text) if cx.is_focused() => {
+                self.apply(cx, TextEditorInput::Text(text.clone()));
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(_) => {
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints the box, then the selection, the lines, and the caret while
+    /// focused. Right-to-left layouts mirror the lines in the box.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state.set(VisualState::DISABLED, !self.enabled);
+        let root = cx.style(Self::query(Slot::Root, state));
+        let text = cx.style(Self::query(Slot::Text, state));
+        let selection = cx.style(Self::query(Slot::Range, state)).background;
+        let caret = cx.style(Self::query(Slot::Indicator, state));
+        let layout = self.hosted_layout(cx.text);
+        let bounds = cx.bounds;
+        cx.slot(bounds, &root, |cx, inner| {
+            let Some(layout) = &layout else {
+                return;
+            };
+            let rtl = cx.rtl;
+            let place = |rect: Rect| {
+                let rect = rect.translate(inner.origin.x, inner.origin.y);
+                if rtl {
+                    let x = inner.origin.x + inner.max_x() - rect.max_x();
+                    Rect::from_xywh(x, rect.origin.y, rect.size.width, rect.size.height)
+                } else {
+                    rect
+                }
+            };
+            cx.list.push_clip(inner);
+            if state.focused() {
+                for rect in self.selection_rects(layout) {
+                    cx.list.fill_rect(place(rect), selection);
+                }
+            }
+            let source = layout.text();
+            for line in layout.lines() {
+                let top = line.baseline - text.text.baseline();
+                let width = line.width.max(1.0);
+                let rect = place(Rect::from_xywh(
+                    line.offset_x,
+                    top,
+                    width,
+                    text.text.line_height,
+                ));
+                cx.label(rect, &source[line.bytes.clone()], &text, TextAlign::Start);
+            }
+            if state.focused()
+                && let Some(rect) = self.caret_rect(layout)
+            {
+                let mut rect = place(rect);
+                rect.size.width = caret.min_width;
+                cx.list.fill_rect(rect, caret.background);
+            }
+            let _ = cx.list.pop_clip();
+        });
+        *self.host.layout.borrow_mut() = layout;
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        TextEditor::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        match action {
+            SemanticAction::SetValue if self.enabled && !self.read_only => {
+                let text = value.unwrap_or_default().to_string();
+                self.apply(cx, TextEditorInput::SetValue(text));
+                true
+            }
+            SemanticAction::Focus => {
+                cx.request_focus();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.set_enabled_state(enabled);
+        if !enabled {
+            self.host.pressed = false;
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Text(text) = value else {
+            return false;
+        };
+        self.replace_value(text);
+        true
     }
 }
