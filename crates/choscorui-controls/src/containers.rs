@@ -580,6 +580,7 @@ impl Resizable {
             rtl: false,
             active: 0,
             drag: None,
+            handle_nodes: false,
         })
     }
 }
@@ -615,6 +616,9 @@ pub struct HostedResizable {
     active: usize,
     /// The dragged handle and the pointer's offset from its start.
     drag: Option<(usize, f64)>,
+    /// Each handle is its own node, driven through the `handle_*`
+    /// methods; the group node is a plain group.
+    handle_nodes: bool,
 }
 
 impl HostedResizable {
@@ -623,6 +627,26 @@ impl HostedResizable {
     pub fn with_grip(mut self, grip: bool) -> Self {
         self.grip = grip;
         self
+    }
+
+    /// Puts each handle on its own node. The group node then has the
+    /// `Group` role, takes no focus, paints nothing, and ignores input.
+    /// The view layer mounts one node for each handle, places it in its
+    /// handle rectangle, and forwards the node's input, paint, semantics,
+    /// and actions to [`handle_event`](Self::handle_event),
+    /// [`paint_handle`](Self::paint_handle),
+    /// [`handle_semantics`](Self::handle_semantics), and
+    /// [`handle_perform`](Self::handle_perform). Each handle is then its
+    /// own stop in the focus order.
+    #[must_use]
+    pub fn with_handle_nodes(mut self, handle_nodes: bool) -> Self {
+        self.handle_nodes = handle_nodes;
+        self
+    }
+
+    /// The number of handles: one less than the number of panes.
+    pub fn handle_count(&self) -> usize {
+        self.minimums.len() - 1
     }
 
     /// The first pane's width or height, within the pane minimums of the
@@ -812,6 +836,7 @@ impl HostedResizable {
         if target == sizes[index] {
             return;
         }
+        self.active = index;
         self.store(&sizes, index, target);
         cx.request_layout();
         cx.request_paint();
@@ -834,24 +859,47 @@ impl HostedResizable {
         cx: &mut crate::ControlContext<'_>,
         event: PointerEvent,
     ) -> choscorui_core::EventReply {
-        use choscorui_core::EventReply;
         let bounds = cx.bounds();
         match event {
             PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
-            } => {
-                let Some(index) = self.handle_at(bounds, position) else {
-                    return EventReply::Continue;
-                };
-                let start = self.pane_start(&self.layout(), index + 1) - self.handle_extent;
-                self.active = index;
-                self.drag = Some((index, self.along(bounds, position) - start));
-                cx.capture_pointer(true);
-                cx.request_paint();
-                cx.request_semantics();
-                EventReply::Stop
-            }
+            } => match self.handle_at(bounds, position) {
+                Some(index) => self.press(cx, bounds, index, position),
+                None => choscorui_core::EventReply::Continue,
+            },
+            event => self.drag_event(cx, bounds, event),
+        }
+    }
+
+    /// Starts a drag of handle `index` from a press at `position`, in the
+    /// group `bounds`, and makes the handle active.
+    fn press(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        bounds: Rect,
+        index: usize,
+        position: Point,
+    ) -> choscorui_core::EventReply {
+        let start = self.pane_start(&self.layout(), index + 1) - self.handle_extent;
+        self.active = index;
+        self.drag = Some((index, self.along(bounds, position) - start));
+        cx.capture_pointer(true);
+        cx.request_paint();
+        cx.request_semantics();
+        choscorui_core::EventReply::Stop
+    }
+
+    /// Moves the dragged handle, or ends the drag on a primary release,
+    /// in the group `bounds`.
+    fn drag_event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        bounds: Rect,
+        event: PointerEvent,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
+        match event {
             PointerEvent::Move { position } => {
                 let Some((index, offset)) = self.drag else {
                     return EventReply::Continue;
@@ -891,12 +939,23 @@ impl HostedResizable {
             }
             _ => {}
         }
+        self.step_key(cx, self.active, key)
+    }
+
+    /// Moves handle `index` for an arrow key along the split, Home, or
+    /// End. Other keys continue.
+    fn step_key(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        index: usize,
+        key: Key,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
         let (back, forward) = match (self.orientation, self.rtl) {
             (SplitOrientation::Horizontal, false) => (Key::ArrowLeft, Key::ArrowRight),
             (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
             (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
         };
-        let index = self.active;
         let current = self.layout()[index];
         let target = match key {
             Key::Home => self.minimums[index],
@@ -907,6 +966,116 @@ impl HostedResizable {
         };
         self.move_to(cx, index, target);
         EventReply::Stop
+    }
+}
+
+/// The handle nodes of a group made with
+/// [`with_handle_nodes`](HostedResizable::with_handle_nodes). Each method
+/// takes the handle's index, from 0, and does nothing for an index past
+/// the last handle or for a group without handle nodes.
+impl HostedResizable {
+    /// Handles an event on the node of handle `index`. A primary press
+    /// starts a drag of the handle, a move resizes its two panes, and a
+    /// release ends the drag. The arrow keys along the split, Home, and
+    /// End move the handle. Focus makes it the active handle. The drag
+    /// uses the group bounds of the last arrange.
+    pub fn handle_event(
+        &mut self,
+        index: usize,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
+        if !self.handle_nodes || index >= self.handle_count() {
+            return EventReply::Continue;
+        }
+        if let crate::ControlEvent::FocusChanged(true) = event {
+            self.active = index;
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Continue;
+        }
+        let Some(bounds) = self.bounds else {
+            return EventReply::Continue;
+        };
+        let dragged = self.drag.is_some_and(|(dragged, _)| dragged == index);
+        match crate::hosted::route(cx, event) {
+            Some(crate::hosted::Routed::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            })) => self.press(cx, bounds, index, position),
+            Some(crate::hosted::Routed::Pointer(event)) if dragged => {
+                self.drag_event(cx, bounds, event)
+            }
+            Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) => {
+                self.step_key(cx, index, key)
+            }
+            Some(crate::hosted::Routed::Cancel) if dragged => {
+                self.end_drag(cx);
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints handle `index` in `cx.bounds`, the bounds of its node: the
+    /// divider and the grip, with the node's focus state, pressed while
+    /// the handle is dragged.
+    pub fn paint_handle(&self, index: usize, cx: &mut PaintContext<'_>) {
+        if !self.handle_nodes || index >= self.handle_count() {
+            return;
+        }
+        let state = cx.state.set(
+            VisualState::PRESSED,
+            self.drag.is_some_and(|(dragged, _)| dragged == index),
+        );
+        let bounds = cx.bounds;
+        paint_divider(cx, bounds, self.orientation, self.grip, state);
+    }
+
+    /// The semantics of handle `index`: a `Slider` with the group label,
+    /// the size of the pane before the handle as the value, and the range
+    /// of that size as the description, for example `50–150`.
+    pub fn handle_semantics(&self, index: usize) -> SemanticNode {
+        let mut node = crate::hosted::node(
+            SemanticRole::Slider,
+            &self.label,
+            vec![
+                SemanticAction::Increment,
+                SemanticAction::Decrement,
+                SemanticAction::Focus,
+            ],
+        );
+        if index < self.handle_count() {
+            let sizes = self.layout();
+            node.value = Some(format_number(sizes[index]));
+            let (minimum, maximum) = self.range(&sizes, index);
+            if maximum.is_finite() {
+                node.description = format!("{}–{}", format_number(minimum), format_number(maximum));
+            }
+        }
+        node
+    }
+
+    /// Performs `Increment`, `Decrement`, or `Focus` on handle `index`.
+    /// Returns false for other actions.
+    pub fn handle_perform(
+        &mut self,
+        index: usize,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+    ) -> bool {
+        if !self.handle_nodes || index >= self.handle_count() {
+            return false;
+        }
+        let current = self.layout()[index];
+        match action {
+            SemanticAction::Increment => self.move_to(cx, index, current + self.step),
+            SemanticAction::Decrement => self.move_to(cx, index, current - self.step),
+            SemanticAction::Focus => cx.request_focus(),
+            _ => return false,
+        }
+        true
     }
 }
 
@@ -943,6 +1112,9 @@ impl crate::CustomControl for HostedResizable {
         event: &crate::ControlEvent,
     ) -> choscorui_core::EventReply {
         use choscorui_core::EventReply;
+        if self.handle_nodes {
+            return EventReply::Continue;
+        }
         if let crate::ControlEvent::FocusChanged(true) = event {
             // Shift+Tab arrives at the last handle, and Tab at the first.
             if self.drag.is_none() {
@@ -969,6 +1141,9 @@ impl crate::CustomControl for HostedResizable {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
+        if self.handle_nodes {
+            return;
+        }
         let (_, handles) = self.rects();
         let host = cx.state;
         for (index, handle) in handles.into_iter().enumerate() {
@@ -986,6 +1161,9 @@ impl crate::CustomControl for HostedResizable {
     }
 
     fn semantics(&self) -> SemanticNode {
+        if self.handle_nodes {
+            return crate::hosted::node(SemanticRole::Group, &self.label, Vec::new());
+        }
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
             &self.label,
@@ -999,12 +1177,19 @@ impl crate::CustomControl for HostedResizable {
         node
     }
 
+    fn focusable(&self) -> bool {
+        !self.handle_nodes
+    }
+
     fn perform(
         &mut self,
         cx: &mut crate::ControlContext<'_>,
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
+        if self.handle_nodes {
+            return false;
+        }
         let index = self.active;
         let current = self.layout()[index];
         match action {

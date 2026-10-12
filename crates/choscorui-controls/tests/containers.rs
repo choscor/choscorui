@@ -574,6 +574,44 @@ fn a_panel_group_names_the_moved_handle_and_takes_all_sizes() {
     assert_eq!(h.semantics().value.as_deref(), Some("140"));
 }
 
+#[test]
+fn a_panel_group_with_handle_nodes_leaves_the_handles_to_them() {
+    let group = || {
+        Resizable::hosted_group(
+            "Panels",
+            SplitOrientation::Horizontal,
+            vec![50.0, 50.0, 50.0],
+            4.0,
+            vec![100.0, 100.0],
+        )
+        .unwrap()
+        .with_handle_nodes(true)
+    };
+    // The group node is a plain group: no focus, no actions, no input.
+    let mut h = Harness::new(group());
+    h.place(rect(0.0, 0.0, 400.0, 100.0));
+    h.focus();
+    h.key(Key::ArrowRight);
+    drag(&mut h, Point::new(206.0, 50.0), &[Point::new(256.0, 50.0)]);
+    assert_eq!(h.messages(), changes(&[]));
+    let semantics = h.semantics();
+    assert_eq!(semantics.role, SemanticRole::Group);
+    assert!(semantics.actions.is_empty());
+    assert_eq!(semantics.value, None);
+
+    let mut control = group();
+    assert!(!control.focusable());
+    assert_eq!(control.handle_count(), 2);
+    arrange(&mut control, rect(0.0, 0.0, 400.0, 100.0));
+    // Each handle gives the pane before it and that pane's range.
+    let first = control.handle_semantics(0);
+    assert_eq!(first.role, SemanticRole::Slider);
+    assert_eq!(first.value.as_deref(), Some("100"));
+    assert_eq!(first.description, "50–150");
+    assert_eq!(control.handle_semantics(1).description, "50–242");
+    assert_eq!(control.handle_semantics(2).value, None);
+}
+
 /// Arranges `control` in `bounds` as a host would.
 fn arrange(control: &mut HostedResizable, bounds: Rect) {
     let (tokens, styles) = (DesignTokens::light(), Styles::new());

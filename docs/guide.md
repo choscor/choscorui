@@ -280,7 +280,7 @@ impl View for Profile {
 - `.minimums(values)` gives the smallest size of each pane. `.grip(true)` shows a grip on each handle.
 - The group takes the space that it gets. A horizontal group mirrors in a right-to-left locale.
 
-The group is one control. The arrow keys move the active handle, and Tab goes to the next handle. [Resizable](controls.md#resizable) gives the keys and the semantics.
+A group of two panes is one slider control. The arrow keys move its handle. In a group of three or more panes, each handle is a slider node of its own. Tab goes to each handle before the panes, and the arrow keys move the focused handle. Each handle gives the size of the pane before it and the range of that size. [Resizable](controls.md#resizable) gives the keys and the semantics.
 
 ```rust
 use choscorui::prelude::*;

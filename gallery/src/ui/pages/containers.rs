@@ -296,14 +296,23 @@ mod tests {
     #[test]
     fn panel_group_handles_move_and_resize_their_panes() {
         let mut page = Harness::new("resizable");
-        assert_eq!(page.value("Workspace").as_deref(), Some("175"));
+        // The three-pane group is a group with a slider node for each
+        // handle, before the panes.
+        let group = page.node("Workspace");
+        let handles = page.host.tree().children(group).unwrap()[..2].to_vec();
+        let value = |page: &mut Harness, node| page.host.semantic(node).and_then(|node| node.value);
+        assert_eq!(value(&mut page, handles[0]).as_deref(), Some("175"));
         let width = |page: &mut Harness, name: &str| {
             let node = page.node(name);
             page.host.tree().bounds(node).unwrap().size.width
         };
         let (sidebar, inspector) = (width(&mut page, "Sidebar"), width(&mut page, "Inspector"));
-        assert!(page.act("Workspace", SemanticAction::Increment));
-        assert_eq!(page.value("Workspace").as_deref(), Some("185"));
+        assert!(
+            page.host
+                .perform(handles[0], SemanticAction::Increment, None)
+        );
+        page.host.layout();
+        assert_eq!(value(&mut page, handles[0]).as_deref(), Some("185"));
         assert_eq!(width(&mut page, "Sidebar"), sidebar + 10.0);
         assert_eq!(
             width(&mut page, "Inspector"),
@@ -312,8 +321,9 @@ mod tests {
         );
 
         // Tab goes to the second handle, which moves the inspector.
-        assert!(page.act("Workspace", SemanticAction::Focus));
+        assert!(page.host.perform(handles[0], SemanticAction::Focus, None));
         assert!(press(&mut page, Key::Tab));
+        assert_eq!(page.host.tree().focus(), Some(handles[1]));
         assert!(press(&mut page, Key::ArrowLeft));
         assert_eq!(width(&mut page, "Inspector"), inspector + 10.0);
 

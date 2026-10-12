@@ -1239,6 +1239,22 @@ mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
 - **All sizes.** `set_sizes` takes the sizes of all panes but the last.
   It fails for a wrong count, or for a size that is not finite or is
   below its pane minimum. The layout keeps the sizes in the bounds.
+- **Handle nodes.** `with_handle_nodes(true)` puts each handle on its
+  own node. The group node then has the `Group` role and no value or
+  actions. It takes no focus, paints nothing, and ignores input. The view
+  layer mounts a node for each handle. That node sends its events to
+  `handle_event` and its paint to `paint_handle`. It sends its semantics
+  to `handle_semantics` and its actions to `handle_perform`. Each method
+  takes the handle index. `handle_count` gives the number of handles.
+- **Handle node input.** A press on a handle node starts a drag of that
+  handle in the group bounds of the last arrange. The arrow keys, Home,
+  and End move the handle. Focus or a press makes it the active handle.
+  Tab goes to the next focus stop, so each handle is a stop of its own.
+- **Handle node look.** `paint_handle` draws the divider and the grip in
+  the bounds of the handle node, with the focus state of that node.
+- **Handle node semantics.** Each handle node is a `Slider` with the group
+  label. The value is the size of the pane before the handle. The
+  description gives the range of that size, for example `50–150`.
 - **Pane geometry.** `rects_in` gives the pane and handle rectangles in
   other bounds, before the control arranges. `minimum_extent` gives the
   pane minimums and the handles together. The `Resizable` view uses them
