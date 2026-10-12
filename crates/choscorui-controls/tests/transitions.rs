@@ -1,5 +1,6 @@
-//! State transitions: colors, rings, and shadows ease between two resolved
-//! styles over the motion duration, and the Switch thumb slides.
+//! State transitions: colors, rings, shadows, opacity, and the vertical
+//! offset ease between two resolved styles over the motion duration, and
+//! the Switch thumb slides.
 
 mod hosted;
 
@@ -9,7 +10,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, GradientStop, LayoutDirection,
-    Paint, Point, RecipeSet, ThemeResolver,
+    Paint, Point, PointerButton, PointerEvent, RecipeSet, ThemeResolver,
 };
 use hosted::{Harness, rounded_fills};
 use std::rc::Rc;
@@ -254,4 +255,112 @@ fn the_switch_thumb_slides_over_the_duration() {
     assert!(end > start, "a checked thumb rests at the end");
     assert!(middle > start && middle < end, "{start} < {middle} < {end}");
     assert!(!h.host.animating(&h.tree, FULL + 0.01));
+}
+
+/// The opacity of the first opacity layer, or 1 when the paint has none.
+fn opacity(list: &DisplayList) -> f64 {
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::PushOpacity(opacity) => Some(*opacity),
+            _ => None,
+        })
+        .unwrap_or(1.0)
+}
+
+/// The top edge of the first rounded fill: the button's background.
+fn background_top(list: &DisplayList) -> f64 {
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::FillRoundedRect { rect, .. } => Some(rect.min_y()),
+            _ => None,
+        })
+        .expect("the button fills its background")
+}
+
+#[test]
+fn opacity_fades_on_disable_and_enable_of_a_hot_node() {
+    let mut h = hovered();
+    h.paint();
+    h.set_time(FULL);
+    h.paint();
+    assert_eq!(opacity(&h.paint()), 1.0);
+
+    h.set_enabled(false);
+    assert_eq!(opacity(&h.paint()), 1.0, "the fade starts at full opacity");
+    h.set_time(FULL + HALF);
+    let middle = opacity(&h.paint());
+    assert!(middle > 0.5 && middle < 1.0, "{middle} is mid-fade");
+    h.set_time(2.0 * FULL);
+    assert_eq!(opacity(&h.paint()), 0.5);
+
+    h.set_enabled(true);
+    assert_eq!(opacity(&h.paint()), 0.5, "the fade back starts at half");
+    h.set_time(2.0 * FULL + HALF);
+    let middle = opacity(&h.paint());
+    assert!(middle > 0.5 && middle < 1.0, "{middle} is mid-fade");
+    h.set_time(3.0 * FULL);
+    assert_eq!(opacity(&h.paint()), 1.0);
+    assert_eq!(h.host.transition_stats().running, 0);
+}
+
+#[test]
+fn a_cold_node_shows_the_disabled_opacity_at_once() {
+    let mut h = Harness::new(button());
+    h.paint();
+    h.set_enabled(false);
+    assert_eq!(opacity(&h.paint()), 0.5);
+    assert_eq!(h.host.transition_stats().nodes, 0);
+}
+
+#[test]
+fn reduced_motion_shows_the_disabled_opacity_at_once() {
+    let mut tokens = DesignTokens::light();
+    tokens.motion.reduced = true;
+    let mut h = Harness::mount(
+        Box::new(button()),
+        ThemeResolver::new(tokens),
+        Styles::new(),
+        LayoutDirection::Ltr,
+    );
+    let center = h.bounds().center();
+    h.hover(center);
+    h.paint();
+    h.set_enabled(false);
+    assert_eq!(opacity(&h.paint()), 0.5);
+    assert_eq!(h.host.transition_stats().running, 0);
+}
+
+#[test]
+fn the_press_offset_eases_over_the_duration() {
+    let mut h = hovered();
+    h.paint();
+    h.set_time(FULL);
+    let rest = background_top(&h.paint());
+    let center = h.bounds().center();
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Down {
+            position: center,
+            button: PointerButton::Primary,
+        },
+    );
+    assert_eq!(
+        background_top(&h.paint()),
+        rest,
+        "the offset starts at rest"
+    );
+    h.set_time(FULL + HALF);
+    let middle = background_top(&h.paint());
+    h.set_time(2.0 * FULL);
+    let pressed = background_top(&h.paint());
+    assert!(
+        (pressed - rest - 1.0).abs() < 1e-9,
+        "a press moves down 1 pt"
+    );
+    assert!(
+        middle > rest && middle < pressed,
+        "{rest} < {middle} < {pressed}"
+    );
 }

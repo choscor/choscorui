@@ -1,6 +1,6 @@
 //! State transitions: when the visual state of a node changes, the colors,
-//! ring, and shadows of each slot ease from the old resolved style to the
-//! new one over the slot's `motion_ms`. Recipes stay pure; this module
+//! ring, shadows, opacity, and vertical offset of each slot ease from the
+//! old resolved style to the new one over the slot's `motion_ms`. Recipes stay pure; this module
 //! blends two resolved styles.
 //!
 //! The store keeps a record only for a node that the pointer or focus is
@@ -317,9 +317,12 @@ fn blended_eq(a: &ResolvedStyle, b: &ResolvedStyle) -> bool {
         && a.border == b.border
         && a.ring == b.ring
         && a.shadow == b.shadow
+        && a.opacity == b.opacity
+        && a.offset_y == b.offset_y
 }
 
-/// `to` with its colors, ring, and shadows `t` of the way from `from`.
+/// `to` with its colors, ring, shadows, opacity, and vertical offset `t`
+/// of the way from `from`.
 fn blend(from: &ResolvedStyle, to: &ResolvedStyle, t: f64) -> ResolvedStyle {
     ResolvedStyle {
         background: blend_paint(&from.background, &to.background, t),
@@ -327,6 +330,8 @@ fn blend(from: &ResolvedStyle, to: &ResolvedStyle, t: f64) -> ResolvedStyle {
         border: mix(from.border, to.border, t),
         ring: blend_ring(from.ring, to.ring, t),
         shadow: blend_shadows(&from.shadow, &to.shadow, t),
+        opacity: from.opacity + (to.opacity - from.opacity) * t,
+        offset_y: from.offset_y + (to.offset_y - from.offset_y) * t,
         ..to.clone()
     }
 }

@@ -300,14 +300,27 @@ shadows, the ring, and the blur follow the radius of each corner. `draw_text` an
 
 ## State transitions
 
-When the visual state of a control changes, its colors ease. A
-`ControlHost` blends two resolved styles; the recipes stay pure.
+When the visual state of a control changes, its colors, opacity, and
+offset ease. A `ControlHost` blends two resolved styles; the recipes stay
+pure.
 
-- **Values.** The background, foreground, border, ring color and width, and
-  shadows blend. Colors mix with premultiplied alpha. A ring that appears
-  grows from zero width. A solid background blends into a solid background.
-  A change from or to a gradient shows the new background at once. The other values, such as the offset and the
-  padding, change at once.
+- **Values that blend.** These `ResolvedStyle` values blend:
+
+  | Value | Reference basis |
+  | --- | --- |
+  | `background`, `foreground`, `border` | `transition-[color,box-shadow]` |
+  | `ring` color and width, `shadow` | `transition-[color,box-shadow]` |
+  | `opacity` | `transition-opacity` and `transition-all` with `disabled:opacity-50` |
+  | `offset_y` | `transition-all` with the pressed `translate-y-px` |
+
+  Colors mix with premultiplied alpha. A ring that appears grows from zero
+  width. A solid background blends into a solid background. A change from
+  or to a gradient shows the new background at once.
+- **Values that change at once.** The border width and sides, the radius,
+  the padding, the sizes, and the gap change at once. The text, the
+  underline, the icon size, the cursor, the backdrop blur, and `motion_ms`
+  also change at once. The reference state changes do not animate them, or
+  they change the layout.
 - **Timing.** A blend lasts the target style's `motion_ms`, by default the
   `motion.duration_ms` token of 150 ms. It follows the `motion.easing`
   curve and starts at the first paint after the change.
@@ -324,8 +337,9 @@ When the visual state of a control changes, its colors ease. A
   `ControlHost::transition_stats` gives the counts.
 - **Scope.** A hover or focus change on any node eases. A change from the
   control, such as press or checked, eases on a node under the pointer or
-  with focus. Other changes, such as `set_value` from the application,
-  show at once. Overlays do not blend.
+  with focus. `ControlHost::set_enabled` fades the opacity of a hot node.
+  On another node, the disabled look shows at once. Other changes, such as
+  `set_value` from the application, show at once. Overlays do not blend.
 
 A control slot is a call of `PaintContext::style` with a kind and a slot.
 The host matches the calls of one node by their order in each paint.

@@ -481,8 +481,8 @@ impl<'a> PaintContext<'a> {
     }
 
     /// The resolved style of `query`, from the cache. While the host eases
-    /// a state change of the node, the colors, ring, and shadows are part
-    /// of the way from the earlier style.
+    /// a state change of the node, the colors, ring, shadows, opacity, and
+    /// offset are part of the way from the earlier style.
     pub fn style(&self, query: StyleQuery) -> ResolvedStyle {
         let target = self.styles.resolve_keyed(self.key, self.tokens, query);
         match self.transitions {
