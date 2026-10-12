@@ -26,14 +26,14 @@ Install these tools:
 - Rust stable with `rustfmt` and `clippy`
 - Rust 1.88 for the minimum version check: `rustup toolchain install 1.88`
 
-Run the fast checks from the CI `check` job:
+Run the fast checks from the CI `check` job. CI supports only macOS, so it leaves out the Windows and Linux backend crates:
 
 ```sh
 scripts/check-docs.sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo +1.88 check --workspace --all-targets --locked
-cargo test --workspace --locked
+cargo clippy --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked -- -D warnings
+cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
+cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
 ```
 
 For backend or UI changes, also run the native checks from the CI `native` job.

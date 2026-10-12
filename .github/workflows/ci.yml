@@ -31,11 +31,11 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
       - name: Lint
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked -- -D warnings
       - name: Minimum supported Rust version
-        run: cargo +1.88 check --workspace --all-targets --locked
+        run: cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
       - name: Tests
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
 
   native:
     name: native macOS app (${{ matrix.os }})
