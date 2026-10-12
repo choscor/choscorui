@@ -4,6 +4,7 @@
 use super::hosting::{Handle, SharedModel};
 use super::{fill, first_selected, item_view, rows};
 use crate::ui::page::PageCx;
+use choscorui::compose::t;
 use choscorui::compose::view::{
     Alignment, AnyView, Button, Configured, Cx, Dynamic, Either, Env, Frame, HStack,
     HorizontalAlignment, Spacer, State, Text, VStack, VerticalAlignment, View, ViewExt,
@@ -25,6 +26,9 @@ pub struct Product {
     pub quantity: i64,
     pub price: f64,
     pub in_stock: bool,
+    /// What the in-stock column shows when `in_stock` is true, and when
+    /// it is false.
+    pub stock_text: Rc<[String; 2]>,
 }
 
 impl ItemData for Product {
@@ -38,7 +42,7 @@ impl ItemData for Product {
             1 if matches!(role, Role::Edit | Role::Sort) => Value::Int(self.quantity),
             2 if display => Value::Text(format!("{:.2}", self.price)),
             2 if matches!(role, Role::Edit | Role::Sort) => Value::Float(self.price),
-            3 if display => Value::Text(if self.in_stock { "Yes" } else { "No" }.into()),
+            3 if display => Value::Text(self.stock_text[usize::from(!self.in_stock)].clone()),
             3 if matches!(role, Role::Edit | Role::Sort) => Value::Bool(self.in_stock),
             _ => Value::None,
         }
@@ -61,7 +65,18 @@ impl ItemData for Product {
     }
 }
 
-const COLUMNS: [&str; 4] = ["Name", "Quantity", "Price", "In stock"];
+/// The catalog keys of the column titles.
+const COLUMNS: [&str; 4] = [
+    "header-view.name",
+    "header-view.quantity",
+    "header-view.price",
+    "header-view.in_stock",
+];
+
+/// The title of column `column` in `env`.
+fn column_title(env: &Env, column: usize) -> String {
+    env.text(COLUMNS[column], &[])
+}
 
 const PRODUCT_NAMES: [&str; 12] = [
     "Cà phê sữa đá",
@@ -78,9 +93,13 @@ const PRODUCT_NAMES: [&str; 12] = [
     "Hủ tiếu",
 ];
 
-fn products(count: usize) -> TreeStore<Product> {
+fn products(env: &Env, count: usize) -> TreeStore<Product> {
     let mut store = TreeStore::new(4);
-    store.set_headers(COLUMNS);
+    store.set_headers((0..COLUMNS.len()).map(|column| column_title(env, column)));
+    let stock_text = Rc::new([
+        env.text("header-view.yes", &[]),
+        env.text("header-view.no", &[]),
+    ]);
     let rows = (0..count).map(|i| Product {
         name: if i < PRODUCT_NAMES.len() {
             PRODUCT_NAMES[i].to_owned()
@@ -94,18 +113,18 @@ fn products(count: usize) -> TreeStore<Product> {
         quantity: ((i * 7) % 50) as i64,
         price: 1.5 + (i * 13 % 40) as f64 * 0.75,
         in_stock: i % 4 != 3,
+        stock_text: stock_text.clone(),
     });
     store.insert(None, 0, rows).expect("root insert is valid");
     store
 }
 
-fn product_header() -> Rc<RefCell<HeaderView>> {
+fn product_header(env: &Env) -> Rc<RefCell<HeaderView>> {
     Rc::new(RefCell::new(HeaderView::new(
-        COLUMNS
-            .iter()
+        (0..COLUMNS.len())
             .zip([200.0, 100.0, 100.0, 90.0])
-            .map(|(title, width)| HeaderColumn {
-                title: (*title).to_owned(),
+            .map(|(column, width)| HeaderColumn {
+                title: column_title(env, column),
                 width,
                 min_width: 50.0,
             })
@@ -138,8 +157,8 @@ struct HeaderViewPage;
 
 impl View for HeaderViewPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let model = SharedModel::proxied(products(60));
-        let header = product_header();
+        let model = SharedModel::proxied(products(cx.env(), 60));
+        let header = product_header(cx.env());
         let widths = cx.state(header.borrow().widths());
         let revision = cx.state(0_u64);
         let selected = cx.state(Vec::new());
@@ -150,9 +169,9 @@ impl View for HeaderViewPage {
             revision.update(|revision| *revision += 1);
         });
         let (shown, named) = (model.clone(), model.clone());
-        let list = rows(ControlKind::Table, &model, revision, selected, move |_| {
+        let list = rows(ControlKind::Table, &model, revision, selected, move |env| {
             let mut view = item_view(
-                "Products",
+                &env.text("header-view.products", &[]),
                 SemanticRole::Table,
                 &shown,
                 TextItemDelegate::table(),
@@ -181,8 +200,8 @@ struct CellEditPage;
 
 impl View for CellEditPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let model = SharedModel::new(products(30));
-        let header = product_header();
+        let model = SharedModel::new(products(cx.env(), 30));
+        let header = product_header(cx.env());
         let widths = cx.state(header.borrow().widths());
         // Edits change cells, never rows, so the view never builds again
         // for them.
@@ -217,7 +236,7 @@ impl View for CellEditPage {
         let (shown, named) = (model.clone(), model.clone());
         let table = rows(ControlKind::Table, &model, revision, selected, move |env| {
             let mut view = item_view(
-                "Editable products",
+                &env.text("cell-edit.products", &[]),
                 SemanticRole::Table,
                 &shown,
                 TextItemDelegate::table(),
@@ -248,9 +267,18 @@ impl View for CellEditPage {
             }
             _ => {}
         })
-        .accessibility_value(move || match edit.get() {
-            Some(edit) => format!("Editing {}: {}", COLUMNS[edit.column], edit.text),
-            None => first_selected(&named, &selected.get()),
+        .accessibility_value({
+            let env = cx.env().clone();
+            move || match edit.get() {
+                Some(edit) => env.text(
+                    "cell-edit.editing_value",
+                    &[
+                        ("column", &column_title(&env, edit.column)),
+                        ("text", &edit.text),
+                    ],
+                ),
+                None => first_selected(&named, &selected.get()),
+            }
         });
         let editing = cx.memo(move || edit.get().is_some());
         let validation = cx.memo(move || match error.get() {
@@ -259,6 +287,7 @@ impl View for CellEditPage {
                 .get()
                 .map_or(ValidationState::Valid, |edit| edit.validation()),
         });
+        let hint_env = cx.env().clone();
         let editor = Editor {
             model,
             edit,
@@ -274,12 +303,11 @@ impl View for CellEditPage {
                 if editing.get() {
                     Either::Left(editor.clone().field())
                 } else {
+                    let env = hint_env.clone();
                     Either::Right(
                         Text::new(move || {
-                            format!(
-                                "Editing column “{}” · Return edits, Left/Right change column",
-                                COLUMNS[column.get()]
-                            )
+                            let title = column_title(&env, column.get());
+                            env.text("cell-edit.hint", &[("column", &title)])
                         })
                         .text_style(TextPreset::Small)
                         .foreground(ColorRole::MutedForeground),
@@ -338,7 +366,6 @@ impl Editor {
             .ok()
             .flatten()
             .map_or(0, |edit| edit.column);
-        let name = format!("Editing {}", COLUMNS[column]);
         let (built, cancel, shown, typed, committed, message) = (
             self.clone(),
             self.clone(),
@@ -348,8 +375,10 @@ impl Editor {
             self.clone(),
         );
         let cancel: Rc<dyn Fn(Key)> = Rc::new(move |_| cancel.close());
-        let field = Configured::custom(ControlKind::Input, move |_| {
-            let mut input = controls::Input::new(name.clone(), "");
+        let field = Configured::custom(ControlKind::Input, move |env| {
+            let title = column_title(env, column);
+            let name = env.text("cell-edit.editing", &[("column", &title)]);
+            let mut input = controls::Input::new(name, "");
             input.set_validation(built.validation());
             Handle::keyed(input, &[Key::Escape], cancel.clone())
         })
@@ -395,7 +424,8 @@ pub fn cell_edit(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Data mapper
 
-const MAPPED: [(usize, &str); 3] = [(0, "Name"), (1, "Quantity"), (2, "Price")];
+/// The mapped columns.
+const MAPPED: [usize; 3] = [0, 1, 2];
 
 /// Parses the text of mapped column `column` in `env`'s locale.
 fn parse_mapped(env: &Env, column: usize, text: &str) -> Result<Value, String> {
@@ -404,12 +434,12 @@ fn parse_mapped(env: &Env, column: usize, text: &str) -> Result<Value, String> {
         1 => locale
             .parse_integer(text.trim())
             .map(Value::Int)
-            .map_err(|_| "Enter a whole number".into()),
+            .map_err(|_| env.text("data-mapper.whole_number", &[])),
         2 => locale
             .parse_decimal(text.trim())
             .map(Value::Float)
-            .map_err(|_| "Enter a price".into()),
-        _ if text.trim().is_empty() => Err("A name is required".into()),
+            .map_err(|_| env.text("data-mapper.price", &[])),
+        _ if text.trim().is_empty() => Err(env.text("data-mapper.name_required", &[])),
         _ => Ok(Value::Text(text.to_owned())),
     }
 }
@@ -484,7 +514,7 @@ impl Form {
     }
 
     /// The caption, field, and message of mapped column `column`.
-    fn field(self, column: usize, label: &'static str) -> impl View {
+    fn field(self, column: usize) -> impl View {
         let (titled, built, shown, edited, submitted, checked) = (
             self.clone(),
             self.clone(),
@@ -495,16 +525,17 @@ impl Form {
         );
         VStack::new((
             Text::new(move || {
+                let label = column_title(&titled.env, column);
                 if titled.pending() {
-                    format!("{label} · unsaved changes")
+                    titled.env.text("data-mapper.unsaved", &[("label", &label)])
                 } else {
-                    label.to_owned()
+                    label
                 }
             })
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground),
-            Configured::custom(ControlKind::Input, move |_| {
-                let mut input = controls::Input::new(label, "");
+            Configured::custom(ControlKind::Input, move |env| {
+                let mut input = controls::Input::new(column_title(env, column), "");
                 if let Some(message) = built.error(column) {
                     input.set_validation(ValidationState::Invalid(message));
                 }
@@ -531,8 +562,8 @@ struct DataMapperPage;
 
 impl View for DataMapperPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let model = SharedModel::new(products(20));
-        let mut mapper = DataMapper::new(MAPPED.iter().map(|(column, _)| *column).collect());
+        let model = SharedModel::new(products(cx.env(), 20));
+        let mut mapper = DataMapper::new(MAPPED.to_vec());
         mapper.set_current(model.model.borrow().key(None, 0));
         let form = Form {
             model: model.clone(),
@@ -552,9 +583,9 @@ impl View for DataMapperPage {
             &model,
             revision,
             selected,
-            move |_| {
+            move |env| {
                 Handle::new(item_view(
-                    "Products",
+                    &env.text("header-view.products", &[]),
                     SemanticRole::List,
                     &shown,
                     TextItemDelegate::default(),
@@ -575,10 +606,10 @@ impl View for DataMapperPage {
                     .alignment(Alignment::FILL),
             ),
             VStack::new((
-                form.clone().field(MAPPED[0].0, MAPPED[0].1),
-                form.clone().field(MAPPED[1].0, MAPPED[1].1),
-                form.clone().field(MAPPED[2].0, MAPPED[2].1),
-                Button::new("Submit", move || submitted.submit()),
+                form.clone().field(MAPPED[0]),
+                form.clone().field(MAPPED[1]),
+                form.clone().field(MAPPED[2]),
+                Button::new(t!("data-mapper.submit"), move || submitted.submit()),
             ))
             .alignment(HorizontalAlignment::Leading)
             .spacing(Space::S4),

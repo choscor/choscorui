@@ -2,9 +2,10 @@
 //! chooser.
 
 use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Canvas, Configured, Cx, Dynamic, Frame, HorizontalAlignment, Text, VStack,
-    View, ViewExt,
+    Alignment, AnyView, Canvas, Configured, Cx, Dynamic, Frame, HorizontalAlignment, IntoLive,
+    Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, ComboItem, CompletionMode, ControlKind, ControlMessage, ControlValue, FontChooser,
@@ -14,7 +15,7 @@ use choscorui::core::{ColorRole, Point, RadiusScale, Space, TextPreset};
 
 /// A small muted caption. It repeats the name of the control below it, so
 /// assistive technology skips it and reads the control.
-fn hidden_caption(text: impl Fn() -> String + 'static) -> impl View {
+fn hidden_caption<M>(text: impl IntoLive<TextContent, M>) -> impl View {
     Text::new(text)
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
@@ -29,7 +30,7 @@ fn captioned(caption: impl View, control: impl View) -> impl View {
 }
 
 /// A radio group whose first option is selected, with the option at
-/// `disabled` unavailable.
+/// `disabled` unavailable. The name and options are catalog keys.
 fn radios(
     cx: &mut Cx<'_>,
     name: &'static str,
@@ -37,8 +38,9 @@ fn radios(
     disabled: Option<usize>,
 ) -> impl View {
     let selected = cx.state(0usize);
-    let group = Configured::try_custom(ControlKind::RadioGroup, move |_| {
-        let group = controls::RadioGroup::hosted(name, options, 0)?;
+    let group = Configured::try_custom(ControlKind::RadioGroup, move |env| {
+        let options = options.map(|option| env.text(option, &[]));
+        let group = controls::RadioGroup::hosted(env.text(name, &[]), options, 0)?;
         match disabled {
             Some(index) => group.with_disabled(index),
             None => Ok(group),
@@ -50,7 +52,7 @@ fn radios(
             selected.set(*index);
         }
     });
-    captioned(hidden_caption(move || name.to_owned()), group)
+    captioned(hidden_caption(t!(name)), group)
 }
 
 /// Two radio groups, one with a disabled option.
@@ -59,11 +61,16 @@ struct RadioPage;
 impl View for RadioPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         column((
-            radios(cx, "Paper size", ["A4", "Letter", "Legal"], None),
             radios(
                 cx,
-                "Quality",
-                ["Draft", "Normal", "Best (unavailable)"],
+                "radio.paper_size",
+                ["radio.a4", "radio.letter", "radio.legal"],
+                None,
+            ),
+            radios(
+                cx,
+                "radio.quality",
+                ["radio.draft", "radio.normal", "radio.best"],
                 Some(2),
             ),
         ))
@@ -74,19 +81,20 @@ pub fn radio(_: &PageCx) -> AnyView {
     RadioPage.into_any()
 }
 
-/// Each tab's label and the text of its panel.
+/// The catalog keys of each tab's label and of the text of its panel.
 const TAB_CONTENT: [(&str, &str); 3] = [
-    ("General", "Name, icon, and startup behavior."),
-    ("Appearance", "Theme, accent color, and font size."),
-    ("Advanced (disabled)", "Hidden settings."),
+    ("tabs.general", "tabs.general_panel"),
+    ("tabs.appearance", "tabs.appearance_panel"),
+    ("tabs.advanced", "tabs.advanced_panel"),
 ];
 
 /// A tab list in `variant` over the panel of the selected tab; the last
 /// tab is disabled.
 fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant) -> impl View {
     let selected = cx.state(0usize);
-    let tabs = Configured::try_custom(ControlKind::Tabs, move |_| {
-        controls::Tabs::hosted("Settings", TAB_CONTENT.map(|(label, _)| label), 0)?
+    let tabs = Configured::try_custom(ControlKind::Tabs, move |env| {
+        let labels = TAB_CONTENT.map(|(label, _)| env.text(label, &[]));
+        controls::Tabs::hosted(env.text("tabs.settings", &[]), labels, 0)?
             .with_variant(variant)
             .with_disabled(2)
     })
@@ -96,7 +104,7 @@ fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant) -> impl View {
             selected.set(*index);
         }
     });
-    let panel = Text::new(move || TAB_CONTENT[selected.get()].1)
+    let panel = Text::new(move || t!(TAB_CONTENT[selected.get()].1))
         .padding(Space::S3)
         .frame(
             Frame::new()
@@ -150,8 +158,8 @@ fn city_items() -> Vec<ComboItem> {
         .collect()
 }
 
-/// A city combobox; the read-only one starts on Huế. The caption names
-/// the selected city.
+/// A city combobox labeled by catalog key `label`; the read-only one
+/// starts on Huế. The caption names the selected city.
 fn city_combo(
     cx: &mut Cx<'_>,
     label: &'static str,
@@ -160,8 +168,8 @@ fn city_combo(
 ) -> impl View {
     let start = (!editable).then(|| CITIES.iter().position(|city| *city == "Huế"));
     let selected = cx.state(start.flatten());
-    let combo = Configured::custom(ControlKind::Combobox, move |_| {
-        let mut combo = controls::Combobox::new(label, editable);
+    let combo = Configured::custom(ControlKind::Combobox, move |env| {
+        let mut combo = controls::Combobox::new(env.text(label, &[]), editable);
         combo.set_completion_mode(mode);
         combo.set_items(city_items());
         if !editable {
@@ -175,9 +183,14 @@ fn city_combo(
         }
     })
     .frame(Frame::new().width(280.0).alignment(Alignment::FILL));
+    let env = cx.env().clone();
     let caption = hidden_caption(move || {
-        let city = selected.get().map_or("none", |index| CITIES[index]);
-        format!("{label} — selected: {city}")
+        let city = match selected.get() {
+            Some(index) => CITIES[index].to_owned(),
+            None => env.text("combobox.none", &[]),
+        };
+        let label = env.text(label, &[]);
+        env.text("combobox.selected", &[("label", &label), ("city", &city)])
     });
     captioned(caption, combo)
 }
@@ -189,19 +202,9 @@ struct ComboboxPage;
 impl View for ComboboxPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         column((
-            city_combo(cx, "City (read-only)", false, CompletionMode::Prefix),
-            city_combo(
-                cx,
-                "City (editable, prefix completion)",
-                true,
-                CompletionMode::Prefix,
-            ),
-            city_combo(
-                cx,
-                "City (editable, contains match)",
-                true,
-                CompletionMode::Contains,
-            ),
+            city_combo(cx, "combobox.read_only", false, CompletionMode::Prefix),
+            city_combo(cx, "combobox.prefix", true, CompletionMode::Prefix),
+            city_combo(cx, "combobox.contains", true, CompletionMode::Contains),
         ))
     }
 }
@@ -246,26 +249,28 @@ impl View for FontChooserPage {
         })
         .frame(Frame::new().width(280.0).alignment(Alignment::FILL));
         let family = move || chosen.get().map_or(FALLBACK, |index| FAMILIES[index]);
+        let env = cx.env().clone();
         let preview = Dynamic::new(move || {
             let family = family();
+            let sample = env.text("font-chooser.sample", &[]);
             Canvas::new(move |canvas, _| {
                 let _ = canvas.list.draw_text(
                     Point::new(canvas.bounds.origin.x + 12.0, canvas.bounds.origin.y + 40.0),
-                    "The quick brown fox — Chữ Việt",
+                    &sample,
                     family,
                     24.0,
                     canvas.tokens.color(ColorRole::Foreground),
                 );
             })
-            .label(format!("Preview in {family}"))
+            .label(env.text("font-chooser.preview", &[("family", family)]))
             .frame(Frame::new().max_width(f64::INFINITY).height(64.0))
             .background(ColorRole::Card)
             .border(ColorRole::Border, 1.0)
             .corner_radius(RadiusScale::Lg)
         });
         let note = Text::new(move || match chosen.get() {
-            Some(_) => format!("Rendering with {}", family()),
-            None => format!("Missing family; rendering with the fallback {FALLBACK}"),
+            Some(_) => t!("font-chooser.rendering", family = family()),
+            None => t!("font-chooser.missing", family = FALLBACK),
         })
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground);

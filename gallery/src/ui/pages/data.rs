@@ -8,6 +8,7 @@ mod hosting;
 mod products;
 
 use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
     Alignment, AnyView, Button, Configured, Cx, Env, ForEach, Frame, HStack, HorizontalAlignment,
     State, Text, VStack, VerticalAlignment, View, ViewExt,
@@ -130,10 +131,10 @@ impl View for ItemViewPage {
                 _ => list_focused.set(true),
             })
         };
-        let field = Configured::custom(ControlKind::Input, move |_| {
+        let field = Configured::custom(ControlKind::Input, move |env| {
             Handle::keyed(
-                controls::Input::new("Search records", "")
-                    .with_placeholder("Search (try “hoi an” or “tel”)"),
+                controls::Input::new(env.text("item-view.search", &[]), "")
+                    .with_placeholder(env.text("item-view.search_placeholder", &[])),
                 &[Key::Escape, Key::ArrowDown],
                 on_key.clone(),
             )
@@ -148,9 +149,9 @@ impl View for ItemViewPage {
         let layout = Button::new(
             move || {
                 if grid.get() {
-                    "List layout"
+                    t!("item-view.list_layout")
                 } else {
-                    "Grid layout"
+                    t!("item-view.grid_layout")
                 }
             },
             move || grid.update(|grid| *grid = !*grid),
@@ -162,9 +163,9 @@ impl View for ItemViewPage {
             &model,
             revision,
             selected,
-            move |_| {
+            move |env| {
                 let mut view = item_view(
-                    "Records",
+                    &env.text("item-view.records", &[]),
                     SemanticRole::List,
                     &shown,
                     TextItemDelegate::default(),
@@ -181,7 +182,7 @@ impl View for ItemViewPage {
             HStack::new((
                 field.frame(Frame::new().width(300.0)),
                 layout,
-                Text::new(move || format!("{} of {RECORDS} records", matches.get()))
+                Text::new(t!("item-view.matches", n = matches, total = RECORDS))
                     .text_style(TextPreset::Small)
                     .foreground(ColorRole::MutedForeground),
             ))
@@ -205,9 +206,11 @@ pub fn item_view_page(_: &PageCx) -> AnyView {
 /// A country and its cities.
 type Country = (&'static str, &'static [&'static str]);
 
+/// Continents by catalog key, with their countries. Country and city
+/// names are place data and stay in their own spelling.
 const PLACES: &[(&str, &[Country])] = &[
     (
-        "Asia",
+        "column-browser.asia",
         &[
             (
                 "Việt Nam",
@@ -218,14 +221,14 @@ const PLACES: &[(&str, &[Country])] = &[
         ],
     ),
     (
-        "Europe",
+        "column-browser.europe",
         &[
             ("France", &["Paris", "Lyon"]),
             ("Deutschland", &["Berlin", "München", "Köln"]),
         ],
     ),
     (
-        "Americas",
+        "column-browser.americas",
         &[
             ("Canada", &["Montréal", "Toronto"]),
             ("Brasil", &["São Paulo", "Rio de Janeiro"]),
@@ -234,11 +237,11 @@ const PLACES: &[(&str, &[Country])] = &[
 ];
 
 /// The places as a three-level tree: continents, countries, cities.
-fn places() -> TreeStore<String> {
+fn places(env: &Env) -> TreeStore<String> {
     let mut model = TreeStore::<String>::new(1);
     for (continent, countries) in PLACES {
         let continent_key = model
-            .push(None, (*continent).to_owned())
+            .push(None, env.text(continent, &[]))
             .expect("the root is a valid parent");
         for (country, cities) in *countries {
             let country_key = model
@@ -255,17 +258,21 @@ fn places() -> TreeStore<String> {
 }
 
 /// The names along a path of rows: a continent, a country, and a city.
-fn place_names(rows: &[usize]) -> Vec<&'static str> {
+fn place_names(env: &Env, rows: &[usize]) -> Vec<String> {
     let mut names = Vec::new();
     let Some((continent, countries)) = rows.first().and_then(|row| PLACES.get(*row)) else {
         return names;
     };
-    names.push(*continent);
+    names.push(env.text(continent, &[]));
     let Some((country, cities)) = rows.get(1).and_then(|row| countries.get(*row)) else {
         return names;
     };
-    names.push(*country);
-    names.extend(rows.get(2).and_then(|row| cities.get(*row)));
+    names.push((*country).to_owned());
+    names.extend(
+        rows.get(2)
+            .and_then(|row| cities.get(*row))
+            .map(|city| (*city).to_owned()),
+    );
     names
 }
 
@@ -275,13 +282,14 @@ struct ColumnBrowserPage;
 impl View for ColumnBrowserPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let path = cx.state(vec![0_usize]);
-        let browser = Configured::custom(ControlKind::ListView, |_| {
-            let model = places();
+        let env = cx.env().clone();
+        let browser = Configured::custom(ControlKind::ListView, |env| {
+            let model = places(env);
             let mut browser = ColumnBrowser::new();
             if let Some(first) = model.key(None, 0) {
                 browser.select(0, first);
             }
-            browser.hosted("Places", Box::new(model))
+            browser.hosted(env.text("column-browser.places", &[]), Box::new(model))
         })
         .on_message(move |message| {
             if let ControlMessage::Changed(ControlValue::Indices(rows)) = message {
@@ -296,7 +304,7 @@ impl View for ColumnBrowserPage {
                         .max_width(f64::INFINITY)
                         .alignment(Alignment::FILL),
                 ),
-                Text::new(move || place_names(&path.get()).join(" › "))
+                Text::new(move || place_names(&env, &path.get()).join(" › "))
                     .text_style(TextPreset::Small)
                     .foreground(ColorRole::MutedForeground),
             ))
@@ -324,22 +332,35 @@ enum Step {
     Reset,
 }
 
+impl Step {
+    /// The catalog key of the button and of the history rows.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Add1 => "undo-history.add_1",
+            Self::Add10 => "undo-history.add_10",
+            Self::Double => "undo-history.double",
+            Self::Reset => "undo-history.reset",
+        }
+    }
+}
+
 /// A counter and the undo stack of its changes.
 struct Counter {
     value: i64,
     stack: UndoStack<i64>,
+    env: Env,
 }
 
 impl Counter {
     fn apply(&mut self, step: Step) {
-        let (label, delta) = match step {
-            Step::Add1 => ("Add 1", 1),
-            Step::Add10 => ("Add 10", 10),
-            Step::Double => ("Double", self.value),
-            Step::Reset => ("Reset", -self.value),
+        let delta = match step {
+            Step::Add1 => 1,
+            Step::Add10 => 10,
+            Step::Double => self.value,
+            Step::Reset => -self.value,
         };
         self.value += delta;
-        self.stack.push(label, delta);
+        self.stack.push(self.env.text(step.key(), &[]), delta);
     }
 
     fn undo(&mut self) {
@@ -396,12 +417,15 @@ impl View for UndoHistoryPage {
             counter: Rc::new(RefCell::new(Counter {
                 value: 0,
                 stack: UndoStack::new(HISTORY_LIMIT),
+                env: cx.env().clone(),
             })),
             version: cx.state(0),
         };
+        let start = cx.env().text("undo-history.start", &[]);
+        let redoable = cx.env().text("undo-history.redoable", &[]);
         let push = |label: &'static str, change: fn(&mut Counter)| {
             let history = history.clone();
-            Button::new(label, move || history.change(change)).variant(ButtonVariant::Outline)
+            Button::new(t!(label), move || history.change(change)).variant(ButtonVariant::Outline)
         };
         let shown = history.clone();
         let listed = history.clone();
@@ -416,20 +440,26 @@ impl View for UndoHistoryPage {
             ..command
         };
         column((
-            Text::new(move || format!("Value: {}", shown.read(|counter| counter.value))),
+            Text::new(t!(
+                "undo-history.value",
+                value = move || shown.read(|counter| counter.value)
+            )),
             HStack::new((
-                push("Add 1", |counter| counter.apply(Step::Add1)),
-                push("Add 10", |counter| counter.apply(Step::Add10)),
-                push("Double", |counter| counter.apply(Step::Double)),
-                push("Reset", |counter| counter.apply(Step::Reset)),
+                push(Step::Add1.key(), |counter| counter.apply(Step::Add1)),
+                push(Step::Add10.key(), |counter| counter.apply(Step::Add10)),
+                push(Step::Double.key(), |counter| counter.apply(Step::Double)),
+                push(Step::Reset.key(), |counter| counter.apply(Step::Reset)),
             ))
             .spacing(Space::S2),
-            HStack::new((push("Undo", Counter::undo), push("Redo", Counter::redo)))
-                .spacing(Space::S2),
+            HStack::new((
+                push("undo-history.undo", Counter::undo),
+                push("undo-history.redo", Counter::redo),
+            ))
+            .spacing(Space::S2),
             VStack::new(ForEach::new(
                 move || {
                     listed
-                        .read(|counter| undo_history(&counter.stack, "Start (0)"))
+                        .read(|counter| undo_history(&counter.stack, &start))
                         .into_iter()
                         .enumerate()
                         .collect::<Vec<_>>()
@@ -447,7 +477,11 @@ impl View for UndoHistoryPage {
                         ButtonVariant::Ghost
                     })
                     .size(ControlSize::Sm)
-                    .accessibility_hint(if entry.redoable { "Redoable" } else { "" }.to_owned())
+                    .accessibility_hint(if entry.redoable {
+                        redoable.clone()
+                    } else {
+                        String::new()
+                    })
                     .opacity(if entry.redoable { 0.5 } else { 1.0 })
                 },
             ))

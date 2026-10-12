@@ -3,39 +3,44 @@
 
 use crate::page::Desktop;
 use crate::ui::page::{Build, PageCx, column, section};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Cx, ForEach, Frame, HStack, Text, VStack, View, ViewExt,
+    Alignment, AnyView, Button, Cx, Env, ForEach, Frame, HStack, Localized, Text, VStack, View,
+    ViewExt,
 };
 use choscorui::controls::ButtonVariant;
 use choscorui::core::{BackendCapabilities, Space, Support, TextPreset};
 use std::rc::Rc;
 
-/// Every capability the backend reports, by display name.
+/// Every capability the backend reports, by the catalog key of its
+/// display name.
 pub fn capability_rows(capabilities: &BackendCapabilities) -> Vec<(&'static str, Support)> {
     vec![
-        ("Multiple windows", capabilities.multiple_windows),
-        ("Native menus", capabilities.native_menus),
-        ("Context menus", capabilities.context_menus),
-        ("Native dialogs", capabilities.native_dialogs),
-        ("Clipboard", capabilities.clipboard),
-        ("Drag and drop", capabilities.drag_and_drop),
-        ("Input methods", capabilities.input_methods),
-        ("Accessibility", capabilities.accessibility),
-        ("Status items", capabilities.status_items),
-        ("Notifications", capabilities.notifications),
-        ("Open URLs", capabilities.open_urls),
-        ("System appearance", capabilities.system_appearance),
-        ("Text shaping", capabilities.text_shaping),
-        ("Image codecs", capabilities.image_codecs),
-        ("GPU painting", capabilities.gpu_painting),
+        ("desktop.multiple_windows", capabilities.multiple_windows),
+        ("desktop.native_menus", capabilities.native_menus),
+        ("desktop.context_menus", capabilities.context_menus),
+        ("desktop.native_dialogs", capabilities.native_dialogs),
+        ("desktop.clipboard", capabilities.clipboard),
+        ("desktop.drag_and_drop", capabilities.drag_and_drop),
+        ("desktop.input_methods", capabilities.input_methods),
+        ("desktop.accessibility", capabilities.accessibility),
+        ("desktop.status_items", capabilities.status_items),
+        ("desktop.notifications", capabilities.notifications),
+        ("desktop.open_urls", capabilities.open_urls),
+        ("desktop.system_appearance", capabilities.system_appearance),
+        ("desktop.text_shaping", capabilities.text_shaping),
+        ("desktop.image_codecs", capabilities.image_codecs),
+        ("desktop.gpu_painting", capabilities.gpu_painting),
     ]
 }
 
-fn support_text(support: Support) -> String {
+/// How well the backend supports a capability. A condition is the
+/// backend's own technical term.
+fn support_text(support: Support) -> Localized {
     match support {
-        Support::Supported => "supported".into(),
-        Support::Unsupported => "not supported".into(),
-        Support::Conditional(condition) => format!("needs {condition}"),
+        Support::Supported => t!("desktop.supported"),
+        Support::Unsupported => t!("desktop.unsupported"),
+        Support::Conditional(condition) => t!("desktop.needs", condition = condition),
     }
 }
 
@@ -53,56 +58,59 @@ enum Action {
     Notify,
 }
 
-fn run(desktop: &dyn Desktop, action: Action) -> String {
+/// Runs `action` and describes the outcome in `env`'s language.
+fn run(env: &Env, desktop: &dyn Desktop, action: Action) -> String {
+    let text = |key: &str| env.text(key, &[]);
+    let failed = |key: &str, error: &str| env.text(key, &[("error", error)]);
+    let app = text("app.name");
     match action {
-        Action::StatusItem => match desktop.toggle_status_item("choscorui gallery") {
-            Ok(true) => "Status item shown in the menu bar".into(),
-            Ok(false) => "Status item removed".into(),
-            Err(error) => format!("Status item failed: {error}"),
+        Action::StatusItem => match desktop.toggle_status_item(&app) {
+            Ok(true) => text("desktop.status_item_shown"),
+            Ok(false) => text("desktop.status_item_removed"),
+            Err(error) => failed("desktop.status_item_failed", &error),
         },
         Action::Url => match desktop.url_handler("https://example.com") {
-            Ok(Some(app)) => format!("https:// links open in {app}"),
-            Ok(None) => "No application handles https:// links".into(),
-            Err(error) => format!("URL handler lookup failed: {error}"),
+            Ok(Some(handler)) => env.text("desktop.url_handler", &[("app", &handler)]),
+            Ok(None) => text("desktop.no_url_handler"),
+            Err(error) => failed("desktop.url_handler_failed", &error),
         },
-        Action::Notify => {
-            match desktop.notify("choscorui gallery", "Hello from the Desktop page") {
-                Ok(()) => "Notification sent".into(),
-                Err(error) => format!("Notification failed: {error}"),
-            }
-        }
+        Action::Notify => match desktop.notify(&app, &text("desktop.notification_body")) {
+            Ok(()) => text("desktop.notification_sent"),
+            Err(error) => failed("desktop.notification_failed", &error),
+        },
     }
 }
 
 impl View for DesktopPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let capabilities = self.desktop.capabilities();
-        let last = cx.state(format!("Backend: {}", capabilities.backend));
-        let button = |label: &str, action: Action, support: Support| {
+        let env = cx.env().clone();
+        let backend = capabilities.backend;
+        let last = cx.state(env.text("desktop.backend", &[("backend", backend)]));
+        let button = |label: &'static str, action: Action, support: Support| {
             let desktop = self.desktop.clone();
-            Button::new(label.to_owned(), move || last.set(run(&*desktop, action)))
+            let (ran, hinted) = (env.clone(), env.clone());
+            Button::new(t!(label), move || last.set(run(&ran, &*desktop, action)))
                 .variant(ButtonVariant::Outline)
                 .disabled(!support.is_supported())
-                .accessibility_hint(if support.is_supported() {
-                    String::new()
-                } else {
-                    support_text(support)
+                .accessibility_hint(move || {
+                    if support.is_supported() {
+                        String::new()
+                    } else {
+                        support_text(support).resolve(&hinted)
+                    }
                 })
         };
         column((
             HStack::new((
                 button(
-                    "Toggle status item",
+                    "desktop.toggle_status_item",
                     Action::StatusItem,
                     capabilities.status_items,
                 ),
+                button("desktop.who_opens", Action::Url, capabilities.open_urls),
                 button(
-                    "Who opens https:// links?",
-                    Action::Url,
-                    capabilities.open_urls,
-                ),
-                button(
-                    "Send a notification",
+                    "desktop.send_notification",
                     Action::Notify,
                     capabilities.notifications,
                 ),
@@ -110,13 +118,13 @@ impl View for DesktopPage {
             .spacing(Space::S3),
             Text::new(move || last.get()).text_style(TextPreset::Muted),
             section(
-                format!("Capabilities of the {} backend", capabilities.backend),
+                t!("desktop.capabilities", backend = backend),
                 VStack::new(ForEach::new(
                     capability_rows(&capabilities),
                     |(name, _)| *name,
                     |(name, support)| {
                         HStack::new((
-                            Text::new(*name)
+                            Text::new(t!(*name))
                                 .text_style(TextPreset::Small)
                                 .frame(Frame::new().width(180.0).alignment(Alignment::LEADING)),
                             Text::new(support_text(*support))

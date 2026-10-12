@@ -3,11 +3,11 @@
 
 use super::fill;
 use crate::ui::page::PageCx;
-use choscorui::compose::Property;
 use choscorui::compose::view::{
-    AnyView, Button, ControlView, Cx, HStack, HorizontalAlignment, Text, VStack, VerticalAlignment,
-    View, ViewExt,
+    AnyView, Button, ControlView, Cx, Env, HStack, HorizontalAlignment, Text, VStack,
+    VerticalAlignment, View, ViewExt,
 };
+use choscorui::compose::{Property, t};
 use choscorui::controls::{
     ButtonVariant, CanvasView, ControlContext, ControlEvent, ControlKind, ControlMessage,
     ControlValue, CustomControl, HostedCanvas, MAX_ZOOM, MIN_ZOOM, MeasureContext, PaintContext,
@@ -34,8 +34,13 @@ fn canvas_extent() -> Rect {
     )
 }
 
-/// 28-unit squares and circles on a 40-unit grid, named "Node 0" on.
-fn scene() -> Scene {
+/// 28-unit squares and circles on a 40-unit grid, named "Node 0" on in
+/// English. The name pattern is looked up once, not once per item.
+fn scene(env: &Env) -> Scene {
+    // A marker that no translation contains stands for the number.
+    const MARK: &str = "\u{1}";
+    let pattern = env.text("canvas.node", &[("i", MARK)]);
+    let (before, after) = pattern.split_once(MARK).unwrap_or((&pattern, ""));
     let mut scene = Scene::new();
     let palette = [
         Color::rgba8(10, 132, 255, 255),
@@ -56,7 +61,7 @@ fn scene() -> Scene {
         };
         let _ = scene.add(
             SceneItem::new(shape, ItemStyle::filled(palette[i % palette.len()]))
-                .named(format!("Node {i}"), SemanticRole::Button),
+                .named(format!("{before}{i}{after}"), SemanticRole::Button),
         );
     }
     scene
@@ -137,19 +142,20 @@ struct CanvasPage {
 impl View for CanvasPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let canvas = Rc::new(RefCell::new(
-            CanvasView::new("Canvas", Rect::default()).hosted(scene()),
+            CanvasView::new(cx.env().text("canvas.canvas", &[]), Rect::default())
+                .hosted(scene(cx.env())),
         ));
         let selected = cx.state(0_usize);
         let zoom = self.zoom.clone();
         let step = |label: &'static str, factor: f64| {
             let zoom = zoom.clone();
-            Button::new(label, move || {
+            Button::new(t!(label), move || {
                 zoom.set((zoom.get() * factor).clamp(MIN_ZOOM, MAX_ZOOM));
             })
             .variant(ButtonVariant::Outline)
         };
         let (fitted, fit_zoom) = (canvas.clone(), zoom.clone());
-        let fit = Button::new("Fit", move || {
+        let fit = Button::new(t!("canvas.fit"), move || {
             let mut canvas = fitted.borrow_mut();
             canvas.view_mut().fit(canvas_extent(), 8.0);
             fit_zoom.set(canvas.view().zoom());
@@ -166,16 +172,14 @@ impl View for CanvasPage {
             });
         VStack::new((
             HStack::new((
-                step("Zoom in", 1.25),
-                step("Zoom out", 1.0 / 1.25),
+                step("canvas.zoom_in", 1.25),
+                step("canvas.zoom_out", 1.0 / 1.25),
                 fit,
-                Text::new(move || {
-                    format!(
-                        "Zoom {}% · {} selected",
-                        (shown.get() * 100.0).round(),
-                        selected.get()
-                    )
-                })
+                Text::new(t!(
+                    "canvas.readout",
+                    zoom = move || (shown.get() * 100.0).round(),
+                    selected = selected
+                ))
                 .text_style(TextPreset::Small)
                 .foreground(ColorRole::MutedForeground),
             ))
@@ -205,7 +209,7 @@ mod tests {
     use choscorui::compose::Runtime;
     use choscorui::compose::view::{Env, ViewHost};
     use choscorui::controls::{EstimatedText, ShortcutModifiers};
-    use choscorui::core::{Catalog, DesignTokens, Locale, PointerButton, PointerEvent, WheelUnit};
+    use choscorui::core::{DesignTokens, Locale, PointerButton, PointerEvent, WheelUnit};
 
     /// The most items that may have semantic nodes at once.
     const REALIZED_LIMIT: usize = 400;
@@ -307,7 +311,9 @@ mod tests {
             desktop: Rc::new(NoDesktop),
             store: PageStore::new(&runtime, &state),
         };
-        let env = Env::new(Rc::new(Catalog::new()), Locale::parse("en").unwrap());
+        let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+        let (catalog, _, _) = crate::strings::load(&resources);
+        let env = Env::new(Rc::new(catalog), Locale::parse("en").unwrap());
         let mut host = ViewHost::new(
             Size::new(900.0, 700.0),
             DesignTokens::light(),

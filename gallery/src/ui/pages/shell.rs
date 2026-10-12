@@ -2,9 +2,10 @@
 //! composition.
 
 use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Frame, HStack, Spacer, State, Text,
-    Toggle, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, Frame, HStack, IntoLive,
+    Spacer, State, Text, TextContent, Toggle, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
@@ -31,43 +32,53 @@ const SEARCH_LENGTH: f64 = 150.0;
 /// item: Share and the spacing around it.
 const SEARCH_END: f64 = 42.0;
 
-fn editor_toolbar() -> Toolbar {
+fn editor_toolbar(env: &Env) -> Toolbar {
     // The search field is a view laid over its item: the toolbar only
     // keeps its length, so the item names no live node.
     let search = Tree::new(Rect::default()).root();
+    let command = |key: &str, command: CommandId| {
+        ToolbarItem::command(key, env.text(command_key(command), &[]), command)
+    };
     Toolbar::new(
-        "Editor",
+        env.text("toolbar.editor", &[]),
         vec![
-            ToolbarItem::command("new", "New", NEW),
-            ToolbarItem::command("open", "Open", OPEN),
-            ToolbarItem::command("save", "Save", SAVE),
+            command("new", NEW),
+            command("open", OPEN),
+            command("save", SAVE),
             ToolbarItem::separator("sep"),
-            ToolbarItem::command("undo", "Undo", UNDO),
-            ToolbarItem::command("redo", "Redo", REDO),
+            command("undo", UNDO),
+            command("redo", REDO),
             ToolbarItem::flexible_space("space"),
-            ToolbarItem::control("search", "Search", search, SEARCH_LENGTH),
-            ToolbarItem::command("share", "Share", SHARE),
+            ToolbarItem::control(
+                "search",
+                env.text("toolbar.search", &[]),
+                search,
+                SEARCH_LENGTH,
+            ),
+            command("share", SHARE),
         ],
     )
 }
 
-fn command_name(command: CommandId) -> &'static str {
+/// The catalog key of a command's label.
+fn command_key(command: CommandId) -> &'static str {
     match command {
-        NEW => "New",
-        OPEN => "Open",
-        SAVE => "Save",
-        UNDO => "Undo",
-        REDO => "Redo",
-        _ => "Share",
+        NEW => "toolbar.new",
+        OPEN => "toolbar.open",
+        SAVE => "toolbar.save",
+        UNDO => "toolbar.undo",
+        REDO => "toolbar.redo",
+        _ => "toolbar.share",
     }
 }
 
-/// The edges a toolbar can sit on, with their button labels.
+/// The edges a toolbar can sit on, with the catalog keys of their button
+/// labels.
 const AREAS: [(&str, ToolbarArea); 4] = [
-    ("Top", ToolbarArea::Top),
-    ("Bottom", ToolbarArea::Bottom),
-    ("Left", ToolbarArea::Left),
-    ("Right", ToolbarArea::Right),
+    ("toolbar.top", ToolbarArea::Top),
+    ("toolbar.bottom", ToolbarArea::Bottom),
+    ("toolbar.left", ToolbarArea::Left),
+    ("toolbar.right", ToolbarArea::Right),
 ];
 
 /// A frame that takes all the space it is offered and stretches its
@@ -80,7 +91,7 @@ fn fill() -> Frame {
 }
 
 /// A small muted line.
-fn note(text: impl Fn() -> String + 'static) -> impl View {
+fn note<M>(text: impl IntoLive<TextContent, M>) -> impl View {
     Text::new(text)
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
@@ -107,11 +118,12 @@ struct ToolbarState {
 }
 
 /// The editor toolbar on its edge of a miniature window.
-fn toolbar_window(state: ToolbarState) -> impl View {
+fn toolbar_window(env: &Env, state: ToolbarState) -> impl View + use<> {
     let area = AREAS[state.area.get()].1;
     let narrow = state.narrow.get();
-    let bar = Configured::custom(ControlKind::Toolbar, move |_| {
-        let mut toolbar = editor_toolbar();
+    let ran = env.clone();
+    let bar = Configured::custom(ControlKind::Toolbar, move |env| {
+        let mut toolbar = editor_toolbar(env);
         toolbar.move_to(area);
         let mut toolbar = toolbar.hosted();
         let redo = CommandState {
@@ -125,13 +137,17 @@ fn toolbar_window(state: ToolbarState) -> impl View {
         if command == UNDO {
             state.redo.set(true);
         }
-        state.last.set(format!("Ran “{}”", command_name(command)));
+        let name = ran.text(command_key(command), &[]);
+        state
+            .last
+            .set(ran.text("toolbar.ran", &[("command", &name)]));
     });
-    let mut saved = editor_toolbar();
+    let mut saved = editor_toolbar(env);
     saved.move_to(area);
+    let thickness = saved.thickness;
     let content = VStack::new((
         Spacer::new(),
-        note(move || format!("Saved as “{}”", saved.save())),
+        note(t!("toolbar.saved", layout = saved.save())),
     ))
     .padding(Space::S3)
     .frame(
@@ -139,14 +155,14 @@ fn toolbar_window(state: ToolbarState) -> impl View {
             .max_width(f64::INFINITY)
             .max_height(f64::INFINITY),
     );
-    let thickness = editor_toolbar().thickness;
     let window: AnyView = match area {
         ToolbarArea::Top | ToolbarArea::Bottom => {
             // The search field sits over its item, just before Share,
             // while the window is wide enough to place it.
             let search = (!narrow).then(|| {
-                Configured::custom(ControlKind::Input, |_| {
-                    controls::Input::new("Search", "").with_placeholder("Search…")
+                Configured::custom(ControlKind::Input, |env| {
+                    controls::Input::new(env.text("toolbar.search", &[]), "")
+                        .with_placeholder(env.text("toolbar.search_placeholder", &[]))
                 })
                 .padding(Edges::new(0.0, 0.0, 0.0, SEARCH_END))
                 .frame(Frame::size(
@@ -185,13 +201,14 @@ impl View for ToolbarPage {
             area: cx.state(0),
             narrow: cx.state(false),
             redo: cx.state(false),
-            last: cx.state("Click the toolbar, then use the arrow keys.".to_owned()),
+            last: cx.state(cx.env().text("toolbar.start", &[])),
         };
+        let env = cx.env().clone();
         let edges = AREAS
             .iter()
             .enumerate()
             .map(|(index, (label, _))| {
-                Button::new(*label, move || state.area.set(index)).variant(move || {
+                Button::new(t!(*label), move || state.area.set(index)).variant(move || {
                     if state.area.get() == index {
                         ButtonVariant::Secondary
                     } else {
@@ -203,9 +220,9 @@ impl View for ToolbarPage {
         let narrow = Button::new(
             move || {
                 if state.narrow.get() {
-                    "Wide window"
+                    t!("toolbar.wide")
                 } else {
-                    "Narrow window"
+                    t!("toolbar.narrow")
                 }
             },
             move || state.narrow.update(|narrow| *narrow = !*narrow),
@@ -214,7 +231,7 @@ impl View for ToolbarPage {
         column((
             HStack::new((edges, narrow)).spacing(Space::S2),
             note(move || state.last.get()),
-            Dynamic::new(move || toolbar_window(state)),
+            Dynamic::new(move || toolbar_window(&env, state)),
         ))
     }
 }
@@ -231,18 +248,26 @@ struct TimedStatus {
     bar: StatusBar,
     /// The message is requested but not shown yet.
     pending: bool,
+    /// The temporary message.
+    message: String,
 }
 
 impl TimedStatus {
-    fn new(words: usize, message: bool) -> Self {
+    fn new(env: &Env, words: usize, message: bool) -> Self {
         let mut bar = StatusBar::new();
-        bar.set_default_text("Ready");
-        bar.set_section("words", format!("{words} words"), 110.0);
+        bar.set_default_text(env.text("status-bar.ready", &[]));
+        bar.set_section(
+            "words",
+            env.plural("status-bar.words", words as u64, &[]),
+            110.0,
+        );
         bar.set_section("encoding", "UTF-8", 70.0);
-        bar.set_section("position", "Ln 4, Col 12", 110.0);
+        let position = env.text("status-bar.position", &[("line", "4"), ("column", "12")]);
+        bar.set_section("position", position, 110.0);
         Self {
             bar,
             pending: message,
+            message: env.text("status-bar.saved", &[("file", "Notes.txt")]),
         }
     }
 }
@@ -259,7 +284,7 @@ impl CustomControl for TimedStatus {
         let now = Duration::from_secs_f64(cx.time().max(0.0));
         if std::mem::take(&mut self.pending) {
             self.bar
-                .show_message("Saved “Notes.txt”", Some(Duration::from_secs(3)), now);
+                .show_message(self.message.clone(), Some(Duration::from_secs(3)), now);
         } else {
             let before = self.bar.text().to_owned();
             self.bar.poll(now);
@@ -310,17 +335,19 @@ impl View for StatusBarPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let words = cx.state(120usize);
         let message = cx.state(false);
-        let bar = Configured::custom(ControlKind::StatusBar, move |_| {
-            TimedStatus::new(words.get(), message.get())
+        let bar = Configured::custom(ControlKind::StatusBar, move |env| {
+            TimedStatus::new(env, words.get(), message.get())
         })
         .on_dismiss(move || message.set(false))
         .frame(Frame::new().width(680.0).alignment(Alignment::FILL));
         column((
             HStack::new((
-                Button::new("Show message", move || message.set(true))
+                Button::new(t!("status-bar.show_message"), move || message.set(true))
                     .variant(ButtonVariant::Outline),
-                Button::new("Add words", move || words.update(|words| *words += 15))
-                    .variant(ButtonVariant::Outline),
+                Button::new(t!("status-bar.add_words"), move || {
+                    words.update(|words| *words += 15)
+                })
+                .variant(ButtonVariant::Outline),
             ))
             .spacing(Space::S2),
             bar,
@@ -338,12 +365,12 @@ const TOP_TOOLBAR: f64 = 36.0;
 const SIDE_TOOLBAR: f64 = 44.0;
 const STATUS_BAR: f64 = 22.0;
 
-/// An empty toolbar named and captioned `label` on `area`. A side toolbar
-/// sits on the start edge, so it moves to the right in right-to-left
-/// layouts.
+/// An empty toolbar named and captioned by catalog key `label` on
+/// `area`. A side toolbar sits on the start edge, so it moves to the
+/// right in right-to-left layouts.
 fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
     let bar = Configured::custom(ControlKind::Toolbar, move |env| {
-        let mut toolbar = Toolbar::new(label, vec![]);
+        let mut toolbar = Toolbar::new(env.text(label, &[]), vec![]);
         toolbar.move_to(match area {
             ToolbarArea::Left if env.direction() == LayoutDirection::Rtl => ToolbarArea::Right,
             area => area,
@@ -352,7 +379,7 @@ fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
     });
     ZStack::new((
         bar.frame(fill()),
-        Text::new(label)
+        Text::new(t!(label))
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground)
             .accessibility_hidden(true),
@@ -361,25 +388,32 @@ fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
 
 /// The window preview: toolbars on the chosen edges, an optional status
 /// bar, and the content area that remains.
-fn window_preview(top: bool, side: bool, status: bool) -> impl View {
+fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View + use<> {
     let (width, height) = WINDOW;
     let content_width = width - if side { SIDE_TOOLBAR } else { 0.0 };
     let content_height =
         height - if top { TOP_TOOLBAR } else { 0.0 } - if status { STATUS_BAR } else { 0.0 };
-    let content = Text::new(format!("Content {content_width:.0} × {content_height:.0}"))
-        .foreground(ColorRole::MutedForeground)
-        .frame(
-            Frame::new()
-                .max_width(f64::INFINITY)
-                .max_height(f64::INFINITY)
-                .alignment(Alignment::CENTER),
-        )
-        .background(ColorRole::Card)
-        .border(ColorRole::Border, 1.0)
-        .corner_radius(RadiusScale::Lg)
-        .padding(6.0);
+    let content = Text::new(t!(
+        "main-window.content",
+        width = format!("{content_width:.0}"),
+        height = format!("{content_height:.0}")
+    ))
+    .foreground(ColorRole::MutedForeground)
+    .frame(
+        Frame::new()
+            .max_width(f64::INFINITY)
+            .max_height(f64::INFINITY)
+            .alignment(Alignment::CENTER),
+    )
+    .background(ColorRole::Card)
+    .border(ColorRole::Border, 1.0)
+    .corner_radius(RadiusScale::Lg)
+    .padding(6.0);
     let middle = HStack::new((
-        side.then(|| preview_toolbar("Tools", ToolbarArea::Left).frame(fill().width(SIDE_TOOLBAR))),
+        side.then(|| {
+            preview_toolbar("main-window.tools", ToolbarArea::Left)
+                .frame(fill().width(SIDE_TOOLBAR))
+        }),
         content,
     ))
     .spacing(0.0)
@@ -389,12 +423,15 @@ fn window_preview(top: bool, side: bool, status: bool) -> impl View {
             .max_height(f64::INFINITY),
     );
     let window = VStack::new((
-        top.then(|| preview_toolbar("Toolbar", ToolbarArea::Top).frame(fill().height(TOP_TOOLBAR))),
+        top.then(|| {
+            preview_toolbar("main-window.toolbar", ToolbarArea::Top)
+                .frame(fill().height(TOP_TOOLBAR))
+        }),
         middle,
         status.then(|| {
-            Configured::custom(ControlKind::StatusBar, |_| {
+            Configured::custom(ControlKind::StatusBar, |env| {
                 let mut status = StatusBar::new();
-                status.set_default_text("Status bar");
+                status.set_default_text(env.text("main-window.status_bar", &[]));
                 status
             })
             .frame(fill().height(STATUS_BAR))
@@ -403,7 +440,7 @@ fn window_preview(top: bool, side: bool, status: bool) -> impl View {
     .spacing(0.0);
     panel(window)
         .frame(Frame::size(width, height))
-        .accessibility_label("Window preview".to_owned())
+        .accessibility_label(env.text("main-window.preview", &[]))
 }
 
 /// A miniature main window: toolbars on chosen edges, an optional status
@@ -415,14 +452,15 @@ impl View for MainWindowPage {
         let top = cx.state(true);
         let side = cx.state(true);
         let status = cx.state(true);
+        let env = cx.env().clone();
         column((
             HStack::new((
-                Toggle::new("Top toolbar", top.binding()),
-                Toggle::new("Side toolbar", side.binding()),
-                Toggle::new("Status bar", status.binding()),
+                Toggle::new(t!("main-window.top_toolbar"), top.binding()),
+                Toggle::new(t!("main-window.side_toolbar"), side.binding()),
+                Toggle::new(t!("main-window.status_bar"), status.binding()),
             ))
             .spacing(Space::S2),
-            Dynamic::new(move || window_preview(top.get(), side.get(), status.get())),
+            Dynamic::new(move || window_preview(&env, top.get(), side.get(), status.get())),
         ))
     }
 }
