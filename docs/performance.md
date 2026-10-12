@@ -85,11 +85,11 @@ The baselines are from the reference machine, measured on 2026-10-08. The `views
 | `document.present_ms.p95` | 20.7 ms | ≤ 33 |
 | `document.shape_ms.p95` | 6.8 ms | ≤ 12 |
 | `theme.present_ms.p95` | 2.7–2.9 ms | ≤ 16.7 |
-| `views.present_ms.p95` | 6.3–7.0 ms, 10,000 rows | ≤ 16.7 |
+| `views.present_ms.p95` | 6.3–8.0 ms, 10,000 rows | ≤ 16.7 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.90 MiB | ≤ 3 |
+| `size.choscorui-gallery_mib` | 2.95 MiB | ≤ 3 |
 
 These correctness counters have a budget of 0:
 
