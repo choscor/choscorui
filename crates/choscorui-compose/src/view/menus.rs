@@ -1,0 +1,306 @@
+//! Menus that a view presents: a context menu at the pointer and a
+//! dropdown menu below the view. Both show the controls' hosted dropdown
+//! menu in an anchored layer, so its keys, hover, and type-ahead apply.
+//! Focus moves into the menu, a press outside or Escape closes it, and
+//! closing returns focus.
+
+use super::View;
+use super::configured::Configured;
+use super::env::Env;
+use super::host::{Cx, Inner};
+use super::modifier::{Modifier, Trigger};
+use super::present::{Anchor, Content, Placement, Presentation, mount_presentation};
+use super::state::{Binding, IntoLive, Live};
+use super::text::TextContent;
+use super::widgets::Items;
+use choscorui_controls::{
+    CommandId, CommandState, ControlContext, ControlEvent, ControlKind, ControlMessage,
+    CustomControl, DropdownMenu, MeasureContext, MenuItem, PaintContext, Variant,
+};
+use choscorui_core::{
+    EventPhase, EventReply, Measured, NodeId, Point, PointerButton, PointerEvent, SemanticNode,
+    SemanticRole, SemanticState,
+};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
+/// What a menu row is.
+#[derive(Clone)]
+enum Row {
+    Action(Live<TextContent>, Rc<dyn Fn()>),
+    Submenu(Live<TextContent>, Vec<MenuChoice>),
+    Separator,
+}
+
+/// One row of a menu that a view presents: an action, a submenu, or a
+/// separator. Labels take literal text or a catalog string (`t!`), and
+/// follow the locale.
+#[derive(Clone)]
+pub struct MenuChoice {
+    row: Row,
+    shortcut: Option<String>,
+    destructive: bool,
+    disabled: Live<bool>,
+}
+
+impl MenuChoice {
+    fn new(row: Row) -> Self {
+        Self {
+            row,
+            shortcut: None,
+            destructive: false,
+            disabled: Live::Value(false),
+        }
+    }
+
+    /// A row that runs `action` and closes the menu.
+    pub fn action<M>(label: impl IntoLive<TextContent, M>, action: impl Fn() + 'static) -> Self {
+        Self::new(Row::Action(label.into_live(), Rc::new(action)))
+    }
+
+    /// A row that opens `items` beside the menu.
+    pub fn submenu<M>(label: impl IntoLive<TextContent, M>, items: Vec<MenuChoice>) -> Self {
+        Self::new(Row::Submenu(label.into_live(), items))
+    }
+
+    /// A line between groups of rows.
+    pub fn separator() -> Self {
+        Self::new(Row::Separator)
+    }
+
+    /// Shows the shortcut text of an action, such as "⌘C". The text is
+    /// a label only; `.keyboard_shortcut` runs the action from the keys.
+    #[must_use]
+    pub fn shortcut(mut self, text: impl Into<String>) -> Self {
+        self.shortcut = Some(text.into());
+        self
+    }
+
+    /// Paints an action with the destructive look.
+    #[must_use]
+    pub fn destructive(mut self) -> Self {
+        self.destructive = true;
+        self
+    }
+
+    /// Disables an action while `disabled` is true when the menu opens.
+    /// The keys skip a disabled action, and it does not run.
+    #[must_use]
+    pub fn disabled<M>(mut self, disabled: impl IntoLive<bool, M>) -> Self {
+        self.disabled = disabled.into_live();
+        self
+    }
+}
+
+/// The actions of a built menu, by command id less one.
+type Actions = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
+
+/// Converts `choices` to menu items in `env`. Each action gets the next
+/// command id; `actions` and `disabled` collect them.
+fn build(
+    choices: &[MenuChoice],
+    env: &Env,
+    actions: &mut Vec<Rc<dyn Fn()>>,
+    disabled: &mut Vec<CommandId>,
+) -> Vec<MenuItem> {
+    choices
+        .iter()
+        .map(|choice| match &choice.row {
+            Row::Action(label, action) => {
+                actions.push(action.clone());
+                let command = CommandId(actions.len() as u64);
+                if choice.disabled.get() {
+                    disabled.push(command);
+                }
+                let mut item = MenuItem::action(label.get().resolve(env), command);
+                if let Some(shortcut) = &choice.shortcut {
+                    item = item.with_shortcut(shortcut.clone());
+                }
+                if choice.destructive {
+                    item = item.destructive();
+                }
+                item
+            }
+            Row::Submenu(label, items) => MenuItem::submenu(
+                label.get().resolve(env),
+                build(items, env, actions, disabled),
+            ),
+            Row::Separator => MenuItem::Separator,
+        })
+        .collect()
+}
+
+/// The look and place of a presented menu: anchored, with the menu's own
+/// panel.
+const MENU: Presentation = Presentation {
+    kind: ControlKind::Menu,
+    variant: Variant(0),
+    placement: Placement::Anchored,
+    surface: false,
+};
+
+/// The accessible name of `node`, which names its menu.
+fn name_of(inner: &Inner, node: NodeId) -> String {
+    let label = inner
+        .nodes
+        .get(&node)
+        .and_then(|data| data.access.label.clone());
+    label
+        .or_else(|| {
+            inner
+                .controls
+                .get(node)
+                .map(|control| control.semantics().name)
+        })
+        .unwrap_or_default()
+}
+
+/// The menu content: a hosted dropdown menu of `items`. A chosen action
+/// sets `presented` to false and runs; Escape sets it to false.
+fn menu_content(
+    name: String,
+    items: Rc<dyn Items<MenuChoice>>,
+    presented: Binding<bool>,
+) -> Content {
+    Rc::new(move || {
+        let actions: Actions = Rc::default();
+        let built = actions.clone();
+        let (name, items) = (name.clone(), items.clone());
+        Configured::custom(ControlKind::Menu, move |env| {
+            let mut list = Vec::new();
+            let mut disabled = Vec::new();
+            let items = build(&items.items(env), env, &mut list, &mut disabled);
+            *built.borrow_mut() = list;
+            let mut menu = DropdownMenu::new(items).hosted(name.clone());
+            for command in disabled {
+                let off = CommandState {
+                    enabled: false,
+                    checked: false,
+                };
+                // Every action of the menu has a command, so this cannot
+                // fail.
+                let _ = menu.set_command(command, off);
+            }
+            menu
+        })
+        .on_message(move |message| match message {
+            ControlMessage::Command(CommandId(id)) => {
+                presented.set(false);
+                let index = usize::try_from(*id).unwrap_or(0).wrapping_sub(1);
+                let action = actions.borrow().get(index).cloned();
+                if let Some(action) = action {
+                    action();
+                }
+            }
+            ControlMessage::Dismissed => presented.set(false),
+            _ => {}
+        })
+        .into_any()
+    })
+}
+
+/// The modifier that shows a menu of `items` below the view.
+pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoice>) -> Modifier {
+    let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
+    Modifier::Present(Rc::new(move |cx: &mut Cx<'_>, anchor| {
+        let name = name_of(cx.inner, anchor);
+        let content = menu_content(name, items.clone(), presented);
+        mount_presentation(cx, Anchor::Node(anchor), presented, MENU, content);
+    }))
+}
+
+/// The control that wraps a view with a context menu: a secondary press
+/// or a Control-press inside the view records the point and reports
+/// `OpenChanged(true)`. It sees the press before the views inside, which
+/// keep it. It paints nothing and takes no focus.
+struct MenuTrigger {
+    point: Rc<Cell<Point>>,
+    enabled: Rc<Cell<bool>>,
+}
+
+impl CustomControl for MenuTrigger {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        Measured::new(cx.constraints.min)
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Capture || !self.enabled.get() {
+            return EventReply::Continue;
+        }
+        let ControlEvent::Pointer(PointerEvent::Down { position, button }) = event else {
+            return EventReply::Continue;
+        };
+        let secondary = *button == PointerButton::Secondary
+            || *button == PointerButton::Primary && cx.modifiers().control;
+        if !secondary {
+            return EventReply::Continue;
+        }
+        self.point.set(*position);
+        cx.emit(ControlMessage::OpenChanged(true));
+        EventReply::Continue
+    }
+
+    fn paint(&self, _cx: &mut PaintContext<'_>) {}
+
+    fn semantics(&self) -> SemanticNode {
+        SemanticNode {
+            role: SemanticRole::Group,
+            name: String::new(),
+            description: String::new(),
+            value: None,
+            state: SemanticState::default(),
+            relations: Vec::new(),
+            actions: Vec::new(),
+            text: None,
+        }
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+}
+
+/// The modifier that opens a menu of `items` at a secondary click.
+pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
+    let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
+    let point: Rc<Cell<Point>> = Rc::new(Cell::new(Point::new(0.0, 0.0)));
+    let enabled = Rc::new(Cell::new(true));
+    let (control_point, control_enabled) = (point.clone(), enabled.clone());
+    Modifier::Trigger(Trigger {
+        control: Box::new(move |_inner: &mut Inner| {
+            Box::new(MenuTrigger {
+                point: control_point,
+                enabled: control_enabled,
+            })
+        }),
+        mount: Box::new(move |cx: &mut Cx<'_>, wrapper, view| {
+            let open = cx.state(false).binding();
+            let disabled = cx.env.disabled.clone();
+            let live = enabled.clone();
+            cx.bind(disabled, move |_inner, disabled| live.set(!disabled));
+            // Of nested context menus, the innermost one opens.
+            let press = cx.inner.menu_press.clone();
+            cx.inner
+                .data(wrapper)
+                .handlers
+                .push(Rc::new(move |message: &ControlMessage| {
+                    if *message == ControlMessage::OpenChanged(true) {
+                        *press.borrow_mut() = Some(Rc::new(move || open.set(true)));
+                    }
+                }));
+            let center = point.clone();
+            cx.inner.data(view).show_menu = Some(Rc::new(move |inner: &Inner| {
+                if !enabled.get() {
+                    return;
+                }
+                if let Some(bounds) = inner.tree.bounds(wrapper) {
+                    center.set(bounds.center());
+                }
+                open.set(true);
+            }));
+            let name = name_of(cx.inner, view);
+            let content = menu_content(name, items, open);
+            mount_presentation(cx, Anchor::Point(point), open, MENU, content);
+        }),
+    })
+}

@@ -1,14 +1,14 @@
-//! Presentation: dialogs, sheets, and popovers. A presented view mounts
-//! above the window content in a modal layer. Focus moves into it and
-//! stays there; Escape or a press on the scrim closes it; closing returns
-//! focus to where it was.
+//! Presentation: dialogs, sheets, popovers, and menus. A presented view
+//! mounts above the window content in a modal layer. Focus moves into it
+//! and stays there; Escape or a press on the scrim closes it; closing
+//! returns focus to where it was.
 
-use super::View;
 use super::host::{Cx, Inner};
 use super::layout::{Alignment, HorizontalAlignment, VerticalAlignment, parent_tokens};
 use super::modifier::Styled;
 use super::scope;
 use super::state::Binding;
+use super::{AnyView, View};
 use crate::reactive::Runtime;
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, CustomControl, MeasureContext,
@@ -16,7 +16,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     Axis, EventPhase, EventReply, Insets, ItemAlign, Key, KeyEvent, LayoutKind, LayoutStyle,
-    Length, MainAlign, Measured, NodeId, PointerEvent, Rect, SemanticNode, SemanticRole,
+    Length, MainAlign, Measured, NodeId, Point, PointerEvent, Rect, SemanticNode, SemanticRole,
     SemanticState, Size,
 };
 use std::cell::Cell;
@@ -39,6 +39,29 @@ pub(crate) struct Presentation {
     pub kind: ControlKind,
     pub variant: Variant,
     pub placement: Placement,
+    /// Whether the panel paints the surface of its kind's root slot. A
+    /// menu paints its own panel.
+    pub surface: bool,
+}
+
+/// What an anchored panel sits next to.
+#[derive(Clone, Debug)]
+pub(crate) enum Anchor {
+    /// A node: the panel sits below it, or above it when it does not fit.
+    Node(NodeId),
+    /// A point in the window, such as the pointer of a secondary click:
+    /// the panel's top-start corner sits at the point.
+    Point(Rc<Cell<Point>>),
+}
+
+impl Anchor {
+    /// Whether the anchor is still in `tree`.
+    pub(crate) fn exists(&self, tree: &choscorui_core::Tree) -> bool {
+        match self {
+            Self::Node(node) => tree.contains(*node),
+            Self::Point(_) => true,
+        }
+    }
 }
 
 /// The scope of an open layer, and the node that had focus before.
@@ -116,6 +139,7 @@ struct Panel {
     query: StyleQuery,
     bounds: Rc<Cell<Rect>>,
     role: SemanticRole,
+    surface: bool,
 }
 
 impl CustomControl for Panel {
@@ -132,8 +156,10 @@ impl CustomControl for Panel {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let style = cx.style(self.query);
-        paint_box(cx.list, cx.bounds, &style, cx.rtl);
+        if self.surface {
+            let style = cx.style(self.query);
+            paint_box(cx.list, cx.bounds, &style, cx.rtl);
+        }
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -203,6 +229,22 @@ fn mount_layer(cx: &mut Cx<'_>, presentation: Presentation, content: impl View) 
     } else {
         (style.padding.inline_start, style.padding.inline_end)
     };
+    // A panel without a surface adds no space around its content.
+    let padding = if presentation.surface {
+        Insets {
+            left,
+            top: style.padding.block_start,
+            right,
+            bottom: style.padding.block_end,
+        }
+    } else {
+        Insets::default()
+    };
+    let min = if presentation.surface {
+        Size::new(style.min_width, style.min_height)
+    } else {
+        Size::ZERO
+    };
     let role = match presentation.kind {
         ControlKind::Dialog
         | ControlKind::AlertDialog
@@ -216,8 +258,9 @@ fn mount_layer(cx: &mut Cx<'_>, presentation: Presentation, content: impl View) 
         query,
         bounds: panel_bounds,
         role,
+        surface: presentation.surface,
     }));
-    let max_width = if style.max_width > 0.0 {
+    let max_width = if presentation.surface && style.max_width > 0.0 {
         style.max_width
     } else {
         f64::INFINITY
@@ -229,13 +272,8 @@ fn mount_layer(cx: &mut Cx<'_>, presentation: Presentation, content: impl View) 
             main_align: MainAlign::Start,
             cross_align: ItemAlign::Stretch,
         },
-        padding: Insets {
-            left,
-            top: style.padding.block_start,
-            right,
-            bottom: style.padding.block_end,
-        },
-        min: Size::new(style.min_width, style.min_height),
+        padding,
+        min,
         max: Size::new(max_width, f64::INFINITY),
         width: if max_width.is_finite() && presentation.placement == Placement::Center {
             Length::Points(max_width)
@@ -253,8 +291,12 @@ fn mount_layer(cx: &mut Cx<'_>, presentation: Presentation, content: impl View) 
 
 /// Keeps an anchored panel next to its anchor after layout, inside the
 /// window: below the anchor when it fits, otherwise above it.
-pub(crate) fn place_anchored(inner: &mut Inner, layer: NodeId, anchor: NodeId) -> bool {
-    let (Some(target), Some(window)) = (inner.tree.bounds(anchor), inner.tree.bounds(layer)) else {
+pub(crate) fn place_anchored(inner: &mut Inner, layer: NodeId, anchor: &Anchor) -> bool {
+    let (target, gap) = match anchor {
+        Anchor::Node(node) => (inner.tree.bounds(*node), ANCHOR_GAP),
+        Anchor::Point(point) => (Some(Rect::new(point.get(), Size::ZERO)), 0.0),
+    };
+    let (Some(target), Some(window)) = (target, inner.tree.bounds(layer)) else {
         return false;
     };
     let panel = inner
@@ -271,11 +313,11 @@ pub(crate) fn place_anchored(inner: &mut Inner, layer: NodeId, anchor: NodeId) -
         target.min_x() - window.min_x()
     };
     let start = start.clamp(0.0, room);
-    let below = target.max_y() + ANCHOR_GAP - window.min_y();
+    let below = target.max_y() + gap - window.min_y();
     let top = if below + panel.height <= window.size.height {
         below
     } else {
-        (target.min_y() - ANCHOR_GAP - panel.height - window.min_y()).max(0.0)
+        (target.min_y() - gap - panel.height - window.min_y()).max(0.0)
     };
     let padding = Insets {
         left: if rtl { 0.0 } else { start },
@@ -300,54 +342,75 @@ pub(crate) fn present<V: View, C: View>(
     presentation: Presentation,
     content: impl Fn() -> C + 'static,
 ) -> Styled<V> {
-    let content = Rc::new(content);
+    let content: Content = Rc::new(move || content().into_any());
     view.present(move |cx, anchor| {
-        let root = cx.inner.tree.root();
-        let root_fragment = cx.inner.fragments.root_of(root);
-        let fragment = cx.inner.fragments.child(root_fragment);
-        let owner = cx.scope;
-        let env = cx.env.clone();
-        let content = content.clone();
-        // The scope of the open layer, and the focus to return on close.
-        let mounted: Rc<Cell<Option<Mounted>>> = Rc::default();
-        cx.react(move |inner| {
-            let open = presented.try_get().unwrap_or(false);
-            Runtime::untracked(|| match (open, mounted.get()) {
-                (true, None) => {
-                    let returns = inner.tree.focus();
-                    let scope = inner.child_scope(owner);
-                    let _owner = scope::enter(inner.owned(scope));
-                    let mut layer_cx = Cx {
-                        inner: &mut *inner,
-                        parent: root,
-                        fragment,
-                        scope,
-                        env: env.clone(),
-                    };
-                    let layer = mount_layer(&mut layer_cx, presentation, content());
-                    let data = inner.data(layer);
-                    data.handlers.push(Rc::new(move |message: &ControlMessage| {
-                        if *message == ControlMessage::Dismissed {
-                            presented.set(false);
-                        }
-                    }));
-                    if presentation.placement == Placement::Anchored {
-                        inner.anchors.insert(layer, anchor);
-                    }
-                    inner.controls.focus_next(&mut inner.tree, false);
-                    mounted.set(Some((scope, returns)));
-                }
-                (false, Some((scope, returns))) => {
-                    inner.dispose_scope(scope);
-                    let nodes = inner.fragments.clear(fragment);
-                    inner.remove_nodes(&nodes);
-                    if let Some(node) = returns.filter(|node| inner.tree.contains(*node)) {
-                        inner.controls.move_focus(&mut inner.tree, Some(node));
-                    }
-                    mounted.set(None);
-                }
-                _ => {}
-            });
-        });
+        mount_presentation(
+            cx,
+            Anchor::Node(anchor),
+            presented,
+            presentation,
+            content.clone(),
+        );
     })
+}
+
+/// Makes the content of a presentation each time it opens.
+pub(crate) type Content = Rc<dyn Fn() -> AnyView>;
+
+/// Shows `content` in a layer above the window while `presented` is
+/// true. An anchored layer sits next to `anchor`. Focus moves into the
+/// layer when it opens and returns when it closes.
+pub(crate) fn mount_presentation(
+    cx: &mut Cx<'_>,
+    anchor: Anchor,
+    presented: Binding<bool>,
+    presentation: Presentation,
+    content: Content,
+) {
+    let root = cx.inner.tree.root();
+    let root_fragment = cx.inner.fragments.root_of(root);
+    let fragment = cx.inner.fragments.child(root_fragment);
+    let owner = cx.scope;
+    let env = cx.env.clone();
+    // The scope of the open layer, and the focus to return on close.
+    let mounted: Rc<Cell<Option<Mounted>>> = Rc::default();
+    cx.react(move |inner| {
+        let open = presented.try_get().unwrap_or(false);
+        Runtime::untracked(|| match (open, mounted.get()) {
+            (true, None) => {
+                let returns = inner.tree.focus();
+                let scope = inner.child_scope(owner);
+                let _owner = scope::enter(inner.owned(scope));
+                let mut layer_cx = Cx {
+                    inner: &mut *inner,
+                    parent: root,
+                    fragment,
+                    scope,
+                    env: env.clone(),
+                };
+                let layer = mount_layer(&mut layer_cx, presentation, content());
+                let data = inner.data(layer);
+                data.handlers.push(Rc::new(move |message: &ControlMessage| {
+                    if *message == ControlMessage::Dismissed {
+                        presented.set(false);
+                    }
+                }));
+                if presentation.placement == Placement::Anchored {
+                    inner.anchors.insert(layer, anchor.clone());
+                }
+                inner.controls.focus_next(&mut inner.tree, false);
+                mounted.set(Some((scope, returns)));
+            }
+            (false, Some((scope, returns))) => {
+                inner.dispose_scope(scope);
+                let nodes = inner.fragments.clear(fragment);
+                inner.remove_nodes(&nodes);
+                if let Some(node) = returns.filter(|node| inner.tree.contains(*node)) {
+                    inner.controls.move_focus(&mut inner.tree, Some(node));
+                }
+                mounted.set(None);
+            }
+            _ => {}
+        });
+    });
 }

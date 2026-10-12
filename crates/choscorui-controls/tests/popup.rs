@@ -131,8 +131,10 @@ fn tooltips_wait_warm_up_and_hide_on_interrupt() {
     let mut tips = TooltipController::new();
     tips.hover(a, "Lưu", rect(0.0, 0.0, 10.0, 10.0), ms(0));
     assert_eq!(tips.poll(ms(100)), Some(TOOLTIP_DELAY));
+    assert_eq!(tips.pending(), Some((a, TOOLTIP_DELAY)));
     assert!(tips.visible().is_none());
     tips.poll(ms(600));
+    assert_eq!(tips.pending(), None, "a shown tooltip waits for nothing");
     assert_eq!(tips.visible().unwrap().text, "Lưu");
     assert!(tips.semantics().is_some());
     // Moving to another target shows its tip immediately.
@@ -140,6 +142,16 @@ fn tooltips_wait_warm_up_and_hide_on_interrupt() {
     assert_eq!(tips.visible().unwrap().target, b);
     tips.interrupt(ms(800));
     assert!(tips.visible().is_none());
+    assert_eq!(
+        tips.pending(),
+        None,
+        "an interrupted tooltip waits for nothing"
+    );
+    assert_eq!(
+        tips.target(),
+        Some(b),
+        "the hover stays until the pointer leaves"
+    );
     tips.poll(ms(5_000));
     assert!(
         tips.visible().is_none(),

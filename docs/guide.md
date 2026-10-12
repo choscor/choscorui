@@ -82,7 +82,7 @@ The toolkit gives these views:
 
 | Group | Views |
 | --- | --- |
-| Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Group`, `ScrollView`, `Spacer`, `Divider` |
+| Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Form`, `FormRow`, `Group`, `ScrollView`, `Spacer`, `Divider` |
 | Text | `Text`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `ForEach`, `Either`, `AnyView`, `Empty` |
 | Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
@@ -141,6 +141,7 @@ Stacks place their children along one axis:
 | `VStack`, `HStack` | A column or a row, with `.spacing`, `.alignment`, and `.distribution` |
 | `ZStack` | Children on top of each other, with an `Alignment` |
 | `Grid` | Columns of `GridItem::Fixed`, `GridItem::Flexible`, or `GridItem::Fit` |
+| `Form`, `FormRow` | Labels in one column beside their fields in another |
 | `Spacer` | Flexible space that pushes its siblings apart |
 | `ScrollView` | Content that scrolls when it is larger than the space |
 | `LazyVStack`, `LazyHStack` | A column or a row that mounts only the items in view, with `.spacing` and `.alignment` |
@@ -150,6 +151,25 @@ Stacks place their children along one axis:
 | `.layout_priority(share)` | A share of the leftover space along the stack |
 
 A view is as large as its content. A `Spacer`, a `ScrollView`, a `Divider`, or a frame with an infinite maximum is flexible. A stack that holds a flexible view becomes flexible too, so it takes the space that its parent offers. A fixed width or height stops this along that axis. Layout mirrors in a right-to-left locale: leading is on the right.
+
+A `Form` takes `FormRow` views. Each row has a label and a field. The label column is as wide as its widest label, and the field column takes the remaining width. Labels sit against their fields by default. Change this with `.label_alignment`, and change the field width with `.field_alignment`. The row and column spacing come from the `Field` recipe.
+
+```rust
+use choscorui::prelude::*;
+
+struct Account;
+
+impl View for Account {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let name = cx.state(String::new());
+        let alerts = cx.state(true);
+        Form::new((
+            FormRow::new(t!("account.name"), Input::new(t!("account.name"), name.binding())),
+            FormRow::new(t!("account.alerts"), Switch::new(t!("account.alerts"), alerts.binding())),
+        ))
+    }
+}
+```
 
 When a row has too little width, a wrapping `Text` becomes narrower and takes more lines. Use `Text::single_line` or `.fixed_size()` to keep the text on one line. A row that still cannot fit reports a layout error.
 
@@ -232,7 +252,7 @@ assert_eq!(env.text("greeting", &[("name", "Linh")]), "Hello, Linh");
 let greeting = Text::new(t!("greeting", name = "Linh"));
 ```
 
-## Dialogs, sheets, and popovers
+## Dialogs, sheets, popovers, and menus
 
 A presentation modifier shows content while a `Binding<bool>` is true:
 
@@ -263,6 +283,66 @@ impl View for Delete {
 }
 ```
 
+### Tooltips
+
+`.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It also shows after keyboard focus moves into the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one.
+
+### Menus
+
+A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.
+
+- `.context_menu(items)` opens a menu at the pointer on a secondary click or a Control-click on the view. The `ShowMenu` action of assistive technology opens it at the center of the view. Of nested context menus, the innermost one opens.
+- `.dropdown_menu(presented, items)` shows a menu below the view while `presented` is true. A chosen row or Escape sets `presented` to false.
+
+Focus moves into an open menu. The menu keys, hover, and type-ahead of [DropdownMenu](controls.md#dropdownmenu) apply. Escape or a press outside closes the menu, and focus returns to where it was.
+
+```rust
+use choscorui::prelude::*;
+
+struct File;
+
+impl View for File {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let options = cx.state(false);
+        let rows = move || {
+            vec![
+                MenuChoice::action(t!("file.rename"), || {}),
+                MenuChoice::separator(),
+                MenuChoice::action(t!("file.delete"), || {}).destructive(),
+            ]
+        };
+        Button::new(t!("file.options"), move || options.set(true))
+            .tooltip(t!("file.options_hint"))
+            .dropdown_menu(options.binding(), rows())
+            .context_menu(rows())
+    }
+}
+```
+
+### Toasts
+
+`.toaster(position, name, close)` puts a toast queue in the environment of the view, and shows its toasts at `position` in the window. A descendant posts a toast in one of two ways:
+
+- `cx.env().toasts()` gives the `Toasts` queue. Call `push` with a `Toast`.
+- `.toast(presented, make)` posts the toast that `make` returns when `presented` becomes true. Then it sets `presented` to false.
+
+A toast closes after its duration, and the timers stop while the pointer rests on the stack. With reduced motion, toasts show and close without motion. A `.toast` without a `.toaster` above it reports `ViewError::NoToaster`.
+
+```rust
+use choscorui::prelude::*;
+
+struct Editor;
+
+impl View for Editor {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let saved = cx.state(false);
+        Button::new(t!("editor.save"), move || saved.set(true))
+            .toast(saved.binding(), |env| Toast::new(env.text("editor.saved", &[])))
+            .toaster(ToastPosition::BottomEnd, t!("editor.notifications"), t!("editor.close"))
+    }
+}
+```
+
 ## Accessibility
 
 Each control publishes its role, name, value, state, and actions. You do not build the semantic tree. A static text node is named by its text. Use these modifiers when the default is not enough:
@@ -270,6 +350,7 @@ Each control publishes its role, name, value, state, and actions. You do not bui
 - `.accessibility_label`, `.accessibility_value`, and `.accessibility_hint` replace what assistive technology reads.
 - `.accessibility_hidden(true)` hides decoration.
 - `.focusable(false)` takes a view out of the keyboard order, and `.focused(binding)` moves focus.
+- `.tooltip(text)` gives the description, and `.context_menu(items)` adds the `ShowMenu` action.
 
 Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disables every control in a subtree, and a disabled control leaves the keyboard order.
 

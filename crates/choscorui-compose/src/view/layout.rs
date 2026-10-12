@@ -31,7 +31,7 @@ pub enum HorizontalAlignment {
 }
 
 impl HorizontalAlignment {
-    pub(super) fn item(self) -> ItemAlign {
+    pub(crate) fn item(self) -> ItemAlign {
         match self {
             Self::Leading => ItemAlign::Start,
             Self::Center => ItemAlign::Center,

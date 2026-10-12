@@ -413,6 +413,22 @@ impl TooltipController {
         }
     }
 
+    /// The target that the pointer rests on, whether its tooltip shows,
+    /// waits, or was hidden by `interrupt`.
+    pub fn target(&self) -> Option<NodeId> {
+        self.hover.as_ref().map(|(target, ..)| *target)
+    }
+
+    /// The target of the tooltip that waits for its delay, and the time
+    /// at which it shows. `None` while a tooltip shows or none waits.
+    pub fn pending(&self) -> Option<(NodeId, Duration)> {
+        let (target, _, _, start) = self.hover.as_ref()?;
+        if *start == Duration::MAX || self.visible.is_some() {
+            return None;
+        }
+        Some((*target, start.saturating_add(TOOLTIP_DELAY)))
+    }
+
     pub fn semantics(&self) -> Option<SemanticNode> {
         let visible = self.visible.as_ref()?;
         Some(SemanticNode {

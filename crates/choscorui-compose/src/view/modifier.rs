@@ -9,11 +9,17 @@ use super::env::{Corner, Elevation, Env, Fill, Metric};
 use super::fragment::FragmentId;
 use super::host::{Cx, Flex, Handler, Inner, Layer, ShortcutEntry, ViewError};
 use super::layout::{Alignment, parent_tokens};
+use super::menus::{self, MenuChoice};
 use super::present::{Placement, Presentation, present};
 use super::state::{Binding, IntoLive, Live};
+use super::text::TextContent;
+use super::toast::{self, MakeToast, ToasterSpec};
+use super::tooltip;
+use super::widgets::Items;
 use choscorui_controls::{
-    ButtonVariant, ControlKind, ControlMessage, ControlSize, Corners, DefaultRecipe, Recipe,
-    ResolvedStyle, SheetSide, ShortcutModifiers, Slot, StyleQuery, Variant,
+    ButtonVariant, ControlKind, ControlMessage, ControlSize, Corners, CustomControl, DefaultRecipe,
+    Recipe, ResolvedStyle, SheetSide, ShortcutModifiers, Slot, StyleQuery, Toast, ToastPosition,
+    Variant,
 };
 use choscorui_core::{
     Axis, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens, Dirty, FontWeight, Insets,
@@ -176,6 +182,21 @@ pub(crate) enum AccessField {
 /// Mounts presented content for the node that a modifier applies to.
 pub(crate) type PresentFn = Rc<dyn Fn(&mut Cx<'_>, NodeId)>;
 
+/// Makes the control of a [`Trigger`].
+pub(crate) type MakeTrigger = Box<dyn FnOnce(&mut Inner) -> Box<dyn CustomControl>>;
+
+/// Finishes a [`Trigger`] with the wrapper node and the view's node.
+pub(crate) type MountTrigger = Box<dyn FnOnce(&mut Cx<'_>, NodeId, NodeId)>;
+
+/// A control that wraps the view to watch its input, such as the hover
+/// of a tooltip or the secondary click of a context menu.
+pub(crate) struct Trigger {
+    /// Makes the wrapping control.
+    pub control: MakeTrigger,
+    /// Runs after the wrap, with the wrapper node and the view's node.
+    pub mount: MountTrigger,
+}
+
 /// One modifier. The list keeps them in the order they were applied.
 pub(crate) enum Modifier {
     Padding(Edges),
@@ -213,6 +234,9 @@ pub(crate) enum Modifier {
     Focused(Binding<bool>),
     Focusable(bool),
     Present(PresentFn),
+    Trigger(Trigger),
+    Toaster(ToasterSpec),
+    Toast(Binding<bool>, MakeToast),
 }
 
 impl Modifier {
@@ -389,6 +413,24 @@ modifiers! {
     fn focused(focused: Binding<bool>) => Modifier::Focused(focused);
     /// Whether keyboard focus can stop on the view.
     fn focusable(focusable: bool) => Modifier::Focusable(focusable);
+    /// Shows `text` in a tooltip after the pointer rests on the view, or
+    /// after keyboard focus moves into it. The text also describes the
+    /// view for assistive technology.
+    fn tooltip<M>(text: impl IntoLive<TextContent, M>) => tooltip::tooltip(text.into_live());
+    /// Opens a menu of `items` at the pointer on a secondary click or a
+    /// Control-click on the view, or for the `ShowMenu` action.
+    fn context_menu(items: impl Items<MenuChoice>) => menus::context_menu(items);
+    /// Shows a menu of `items` below the view while `presented` is true.
+    /// A chosen item or Escape sets `presented` to false.
+    fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoice>) => menus::dropdown_menu(presented, items);
+    /// Shows the toasts that descendants post through
+    /// [`Env::toasts`], at `position` in the window. `name` names the
+    /// stack and `close` names the close buttons.
+    fn toaster<M, N>(position: ToastPosition, name: impl IntoLive<TextContent, M>, close: impl IntoLive<TextContent, N>) => Modifier::Toaster(ToasterSpec::new(position, name.into_live(), close.into_live()));
+    /// Posts the toast that `toast` makes when `presented` becomes true,
+    /// and sets `presented` back to false. A `toaster` above the view
+    /// shows it.
+    fn toast(presented: Binding<bool>, toast: impl Fn(&Env) -> Toast + 'static) => Modifier::Toast(presented, Rc::new(toast));
 
     present {
         /// Shows `content` in a dialog while `presented` is true. Escape
@@ -397,6 +439,7 @@ modifiers! {
             kind: ControlKind::Dialog,
             variant: Variant::default(),
             placement: Placement::Center,
+            surface: true,
         };
         /// Shows `content` in an alert dialog, which asks the user to
         /// confirm or cancel.
@@ -404,24 +447,28 @@ modifiers! {
             kind: ControlKind::AlertDialog,
             variant: Variant::default(),
             placement: Placement::Center,
+            surface: true,
         };
         /// Shows `content` in a sheet along the `side` edge.
         fn sheet(side: SheetSide) => Presentation {
             kind: ControlKind::Sheet,
             variant: side.into(),
             placement: Placement::Edge(side),
+            surface: true,
         };
         /// Shows `content` in a drawer along the bottom edge.
         fn drawer() => Presentation {
             kind: ControlKind::Drawer,
             variant: SheetSide::Bottom.into(),
             placement: Placement::Edge(SheetSide::Bottom),
+            surface: true,
         };
         /// Shows `content` in a popover next to the view.
         fn popover() => Presentation {
             kind: ControlKind::Popover,
             variant: Variant::default(),
             placement: Placement::Anchored,
+            surface: true,
         };
     }
 }
@@ -620,6 +667,7 @@ fn child_env(parent: &Env, modifiers: &[Modifier]) -> Env {
             Modifier::Locale(locale) => env.locale = locale.clone(),
             Modifier::Direction(direction) => env.direction = Some(direction.clone()),
             Modifier::Environment(change) => change(&mut env),
+            Modifier::Toaster(spec) => env.set_value(spec.toasts()),
             _ => {}
         }
     }
@@ -676,8 +724,9 @@ fn gather(cx: &mut Cx<'_>, fragment: FragmentId) -> NodeId {
 }
 
 /// Wraps `node` in a new overlay node at its place and returns the new
-/// node. The wrapper takes over how `node` sat in its parent.
-fn wrap(inner: &mut Inner, node: NodeId) -> NodeId {
+/// node. The wrapper takes over how `node` sat in its parent. With
+/// `control`, the wrapper is a node of that control.
+fn wrap(inner: &mut Inner, node: NodeId, control: Option<Box<dyn CustomControl>>) -> NodeId {
     let Some(parent) = inner.tree.parent(node) else {
         return node;
     };
@@ -686,7 +735,11 @@ fn wrap(inner: &mut Inner, node: NodeId) -> NodeId {
         .children(parent)
         .and_then(|children| children.iter().position(|child| *child == node))
         .unwrap_or(0);
-    let wrapper = match inner.tree.attach(parent, choscorui_core::Rect::default()) {
+    let attached = match control {
+        Some(control) => inner.controls.mount(&mut inner.tree, parent, control),
+        None => inner.tree.attach(parent, choscorui_core::Rect::default()),
+    };
+    let wrapper = match attached {
         Ok(wrapper) => wrapper,
         Err(error) => {
             inner.report(ViewError::Tree(error));
@@ -734,7 +787,7 @@ fn wrap(inner: &mut Inner, node: NodeId) -> NodeId {
 /// is a wrapper without paint, or a new wrapper.
 fn layout_node(inner: &mut Inner, target: &mut Target) -> NodeId {
     if !target.wrapper || target.painted {
-        target.node = wrap(inner, target.node);
+        target.node = wrap(inner, target.node, None);
         target.wrapper = true;
         target.painted = false;
     }
@@ -1059,6 +1112,19 @@ fn apply(
             }
         }
         Modifier::Present(present) => present(cx, inner_node),
+        Modifier::Trigger(trigger) => {
+            let control = (trigger.control)(cx.inner);
+            let wrapper = wrap(cx.inner, target.node, Some(control));
+            cx.inner.data(wrapper).silent = true;
+            // Later layout modifiers wrap the trigger, so that it keeps
+            // the bounds of the view.
+            target.node = wrapper;
+            target.wrapper = true;
+            target.painted = true;
+            (trigger.mount)(cx, wrapper, inner_node);
+        }
+        Modifier::Toaster(spec) => toast::mount_toaster(cx, env, spec),
+        Modifier::Toast(presented, make) => toast::post(cx, env, presented, make),
         // Environment modifiers already reached the content, and theme
         // modifiers apply after the list.
         _ => {}

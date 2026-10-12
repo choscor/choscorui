@@ -83,7 +83,10 @@ The `view` module is the declarative view layer:
 - Every visual leaf is a `CustomControl` in a `ControlHost`. Environment modifiers become `ThemeResolver` scopes. Local paint modifiers on a control become a recipe set for that instance.
 - `Dynamic` mounts the view that a closure returns again when its reads change. It is the scope of `Option`, `Either`, and `AnyView`: a keyed scope with one child. A view value has no identity to compare, so each run replaces that child.
 - `ForEach` compares its item keys with `plan_keyed`. An item can make many nodes, so the plan moves the nodes of each item as one fragment, without a wrapper node.
-- Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus.
+- Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus. Menus use the same layer, next to the view or at the pointer.
+- The `tooltip` and `context_menu` modifiers wrap the view in a control that watches its hover, presses, and keys. The wrapper publishes no semantic node.
+- The `toaster` modifier mounts a `Toaster` above the window content and puts its queue in the environment.
+- `Form` lowers onto the two-column form grid of the core layout engine.
 - `ViewHost` runs layout, paint, semantics, and input for a mounted view. A window backend calls it for each frame, and tests drive it without a window.
 
 Dependencies: `choscorui-core` and `choscorui-controls`.

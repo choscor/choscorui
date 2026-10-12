@@ -10,16 +10,20 @@ mod dialogs;
 mod dynamic;
 mod env;
 mod focus;
+mod form;
 mod fragment;
 mod host;
 mod layout;
 mod lazy;
+mod menus;
 mod modifier;
 mod paint;
 mod present;
 mod scope;
 mod state;
 mod text;
+mod toast;
+mod tooltip;
 mod widgets;
 
 pub use builtins::{
@@ -32,12 +36,14 @@ pub use dialogs::{FontDialog, InputDialog};
 pub use dynamic::{Dynamic, ForEach};
 pub use env::{Corner, Elevation, Env, Fill, Metric, TextEnv};
 pub use focus::FocusFrame;
+pub use form::{Form, FormRow};
 pub use host::{Cx, ViewError, ViewHost};
 pub use layout::{
     Alignment, Divider, Grid, GridItem, Group, HStack, HorizontalAlignment, ScrollView, Spacer,
     VStack, VerticalAlignment, ZStack,
 };
 pub use lazy::{LazyHStack, LazyVStack};
+pub use menus::MenuChoice;
 pub use modifier::{Edges, Frame, Styled, ViewExt};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{IntoTextArg, Localized, Text, TextContent};

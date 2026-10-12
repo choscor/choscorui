@@ -7,12 +7,13 @@ use super::env::{Corner, Elevation, Env, Fill};
 use super::fragment::{FragmentId, Fragments};
 use super::layout::ScrollShared;
 use super::lazy::LazyHook;
+use super::present::Anchor;
 use super::scope::{self, Owned};
 use super::state::{Binding, Live, Memo, State};
 use crate::reactive::{ReactiveError, Runtime, Subscription};
 use choscorui_controls::{
     ControlHost, ControlKind, ControlMessage, CustomControl, HostEnv, ShortcutModifiers, Styles,
-    TextMeasure,
+    TextMeasure, TooltipController,
 };
 use choscorui_core::{
     Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, GridPlacement, InputModality,
@@ -38,6 +39,8 @@ pub enum ViewError {
     DuplicateKey(String),
     /// A control view could not build its control, with the reason.
     Control(String),
+    /// A `.toast` modifier has no `.toaster` above it.
+    NoToaster,
 }
 
 impl std::fmt::Display for ViewError {
@@ -50,6 +53,7 @@ impl std::fmt::Display for ViewError {
             Self::Reactive(error) => write!(f, "state update failed: {error}"),
             Self::DuplicateKey(key) => write!(f, "duplicate key {key} in a list"),
             Self::Control(reason) => write!(f, "control build failed: {reason}"),
+            Self::NoToaster => write!(f, "a toast has no toaster above it"),
         }
     }
 }
@@ -121,11 +125,18 @@ pub(crate) struct Access {
     pub hint: Option<String>,
     pub value: Option<String>,
     pub hidden: bool,
+    /// The text of a `tooltip` modifier, which describes the view when no
+    /// hint does.
+    pub tooltip: Option<String>,
 }
 
 impl Access {
     fn is_set(&self) -> bool {
-        self.label.is_some() || self.hint.is_some() || self.value.is_some() || self.hidden
+        self.label.is_some()
+            || self.hint.is_some()
+            || self.value.is_some()
+            || self.hidden
+            || self.tooltip.is_some()
     }
 }
 
@@ -167,6 +178,13 @@ pub(crate) struct NodeData {
     /// Whether the node draws the focus ring of a descendant, as a
     /// `FocusFrame` view does.
     pub focus_frame: bool,
+    /// Whether the node publishes no semantic node, as the wrapper of a
+    /// tooltip or a context menu does.
+    pub silent: bool,
+    /// The tooltip text of a tooltip wrapper.
+    pub tip: Option<Rc<RefCell<String>>>,
+    /// Opens the context menu of the view, for the `ShowMenu` action.
+    pub show_menu: Option<MenuOpener>,
 }
 
 /// The axes along which a view takes all the space it is offered, as a
@@ -188,6 +206,12 @@ impl Flex {
         self.wide || self.tall
     }
 }
+
+/// Opens the context menu of a view.
+pub(crate) type MenuOpener = Rc<dyn Fn(&Inner)>;
+
+/// The context menu that a secondary press opens after dispatch.
+pub(crate) type MenuPress = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
 
 /// A message handler that changes the runtime.
 pub(crate) type InternalHandler = Rc<dyn Fn(&mut Inner, &ControlMessage)>;
@@ -238,11 +262,17 @@ pub(crate) struct Inner {
     focus: Option<NodeId>,
     /// A focused node to scroll into view after layout.
     reveal: Option<NodeId>,
-    /// Anchored presentation layers and the nodes they sit next to.
-    pub anchors: HashMap<NodeId, NodeId>,
+    /// Anchored presentation layers and what they sit next to.
+    pub anchors: HashMap<NodeId, Anchor>,
     /// The track nodes of lazy stacks, and the work that mounts their
     /// visible items after layout.
     pub lazies: BTreeMap<NodeId, LazyHook>,
+    /// The hover and focus tooltips of every tooltip wrapper, shared so
+    /// that a second tooltip follows the first without a delay.
+    pub tooltips: Rc<RefCell<TooltipController>>,
+    /// The context menu that the last secondary press opens: the one of
+    /// the innermost view, which sees the press last.
+    pub menu_press: MenuPress,
 }
 
 /// The first recipe set that instances use, above any set an
@@ -362,7 +392,7 @@ impl Inner {
             }
         }
         for (layer, anchor) in self.anchors.clone() {
-            again |= super::present::place_anchored(self, layer, anchor);
+            again |= super::present::place_anchored(self, layer, &anchor);
         }
         if let Some(node) = self.reveal.take() {
             again |= self.reveal_node(node);
@@ -434,6 +464,7 @@ impl Inner {
                 binding.set(value);
             }
         }
+        super::tooltip::follow_focus(self, old, focus);
         if focus.is_some() {
             self.reveal = focus;
             self.needs_layout = true;
@@ -738,7 +769,7 @@ impl Inner {
         }
         let tree = &self.tree;
         self.anchors
-            .retain(|layer, anchor| tree.contains(*layer) && tree.contains(*anchor));
+            .retain(|layer, anchor| tree.contains(*layer) && anchor.exists(tree));
         if self.focus.is_some_and(|focus| !self.tree.contains(focus)) {
             self.focus = None;
         }
@@ -968,6 +999,8 @@ impl ViewHost {
             reveal: None,
             anchors: HashMap::new(),
             lazies: BTreeMap::new(),
+            tooltips: Rc::default(),
+            menu_press: Rc::default(),
         };
         let mut host = Self {
             inner,
@@ -1275,6 +1308,10 @@ impl ViewHost {
                 handler(&message);
             }
         }
+        let open = self.inner.menu_press.borrow_mut().take();
+        if let Some(open) = open {
+            open();
+        }
         self.inner.sync_control_dirt();
         self.flush();
     }
@@ -1366,8 +1403,18 @@ impl ViewHost {
 
     /// Performs an assistive action on `node`.
     pub fn perform(&mut self, node: NodeId, action: SemanticAction, value: Option<&str>) -> bool {
+        let opener = self
+            .inner
+            .nodes
+            .get(&node)
+            .and_then(|data| data.show_menu.clone());
         let handled = if action == SemanticAction::Focus && !self.inner.controls.contains(node) {
             self.focus(Some(node));
+            true
+        } else if let Some(open) = opener
+            .filter(|_| action == SemanticAction::ShowMenu && self.inner.controls.is_enabled(node))
+        {
+            open(&self.inner);
             true
         } else {
             self.inner
@@ -1449,7 +1496,7 @@ impl ViewHost {
     /// The semantic node that `node` publishes, if any.
     fn semantic_node(&self, node: NodeId) -> Option<SemanticNode> {
         let data = self.inner.nodes.get(&node)?;
-        if data.access.hidden || self.hidden_by_ancestor(node) {
+        if data.silent || data.access.hidden || self.hidden_by_ancestor(node) {
             return None;
         }
         let mut semantic = match self.inner.controls.get(node) {
@@ -1461,7 +1508,7 @@ impl ViewHost {
                 }
                 semantic
             }
-            None if data.access.is_set() => SemanticNode {
+            None if data.access.is_set() || data.show_menu.is_some() => SemanticNode {
                 role: SemanticRole::Group,
                 name: String::new(),
                 description: String::new(),
@@ -1476,8 +1523,14 @@ impl ViewHost {
         if let Some(label) = &data.access.label {
             semantic.name.clone_from(label);
         }
-        if let Some(hint) = &data.access.hint {
+        if let Some(hint) = data.access.hint.as_ref().or(data.access.tooltip.as_ref()) {
             semantic.description.clone_from(hint);
+        }
+        if data.show_menu.is_some()
+            && !semantic.state.disabled
+            && !semantic.actions.contains(&SemanticAction::ShowMenu)
+        {
+            semantic.actions.push(SemanticAction::ShowMenu);
         }
         if let Some(value) = &data.access.value {
             semantic.value = Some(value.clone());

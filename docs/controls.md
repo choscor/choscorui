@@ -1390,6 +1390,9 @@ pin this behavior.
 - An activated action reports `Command`. Escape or ArrowLeft at the root
   reports `Dismissed`. The menu then closes its submenus and stays in
   place.
+- **In a view.** The `context_menu` and `dropdown_menu` view modifiers
+  show a `HostedDropdownMenu` in an anchored layer. `Command` runs the
+  chosen action and closes the layer, and `Dismissed` closes it.
 - **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
   shortcut text, and `destructive` sets the destructive look.
   `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`
@@ -1450,6 +1453,13 @@ the actions are `Activate` and `Focus`.
   counts as a leave.
 - `interrupt` (a press, a key, or a scroll) hides the tooltip until the
   pointer goes to another target.
+- `target` gives the target of the current hover, also after `interrupt`.
+  `pending` gives the target that waits for its delay, and the time at
+  which its tooltip shows.
+- **In a view.** The `tooltip` view modifier uses one controller for each
+  view host, so the grace time applies between views. Keyboard focus in
+  the view starts the delay as a hover does. Escape hides the tooltip and
+  stops there.
 - **Look.** `VisibleTooltip::place` centers the bubble above the anchor,
   and flips it below when it does not fit. `paint` uses the `Tooltip`
   recipe. The bubble has a `foreground` fill and xs `background` text. It
@@ -2877,6 +2887,9 @@ behavior.
 - Toasts slide in from the window edge and fade. With reduced motion,
   they show and close at once.
 - The toaster takes focus only while it shows toasts.
+- **In a view.** The `toaster` view modifier mounts a `Toaster` above the
+  window content. It puts the `Toasts` handle in the environment of its
+  view, where `Env::toasts` and the `toast` modifier find it.
 
 | Part | Slot | Value |
 | --- | --- | --- |
