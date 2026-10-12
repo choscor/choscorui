@@ -451,13 +451,16 @@ fn main() {
             send_native_key_event(10, c"keyDown:", 0x7b, 0, false, true);
         })
         .unwrap();
+    // The run loop fires overdue timers in fire-date order, so the stop
+    // follows both injections even on a slow machine.
     let stopper = poster.clone();
-    let worker = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(150));
-        stopper.request_stop().unwrap();
-    });
+    let stop = app
+        .schedule_once(Duration::from_millis(150), move || {
+            stopper.request_stop().unwrap();
+        })
+        .unwrap();
     app.run();
-    worker.join().unwrap();
+    assert!(!stop.is_active());
     assert!(window.paint_count() > before_paint);
     assert!(!injected.is_active());
     assert!(!injected_key.is_active());
