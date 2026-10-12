@@ -104,7 +104,7 @@ pub(crate) unsafe fn image_from_cg(cg: Id) -> Result<Image, ImageError> {
         for y in 0..height {
             let row =
                 std::slice::from_raw_parts((data.as_ptr() as *const u8).add(y * stride), width * 4);
-            for px in row.chunks_exact(4) {
+            for px in row.as_chunks::<4>().0 {
                 pixels.extend_from_slice(&unpremultiply(px));
             }
         }
@@ -112,7 +112,7 @@ pub(crate) unsafe fn image_from_cg(cg: Id) -> Result<Image, ImageError> {
     }
 }
 
-pub(crate) fn unpremultiply(px: &[u8]) -> [u8; 4] {
+pub(crate) fn unpremultiply(px: &[u8; 4]) -> [u8; 4] {
     let a = px[3];
     if a == 0 {
         return [0, 0, 0, 0];
@@ -157,7 +157,9 @@ impl MacBitmap {
     pub fn to_image(&self) -> Option<Image> {
         let pixels = self
             .pixels()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(unpremultiply)
             .collect();
         Image::from_rgba8(self.width(), self.height(), pixels).ok()

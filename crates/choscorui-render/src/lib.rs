@@ -155,7 +155,7 @@ pub fn compare(a: &[u8], b: &[u8], tolerance: u8) -> Option<(u8, f64)> {
     }
     let mut worst = 0u8;
     let mut differing = 0usize;
-    for (pa, pb) in a.chunks_exact(4).zip(b.chunks_exact(4)) {
+    for (pa, pb) in a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0) {
         let both_clear = pa[3] < 8 && pb[3] < 8;
         let channels = if both_clear { 3..4 } else { 0..4 };
         let diff = channels.map(|i| pa[i].abs_diff(pb[i])).max().unwrap_or(0);
