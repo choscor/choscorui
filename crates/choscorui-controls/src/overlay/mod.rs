@@ -5,7 +5,7 @@ mod command;
 mod dialog;
 pub(crate) mod menu_popup;
 mod menus;
-mod panel;
+pub(crate) mod panel;
 mod popover;
 
 pub use command::{Command, CommandItem};

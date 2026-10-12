@@ -4,6 +4,7 @@ pub mod containers;
 pub mod data;
 pub mod datetime;
 pub mod dialogs;
+pub mod display;
 pub mod form;
 pub mod hosted;
 pub mod inputs;

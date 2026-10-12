@@ -97,6 +97,10 @@ in parentheses is the role that the macOS backend gives to that
 | Navigation | [`Pagination`](#pagination) | Page links with previous and next buttons. |
 | Navigation | [`NavigationMenu`](#navigationmenu-and-navigationlink) | Row of site links whose triggers open panels of described links. |
 | Navigation | [`Sidebar`](#sidebar) | Grouped navigation items that collapse, and become a sheet in a narrow window. |
+| Data | [`Card`](#card) | Surface with a header, content, and footer buttons. |
+| Data | [`Badge`](#badge) | Short status label, optionally a link. |
+| Data | [`Avatar`](#avatar-and-avatargroup) | Round user image with a text fallback. |
+| Data | [`AvatarGroup`](#avatar-and-avatargroup) | Overlapping avatars with a count. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2043,6 +2047,88 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | `Activate`, `Expand` or `Collapse` when it collapses, and `Focus` while enabled |
 
 [sidebar.rs](../crates/choscorui-controls/tests/sidebar.rs) pins this behavior.
+
+### Card
+
+- The header shows the title and the description. An optional header
+  action sits at the header end. Content text wraps to the card width.
+  Footer buttons sit in a row at the end.
+- Without constraints, the card is 384 pt wide.
+- The header action and the footer buttons are tab stops inside the card.
+  Tab and Shift+Tab move between them, and leave the card at the ends.
+- Enter, Space, a click, or `Activate` on a button emits
+  `ItemActivated(index)`. The header action is index 0.
+- A card without buttons takes no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Surface | `Root` | `card` fill, 1 pt ring at 10% `foreground`, radius xl, shadow xs, 24 pt gap and vertical padding (16 pt for `Sm`) |
+| Header | `Header` | 4 pt gap, 24 pt horizontal padding (16 pt for `Sm`) |
+| Title | `Title` | base medium `card-foreground` text, 1.5 line height; sm for `Sm` |
+| Description | `Description` | sm `muted-foreground` text |
+| Content, footer | `Content`, `Footer` | `card-foreground`, 24 pt horizontal padding (16 pt for `Sm`), 12 pt gap |
+| Buttons | `Button` `Root` | default-size buttons in their variants |
+
+| Field | `Card::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | title / description and content text |
+| Description | the label of the focused button |
+| State | disabled |
+| Actions | `Activate` and `Focus` with buttons while enabled |
+
+[data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
+
+### Badge
+
+- A badge shows a label with an optional leading icon in a `BadgeVariant`:
+  `Default`, `Secondary`, `Destructive`, `Outline`, `Ghost`, or `Link`.
+- A plain badge is static text. It takes no focus and shows no hover look.
+- `as_link()` makes the badge a link. It takes focus and shows the hover
+  look. Enter, Space, a click, or `Activate` emits `ItemActivated(0)`.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Badge | `Root` | 20 pt high, radius 4xl, padding 8 by 2 pt, xs medium text, 12 pt icon, 4 pt gap |
+| Default, Secondary | `Root` | `primary` or `secondary` fill; 80% while a link is hovered |
+| Destructive | `Root` | 10% `destructive` fill (20% dark), `destructive` text |
+| Outline | `Root` | 1 pt `border`; `muted` fill while a link is hovered |
+| Ghost, Link | `Root` | no fill; `Link` has `primary` text, underlined while hovered |
+
+| Field | `Badge::semantics` |
+| --- | --- |
+| Role | `StaticText`, or `Link` (AXLink) for a link |
+| Name / value | label / none |
+| State | disabled |
+| Actions | `Activate` and `Focus` for an enabled link |
+
+[data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
+
+### Avatar and AvatarGroup
+
+- An avatar shows its image clipped to a circle. Without an image, it
+  shows the fallback text, such as initials, on a muted circle.
+- `with_badge(icon)` adds a badge at the bottom end. The `Sm` size shows
+  no badge icon.
+- An avatar group overlaps its avatars in reading order. Each avatar has a
+  2 pt ring in the background color. `with_count` ends the group with a
+  circle that shows the count of people not shown.
+- Avatars take no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Avatar | `Root` | 32 pt circle (24 pt `Sm`, 40 pt `Lg`); in a group, 2 pt `background` ring and -8 pt gap |
+| Fallback | `Fallback` | `muted` fill, sm `muted-foreground` text (xs for `Sm`) |
+| Badge | `Badge` | 10 pt `primary` circle (8 pt `Sm`, 12 pt `Lg`), 2 pt `background` ring, 8 pt icon |
+| Count | `Group` | as the fallback |
+
+| Field | `Avatar::semantics` | `AvatarGroup::semantics` |
+| --- | --- | --- |
+| Role | `Image` (AXImage) | `Group` (AXGroup) |
+| Name / value | person's name / none | name / the names and the count |
+| Actions | none | none |
+
+[data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

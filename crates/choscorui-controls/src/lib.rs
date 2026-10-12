@@ -102,6 +102,7 @@ pub use dialogs::{
 mod canvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
 mod custom;
+mod data;
 mod form;
 mod hosted;
 mod listbox;
@@ -111,6 +112,7 @@ pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,
 };
+pub use data::{Avatar, AvatarGroup, Badge, Card};
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
     InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,

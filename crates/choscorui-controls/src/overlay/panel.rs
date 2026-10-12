@@ -1,12 +1,15 @@
-//! Parts that overlay panels share: a wrapped title and description, and
-//! a row or column of action buttons.
+//! Parts that overlay panels and surfaces share: a wrapped title and
+//! description, a row or column of action buttons, and the focus and
+//! press tracking for buttons that are tab stops inside one control.
 
-use crate::custom::MeasureContext;
+use crate::custom::{ControlContext, ControlEvent, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
-use choscorui_core::{Point, Rect};
+use choscorui_core::{
+    EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
+};
 
 /// The title and description of an overlay panel.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -97,7 +100,8 @@ impl Buttons {
             .state(state)
     }
 
-    fn width(cx: &MeasureContext<'_>, button: &PanelButton) -> f64 {
+    /// The width of one button.
+    pub fn width(cx: &MeasureContext<'_>, button: &PanelButton) -> f64 {
         let style = cx.style(Self::query(button.variant, VisualState::NONE));
         (cx.text.width(&button.label, &style.text) + style.padding.horizontal())
             .max(style.min_width)
@@ -190,6 +194,85 @@ impl Buttons {
             cx.slot(*rect, &style, |cx, inner| {
                 cx.label(inner, &button.label, &style, TextAlign::Center);
             });
+        }
+    }
+}
+
+/// Focus and press tracking for buttons that are tab stops inside one
+/// control. Tab and Shift+Tab move between the buttons and leave the
+/// control at the ends. Enter, Space, and a click activate a button.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ButtonStops {
+    pub focus: usize,
+    pub pressed: Option<usize>,
+}
+
+impl ButtonStops {
+    /// Handles `event` for `buttons`. Returns the reply and the button
+    /// that the event activated.
+    pub fn event(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+        buttons: &Buttons,
+    ) -> (EventReply, Option<usize>) {
+        if cx.phase() != EventPhase::Target {
+            return (EventReply::Continue, None);
+        }
+        let count = buttons.buttons.len();
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                let Some(index) = buttons.hit(*position) else {
+                    return (EventReply::Continue, None);
+                };
+                self.pressed = Some(index);
+                self.focus = index;
+                cx.request_focus();
+                cx.capture_pointer(true);
+                cx.request_paint();
+                (EventReply::Stop, None)
+            }
+            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
+                cx.capture_pointer(false);
+                cx.request_paint();
+                let hit = buttons.hit(*position);
+                let activated = self.pressed.take().filter(|index| hit == Some(*index));
+                (EventReply::Stop, activated)
+            }
+            ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
+                match crate::hosted::tab_stop(self.focus, count, cx.modifiers().shift) {
+                    Some(next) => {
+                        self.focus = next;
+                        cx.request_paint();
+                        cx.request_semantics();
+                        (EventReply::Stop, None)
+                    }
+                    None => (EventReply::Continue, None),
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Enter | Key::Space,
+                repeat: false,
+            }) if self.focus < count => (EventReply::Stop, Some(self.focus)),
+            ControlEvent::FocusChanged(focused) => {
+                // Shift+Tab arrives at the last button.
+                if *focused {
+                    self.focus = if cx.modifiers().shift {
+                        count.saturating_sub(1)
+                    } else {
+                        0
+                    };
+                } else if self.pressed.take().is_some() {
+                    cx.capture_pointer(false);
+                }
+                cx.request_paint();
+                cx.request_semantics();
+                (EventReply::Continue, None)
+            }
+            _ => (EventReply::Continue, None),
         }
     }
 }

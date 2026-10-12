@@ -5,8 +5,8 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, form, inputs, nav, navigation, overlay, popups, range,
-    recipes, selection, shell, statics, system, text,
+    containers, data, datetime, dialogs, display, form, inputs, nav, navigation, overlay, popups,
+    range, recipes, selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -101,6 +101,9 @@ pub const PAGES: &[PageInfo] = &[
         data::undo_history_page
     ),
     page!("canvas", "Canvas", Data, data::canvas),
+    page!("card", "Card", Data, display::card),
+    page!("badge", "Badge", Data, display::badge),
+    page!("avatar", "Avatar", Data, display::avatar),
     page!("group-box", "Group box", Containers, containers::group_box),
     page!("resizable", "Resizable", Containers, containers::resizable),
     page!(
@@ -216,6 +219,11 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("SidebarCollapse", "sidebar"),
     ("SidebarItem", "sidebar"),
     ("SidebarVariant", "sidebar"),
+    ("Card", "card"),
+    ("Badge", "badge"),
+    ("BadgeVariant", "badge"),
+    ("Avatar", "avatar"),
+    ("AvatarGroup", "avatar"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -369,7 +377,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "AttachmentState",
         "variant key of attachments; read by recipes",
     ),
-    ("BadgeVariant", "variant key of badges; read by recipes"),
     (
         "BubbleVariant",
         "variant key of chat bubbles; read by recipes",
