@@ -44,14 +44,14 @@ impl<T, F: Fn(&Env) -> Vec<T> + 'static> Items<T> for F {
 }
 
 /// A text argument of a control view.
-type Label = Live<TextContent>;
+pub(super) type Label = Live<TextContent>;
 
-fn label<M>(text: impl IntoLive<TextContent, M>) -> Label {
+pub(super) fn label<M>(text: impl IntoLive<TextContent, M>) -> Label {
     text.into_live()
 }
 
 /// The text of `label` in `env`.
-fn text(label: &Label, env: &Env) -> String {
+pub(super) fn text(label: &Label, env: &Env) -> String {
     label.get().resolve(env)
 }
 
@@ -67,14 +67,14 @@ fn as_bool(value: &ControlValue) -> Option<bool> {
     }
 }
 
-fn as_text(value: &ControlValue) -> Option<String> {
+pub(super) fn as_text(value: &ControlValue) -> Option<String> {
     match value {
         ControlValue::Text(value) => Some(value.clone()),
         _ => None,
     }
 }
 
-fn as_index(value: &ControlValue) -> Option<Option<usize>> {
+pub(super) fn as_index(value: &ControlValue) -> Option<Option<usize>> {
     match value {
         ControlValue::Index(index) => Some(*index),
         ControlValue::Indices(indices) => Some(indices.first().copied()),
@@ -82,14 +82,14 @@ fn as_index(value: &ControlValue) -> Option<Option<usize>> {
     }
 }
 
-fn as_position(value: &ControlValue) -> Option<usize> {
+pub(super) fn as_position(value: &ControlValue) -> Option<usize> {
     match value {
         ControlValue::Index(Some(index)) => Some(*index),
         _ => None,
     }
 }
 
-fn to_position(index: usize) -> ControlValue {
+pub(super) fn to_position(index: usize) -> ControlValue {
     ControlValue::Index(Some(index))
 }
 

@@ -24,8 +24,8 @@ pub trait CustomView: CustomControl + 'static {}
 
 impl<T: CustomControl + 'static> CustomView for T {}
 
-/// Builds a control from the environment.
-type Build = Rc<dyn Fn(&Env) -> Box<dyn CustomControl>>;
+/// Builds a control from the environment, or says why it cannot.
+type Build = Rc<dyn Fn(&Env) -> Result<Box<dyn CustomControl>, String>>;
 
 /// Where a [`ControlView`] gets its control.
 enum Source {
@@ -58,7 +58,19 @@ impl ControlView {
     /// the control again on the same node. The node keeps its focus, and
     /// the view gives the new control the current value and open state.
     pub fn build(build: impl Fn(&Env) -> Box<dyn CustomControl> + 'static) -> Self {
-        Self::with_source(Source::Built(Rc::new(build)))
+        Self::try_build(move |env| Ok::<_, std::convert::Infallible>(build(env)))
+    }
+
+    /// Like [`ControlView::build`], for a control whose constructor can
+    /// fail. A failed build reports [`ViewError::Control`] and keeps the
+    /// control that the node has; before the first good build, the node
+    /// has an empty placeholder.
+    pub fn try_build<E: std::fmt::Display>(
+        build: impl Fn(&Env) -> Result<Box<dyn CustomControl>, E> + 'static,
+    ) -> Self {
+        Self::with_source(Source::Built(Rc::new(move |env| {
+            build(env).map_err(|error| error.to_string())
+        })))
     }
 
     fn with_source(source: Source) -> Self {
@@ -181,7 +193,16 @@ fn mount_built(cx: &mut Cx<'_>, build: Build, current: Rc<Current>) -> NodeId {
     {
         let (first, mounted) = (first.clone(), mounted.clone());
         cx.react(move |inner| {
-            let mut control = build(&env);
+            let mut control = match build(&env) {
+                Ok(control) => control,
+                Err(error) => {
+                    inner.report(ViewError::Control(error));
+                    if mounted.get().is_some() {
+                        return;
+                    }
+                    Box::new(Placeholder)
+                }
+            };
             match mounted.get() {
                 None => *first.borrow_mut() = Some(control),
                 Some(node) => {
@@ -201,6 +222,38 @@ fn mount_built(cx: &mut Cx<'_>, build: Build, current: Rc<Current>) -> NodeId {
     };
     mounted.set(Some(node));
     node
+}
+
+/// What a node shows until its control builds.
+struct Placeholder;
+
+impl CustomControl for Placeholder {
+    fn measure(&mut self, _cx: &MeasureContext<'_>) -> Measured {
+        Measured::new(Size::ZERO)
+    }
+
+    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
+        EventReply::Continue
+    }
+
+    fn paint(&self, _cx: &mut PaintContext<'_>) {}
+
+    fn semantics(&self) -> SemanticNode {
+        SemanticNode {
+            role: SemanticRole::Group,
+            name: String::new(),
+            description: String::new(),
+            value: None,
+            state: SemanticState::default(),
+            relations: Vec::new(),
+            actions: Vec::new(),
+            text: None,
+        }
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
 }
 
 fn set_enabled(inner: &mut Inner, node: NodeId, enabled: bool) {

@@ -2,6 +2,7 @@
 //! views with chained modifiers. The tree is built once; live properties
 //! update only what depends on the state that changed.
 
+mod builtins;
 mod configured;
 mod control;
 mod dynamic;
@@ -17,6 +18,9 @@ mod state;
 mod text;
 mod widgets;
 
+pub use builtins::{
+    Calendar, Combobox, Progress, RadioGroup, Slider, SpinBox, Tabs, TextEditor, TextField,
+};
 pub use configured::Configured;
 pub use control::{Canvas, CanvasContext, ControlView, CustomView};
 pub use dynamic::{Dynamic, ForEach};

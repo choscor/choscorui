@@ -712,3 +712,77 @@ fn control_labels_follow_the_locale_on_the_same_node() {
     assert_eq!(host.semantic(wifi).unwrap().state.checked, Some(true));
     assert_eq!(host.take_errors(), Vec::new());
 }
+
+#[test]
+fn range_and_selection_views_bind_both_ways() {
+    use choscorui_compose::view::{RadioGroup, Slider, Tabs};
+    use choscorui_controls::IntegerRange;
+    struct Screen;
+    impl View for Screen {
+        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+            let level = cx.state(50);
+            let size = cx.state(0_usize);
+            let tab = cx.state(0_usize);
+            let range = IntegerRange::new(0, 100, 0, 1, 10).unwrap();
+            VStack::new((
+                Slider::new("level", range, level.binding()),
+                RadioGroup::new(
+                    "size",
+                    vec!["small".to_owned(), "large".to_owned()],
+                    size.binding(),
+                ),
+                Tabs::new(
+                    "pages",
+                    vec!["one".to_owned(), "two".to_owned()],
+                    tab.binding(),
+                ),
+                Text::new(move || {
+                    format!(
+                        "level {} size {} tab {}",
+                        level.get(),
+                        size.get(),
+                        tab.get()
+                    )
+                }),
+                tap("reset", move || {
+                    level.set(10);
+                    size.set(0);
+                }),
+            ))
+        }
+    }
+    let mut host = host(Screen);
+    let slider = host.find("level").unwrap();
+    assert_eq!(host.semantic(slider).unwrap().value.as_deref(), Some("50"));
+    host.perform(slider, SemanticAction::Increment, None);
+    let size = host.find("size").unwrap();
+    host.perform(size, SemanticAction::Increment, None);
+    let pages = host.find("pages").unwrap();
+    host.perform(pages, SemanticAction::Increment, None);
+    assert!(names(&mut host).contains(&"level 51 size 1 tab 1".to_owned()));
+    let reset = host.find("reset").unwrap();
+    host.perform(reset, SemanticAction::Activate, None);
+    assert_eq!(host.semantic(slider).unwrap().value.as_deref(), Some("10"));
+    assert_eq!(host.semantic(size).unwrap().value.as_deref(), Some("small"));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn a_control_that_cannot_build_reports_an_error() {
+    use choscorui_compose::view::{Progress, ViewError};
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        Runtime::new(),
+        Rc::new(EstimatedText),
+    );
+    host.mount(VStack::new((
+        Progress::new("upload", 3_u32, 0),
+        Text::new("after"),
+    )));
+    host.layout();
+    let errors = host.take_errors();
+    assert!(matches!(errors.as_slice(), [ViewError::Control(_)]));
+    assert!(host.find("after").is_some());
+}

@@ -35,6 +35,8 @@ pub enum ViewError {
     /// Two items of a `ForEach` have the same key; the later one is left
     /// out.
     DuplicateKey(String),
+    /// A control view could not build its control, with the reason.
+    Control(String),
 }
 
 impl std::fmt::Display for ViewError {
@@ -46,6 +48,7 @@ impl std::fmt::Display for ViewError {
             Self::Semantics(error) => write!(f, "semantics update failed: {error}"),
             Self::Reactive(error) => write!(f, "state update failed: {error}"),
             Self::DuplicateKey(key) => write!(f, "duplicate key {key} in a list"),
+            Self::Control(reason) => write!(f, "control build failed: {reason}"),
         }
     }
 }

@@ -10,7 +10,7 @@ use super::state::{Binding, IntoLive, Live};
 use choscorui_controls::{CommandId, ControlKind, ControlMessage, ControlValue, CustomControl};
 use std::rc::Rc;
 
-type Build<C> = Rc<dyn Fn(&Env) -> C>;
+type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
 type Change<C> = Rc<dyn Fn(C) -> C>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
 
@@ -30,9 +30,23 @@ impl<C: CustomControl + 'static> Configured<C> {
     /// A view of the control that `build` makes. `kind` is the control
     /// kind whose root slot local style modifiers change.
     pub fn custom(kind: ControlKind, build: impl Fn(&Env) -> C + 'static) -> Self {
+        Self::try_custom(kind, move |env| {
+            Ok::<_, std::convert::Infallible>(build(env))
+        })
+    }
+
+    /// A view of the control that `build` makes, for a constructor that
+    /// can fail. A failed build reports [`ViewError::Control`] and keeps
+    /// the control that the node has.
+    ///
+    /// [`ViewError::Control`]: super::ViewError::Control
+    pub fn try_custom<E: std::fmt::Display>(
+        kind: ControlKind,
+        build: impl Fn(&Env) -> Result<C, E> + 'static,
+    ) -> Self {
         Self {
             kind,
-            build: Rc::new(build),
+            build: Rc::new(move |env| build(env).map_err(|error| error.to_string())),
             changes: Vec::new(),
             value: None,
             open: None,
@@ -144,11 +158,12 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             open,
             handlers,
         } = self;
-        let mut view = ControlView::build(move |env| {
+        let mut view = ControlView::try_build(move |env| {
+            let control = build(env)?;
             let control = changes
                 .iter()
-                .fold(build(env), |control, change| change(control));
-            Box::new(control)
+                .fold(control, |control, change| change(control));
+            Ok::<Box<dyn CustomControl>, String>(Box::new(control))
         })
         .kind(kind);
         if let Some(value) = value {
