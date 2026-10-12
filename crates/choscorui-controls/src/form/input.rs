@@ -162,6 +162,15 @@ impl Editor {
         true
     }
 
+    /// Replaces the value without a `Changed` message, for a control
+    /// that resets its own search text.
+    pub fn replace(&mut self, cx: &mut ControlContext<'_>, value: &str) {
+        let node = cx.node();
+        let input = TextFieldInput::SetValue(value.to_string());
+        let _ = self.field.handle(cx.tree_mut(), node, input);
+        cx.request_paint();
+    }
+
     /// Paints the text in `rect` and records where its caret stops are.
     pub fn paint_text(&self, cx: &mut PaintContext<'_>, rect: Rect, state: VisualState) {
         let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));

@@ -4,10 +4,10 @@
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    ButtonVariant, CommandId, ContextMenu, CustomControl, Dialog, MenuCheck, MenuItem, Menubar,
-    Popover, SheetSide,
+    ButtonVariant, Command, CommandId, CommandItem, ContextMenu, CustomControl, Dialog, MenuCheck,
+    MenuItem, Menubar, Popover, SheetSide,
 };
-use choscorui::core::{NodeId, Tree};
+use choscorui::core::{Icon, NodeId, Tree};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
     Box::new(control)
@@ -157,6 +157,58 @@ pub fn drawer(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> 
         })
         .collect();
     let rows: Vec<Row> = vec![("Directions; drag toward the edge to dismiss", drawers)];
+    HostedPage::build(tree, parent, rows)
+}
+
+fn commands() -> Vec<(String, Vec<CommandItem>)> {
+    vec![
+        (
+            "Suggestions".to_string(),
+            vec![
+                CommandItem::new("Calendar").with_icon(Icon::Calendar),
+                CommandItem::new("Search Emoji").with_icon(Icon::Search),
+                CommandItem::new("Calculator").disabled(),
+            ],
+        ),
+        (
+            "Settings".to_string(),
+            vec![
+                CommandItem::new("Profile")
+                    .with_icon(Icon::User)
+                    .with_shortcut("⌘P"),
+                CommandItem::new("Billing")
+                    .with_icon(Icon::Mail)
+                    .with_shortcut("⌘B"),
+                CommandItem::new("Settings")
+                    .with_icon(Icon::Settings)
+                    .with_shortcut("⌘S"),
+            ],
+        ),
+    ]
+}
+
+pub fn command(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![
+        (
+            "Inline",
+            vec![boxed(
+                Command::new("Commands", "Type a command or search…", commands())
+                    .with_empty("No results found."),
+            )],
+        ),
+        (
+            "Dialog",
+            vec![boxed(
+                Command::dialog(
+                    "Open command palette",
+                    "Commands",
+                    "Type a command or search…",
+                    commands(),
+                )
+                .with_empty("No results found."),
+            )],
+        ),
+    ];
     HostedPage::build(tree, parent, rows)
 }
 

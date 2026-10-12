@@ -102,6 +102,7 @@ page.context-menu = Context menu
 page.menubar = Menu bar
 page.popover = Popover
 page.hover-card = Hover card
+page.command = Command
 page.alert-dialog = Alert dialog
 page.dialog = Dialog
 page.sheet = Sheet

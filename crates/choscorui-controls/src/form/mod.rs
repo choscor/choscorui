@@ -3,7 +3,7 @@
 
 mod date_picker;
 mod field;
-mod input;
+pub(crate) mod input;
 mod input_group;
 mod kbd;
 pub(crate) mod measured;

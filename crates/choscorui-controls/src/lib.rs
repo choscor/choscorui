@@ -117,7 +117,8 @@ pub use form::{
 };
 pub use listbox::ListEntry;
 pub use overlay::{
-    ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY, Menubar, Popover,
+    Command, CommandItem, ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY,
+    Menubar, Popover,
 };
 mod dock;
 pub use dock::{

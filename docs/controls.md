@@ -92,6 +92,7 @@ in parentheses is the role that the macOS backend gives to that
 | Overlay | [`Menubar`](#contextmenu-and-menubar) | Row of menu titles inside the window. |
 | Overlay | [`Popover`](#popover) | Button with a floating panel; `Popover::hover_card` opens it on hover. |
 | Overlay | [`Dialog`](#dialog) | Button with a modal panel; `Dialog::sheet` and `Dialog::drawer` slide it in from an edge. |
+| Overlay | [`Command`](#command-and-commanditem) | Search input over grouped commands, inline or in a modal dialog. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1853,6 +1854,50 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | `Activate` and `Focus` while enabled | `Activate` (the focused part), `Dismiss`, and `Focus` |
 
 [overlays.rs](../crates/choscorui-controls/tests/overlays.rs) pins this behavior.
+
+### Command and CommandItem
+
+- Typing filters the commands. A command shows when its label contains
+  the search text, compared without case and accents. A group with no
+  shown command is hidden, and separators sit between shown groups.
+- The first enabled command that shows is highlighted after each change.
+  ArrowDown and ArrowUp move the highlight over enabled commands and stop
+  at the ends. Hover highlights a command.
+- Enter or a click runs the highlighted command and emits
+  `ItemActivated(index)`. The index counts every command of every group in
+  order. A disabled command does not run.
+- The list grows with its rows up to 300 pt, then scrolls. It keeps the
+  highlight in view. `with_empty(text)` shows `text` when nothing matches.
+- **`Command::dialog`.** An outline button opens the palette centered in a
+  modal dialog, with an empty search. Running a command closes it. Escape,
+  a press outside the palette, or `Dismiss` closes it and emits
+  `Dismissed`.
+- `CommandItem::with_icon` adds a leading icon, `with_shortcut` adds the
+  shortcut text at the end, and `disabled` shows the command without
+  letting it run.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Palette | `Root` | `popover` fill, radius xl, 4 pt padding; in a dialog, a 1 pt ring at 10% `foreground` and at most 448 pt wide |
+| Input | `Input` | 32 pt high, `input` fill and border at 30%, radius lg, 8 pt side padding and gap |
+| Search icon | `Icon` | 16 pt at 50% opacity |
+| Group | `Group` | 4 pt padding |
+| Group label | `GroupLabel` | xs medium `muted-foreground` text |
+| Command | `Item` | 32 pt high, radius sm; `muted` fill while highlighted |
+| Shortcut | `Shortcut` | xs `muted-foreground` text with widest tracking |
+| Separator | `Separator` | 1 pt `border` line |
+| Empty text | `Description` | sm text, 24 pt above and below, centered |
+| Scrim | `Overlay` | black at 10% behind the dialog form |
+
+| Field | `Command::semantics` |
+| --- | --- |
+| Role | `ComboBox` (AXComboBox); `Button` for a closed dialog form |
+| Name / value | name / search text |
+| Description | the highlighted command, or the empty text |
+| State | expanded, disabled |
+| Actions | `Activate` while a command is highlighted, `SetValue`, `Focus`, and `Dismiss` in the dialog form |
+
+[command.rs](../crates/choscorui-controls/tests/command.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 
