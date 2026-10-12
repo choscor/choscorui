@@ -1,6 +1,7 @@
 //! A button that opens a calendar in a popover.
 
 use super::input::default_width;
+use crate::calendar_caption::CaptionReply;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
@@ -68,6 +69,14 @@ impl DatePicker {
         self.mode
     }
 
+    /// Shows the month and the year as dropdowns in the calendar caption.
+    /// See [`Calendar::with_dropdown_caption`].
+    #[must_use]
+    pub fn with_dropdown_caption(mut self, first_year: i32, last_year: i32) -> Self {
+        self.calendar = self.calendar.with_dropdown_caption(first_year, last_year);
+        self
+    }
+
     #[must_use]
     pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = placeholder.into();
@@ -124,6 +133,7 @@ impl DatePicker {
             return false;
         }
         self.reveal.set(open, time);
+        self.calendar.close_caption();
         self.focus = if open {
             CalendarFocus::Grid
         } else {
@@ -158,8 +168,33 @@ impl DatePicker {
         cx.request_paint();
     }
 
+    /// Routes a pointer event in the open popover to the caption
+    /// dropdowns first. Returns `None` when they did not use it.
+    fn caption_pointer(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &PointerEvent,
+    ) -> Option<EventReply> {
+        if !self.reveal.open {
+            return None;
+        }
+        match self.calendar.caption_pointer(event, cx.time()) {
+            CaptionReply::Ignored => return None,
+            CaptionReply::Pressed(part) => self.focus = CalendarFocus::from_part(part),
+            CaptionReply::Used | CaptionReply::Show(..) => {}
+        }
+        cx.request_paint();
+        cx.request_semantics();
+        Some(if matches!(event, PointerEvent::Move { .. }) {
+            EventReply::Continue
+        } else {
+            EventReply::Stop
+        })
+    }
+
     fn pointer(&mut self, cx: &mut ControlContext<'_>, position: Point) -> EventReply {
         if self.reveal.open && self.frame.contains(position) {
+            self.focus = CalendarFocus::Grid;
             let Some(layout) = &self.layout else {
                 return EventReply::Stop;
             };
@@ -194,6 +229,24 @@ impl DatePicker {
                 _ => EventReply::Continue,
             };
         }
+        if key == Key::Escape && self.calendar.caption_open().is_some() {
+            // Escape closes the dropdown list first.
+            self.calendar.close_caption();
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Stop;
+        }
+        if key == Key::Tab && self.calendar.has_dropdown_caption() {
+            return self.tab(cx);
+        }
+        if let Some(part) = self.calendar.caption_part(self.focus) {
+            if self.calendar.caption_key(part, key) == CaptionReply::Ignored {
+                return EventReply::Continue;
+            }
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Stop;
+        }
         match key {
             Key::Escape => {
                 self.change_open(cx, false);
@@ -219,6 +272,31 @@ impl DatePicker {
                 } else {
                     EventReply::Continue
                 }
+            }
+        }
+    }
+}
+
+impl DatePicker {
+    /// Tab and Shift+Tab move between the caption dropdowns and the grid.
+    /// Past the ends they close the popover, and focus moves on.
+    fn tab(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let stops = self.calendar.stops();
+        let current = stops
+            .iter()
+            .position(|stop| *stop == self.focus)
+            .unwrap_or(stops.len() - 1);
+        self.calendar.close_caption();
+        match hosted::tab_stop(current, stops.len(), cx.modifiers().shift) {
+            Some(next) => {
+                self.focus = stops[next];
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            None => {
+                self.change_open(cx, false);
+                EventReply::Continue
             }
         }
     }
@@ -261,17 +339,19 @@ impl CustomControl for DatePicker {
         };
         self.frame = Rect::new(Point::new(x, bounds.max_y() + cx.tokens.spacing), size);
         let inner = content_rect(self.frame, &calendar, cx.rtl());
-        self.layout = Some(Calendar::layout(
-            inner.origin,
-            cx.styles,
-            cx.tokens,
-            cx.rtl(),
-        ));
+        let layout = Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl());
+        self.calendar.arrange_caption(cx, &layout);
+        self.layout = Some(layout);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
+        }
+        if let ControlEvent::Pointer(pointer) = event
+            && let Some(reply) = self.caption_pointer(cx, pointer)
+        {
+            return reply;
         }
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
@@ -284,9 +364,27 @@ impl CustomControl for DatePicker {
                 EventReply::Stop
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
+            ControlEvent::Text(text) if self.reveal.open => {
+                if self.calendar.caption_text(text, cx.time()) == CaptionReply::Ignored {
+                    return EventReply::Continue;
+                }
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
                 self.change_open(cx, false);
                 EventReply::Continue
+            }
+            ControlEvent::Hover(false) => {
+                self.calendar.caption_stop_scroll();
+                EventReply::Continue
+            }
+            ControlEvent::Timer => {
+                if self.calendar.caption_step(cx.time()) {
+                    cx.request_paint();
+                }
+                EventReply::Stop
             }
             _ => EventReply::Continue,
         }
@@ -313,8 +411,12 @@ impl CustomControl for DatePicker {
         });
     }
 
+    /// The popover, and the open dropdown list that can reach below it.
     fn overlay(&self) -> Option<Rect> {
-        self.reveal.open.then_some(self.frame)
+        let list = self.calendar.caption_frame();
+        self.reveal
+            .open
+            .then(|| list.map_or(self.frame, |list| self.frame.union(list)))
     }
 
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
@@ -335,10 +437,17 @@ impl CustomControl for DatePicker {
                 self.calendar.paint(cx, layout, self.today, self.focus);
             });
         });
+        self.calendar.paint_caption_list(cx);
     }
 
     fn animating(&self, time: f64) -> bool {
         self.reveal.animating(self.motion_ms, time)
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.calendar
+            .caption_deadline()
+            .filter(|_| self.reveal.open)
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -357,7 +466,14 @@ impl CustomControl for DatePicker {
         };
         let mut node = hosted::node(SemanticRole::Button, &self.name, actions);
         node.value = Some(self.text().unwrap_or_else(|| self.placeholder.clone()));
-        if self.reveal.open {
+        if let Some(part) = self
+            .calendar
+            .caption_part(self.focus)
+            .filter(|_| self.reveal.open)
+        {
+            // A focused caption dropdown names its month or year.
+            node.description = self.calendar.caption_description(part);
+        } else if self.reveal.open {
             // The cursor day, as the grid would announce it.
             node.description = self
                 .calendar

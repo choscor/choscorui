@@ -6,7 +6,7 @@ use crate::custom::MeasureContext;
 use crate::style::{
     Content, ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
 };
-use choscorui_core::{Icon, Key, Point, Rect};
+use choscorui_core::{Icon, Key, Point, PointerButton, PointerEvent, Rect, WheelUnit};
 
 /// One row of a popup list.
 #[derive(Clone, Debug, PartialEq)]
@@ -59,9 +59,24 @@ const TYPE_AHEAD_SECONDS: f64 = 1.0;
 /// The most rows the list shows before it scrolls.
 const MAX_ROWS: usize = 8;
 
+/// How long the pointer rests on a scroll button before the list moves
+/// one more row, in seconds.
+const SCROLL_REPEAT_SECONDS: f64 = 0.05;
+
+/// What a pointer event did to an open list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ListPointer {
+    /// The event is not for the list.
+    Ignored,
+    /// The list used the event; `paint` says that its look changed.
+    Used { paint: bool },
+    /// A release on the enabled option at this index.
+    Chosen(usize),
+}
+
 /// The open list's geometry and highlight. Rectangles are in window
 /// coordinates with no scroll applied.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ListPopup {
     kind: ControlKind,
     pub entries: Vec<ListEntry>,
@@ -72,6 +87,11 @@ pub(crate) struct ListPopup {
     rows: Vec<Rect>,
     /// The height of the scroll-up and scroll-down buttons.
     button_height: f64,
+    /// The scroll step of one row or wheel line: the option height.
+    line: f64,
+    /// The direction of the scroll button under the pointer and the
+    /// host time of its next row step.
+    auto_scroll: Option<(f64, f64)>,
     typed: String,
     typed_at: f64,
 }
@@ -87,6 +107,8 @@ impl ListPopup {
             viewport: Rect::default(),
             rows: Vec::new(),
             button_height: 0.0,
+            line: 0.0,
+            auto_scroll: None,
             typed: String::new(),
             typed_at: f64::NEG_INFINITY,
         }
@@ -137,6 +159,9 @@ impl ListPopup {
         let content = cx.style(self.query(Slot::Content, VisualState::NONE));
         self.button_height = cx
             .style(self.query(Slot::Previous, VisualState::NONE))
+            .min_height;
+        self.line = cx
+            .style(self.query(Slot::Item, VisualState::NONE))
             .min_height;
         let width = self.natural_width(cx).max(min_width);
         let x = if cx.rtl() {
@@ -195,6 +220,89 @@ impl ListPopup {
 
     pub fn scroll_by(&mut self, delta: f64) {
         self.scroll = (self.scroll + delta).clamp(0.0, self.max_scroll());
+    }
+
+    /// Stops the scroll that a hovered scroll button drives, for example
+    /// when the pointer leaves the list or the list closes.
+    pub fn stop_scroll(&mut self) {
+        self.auto_scroll = None;
+    }
+
+    /// The host time of the next row step while the pointer rests on a
+    /// scroll button.
+    pub fn deadline(&self) -> Option<f64> {
+        self.auto_scroll.map(|(_, at)| at)
+    }
+
+    /// Scrolls one row for the hovered scroll button at `time`. The
+    /// scroll stops at the end of the list, where the button goes away.
+    /// Returns true when the list scrolled.
+    pub fn step_scroll(&mut self, time: f64) -> bool {
+        let Some((direction, _)) = self.auto_scroll else {
+            return false;
+        };
+        self.scroll_by(direction * self.line);
+        let end = if direction < 0.0 {
+            self.scroll <= 0.0
+        } else {
+            self.scroll >= self.max_scroll()
+        };
+        self.auto_scroll = (!end).then_some((direction, time + SCROLL_REPEAT_SECONDS));
+        true
+    }
+
+    /// Handles a pointer event at `time` while the list is open: a press
+    /// on a scroll button scrolls one row, resting on a scroll button
+    /// scrolls on, a move highlights the option under the pointer, the
+    /// wheel scrolls, and a release on an option chooses it.
+    pub fn pointer(&mut self, event: &PointerEvent, time: f64) -> ListPointer {
+        match *event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } if self.frame.contains(position) => {
+                let direction = self.scroll_button(position);
+                if let Some(direction) = direction {
+                    self.scroll_by(direction * self.line);
+                }
+                ListPointer::Used {
+                    paint: direction.is_some(),
+                }
+            }
+            PointerEvent::Up { position, .. } => self
+                .hit(position)
+                .map_or(ListPointer::Ignored, ListPointer::Chosen),
+            PointerEvent::Move { position } => {
+                let direction = self.scroll_button(position);
+                self.auto_scroll = match (direction, self.auto_scroll) {
+                    (Some(direction), Some((current, at))) if direction == current => {
+                        Some((current, at))
+                    }
+                    (Some(direction), _) => Some((direction, time + SCROLL_REPEAT_SECONDS)),
+                    (None, _) => None,
+                };
+                match self.hit(position) {
+                    Some(index) if self.highlighted != Some(index) => {
+                        self.highlighted = Some(index);
+                        ListPointer::Used { paint: true }
+                    }
+                    _ => ListPointer::Ignored,
+                }
+            }
+            PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            } if self.frame.contains(position) => {
+                let step = match unit {
+                    WheelUnit::Points => delta.y,
+                    WheelUnit::Lines => delta.y * self.line,
+                };
+                self.scroll_by(step);
+                ListPointer::Used { paint: true }
+            }
+            _ => ListPointer::Ignored,
+        }
     }
 
     /// Scrolls so that the entry at `index` is in view.
@@ -298,7 +406,7 @@ impl ListPopup {
     }
 
     /// The scroll-up or scroll-down button under `point`: `-1` or `1`.
-    pub fn scroll_button(&self, point: Point) -> Option<f64> {
+    fn scroll_button(&self, point: Point) -> Option<f64> {
         let (up, down) = self.scroll_buttons();
         if up.is_some_and(|rect| rect.contains(point)) {
             Some(-1.0)

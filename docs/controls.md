@@ -1203,6 +1203,18 @@ behavior.
 - Chosen days fill `primary`. A range's middle days fill `muted` with
   square corners, and a muted band joins its two ends. The ring follows the
   cursor.
+- **Dropdown caption.** `with_dropdown_caption(first_year, last_year)`
+  replaces the caption text with a month dropdown and a year dropdown. The
+  year list runs from `first_year` to `last_year`, in either order, inside
+  1..=9999.
+- The month dropdown shows the localized month names of the locale. The
+  triggers sit side by side between the month buttons, the month first in
+  reading order. Right-to-left layouts mirror them.
+- Each list is a [Select](#select-and-listentry) list below its trigger,
+  with the same keys, type-ahead, scroll buttons, and hover scroll. A check
+  mark shows the shown month or year.
+- Months and years with no day in the range are disabled. A choice shows
+  that month and keeps the selection. It emits no message.
 
 | Calendar part | Slot | Value |
 | --- | --- | --- |
@@ -1217,15 +1229,17 @@ behavior.
 | Disabled day | `Day`, disabled | `muted-foreground` text at 50% opacity |
 | Weekday | `Weekday` | 12.8 pt `muted-foreground` text, 32 pt high |
 | Caption | `Caption` | sm medium text, 32 pt high, 32 pt sides, 6 pt gap |
-| Caption dropdown | `Trigger` | 32 pt input box with no fill, radius md, sm medium text; the focus ring while focused |
+| Caption dropdown | `Trigger` | 32 pt input box with no fill, radius md, 8 pt start and 4 pt end padding, sm medium text, 4 pt gap; the focus ring while focused |
+| Dropdown chevron | `Icon` | 14 pt `muted-foreground` chevron at the end of the trigger |
+| Dropdown list | `Select` `Content`, `Item` | the select list |
 | Month buttons | `Previous`, `Next` | 32 pt ghost icon buttons |
 
 | Field | `DateTimeEdit::semantics` | `Calendar::semantics` | `Calendar::cell_semantics` |
 | --- | --- | --- | --- |
 | Role | `SpinButton` (AXIncrementor) | `Table` (AXTable) | `Cell` (AXCell) |
 | Name / value | name / long date, short time, or both | name / chosen long dates (a range joins its ends with an en dash) | long date / day number |
-| State | invalid when out of range; the description names the focused field | the description is the month title | selected when chosen; disabled outside the range |
-| Actions | `Increment`, `Decrement`, `Focus` | `Focus` | `Activate` when enabled |
+| State | invalid when out of range; the description names the focused field | the description is the month title, or the month or year of a focused caption dropdown; expanded while a dropdown has focus | selected when chosen; disabled outside the range |
+| Actions | `Increment`, `Decrement`, `Focus` | `Focus`; `ShowMenu` and `Expand` or `Collapse` while a dropdown has focus | `Activate` when enabled |
 
 `DateTimeEdit` has no handler for these actions. The host maps them to
 `handle_key`.
@@ -1242,8 +1256,21 @@ month. A press on an enabled day activates it. In `Single` mode, Enter or
 Space reports `Activated`, and a selection change reports `Date`. The other
 modes report `Dates`. Keyboard focus rings the cursor day.
 
-[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) and
-[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
+With a dropdown caption, a hosted `Calendar` has three tab stops: the month
+dropdown, the year dropdown, and the grid. Tab enters at the month and
+Shift+Tab at the grid. Tab and Shift+Tab leave the calendar at the ends.
+
+- On a focused dropdown, Enter, Space, ArrowDown, or ArrowUp opens its list.
+  A press on a trigger focuses it and opens or closes its list.
+- In the open list, Enter or Space chooses the highlight. Escape, Tab, a
+  press outside the list, or a focus loss closes it.
+- The description names the focused dropdown with its month or year, or the
+  highlighted option while the list is open. `ShowMenu` and `Expand` open
+  the list, and `Collapse` closes it.
+
+[widgets.rs](../crates/choscorui-controls/tests/widgets.rs),
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
+and [calendar_caption.rs](../crates/choscorui-controls/tests/calendar_caption.rs)
 pin this behavior.
 
 ### ItemView
@@ -2254,6 +2281,11 @@ character that the code does not accept. `set_open` returns false.
   `Multiple` and `Range` pickers stay open and emit `Changed(Dates)`.
 - `with_today` marks today. `set_dates` sets the value; a single picker
   keeps the first date.
+- **Dropdown caption.** `with_dropdown_caption(first_year, last_year)` gives
+  the calendar the dropdown caption of [Calendar](#datetimeedit-and-calendar).
+  Tab and Shift+Tab move between the month dropdown, the year dropdown, and
+  the grid. Past the ends they close the popover, and focus moves on.
+- Escape closes an open dropdown list first. The popover stays open.
 
 | Part | Value |
 | --- | --- |
@@ -2265,7 +2297,7 @@ character that the code does not accept. `set_open` returns false.
 | --- | --- |
 | Role | `Button` (AXButton) |
 | Name / value | name / chosen dates, or the placeholder |
-| Description | the cursor day while open |
+| Description | the cursor day while open; the month or year of a focused caption dropdown |
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
@@ -2274,7 +2306,9 @@ range mode, it rejects more than two dates and an end before the start.
 `set_open` opens and closes the calendar, but not while the picker is
 disabled.
 
-[date_picker.rs](../crates/choscorui-controls/tests/date_picker.rs) pins this behavior.
+[date_picker.rs](../crates/choscorui-controls/tests/date_picker.rs) and
+[calendar_caption.rs](../crates/choscorui-controls/tests/calendar_caption.rs)
+pin this behavior.
 
 ### ContextMenu and Menubar
 

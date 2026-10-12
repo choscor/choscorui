@@ -6,6 +6,7 @@
 //! sections. Values outside the minimum/maximum are reported as
 //! `Intermediate` while typing and clamped on commit.
 
+use crate::calendar_caption::{CaptionContext, CaptionDropdowns, CaptionPart, CaptionReply};
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
@@ -410,6 +411,10 @@ pub struct Calendar {
     today: Option<CivilDate>,
     /// The parts of a hosted calendar, from `arrange`.
     layout: Option<CalendarLayout>,
+    /// The month and year dropdowns that replace the caption text.
+    caption: Option<CaptionDropdowns>,
+    /// The part of a hosted calendar that has keyboard focus.
+    focus: CalendarFocus,
 }
 
 /// How a calendar chooses days.
@@ -444,6 +449,27 @@ pub enum CalendarFocus {
     Next,
     /// The day grid; the ring is on the selected day.
     Grid,
+    /// The month dropdown of a dropdown caption.
+    Month,
+    /// The year dropdown of a dropdown caption.
+    Year,
+}
+
+impl CalendarFocus {
+    fn caption_part(self) -> Option<CaptionPart> {
+        match self {
+            Self::Month => Some(CaptionPart::Month),
+            Self::Year => Some(CaptionPart::Year),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_part(part: CaptionPart) -> Self {
+        match part {
+            CaptionPart::Month => Self::Month,
+            CaptionPart::Year => Self::Year,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -467,7 +493,29 @@ impl Calendar {
             name: String::new(),
             today: None,
             layout: None,
+            caption: None,
+            focus: CalendarFocus::None,
         }
+    }
+
+    /// Shows the month and the year as dropdowns in the caption, in
+    /// place of the caption text. The year list runs from `first_year`
+    /// to `last_year`, in either order, inside 1..=9999.
+    #[must_use]
+    pub fn with_dropdown_caption(mut self, first_year: i32, last_year: i32) -> Self {
+        self.caption = Some(CaptionDropdowns::new(&self.locale, first_year, last_year));
+        self
+    }
+
+    /// True when the caption shows month and year dropdowns.
+    pub fn has_dropdown_caption(&self) -> bool {
+        self.caption.is_some()
+    }
+
+    /// Shows `month` of `year`, as a choice in a caption dropdown does.
+    /// It keeps the selection.
+    pub fn show(&mut self, year: i32, month: u8) {
+        self.shown = (year, month.clamp(1, 12));
     }
 
     /// Chooses days as `mode` says. In `Multiple` and `Range` modes the
@@ -705,8 +753,13 @@ impl Calendar {
         focus: CalendarFocus,
     ) {
         let query = |slot| StyleQuery::new(ControlKind::Calendar, slot);
-        let caption = cx.style(query(Slot::Caption));
-        cx.label(layout.caption, &self.title(), &caption, TextAlign::Center);
+        match &self.caption {
+            Some(dropdowns) => dropdowns.paint_triggers(cx, self.shown, focus.caption_part()),
+            None => {
+                let caption = cx.style(query(Slot::Caption));
+                cx.label(layout.caption, &self.title(), &caption, TextAlign::Center);
+            }
+        }
         let (back, forward) = if cx.rtl {
             (Icon::ChevronRight, Icon::ChevronLeft)
         } else {
@@ -1007,6 +1060,140 @@ impl CustomControl for DateTimeEdit {
     }
 }
 
+/// The caption dropdowns as `Calendar` and `DatePicker` drive them. A
+/// choice in a dropdown shows its month.
+impl Calendar {
+    /// Places the caption dropdowns in the caption row of `layout`.
+    pub(crate) fn arrange_caption(&mut self, cx: &MeasureContext<'_>, layout: &CalendarLayout) {
+        if let Some(caption) = &mut self.caption {
+            caption.arrange(cx, layout.caption);
+        }
+    }
+
+    /// The tab stops inside the calendar, in order.
+    pub(crate) fn stops(&self) -> &'static [CalendarFocus] {
+        if self.caption.is_some() {
+            &[
+                CalendarFocus::Month,
+                CalendarFocus::Year,
+                CalendarFocus::Grid,
+            ]
+        } else {
+            &[CalendarFocus::Grid]
+        }
+    }
+
+    /// The dropdown that `focus` names, when the caption has dropdowns.
+    pub(crate) fn caption_part(&self, focus: CalendarFocus) -> Option<CaptionPart> {
+        self.caption.as_ref().and(focus.caption_part())
+    }
+
+    /// The dropdown whose list is open.
+    pub(crate) fn caption_open(&self) -> Option<CaptionPart> {
+        self.caption.as_ref()?.open_part()
+    }
+
+    /// The rectangle of the open dropdown list.
+    pub(crate) fn caption_frame(&self) -> Option<Rect> {
+        self.caption.as_ref()?.frame()
+    }
+
+    /// The shown month and the range, as the dropdowns read them.
+    fn caption_context(&self) -> CaptionContext {
+        CaptionContext {
+            shown: self.shown,
+            minimum: self.minimum,
+            maximum: self.maximum,
+        }
+    }
+
+    /// Shows the month of a `Show` reply.
+    fn apply_caption(&mut self, reply: CaptionReply) -> CaptionReply {
+        if let CaptionReply::Show(year, month) = reply {
+            self.show(year, month);
+        }
+        reply
+    }
+
+    /// Opens the list of `part`.
+    pub(crate) fn open_caption(&mut self, part: CaptionPart) {
+        let at = self.caption_context();
+        if let Some(caption) = &mut self.caption {
+            caption.open(part, at);
+        }
+    }
+
+    /// Closes the open dropdown list.
+    pub(crate) fn close_caption(&mut self) {
+        if let Some(caption) = &mut self.caption {
+            caption.close();
+        }
+    }
+
+    /// A key for the focused dropdown `part`.
+    pub(crate) fn caption_key(&mut self, part: CaptionPart, key: Key) -> CaptionReply {
+        let at = self.caption_context();
+        let reply = match &mut self.caption {
+            Some(caption) => caption.key(part, key, at),
+            None => CaptionReply::Ignored,
+        };
+        self.apply_caption(reply)
+    }
+
+    /// A pointer event at `time` for the dropdowns.
+    pub(crate) fn caption_pointer(&mut self, event: &PointerEvent, time: f64) -> CaptionReply {
+        let at = self.caption_context();
+        let reply = match &mut self.caption {
+            Some(caption) => caption.pointer(event, time, at),
+            None => CaptionReply::Ignored,
+        };
+        self.apply_caption(reply)
+    }
+
+    /// Typed text for the open dropdown list.
+    pub(crate) fn caption_text(&mut self, text: &str, time: f64) -> CaptionReply {
+        match &mut self.caption {
+            Some(caption) => caption.text(text, time),
+            None => CaptionReply::Ignored,
+        }
+    }
+
+    /// Stops the hover scroll of the open list.
+    pub(crate) fn caption_stop_scroll(&mut self) {
+        if let Some(caption) = &mut self.caption {
+            caption.stop_scroll();
+        }
+    }
+
+    /// The time of the open list's next hover scroll step.
+    pub(crate) fn caption_deadline(&self) -> Option<f64> {
+        self.caption.as_ref()?.deadline()
+    }
+
+    /// Runs the hover scroll step due at `time`. Returns true when the
+    /// list scrolled.
+    pub(crate) fn caption_step(&mut self, time: f64) -> bool {
+        self.caption
+            .as_mut()
+            .is_some_and(|caption| caption.step_scroll(time))
+    }
+
+    /// The text that names the focused dropdown `part`.
+    pub(crate) fn caption_description(&self, part: CaptionPart) -> String {
+        self.caption
+            .as_ref()
+            .map(|caption| caption.description(part, self.shown))
+            .unwrap_or_default()
+    }
+
+    /// Paints the open dropdown list.
+    pub(crate) fn paint_caption_list(&self, cx: &mut PaintContext<'_>) {
+        if let Some(caption) = &self.caption {
+            caption.paint_list(cx, self.shown);
+        }
+    }
+}
+
 impl Calendar {
     /// Names the calendar for its hosted semantics.
     #[must_use]
@@ -1036,6 +1223,7 @@ impl Calendar {
         let Some(layout) = &self.layout else {
             return EventReply::Continue;
         };
+        self.focus = CalendarFocus::Grid;
         if layout.previous.contains(position) {
             self.show_month(-1);
             cx.request_semantics();
@@ -1054,7 +1242,69 @@ impl Calendar {
         EventReply::Stop
     }
 
+    /// Routes a pointer event to the caption dropdowns first.
+    fn hosted_pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+        match self.caption_pointer(event, cx.time()) {
+            CaptionReply::Ignored => {}
+            CaptionReply::Pressed(part) => {
+                self.focus = CalendarFocus::from_part(part);
+                cx.request_focus();
+                cx.request_paint();
+                cx.request_semantics();
+                return EventReply::Stop;
+            }
+            reply => {
+                cx.request_paint();
+                if matches!(reply, CaptionReply::Show(..)) {
+                    cx.request_semantics();
+                }
+                if !matches!(event, PointerEvent::Move { .. }) {
+                    return EventReply::Stop;
+                }
+            }
+        }
+        match *event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => self.hosted_press(cx, position),
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Tab and Shift+Tab move between the dropdowns and the grid, and
+    /// leave the calendar at the ends.
+    fn hosted_tab(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let stops = self.stops();
+        let current = stops
+            .iter()
+            .position(|stop| *stop == self.focus)
+            .unwrap_or(0);
+        self.close_caption();
+        cx.request_paint();
+        match crate::hosted::tab_stop(current, stops.len(), cx.modifiers().shift) {
+            Some(next) => {
+                self.focus = stops[next];
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            None => EventReply::Continue,
+        }
+    }
+
     fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        if key == Key::Tab && self.caption.is_some() {
+            return self.hosted_tab(cx);
+        }
+        if let Some(part) = self.focus.caption_part() {
+            let reply = self.caption_key(part, key);
+            if reply == CaptionReply::Ignored {
+                return EventReply::Continue;
+            }
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Stop;
+        }
         match key {
             // A single calendar leaves choosing to the application.
             Key::Enter | Key::Space if self.mode == CalendarMode::Single => {
@@ -1103,12 +1353,9 @@ impl CustomControl for Calendar {
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let root = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
         let inner = content_rect(bounds, &root, cx.rtl());
-        self.layout = Some(Calendar::layout(
-            inner.origin,
-            cx.styles,
-            cx.tokens,
-            cx.rtl(),
-        ));
+        let layout = Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl());
+        self.arrange_caption(cx, &layout);
+        self.layout = Some(layout);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -1116,14 +1363,44 @@ impl CustomControl for Calendar {
             return EventReply::Continue;
         }
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) => self.hosted_press(cx, *position),
+            ControlEvent::Pointer(pointer) => self.hosted_pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.hosted_key(cx, *key),
-            ControlEvent::FocusChanged(_) => {
+            ControlEvent::Text(text) => {
+                if self.caption_text(text, cx.time()) == CaptionReply::Ignored {
+                    return EventReply::Continue;
+                }
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(focused) => {
+                // Tab enters at the first stop, and Shift+Tab at the last.
+                let stops = self.stops();
+                self.focus = match (focused, cx.modifiers().shift) {
+                    (true, false) => stops[0],
+                    (true, true) => stops[stops.len() - 1],
+                    (false, _) => CalendarFocus::None,
+                };
+                if !focused {
+                    self.close_caption();
+                }
                 cx.request_paint();
                 EventReply::Continue
+            }
+            ControlEvent::Dismiss => {
+                self.close_caption();
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::Hover(false) => {
+                self.caption_stop_scroll();
+                EventReply::Continue
+            }
+            ControlEvent::Timer => {
+                if self.caption_step(cx.time()) {
+                    cx.request_paint();
+                }
+                EventReply::Stop
             }
             _ => EventReply::Continue,
         }
@@ -1133,18 +1410,47 @@ impl CustomControl for Calendar {
         let root = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
         let bounds = cx.bounds;
         cx.slot(bounds, &root, |_, _| {});
-        let focus = if cx.state.focus_visible() {
-            CalendarFocus::Grid
-        } else {
-            CalendarFocus::None
+        // The grid rings for keyboard focus; a dropdown rings while focused.
+        let focus = match self.focus {
+            CalendarFocus::Month | CalendarFocus::Year if cx.state.focused() => self.focus,
+            CalendarFocus::Grid if cx.state.focus_visible() => CalendarFocus::Grid,
+            _ => CalendarFocus::None,
         };
         if let Some(layout) = &self.layout {
             Calendar::paint(self, cx, layout, self.today, focus);
         }
     }
 
+    fn overlay(&self) -> Option<Rect> {
+        self.caption_frame()
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        self.paint_caption_list(cx);
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.caption_deadline()
+    }
+
+    /// A focused dropdown names itself in the description, takes
+    /// `ShowMenu`, and reports whether its list is open.
     fn semantics(&self) -> SemanticNode {
-        Calendar::semantics(self, &self.name)
+        let mut node = Calendar::semantics(self, &self.name);
+        if let Some(part) = self.focus.caption_part() {
+            let open = self.caption_open() == Some(part);
+            node.description = self.caption_description(part);
+            node.state.expanded = Some(open);
+            node.actions.extend([
+                SemanticAction::ShowMenu,
+                if open {
+                    SemanticAction::Collapse
+                } else {
+                    SemanticAction::Expand
+                },
+            ]);
+        }
+        node
     }
 
     fn perform(
@@ -1153,10 +1459,17 @@ impl CustomControl for Calendar {
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
-        if action != SemanticAction::Focus {
-            return false;
+        let part = self.focus.caption_part();
+        match (action, part) {
+            (SemanticAction::Focus, _) => cx.request_focus(),
+            (SemanticAction::ShowMenu | SemanticAction::Expand, Some(part)) => {
+                self.open_caption(part);
+            }
+            (SemanticAction::Collapse, Some(_)) => self.close_caption(),
+            _ => return false,
         }
-        cx.request_focus();
+        cx.request_paint();
+        cx.request_semantics();
         true
     }
 

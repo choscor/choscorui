@@ -4,18 +4,14 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::{self, Reveal};
-use crate::listbox::{ListEntry, ListPopup};
+use crate::listbox::{ListEntry, ListPointer, ListPopup};
 use crate::style::{
     ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
+    SemanticAction, SemanticNode, SemanticRole, Size,
 };
-
-/// How long the pointer rests on a scroll button before the list moves
-/// one more row, in seconds.
-const SCROLL_REPEAT_SECONDS: f64 = 0.05;
 
 /// A select: a trigger that shows the chosen option, and a popup list
 /// below it. The list scrolls past eight options. While the pointer is
@@ -31,13 +27,8 @@ pub struct Select {
     enabled: bool,
     reveal: Reveal,
     motion_ms: u32,
-    /// The scroll step of one wheel line: the first row's height.
-    line: f64,
     /// True for the native-select look of the trigger.
     native: bool,
-    /// The direction of the scroll button under the pointer and the
-    /// host time of its next row step.
-    auto_scroll: Option<(f64, f64)>,
 }
 
 impl Select {
@@ -52,9 +43,7 @@ impl Select {
             enabled: true,
             reveal: Reveal::default(),
             motion_ms: 0,
-            line: 0.0,
             native: false,
-            auto_scroll: None,
         }
     }
 
@@ -146,7 +135,7 @@ impl Select {
             return false;
         }
         self.reveal.set(open, time);
-        self.auto_scroll = None;
+        self.list.stop_scroll();
         if open {
             let start = self.selected.or_else(|| self.list.options().next());
             self.list.highlight(start);
@@ -174,83 +163,35 @@ impl Select {
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
         let open = self.reveal.open;
+        if open {
+            match self.list.pointer(event, cx.time()) {
+                ListPointer::Chosen(index) => {
+                    self.choose(cx, index);
+                    return EventReply::Stop;
+                }
+                ListPointer::Used { paint } => {
+                    if paint {
+                        cx.request_paint();
+                    }
+                    // A move goes on to the host's hover tracking.
+                    if !matches!(event, PointerEvent::Move { .. }) {
+                        return EventReply::Stop;
+                    }
+                }
+                ListPointer::Ignored => {}
+            }
+        }
         match *event {
             PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
-            } => {
-                if open && self.list.frame.contains(position) {
-                    if let Some(direction) = self.list.scroll_button(position) {
-                        self.list.scroll_by(direction * self.line);
-                        cx.request_paint();
-                    }
-                    return EventReply::Stop;
-                }
-                if cx.bounds().contains(position) {
-                    cx.request_focus();
-                    self.change_open(cx, !open);
-                    return EventReply::Stop;
-                }
-                EventReply::Continue
-            }
-            PointerEvent::Up { position, .. } if open => {
-                match self.list.hit(position) {
-                    Some(index) => self.choose(cx, index),
-                    None => return EventReply::Continue,
-                }
-                EventReply::Stop
-            }
-            PointerEvent::Move { position } if open => {
-                self.hover_scroll(cx.time(), self.list.scroll_button(position));
-                if let Some(index) = self.list.hit(position)
-                    && self.list.highlighted != Some(index)
-                {
-                    self.list.highlighted = Some(index);
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-            PointerEvent::Wheel {
-                position,
-                delta,
-                unit,
-            } if open && self.list.frame.contains(position) => {
-                let step = match unit {
-                    WheelUnit::Points => delta.y,
-                    WheelUnit::Lines => delta.y * self.line,
-                };
-                self.list.scroll_by(step);
-                cx.request_paint();
+            } if cx.bounds().contains(position) => {
+                cx.request_focus();
+                self.change_open(cx, !open);
                 EventReply::Stop
             }
             _ => EventReply::Continue,
         }
-    }
-
-    /// Starts, keeps, or stops the scroll that a hovered scroll button
-    /// drives. `direction` is the button under the pointer, if any.
-    fn hover_scroll(&mut self, time: f64, direction: Option<f64>) {
-        self.auto_scroll = match (direction, self.auto_scroll) {
-            (Some(direction), Some((current, at))) if direction == current => Some((current, at)),
-            (Some(direction), _) => Some((direction, time + SCROLL_REPEAT_SECONDS)),
-            (None, _) => None,
-        };
-    }
-
-    /// Scrolls one row for the hovered scroll button. The scroll stops
-    /// at the end of the list, where the button goes away.
-    fn step_scroll(&mut self, cx: &mut ControlContext<'_>) {
-        let Some((direction, _)) = self.auto_scroll else {
-            return;
-        };
-        self.list.scroll_by(direction * self.line);
-        let end = if direction < 0.0 {
-            self.list.scroll <= 0.0
-        } else {
-            self.list.scroll >= self.list.max_scroll()
-        };
-        self.auto_scroll = (!end).then(|| (direction, cx.time() + SCROLL_REPEAT_SECONDS));
-        cx.request_paint();
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
@@ -325,9 +266,6 @@ impl CustomControl for Select {
         self.motion_ms = cx
             .style(self.query(Slot::Content, VisualState::OPEN))
             .motion_ms;
-        self.line = cx
-            .style(self.query(Slot::Item, VisualState::NONE))
-            .min_height;
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -360,11 +298,13 @@ impl CustomControl for Select {
                 EventReply::Continue
             }
             ControlEvent::Hover(false) => {
-                self.auto_scroll = None;
+                self.list.stop_scroll();
                 EventReply::Continue
             }
             ControlEvent::Timer => {
-                self.step_scroll(cx);
+                if self.list.step_scroll(cx.time()) {
+                    cx.request_paint();
+                }
                 EventReply::Stop
             }
             _ => EventReply::Continue,
@@ -434,9 +374,7 @@ impl CustomControl for Select {
     }
 
     fn deadline(&self) -> Option<f64> {
-        self.auto_scroll
-            .filter(|_| self.reveal.open)
-            .map(|(_, at)| at)
+        self.list.deadline().filter(|_| self.reveal.open)
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -505,7 +443,7 @@ impl CustomControl for Select {
         self.enabled = enabled;
         if !enabled {
             self.reveal = Reveal::default();
-            self.auto_scroll = None;
+            self.list.stop_scroll();
         }
     }
 

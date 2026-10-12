@@ -112,6 +112,7 @@ pub use dialogs::HostedAlertDialog;
 pub use menu::HostedDropdownMenu;
 pub use model_widgets::HostedColumnBrowser;
 pub use shell::HostedToolbar;
+mod calendar_caption;
 mod custom;
 mod data;
 pub(crate) mod feedback;

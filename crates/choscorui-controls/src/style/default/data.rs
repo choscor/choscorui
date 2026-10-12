@@ -402,10 +402,18 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
                 ..Edges::ZERO
             };
             style.text = cx.text(TextSize::Sm, FontWeight::MEDIUM);
+            style.gap = cx.sp(1.0);
             if s.focused() {
                 style.border = cx.c(ColorRole::Ring);
                 style.ring = cx.focus_ring();
             }
+            style
+        }
+        Slot::Icon => {
+            // The chevron of a caption dropdown.
+            let mut style = cx.base();
+            style.foreground = cx.c(ColorRole::MutedForeground);
+            style.icon_size = cx.sp(3.5);
             style
         }
         Slot::Previous | Slot::Next => {
