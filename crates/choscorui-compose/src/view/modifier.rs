@@ -6,6 +6,7 @@
 
 use super::View;
 use super::env::{Corner, Elevation, Env, Fill, Metric};
+use super::fragment::FragmentId;
 use super::host::{Cx, Flex, Handler, Inner, Layer, ShortcutEntry, ViewError};
 use super::layout::{Alignment, parent_tokens};
 use super::present::{Placement, Presentation, present};
@@ -518,8 +519,7 @@ struct Target {
 impl<V: View> View for Styled<V> {
     fn mount(self, cx: &mut Cx<'_>) {
         let Styled { view, modifiers } = self;
-        let env = child_env(&cx.env, &modifiers);
-        let fragment = cx.inner.fragments.child(cx.fragment);
+        let (env, fragment) = enter_styled(cx, &modifiers);
         {
             let mut inside = Cx {
                 inner: &mut *cx.inner,
@@ -530,52 +530,69 @@ impl<V: View> View for Styled<V> {
             };
             inside.mount(view);
         }
-        let only_environment = modifiers.iter().all(Modifier::is_environment);
-        if only_environment {
-            return;
+        finish_styled(cx, &env, fragment, modifiers);
+    }
+}
+
+// The non-generic halves of `Styled::mount` stay out of line, so that
+// each styled view type adds only the call to its content.
+
+/// The environment and fragment for the content of a styled view.
+#[inline(never)]
+fn enter_styled(cx: &mut Cx<'_>, modifiers: &[Modifier]) -> (Env, FragmentId) {
+    let env = child_env(&cx.env, modifiers);
+    let fragment = cx.inner.fragments.child(cx.fragment);
+    (env, fragment)
+}
+
+/// Applies `modifiers` to the content mounted in `fragment`.
+#[inline(never)]
+fn finish_styled(cx: &mut Cx<'_>, env: &Env, fragment: FragmentId, modifiers: Vec<Modifier>) {
+    let only_environment = modifiers.iter().all(Modifier::is_environment);
+    if only_environment {
+        return;
+    }
+    let nodes = cx.inner.fragments.nodes(fragment);
+    let single = nodes.len() == 1 && cx.inner.fragments.children(fragment).is_empty();
+    let inner_node = if single {
+        nodes[0]
+    } else {
+        gather(cx, fragment)
+    };
+    let control = cx
+        .inner
+        .nodes
+        .get(&inner_node)
+        .is_some_and(|data| data.control && !data.text);
+    let mut target = Target {
+        node: inner_node,
+        wrapper: !single,
+        painted: false,
+    };
+    let patch: Rc<RefCell<Patch>> = Rc::default();
+    let mut patched = false;
+    let mut theme_modifiers = Vec::new();
+    for modifier in modifiers {
+        if modifier.is_theme() {
+            theme_modifiers.push(modifier);
+            continue;
         }
-        let nodes = cx.inner.fragments.nodes(fragment);
-        let single = nodes.len() == 1 && cx.inner.fragments.children(fragment).is_empty();
-        let inner_node = if single {
-            nodes[0]
-        } else {
-            gather(cx, fragment)
-        };
-        let control = cx
-            .inner
-            .nodes
-            .get(&inner_node)
-            .is_some_and(|data| data.control && !data.text);
-        let mut target = Target {
-            node: inner_node,
-            wrapper: !single,
-            painted: false,
-        };
-        let patch: Rc<RefCell<Patch>> = Rc::default();
-        let mut patched = false;
-        let mut theme_modifiers = Vec::new();
-        for modifier in modifiers {
-            if modifier.is_theme() {
-                theme_modifiers.push(modifier);
-                continue;
-            }
-            apply(
-                cx,
-                &env,
-                modifier,
-                &mut target,
-                inner_node,
-                control,
-                &patch,
-                &mut patched,
-            );
-        }
-        if patched {
-            install_patch(cx, inner_node, patch);
-        }
-        if !theme_modifiers.is_empty() {
-            apply_theme(cx, target.node, theme_modifiers);
-        }
+        apply(
+            cx,
+            env,
+            modifier,
+            &mut target,
+            inner_node,
+            control,
+            &patch,
+            &mut patched,
+        );
+    }
+    if patched {
+        install_patch(cx, inner_node, patch);
+    }
+    if !theme_modifiers.is_empty() {
+        apply_theme(cx, target.node, theme_modifiers);
     }
 }
 
@@ -611,7 +628,7 @@ fn child_env(parent: &Env, modifiers: &[Modifier]) -> Env {
 
 /// Puts the fragment's nodes in one new column node at their place, and
 /// returns it.
-fn gather(cx: &mut Cx<'_>, fragment: super::fragment::FragmentId) -> NodeId {
+fn gather(cx: &mut Cx<'_>, fragment: FragmentId) -> NodeId {
     let column = LayoutStyle {
         kind: LayoutKind::Stack {
             axis: Axis::Vertical,

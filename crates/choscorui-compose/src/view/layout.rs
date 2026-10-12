@@ -126,6 +126,24 @@ fn stack<C: View>(
     cross: ItemAlign,
     main: MainAlign,
 ) -> NodeId {
+    let node = stack_node(cx, axis, spacing, cross, main);
+    let env = cx.env.clone();
+    cx.within(node, env).mount(children);
+    node
+}
+
+// The node setup of the containers stays out of line, so that each
+// content type adds only the call that mounts its children.
+
+/// A new stack node along `axis`.
+#[inline(never)]
+fn stack_node(
+    cx: &mut Cx<'_>,
+    axis: Axis,
+    spacing: Metric,
+    cross: ItemAlign,
+    main: MainAlign,
+) -> NodeId {
     let tokens = parent_tokens(cx);
     let style = LayoutStyle {
         kind: LayoutKind::Stack {
@@ -136,10 +154,7 @@ fn stack<C: View>(
         },
         ..LayoutStyle::default()
     };
-    let node = cx.node(style);
-    let env = cx.env.clone();
-    cx.within(node, env).mount(children);
-    node
+    cx.node(style)
 }
 
 /// Children top to bottom.
@@ -269,15 +284,22 @@ impl<C: View> ZStack<C> {
 
 impl<C: View> View for ZStack<C> {
     fn mount(self, cx: &mut Cx<'_>) {
-        let style = LayoutStyle {
-            kind: LayoutKind::Overlay,
-            ..LayoutStyle::default()
-        };
-        let node = cx.node(style);
-        cx.inner.data(node).child_align = Some(self.alignment.items());
+        let node = overlay_node(cx, self.alignment);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.children);
     }
+}
+
+/// A new node that places its children on top of each other.
+#[inline(never)]
+fn overlay_node(cx: &mut Cx<'_>, alignment: Alignment) -> NodeId {
+    let style = LayoutStyle {
+        kind: LayoutKind::Overlay,
+        ..LayoutStyle::default()
+    };
+    let node = cx.node(style);
+    cx.inner.data(node).child_align = Some(alignment.items());
+    node
 }
 
 /// Flexible space that takes what is left along a stack.
@@ -416,16 +438,23 @@ impl<C: View> Grid<C> {
 
 impl<C: View> View for Grid<C> {
     fn mount(self, cx: &mut Cx<'_>) {
-        let tokens = parent_tokens(cx);
-        let gap = self.spacing.resolve(&tokens);
-        let columns: Vec<Track> = self.columns.iter().map(|item| item.track()).collect();
-        let count = columns.len().max(1);
-        let style = LayoutStyle::grid(columns, Vec::new(), gap);
-        let node = cx.node(style);
-        cx.inner.data(node).grid_columns = Some(count);
+        let node = grid_node(cx, &self.columns, self.spacing);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.children);
     }
+}
+
+/// A new grid node with `columns`.
+#[inline(never)]
+fn grid_node(cx: &mut Cx<'_>, columns: &[GridItem], spacing: Metric) -> NodeId {
+    let tokens = parent_tokens(cx);
+    let gap = spacing.resolve(&tokens);
+    let columns: Vec<Track> = columns.iter().map(|item| item.track()).collect();
+    let count = columns.len().max(1);
+    let style = LayoutStyle::grid(columns, Vec::new(), gap);
+    let node = cx.node(style);
+    cx.inner.data(node).grid_columns = Some(count);
+    node
 }
 
 /// Mounts children without a node of its own, so that a modifier can
@@ -577,59 +606,67 @@ impl<C: View> ScrollView<C> {
 
 impl<C: View> View for ScrollView<C> {
     fn mount(self, cx: &mut Cx<'_>) {
-        let shared = Rc::new(ScrollShared::default());
-        let node = cx.control(Box::new(ScrollControl {
-            shared: shared.clone(),
-            axis: self.axis,
-            bounds: Rect::default(),
-        }));
-        let style = LayoutStyle {
-            kind: LayoutKind::Scroll { axis: self.axis },
-            shrink: true,
-            ..LayoutStyle::default()
-        };
-        if let Err(error) = cx.inner.engine.set_style(&cx.inner.tree, node, style) {
-            cx.inner.report(super::host::ViewError::Layout(error));
-        }
-        // Like SwiftUI, a scroll view takes the space it is offered along
-        // its axis, and a vertical one also takes the full width.
-        let flex = match self.axis {
-            Axis::Vertical => Flex::BOTH,
-            Axis::Horizontal => Flex {
-                wide: true,
-                tall: false,
-            },
-        };
-        cx.inner.make_flexible(node, flex);
-        let axis = self.axis;
-        let data = cx.inner.data(node);
-        data.scroll = Some(shared.clone());
-        cx.inner.scrolls.insert(node);
-        let data = cx.inner.data(node);
-        data.internal = Some(Rc::new(
-            move |inner: &mut Inner, message: &ControlMessage| {
-                if let ControlMessage::Changed(ControlValue::Number(amount)) = message {
-                    scroll_by(inner, node, axis, *amount);
-                }
-            },
-        ));
-        // The content is one column, as the scroll container lays out its
-        // first child only.
-        let column = LayoutStyle {
-            kind: LayoutKind::Stack {
-                axis: Axis::Vertical,
-                spacing: 0.0,
-                main_align: MainAlign::Start,
-                cross_align: ItemAlign::Stretch,
-            },
-            ..LayoutStyle::default()
-        };
+        let (node, content) = scroll_nodes(cx, self.axis);
         let env = cx.env.clone();
         let mut inside = cx.within(node, env);
-        let content = inside.node(column);
         let env = inside.env.clone();
         inside.within(content, env).mount(self.content);
     }
+}
+
+/// A new scroll node along `axis`, and the column node inside it for the
+/// content.
+#[inline(never)]
+fn scroll_nodes(cx: &mut Cx<'_>, axis: Axis) -> (NodeId, NodeId) {
+    let shared = Rc::new(ScrollShared::default());
+    let node = cx.control(Box::new(ScrollControl {
+        shared: shared.clone(),
+        axis,
+        bounds: Rect::default(),
+    }));
+    let style = LayoutStyle {
+        kind: LayoutKind::Scroll { axis },
+        shrink: true,
+        ..LayoutStyle::default()
+    };
+    if let Err(error) = cx.inner.engine.set_style(&cx.inner.tree, node, style) {
+        cx.inner.report(super::host::ViewError::Layout(error));
+    }
+    // Like SwiftUI, a scroll view takes the space it is offered along
+    // its axis, and a vertical one also takes the full width.
+    let flex = match axis {
+        Axis::Vertical => Flex::BOTH,
+        Axis::Horizontal => Flex {
+            wide: true,
+            tall: false,
+        },
+    };
+    cx.inner.make_flexible(node, flex);
+    let data = cx.inner.data(node);
+    data.scroll = Some(shared.clone());
+    cx.inner.scrolls.insert(node);
+    let data = cx.inner.data(node);
+    data.internal = Some(Rc::new(
+        move |inner: &mut Inner, message: &ControlMessage| {
+            if let ControlMessage::Changed(ControlValue::Number(amount)) = message {
+                scroll_by(inner, node, axis, *amount);
+            }
+        },
+    ));
+    // The content is one column, as the scroll container lays out its
+    // first child only.
+    let column = LayoutStyle {
+        kind: LayoutKind::Stack {
+            axis: Axis::Vertical,
+            spacing: 0.0,
+            main_align: MainAlign::Start,
+            cross_align: ItemAlign::Stretch,
+        },
+        ..LayoutStyle::default()
+    };
+    let env = cx.env.clone();
+    let content = cx.within(node, env).node(column);
+    (node, content)
 }
 
 /// Scrolls the scroll node by `amount` points along `axis`.

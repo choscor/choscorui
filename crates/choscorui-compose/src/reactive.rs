@@ -91,7 +91,18 @@ thread_local! {
 /// Ends a tracking frame even when the tracked code panics.
 struct TrackFrame;
 
+impl TrackFrame {
+    /// Starts recording reads for runtime `key` until the frame drops.
+    /// Kept out of line so that each generic caller only calls it.
+    #[inline(never)]
+    fn push(key: usize) -> Self {
+        TRACKING.with(|frames| frames.borrow_mut().push((key, Vec::new())));
+        Self
+    }
+}
+
 impl Drop for TrackFrame {
+    #[inline(never)]
     fn drop(&mut self) {
         TRACKING.with(|frames| frames.borrow_mut().pop());
     }
@@ -224,8 +235,7 @@ impl Runtime {
     /// it read, in first-read order. Reads in a nested `track` belong to
     /// the nested call only.
     pub fn track<R>(&self, operation: impl FnOnce() -> R) -> (R, Vec<u64>) {
-        TRACKING.with(|frames| frames.borrow_mut().push((self.key(), Vec::new())));
-        let frame = TrackFrame;
+        let frame = TrackFrame::push(self.key());
         let result = operation();
         let reads = TRACKING.with(|frames| {
             frames
@@ -242,8 +252,7 @@ impl Runtime {
     /// [`Runtime::track`].
     pub fn untracked<R>(operation: impl FnOnce() -> R) -> R {
         // No runtime has key 0, so the reads go nowhere.
-        TRACKING.with(|frames| frames.borrow_mut().push((0, Vec::new())));
-        let frame = TrackFrame;
+        let frame = TrackFrame::push(0);
         let result = operation();
         drop(frame);
         result

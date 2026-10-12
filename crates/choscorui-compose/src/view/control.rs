@@ -25,7 +25,7 @@ pub trait CustomView: CustomControl + 'static {}
 impl<T: CustomControl + 'static> CustomView for T {}
 
 /// Builds a control from the environment, or says why it cannot.
-type Build = Rc<dyn Fn(&Env) -> Result<Box<dyn CustomControl>, String>>;
+pub(crate) type Build = Rc<dyn Fn(&Env) -> Result<Box<dyn CustomControl>, String>>;
 
 /// Where a [`ControlView`] gets its control.
 enum Source {
@@ -71,6 +71,23 @@ impl ControlView {
         Self::with_source(Source::Built(Rc::new(move |env| {
             build(env).map_err(|error| error.to_string())
         })))
+    }
+
+    /// A view of the control that `build` makes, with all its options.
+    pub(crate) fn configured(
+        build: Build,
+        kind: ControlKind,
+        value: Option<Live<ControlValue>>,
+        open: Option<Live<bool>>,
+        handlers: Vec<Handler>,
+    ) -> Self {
+        Self {
+            source: Source::Built(build),
+            kind: Some(kind),
+            value,
+            open,
+            handlers,
+        }
     }
 
     fn with_source(source: Source) -> Self {
@@ -134,6 +151,8 @@ impl Current {
 }
 
 impl View for ControlView {
+    // Out of line, so that each `Configured<C>` adds only its build.
+    #[inline(never)]
     fn mount(self, cx: &mut Cx<'_>) {
         let current: Rc<Current> = Rc::default();
         let node = match self.source {

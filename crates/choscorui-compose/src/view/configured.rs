@@ -158,23 +158,13 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             open,
             handlers,
         } = self;
-        let mut view = ControlView::try_build(move |env| {
+        let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
             let control = changes
                 .iter()
                 .fold(control, |control, change| change(control));
-            Ok::<Box<dyn CustomControl>, String>(Box::new(control))
-        })
-        .kind(kind);
-        if let Some(value) = value {
-            view = view.value(value);
-        }
-        if let Some(open) = open {
-            view = view.open(open);
-        }
-        for handler in handlers {
-            view = view.on_message(move |message| handler(message));
-        }
-        view.mount(cx);
+            Ok(Box::new(control))
+        });
+        ControlView::configured(build, kind, value, open, handlers).mount(cx);
     }
 }

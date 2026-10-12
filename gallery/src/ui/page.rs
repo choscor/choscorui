@@ -57,10 +57,11 @@ pub fn column(sections: impl View) -> AnyView {
 }
 
 /// A titled group of samples: a small muted caption above `content`.
-pub fn section(title: &str, content: impl View) -> impl View {
+pub fn section(title: &str, content: impl View) -> AnyView {
     VStack::new((caption(title), content))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S2)
+        .into_any()
 }
 
 /// A small caption in `muted-foreground`.
