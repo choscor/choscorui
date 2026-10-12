@@ -20,7 +20,7 @@ fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-fn switch(cx: &mut Cx<'_>, key: &'static str, on: bool, size: ControlSize) -> impl View {
+fn switch(cx: &mut Cx<'_>, key: &'static str, on: bool, size: ControlSize) -> Switch {
     Switch::new(t!(key), cx.state(on).binding()).with(move |switch| switch.with_size(size))
 }
 
@@ -40,6 +40,11 @@ pub fn switch_page(_: &PageCx) -> AnyView {
                     switch(cx, "switch.bluetooth", false, ControlSize::Sm),
                     switch(cx, "switch.hotspot", true, ControlSize::Sm),
                 )),
+            ),
+            section(
+                t!("select.invalid"),
+                switch(cx, "checkbox.terms", false, ControlSize::Default)
+                    .with(|switch| switch.with_invalid(true)),
             ),
         ))
     })
@@ -73,9 +78,21 @@ pub fn toggle(_: &PageCx) -> AnyView {
                 .collect();
             row(toggles)
         };
+        let invalid = section(
+            t!("select.invalid"),
+            Toggle::new(t!("toggle-group.strikethrough"), cx.state(false).binding()).with(
+                |toggle| {
+                    toggle
+                        .with_variant(ToggleVariant::Outline)
+                        .with_invalid(true)
+                },
+            ),
+        )
+        .into_any();
         let lines = TOGGLE_VARIANTS
             .into_iter()
-            .map(|(variant, key)| section(t!(key), line(cx, variant)))
+            .map(|(variant, key)| section(t!(key), line(cx, variant)).into_any())
+            .chain([invalid])
             .collect::<Vec<_>>();
         column(lines)
     })
@@ -149,6 +166,19 @@ pub fn toggle_group(_: &PageCx) -> AnyView {
             section(t!("toggle-group.single"), single),
             section(t!("toggle-group.multiple"), multiple),
             section(t!("toggle-group.small_vertical"), row((small, vertical))),
+            section(
+                t!("select.invalid"),
+                ToggleGroup::single(
+                    t!("toggle-group.required"),
+                    alignment,
+                    cx.state(None).binding(),
+                )
+                .with(|group| {
+                    group
+                        .with_variant(ToggleVariant::Outline)
+                        .with_invalid(true)
+                }),
+            ),
             VStack::new(grid)
                 .alignment(HorizontalAlignment::Leading)
                 .spacing(Space::S4),
@@ -547,6 +577,10 @@ pub fn date_picker(_: &PageCx) -> AnyView {
             section(
                 t!("date-picker.several"),
                 dates(cx, "date-picker.meeting_days", CalendarMode::Multiple),
+            ),
+            section(
+                t!("select.invalid"),
+                single(cx, "date-picker.required", None).with(|picker| picker.with_invalid(true)),
             ),
         ))
     })

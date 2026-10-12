@@ -96,21 +96,21 @@ fn expectations() -> Vec<Expect> {
         },
         Expect {
             sizes: SMALL,
-            states: &[S::CHECKED],
+            states: &[S::CHECKED, S::INVALID],
             ..expect("switch", K::Switch)
         },
         Expect {
             variants: all(ToggleVariant::ALL),
             sizes: TOGGLE_SIZES,
             grid: true,
-            states: &[S::CHECKED],
+            states: &[S::CHECKED, S::INVALID],
             ..expect("toggle", K::Toggle)
         },
         Expect {
             variants: all(ToggleVariant::ALL),
             sizes: TOGGLE_SIZES,
             grid: true,
-            states: &[S::CHECKED],
+            states: &[S::CHECKED, S::INVALID],
             ..expect("toggle-group", K::ToggleGroup)
         },
         Expect {
@@ -154,8 +154,16 @@ fn expectations() -> Vec<Expect> {
             ..expect("kbd", K::Kbd)
         },
         Expect {
-            states: &[S::CHECKED, S::DISABLED],
+            states: &[S::CHECKED, S::INVALID, S::DISABLED],
             ..expect("radio", K::RadioGroup)
+        },
+        Expect {
+            states: &[S::INVALID],
+            ..expect("combobox", K::Combobox)
+        },
+        Expect {
+            states: &[S::INVALID],
+            ..expect("date-picker", K::DatePicker)
         },
         Expect {
             variants: all(TabsVariant::ALL),

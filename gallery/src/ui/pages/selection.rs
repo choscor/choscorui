@@ -30,17 +30,20 @@ fn captioned(caption: impl View, control: impl View) -> impl View {
 }
 
 /// A radio group whose first option is selected, with the option at
-/// `disabled` unavailable. The name and options are catalog keys.
+/// `disabled` unavailable, and invalid when `invalid` is true. The name
+/// and options are catalog keys.
 fn radios(
     cx: &mut Cx<'_>,
     name: &'static str,
     options: [&'static str; 3],
     disabled: Option<usize>,
+    invalid: bool,
 ) -> impl View {
     let selected = cx.state(0usize);
     let group = Configured::try_custom(ControlKind::RadioGroup, move |env| {
         let options = options.map(|option| env.text(option, &[]));
-        let group = controls::RadioGroup::hosted(env.text(name, &[]), options, 0)?;
+        let group =
+            controls::RadioGroup::hosted(env.text(name, &[]), options, 0)?.with_invalid(invalid);
         match disabled {
             Some(index) => group.with_disabled(index),
             None => Ok(group),
@@ -55,7 +58,7 @@ fn radios(
     captioned(hidden_caption(t!(name)), group)
 }
 
-/// Two radio groups, one with a disabled option.
+/// Three radio groups: one with a disabled option, and one invalid.
 struct RadioPage;
 
 impl View for RadioPage {
@@ -66,12 +69,21 @@ impl View for RadioPage {
                 "radio.paper_size",
                 ["radio.a4", "radio.letter", "radio.legal"],
                 None,
+                false,
             ),
             radios(
                 cx,
                 "radio.quality",
                 ["radio.draft", "radio.normal", "radio.best"],
                 Some(2),
+                false,
+            ),
+            radios(
+                cx,
+                "radio.required",
+                ["radio.a4", "radio.letter", "radio.legal"],
+                None,
+                true,
             ),
         ))
     }
@@ -168,18 +180,21 @@ fn city_items() -> Vec<ComboItem> {
         .collect()
 }
 
-/// A city combobox labeled by catalog key `label`; the read-only one
-/// starts on Huế. The caption names the selected city.
+/// A city combobox labeled by catalog key `label`, invalid when `invalid`
+/// is true; the read-only one starts on Huế. The caption names the
+/// selected city.
 fn city_combo(
     cx: &mut Cx<'_>,
     label: &'static str,
     editable: bool,
     mode: CompletionMode,
+    invalid: bool,
 ) -> impl View {
     let start = (!editable).then(|| CITIES.iter().position(|city| *city == "Huế"));
     let selected = cx.state(start.flatten());
     let combo = Configured::custom(ControlKind::Combobox, move |env| {
-        let mut combo = controls::Combobox::new(env.text(label, &[]), editable);
+        let mut combo =
+            controls::Combobox::new(env.text(label, &[]), editable).with_invalid(invalid);
         combo.set_completion_mode(mode);
         combo.set_items(city_items());
         if !editable {
@@ -205,16 +220,29 @@ fn city_combo(
     captioned(caption, combo)
 }
 
-/// A read-only combo, an editable prefix-completing combo, and an editable
-/// contains-matching combo.
+/// A read-only combo, an editable prefix-completing combo, an editable
+/// contains-matching combo, and an invalid combo.
 struct ComboboxPage;
 
 impl View for ComboboxPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         column((
-            city_combo(cx, "combobox.read_only", false, CompletionMode::Prefix),
-            city_combo(cx, "combobox.prefix", true, CompletionMode::Prefix),
-            city_combo(cx, "combobox.contains", true, CompletionMode::Contains),
+            city_combo(
+                cx,
+                "combobox.read_only",
+                false,
+                CompletionMode::Prefix,
+                false,
+            ),
+            city_combo(cx, "combobox.prefix", true, CompletionMode::Prefix, false),
+            city_combo(
+                cx,
+                "combobox.contains",
+                true,
+                CompletionMode::Contains,
+                false,
+            ),
+            city_combo(cx, "combobox.required", true, CompletionMode::Prefix, true),
         ))
     }
 }
