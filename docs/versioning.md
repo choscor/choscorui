@@ -45,7 +45,7 @@ Query capabilities, not the OS version or `cfg!(target_os)`. For example, on mac
 
 ## Compatibility suite
 
-[`compatibility.rs`](../crates/choscorui/tests/compatibility.rs) records fixed scenes. For each scene, it records focus order, layout geometry, accessibility semantics, theme tokens, and display-list output. It compares the records with the golden files in `crates/choscorui/tests/golden/`. A change to any of these values makes the suite fail.
+[`compatibility.rs`](../crates/choscorui/tests/compatibility.rs) records fixed scenes. For each scene, it records focus order, layout geometry, accessibility semantics, theme tokens, and display-list output. It compares the records with the golden files in `crates/choscorui/tests/golden/`. A change to any of these values makes the suite fail. It also records every hosted control from the [catalog](../crates/choscorui-controls/tests/catalog/mod.rs) and each variant. For each control, it records the bounds, semantics, and display list, in both directions. It also records the Tab order through all hosted controls.
 
 To accept an intended change, do these steps:
 

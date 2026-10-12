@@ -6,20 +6,29 @@
 //! An intended change is re-recorded with
 //! `CHOSCORUI_BLESS=1 cargo test -p choscorui --test compatibility`;
 //! review the golden diff and note it in the release notes.
+//!
+//! The hosted controls come from the catalog that the controls contract
+//! tests use, so a control added there is pinned here too.
 
 use choscorui::controls::{
-    Button, ButtonVariant, Checkbox, ComboItem, Combobox, CommandId, ControlSize, EstimatedText,
-    IntegerRange, ItemView, PaintContext, Progress, Slider, SliderOrientation, SpinBox, Styles,
-    TextField, TextItemDelegate, VisualState,
+    Alert, AlertVariant, Avatar, Badge, BadgeVariant, Bubble, BubbleVariant, Button, ButtonVariant,
+    Checkbox, ComboItem, Combobox, CommandId, ControlHost, ControlSize, CustomControl,
+    EstimatedText, HostEnv, IntegerRange, Item, ItemGroup, ItemVariant, ItemView, Kbd, KbdVariant,
+    Marker, MarkerVariant, Message, PaintContext, Progress, ShortcutModifiers, Sidebar,
+    SidebarItem, SidebarVariant, Slider, SliderOrientation, SpinBox, Styles, Switch, TextField,
+    TextItemDelegate, Toast, ToastVariant, Toaster, Toasts, Toggle, ToggleVariant, VisualState,
 };
 use choscorui::core::{
-    AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, CrossAlign,
-    DesignTokens, DisplayList, FormLayout, GridLayout, Icon, Insets, ItemKey, LayoutDirection,
-    LinearLayout, NodeId, Point, Rect, SemanticRole, Size, StringListModel, ThemeOverride,
-    ThemeResolver, Tree,
+    AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, Constraints,
+    CrossAlign, DesignTokens, DisplayList, FormLayout, GridLayout, Icon, InputModality, Insets,
+    ItemKey, Key, KeyEvent, LayoutDirection, LinearLayout, NodeId, Point, Rect, SemanticRole, Size,
+    StringListModel, ThemeOverride, ThemeResolver, Tree,
 };
 use std::fmt::Write;
 use std::path::PathBuf;
+
+#[path = "../../choscorui-controls/tests/catalog/mod.rs"]
+mod catalog;
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
@@ -372,4 +381,192 @@ fn painted_output() {
         writeln!(out, "{command:?}").unwrap();
     }
     golden("painted_output", &out);
+}
+
+/// Every hosted control variant and size that the catalog does not show.
+fn hosted_variants() -> Vec<(String, Box<dyn CustomControl>)> {
+    let mut out: Vec<(String, Box<dyn CustomControl>)> = Vec::new();
+    for variant in BadgeVariant::ALL {
+        let badge = Badge::new("New").with_variant(*variant);
+        out.push((format!("badge {}", variant.name()), Box::new(badge)));
+    }
+    for variant in AlertVariant::ALL {
+        let alert = Alert::new("Heads up!", "You can add components.").with_variant(*variant);
+        out.push((format!("alert {}", variant.name()), Box::new(alert)));
+    }
+    for variant in KbdVariant::ALL {
+        let kbd = Kbd::new("⌘K").with_variant(*variant);
+        out.push((format!("kbd {}", variant.name()), Box::new(kbd)));
+    }
+    for variant in MarkerVariant::ALL {
+        let marker = Marker::new("Today").with_variant(*variant);
+        out.push((format!("marker {}", variant.name()), Box::new(marker)));
+    }
+    for variant in BubbleVariant::ALL {
+        let message = Message::new("Ana", vec![Bubble::new("Hello!").with_variant(*variant)]);
+        out.push((format!("message {}", variant.name()), Box::new(message)));
+    }
+    for variant in ToastVariant::ALL {
+        let toasts = Toasts::new();
+        toasts.push(Toast::new("Event created").with_variant(*variant));
+        let toaster = Toaster::new("Notifications", toasts, "Close");
+        out.push((format!("toaster {}", variant.name()), Box::new(toaster)));
+    }
+    for variant in SidebarVariant::ALL {
+        let sidebar = Sidebar::new(
+            "Navigation",
+            "Toggle sidebar",
+            vec![(
+                "Application".to_string(),
+                vec![SidebarItem::new("Inbox", Icon::Inbox)],
+            )],
+        )
+        .with_variant(*variant);
+        out.push((format!("sidebar {}", variant.name()), Box::new(sidebar)));
+    }
+    for variant in ToggleVariant::ALL {
+        for size in ControlSize::ALL {
+            let toggle = Toggle::new("Bold", false)
+                .with_variant(*variant)
+                .with_size(size);
+            let label = format!("toggle {} {}", variant.name(), size.name());
+            out.push((label, Box::new(toggle)));
+        }
+    }
+    for variant in ItemVariant::ALL {
+        for size in ControlSize::ALL {
+            let item = Item::new("Profile").with_variant(*variant).with_size(size);
+            let group = ItemGroup::new("Settings", vec![item]);
+            let label = format!("item {} {}", variant.name(), size.name());
+            out.push((label, Box::new(group)));
+        }
+    }
+    for size in ControlSize::ALL {
+        let switch = Switch::new("Airplane mode", true).with_size(size);
+        out.push((format!("switch {}", size.name()), Box::new(switch)));
+        let avatar = Avatar::new("Ana Lee", "AL").with_size(size);
+        out.push((format!("avatar {}", size.name()), Box::new(avatar)));
+    }
+    out
+}
+
+/// Mounts `control` at its natural size and settles it.
+fn mount_hosted(
+    control: Box<dyn CustomControl>,
+    themes: &ThemeResolver,
+    styles: &Styles,
+    direction: LayoutDirection,
+) -> (Tree, ControlHost, NodeId) {
+    let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 600.0));
+    let mut host = ControlHost::new();
+    let root = tree.root();
+    let node = host.mount(&mut tree, root, control).unwrap();
+    let env = HostEnv::new(themes, styles, &EstimatedText).direction(direction);
+    let size = host
+        .measure(&tree, node, Constraints::UNBOUNDED, &env)
+        .unwrap()
+        .size;
+    tree.set_bounds(node, rect(10.0, 10.0, size.width, size.height))
+        .unwrap();
+    host.arrange(&tree, &env);
+    host.advance(&mut tree, 0.0);
+    host.arrange(&tree, &env);
+    (tree, host, node)
+}
+
+#[test]
+fn hosted_controls() {
+    let mut out = String::new();
+    let themes = ThemeResolver::new(DesignTokens::light());
+    let styles = Styles::new();
+    let mut controls: Vec<(String, Box<dyn CustomControl>, &[LayoutDirection])> = Vec::new();
+    for (name, factory) in catalog::catalog() {
+        let both: &[LayoutDirection] = &[LayoutDirection::Ltr, LayoutDirection::Rtl];
+        controls.push((name.to_string(), factory(), both));
+    }
+    for (name, control) in hosted_variants() {
+        controls.push((name, control, &[LayoutDirection::Ltr]));
+    }
+    for (name, control, directions) in controls {
+        let mut control = Some(control);
+        for direction in directions {
+            let control = control.take().unwrap_or_else(|| {
+                let (_, factory) = catalog::catalog()
+                    .into_iter()
+                    .find(|(id, _)| *id == name)
+                    .unwrap();
+                factory()
+            });
+            let (tree, host, node) = mount_hosted(control, &themes, &styles, *direction);
+            writeln!(out, "# {name} {direction:?}").unwrap();
+            writeln!(out, "bounds {:?}", tree.bounds(node).unwrap()).unwrap();
+            if *direction == LayoutDirection::Ltr {
+                writeln!(out, "semantics {:?}", host.get(node).unwrap().semantics()).unwrap();
+            }
+            let mut list = DisplayList::new();
+            let env = HostEnv::new(&themes, &styles, &EstimatedText).direction(*direction);
+            host.paint(&tree, &mut list, &env);
+            for command in list.commands() {
+                writeln!(out, "{command:?}").unwrap();
+            }
+        }
+    }
+    golden("hosted_controls", &out);
+}
+
+/// Tab moves through every hosted control in tree order, and through the
+/// tab stops inside a control that keeps Tab.
+#[test]
+fn hosted_focus_order() {
+    let mut out = String::new();
+    let themes = ThemeResolver::new(DesignTokens::light());
+    let styles = Styles::new();
+    let env = HostEnv::new(&themes, &styles, &EstimatedText);
+    let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 20000.0));
+    let mut host = ControlHost::new();
+    let root = tree.root();
+    let mut nodes = Vec::new();
+    let mut top = 0.0;
+    for (name, factory) in catalog::catalog() {
+        let node = host.mount(&mut tree, root, factory()).unwrap();
+        let size = host
+            .measure(&tree, node, Constraints::UNBOUNDED, &env)
+            .unwrap()
+            .size;
+        tree.set_bounds(node, rect(0.0, top, size.width, size.height))
+            .unwrap();
+        top += size.height + 8.0;
+        nodes.push((node, name));
+    }
+    host.arrange(&tree, &env);
+    host.advance(&mut tree, 0.0);
+    host.arrange(&tree, &env);
+    tree.set_input_modality(InputModality::Keyboard);
+    for reverse in [false, true] {
+        host.move_focus(&mut tree, None);
+        let modifiers = ShortcutModifiers {
+            shift: reverse,
+            ..ShortcutModifiers::default()
+        };
+        host.set_modifiers(modifiers);
+        writeln!(out, "# {}", if reverse { "backward" } else { "forward" }).unwrap();
+        for _ in 0..nodes.len() * 2 {
+            let kept = tree.focus().is_some()
+                && host.dispatch_key(
+                    &mut tree,
+                    KeyEvent::Down {
+                        key: Key::Tab,
+                        repeat: false,
+                    },
+                );
+            host.dispatch_key(&mut tree, KeyEvent::Up { key: Key::Tab });
+            if !kept {
+                host.focus_next(&mut tree, reverse);
+            }
+            host.arrange(&tree, &env);
+            let name = names(&nodes, tree.focus());
+            writeln!(out, "{name}{}", if kept { " (inside)" } else { "" }).unwrap();
+        }
+    }
+    golden("hosted_focus_order", &out);
 }
