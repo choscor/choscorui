@@ -113,8 +113,24 @@ pub use choscorui_core::{
 };
 
 /// The connection that [`Runtime::bind`] returns.
-#[deprecated(note = "renamed to `PropertyBinding`")]
+#[deprecated(since = "0.1.0", note = "renamed to `PropertyBinding`")]
 pub type Binding = PropertyBinding;
+
+/// The old name of [`Progress`].
+#[deprecated(since = "0.1.0", note = "renamed to `Progress`")]
+pub type ProgressBar = Progress;
+
+/// The old name of [`Tabs`].
+#[deprecated(since = "0.1.0", note = "renamed to `Tabs`")]
+pub type TabSet = Tabs;
+
+/// The old name of [`Resizable`].
+#[deprecated(since = "0.1.0", note = "renamed to `Resizable`")]
+pub type Splitter = Resizable;
+
+/// The old name of [`ResizableInput`].
+#[deprecated(since = "0.1.0", note = "renamed to `ResizableInput`")]
+pub type SplitterInput = ResizableInput;
 
 /// Stable retained identity of a UI node.
 pub type Node = NodeId;
