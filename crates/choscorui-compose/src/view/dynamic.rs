@@ -7,10 +7,12 @@
 //! keyed diff of the `Reconciler`. An item can make many nodes or none, so
 //! the plan works on the item fragments and not on single nodes.
 //!
-//! `Dynamic` is the scope of `Option`, `Either`, and `AnyView`. It is a
-//! keyed scope with one child whose key is each run of the closure. A view
-//! value has no identity that a run can compare, so each run removes the
-//! old child and creates the new child.
+//! `Dynamic` and `Branch` are the scopes of `Option`, `Either`, and
+//! `AnyView`. Each is a keyed scope with one child, which goes through
+//! [`plan_keyed`] too. A `Branch` child's key is the value of its key
+//! closure, so a run that gives the same key keeps the child. A view value
+//! has no identity that a run can compare, so the key of a `Dynamic` child
+//! is the run, and each run replaces the child.
 
 use super::View;
 use super::env::Env;
@@ -72,28 +74,102 @@ where
     V: View,
 {
     fn mount(self, cx: &mut Cx<'_>) {
-        let fragment = cx.inner.fragments.child(cx.fragment);
-        let owner = cx.scope;
-        let env = cx.env.clone();
-        let current: Rc<Cell<Option<ScopeId>>> = Rc::default();
         let choose = self.choose;
-        cx.react(move |inner| {
+        let runs = Cell::new(0_u64);
+        mount_branch(cx, move || {
             let view = choose();
-            Runtime::untracked(|| {
-                if let Some(scope) = current.take() {
-                    inner.dispose_scope(scope);
-                }
-                let nodes = inner.fragments.clear(fragment);
-                inner.remove_nodes(&nodes);
-                // A modifier may have moved the fragment under a wrapper.
-                let Some(parent) = inner.fragments.parent(fragment) else {
-                    return;
-                };
-                let scope = mount_in(inner, owner, parent, fragment, env.clone(), view);
-                current.set(Some(scope));
-            });
+            runs.set(runs.get() + 1);
+            (runs.get(), Box::new(move || view) as Box<dyn FnOnce() -> V>)
         });
     }
+}
+
+/// A view that a key chooses: `Branch::new(move || tab.get(), |tab| page(*tab))`.
+/// The key closure runs again whenever state that it read changes. The
+/// view closure runs only when the key changes, and its view replaces the
+/// old one; while the key stays, the mounted view keeps its nodes, focus,
+/// semantics, and state.
+pub struct Branch<KF, VF> {
+    key: KF,
+    view: VF,
+}
+
+impl<K, V, KF, VF> Branch<KF, VF>
+where
+    K: Clone + Eq + Hash + 'static,
+    V: View,
+    KF: Fn() -> K + 'static,
+    VF: Fn(&K) -> V + 'static,
+{
+    pub fn new(key: KF, view: VF) -> Self {
+        Self { key, view }
+    }
+}
+
+impl<K, V, KF, VF> View for Branch<KF, VF>
+where
+    K: Clone + Eq + Hash + 'static,
+    V: View,
+    KF: Fn() -> K + 'static,
+    VF: Fn(&K) -> V + 'static,
+{
+    fn mount(self, cx: &mut Cx<'_>) {
+        let (key, view) = (self.key, Rc::new(self.view));
+        mount_branch(cx, move || {
+            let key = key();
+            let view = Rc::clone(&view);
+            let chosen = key.clone();
+            (
+                key,
+                Box::new(move || view(&chosen)) as Box<dyn FnOnce() -> V>,
+            )
+        });
+    }
+}
+
+/// The mounted child of a [`Dynamic`] or [`Branch`] scope.
+struct Child<K> {
+    key: K,
+    scope: ScopeId,
+}
+
+/// Mounts the one keyed child that `next` chooses, and reconciles it with
+/// [`plan_keyed`] whenever state that `next` read changes. The child view
+/// is made only when the plan creates the child.
+fn mount_branch<K, V>(cx: &mut Cx<'_>, next: impl Fn() -> (K, Box<dyn FnOnce() -> V>) + 'static)
+where
+    K: Clone + Eq + Hash + 'static,
+    V: View,
+{
+    let fragment = cx.inner.fragments.child(cx.fragment);
+    let owner = cx.scope;
+    let env = cx.env.clone();
+    let current: Rc<RefCell<Option<Child<K>>>> = Rc::default();
+    cx.react(move |inner| {
+        let (key, make) = next();
+        Runtime::untracked(|| {
+            let old = current.borrow_mut().take();
+            let old_keys: Vec<K> = old.iter().map(|child| child.key.clone()).collect();
+            let plan = plan_keyed(&old_keys, std::slice::from_ref(&key), |_, _| true);
+            if plan.removed.is_empty()
+                && let Some(child) = old
+            {
+                *current.borrow_mut() = Some(child);
+                return;
+            }
+            if let Some(child) = old {
+                inner.dispose_scope(child.scope);
+            }
+            let nodes = inner.fragments.clear(fragment);
+            inner.remove_nodes(&nodes);
+            // A modifier may have moved the fragment under a wrapper.
+            let Some(parent) = inner.fragments.parent(fragment) else {
+                return;
+            };
+            let scope = mount_in(inner, owner, parent, fragment, env.clone(), make());
+            *current.borrow_mut() = Some(Child { key, scope });
+        });
+    });
 }
 
 /// One mounted item of a [`ForEach`].

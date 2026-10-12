@@ -81,7 +81,7 @@ The `view` module is the declarative view layer:
 - A live property is a `Live` value: a fixed value or a closure. A closure runs again only when a value that it read changes, and it updates only its own node.
 - `Styled` holds the modifiers of a view in one ordered list. A layout modifier after a paint modifier wraps the view in a new node.
 - Every visual leaf is a `CustomControl` in a `ControlHost`. Environment modifiers become `ThemeResolver` scopes. Local paint modifiers on a control become a recipe set for that instance.
-- `Dynamic` mounts the view that a closure returns again when its reads change. It is the scope of `Option`, `Either`, and `AnyView`: a keyed scope with one child. A view value has no identity to compare, so each run replaces that child.
+- `Dynamic` and `Branch` are the scopes of `Option`, `Either`, and `AnyView`: keyed scopes with one child that go through `plan_keyed`. The key of a `Branch` child is the value of its key closure, so the child stays while the key stays. A view value has no identity to compare, so the key of a `Dynamic` child is each run, and each run replaces that child.
 - `ForEach` compares its item keys with `plan_keyed`. An item can make many nodes, so the plan moves the nodes of each item as one fragment, without a wrapper node.
 - Presentation modifiers mount a modal layer above the window content. The layer keeps focus inside, closes on Escape, and returns focus. Menus use the same layer, next to the view or at the pointer.
 - The `tooltip` and `context_menu` modifiers wrap the view in a control that watches its hover, presses, and keys. The wrapper publishes no semantic node.

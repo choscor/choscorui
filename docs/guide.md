@@ -84,7 +84,7 @@ The toolkit gives these views:
 | --- | --- |
 | Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Form`, `FormRow`, `Group`, `ScrollView`, `Spacer`, `Divider` |
 | Text | `Text`, `Kbd`, `Badge` |
-| Structure | `Dynamic`, `ForEach`, `Either`, `AnyView`, `Empty` |
+| Structure | `Dynamic`, `Branch`, `ForEach`, `Either`, `AnyView`, `Empty` |
 | Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
 | Dialogs | `Dialog`, `InputDialog`, `FontDialog` |
 | Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `List`, `EmptyState`, `Skeleton`, `Spinner` |
@@ -129,6 +129,7 @@ impl View for Settings {
 To change the structure of the tree, use these views:
 
 - `Dynamic::new(choose)` mounts the view that `choose` returns. When state that `choose` read changes, it unmounts the old view and mounts the new one.
+- `Branch::new(key, view)` mounts the view that `view` makes from the value of `key`. When state that `key` read changes, `key` runs again. The view changes only when the key changes. While the key stays, the view keeps its nodes, focus, semantics, and state.
 - `ForEach::new(items, key, view)` mounts one view for each item. Items keep their nodes, focus, and semantics by key, so an insert mounts only the new item. An item whose value changes under the same key mounts again. A duplicate key reports `ViewError::DuplicateKey`, and only the first item with that key stays.
 - `Either::Left` and `Either::Right` give one type to two branches.
 

@@ -33,7 +33,7 @@ pub use canvas::{Canvas, CanvasContext};
 pub use configured::Configured;
 pub use control::{ControlView, CustomView};
 pub use dialogs::{FontDialog, InputDialog};
-pub use dynamic::{Dynamic, ForEach};
+pub use dynamic::{Branch, Dynamic, ForEach};
 pub use env::{Corner, Elevation, Env, Fill, Metric, TextEnv};
 pub use focus::FocusFrame;
 pub use form::{Form, FormRow};

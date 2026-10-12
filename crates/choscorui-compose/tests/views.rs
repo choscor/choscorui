@@ -4,8 +4,8 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Binding, ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, Text, VStack, View, ViewExt,
-    ViewHost,
+    Binding, Branch, ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, Text, VStack, View,
+    ViewExt, ViewHost,
 };
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlMessage, CustomControl, EstimatedText, MeasureContext,
@@ -348,6 +348,46 @@ fn branches_mount_and_unmount_cleanly() {
     host.flush();
     assert_eq!(names(&mut host), vec!["before", "right", "after"]);
     assert_eq!(node_count(host.tree()), closed);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn a_branch_keeps_its_view_while_the_key_stays() {
+    let runtime = Runtime::new();
+    let count = runtime.property(0);
+    let live = count.clone();
+    struct Keyed(choscorui_compose::Property<i32>);
+    impl View for Keyed {
+        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+            let count = self.0.clone();
+            VStack::new(Branch::new(
+                move || count.get() > 2,
+                |big| tap(if *big { "big" } else { "small" }, || {}),
+            ))
+        }
+    }
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(Keyed(live));
+    host.layout();
+    let small = host.find("small").unwrap();
+    host.focus(Some(small));
+    // The key stays false: the same node keeps focus.
+    count.set(1);
+    host.flush();
+    assert_eq!(host.find("small"), Some(small));
+    assert_eq!(host.tree().focus(), Some(small));
+    // The key changes: a new view replaces the old one.
+    count.set(5);
+    host.flush();
+    assert_eq!(host.find("small"), None);
+    assert!(host.find("big").is_some());
+    assert_eq!(names(&mut host), vec!["big".to_owned()]);
     assert_eq!(host.take_errors(), Vec::new());
 }
 
