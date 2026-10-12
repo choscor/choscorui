@@ -7,7 +7,8 @@ use choscorui::compose::view::{
     AnyView, Breadcrumb, Cx, Env, HStack, NavigationMenu, Pagination, Sidebar, View,
 };
 use choscorui::controls::{
-    NavigationLink, SheetSide, SidebarCollapse, SidebarItem, SidebarVariant,
+    ControlSize, NavigationLink, SheetSide, SidebarCollapse, SidebarItem, SidebarItemVariant,
+    SidebarVariant,
 };
 use choscorui::core::{Icon, Space};
 
@@ -149,7 +150,12 @@ fn sidebar_groups(env: &Env) -> Vec<(String, Vec<SidebarItem>)> {
                 SidebarItem::new(text("breadcrumb.home"), Icon::House),
                 SidebarItem::new(text("sidebar.inbox"), Icon::Inbox).with_badge("24"),
                 SidebarItem::new(text("sidebar.calendar"), Icon::Calendar),
-                SidebarItem::new(text("sidebar.search"), Icon::Search),
+                SidebarItem::new(text("sidebar.search"), Icon::Search)
+                    .with_variant(SidebarItemVariant::Outline),
+                SidebarItem::new(text("sidebar.projects"), Icon::File).with_children(vec![
+                    SidebarItem::new(text("sidebar.design"), Icon::Image),
+                    SidebarItem::new(text("sidebar.sales"), Icon::Star),
+                ]),
             ],
         ),
         (
@@ -159,13 +165,20 @@ fn sidebar_groups(env: &Env) -> Vec<(String, Vec<SidebarItem>)> {
     ]
 }
 
-/// Sidebars in each variant and collapse mode, and one on the right.
+/// The index of the first sub-item, which opens the sub-menu.
+const SUB_ITEM: usize = 5;
+
+/// Sidebars in each variant, collapse mode, and menu size, and one on the
+/// right with its sub-menu open.
 struct SidebarPage;
 
 impl View for SidebarPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let none = cx.state(None);
-        let mut make = |name: &'static str, variant: SidebarVariant, collapse: SidebarCollapse| {
+        let sub_item = cx.state(Some(SUB_ITEM));
+        let mut make = |name: &'static str,
+                        variant: SidebarVariant,
+                        collapse: SidebarCollapse,
+                        size: ControlSize| {
             let selected = cx.state(Some(1));
             Sidebar::new(
                 t!(name),
@@ -173,14 +186,19 @@ impl View for SidebarPage {
                 sidebar_groups,
                 selected.binding(),
             )
-            .with(move |sidebar| sidebar.with_variant(variant).with_collapse(collapse))
+            .with(move |sidebar| {
+                sidebar
+                    .with_variant(variant)
+                    .with_collapse(collapse)
+                    .with_menu_size(size)
+            })
         };
         let row = |sidebars| HStack::new(sidebars).spacing(Space::S4);
         let right = Sidebar::new(
             t!("sidebar.right"),
             t!("sidebar.toggle"),
             sidebar_groups,
-            none.binding(),
+            sub_item.binding(),
         )
         .with(|sidebar| sidebar.with_side(SheetSide::Right));
         // Two sidebars fit side by side in the narrowest content area.
@@ -189,12 +207,14 @@ impl View for SidebarPage {
                 "sidebar.offcanvas",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::Offcanvas,
+                ControlSize::Default,
             )
             .into_any(),
             make(
                 "sidebar.icon",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::Icon,
+                ControlSize::Default,
             )
             .into_any(),
         ]);
@@ -203,12 +223,14 @@ impl View for SidebarPage {
                 "sidebar.fixed",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::None,
+                ControlSize::Sm,
             )
             .into_any(),
             make(
                 "sidebar.floating",
                 SidebarVariant::Floating,
                 SidebarCollapse::Icon,
+                ControlSize::Default,
             )
             .into_any(),
         ]);
@@ -217,6 +239,7 @@ impl View for SidebarPage {
                 "sidebar.inset",
                 SidebarVariant::Inset,
                 SidebarCollapse::Icon,
+                ControlSize::Lg,
             )
             .into_any(),
             right.into_any(),

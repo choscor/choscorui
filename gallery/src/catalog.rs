@@ -135,6 +135,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Sidebar", "sidebar"),
     ("SidebarCollapse", "sidebar"),
     ("SidebarItem", "sidebar"),
+    ("SidebarItemVariant", "sidebar"),
     ("SidebarVariant", "sidebar"),
     ("Card", "card"),
     ("Badge", "badge"),

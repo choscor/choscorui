@@ -10,7 +10,8 @@ use choscorui::controls::{
     AddonAlign, AlertVariant, AttachmentState, BadgeVariant, BubbleVariant, ButtonVariant,
     CalendarDay, ControlKind, ControlSize, EmptyMediaVariant, ItemVariant, KbdVariant,
     MarkerVariant, MenuItemVariant, Recipe, ResolvedStyle, SheetSide, ShortcutModifiers,
-    SidebarVariant, StyleQuery, TabsVariant, ToastVariant, ToggleVariant, Variant, VisualState,
+    SidebarItemVariant, SidebarVariant, Slot, StyleQuery, TabsVariant, ToastVariant, ToggleVariant,
+    Variant, VisualState,
 };
 use choscorui::core::{
     DesignTokens, Key, KeyEvent, PointerEvent, RecipeSet, SemanticAction, SemanticRole, Size,
@@ -19,14 +20,20 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-type Seen = Rc<RefCell<BTreeSet<(ControlKind, Variant, ControlSize, VisualState)>>>;
+type Seen = Rc<RefCell<BTreeSet<(ControlKind, Slot, Variant, ControlSize, VisualState)>>>;
 
 /// Records each query and leaves the style to the default recipe.
 struct Recorder(Seen);
 
 impl Recipe for Recorder {
     fn resolve(&self, query: &StyleQuery, _: &DesignTokens) -> Option<ResolvedStyle> {
-        let key = (query.kind, query.variant, query.size, query.state);
+        let key = (
+            query.kind,
+            query.slot,
+            query.variant,
+            query.size,
+            query.state,
+        );
         self.0.borrow_mut().insert(key);
         None
     }
@@ -36,6 +43,8 @@ impl Recipe for Recorder {
 struct Expect {
     page: &'static str,
     kind: ControlKind,
+    /// The slot to check, or `None` for every slot of the kind.
+    slot: Option<Slot>,
     /// Every variant, or empty when the kind has none.
     variants: Vec<Variant>,
     /// Every size, or empty when the kind has one.
@@ -57,6 +66,7 @@ fn expect(page: &'static str, kind: ControlKind) -> Expect {
     Expect {
         page,
         kind,
+        slot: None,
         variants: Vec::new(),
         sizes: &[],
         grid: false,
@@ -167,7 +177,20 @@ fn expectations() -> Vec<Expect> {
             ..expect("drawer", K::Drawer)
         },
         Expect {
+            slot: Some(Slot::Root),
             variants: all(SidebarVariant::ALL),
+            ..expect("sidebar", K::Sidebar)
+        },
+        Expect {
+            slot: Some(Slot::Item),
+            variants: all(SidebarItemVariant::ALL),
+            sizes: TOGGLE_SIZES,
+            states: &[S::SELECTED],
+            ..expect("sidebar", K::Sidebar)
+        },
+        Expect {
+            slot: Some(Slot::Link),
+            // A selected sub-item paints only in an open sub-menu.
             states: &[S::SELECTED],
             ..expect("sidebar", K::Sidebar)
         },
@@ -262,14 +285,17 @@ fn every_page_paints_each_variant_size_and_state_of_its_control() {
         let seen = seen.borrow();
         let of_kind: Vec<_> = seen
             .iter()
-            .filter(|(kind, ..)| *kind == expect.kind)
+            .filter(|(kind, slot, ..)| {
+                *kind == expect.kind && expect.slot.is_none_or(|expected| *slot == expected)
+            })
             .collect();
         let shows = |variant: Option<Variant>, size: Option<ControlSize>| {
-            of_kind.iter().any(|(_, v, s, _)| {
+            of_kind.iter().any(|(_, _, v, s, _)| {
                 variant.is_none_or(|variant| *v == variant) && size.is_none_or(|size| *s == size)
             })
         };
-        let context = format!("page `{}` {}", expect.page, expect.kind.name());
+        let slot = expect.slot.map_or("", Slot::name);
+        let context = format!("page `{}` {} {slot}", expect.page, expect.kind.name());
         for variant in &expect.variants {
             if expect.grid {
                 for size in expect.sizes {
