@@ -8,6 +8,8 @@ use choscorui_core::{
 };
 use std::collections::HashSet;
 
+mod hosted;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionError {
     Empty,
@@ -234,18 +236,7 @@ impl RadioGroup {
         else {
             return;
         };
-        let dot = cx.style(StyleQuery::new(ControlKind::RadioGroup, Slot::Indicator).state(state));
-        paint_choice(cx, ControlKind::RadioGroup, label, state, |cx, rect| {
-            if state.checked() {
-                let size = Size::new(dot.min_width, dot.min_height);
-                let center = rect.center();
-                let dot_rect = Rect::new(
-                    Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
-                    size,
-                );
-                fill_shape(cx.list, dot_rect, &dot.radius, cx.rtl, dot.background);
-            }
-        });
+        paint_radio(cx, label, state);
     }
 
     fn index_of(&self, id: NodeId) -> Result<usize, SelectionError> {
@@ -465,9 +456,7 @@ impl Tabs {
     }
 
     fn query(&self, slot: Slot, state: VisualState) -> StyleQuery {
-        StyleQuery::new(ControlKind::Tabs, slot)
-            .variant(self.variant)
-            .state(state)
+        tabs_query(self.variant, slot, state)
     }
 
     /// The natural size of the tab at `id`: its label and padding.
@@ -497,38 +486,7 @@ impl Tabs {
         let (Some(state), Some(label)) = (self.visual_state(tree, id), self.tab_label(id)) else {
             return;
         };
-        let style = cx.style(self.query(Slot::Trigger, state));
-        let bounds = cx.bounds;
-        cx.slot(bounds, &style, |cx, rect| {
-            cx.label(rect, label, &style, TextAlign::Center);
-        });
-        let indicator = cx.style(self.query(Slot::Indicator, state));
-        if indicator.background.alpha == 0 {
-            return;
-        }
-        // The indicator sits just outside the tab, over the list padding.
-        let offset = -indicator.padding.block_start;
-        let line = match self.orientation {
-            Orientation::Horizontal => Rect::new(
-                Point::new(
-                    bounds.origin.x,
-                    bounds.max_y() + offset - indicator.min_height,
-                ),
-                Size::new(bounds.size.width, indicator.min_height),
-            ),
-            Orientation::Vertical => {
-                let x = if cx.rtl {
-                    bounds.origin.x - offset
-                } else {
-                    bounds.max_x() + offset - indicator.min_width
-                };
-                Rect::new(
-                    Point::new(x, bounds.origin.y),
-                    Size::new(indicator.min_width, bounds.size.height),
-                )
-            }
-        };
-        cx.list.fill_rect(line, indicator.background);
+        paint_tab(cx, self.variant, self.orientation, label, state);
     }
 
     fn index_of_tab(&self, id: NodeId) -> Result<usize, SelectionError> {
@@ -566,6 +524,72 @@ impl Tabs {
         tree.set_focus(Some(target_id))?;
         Ok(Some(target_id))
     }
+}
+
+/// Paints a radio option in the context's bounds: the circle at the start,
+/// the dot when checked, and the label after it.
+fn paint_radio(cx: &mut PaintContext<'_>, label: &str, state: VisualState) {
+    let dot = cx.style(StyleQuery::new(ControlKind::RadioGroup, Slot::Indicator).state(state));
+    paint_choice(cx, ControlKind::RadioGroup, label, state, |cx, rect| {
+        if state.checked() {
+            let size = Size::new(dot.min_width, dot.min_height);
+            let center = rect.center();
+            let dot_rect = Rect::new(
+                Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
+                size,
+            );
+            fill_shape(cx.list, dot_rect, &dot.radius, cx.rtl, dot.background);
+        }
+    });
+}
+
+fn tabs_query(variant: TabsVariant, slot: Slot, state: VisualState) -> StyleQuery {
+    StyleQuery::new(ControlKind::Tabs, slot)
+        .variant(variant)
+        .state(state)
+}
+
+/// Paints a tab in the context's bounds: its trigger box, label, and the
+/// line indicator when selected.
+fn paint_tab(
+    cx: &mut PaintContext<'_>,
+    variant: TabsVariant,
+    orientation: Orientation,
+    label: &str,
+    state: VisualState,
+) {
+    let style = cx.style(tabs_query(variant, Slot::Trigger, state));
+    let bounds = cx.bounds;
+    cx.slot(bounds, &style, |cx, rect| {
+        cx.label(rect, label, &style, TextAlign::Center);
+    });
+    let indicator = cx.style(tabs_query(variant, Slot::Indicator, state));
+    if indicator.background.alpha == 0 {
+        return;
+    }
+    // The indicator sits just outside the tab, over the list padding.
+    let offset = -indicator.padding.block_start;
+    let line = match orientation {
+        Orientation::Horizontal => Rect::new(
+            Point::new(
+                bounds.origin.x,
+                bounds.max_y() + offset - indicator.min_height,
+            ),
+            Size::new(bounds.size.width, indicator.min_height),
+        ),
+        Orientation::Vertical => {
+            let x = if cx.rtl {
+                bounds.origin.x - offset
+            } else {
+                bounds.max_x() + offset - indicator.min_width
+            };
+            Rect::new(
+                Point::new(x, bounds.origin.y),
+                Size::new(indicator.min_width, bounds.size.height),
+            )
+        }
+    };
+    cx.list.fill_rect(line, indicator.background);
 }
 
 fn selectable_semantics(

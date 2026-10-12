@@ -740,6 +740,299 @@ fn range_semantics(
         text: None,
     }
 }
+
+/// The integer that an assistive `SetValue` string or a
+/// [`ControlValue::Number`](crate::ControlValue::Number) names, rounded
+/// and clamped to `i32`. Not-a-number and infinite values name none.
+fn integer(value: f64) -> Option<i32> {
+    value.is_finite().then(|| {
+        value
+            .round()
+            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+    })
+}
+
+/// The integer in an assistive `SetValue` string.
+fn parse_integer(value: Option<&str>) -> Option<i32> {
+    integer(value?.trim().parse::<f64>().ok()?)
+}
+
+/// The reply for a routed event of a range control: presses and
+/// releases, and the keys that step the value, stop.
+fn range_reply(routed: crate::hosted::Routed) -> choscorui_core::EventReply {
+    use crate::hosted::Routed;
+    match routed {
+        Routed::Pointer(PointerEvent::Down { .. } | PointerEvent::Up { .. })
+        | Routed::Key(KeyEvent::Down {
+            key:
+                Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight | Key::Home | Key::End,
+            ..
+        }) => choscorui_core::EventReply::Stop,
+        _ => choscorui_core::EventReply::Continue,
+    }
+}
+
+/// Reports a changed integer value as `Changed(Number)`.
+fn emit_number(cx: &mut crate::ControlContext<'_>, changed: Result<Option<i32>, TreeError>) {
+    if let Ok(Some(value)) = changed {
+        cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+            f64::from(value),
+        )));
+        cx.request_semantics();
+    }
+}
+
+impl crate::CustomControl for Slider {
+    /// The recipe length along the track and the thumb size across it.
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let root = cx.style(StyleQuery::new(ControlKind::Slider, Slot::Root));
+        let size = match self.orientation {
+            SliderOrientation::Horizontal => {
+                choscorui_core::Size::new(root.min_width, root.min_height)
+            }
+            SliderOrientation::Vertical => {
+                choscorui_core::Size::new(root.min_height, root.min_width)
+            }
+        };
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, _bounds: Rect) {
+        self.direction = cx.direction;
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        if *event == crate::ControlEvent::Hover(false) && self.hovered {
+            self.hovered = false;
+            cx.request_paint();
+        }
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return choscorui_core::EventReply::Continue;
+        };
+        let input = match routed {
+            crate::hosted::Routed::Pointer(event) => SliderInput::Pointer(event),
+            crate::hosted::Routed::Key(event) => SliderInput::Key(event),
+            crate::hosted::Routed::Cancel => SliderInput::Cancel,
+        };
+        let node = cx.node();
+        let changed = self.handle(cx.tree_mut(), node, input);
+        emit_number(cx, changed);
+        cx.request_paint();
+        range_reply(routed)
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx
+            .state
+            .set(VisualState::HOVERED, cx.state.hovered() || self.dragging)
+            .set(VisualState::PRESSED, self.dragging)
+            .set(VisualState::DISABLED, cx.state.disabled() || !self.enabled);
+        self.paint_state(cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        range_semantics(SemanticRole::Slider, &self.label, self.range, self.enabled)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        let semantic = match action {
+            SemanticAction::SetValue => match parse_integer(value) {
+                Some(value) => SliderSemanticAction::SetValue(value),
+                None => return false,
+            },
+            SemanticAction::Increment => SliderSemanticAction::Increment,
+            SemanticAction::Decrement => SliderSemanticAction::Decrement,
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
+            }
+            _ => return false,
+        };
+        let node = cx.node();
+        let changed = self.handle(cx.tree_mut(), node, SliderInput::Semantic(semantic));
+        emit_number(cx, changed);
+        cx.request_paint();
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.dragging = false;
+            self.hovered = false;
+        }
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match value {
+            crate::ControlValue::Number(value) => integer(*value).is_some_and(|value| {
+                self.range.set_value(value);
+                true
+            }),
+            _ => false,
+        }
+    }
+}
+
+impl SpinBox {
+    /// The stepper column inside `bounds` for the reading direction.
+    fn steppers(bounds: Rect, rtl: bool) -> Rect {
+        let width = STEPPER_WIDTH.min(bounds.size.width);
+        let x = if rtl {
+            bounds.origin.x
+        } else {
+            bounds.max_x() - width
+        };
+        Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height)
+    }
+}
+
+impl crate::CustomControl for SpinBox {
+    /// The widest bound as text, the input padding, and the steppers, at
+    /// least the input recipe's size.
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let text = [self.range.minimum(), self.range.maximum()]
+            .iter()
+            .map(|bound| cx.text.width(&bound.to_string(), &style.text))
+            .fold(0.0, f64::max);
+        let size = choscorui_core::Size::new(
+            (text + style.padding.horizontal() + STEPPER_WIDTH).max(style.min_width),
+            (style.text.line_height + style.padding.vertical()).max(style.min_height),
+        );
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, _bounds: Rect) {
+        self.direction = cx.direction;
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return choscorui_core::EventReply::Continue;
+        };
+        let input = match routed {
+            crate::hosted::Routed::Pointer(event) => SpinBoxInput::Pointer(event),
+            crate::hosted::Routed::Key(event) => SpinBoxInput::Key(event),
+            // A spin box has no press to cancel.
+            crate::hosted::Routed::Cancel => return choscorui_core::EventReply::Continue,
+        };
+        let node = cx.node();
+        let changed = self.handle(cx.tree_mut(), node, input);
+        emit_number(cx, changed);
+        cx.request_paint();
+        range_reply(routed)
+    }
+
+    /// The input look: a focused spin box always shows the focus ring.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx
+            .state
+            .set(VisualState::FOCUS_VISIBLE, cx.state.focused())
+            .set(VisualState::DISABLED, cx.state.disabled() || !self.enabled);
+        let steppers = Self::steppers(cx.bounds, cx.rtl);
+        paint_stepper_field(cx, &self.range.value().to_string(), state, steppers);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        range_semantics(
+            SemanticRole::SpinButton,
+            &self.label,
+            self.range,
+            self.enabled,
+        )
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        let semantic = match action {
+            SemanticAction::SetValue => match parse_integer(value) {
+                Some(value) => SpinBoxSemanticAction::SetValue(value),
+                None => return false,
+            },
+            SemanticAction::Increment => SpinBoxSemanticAction::Increment,
+            SemanticAction::Decrement => SpinBoxSemanticAction::Decrement,
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
+            }
+            _ => return false,
+        };
+        let node = cx.node();
+        let changed = self.handle(cx.tree_mut(), node, SpinBoxInput::Semantic(semantic));
+        emit_number(cx, changed);
+        cx.request_paint();
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match value {
+            crate::ControlValue::Number(value) => integer(*value).is_some_and(|value| {
+                self.range.set_value(value);
+                true
+            }),
+            _ => false,
+        }
+    }
+}
+
+impl crate::CustomControl for Progress {
+    /// The width it is given, or the width of an input without a width
+    /// constraint, by the track height.
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let track = cx.style(StyleQuery::new(ControlKind::Progress, Slot::Track));
+        let width = crate::form::input::default_width(cx, &track);
+        let size = choscorui_core::Size::new(width, track.min_height);
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        _cx: &mut crate::ControlContext<'_>,
+        _event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        choscorui_core::EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        Progress::paint(self, cx);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        Progress::semantics(self)
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    /// An indeterminate bar sweeps while it is mounted and visible.
+    fn animating(&self, _time: f64) -> bool {
+        self.needs_frame(true)
+    }
+}
+
 fn require_node(tree: &Tree, id: NodeId) -> Result<(), TreeError> {
     tree.contains(id)
         .then_some(())

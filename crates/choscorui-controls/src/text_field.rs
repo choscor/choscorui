@@ -1,9 +1,11 @@
 use crate::InputText;
-use crate::style::{PaintContext, VisualState};
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use choscorui_core::{
-    Dirty, Key, KeyEvent, NodeId, Rect, SemanticAction as CoreSemanticAction, SemanticNode,
-    SemanticRole, SemanticState, SemanticText, TextBuffer, TextMotion, Tree, TreeError,
+    Dirty, Key, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
+    SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, SemanticText,
+    Size, TextBuffer, TextMotion, Tree, TreeError,
 };
+use std::cell::RefCell;
 use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -141,6 +143,8 @@ pub struct TextField {
     composition: Option<TextComposition>,
     secure: bool,
     placeholder: String,
+    /// Caret placement by pointer in a control host.
+    pointer: HostedPointer,
 }
 
 impl TextField {
@@ -158,6 +162,7 @@ impl TextField {
             composition: None,
             secure: false,
             placeholder: String::new(),
+            pointer: HostedPointer::default(),
         }
     }
 
@@ -385,17 +390,7 @@ impl TextField {
                 }
             }
             TextFieldInput::CancelMarkedText => self.composition = None,
-            TextFieldInput::SetValue(text) => {
-                self.composition = None;
-                let text = text.replace(['\n', '\r'], "");
-                if text != self.buffer.as_str() {
-                    let count = self.buffer.grapheme_count();
-                    self.buffer
-                        .set_selection(0, count)
-                        .expect("buffer range is valid");
-                    self.buffer.replace_selection(&text);
-                }
-            }
+            TextFieldInput::SetValue(text) => self.replace_value(&text),
             TextFieldInput::Undo => {
                 self.buffer.undo();
             }
@@ -540,6 +535,20 @@ impl TextField {
         }
     }
 
+    /// Replaces the whole value with `text` without line breaks, as one
+    /// undoable edit, and drops marked text.
+    fn replace_value(&mut self, text: &str) {
+        self.composition = None;
+        let text = text.replace(['\n', '\r'], "");
+        if text != self.buffer.as_str() {
+            let count = self.buffer.grapheme_count();
+            self.buffer
+                .set_selection(0, count)
+                .expect("buffer range is valid");
+            self.buffer.replace_selection(&text);
+        }
+    }
+
     fn utf16_range_to_graphemes(&self, range: Range<usize>) -> Option<Range<usize>> {
         if range.start > range.end {
             return None;
@@ -553,5 +562,222 @@ impl TextField {
             .utf16_to_byte(range.end)
             .and_then(|byte| self.buffer.byte_to_grapheme(byte))?;
         Some(start..end)
+    }
+}
+
+/// Where each caret stop of the painted text is, so a press in a control
+/// host can place the caret. Paint records it; events read it.
+#[derive(Default)]
+struct CaretStops {
+    rect: Rect,
+    scroll: f64,
+    rtl: bool,
+    /// Offset of each caret stop from the start of the text.
+    offsets: Vec<f64>,
+}
+
+impl CaretStops {
+    fn caret_at(&self, x: f64) -> usize {
+        let offset = if self.rtl {
+            self.rect.max_x() - x + self.scroll
+        } else {
+            x - self.rect.origin.x + self.scroll
+        };
+        self.offsets
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| (*a - offset).abs().total_cmp(&(*b - offset).abs()))
+            .map_or(0, |(index, _)| index)
+    }
+}
+
+/// The pointer state of a hosted field: the caret stops of the last paint
+/// and a selection drag.
+#[derive(Default)]
+struct HostedPointer {
+    stops: RefCell<CaretStops>,
+    dragging: bool,
+}
+
+impl TextField {
+    /// Runs `input` through `handle` and reports an edit as
+    /// `Changed(Text)` and a commit as `Activated`.
+    fn apply(&mut self, cx: &mut crate::ControlContext<'_>, input: TextFieldInput) {
+        let node = cx.node();
+        let change = self
+            .handle(cx.tree_mut(), node, input)
+            .unwrap_or(TextFieldChange::None);
+        match change {
+            TextFieldChange::None => return,
+            TextFieldChange::Edited => cx.emit(crate::ControlMessage::Changed(
+                crate::ControlValue::Text(self.value().to_owned()),
+            )),
+            TextFieldChange::Committed => cx.emit(crate::ControlMessage::Activated),
+            _ => {}
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// The field input for a key-down event with the held modifiers, or
+    /// `None` for a key that the field leaves to its ancestors.
+    fn key_input(key: Key, modifiers: crate::ShortcutModifiers) -> Option<TextFieldInput> {
+        Some(match (key, modifiers.command) {
+            (Key::Character('a'), true) => TextFieldInput::SelectAll,
+            (Key::Character('z'), true) if modifiers.shift => TextFieldInput::Redo,
+            (Key::Character('z'), true) => TextFieldInput::Undo,
+            (Key::Character('x'), true) => TextFieldInput::Cut,
+            (Key::Tab | Key::Escape, _) | (_, true) => return None,
+            (_, false) => TextFieldInput::Key {
+                event: KeyEvent::Down { key, repeat: false },
+                extend: modifiers.shift,
+                word: modifiers.option,
+            },
+        })
+    }
+}
+
+impl crate::CustomControl for TextField {
+    /// The input recipe height, and the width of an input.
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let height = (style.text.line_height + style.padding.vertical()).max(style.min_height);
+        let size = Size::new(crate::form::input::default_width(cx, &style), height);
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        use crate::ControlEvent;
+        use choscorui_core::EventReply;
+        if cx.phase() != choscorui_core::EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let modifiers = cx.modifiers();
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                cx.request_focus();
+                let caret = self.pointer.stops.borrow().caret_at(position.x);
+                let extend = modifiers.shift;
+                self.apply(cx, TextFieldInput::SetCaret { caret, extend });
+                self.pointer.dragging = true;
+                cx.capture_pointer(true);
+                cx.request_paint();
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.pointer.dragging => {
+                let caret = self.pointer.stops.borrow().caret_at(position.x);
+                self.apply(
+                    cx,
+                    TextFieldInput::SetCaret {
+                        caret,
+                        extend: true,
+                    },
+                );
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.pointer.dragging => {
+                self.pointer.dragging = false;
+                cx.capture_pointer(false);
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if cx.is_focused() => {
+                match Self::key_input(*key, modifiers) {
+                    Some(input) => {
+                        self.apply(cx, input);
+                        EventReply::Stop
+                    }
+                    None => EventReply::Continue,
+                }
+            }
+            ControlEvent::Text(text) if cx.is_focused() => {
+                self.apply(cx, TextFieldInput::Text(text.clone()));
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(_) | ControlEvent::Dismiss => {
+                if self.pointer.dragging {
+                    self.pointer.dragging = false;
+                    cx.capture_pointer(false);
+                }
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints like [`TextField::paint`] with the host's focus, and records
+    /// the caret stops for pointer input.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = self.state_for(cx.state.focused()).with(cx.state);
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &style, |cx, rect| {
+            let display = self.display_value();
+            let offsets: Vec<f64> = choscorui_core::grapheme_boundaries(&display)
+                .iter()
+                .map(|end| cx.measure(&display[..*end], &style))
+                .collect();
+            let caret_x = offsets.get(self.caret()).copied().unwrap_or(0.0);
+            let scroll = if state.focused() {
+                (caret_x - rect.size.width + 1.0).max(0.0)
+            } else {
+                0.0
+            };
+            *self.pointer.stops.borrow_mut() = CaretStops {
+                rect,
+                scroll,
+                rtl: cx.rtl,
+                offsets,
+            };
+            self.paint_text(cx, rect, state);
+        });
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        self.semantics_for(false).shared()
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: CoreSemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        match action {
+            CoreSemanticAction::SetValue if self.enabled => {
+                let text = value.unwrap_or_default().to_owned();
+                self.apply(cx, TextFieldInput::SetValue(text));
+                true
+            }
+            CoreSemanticAction::Focus => {
+                cx.request_focus();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.set_enabled_state(enabled);
+        if !enabled {
+            self.pointer.dragging = false;
+        }
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match value {
+            crate::ControlValue::Text(text) => {
+                self.replace_value(text);
+                true
+            }
+            _ => false,
+        }
     }
 }

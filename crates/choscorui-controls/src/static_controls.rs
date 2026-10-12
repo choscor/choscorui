@@ -125,3 +125,68 @@ impl Separator {
         cx.list.fill_rect(line, style.background);
     }
 }
+
+impl crate::CustomControl for Label {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let size = Label::measure(self, cx.styles, cx.tokens, cx.text);
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        _cx: &mut crate::ControlContext<'_>,
+        _event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        choscorui_core::EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        Label::paint(self, cx);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        Label::semantics(self)
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+}
+
+impl crate::CustomControl for Separator {
+    /// The recipe thickness across the rule, and the width or height it
+    /// is given along it.
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::Separator, Slot::Root));
+        let along = |max: f64| if max.is_finite() { max } else { 0.0 };
+        let max = cx.constraints.max;
+        let size = match self.orientation {
+            SeparatorOrientation::Horizontal => Size::new(along(max.width), style.min_height),
+            SeparatorOrientation::Vertical => Size::new(style.min_width, along(max.height)),
+        };
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        _cx: &mut crate::ControlContext<'_>,
+        _event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        choscorui_core::EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        Separator::paint(*self, cx);
+    }
+
+    /// A hidden group: the rule is decorative.
+    fn semantics(&self) -> SemanticNode {
+        let mut node = crate::hosted::node(SemanticRole::Group, "", Vec::new());
+        node.state.hidden = true;
+        node
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+}

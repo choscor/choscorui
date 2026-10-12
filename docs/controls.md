@@ -305,6 +305,10 @@ behavior.
 - `new` rejects an empty list, a duplicate node, an unknown selection, and
   a disabled selection.
 - `TabSet` is a deprecated alias of `Tabs`.
+- **In a control host.** `RadioGroup::hosted` and `Tabs::hosted` make a
+  one-node form that names each option by its index. Its node has the group
+  role, the selected label as value, and the `SetValue`, `Increment`,
+  `Decrement`, and `Focus` actions.
 - **Radio look.** `paint_option` draws a 16 pt circle with the same edge,
   focus, invalid, and disabled values as `Checkbox`. The selected option
   has a `primary` fill and an 8 pt `primary-foreground` dot.
@@ -429,6 +433,7 @@ behavior.
   node is not in the tree.
 - `Separator` takes no input and publishes no semantic node, because it is
   decorative. `paint` centers a 1 pt `border` line in either orientation.
+  In a control host, its node is a hidden `Group`.
 - `Label::paint` draws the small medium text at the start of the bounds.
   A `DISABLED` state in the context gives 50% opacity.
 
@@ -448,7 +453,8 @@ this behavior.
   The value clamps to the maximum.
 - `set_value` and `set_indeterminate` invalidate `PAINT` and `SEMANTICS`
   only when the value changed.
-- `needs_frame(visible)` is true only for a visible indeterminate bar.
+- `needs_frame(visible)` is true only for a visible indeterminate bar. In a
+  control host, the same bar animates.
 - `ProgressBar` is a deprecated alias of `Progress`.
 - **Look.** `paint` draws a 6 pt `muted` track with full rounding, and a
   `primary` indicator from the start in reading order. An indeterminate
@@ -584,6 +590,8 @@ behavior.
 - **Password.** `TextField::password` masks the value. `Cut` does
   nothing, and `selected_text` is empty.
 - The field has no `Cancel` input and no Escape behavior.
+- In a control host, a primary press puts the caret at the nearest
+  grapheme boundary, and a drag extends the selection.
 - **Look.** `paint` uses the `Input` recipe. `with_placeholder` sets the
   muted text that shows while the value is empty. A focused field always
   shows the focus ring and the caret. The text scrolls so the caret stays
@@ -720,6 +728,7 @@ the description "Not installed; using" with the fallback name.
 - A vertical slider has its minimum at the bottom.
 - `set_direction(Rtl)` puts the minimum of a horizontal slider at the
   right for pointer input. `paint` mirrors from the context direction.
+  In a control host, the host direction replaces `set_direction`.
 - A pointer press focuses without the focus ring.
 - **Look.** `paint` draws a 6 pt `muted` track, a `primary` range, and a
   16 pt white thumb with a `primary` edge and a small shadow. On hover,
@@ -767,7 +776,8 @@ this behavior.
   increments in the top half or decrements in the bottom half. It steps
   once, on the press.
 - The stepper column is `STEPPER_WIDTH` wide at the end of the bounds.
-  `set_direction(Rtl)` puts it at the left.
+  `set_direction(Rtl)` puts it at the left. In a control host, the host
+  direction replaces `set_direction`.
 - **Look.** `paint` uses the `Input` look: the value at the start, and up
   and down chevrons in `muted-foreground` in the stepper column.
 - ArrowUp and ArrowDown step. Home and End go to the bounds. PageUp and
