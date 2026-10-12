@@ -11,6 +11,13 @@ sidebar.count[other] = {count} trang
 theme.dark = Tối
 theme.light = Sáng
 theme.brand = Thương hiệu
+base.neutral = Trung tính
+base.stone = Đá
+base.zinc = Kẽm
+base.mauve = Tím nhạt
+base.olive = Ô liu
+base.mist = Sương
+base.taupe = Nâu xám
 readout.focus = Tiêu điểm: {name}
 readout.value = Tiêu điểm: {name} = {value}
 readout.none = Không có tiêu điểm

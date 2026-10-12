@@ -7,7 +7,7 @@ use crate::page::PageState;
 use crate::strings::LANGUAGES;
 use crate::view::Theme;
 use choscorui::core::{
-    LoadReport, SettingValue, Settings, SettingsError, SettingsSchema, WindowGeometry,
+    BaseColor, LoadReport, SettingValue, Settings, SettingsError, SettingsSchema, WindowGeometry,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -23,6 +23,10 @@ const MAIN_WINDOW: &str = "window.main";
 pub fn schema() -> SettingsSchema {
     SettingsSchema::new(VERSION)
         .with_default("gallery.theme", SettingValue::Text(Theme::Dark.id().into()))
+        .with_default(
+            "gallery.base",
+            SettingValue::Text(BaseColor::Neutral.id().into()),
+        )
         .with_default("gallery.language", SettingValue::Text("en".into()))
         .with_default("gallery.filter", SettingValue::Text(String::new()))
         .with_default("canvas.zoom", SettingValue::Float(1.0))
@@ -101,6 +105,7 @@ pub struct Saved {
     /// The page id last shown; it may no longer exist.
     pub page: Option<String>,
     pub theme: Theme,
+    pub base: BaseColor,
     pub language: &'static str,
     pub filter: String,
     pub state: PageState,
@@ -113,6 +118,7 @@ impl Saved {
         Self {
             page: settings.text("gallery.page").map(str::to_owned),
             theme: Theme::parse(&text("gallery.theme")).unwrap_or(Theme::Dark),
+            base: BaseColor::from_id(&text("gallery.base")).unwrap_or_default(),
             language: LANGUAGES
                 .into_iter()
                 .find(|tag| *tag == text("gallery.language"))
@@ -134,6 +140,7 @@ impl Saved {
             settings.set("gallery.page", SettingValue::Text(page.clone()))?;
         }
         settings.set("gallery.theme", SettingValue::Text(self.theme.id().into()))?;
+        settings.set("gallery.base", SettingValue::Text(self.base.id().into()))?;
         settings.set("gallery.language", SettingValue::Text(self.language.into()))?;
         settings.set("gallery.filter", SettingValue::Text(self.filter.clone()))?;
         settings.set("canvas.zoom", SettingValue::Float(self.state.canvas_zoom))?;
@@ -193,6 +200,7 @@ mod tests {
         let saved = Saved {
             page: Some("canvas".into()),
             theme: Theme::Brand,
+            base: BaseColor::Mauve,
             language: "vi",
             filter: "spin".into(),
             state: PageState {

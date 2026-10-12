@@ -7,13 +7,14 @@ use crate::page::{Align, Category, Desktop, Env, MeasureCache, Page, PageState, 
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use choscorui::controls::{
     Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandId, ControlKind,
-    ControlSize, InputText, ShortcutModifiers, Slot, StyleQuery, TextAlign, TextField,
+    ControlSize, Corners, InputText, ShortcutModifiers, Slot, StyleQuery, TextAlign, TextField,
     TextFieldChange, TextFieldInput, VisualState, paint_box,
 };
 use choscorui::core::{
-    Color, ColorRole, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, Localizer, NodeId,
-    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry,
-    SemanticNode, SemanticRole, SemanticTree, Size, TextShaper, Tree, WheelUnit, fold_for_search,
+    BaseColor, Color, ColorRole, ColorScheme, DesignTokens, DisplayList, Key, KeyEvent,
+    LayoutDirection, Localizer, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticChange, SemanticEntry, SemanticNode, SemanticRole, SemanticTree, Size, TextShaper,
+    Tree, WheelUnit, fold_for_search,
 };
 use std::time::Duration;
 
@@ -51,12 +52,13 @@ impl Theme {
         Self::ALL.into_iter().find(|theme| theme.id() == id)
     }
 
-    pub fn tokens(self) -> DesignTokens {
+    /// The tokens of this theme over `base`.
+    pub fn tokens(self, base: BaseColor) -> DesignTokens {
         match self {
-            Self::Dark => DesignTokens::dark(),
-            Self::Light => DesignTokens::light(),
+            Self::Dark => DesignTokens::new(base, ColorScheme::Dark),
+            Self::Light => DesignTokens::new(base, ColorScheme::Light),
             Self::Brand => {
-                let light = DesignTokens::light();
+                let light = DesignTokens::new(base, ColorScheme::Light);
                 DesignTokens {
                     palette: light
                         .palette
@@ -73,6 +75,7 @@ impl Theme {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
     Theme(Theme),
+    Base(BaseColor),
     Language(&'static str),
     /// Open the page with this catalog index in a new window.
     NewWindow(usize),
@@ -82,6 +85,7 @@ pub enum Request {
 pub struct Ctx<'a> {
     pub localizer: &'a Localizer,
     pub theme: Theme,
+    pub base: BaseColor,
     pub shaper: &'a dyn TextShaper,
     pub desktop: &'a dyn Desktop,
     /// Time since the application started.
@@ -89,6 +93,11 @@ pub struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
+    /// The tokens of the current theme and base color.
+    pub fn tokens(&self) -> DesignTokens {
+        self.theme.tokens(self.base)
+    }
+
     /// A translated string, or `fallback` when the catalog lacks it.
     pub fn text_or(&self, id: &str, args: &[(&str, &str)], fallback: &str) -> String {
         self.localizer
@@ -165,6 +174,7 @@ pub struct GalleryView {
     tree: Tree,
     size: Size,
     theme_buttons: Vec<(Theme, NodeId, Button)>,
+    base_buttons: Vec<(BaseColor, NodeId, Button)>,
     language_buttons: Vec<(&'static str, NodeId, Button)>,
     enabled_node: NodeId,
     enabled_box: Checkbox,
@@ -184,6 +194,7 @@ pub struct GalleryView {
     selected: usize,
     enabled: bool,
     theme: Theme,
+    base: BaseColor,
     revision: u64,
     direction: LayoutDirection,
     page_state: PageState,
@@ -220,6 +231,13 @@ impl GalleryView {
                 (theme, id, Button::new(theme.id(), CommandId(0)))
             })
             .collect();
+        let base_buttons = BaseColor::ALL
+            .into_iter()
+            .map(|base| {
+                let id = focusable(&mut tree);
+                (base, id, Button::new(base.id(), CommandId(0)))
+            })
+            .collect();
         let language_buttons = LANGUAGES
             .iter()
             .zip(LANGUAGE_NAMES)
@@ -236,7 +254,7 @@ impl GalleryView {
         let title_node = tree.attach(root, Rect::default()).expect("root exists");
         let readout_node = tree.attach(root, Rect::default()).expect("root exists");
         let page_root = tree.attach(root, Rect::default()).expect("root exists");
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let measure = MeasureCache::default();
         let page = {
             let env = env(&tokens, ctx, true, &page_state, &measure);
@@ -246,6 +264,7 @@ impl GalleryView {
             tree,
             size,
             theme_buttons,
+            base_buttons,
             language_buttons,
             enabled_node,
             enabled_box: Checkbox::new(ctx.text("state.enabled", &[]), true),
@@ -265,6 +284,7 @@ impl GalleryView {
             selected,
             enabled: true,
             theme: ctx.theme,
+            base: ctx.base,
             revision: ctx.localizer.revision(),
             direction: ctx.localizer.locale().direction(),
             page_state,
@@ -312,7 +332,7 @@ impl GalleryView {
         f: impl FnOnce(&mut Tree, &mut dyn Page, &Env<'_>) -> R,
     ) -> R {
         self.sync(ctx);
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         f(&mut self.tree, self.page.as_mut(), &env)
     }
@@ -333,6 +353,14 @@ impl GalleryView {
         self.theme_buttons
             .iter()
             .find(|(candidate, _, _)| *candidate == theme)
+            .and_then(|(_, id, _)| self.tree.bounds(*id))
+            .unwrap_or_default()
+    }
+
+    pub fn base_button(&self, base: BaseColor) -> Rect {
+        self.base_buttons
+            .iter()
+            .find(|(candidate, _, _)| *candidate == base)
             .and_then(|(_, id, _)| self.tree.bounds(*id))
             .unwrap_or_default()
     }
@@ -360,10 +388,11 @@ impl GalleryView {
     /// language or theme change made elsewhere.
     fn sync(&mut self, ctx: &Ctx<'_>) {
         let relabel = ctx.localizer.revision() != self.revision;
-        if !relabel && ctx.theme == self.theme {
+        if !relabel && ctx.theme == self.theme && ctx.base == self.base {
             return;
         }
         self.theme = ctx.theme;
+        self.base = ctx.base;
         if relabel {
             self.revision = ctx.localizer.revision();
             self.direction = ctx.localizer.locale().direction();
@@ -483,7 +512,7 @@ impl GalleryView {
             .tree
             .attach(self.tree.root(), self.content)
             .expect("root exists");
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         self.page = (PAGES[self.selected].build)(&mut self.tree, self.page_root, &env);
         self.page.layout(&mut self.tree, self.content, &env);
@@ -554,7 +583,8 @@ impl GalleryView {
         let cells = split(
             inner,
             &[
-                62.0, 62.0, 62.0, 14.0, 78.0, 92.0, 70.0, 14.0, 22.0, 96.0, 0.0, 190.0,
+                62.0, 62.0, 62.0, 8.0, 22.0, 22.0, 22.0, 22.0, 22.0, 22.0, 22.0, 14.0, 78.0, 92.0,
+                14.0, 22.0, 96.0, 0.0, 190.0,
             ],
             6.0,
             rtl,
@@ -562,20 +592,29 @@ impl GalleryView {
         for (index, (_, id, _)) in self.theme_buttons.iter().enumerate() {
             let _ = self.tree.set_bounds(*id, cells[index]);
         }
+        // Base color swatches are 22 pt squares.
+        for (index, (_, id, _)) in self.base_buttons.iter().enumerate() {
+            let cell = cells[4 + index];
+            let square = Rect::new(
+                Point::new(cell.origin.x, cell.center().y - 11.0),
+                Size::new(cell.size.width, 22.0),
+            );
+            let _ = self.tree.set_bounds(*id, square);
+        }
         for (index, (_, id, _)) in self.language_buttons.iter().enumerate() {
-            let _ = self.tree.set_bounds(*id, cells[4 + index]);
+            let _ = self.tree.set_bounds(*id, cells[12 + index]);
         }
         // The checkbox paints its own label, so it spans both cells.
-        let left = cells[8].origin.x.min(cells[9].origin.x);
-        let right = cells[8].max_x().max(cells[9].max_x());
+        let left = cells[15].origin.x.min(cells[16].origin.x);
+        let right = cells[15].max_x().max(cells[16].max_x());
         let _ = self.tree.set_bounds(
             self.enabled_node,
             Rect::new(
-                Point::new(left, cells[8].origin.y + 5.0),
+                Point::new(left, cells[15].origin.y + 5.0),
                 Size::new(right - left, 22.0),
             ),
         );
-        let _ = self.tree.set_bounds(self.new_window_node, cells[11]);
+        let _ = self.tree.set_bounds(self.new_window_node, cells[18]);
 
         // Sidebar: filter, list, and page count.
         let side = self.sidebar;
@@ -628,7 +667,7 @@ impl GalleryView {
             Size::new(width, (pane.max_y() - top - inset).max(0.0)),
         );
         let _ = self.tree.set_bounds(self.page_root, self.content);
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         self.page.layout(&mut self.tree, self.content, &env);
     }
@@ -639,9 +678,35 @@ impl GalleryView {
         self.layout(size, ctx);
     }
 
+    /// Paints the base color swatches: round outline buttons filled with
+    /// each base's muted foreground in the light scheme. The current base
+    /// has a thicker foreground border.
+    fn paint_swatches(&self, list: &mut DisplayList, env: &Env<'_>, ctx: &Ctx<'_>) {
+        let tokens = ctx.tokens();
+        for (base, id, button) in &self.base_buttons {
+            let bounds = self.tree.bounds(*id).unwrap_or_default();
+            if bounds.size.width <= 0.0 {
+                continue;
+            }
+            let query = StyleQuery::new(ControlKind::Button, Slot::Root)
+                .variant(ButtonVariant::Outline)
+                .size(ControlSize::IconSm)
+                .state(button.visual_state(&self.tree, *id));
+            let mut style = env.styles().resolve(&tokens, query);
+            style.radius = Corners::all(bounds.size.height / 2.0);
+            style.background =
+                DesignTokens::new(*base, ColorScheme::Light).color(ColorRole::MutedForeground);
+            if *base == ctx.base {
+                style.border = tokens.color(ColorRole::Foreground);
+                style.border_width = tokens.ring_width;
+            }
+            paint_box(list, bounds, &style, env.rtl());
+        }
+    }
+
     pub fn paint(&mut self, ctx: &Ctx<'_>) -> DisplayList {
         self.sync(ctx);
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         let mut list = DisplayList::new();
         list.fill_rect(
@@ -698,6 +763,7 @@ impl GalleryView {
                     button.visual_state(&self.tree, id),
                 );
         }
+        self.paint_swatches(&mut list, &env, ctx);
         let toggle = self.tree.bounds(self.enabled_node).unwrap_or_default();
         self.enabled_box.paint(
             &mut env.cx(&mut list, toggle),
@@ -861,7 +927,7 @@ impl GalleryView {
     /// the platform accessibility bridge.
     pub fn sync_semantics(&mut self, ctx: &Ctx<'_>) -> (Vec<SemanticEntry>, Vec<SemanticChange>) {
         self.sync(ctx);
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         let mut page_nodes = self.page.semantics(&self.tree, &env);
         if !self.enabled {
@@ -876,6 +942,12 @@ impl GalleryView {
             let mut node = button.semantics(&self.tree, *id).shared();
             node.name = ctx.text(&format!("theme.{}", theme.id()), &[]);
             node.state.selected = Some(*theme == ctx.theme);
+            nodes.push((*id, node));
+        }
+        for (base, id, button) in &self.base_buttons {
+            let mut node = button.semantics(&self.tree, *id).shared();
+            node.name = ctx.text(&format!("base.{}", base.id()), &[]);
+            node.state.selected = Some(*base == ctx.base);
             nodes.push((*id, node));
         }
         for (tag, id, button) in &self.language_buttons {
@@ -979,6 +1051,11 @@ impl GalleryView {
                 requests.push(Request::Theme(*theme));
             }
         }
+        for (base, id, button) in &mut self.base_buttons {
+            if let Ok(Some(_)) = button.handle(&mut self.tree, *id, ButtonInput::Pointer(event)) {
+                requests.push(Request::Base(*base));
+            }
+        }
         for (tag, id, button) in &mut self.language_buttons {
             if let Ok(Some(_)) = button.handle(&mut self.tree, *id, ButtonInput::Pointer(event)) {
                 requests.push(Request::Language(tag));
@@ -1056,7 +1133,7 @@ impl GalleryView {
         };
         if to_page && self.enabled {
             let focus_before = self.tree.focus();
-            let tokens = ctx.theme.tokens();
+            let tokens = ctx.tokens();
             let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
             self.page.pointer(&mut self.tree, event, modifiers, &env);
             if let PointerEvent::Down { position, .. } = event
@@ -1095,6 +1172,13 @@ impl GalleryView {
                     requests.push(Request::Theme(*theme));
                 }
             }
+            for (base, id, button) in &mut self.base_buttons {
+                if (focus == Some(*id) || matches!(event, KeyEvent::Up { .. }))
+                    && let Ok(Some(_)) = button.handle(&mut self.tree, *id, ButtonInput::Key(event))
+                {
+                    requests.push(Request::Base(*base));
+                }
+            }
             for (tag, id, button) in &mut self.language_buttons {
                 if (focus == Some(*id) || matches!(event, KeyEvent::Up { .. }))
                     && let Ok(Some(_)) = button.handle(&mut self.tree, *id, ButtonInput::Key(event))
@@ -1127,7 +1211,7 @@ impl GalleryView {
         } else if focus == Some(self.list_node) {
             self.list_key(event, ctx);
         } else if focus.is_none_or(|f| self.in_page(f)) && self.enabled {
-            let tokens = ctx.theme.tokens();
+            let tokens = ctx.tokens();
             let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
             self.page.key(&mut self.tree, event, modifiers, &env);
         }
@@ -1240,7 +1324,7 @@ impl GalleryView {
                 self.rebuild_rows(ctx);
             }
         } else if self.enabled {
-            let tokens = ctx.theme.tokens();
+            let tokens = ctx.tokens();
             let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
             self.page.text(&mut self.tree, text, &env);
         }
@@ -1267,6 +1351,12 @@ impl GalleryView {
         {
             if let Ok(Some(_)) = button.handle(&mut self.tree, *id, activate) {
                 requests.push(Request::Theme(*theme));
+            }
+        } else if let Some((base, id, button)) =
+            self.base_buttons.iter_mut().find(|(_, id, _)| *id == node)
+        {
+            if let Ok(Some(_)) = button.handle(&mut self.tree, *id, activate) {
+                requests.push(Request::Base(*base));
             }
         } else if let Some((tag, id, button)) = self
             .language_buttons
@@ -1304,7 +1394,7 @@ impl GalleryView {
             if action == SemanticAction::Focus {
                 let _ = self.tree.set_focus(Some(node));
             }
-            let tokens = ctx.theme.tokens();
+            let tokens = ctx.tokens();
             let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
             self.page
                 .action(&mut self.tree, node, action, value.as_deref(), &env);
@@ -1316,7 +1406,7 @@ impl GalleryView {
     #[cfg(target_os = "macos")]
     pub fn tick(&mut self, ctx: &Ctx<'_>) -> bool {
         self.sync(ctx);
-        let tokens = ctx.theme.tokens();
+        let tokens = ctx.tokens();
         let env = env(&tokens, ctx, self.enabled, &self.page_state, &self.measure);
         self.page.tick(&mut self.tree, &env)
     }
@@ -1327,6 +1417,9 @@ impl GalleryView {
     pub fn cancel_interaction(&mut self) {
         let cancel = ButtonInput::Cancel;
         for (_, id, button) in &mut self.theme_buttons {
+            let _ = button.handle(&mut self.tree, *id, cancel);
+        }
+        for (_, id, button) in &mut self.base_buttons {
             let _ = button.handle(&mut self.tree, *id, cancel);
         }
         for (_, id, button) in &mut self.language_buttons {
@@ -1362,6 +1455,7 @@ mod tests {
         Ctx {
             localizer,
             theme,
+            base: BaseColor::Neutral,
             shaper: &StubShaper,
             desktop: &NoDesktop,
             now: Duration::from_secs(2),
@@ -1408,6 +1502,14 @@ mod tests {
 
     fn down(key: Key) -> KeyEvent {
         KeyEvent::Down { key, repeat: false }
+    }
+
+    /// The window fill: the first command of a view's paint.
+    fn background(list: &DisplayList) -> Color {
+        match list.commands().first() {
+            Some(DisplayCommand::FillRect { color, .. }) => *color,
+            other => panic!("{other:?}"),
+        }
     }
 
     fn texts(list: &DisplayList) -> Vec<String> {
@@ -1497,6 +1599,13 @@ mod tests {
         );
         assert_eq!(
             {
+                let at = view.base_button(BaseColor::Olive);
+                click(&mut view, at, &ctx)
+            },
+            [Request::Base(BaseColor::Olive)]
+        );
+        assert_eq!(
+            {
                 let at = bounds(&view, language_node(&view, "vi"));
                 click(&mut view, at, &ctx)
             },
@@ -1513,20 +1622,44 @@ mod tests {
     }
 
     #[test]
+    fn base_swatches_are_named_and_mark_the_current_base() {
+        let english = localizer("en");
+        let mut ctx = ctx(&english, Theme::Light);
+        ctx.base = BaseColor::Stone;
+        let mut view = view(&ctx);
+        let (entries, _) = view.sync_semantics(&ctx);
+        let names: Vec<(String, Option<bool>)> = view
+            .base_buttons
+            .iter()
+            .filter_map(|(_, id, _)| entries.iter().find(|entry| entry.id == *id))
+            .map(|entry| (entry.node.name.clone(), entry.node.state.selected))
+            .collect();
+        assert_eq!(names.len(), 7);
+        assert_eq!(names[0], ("Neutral".to_string(), Some(false)));
+        assert_eq!(names[1], ("Stone".to_string(), Some(true)));
+        assert_eq!(
+            background(&view.paint(&ctx)),
+            Theme::Light
+                .tokens(BaseColor::Stone)
+                .color(ColorRole::Background)
+        );
+    }
+
+    #[test]
     fn theme_change_repaints_with_the_new_tokens() {
         let english = localizer("en");
         let mut view = view(&ctx(&english, Theme::Dark));
-        let background = |list: &DisplayList| match list.commands().first() {
-            Some(DisplayCommand::FillRect { color, .. }) => *color,
-            other => panic!("{other:?}"),
-        };
         assert_eq!(
             background(&view.paint(&ctx(&english, Theme::Dark))),
-            Theme::Dark.tokens().color(ColorRole::Background)
+            Theme::Dark
+                .tokens(BaseColor::Neutral)
+                .color(ColorRole::Background)
         );
         assert_eq!(
             background(&view.paint(&ctx(&english, Theme::Light))),
-            Theme::Light.tokens().color(ColorRole::Background)
+            Theme::Light
+                .tokens(BaseColor::Neutral)
+                .color(ColorRole::Background)
         );
     }
 

@@ -29,9 +29,10 @@ pub mod tests {
     use crate::page::{Env, MeasureCache, NoDesktop, Page, PageState};
     use choscorui::controls::ShortcutModifiers;
     use choscorui::core::{
-        CaretStop, DesignTokens, DisplayList, Key, KeyEvent, LayoutDirection, LayoutLine, Locale,
-        NodeId, Point, Rect, SemanticAction, SemanticRole, SemanticTree, Size, TextLayout,
-        TextLayoutError, TextShaper, TextStyle, Tree, grapheme_boundaries,
+        BaseColor, CaretStop, ColorScheme, DesignTokens, DisplayList, Key, KeyEvent,
+        LayoutDirection, LayoutLine, Locale, NodeId, Point, Rect, SemanticAction, SemanticRole,
+        SemanticTree, Size, TextLayout, TextLayoutError, TextShaper, TextStyle, Tree,
+        grapheme_boundaries,
     };
     use std::time::Duration;
 
@@ -165,15 +166,35 @@ pub mod tests {
 
     #[test]
     fn every_page_builds_paints_and_exposes_semantics_headlessly() {
-        let tokens = DesignTokens::light();
-        let state = PageState::default();
-        let cache = MeasureCache::default();
+        // Each base and scheme runs on its own thread.
+        std::thread::scope(|scope| {
+            for base in BaseColor::ALL {
+                for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+                    scope.spawn(move || {
+                        let tokens = DesignTokens::new(base, scheme);
+                        let theme = format!("{base:?} {scheme:?}");
+                        every_page_in(
+                            &tokens,
+                            &theme,
+                            &PageState::default(),
+                            &MeasureCache::default(),
+                        );
+                    });
+                }
+            }
+        });
+    }
+
+    /// Builds, paints, and reads the semantics of every page with
+    /// `tokens`, in both directions, enabled and disabled.
+    fn every_page_in(tokens: &DesignTokens, theme: &str, state: &PageState, cache: &MeasureCache) {
         for tag in ["en", "ar"] {
             let locale = Locale::parse(tag).unwrap();
             for enabled in [true, false] {
                 for page in PAGES {
-                    let context = format!("page `{}` ({tag}, enabled: {enabled})", page.id);
-                    let env = env(&tokens, &locale, enabled, &state, &cache);
+                    let context =
+                        format!("page `{}` ({theme}, {tag}, enabled: {enabled})", page.id);
+                    let env = env(tokens, &locale, enabled, state, cache);
                     assert_eq!(
                         env.direction,
                         if tag == "ar" {

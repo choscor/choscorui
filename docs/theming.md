@@ -13,7 +13,8 @@ change input handling, focus, or accessibility semantics.
 `BaseColor` in a `ColorScheme`. `DesignTokens::new(base, scheme)` builds any
 of the 7 bases (`Neutral`, `Stone`, `Zinc`, `Mauve`, `Olive`, `Mist`,
 `Taupe`) in `Light` or `Dark`. `DesignTokens::light()` and
-`DesignTokens::dark()` are the `Neutral` base.
+`DesignTokens::dark()` are the `Neutral` base. The gallery state bar has a
+swatch for each base beside its theme buttons.
 
 | Group | Fields and helpers | Change invalidates |
 | --- | --- | --- |

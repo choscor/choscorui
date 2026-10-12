@@ -18,7 +18,8 @@ use crate::strings::Source;
 use crate::view::{GalleryView, Theme};
 use choscorui::controls::{DateTimeField, ValidationState};
 use choscorui::core::{
-    CivilDate, CivilDateTime, CivilTime, Key, Point, PointerButton, PointerEvent, Support, Tree,
+    BaseColor, CivilDate, CivilDateTime, CivilTime, Key, Point, PointerButton, PointerEvent,
+    Support, Tree,
 };
 use choscorui::platform::{Application, Modifiers, WindowEvent};
 use std::time::{Duration, Instant};
@@ -232,6 +233,18 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
         }),
     );
 
+    // A base color swatch restyles and repaints.
+    let before = paint_count(gallery, 0);
+    let mauve = gallery.windows[0]
+        .view
+        .base_button(BaseColor::Mauve)
+        .center();
+    click(gallery, app, 0, mauve);
+    check(
+        "the Mauve base swatch restyles and repaints",
+        gallery.base == BaseColor::Mauve && painted_after(app, gallery, 0, before),
+    );
+
     // The Enabled toggle disables the page and enables it again.
     let toggle = gallery.windows[0].view.enabled_toggle().center();
     click(gallery, app, 0, toggle);
@@ -423,11 +436,12 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
         .as_ref()
         .is_some_and(|(saved, issues)| issues.is_empty() && *saved == expected);
     check(
-        "settings save, then reload page, theme, language, geometry, filter, zoom, and dock",
+        "settings save, then reload page, theme, base, language, geometry, filter, zoom, and dock",
         saved.is_ok()
             && restored
             && expected.page.as_deref() == Some("canvas")
             && expected.theme == Theme::Brand
+            && expected.base == BaseColor::Mauve
             && expected.language == "vi"
             && expected.filter == "canvas"
             && (expected.state.canvas_zoom - 2.5).abs() < 1e-9

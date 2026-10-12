@@ -9,7 +9,7 @@ use crate::strings::{self, LANGUAGE_NAMES, LANGUAGES, Source};
 use crate::view::{Ctx, GalleryView, Request, Theme};
 use choscorui::controls::ShortcutModifiers;
 use choscorui::core::{
-    BackendCapabilities, Locale, Localizer, Settings, Size, Tree, WindowGeometry,
+    BackendCapabilities, BaseColor, Locale, Localizer, Settings, Size, Tree, WindowGeometry,
 };
 use choscorui::platform::{
     AccessibilityActionRequest, Application, CoreTextShaper, MainMenu, MenuBarModel, MenuCommandId,
@@ -92,12 +92,14 @@ static SHAPER: CoreTextShaper = CoreTextShaper;
 fn ctx<'a>(
     localizer: &'a Localizer,
     theme: Theme,
+    base: BaseColor,
     desktop: &'a MacDesktop,
     started: Instant,
 ) -> Ctx<'a> {
     Ctx {
         localizer,
         theme,
+        base,
         shaper: &SHAPER,
         desktop,
         now: started.elapsed(),
@@ -128,6 +130,7 @@ pub struct Gallery {
     menu: Option<MainMenu>,
     pub localizer: Localizer,
     pub theme: Theme,
+    pub base: BaseColor,
     pub windows: Vec<GalleryWindow>,
     pub desktop: MacDesktop,
     pub settings: Settings,
@@ -169,6 +172,7 @@ impl Gallery {
             menu: None,
             localizer: Localizer::new(locale, catalog),
             theme: session.theme,
+            base: session.base,
             windows: Vec::new(),
             desktop: MacDesktop::default(),
             settings,
@@ -190,7 +194,13 @@ impl Gallery {
     }
 
     pub fn ctx(&self) -> Ctx<'_> {
-        ctx(&self.localizer, self.theme, &self.desktop, self.started)
+        ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        )
     }
 
     pub fn menu(&self) -> Option<&MainMenu> {
@@ -302,7 +312,13 @@ impl Gallery {
         state: PageState,
         geometry: Option<WindowGeometry>,
     ) {
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let view = GalleryView::new(DEFAULT_SIZE, selected, filter, state, &ctx);
         let title = view.window_title(&ctx);
         let mut window = match app.create_window(WindowOptions::new(
@@ -364,6 +380,7 @@ impl Gallery {
     pub fn session(&mut self) -> Saved {
         self.snapshot_main();
         self.session.theme = self.theme;
+        self.session.base = self.base;
         self.session.language = LANGUAGES
             .into_iter()
             .find(|tag| *tag == self.localizer.locale().tag())
@@ -400,6 +417,11 @@ impl Gallery {
         self.refresh_all();
     }
 
+    pub fn set_base(&mut self, base: BaseColor) {
+        self.base = base;
+        self.refresh_all();
+    }
+
     pub fn set_language(&mut self, app: &Application, tag: &str) {
         let Some(locale) = strings::language(tag) else {
             return;
@@ -415,7 +437,13 @@ impl Gallery {
         let Some(entry) = self.windows.get_mut(self.active) else {
             return;
         };
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let visible = entry.view.visible_pages();
         let Some(position) = visible.iter().position(|i| *i == entry.view.selected()) else {
             if let Some(first) = visible.first() {
@@ -464,6 +492,7 @@ impl Gallery {
     pub fn handle_request(&mut self, app: &Application, source: usize, request: Request) {
         match request {
             Request::Theme(theme) => self.set_theme(theme),
+            Request::Base(base) => self.set_base(base),
             Request::Language(tag) => self.set_language(app, tag),
             Request::NewWindow(page) => {
                 let state = self
@@ -483,7 +512,13 @@ impl Gallery {
 
     /// Repaints one window, updates its title and accessibility tree.
     pub fn refresh(&mut self, index: usize) {
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let Some(entry) = self.windows.get_mut(index) else {
             return;
         };
@@ -520,7 +555,13 @@ impl Gallery {
                 index += 1;
             }
         }
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let mut stale = Vec::new();
         for (index, entry) in self.windows.iter_mut().enumerate() {
             if entry.view.tick(&ctx) {
@@ -544,7 +585,13 @@ impl Gallery {
         if events.is_empty() && requests.is_empty() {
             return;
         }
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let Some(entry) = self.windows.get_mut(index) else {
             return;
         };
@@ -603,7 +650,13 @@ impl Gallery {
 
     /// Shows catalog page `page` in window `index`.
     pub fn select(&mut self, index: usize, page: usize) {
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         if let Some(entry) = self.windows.get_mut(index) {
             entry.view.select(page, &ctx);
         }
@@ -612,7 +665,13 @@ impl Gallery {
 
     /// Replaces the sidebar filter text of window `index`.
     pub fn set_filter(&mut self, index: usize, text: &str) {
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         if let Some(entry) = self.windows.get_mut(index) {
             entry.view.set_filter(text, &ctx);
         }
@@ -625,7 +684,13 @@ impl Gallery {
         index: usize,
         f: impl FnOnce(&mut Tree, &mut dyn Page, &Env<'_>) -> R,
     ) -> Option<R> {
-        let ctx = ctx(&self.localizer, self.theme, &self.desktop, self.started);
+        let ctx = ctx(
+            &self.localizer,
+            self.theme,
+            self.base,
+            &self.desktop,
+            self.started,
+        );
         let entry = self.windows.get_mut(index)?;
         Some(entry.view.with_page(&ctx, f))
     }

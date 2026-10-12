@@ -13,6 +13,13 @@ sidebar.count[other] = {count} pages
 theme.dark = Dark
 theme.light = Light
 theme.brand = Brand
+base.neutral = Neutral
+base.stone = Stone
+base.zinc = Zinc
+base.mauve = Mauve
+base.olive = Olive
+base.mist = Mist
+base.taupe = Taupe
 readout.focus = Focus: {name}
 readout.value = Focus: {name} = {value}
 readout.none = Nothing focused
