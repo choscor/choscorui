@@ -310,6 +310,7 @@ fn page_area(shared: &Shared, window: &WindowState) -> impl View {
     let enabled = window.enabled.clone();
     let cx = PageCx {
         desktop: shared.desktop.clone(),
+        store: window.store.clone(),
     };
     VStack::new((Dynamic::new(move || {
         let index = shown.get();

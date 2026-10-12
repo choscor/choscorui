@@ -42,6 +42,7 @@ impl PageStore {
 #[derive(Clone)]
 pub struct PageCx {
     pub desktop: Rc<dyn Desktop>,
+    pub store: PageStore,
 }
 
 /// The page column: `sections` top to bottom with the page spacing,
