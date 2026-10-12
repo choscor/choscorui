@@ -251,7 +251,7 @@ impl View for KeySequencePage {
             })
             .frame(Frame::new().width(320.0)),
             readout(move || format!("Last change: {}", last.get())),
-            caption(&format!("shortcut_text examples: {}", examples()))
+            caption(format!("shortcut_text examples: {}", examples()))
                 .accessibility_label(examples()),
         ))
     }

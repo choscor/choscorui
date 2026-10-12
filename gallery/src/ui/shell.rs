@@ -358,8 +358,12 @@ fn page_area(shared: &Shared, window: &WindowState) -> impl View {
         desktop: shared.desktop.clone(),
         store: window.store.clone(),
     };
+    let language = shared.language.clone();
     VStack::new((Dynamic::new(move || {
         let index = shown.get();
+        // Pages read some sample strings while they build, so a new
+        // language builds the page again.
+        language.get();
         let title = Text::new(Localized::new(format!("page.{}", PAGES[index].id)))
             .text_style(TextPreset::H3);
         let content: AnyView = match crate::ui::pages::find(PAGES[index].id) {

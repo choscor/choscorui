@@ -1,9 +1,16 @@
 //! What a gallery page is in the view API, and the small views that pages
 //! share: the page column, titled sections, and captions.
+//!
+//! Sample strings come from the `en` and `vi` catalogs under
+//! `resources/strings/`, with keys `<page id>.<name>`. Labels take
+//! `t!(key)` and follow the language live. Other strings come from
+//! `Env::text` while the page builds; the shell builds the page again when
+//! the language changes. Personal names, addresses, and file names stand
+//! for user data and stay literal.
 
 use crate::page::{Desktop, PageState};
 use choscorui::compose::view::{
-    AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, VStack, View, ViewExt,
+    AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::compose::{Property, Runtime};
 use choscorui::core::{ColorRole, Image, Space, TextPreset};
@@ -57,7 +64,7 @@ pub fn column(sections: impl View) -> AnyView {
 }
 
 /// A titled group of samples: a small muted caption above `content`.
-pub fn section(title: &str, content: impl View) -> AnyView {
+pub fn section(title: impl Into<TextContent>, content: impl View) -> AnyView {
     VStack::new((caption(title), content))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S2)
@@ -65,8 +72,8 @@ pub fn section(title: &str, content: impl View) -> AnyView {
 }
 
 /// A small caption in `muted-foreground`.
-pub fn caption(text: &str) -> impl View {
-    Text::new(text.to_owned())
+pub fn caption(text: impl Into<TextContent>) -> impl View {
+    Text::new(text.into())
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
 }

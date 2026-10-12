@@ -110,7 +110,7 @@ impl View for DesktopPage {
             .spacing(Space::S3),
             Text::new(move || last.get()).text_style(TextPreset::Muted),
             section(
-                &format!("Capabilities of the {} backend", capabilities.backend),
+                format!("Capabilities of the {} backend", capabilities.backend),
                 VStack::new(ForEach::new(
                     capability_rows(&capabilities),
                     |(name, _)| *name,

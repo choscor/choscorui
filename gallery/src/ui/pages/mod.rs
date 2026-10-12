@@ -61,8 +61,7 @@ pub mod tests {
     use choscorui::compose::view::{Env, ViewExt, ViewHost};
     use choscorui::controls::EstimatedText;
     use choscorui::core::{
-        BaseColor, Catalog, ColorScheme, DesignTokens, Locale, NodeId, SemanticAction,
-        SemanticRole, Size,
+        BaseColor, ColorScheme, DesignTokens, Locale, NodeId, SemanticAction, SemanticRole, Size,
     };
     use std::rc::Rc;
 
@@ -85,7 +84,9 @@ pub mod tests {
                 store: PageStore::new(&runtime, &PageState::default()),
             };
             let build = super::find(id).unwrap_or_else(|| panic!("page {id} has no view"));
-            let env = Env::new(Rc::new(Catalog::new()), Locale::parse(tag).unwrap());
+            let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+            let (catalog, _, _) = crate::strings::load(&resources);
+            let env = Env::new(Rc::new(catalog), Locale::parse(tag).unwrap());
             let mut host = ViewHost::new(
                 Size::new(900.0, 700.0),
                 tokens,
@@ -135,7 +136,7 @@ pub mod tests {
     /// Mounts, paints, and reads the semantics of every page view with
     /// `tokens`, in both directions, enabled and disabled.
     fn every_page_in(tokens: DesignTokens) {
-        for tag in ["en", "ar"] {
+        for tag in ["en", "vi", "ar"] {
             for enabled in [true, false] {
                 for page in PAGES {
                     assert!(
@@ -155,6 +156,12 @@ pub mod tests {
                     assert!(!snapshot.is_empty(), "{context}: no semantic nodes");
                     for entry in &snapshot {
                         let node = &entry.node;
+                        if tag != "ar" {
+                            let texts = [Some(&node.name), Some(&node.description)];
+                            for text in texts.into_iter().chain([node.value.as_ref()]).flatten() {
+                                assert!(!is_page_key(text), "{context}: untranslated {text:?}");
+                            }
+                        }
                         assert!(
                             node.state.hidden
                                 || node.role == SemanticRole::Group
@@ -169,5 +176,20 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    /// Whether `text` is a catalog key of a page (`<page id>.<name>`)
+    /// that the catalog does not translate.
+    fn is_page_key(text: &str) -> bool {
+        let Some((page, name)) = text.split_once('.') else {
+            return false;
+        };
+        let key_chars = |part: &str| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "._-".contains(c))
+        };
+        key_chars(name) && PAGES.iter().any(|known| known.id == page)
     }
 }
