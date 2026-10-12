@@ -102,6 +102,7 @@ in parentheses is the role that the macOS backend gives to that
 | Data | [`Avatar`](#avatar-and-avatargroup) | Round user image with a text fallback. |
 | Data | [`AvatarGroup`](#avatar-and-avatargroup) | Overlapping avatars with a count. |
 | Data | [`Carousel`](#carousel) | Slides that move one at a time and snap. |
+| Data | [`DataTable`](#datatable) | Sorted, filtered, selectable, and paged rows of an item model. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2162,6 +2163,58 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | `Focus`; `Activate`, `Increment`, and `Decrement` when a move is possible |
 
 [carousel.rs](../crates/choscorui-controls/tests/carousel.rs) pins this behavior.
+
+### DataTable
+
+- The table reads rows from an `ItemModel` through a `SortFilterProxy`.
+  A keyed `Selection` holds the selected rows, so the selection stays
+  correct when the sort or the filter changes.
+- **Filter.** `with_filter(placeholder, column)` adds an input above the
+  table. Typing filters the rows, goes to the first page, and emits
+  `Changed(Text(filter))`.
+- **Columns.** `with_column_menu(label)` adds a menu button at the toolbar
+  end. Each menu item shows or hides one column. `with_hidden(column)`
+  hides a column at the start.
+- **Sort.** A click on a header, or Enter or Space on a header cell,
+  sorts by that column. Each activation goes from ascending to
+  descending to source order. An arrow after the label shows the order.
+- **Selection.** The first column holds checkboxes. A row checkbox, or
+  Space on a row, toggles the row. The header checkbox toggles every row
+  on the page, and shows a mixed mark when some are selected. Each change
+  emits `Changed(Indices(rows))` with the selected source rows.
+- **Pages.** `with_page_size(rows)` sets the rows per page; the default is
+  10. Previous, Next, `Increment`, and `Decrement` change the page.
+- **Keys.** The filter, the column menu, the grid, and the enabled page
+  buttons are tab stops. In the grid, arrow keys move between cells and
+  follow the reading order. Home and End go to the first and the last
+  column.
+- `with_empty(text)` shows text when no row matches. `with_status(format)`
+  shows a status line from the selected and the filtered row counts.
+- Paint reads only the rows on the page.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Frame | `Group` | 1 pt `border`, radius md |
+| Header row | `Header` | 1 pt `border` at the bottom |
+| Header cell | `HeaderCell` | 40 pt high, sm medium text, 8 pt horizontal padding; 50% `muted` fill while hovered |
+| Row | `Row` | 1 pt `border` at the bottom; 50% `muted` fill while hovered, `muted` while selected |
+| Cell | `Cell` | sm text, 8 pt padding |
+| Focused cell | `Root` | focus ring |
+| Status | `Caption` | sm `muted-foreground` text |
+| Filter | `Input` `Root` | input box, at most 384 pt wide |
+| Column menu, page buttons | `Button` `Root` | outline buttons; the page buttons are small |
+| Toolbar and footer gap | none | 16 pt from the spacing token |
+
+| Field | `DataTable::semantics` |
+| --- | --- |
+| Role | `Table` (AXTable) |
+| Name / value | name / status line |
+| Description | the focused header, row cells, button, or filter placeholder |
+| State | expanded with a column menu, disabled |
+| Actions | `Activate`, `Focus`, `Increment` and `Decrement` when a page applies, `SetValue` on the filter |
+
+[data_table.rs](../crates/choscorui-controls/tests/data_table.rs) pins this
+behavior.
 
 ### CustomControl and ControlHost
 

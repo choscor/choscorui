@@ -88,6 +88,14 @@ fn table(cx: &Cx) -> ResolvedStyle {
             style.icon_size = 16.0;
             style
         }
+        Slot::Group => {
+            // The frame around a data table.
+            let mut style = cx.base();
+            style.border = cx.c(ColorRole::Border);
+            style.border_width = cx.t.border_width;
+            style.radius = Corners::all(cx.r(RadiusScale::Md));
+            style
+        }
         _ => {
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL);
             focus(&mut style, cx);

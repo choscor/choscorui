@@ -1,13 +1,13 @@
 //! Data display components mounted through `ControlHost`: cards,
-//! badges, avatars, and carousels.
+//! badges, avatars, carousels, and the data table.
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
     Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, Carousel, ControlSize,
-    CustomControl, Orientation,
+    CustomControl, DataTable, Orientation,
 };
-use choscorui::core::{Icon, Image, NodeId, Tree};
+use choscorui::core::{Icon, Image, ItemData, ListStore, NodeId, Role, Tree, Value};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
     Box::new(control)
@@ -190,6 +190,52 @@ pub fn carousel(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page
     HostedPage::build(tree, parent, rows)
 }
 
+/// One payment row: status, email, and amount.
+struct Payment(&'static str, &'static str, f64);
+
+impl ItemData for Payment {
+    fn data(&self, column: usize, role: Role) -> Value {
+        match (column, role) {
+            (0, Role::Display | Role::Sort) => Value::Text(self.0.into()),
+            (1, Role::Display | Role::Sort) => Value::Text(self.1.into()),
+            (2, Role::Display) => Value::Text(format!("${:.2}", self.2)),
+            (2, Role::Sort) => Value::Float(self.2),
+            _ => Value::None,
+        }
+    }
+}
+
+fn payments() -> ListStore<Payment> {
+    let mut store = ListStore::new(3);
+    store.set_headers(["Status", "Email", "Amount"]);
+    let rows = vec![
+        Payment("success", "ken99@example.com", 316.0),
+        Payment("success", "abe45@example.com", 242.0),
+        Payment("processing", "monserrat44@example.com", 837.0),
+        Payment("success", "silas22@example.com", 874.0),
+        Payment("failed", "carmella@example.com", 721.0),
+        Payment("pending", "jason78@example.com", 450.0),
+        Payment("success", "sarah23@example.com", 1280.0),
+    ];
+    store.insert(None, 0, rows).expect("root insert is valid");
+    store
+}
+
+pub fn data_table(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let rows: Vec<Row> = vec![(
+        "Sort, filter, columns, selection, and pages",
+        vec![boxed(
+            DataTable::new("Payments", Box::new(payments()), "Previous", "Next")
+                .with_filter("Filter emails...", Some(1))
+                .with_column_menu("Columns")
+                .with_empty("No results.")
+                .with_status(|selected, total| format!("{selected} of {total} row(s) selected."))
+                .with_page_size(5),
+        )],
+    )];
+    HostedPage::build(tree, parent, rows)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::pages::tests::Harness;
@@ -212,6 +258,14 @@ mod tests {
         let page = h.get::<crate::pages::hosted::HostedPage>();
         let value = page.host.get(node).unwrap().semantics().value;
         assert_eq!(value.as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn data_table_page_pages_with_assistive_actions() {
+        let mut h = Harness::new("data-table");
+        let node = h.node("Payments", Some(SemanticRole::Table));
+        assert!(h.act(node, SemanticAction::Increment));
+        assert!(!h.act(node, SemanticAction::Increment), "two pages");
     }
 
     #[test]
