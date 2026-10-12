@@ -3,8 +3,8 @@
 //! pins them.
 
 use choscorui_controls::{
-    ControlKind, ControlSize, Corners, Edges, ResolvedStyle, Ring, SidebarVariant, Sides, Slot,
-    StyleQuery, Styles, TabsVariant, VisualState,
+    ControlKind, ControlSize, Corners, Edges, ResolvedStyle, Ring, SidebarItemVariant,
+    SidebarVariant, Sides, Slot, StyleQuery, Styles, TabsVariant, VisualState,
 };
 use choscorui_core::{
     Color, ColorRole, ColorScheme, DesignTokens, FontWeight, RadiusScale, ShadowLayers,
@@ -485,6 +485,63 @@ fn sidebar_matches_its_reference_table() {
         );
         assert_eq!(item(VisualState::FOCUS_VISIBLE).ring, sidebar_ring);
         assert_eq!(item(VisualState::DISABLED).opacity, 0.5);
+
+        let outline = |state| {
+            let query = query(Slot::Item).variant(SidebarItemVariant::Outline);
+            get(&tokens, query.state(state))
+        };
+        let rest = outline(VisualState::NONE);
+        assert_eq!(
+            (rest.background, rest.ring),
+            (c(ColorRole::Background), border)
+        );
+        let lit = outline(VisualState::HOVERED);
+        assert_eq!(
+            (lit.background, lit.ring),
+            (
+                accent.0,
+                Some(Ring {
+                    width: 1.0,
+                    color: accent.0
+                })
+            )
+        );
+
+        let menu = get(&tokens, query(Slot::Row));
+        assert_eq!(
+            (
+                menu.border,
+                menu.border_width,
+                menu.border_sides,
+                menu.min_width,
+                menu.padding,
+                menu.gap
+            ),
+            (
+                c(ColorRole::SidebarBorder),
+                1.0,
+                Sides::START,
+                14.0,
+                Edges::axes(10.0, 2.0),
+                4.0
+            )
+        );
+        for (size, size_text) in [
+            (ControlSize::Default, TextSize::Sm),
+            (ControlSize::Sm, TextSize::Xs),
+        ] {
+            let link = get(&tokens, query(Slot::Link).size(size));
+            assert_eq!(
+                (link.min_height, link.padding, link.text),
+                (
+                    28.0,
+                    Edges::axes(8.0, 0.0),
+                    tokens.text(size_text, FontWeight::NORMAL)
+                ),
+                "{}",
+                size.name()
+            );
+        }
 
         let badge = get(&tokens, query(Slot::Badge));
         assert_eq!(

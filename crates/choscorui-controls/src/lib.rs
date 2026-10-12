@@ -171,9 +171,10 @@ pub use style::{
     CalendarDay, Content, ControlKind, ControlSize, Corners, Cursor, DefaultRecipe, Edges,
     EmptyMediaVariant, EstimatedText, FieldOrientation, ItemVariant, KbdVariant, MarkerVariant,
     MenuItemVariant, Orientation, PaintContext, Recipe, ResolvedStyle, Ring, ShapedText, SheetSide,
-    SidebarVariant, Sides, Slot, StyleCacheStats, StyleQuery, Styles, TabsVariant, TextAlign,
-    TextLine, TextMeasure, ToastVariant, ToggleVariant, TransitionStats, Variant, VisualState,
-    align_x, content_rect, draw_icon, draw_text, fill_shape, paint_box, paint_slot,
+    SidebarItemVariant, SidebarVariant, Sides, Slot, StyleCacheStats, StyleQuery, Styles,
+    TabsVariant, TextAlign, TextLine, TextMeasure, ToastVariant, ToggleVariant, TransitionStats,
+    Variant, VisualState, align_x, content_rect, draw_icon, draw_text, fill_shape, paint_box,
+    paint_slot,
 };
 mod navigation;
 pub use navigation::{

@@ -16,8 +16,9 @@ use choscorui::controls::{
     Checkbox, ComboItem, Combobox, CommandId, ControlHost, ControlSize, CustomControl,
     EstimatedText, HostEnv, IntegerRange, Item, ItemGroup, ItemVariant, ItemView, Kbd, KbdVariant,
     Marker, MarkerVariant, Message, PaintContext, Progress, ShortcutModifiers, Sidebar,
-    SidebarItem, SidebarVariant, Slider, SliderOrientation, SpinBox, Styles, Switch, TextField,
-    TextItemDelegate, Toast, ToastVariant, Toaster, Toasts, Toggle, ToggleVariant, VisualState,
+    SidebarItem, SidebarItemVariant, SidebarVariant, Slider, SliderOrientation, SpinBox, Styles,
+    Switch, TextField, TextItemDelegate, Toast, ToastVariant, Toaster, Toasts, Toggle,
+    ToggleVariant, VisualState,
 };
 use choscorui::core::{
     AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, Constraints,
@@ -427,6 +428,22 @@ fn hosted_variants() -> Vec<(String, Box<dyn CustomControl>)> {
         .with_variant(*variant);
         out.push((format!("sidebar {}", variant.name()), Box::new(sidebar)));
     }
+    // A small menu with an outline item and an open sub-menu.
+    let menu = Sidebar::new(
+        "Navigation",
+        "Toggle sidebar",
+        vec![(
+            "Application".to_string(),
+            vec![
+                SidebarItem::new("Inbox", Icon::Inbox).with_variant(SidebarItemVariant::Outline),
+                SidebarItem::new("Projects", Icon::File)
+                    .with_children(vec![SidebarItem::new("Design", Icon::File)]),
+            ],
+        )],
+    )
+    .with_menu_size(ControlSize::Sm)
+    .with_selected(2);
+    out.push(("sidebar sub-menu".to_string(), Box::new(menu)));
     for variant in ToggleVariant::ALL {
         for size in ControlSize::ALL {
             let toggle = Toggle::new("Bold", false)

@@ -6,8 +6,8 @@ use crate::custom::{
 };
 use crate::hosted::{self, Reveal};
 use crate::style::{
-    ButtonVariant, ControlKind, ControlSize, PaintContext, SheetSide, SidebarVariant, Slot,
-    StyleQuery, TextAlign, VisualState,
+    ButtonVariant, ControlKind, ControlSize, PaintContext, SheetSide, SidebarItemVariant,
+    SidebarVariant, Slot, StyleQuery, TextAlign, Variant, VisualState,
 };
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
@@ -52,6 +52,11 @@ pub struct SidebarItem {
     pub icon: Icon,
     /// Short text at the end of the row, such as a count.
     pub badge: Option<String>,
+    /// The look of the row.
+    pub variant: SidebarItemVariant,
+    /// The items of the sub-menu under the row. The children of a
+    /// sub-item do not show.
+    pub children: Vec<SidebarItem>,
 }
 
 impl SidebarItem {
@@ -60,6 +65,8 @@ impl SidebarItem {
             label: label.into(),
             icon,
             badge: None,
+            variant: SidebarItemVariant::Default,
+            children: Vec::new(),
         }
     }
 
@@ -68,24 +75,54 @@ impl SidebarItem {
         self.badge = Some(badge.into());
         self
     }
+
+    #[must_use]
+    pub fn with_variant(mut self, variant: SidebarItemVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    /// Gives the row a sub-menu with `children`.
+    #[must_use]
+    pub fn with_children(mut self, children: Vec<SidebarItem>) -> Self {
+        self.children = children;
+        self
+    }
+}
+
+/// An item or a sub-item, in the order that items count.
+#[derive(Clone, Copy)]
+struct Entry<'a> {
+    item: &'a SidebarItem,
+    /// The index of the item whose sub-menu holds this sub-item.
+    parent: Option<usize>,
+}
+
+impl Entry<'_> {
+    /// True for an item with a sub-menu.
+    fn has_menu(self) -> bool {
+        self.parent.is_none() && !self.item.children.is_empty()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Part {
     Toggle,
     Label(usize),
-    /// An item by its index across all groups.
+    /// An item or a sub-item by its index across all groups.
     Item(usize),
+    /// The sub-menu box of the item with this index.
+    Menu(usize),
 }
 
 impl Part {
     fn focusable(self) -> bool {
-        !matches!(self, Part::Label(_))
+        matches!(self, Part::Toggle | Part::Item(_))
     }
 }
 
 /// A sidebar: a toggle and groups of items with icons. The selected item
-/// takes the accent look. Command+B, the toggle, `Expand`, and `Collapse`
+/// takes the accent look. An item with children opens a sub-menu. Command+B, the toggle, `Expand`, and `Collapse`
 /// open or collapse it. In a window narrower than
 /// [`SIDEBAR_MOBILE_BREAKPOINT`], only the toggle shows, and opening the
 /// sidebar shows it as a modal sheet.
@@ -97,6 +134,9 @@ pub struct Sidebar {
     collapse: SidebarCollapse,
     side: SheetSide,
     expanded: bool,
+    menu_size: ControlSize,
+    /// The items whose sub-menus are open.
+    open: Vec<usize>,
     selected: Option<usize>,
     /// The focused part, as an index into the active parts.
     focus: usize,
@@ -109,6 +149,7 @@ pub struct Sidebar {
     sheet: Rect,
     reveal: Reveal,
     motion_ms: u32,
+    rtl: bool,
     enabled: bool,
 }
 
@@ -127,6 +168,8 @@ impl Sidebar {
             collapse: SidebarCollapse::Offcanvas,
             side: SheetSide::Left,
             expanded: true,
+            menu_size: ControlSize::Default,
+            open: Vec::new(),
             selected: None,
             focus: 0,
             hovered: None,
@@ -138,6 +181,7 @@ impl Sidebar {
             sheet: Rect::default(),
             reveal: Reveal::default(),
             motion_ms: 0,
+            rtl: false,
             enabled: true,
         }
     }
@@ -165,9 +209,22 @@ impl Sidebar {
         self
     }
 
+    /// The size of the item rows: `Sm`, `Default`, or `Lg`. Other sizes
+    /// take `Default`.
+    #[must_use]
+    pub fn with_menu_size(mut self, size: ControlSize) -> Self {
+        self.menu_size = match size {
+            ControlSize::Sm | ControlSize::Lg => size,
+            _ => ControlSize::Default,
+        };
+        self
+    }
+
+    /// Selects `item` and opens the sub-menu that holds it.
     #[must_use]
     pub fn with_selected(mut self, item: usize) -> Self {
         self.selected = Some(item);
+        self.open_parent(item);
         self
     }
 
@@ -191,13 +248,34 @@ impl Sidebar {
         if compact {
             ControlSize::Icon
         } else {
+            self.menu_size
+        }
+    }
+
+    /// The size of the sub-item rows.
+    fn link_size(&self) -> ControlSize {
+        if self.menu_size == ControlSize::Sm {
+            ControlSize::Sm
+        } else {
             ControlSize::Default
         }
     }
 
+    /// A query of a panel slot, which takes the sidebar variant.
     fn query(&self, slot: Slot, size: ControlSize, state: VisualState) -> StyleQuery {
+        Self::item_query(slot, self.variant.into(), size, state)
+    }
+
+    /// A query of a row slot. Rows take the variant of their item, not
+    /// the sidebar variant.
+    fn item_query(
+        slot: Slot,
+        variant: Variant,
+        size: ControlSize,
+        state: VisualState,
+    ) -> StyleQuery {
         StyleQuery::new(ControlKind::Sidebar, slot)
-            .variant(self.variant)
+            .variant(variant)
             .size(size)
             .state(state)
     }
@@ -209,12 +287,55 @@ impl Sidebar {
             .state(state)
     }
 
-    fn items(&self) -> impl Iterator<Item = (usize, &SidebarItem)> {
-        self.groups.iter().flat_map(|(_, items)| items).enumerate()
+    /// The items, each followed by its sub-items.
+    fn entries(&self) -> Vec<Entry<'_>> {
+        let mut entries = Vec::new();
+        for item in self.groups.iter().flat_map(|(_, items)| items) {
+            let parent = entries.len();
+            entries.push(Entry { item, parent: None });
+            entries.extend(item.children.iter().map(|child| Entry {
+                item: child,
+                parent: Some(parent),
+            }));
+        }
+        entries
     }
 
     fn item(&self, index: usize) -> Option<&SidebarItem> {
-        self.items().nth(index).map(|(_, item)| item)
+        self.entries().get(index).map(|entry| entry.item)
+    }
+
+    /// Opens the sub-menu that holds `item`, if any.
+    fn open_parent(&mut self, item: usize) {
+        let parent = self.entries().get(item).and_then(|entry| entry.parent);
+        if let Some(parent) = parent.filter(|parent| !self.open.contains(parent)) {
+            self.open.push(parent);
+        }
+    }
+
+    /// The focused part.
+    fn focused(&self) -> Option<Part> {
+        let stops = self.stops();
+        stops.get(self.focus).map(|stop| self.active()[*stop].0)
+    }
+
+    fn focus_part(&mut self, part: Part) {
+        let active = self.active();
+        let stop = self.stops().iter().position(|stop| active[*stop].0 == part);
+        if let Some(stop) = stop {
+            self.focus = stop;
+        }
+    }
+
+    /// The focused item with a sub-menu, while the item labels show.
+    /// `Expand` and `Collapse` act on its sub-menu.
+    fn menu_target(&self) -> Option<usize> {
+        let Some(Part::Item(index)) = self.focused() else {
+            return None;
+        };
+        let entries = self.entries();
+        let has_menu = entries.get(index).is_some_and(|entry| entry.has_menu());
+        (self.is_expanded() && has_menu).then_some(index)
     }
 
     /// The parts that input and paint use now.
@@ -250,7 +371,11 @@ impl Sidebar {
         let header = cx.style(self.query(Slot::Header, size, VisualState::NONE));
         let group = cx.style(self.query(Slot::Group, size, VisualState::NONE));
         let label = cx.style(self.query(Slot::GroupLabel, size, VisualState::NONE));
-        let item = cx.style(self.query(Slot::Item, size, VisualState::NONE));
+        // Row sizes do not depend on the item variant.
+        let row = |slot, size| Self::item_query(slot, Variant::default(), size, VisualState::NONE);
+        let item = cx.style(row(Slot::Item, size));
+        let menu = cx.style(self.query(Slot::Row, self.link_size(), VisualState::NONE));
+        let link = cx.style(row(Slot::Link, self.link_size()));
         let toggle = cx.style(Self::toggle_query(VisualState::NONE));
         let inner = Rect::from_xywh(
             panel.origin.x + root.padding.inline_start,
@@ -289,14 +414,44 @@ impl Sidebar {
                 ));
                 y += label.min_height;
             }
-            for _ in entries {
+            for entry in entries {
                 let row_width = if compact { item.min_width } else { width };
                 parts.push((
                     Part::Item(index),
                     Rect::from_xywh(x, y, row_width, item.min_height),
                 ));
                 y += item.min_height + group.gap;
+                let parent = index;
                 index += 1;
+                if compact || entry.children.is_empty() || !self.open.contains(&parent) {
+                    index += entry.children.len();
+                    continue;
+                }
+                // The sub-menu box: inset by the row's minimum width at
+                // the start, with a border on that edge.
+                let margin = menu.min_width;
+                let box_x = if cx.rtl() { x } else { x + margin };
+                let box_width = (width - margin).max(0.0);
+                let slot = parts.len();
+                parts.push((Part::Menu(parent), Rect::default()));
+                let top = y;
+                y += menu.padding.block_start;
+                for _ in &entry.children {
+                    parts.push((
+                        Part::Item(index),
+                        Rect::from_xywh(
+                            box_x + menu.padding.inline_start,
+                            y,
+                            (box_width - menu.padding.horizontal()).max(0.0),
+                            link.min_height,
+                        ),
+                    ));
+                    y += link.min_height + menu.gap;
+                    index += 1;
+                }
+                y += menu.padding.block_end - menu.gap;
+                parts[slot].1 = Rect::from_xywh(box_x, top, box_width, y - top);
+                y += group.gap;
             }
             // The last item has no gap after it.
             let trailing = if entries.is_empty() { 0.0 } else { group.gap };
@@ -347,6 +502,19 @@ impl Sidebar {
                 let expanded = !self.is_expanded();
                 self.set_expanded(cx, expanded);
             }
+            Some(Part::Item(index)) if self.entries().get(index).is_some_and(|e| e.has_menu()) => {
+                if self.is_expanded() {
+                    let open = !self.open.contains(&index);
+                    self.set_menu_open(cx, index, open);
+                } else {
+                    // On the icon rail: expand the sidebar with the
+                    // sub-menu open.
+                    if !self.open.contains(&index) {
+                        self.open.push(index);
+                    }
+                    self.set_expanded(cx, true);
+                }
+            }
             Some(Part::Item(index)) => {
                 if self.selected != Some(index) {
                     self.selected = Some(index);
@@ -360,6 +528,44 @@ impl Sidebar {
             }
             _ => {}
         }
+    }
+
+    /// Opens or closes the sub-menu of `item`.
+    fn set_menu_open(&mut self, cx: &mut ControlContext<'_>, item: usize, open: bool) {
+        if self.open.contains(&item) == open {
+            return;
+        }
+        if open {
+            self.open.push(item);
+        } else {
+            self.open.retain(|other| *other != item);
+        }
+        cx.request_layout();
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// ArrowRight, or ArrowLeft right to left, with `forward`: opens the
+    /// focused sub-menu, or goes into it. The other arrow closes it, or
+    /// goes from a sub-item to its item.
+    fn menu_key(&mut self, cx: &mut ControlContext<'_>, forward: bool) -> EventReply {
+        let Some(Part::Item(index)) = self.focused() else {
+            return EventReply::Continue;
+        };
+        let Some(entry) = self.entries().get(index).copied() else {
+            return EventReply::Continue;
+        };
+        let open = self.open.contains(&index);
+        match (entry.parent, forward) {
+            (Some(parent), false) => self.focus_part(Part::Item(parent)),
+            (None, true) if entry.has_menu() && open => self.focus_part(Part::Item(index + 1)),
+            (None, true) if entry.has_menu() => self.set_menu_open(cx, index, true),
+            (None, false) if open => self.set_menu_open(cx, index, false),
+            _ => return EventReply::Continue,
+        }
+        cx.request_paint();
+        cx.request_semantics();
+        EventReply::Stop
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
@@ -378,6 +584,10 @@ impl Sidebar {
                 if let Some(part) = stops.get(self.focus) {
                     self.activate(cx, *part);
                 }
+            }
+            Key::ArrowRight | Key::ArrowLeft if self.is_expanded() => {
+                let forward = (key == Key::ArrowRight) != self.rtl;
+                return self.menu_key(cx, forward);
             }
             Key::Tab if self.mobile && self.reveal.open && !stops.is_empty() => {
                 // Focus stays in the sheet.
@@ -457,6 +667,7 @@ impl Sidebar {
             .map(|(index, _)| index)
             .collect();
         let focused = stops.get(self.focus).copied();
+        let entries = self.entries();
         for (index, (part, rect)) in parts.iter().enumerate() {
             let state = VisualState::NONE
                 .set(VisualState::HOVERED, self.hovered == Some(index))
@@ -480,14 +691,34 @@ impl Sidebar {
                         cx.label(inner, title, &style, TextAlign::Start);
                     });
                 }
+                Part::Menu(_) => {
+                    let style = cx.style(self.query(Slot::Row, self.link_size(), state));
+                    cx.slot(*rect, &style, |_, _| {});
+                }
                 Part::Item(item_index) => {
-                    let Some(item) = self.item(*item_index) else {
+                    let Some(entry) = entries.get(*item_index).copied() else {
                         continue;
+                    };
+                    let item = entry.item;
+                    let (slot, size) = if entry.parent.is_some() {
+                        (Slot::Link, self.link_size())
+                    } else {
+                        (Slot::Item, size)
                     };
                     let state =
                         state.set(VisualState::SELECTED, self.selected == Some(*item_index));
-                    let style = cx.style(self.query(Slot::Item, size, state));
-                    let badge = cx.style(self.query(Slot::Badge, size, state));
+                    let variant = item.variant.into();
+                    let style = cx.style(Self::item_query(slot, variant, size, state));
+                    let badge = cx.style(Self::item_query(Slot::Badge, variant, size, state));
+                    let chevron = (entry.has_menu() && !compact).then(|| {
+                        if self.open.contains(item_index) {
+                            Icon::ChevronDown
+                        } else if cx.rtl {
+                            Icon::ChevronLeft
+                        } else {
+                            Icon::ChevronRight
+                        }
+                    });
                     cx.slot(*rect, &style, |cx, inner| {
                         let icon_size = 16.0;
                         let icon_x = if compact {
@@ -504,14 +735,27 @@ impl Sidebar {
                             return;
                         }
                         let skip = icon_size + style.gap;
+                        let end = if let Some(chevron) = chevron {
+                            let x = if cx.rtl {
+                                inner.origin.x
+                            } else {
+                                inner.max_x() - icon_size
+                            };
+                            let mark =
+                                Rect::from_xywh(x, inner.origin.y, icon_size, inner.size.height);
+                            cx.icon(mark, chevron, &style);
+                            icon_size + style.gap
+                        } else {
+                            0.0
+                        };
                         let text = Rect::from_xywh(
                             if cx.rtl {
-                                inner.origin.x
+                                inner.origin.x + end
                             } else {
                                 inner.origin.x + skip
                             },
                             inner.origin.y,
-                            (inner.size.width - skip).max(0.0),
+                            (inner.size.width - skip - end).max(0.0),
                             inner.size.height,
                         );
                         if let Some(count) = &item.badge {
@@ -564,6 +808,7 @@ impl CustomControl for Sidebar {
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.viewport = cx.viewport;
+        self.rtl = cx.rtl();
         self.mobile = cx.viewport.size.width < SIDEBAR_MOBILE_BREAKPOINT;
         let compact = self.compact();
         self.parts = self.layout(cx, bounds, compact);
@@ -654,10 +899,15 @@ impl CustomControl for Sidebar {
     }
 
     fn semantics(&self) -> SemanticNode {
+        let menu = self.menu_target();
+        let expanded = match menu {
+            Some(item) => self.open.contains(&item),
+            None => self.is_expanded(),
+        };
         let actions = if self.enabled {
             let mut actions = vec![SemanticAction::Activate];
-            if self.collapsible() {
-                actions.push(if self.is_expanded() {
+            if self.collapsible() || menu.is_some() {
+                actions.push(if expanded {
                     SemanticAction::Collapse
                 } else {
                     SemanticAction::Expand
@@ -673,11 +923,7 @@ impl CustomControl for Sidebar {
             .selected
             .and_then(|index| self.item(index))
             .map(|item| item.label.clone());
-        node.description = match self
-            .stops()
-            .get(self.focus)
-            .map(|stop| self.active()[*stop].0)
-        {
+        node.description = match self.focused() {
             Some(Part::Toggle) => self.toggle.clone(),
             Some(Part::Item(index)) => self
                 .item(index)
@@ -685,7 +931,7 @@ impl CustomControl for Sidebar {
                 .unwrap_or_default(),
             _ => String::new(),
         };
-        node.state.expanded = Some(self.is_expanded());
+        node.state.expanded = Some(expanded);
         node.state.disabled = !self.enabled;
         node
     }
@@ -704,12 +950,12 @@ impl CustomControl for Sidebar {
                 }
                 None => false,
             },
-            SemanticAction::Expand => {
-                self.set_expanded(cx, true);
-                true
-            }
-            SemanticAction::Collapse => {
-                self.set_expanded(cx, false);
+            SemanticAction::Expand | SemanticAction::Collapse => {
+                let open = action == SemanticAction::Expand;
+                match self.menu_target() {
+                    Some(item) => self.set_menu_open(cx, item, open),
+                    None => self.set_expanded(cx, open),
+                }
                 true
             }
             SemanticAction::Focus => {
@@ -727,15 +973,21 @@ impl CustomControl for Sidebar {
         }
     }
 
-    /// Takes `Index`, the selected item, or no item. Rejects an index
-    /// past the items.
+    /// Takes `Index`, the selected item, or no item, and opens the
+    /// sub-menu that holds the item. Rejects an index past the items or
+    /// of an item with a sub-menu.
     fn set_value(&mut self, value: &ControlValue) -> bool {
         let ControlValue::Index(index) = *value else {
             return false;
         };
-        let fits = index.is_none_or(|index| self.item(index).is_some());
+        let entries = self.entries();
+        let fits =
+            index.is_none_or(|index| entries.get(index).is_some_and(|entry| !entry.has_menu()));
         if fits {
             self.selected = index;
+            if let Some(index) = index {
+                self.open_parent(index);
+            }
         }
         fits
     }

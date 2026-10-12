@@ -79,6 +79,14 @@ variant_enum! {
 }
 
 variant_enum! {
+    /// The look of a sidebar item and of a sub-item.
+    SidebarItemVariant {
+        #[default] Default => "default",
+        Outline => "outline",
+    }
+}
+
+variant_enum! {
     /// The look of an item row.
     ItemVariant {
         #[default] Default => "default",

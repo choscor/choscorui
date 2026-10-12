@@ -3,10 +3,13 @@
 mod hosted;
 
 use choscorui_controls::{
-    ControlMessage, ControlValue, Input, ShortcutModifiers, Sidebar, SidebarCollapse, SidebarItem,
+    ControlMessage, ControlSize, ControlValue, Input, ShortcutModifiers, Sidebar, SidebarCollapse,
+    SidebarItem, SidebarItemVariant, SidebarVariant,
 };
-use choscorui_core::{Icon, Key, KeyEvent, Rect, SemanticAction};
-use hosted::{Harness, texts};
+use choscorui_core::{
+    ColorRole, DesignTokens, Icon, Key, KeyEvent, LayoutDirection, Rect, SemanticAction,
+};
+use hosted::{Harness, rounded_fills, texts};
 
 fn sidebar() -> Sidebar {
     Sidebar::new(
@@ -184,4 +187,152 @@ fn a_narrow_window_shows_the_sidebar_as_a_sheet() {
         ]
     );
     assert_eq!(h.host.modal(&h.tree), None);
+}
+
+#[test]
+fn floating_items_keep_the_default_look_and_outline_items_take_theirs() {
+    let background = DesignTokens::light().color(ColorRole::Background);
+    let floating = Harness::new(sidebar().with_variant(SidebarVariant::Floating));
+    assert!(
+        rounded_fills(&floating.paint(), background).is_empty(),
+        "a floating sidebar paints no outline items"
+    );
+    let outline = Harness::new(Sidebar::new(
+        "Navigation",
+        "Toggle sidebar",
+        vec![(
+            String::new(),
+            vec![SidebarItem::new("Inbox", Icon::Inbox).with_variant(SidebarItemVariant::Outline)],
+        )],
+    ));
+    assert_eq!(rounded_fills(&outline.paint(), background).len(), 1);
+}
+
+#[test]
+fn the_menu_size_sets_the_item_height() {
+    let height = |size| {
+        Harness::new(sidebar().with_menu_size(size))
+            .measure()
+            .height
+    };
+    let default = height(ControlSize::Default);
+    // Four items: 28 pt each when small, 48 pt when large.
+    assert_eq!(height(ControlSize::Sm), default - 4.0 * 4.0);
+    assert_eq!(height(ControlSize::Lg), default + 4.0 * 16.0);
+    assert_eq!(
+        height(ControlSize::Icon),
+        default,
+        "other sizes take default"
+    );
+}
+
+fn with_menu() -> Sidebar {
+    Sidebar::new(
+        "Navigation",
+        "Toggle sidebar",
+        vec![(
+            "Application".to_string(),
+            vec![
+                SidebarItem::new("Inbox", Icon::Inbox),
+                SidebarItem::new("Projects", Icon::File).with_children(vec![
+                    SidebarItem::new("Design", Icon::File),
+                    SidebarItem::new("Sales", Icon::File),
+                ]),
+            ],
+        )],
+    )
+}
+
+#[test]
+fn arrows_open_and_close_a_sub_menu_and_move_into_it() {
+    let mut h = Harness::new(with_menu());
+    let closed = h.measure().height;
+    assert!(!texts(&h.paint()).contains(&"Design".to_string()));
+    h.focus();
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowDown);
+    let node = h.semantics();
+    assert_eq!(node.description, "Projects");
+    assert_eq!(node.state.expanded, Some(false), "the sub-menu state");
+    assert!(node.actions.contains(&SemanticAction::Expand));
+
+    h.key(Key::ArrowRight);
+    relayout(&mut h);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    // Two 28 pt sub-items with a 4 pt gap, 2 pt padding above and below,
+    // and the 4 pt group gap after the box.
+    assert_eq!(h.measure().height, closed + 28.0 * 2.0 + 4.0 + 4.0 + 4.0);
+    assert!(texts(&h.paint()).contains(&"Design".to_string()));
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().description, "Design");
+    h.key(Key::ArrowDown);
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Index(Some(3)))]
+    );
+    assert_eq!(h.semantics().value.as_deref(), Some("Sales"));
+    h.key(Key::ArrowLeft);
+    assert_eq!(h.semantics().description, "Projects", "back to the item");
+    h.key(Key::ArrowLeft);
+    relayout(&mut h);
+    assert_eq!(h.measure().height, closed);
+    assert!(h.messages().is_empty(), "sub-menu changes emit nothing");
+
+    // Enter and the semantic actions toggle the focused sub-menu; the
+    // sidebar stays expanded.
+    h.key(Key::Enter);
+    relayout(&mut h);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    assert!(h.perform(SemanticAction::Collapse, None));
+    relayout(&mut h);
+    assert_eq!(h.measure().height, closed);
+    assert_eq!(h.measure().width, 256.0);
+}
+
+#[test]
+fn right_to_left_arrows_mirror_and_values_reach_into_sub_menus() {
+    let mut h = Harness::with_direction(with_menu(), LayoutDirection::Rtl);
+    let closed = h.measure().height;
+    h.focus();
+    h.key(Key::End);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().state.expanded, Some(false));
+    h.key(Key::ArrowLeft);
+    relayout(&mut h);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    assert!(h.measure().height > closed);
+
+    let mut h = Harness::new(with_menu());
+    let node = h.node;
+    let one = ControlValue::Index(Some(1));
+    assert!(
+        !h.host.set_value(&mut h.tree, node, &one),
+        "an item with a sub-menu is not a value"
+    );
+    let two = ControlValue::Index(Some(2));
+    assert!(h.host.set_value(&mut h.tree, node, &two));
+    relayout(&mut h);
+    assert_eq!(h.semantics().value.as_deref(), Some("Design"));
+    assert!(h.measure().height > closed, "the sub-menu opens");
+}
+
+#[test]
+fn a_sub_menu_item_on_the_icon_rail_expands_the_sidebar() {
+    let mut h = Harness::new(with_menu().with_collapse(SidebarCollapse::Icon));
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(false)]);
+    relayout(&mut h);
+    assert_eq!(h.measure().width, 48.0);
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().description, "Projects");
+    h.key(Key::ArrowRight);
+    assert!(h.messages().is_empty(), "no sub-menu on the rail");
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(true)]);
+    relayout(&mut h);
+    assert_eq!(h.measure().width, 256.0);
+    assert!(texts(&h.paint()).contains(&"Design".to_string()));
 }

@@ -17,8 +17,8 @@ use choscorui::controls::{
     AddonAlign, AlertVariant, AttachmentState, BadgeVariant, BubbleVariant, ButtonVariant,
     CalendarDay, ControlKind, ControlSize, EmptyMediaVariant, EstimatedText, FieldOrientation,
     ItemVariant, KbdVariant, MarkerVariant, MenuItemVariant, ResolvedStyle, SheetSide,
-    SidebarVariant, Slot, StyleQuery, Styles, TabsVariant, TextLine, ToastVariant, ToggleVariant,
-    Variant, VisualState, draw_icon, draw_text, paint_slot,
+    SidebarItemVariant, SidebarVariant, Slot, StyleQuery, Styles, TabsVariant, TextLine,
+    ToastVariant, ToggleVariant, Variant, VisualState, draw_icon, draw_text, paint_slot,
 };
 use choscorui::core::{
     Color, DesignTokens, DisplayCommand, DisplayList, Icon, Paint, PathElement, Point, Rect,
@@ -192,6 +192,17 @@ fn variants(kind: ControlKind) -> Vec<(String, Variant)> {
             })
             .collect(),
         _ => vec![("default".to_string(), Variant::default())],
+    }
+}
+
+/// The variant enum of `slot`, when it differs from the enum of its kind:
+/// the sidebar rows take the item variant.
+fn slot_variants(kind: ControlKind, slot: Slot) -> Option<Vec<(String, Variant)>> {
+    match (kind, slot) {
+        (ControlKind::Sidebar, Slot::Item | Slot::Link) => {
+            Some(named(SidebarItemVariant::ALL, SidebarItemVariant::name))
+        }
+        _ => None,
     }
 }
 
@@ -455,6 +466,14 @@ fn record_kind(out: &mut String, styles: &Styles, tokens: &DesignTokens, kind: C
     for (variant_name, variant) in &variants {
         for size in &sizes {
             for (_, slots) in &groups {
+                // A slot with its own enum shows each of its variants once.
+                let variant_name = match slot_variants(kind, slots[0]) {
+                    Some(own) => match own.into_iter().find(|(_, v)| v == variant) {
+                        Some((name, _)) => name,
+                        None => continue,
+                    },
+                    None => variant_name.clone(),
+                };
                 writeln!(
                     out,
                     "### {} {variant_name} {} {}",

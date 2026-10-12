@@ -2638,6 +2638,21 @@ false.
   press outside closes it; the last two emit `Dismissed`.
 - `with_side(SheetSide::Right)` puts the border on the left edge and the
   sheet at the right edge of the window.
+- **Rows.** `with_menu_size` sets the item rows to `Sm`, `Default`, or
+  `Lg`. Other sizes give `Default`. `SidebarItem::with_variant` gives an
+  item the `SidebarItemVariant::Outline` look. The item rows take the item
+  variant. Only the panel slots take the `SidebarVariant`.
+- **Sub-menus.** `SidebarItem::with_children` gives an item a sub-menu,
+  with a chevron at the row end. Sub-items count in order after their
+  item. The children of a sub-item do not show.
+- Enter, Space, or a click on an item with a sub-menu opens or closes the
+  sub-menu. It does not select the item. On the icon rail, it expands the
+  sidebar with the sub-menu open.
+- ArrowRight opens the focused sub-menu, then moves focus to its first
+  sub-item. ArrowLeft closes it, or moves focus from a sub-item to its
+  item. Right to left, the two arrows change places.
+- A selected sub-item opens its sub-menu. Sub-menu changes emit no
+  message.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -2649,7 +2664,10 @@ false.
 | Group label | `GroupLabel` | 32 pt high, xs medium text at 70% `sidebar-foreground` |
 | Item | `Item` | 32 pt high, 8 pt padding, radius md; `sidebar-accent` fill while hovered, pressed, or selected; medium text while selected |
 | Item sizes | `Item` | `Sm` 28 pt with xs text, `Lg` 48 pt, `Icon` 32 pt square |
-| Focus | `Item`, `GroupLabel` | 2 pt `sidebar-ring` ring |
+| Outline item | `Item`, `Link` | `background` fill, 1 pt `sidebar-border` ring; `sidebar-accent` fill and ring while hovered or pressed |
+| Sub-menu | `Row` | 14 pt in from the start, 1 pt `sidebar-border` at the start edge, 10 pt by 2 pt padding, 4 pt gap |
+| Sub-item | `Link` | 28 pt high, 8 pt side padding, sm text (xs with the `Sm` menu size); the item states |
+| Focus | `Item`, `Link`, `GroupLabel` | 2 pt `sidebar-ring` ring |
 | Inset panel | `Root`, `Inset` | 8 pt padding, no edge |
 | Badge | `Badge` | xs medium text at the end |
 
@@ -2658,12 +2676,13 @@ false.
 | Role | `Group` (AXGroup) |
 | Name / value | name / selected item |
 | Description | the focused item, or the toggle name |
-| State | expanded, disabled |
-| Actions | `Activate`, `Expand` or `Collapse` when it collapses, and `Focus` while enabled |
+| State | expanded (the focused sub-menu while the labels show, else the sidebar), disabled |
+| Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while enabled; these act on the focused sub-menu while the labels show, else on a sidebar that collapses |
 
-`set_value` takes `Index` of an item, or `None`. `set_open` expands and
-collapses the sidebar, or opens and closes the sheet in a narrow window.
-With `SidebarCollapse::None` in a wide window, `set_open` returns false.
+`set_value` takes `Index` of an item without a sub-menu, or `None`.
+`set_open` expands and collapses the sidebar, or opens and closes the sheet
+in a narrow window. With `SidebarCollapse::None` in a wide window,
+`set_open` returns false.
 
 [sidebar.rs](../crates/choscorui-controls/tests/sidebar.rs) pins this behavior.
 

@@ -3,8 +3,8 @@
 
 use super::{Cx, disabled, focus, muted_text, surface, text};
 use crate::style::{
-    ButtonVariant, ControlKind, ControlSize, Corners, Edges, ResolvedStyle, SidebarVariant, Sides,
-    Slot, TabsVariant,
+    ButtonVariant, ControlKind, ControlSize, Corners, Edges, ResolvedStyle, SidebarItemVariant,
+    SidebarVariant, Sides, Slot, TabsVariant,
 };
 use choscorui_core::{ColorRole, FontWeight, RadiusScale, ShadowScale, TextSize};
 
@@ -292,13 +292,15 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
                 style.min_width = cx.sp(8.0);
             }
             style.text = cx.text(size, FontWeight::NORMAL);
-            if cx.q.variant.0 == 1 {
+            let outline =
+                SidebarItemVariant::from_variant(cx.q.variant) == SidebarItemVariant::Outline;
+            if outline {
                 style.background = cx.c(ColorRole::Background);
                 style.ring = cx.ring(1.0, cx.c(ColorRole::SidebarBorder));
             }
             if s.interactive_hover() || s.pressed() {
                 accent(&mut style);
-                if cx.q.variant.0 == 1 {
+                if outline {
                     style.ring = cx.ring(1.0, cx.c(ColorRole::SidebarAccent));
                 }
             }
