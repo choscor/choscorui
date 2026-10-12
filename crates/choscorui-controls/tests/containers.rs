@@ -1,11 +1,16 @@
+mod hosted;
+
 use choscorui_controls::{
-    ContainerError, EstimatedText, GroupBox, PaintContext, Resizable, ResizableInput,
-    SplitOrientation, StackPage, StackedContainer, Styles,
+    ContainerError, ControlMessage, ControlValue, CustomControl, EstimatedText, GroupBox,
+    HostedResizable, MeasureContext, PaintContext, Resizable, ResizableInput, SplitOrientation,
+    StackPage, StackedContainer, Styles,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent, Point, Rect,
-    SemanticAction, SemanticRole, Size, Tree,
+    ColorRole, Constraints, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent,
+    LayoutDirection, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
+    Tree,
 };
+use hosted::Harness;
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
@@ -276,4 +281,275 @@ fn group_box_paints_a_small_card_with_its_title() {
         command,
         DisplayCommand::DrawText { text, .. } if text == "Account"
     )));
+}
+
+fn down(position: Point) -> PointerEvent {
+    PointerEvent::Down {
+        position,
+        button: PointerButton::Primary,
+    }
+}
+
+fn up(position: Point) -> PointerEvent {
+    PointerEvent::Up {
+        position,
+        button: PointerButton::Primary,
+    }
+}
+
+fn moved(position: Point) -> PointerEvent {
+    PointerEvent::Move { position }
+}
+
+#[test]
+fn splitter_handle_drags_within_the_pane_minimums() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 500.0, 200.0));
+    let first = tree
+        .attach(tree.root(), rect(0.0, 0.0, 240.0, 200.0))
+        .unwrap();
+    let handle = tree
+        .attach(tree.root(), rect(240.0, 0.0, 8.0, 200.0))
+        .unwrap();
+    let second = tree
+        .attach(tree.root(), rect(248.0, 0.0, 252.0, 200.0))
+        .unwrap();
+    let mut splitter = Resizable::new(
+        "Sidebar width",
+        SplitOrientation::Horizontal,
+        first,
+        handle,
+        second,
+        rect(0.0, 0.0, 500.0, 200.0),
+        100.0,
+        120.0,
+        8.0,
+        240.0,
+    )
+    .unwrap();
+    splitter.install(&mut tree).unwrap();
+    let mut input = |tree: &mut Tree, event| {
+        splitter
+            .handle(tree, ResizableInput::Pointer(event))
+            .unwrap()
+    };
+
+    // A press on a pane is not a drag.
+    assert_eq!(input(&mut tree, down(Point::new(50.0, 100.0))), None);
+    assert_eq!(tree.pointer_capture(), None);
+    assert_eq!(input(&mut tree, moved(Point::new(80.0, 100.0))), None);
+
+    // The handle keeps its offset under the pointer.
+    assert_eq!(input(&mut tree, down(Point::new(244.0, 100.0))), None);
+    assert_eq!(tree.focus(), Some(handle));
+    assert_eq!(tree.pointer_capture(), Some(handle));
+    assert_eq!(
+        input(&mut tree, moved(Point::new(304.0, 100.0))),
+        Some(300.0)
+    );
+    assert_eq!(tree.bounds(first), Some(rect(0.0, 0.0, 300.0, 200.0)));
+    assert_eq!(tree.bounds(handle), Some(rect(300.0, 0.0, 8.0, 200.0)));
+    assert_eq!(
+        input(&mut tree, moved(Point::new(-50.0, 100.0))),
+        Some(100.0)
+    );
+    assert_eq!(
+        input(&mut tree, moved(Point::new(900.0, 100.0))),
+        Some(372.0)
+    );
+    assert_eq!(input(&mut tree, up(Point::new(900.0, 100.0))), None);
+    assert_eq!(tree.pointer_capture(), None);
+    assert_eq!(input(&mut tree, moved(Point::new(200.0, 100.0))), None);
+
+    // A cancel ends a drag and keeps the position.
+    input(&mut tree, down(Point::new(376.0, 100.0)));
+    assert_eq!(
+        input(&mut tree, moved(Point::new(304.0, 100.0))),
+        Some(300.0)
+    );
+    assert_eq!(splitter.handle(&mut tree, ResizableInput::Cancel), Ok(None));
+    assert_eq!(tree.pointer_capture(), None);
+    assert_eq!(splitter.position(), 300.0);
+
+    // The keys still move the handle, and the semantics do not change.
+    assert_eq!(
+        splitter
+            .handle(
+                &mut tree,
+                ResizableInput::Key(KeyEvent::Down {
+                    key: Key::ArrowLeft,
+                    repeat: false,
+                }),
+            )
+            .unwrap(),
+        Some(290.0)
+    );
+    let semantics = splitter.semantics(&tree);
+    assert_eq!(semantics.role, SemanticRole::Slider);
+    assert_eq!(semantics.value.as_deref(), Some("290"));
+}
+
+fn hosted_sidebar() -> HostedResizable {
+    Resizable::hosted(
+        "Sidebar",
+        SplitOrientation::Horizontal,
+        50.0,
+        50.0,
+        4.0,
+        100.0,
+    )
+    .unwrap()
+}
+
+fn drag(h: &mut Harness, from: Point, to: &[Point]) {
+    h.host.dispatch_pointer(&mut h.tree, down(from));
+    for point in to {
+        h.host.dispatch_pointer(&mut h.tree, moved(*point));
+    }
+    let end = to.last().copied().unwrap_or(from);
+    h.host.dispatch_pointer(&mut h.tree, up(end));
+}
+
+fn changes(values: &[f64]) -> Vec<ControlMessage> {
+    values
+        .iter()
+        .map(|value| ControlMessage::Changed(ControlValue::Number(*value)))
+        .collect()
+}
+
+#[test]
+fn a_hosted_resizable_drags_its_handle_and_clamps_to_the_minimums() {
+    let mut h = Harness::new(hosted_sidebar());
+    h.place(rect(0.0, 0.0, 300.0, 100.0));
+    let at = |x| Point::new(x, 50.0);
+
+    // A press on a pane does not drag.
+    drag(&mut h, at(20.0), &[at(60.0)]);
+    assert!(h.messages().is_empty());
+
+    // The handle is 100..104, and the pointer keeps its 2 pt offset.
+    drag(&mut h, at(102.0), &[at(152.0), at(-40.0), at(400.0)]);
+    assert_eq!(h.messages(), changes(&[150.0, 50.0, 246.0]));
+    assert_eq!(h.tree.pointer_capture(), None);
+    h.hover(at(120.0));
+    assert!(h.messages().is_empty());
+
+    // A loss of focus cancels a drag and keeps the position.
+    h.host.dispatch_pointer(&mut h.tree, down(at(248.0)));
+    assert_eq!(h.tree.pointer_capture(), Some(h.node));
+    h.host.move_focus(&mut h.tree, None);
+    assert_eq!(h.tree.pointer_capture(), None);
+    h.hover(at(150.0));
+    assert!(h.messages().is_empty());
+
+    // The keys still work, and the semantics are those of a slider.
+    h.focus();
+    h.key(Key::ArrowLeft);
+    assert_eq!(h.messages(), changes(&[236.0]));
+    let semantics = h.semantics();
+    assert_eq!(semantics.role, SemanticRole::Slider);
+    assert_eq!(semantics.name, "Sidebar");
+    assert_eq!(semantics.value.as_deref(), Some("236"));
+    assert_eq!(
+        semantics.actions,
+        vec![
+            SemanticAction::Increment,
+            SemanticAction::Decrement,
+            SemanticAction::Focus
+        ]
+    );
+}
+
+#[test]
+fn a_hosted_resizable_mirrors_its_drag_right_to_left() {
+    let mut h = Harness::with_direction(hosted_sidebar(), LayoutDirection::Rtl);
+    h.place(rect(0.0, 0.0, 300.0, 100.0));
+    // The first pane is on the right, and its handle is 196..200.
+    drag(&mut h, Point::new(198.0, 50.0), &[Point::new(148.0, 50.0)]);
+    assert_eq!(h.messages(), changes(&[150.0]));
+}
+
+#[test]
+fn a_hosted_resizable_drags_a_vertical_handle() {
+    let resizable =
+        Resizable::hosted("Rows", SplitOrientation::Vertical, 40.0, 40.0, 4.0, 60.0).unwrap();
+    let mut h = Harness::new(resizable);
+    h.place(rect(0.0, 0.0, 100.0, 200.0));
+    drag(&mut h, Point::new(50.0, 62.0), &[Point::new(50.0, 92.0)]);
+    assert_eq!(h.messages(), changes(&[90.0]));
+}
+
+#[test]
+fn a_hosted_panel_group_moves_each_handle_between_its_neighbors() {
+    let group = || {
+        Resizable::hosted_group(
+            "Panels",
+            SplitOrientation::Horizontal,
+            vec![50.0, 50.0, 50.0],
+            4.0,
+            vec![100.0, 100.0],
+        )
+        .unwrap()
+    };
+    let mut h = Harness::new(group());
+    h.place(rect(0.0, 0.0, 400.0, 100.0));
+    let at = |x| Point::new(x, 50.0);
+
+    // The second handle is 204..208. It moves only the panes beside it.
+    drag(&mut h, at(206.0), &[at(256.0), at(900.0)]);
+    assert_eq!(h.messages(), changes(&[150.0, 242.0]));
+    // The first handle is 100..104, and the middle pane has 242 pt.
+    drag(&mut h, at(102.0), &[at(400.0)]);
+    assert_eq!(h.messages(), changes(&[292.0]));
+    assert_eq!(h.semantics().value.as_deref(), Some("292"));
+
+    // Tab moves between the handles inside the node.
+    let mut h = Harness::new(group());
+    h.place(rect(0.0, 0.0, 400.0, 100.0));
+    h.focus();
+    h.key(Key::ArrowRight);
+    h.key(Key::Tab);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.messages(), changes(&[110.0, 100.0]));
+    assert_eq!(h.semantics().value.as_deref(), Some("100"));
+
+    let mut control = group();
+    arrange(&mut control, rect(0.0, 0.0, 400.0, 100.0));
+    assert_eq!(control.sizes(), vec![100.0, 100.0, 192.0]);
+    let (panes, handles) = control.rects();
+    assert_eq!(panes[2], rect(208.0, 0.0, 192.0, 100.0));
+    assert_eq!(
+        handles,
+        vec![rect(100.0, 0.0, 4.0, 100.0), rect(204.0, 0.0, 4.0, 100.0)]
+    );
+
+    for (minimums, sizes) in [(vec![50.0], vec![]), (vec![50.0, 50.0], vec![60.0, 60.0])] {
+        assert!(matches!(
+            Resizable::hosted_group("Bad", SplitOrientation::Vertical, minimums, 4.0, sizes),
+            Err(ContainerError::InvalidGeometry)
+        ));
+    }
+    assert!(matches!(
+        Resizable::hosted_group(
+            "Bad",
+            SplitOrientation::Vertical,
+            vec![50.0, 50.0, 50.0],
+            4.0,
+            vec![60.0, 20.0],
+        ),
+        Err(ContainerError::InvalidPosition)
+    ));
+}
+
+/// Arranges `control` in `bounds` as a host would.
+fn arrange(control: &mut HostedResizable, bounds: Rect) {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let cx = MeasureContext {
+        constraints: Constraints::tight(bounds.size),
+        viewport: bounds,
+        direction: LayoutDirection::Ltr,
+        tokens: &tokens,
+        styles: &styles,
+        text: &EstimatedText,
+    };
+    control.arrange(&cx, bounds);
 }

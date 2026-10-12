@@ -76,7 +76,6 @@ fn resizable(cx: &Cx) -> ResolvedStyle {
             style.min_height = 1.0;
             // The hit area is 4 pt wide around the 1 pt line.
             style.padding = Edges::axes(cx.sp(1.0) / 2.0, 0.0);
-            style.cursor = Cursor::ResizeHorizontal;
             if s.focus_visible() {
                 style.ring = cx.ring(1.0, cx.c(ColorRole::Ring));
             }

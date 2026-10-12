@@ -92,7 +92,7 @@ fn resizable_matches_its_reference_table() {
             );
             assert_eq!(
                 (handle.padding, handle.cursor, handle.ring),
-                (Edges::axes(2.0, 0.0), Cursor::ResizeHorizontal, None)
+                (Edges::axes(2.0, 0.0), Cursor::Arrow, None)
             );
             let focused = get(&tokens, query.state(VisualState::FOCUS_VISIBLE));
             assert_eq!(

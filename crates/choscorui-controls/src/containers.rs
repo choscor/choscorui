@@ -3,8 +3,8 @@ use crate::style::{
     fill_shape,
 };
 use choscorui_core::{
-    DesignTokens, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
-    SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
+    DesignTokens, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -63,8 +63,13 @@ pub enum SplitOrientation {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ResizableInput {
+    /// A press on the handle starts a drag, a move resizes, and a release
+    /// ends it.
+    Pointer(PointerEvent),
     Key(KeyEvent),
     Semantic(SemanticAction),
+    /// Ends a drag and releases pointer capture. The position stays.
+    Cancel,
 }
 
 /// The old name of [`ResizableInput`].
@@ -90,10 +95,15 @@ pub struct Resizable {
     step: f64,
     position: f64,
     grip: bool,
+    /// The pointer's offset from the handle start during a drag.
+    drag: Option<f64>,
 }
 
 impl Resizable {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "public constructor: each pane, the handle, and the geometry are separate arguments"
+    )]
     pub fn new(
         label: impl Into<String>,
         orientation: SplitOrientation,
@@ -134,6 +144,7 @@ impl Resizable {
             step: 10.0,
             position,
             grip: false,
+            drag: None,
         })
     }
 
@@ -182,6 +193,35 @@ impl Resizable {
         input: ResizableInput,
     ) -> Result<Option<f64>, ContainerError> {
         let target = match input {
+            ResizableInput::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if tree.hit_test(position) == Some(self.handle) => {
+                tree.focus_by_pointer(self.handle)?;
+                tree.set_pointer_capture(Some(self.handle))?;
+                self.drag = Some(self.along(position) - self.position);
+                return Ok(None);
+            }
+            ResizableInput::Pointer(PointerEvent::Move { position }) => {
+                let Some(offset) = self
+                    .drag
+                    .filter(|_| tree.pointer_capture() == Some(self.handle))
+                else {
+                    return Ok(None);
+                };
+                self.along(position) - offset
+            }
+            ResizableInput::Pointer(PointerEvent::Up {
+                button: PointerButton::Primary,
+                ..
+            })
+            | ResizableInput::Cancel => {
+                self.drag = None;
+                if tree.pointer_capture() == Some(self.handle) {
+                    tree.set_pointer_capture(None)?;
+                }
+                return Ok(None);
+            }
             ResizableInput::Semantic(SemanticAction::Focus) => {
                 validate_attached(tree, [self.handle])?;
                 tree.set_focus(Some(self.handle))?;
@@ -245,6 +285,14 @@ impl Resizable {
 
     fn maximum(&self) -> f64 {
         primary_size(self.bounds, self.orientation) - self.handle_extent - self.minimum_second
+    }
+
+    /// The distance of `point` from the start of the bounds along the split.
+    fn along(&self, point: Point) -> f64 {
+        match self.orientation {
+            SplitOrientation::Horizontal => point.x - self.bounds.origin.x,
+            SplitOrientation::Vertical => point.y - self.bounds.origin.y,
+        }
     }
 
     fn arrange(&self, tree: &mut Tree, position: f64) -> Result<(), ContainerError> {
@@ -468,7 +516,7 @@ impl crate::CustomControl for HostedGroupBox {
 impl Resizable {
     /// A resizable for a control host, with no pane nodes. The hosted node
     /// covers both panes and the handle: it paints the handle and takes
-    /// the keys, and the view layer places the panes in
+    /// the pointer and the keys, and the view layer places the panes in
     /// [`HostedResizable::panes`]. Fails like [`Resizable::new`] for
     /// geometry that is not finite, a handle that is not positive, or a
     /// position below `minimum_first`.
@@ -480,53 +528,95 @@ impl Resizable {
         handle_extent: f64,
         position: f64,
     ) -> Result<HostedResizable, ContainerError> {
-        if !valid_number(minimum_first)
-            || !valid_number(minimum_second)
+        Self::hosted_group(
+            label,
+            orientation,
+            vec![minimum_first, minimum_second],
+            handle_extent,
+            vec![position],
+        )
+    }
+
+    /// A panel group for a control host: one pane for each value in
+    /// `minimums`, and a handle between each two neighbors. `sizes` gives
+    /// the size of each pane but the last, which takes the rest. Fails
+    /// with `InvalidGeometry` for fewer than two panes, a `sizes` count
+    /// that is not one less than the pane count, a minimum that is not
+    /// finite or is negative, or a handle that is not positive. Fails with
+    /// `InvalidPosition` for a size that is not finite or is below its
+    /// pane minimum.
+    pub fn hosted_group(
+        label: impl Into<String>,
+        orientation: SplitOrientation,
+        minimums: Vec<f64>,
+        handle_extent: f64,
+        sizes: Vec<f64>,
+    ) -> Result<HostedResizable, ContainerError> {
+        if minimums.len() < 2
+            || sizes.len() + 1 != minimums.len()
+            || !minimums.iter().all(|minimum| valid_number(*minimum))
             || !valid_number(handle_extent)
             || handle_extent <= 0.0
         {
             return Err(ContainerError::InvalidGeometry);
         }
-        if !position.is_finite() || position < minimum_first {
+        if sizes
+            .iter()
+            .zip(&minimums)
+            .any(|(size, minimum)| !size.is_finite() || size < minimum)
+        {
             return Err(ContainerError::InvalidPosition);
         }
         Ok(HostedResizable {
             label: label.into(),
             orientation,
-            minimum_first,
-            minimum_second,
+            minimums,
             handle_extent,
+            hit_extent: handle_extent,
             step: 10.0,
-            position,
+            sizes,
             grip: false,
             bounds: None,
             rtl: false,
+            active: 0,
+            drag: None,
         })
     }
 }
 
-/// A [`Resizable`] mounted in a control host. The node covers both panes
-/// and the handle. The arrow keys along the split axis, Home, End, and
-/// the `Increment` and `Decrement` actions move the handle and report
-/// `Changed(Number(position))`. In a right-to-left layout a horizontal
-/// split puts the first pane on the right and mirrors the arrow keys.
+/// A [`Resizable`] mounted in a control host. The node covers the panes
+/// and the handles. A primary press on a handle starts a drag, a move
+/// resizes the two panes next to that handle, and a release ends the drag.
+/// The arrow keys along the split axis, Home, End, and the `Increment` and
+/// `Decrement` actions move the active handle. Each change reports
+/// `Changed(Number(size))` with the size of the pane before the handle.
+/// In a right-to-left layout a horizontal split puts the first pane on
+/// the right and mirrors the arrow keys and the drag.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostedResizable {
     label: String,
     orientation: SplitOrientation,
-    minimum_first: f64,
-    minimum_second: f64,
+    /// The minimum of each pane, in order. There are two or more.
+    minimums: Vec<f64>,
     handle_extent: f64,
+    /// The extent along the split that a press hits: the handle, widened
+    /// to the recipe's hit area and the grip.
+    hit_extent: f64,
     step: f64,
-    position: f64,
+    /// The size of each pane but the last, which takes the rest.
+    sizes: Vec<f64>,
     grip: bool,
     /// The bounds from the last arrange.
     bounds: Option<Rect>,
     rtl: bool,
+    /// The handle that the keys and actions move.
+    active: usize,
+    /// The dragged handle and the pointer's offset from its start.
+    drag: Option<(usize, f64)>,
 }
 
 impl HostedResizable {
-    /// Shows a grip on the handle.
+    /// Shows a grip on each handle.
     #[must_use]
     pub fn with_grip(mut self, grip: bool) -> Self {
         self.grip = grip;
@@ -537,55 +627,151 @@ impl HostedResizable {
     /// last arranged bounds. Bounds too small for the position keep it for
     /// when they grow again.
     pub fn position(&self) -> f64 {
-        self.clamp(self.position)
+        self.layout()[0]
     }
 
-    /// The first pane, the handle, and the second pane in the last
+    /// The width or height of each pane, within the pane minimums of the
+    /// last arranged bounds.
+    pub fn sizes(&self) -> Vec<f64> {
+        self.layout()
+    }
+
+    /// The handle that the keys and actions move, from 0.
+    pub fn active(&self) -> usize {
+        self.active
+    }
+
+    /// The first pane, the first handle, and the second pane in the last
     /// arranged bounds. A right-to-left horizontal split mirrors them.
     pub fn panes(&self) -> (Rect, Rect, Rect) {
-        let bounds = self.bounds.unwrap_or_default();
-        let (first, handle, second) = split_rects(
-            bounds,
-            self.orientation,
-            self.position(),
-            self.handle_extent,
-        );
-        if self.rtl && self.orientation == SplitOrientation::Horizontal {
-            let mirror = |rect: Rect| {
-                Rect::from_xywh(
-                    bounds.origin.x + bounds.max_x() - rect.max_x(),
-                    rect.origin.y,
-                    rect.size.width,
-                    rect.size.height,
-                )
+        let (panes, handles) = self.rects();
+        (panes[0], handles[0], panes[1])
+    }
+
+    /// Each pane rectangle and each handle rectangle in the last arranged
+    /// bounds, in pane order. A right-to-left horizontal split mirrors
+    /// them.
+    pub fn rects(&self) -> (Vec<Rect>, Vec<Rect>) {
+        let count = self.minimums.len();
+        let Some(bounds) = self.bounds else {
+            return (
+                vec![Rect::default(); count],
+                vec![Rect::default(); count - 1],
+            );
+        };
+        let mut panes = Vec::with_capacity(count);
+        let mut handles = Vec::with_capacity(count - 1);
+        let mut start = 0.0;
+        for (index, size) in self.layout().into_iter().enumerate() {
+            panes.push(self.span(bounds, start, size));
+            start += size;
+            if index + 1 < count {
+                handles.push(self.span(bounds, start, self.handle_extent));
+                start += self.handle_extent;
+            }
+        }
+        (panes, handles)
+    }
+
+    /// The size of each pane: each stored size kept between its minimum
+    /// and the space that the later pane minimums leave. The last pane
+    /// takes the rest. Before the first arrange the space has no limit.
+    fn layout(&self) -> Vec<f64> {
+        let count = self.minimums.len();
+        let mut free = self.bounds.map_or(f64::INFINITY, |bounds| {
+            primary_size(bounds, self.orientation) - self.handle_extent * (count - 1) as f64
+        });
+        let mut reserved: f64 = self.minimums.iter().sum();
+        let mut sizes = Vec::with_capacity(count);
+        for (index, minimum) in self.minimums.iter().enumerate() {
+            reserved -= minimum;
+            let size = match self.sizes.get(index) {
+                Some(size) => size.min(free - reserved).max(*minimum),
+                None => free.max(0.0),
             };
-            (mirror(first), mirror(handle), mirror(second))
-        } else {
-            (first, handle, second)
+            free -= size;
+            sizes.push(size);
+        }
+        sizes
+    }
+
+    /// The rectangle `extent` long that starts `start` from the start edge
+    /// of `bounds` along the split.
+    fn span(&self, bounds: Rect, start: f64, extent: f64) -> Rect {
+        match self.orientation {
+            SplitOrientation::Horizontal => {
+                let x = if self.rtl {
+                    bounds.max_x() - start - extent
+                } else {
+                    bounds.origin.x + start
+                };
+                Rect::from_xywh(x, bounds.origin.y, extent, bounds.size.height)
+            }
+            SplitOrientation::Vertical => Rect::from_xywh(
+                bounds.origin.x,
+                bounds.origin.y + start,
+                bounds.size.width,
+                extent,
+            ),
         }
     }
 
-    /// The largest position, once the control has bounds.
-    fn maximum(&self) -> Option<f64> {
-        let bounds = self.bounds?;
-        let maximum =
-            primary_size(bounds, self.orientation) - self.handle_extent - self.minimum_second;
-        Some(maximum.max(self.minimum_first))
+    /// The distance of `point` from the start edge along the split. A
+    /// right-to-left horizontal split measures from the right.
+    fn along(&self, bounds: Rect, point: Point) -> f64 {
+        match self.orientation {
+            SplitOrientation::Horizontal if self.rtl => bounds.max_x() - point.x,
+            SplitOrientation::Horizontal => point.x - bounds.origin.x,
+            SplitOrientation::Vertical => point.y - bounds.origin.y,
+        }
     }
 
-    fn clamp(&self, position: f64) -> f64 {
-        let position = position.max(self.minimum_first);
-        self.maximum()
-            .map_or(position, |maximum| position.min(maximum))
+    /// The start of pane `index` along the split, from `sizes`.
+    fn pane_start(&self, sizes: &[f64], index: usize) -> f64 {
+        sizes[..index].iter().sum::<f64>() + self.handle_extent * index as f64
     }
 
-    /// Moves the handle to `target`, clamped, and reports a change.
-    fn move_to(&mut self, cx: &mut crate::ControlContext<'_>, target: f64) {
-        let target = self.clamp(target);
-        if target == self.position() {
+    /// The handle whose hit area contains `point`.
+    fn handle_at(&self, bounds: Rect, point: Point) -> Option<usize> {
+        if !bounds.contains(point) {
+            return None;
+        }
+        let along = self.along(bounds, point);
+        let sizes = self.layout();
+        (0..self.minimums.len() - 1).find(|&index| {
+            let center = self.pane_start(&sizes, index + 1) - self.handle_extent / 2.0;
+            (along - center).abs() <= self.hit_extent / 2.0
+        })
+    }
+
+    /// The range of the pane before handle `index`, from `sizes`: its
+    /// minimum, and the pair's total less the next pane's minimum.
+    fn range(&self, sizes: &[f64], index: usize) -> (f64, f64) {
+        let minimum = self.minimums[index];
+        let pair = sizes[index] + sizes[index + 1];
+        (minimum, (pair - self.minimums[index + 1]).max(minimum))
+    }
+
+    /// Stores `size` for the pane before handle `index`, and gives the
+    /// rest of the pair to the pane after it.
+    fn store(&mut self, sizes: &[f64], index: usize, size: f64) {
+        let pair = sizes[index] + sizes[index + 1];
+        self.sizes[index] = size;
+        if let Some(next) = self.sizes.get_mut(index + 1) {
+            *next = pair - size;
+        }
+    }
+
+    /// Moves handle `index` so that the pane before it is `target` long,
+    /// clamped, and reports a change.
+    fn move_to(&mut self, cx: &mut crate::ControlContext<'_>, index: usize, target: f64) {
+        let sizes = self.layout();
+        let (minimum, maximum) = self.range(&sizes, index);
+        let target = target.min(maximum).max(minimum);
+        if target == sizes[index] {
             return;
         }
-        self.position = target;
+        self.store(&sizes, index, target);
         cx.request_layout();
         cx.request_paint();
         cx.request_semantics();
@@ -593,11 +779,100 @@ impl HostedResizable {
             target,
         )));
     }
+
+    /// Ends a drag and releases pointer capture.
+    fn end_drag(&mut self, cx: &mut crate::ControlContext<'_>) {
+        if self.drag.take().is_some() {
+            cx.capture_pointer(false);
+            cx.request_paint();
+        }
+    }
+
+    fn pointer(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: PointerEvent,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
+        let bounds = cx.bounds();
+        match event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => {
+                let Some(index) = self.handle_at(bounds, position) else {
+                    return EventReply::Continue;
+                };
+                let start = self.pane_start(&self.layout(), index + 1) - self.handle_extent;
+                self.active = index;
+                self.drag = Some((index, self.along(bounds, position) - start));
+                cx.capture_pointer(true);
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Stop
+            }
+            PointerEvent::Move { position } => {
+                let Some((index, offset)) = self.drag else {
+                    return EventReply::Continue;
+                };
+                let start = self.pane_start(&self.layout(), index);
+                let target = self.along(bounds, position) - offset - start;
+                self.move_to(cx, index, target);
+                EventReply::Stop
+            }
+            PointerEvent::Up {
+                button: PointerButton::Primary,
+                ..
+            } if self.drag.is_some() => {
+                self.end_drag(cx);
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn key(&mut self, cx: &mut crate::ControlContext<'_>, key: Key) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
+        let shift = cx.modifiers().shift;
+        let last = self.minimums.len() - 2;
+        match key {
+            Key::Tab if !shift && self.active < last => {
+                self.active += 1;
+                cx.request_paint();
+                cx.request_semantics();
+                return EventReply::Stop;
+            }
+            Key::Tab if shift && self.active > 0 => {
+                self.active -= 1;
+                cx.request_paint();
+                cx.request_semantics();
+                return EventReply::Stop;
+            }
+            _ => {}
+        }
+        let (back, forward) = match (self.orientation, self.rtl) {
+            (SplitOrientation::Horizontal, false) => (Key::ArrowLeft, Key::ArrowRight),
+            (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
+            (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
+        };
+        let index = self.active;
+        let current = self.layout()[index];
+        let target = match key {
+            Key::Home => self.minimums[index],
+            Key::End => f64::INFINITY,
+            key if key == back => current - self.step,
+            key if key == forward => current + self.step,
+            _ => return EventReply::Continue,
+        };
+        self.move_to(cx, index, target);
+        EventReply::Stop
+    }
 }
 
 impl crate::CustomControl for HostedResizable {
     fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
-        let along = self.minimum_first + self.handle_extent + self.minimum_second;
+        let along = self.minimums.iter().sum::<f64>()
+            + self.handle_extent * (self.minimums.len() - 1) as f64;
         let natural = match self.orientation {
             SplitOrientation::Horizontal => Size::new(along, 0.0),
             SplitOrientation::Vertical => Size::new(0.0, along),
@@ -608,6 +883,18 @@ impl crate::CustomControl for HostedResizable {
     fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
         self.bounds = Some(bounds);
         self.rtl = cx.rtl();
+        // The recipe padding gives the hit area around the line. The grip
+        // also hits.
+        let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle));
+        let mut hit = self
+            .handle_extent
+            .max(line.padding.horizontal())
+            .max(line.min_width);
+        if self.grip {
+            let grip = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Thumb));
+            hit = hit.max(grip.min_width);
+        }
+        self.hit_extent = hit;
     }
 
     fn event(
@@ -616,35 +903,46 @@ impl crate::CustomControl for HostedResizable {
         event: &crate::ControlEvent,
     ) -> choscorui_core::EventReply {
         use choscorui_core::EventReply;
-        if let crate::ControlEvent::FocusChanged(_) = event {
+        if let crate::ControlEvent::FocusChanged(true) = event {
+            // Shift+Tab arrives at the last handle, and Tab at the first.
+            if self.drag.is_none() {
+                self.active = if cx.modifiers().shift {
+                    self.minimums.len() - 2
+                } else {
+                    0
+                };
+            }
             cx.request_paint();
+            cx.request_semantics();
             return EventReply::Continue;
         }
-        let Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) =
-            crate::hosted::route(cx, event)
-        else {
-            return EventReply::Continue;
-        };
-        let (back, forward) = match (self.orientation, self.rtl) {
-            (SplitOrientation::Horizontal, false) => (Key::ArrowLeft, Key::ArrowRight),
-            (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
-            (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
-        };
-        let target = match key {
-            Key::Home => self.minimum_first,
-            Key::End => f64::INFINITY,
-            key if key == back => self.position() - self.step,
-            key if key == forward => self.position() + self.step,
-            _ => return EventReply::Continue,
-        };
-        self.move_to(cx, target);
-        EventReply::Stop
+        match crate::hosted::route(cx, event) {
+            Some(crate::hosted::Routed::Pointer(event)) => self.pointer(cx, event),
+            Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) => self.key(cx, key),
+            Some(crate::hosted::Routed::Cancel) => {
+                self.end_drag(cx);
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let (_, handle, _) = self.panes();
-        let state = cx.state;
-        paint_divider(cx, handle, self.orientation, self.grip, state);
+        let (_, handles) = self.rects();
+        let host = cx.state;
+        for (index, handle) in handles.into_iter().enumerate() {
+            let state = host
+                .set(
+                    VisualState::FOCUS_VISIBLE,
+                    host.focus_visible() && index == self.active,
+                )
+                .set(
+                    VisualState::PRESSED,
+                    self.drag.is_some_and(|(dragged, _)| dragged == index),
+                );
+            paint_divider(cx, handle, self.orientation, self.grip, state);
+        }
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -657,7 +955,7 @@ impl crate::CustomControl for HostedResizable {
                 SemanticAction::Focus,
             ],
         );
-        node.value = Some(format_number(self.position()));
+        node.value = Some(format_number(self.layout()[self.active]));
         node
     }
 
@@ -667,23 +965,36 @@ impl crate::CustomControl for HostedResizable {
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
+        let index = self.active;
+        let current = self.layout()[index];
         match action {
-            SemanticAction::Increment => self.move_to(cx, self.position() + self.step),
-            SemanticAction::Decrement => self.move_to(cx, self.position() - self.step),
+            SemanticAction::Increment => self.move_to(cx, index, current + self.step),
+            SemanticAction::Decrement => self.move_to(cx, index, current - self.step),
             SemanticAction::Focus => cx.request_focus(),
             _ => return false,
         }
         true
     }
 
+    fn set_enabled(&mut self, enabled: bool) {
+        // The host releases the pointer capture of a disabled control.
+        if !enabled {
+            self.drag = None;
+        }
+    }
+
+    /// Takes `Number`: the size of the pane before the active handle.
+    /// Rejects a size that is not finite or is outside the handle's range.
     fn set_value(&mut self, value: &crate::ControlValue) -> bool {
-        let crate::ControlValue::Number(position) = *value else {
+        let crate::ControlValue::Number(size) = *value else {
             return false;
         };
-        if !position.is_finite() || self.clamp(position) != position {
+        let sizes = self.layout();
+        let (minimum, maximum) = self.range(&sizes, self.active);
+        if !size.is_finite() || size < minimum || size > maximum {
             return false;
         }
-        self.position = position;
+        self.store(&sizes, self.active, size);
         true
     }
 }

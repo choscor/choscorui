@@ -49,7 +49,7 @@ in parentheses is the role that the macOS backend gives to that
 | Range | [`Dial`](#dial) | Rotary integer value. |
 | Range | [`ScrollBar`](#scrollbar) | Standalone scroll position. |
 | Range | [`ScrollArea`](#scrollarea) | Scroll container with overlay scroll bars. |
-| Range | [`Resizable`](#resizable) | Two panels with a movable handle between them. |
+| Range | [`Resizable`](#resizable) | Panels with a movable handle between each two neighbors. |
 | Range | [`DateTimeEdit`](#datetimeedit-and-calendar) | Date or time in sections. |
 | Range | [`Calendar`](#datetimeedit-and-calendar) | Month grid for date choice. |
 | Data and item views | [`ItemView`](#itemview) | Virtualized list, tree, table, or grid. |
@@ -153,9 +153,10 @@ only the missing-node rule below applies, with `TreeError`. The
   `Checkbox`, `Slider`, and `ScrollArea`, `set_enabled(false)` cancels a
   press or drag and releases pointer capture. Text controls drop IME
   marked text. `RadioGroup` and `Tabs` disable single options.
-- **Cancel.** `Button`, `Checkbox`, `Slider`, and `ScrollArea` accept a
-  `Cancel` input. It clears an armed press or drag and releases capture. It
-  never activates and never restores an earlier value.
+- **Cancel.** `Button`, `Checkbox`, `Slider`, `ScrollArea`, and
+  `Resizable` accept a `Cancel` input. It clears an armed press or drag and
+  releases capture. It never activates and never restores an earlier
+  value.
 
 **In a control host.** A built-in control also implements
 `CustomControl`, so a `ControlHost` and the views can mount it. The host
@@ -182,7 +183,7 @@ changes as `ControlMessage` values:
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Dismissed` when a panel closes | - |
 | `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
-| `HostedResizable` | `Changed(Number)` with the position | `Number` |
+| `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle | `Number` |
 | `HostedStack` | - | `Index(Some(page))` |
 | `StatusBar`, `ScrollArea`, `HostedGroupBox` | - | - |
 | `Combobox`, `FontChooser` | `Changed(Index)`, `Changed(Text)` when editable, `OpenChanged`, `Dismissed` on Escape | `Index`, or `Text` when editable |
@@ -1089,8 +1090,14 @@ behavior.
 
 ### Resizable
 
-- After `install`, the handle is focusable. The control has no pointer
-  input.
+- After `install`, the handle is focusable.
+- A primary press on the handle node focuses the handle, captures the
+  pointer, and starts a drag. The handle keeps its offset under the
+  pointer.
+- During a drag, a move sets the position, clamped to the pane minimums. A
+  release or a `Cancel` input ends the drag, releases capture, and keeps
+  the position.
+- A press on a pane does not start a drag.
 - The arrow keys along the split axis move the handle by 10 points.
 - Home and End go to the smallest and the largest position that both pane
   minimums allow.
@@ -1107,7 +1114,7 @@ behavior.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, resize cursor |
+| Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, default arrow cursor |
 | Focus | `Handle`, focus visible | 1 pt `ring` ring |
 | Grip | `Icon` | 4 by 24 pt `border` grip, radius lg |
 
@@ -1121,12 +1128,32 @@ behavior.
 The node has a `Controls` relation to each pane.
 
 **In a control host.** `Resizable::hosted` makes a resizable with no pane
-nodes. Its node covers both panes and the handle. The keys and actions
-above move the handle and send `Changed(Number(position))`. `panes` gives
-the pane and handle rectangles from the last arranged bounds, and the view
-layer places the panes there. In a right-to-left layout, a horizontal
-split puts the first pane on the right and mirrors ArrowLeft and
-ArrowRight. The hosted node has no `Controls` relations.
+nodes. Its node covers both panes and the handle. The drag, keys, and
+actions above move the handle and send `Changed(Number(position))`.
+`panes` gives the pane and handle rectangles from the last arranged
+bounds, and the view layer places the panes there. In a right-to-left
+layout, a horizontal split puts the first pane on the right. It also
+mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
+`Controls` relations.
+
+- **Hit area.** A press hits a handle in its rectangle, widened to the
+  recipe hit area and to the grip width.
+- **Panel group.** `Resizable::hosted_group` takes one minimum for each
+  pane, two or more, and the sizes of all panes but the last. The last
+  pane takes the rest. A handle sits between each two neighbor panes.
+- **Neighbors.** A drag or a key moves one handle. It changes only the two
+  panes next to that handle and keeps each pane at its minimum or more.
+- **Active handle.** The keys and actions move the active handle. A press
+  on a handle makes it active. Tab moves to the next handle and Shift+Tab
+  to the previous one. At the last or first handle, the key goes to the
+  host.
+- **Value.** The message, the `set_value` value, and the semantic value
+  give the size of the pane before the active handle. `sizes` gives each
+  pane size, and `rects` gives each pane and handle rectangle.
+- **Errors.** `hosted_group` fails with `InvalidGeometry` for fewer than
+  two panes or a wrong count of sizes. It fails with `InvalidPosition` for
+  a size below its pane minimum.
+- **Cancel.** A loss of focus or disabling the control ends a drag.
 
 [containers.rs](../crates/choscorui-controls/tests/containers.rs) pins this
 behavior.
