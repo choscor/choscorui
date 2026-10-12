@@ -9,7 +9,8 @@ use crate::style::{
     Styles, TextAlign, VisualState,
 };
 use choscorui_core::{
-    DesignTokens, EventReply, Measured, Point, Rect, SemanticNode, SemanticRole, Size,
+    ChildMeasure, Constraints, CustomLayout, DesignTokens, EventReply, LayoutDirection, Measured,
+    Point, Rect, SemanticNode, SemanticRole, Size,
 };
 
 /// Which text part of a field a [`FieldText`] is.
@@ -166,17 +167,35 @@ impl CustomControl for FieldText {
     }
 }
 
-/// How far apart [`Field::stack`] places its items.
+/// How far apart a field group, a field set, or a field's content places
+/// its items.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FieldGap {
     /// Fields inside a field group: 28 pt.
     Group,
     /// The legend, description, and group of a field set: 24 pt.
     Set,
+    /// The text parts of a field's content, and the parts beside the
+    /// first part of a horizontal field: 4 pt.
+    Content,
+}
+
+impl FieldGap {
+    /// The gap in points, from the `Field` recipe.
+    pub fn resolve(self, styles: &Styles, tokens: &DesignTokens) -> f64 {
+        let slot = match self {
+            Self::Group => Slot::Group,
+            Self::Set => Slot::Root,
+            Self::Content => Slot::Content,
+        };
+        styles
+            .resolve(tokens, StyleQuery::new(ControlKind::Field, slot))
+            .gap
+    }
 }
 
 /// The layout of one form field: its parts in order, stacked or side by
-/// side. Rectangles come back in the order of the sizes given.
+/// side.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Field {
     pub orientation: FieldOrientation,
@@ -190,13 +209,6 @@ impl Field {
         Self { orientation }
     }
 
-    fn item(&self, styles: &Styles, tokens: &DesignTokens) -> ResolvedStyle {
-        styles.resolve(
-            tokens,
-            StyleQuery::new(ControlKind::Field, Slot::Item).variant(self.orientation),
-        )
-    }
-
     /// True when the parts go side by side at `width`.
     pub fn is_horizontal(&self, width: f64) -> bool {
         match self.orientation {
@@ -206,34 +218,55 @@ impl Field {
         }
     }
 
-    /// Places `sizes` in `bounds`. Stacked parts fill the width, with the
-    /// field gap between them. Side by side, the first part sits at the
-    /// leading edge and the others stack beside it with the content gap.
-    pub fn layout(
-        &self,
-        styles: &Styles,
-        tokens: &DesignTokens,
-        bounds: Rect,
-        rtl: bool,
-        sizes: &[Size],
-    ) -> Vec<Rect> {
-        let item = self.item(styles, tokens);
-        if !self.is_horizontal(bounds.size.width) || sizes.len() < 2 {
-            return stack(bounds.origin, item.gap, sizes, |size| {
-                Size::new(bounds.size.width, size.height)
+    /// The field layout with the gaps of the `Field` recipe. It is a
+    /// [`CustomLayout`] for a layout node whose children are the parts.
+    pub fn layout(&self, styles: &Styles, tokens: &DesignTokens) -> FieldLayout {
+        let gap = |query: StyleQuery| styles.resolve(tokens, query).gap;
+        FieldLayout {
+            field: *self,
+            item_gap: gap(StyleQuery::new(ControlKind::Field, Slot::Item).variant(self.orientation)),
+            content_gap: FieldGap::Content.resolve(styles, tokens),
+        }
+    }
+}
+
+/// A [`Field`] with its gaps resolved. Stacked parts fill the width, with
+/// the field gap between them. Side by side, the first part sits at the
+/// leading edge, and the others stack beside it with the content gap.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FieldLayout {
+    field: Field,
+    item_gap: f64,
+    content_gap: f64,
+}
+
+impl FieldLayout {
+    /// Places parts of `sizes` in a field `width` wide, from the origin.
+    /// Rectangles come back in the order of the sizes. An infinite width
+    /// gives each part its own width. `rtl` mirrors side-by-side parts.
+    pub fn place(&self, width: f64, rtl: bool, sizes: &[Size]) -> Vec<Rect> {
+        let widest = |sizes: &[Size]| sizes.iter().map(|size| size.width).fold(0.0, f64::max);
+        if !self.field.is_horizontal(width) || sizes.len() < 2 {
+            return stack(Point::new(0.0, 0.0), self.item_gap, sizes, |size| {
+                let fill = if width.is_finite() { width } else { size.width };
+                Size::new(fill, size.height)
             });
         }
-        let content = styles.resolve(tokens, StyleQuery::new(ControlKind::Field, Slot::Content));
         let lead = sizes[0];
         let rest = &sizes[1..];
-        let column = (bounds.size.width - lead.width - item.gap).max(0.0);
+        let (width, column) = if width.is_finite() {
+            (width, (width - lead.width - self.item_gap).max(0.0))
+        } else {
+            let column = widest(rest);
+            (lead.width + self.item_gap + column, column)
+        };
         let rest_height: f64 = rest.iter().map(|size| size.height).sum::<f64>()
-            + content.gap * rest.len().saturating_sub(1) as f64;
+            + self.content_gap * rest.len().saturating_sub(1) as f64;
         let height = lead.height.max(rest_height);
         let mirror = |rect: Rect| {
             if rtl {
                 Rect::from_xywh(
-                    bounds.max_x() - (rect.max_x() - bounds.origin.x),
+                    width - rect.max_x(),
                     rect.origin.y,
                     rect.size.width,
                     rect.size.height,
@@ -244,14 +277,14 @@ impl Field {
         };
         // One line of content centers on the lead; more align to the top.
         let lead_y = if rest.len() == 1 {
-            bounds.origin.y + (height - lead.height) / 2.0
+            (height - lead.height) / 2.0
         } else {
-            bounds.origin.y
+            0.0
         };
-        let mut rects = vec![mirror(Rect::new(Point::new(bounds.origin.x, lead_y), lead))];
-        let start = Point::new(bounds.origin.x + lead.width + item.gap, bounds.origin.y);
+        let mut rects = vec![mirror(Rect::new(Point::new(0.0, lead_y), lead))];
+        let start = Point::new(lead.width + self.item_gap, 0.0);
         rects.extend(
-            stack(start, content.gap, rest, |size| {
+            stack(start, self.content_gap, rest, |size| {
                 Size::new(column, size.height)
             })
             .into_iter()
@@ -259,44 +292,37 @@ impl Field {
         );
         rects
     }
+}
 
-    /// The height that [`layout`](Self::layout) uses for `sizes` at
-    /// `width`.
-    pub fn height(
+impl CustomLayout for FieldLayout {
+    /// Measures the parts at the width that each gets, and places them
+    /// with [`FieldLayout::place`]. A finite width fills it.
+    fn layout(
         &self,
-        styles: &Styles,
-        tokens: &DesignTokens,
-        width: f64,
-        sizes: &[Size],
-    ) -> f64 {
-        let bounds = Rect::from_xywh(0.0, 0.0, width, f64::MAX);
-        self.layout(styles, tokens, bounds, false, sizes)
-            .iter()
-            .map(|rect| rect.max_y())
-            .fold(0.0, f64::max)
-    }
-
-    /// Stacks whole fields or field set parts down `bounds` with the
-    /// group or set gap. Each item fills the width.
-    pub fn stack(
-        styles: &Styles,
-        tokens: &DesignTokens,
-        bounds: Rect,
-        gap: FieldGap,
-        heights: &[f64],
-    ) -> Vec<Rect> {
-        let slot = match gap {
-            FieldGap::Group => Slot::Group,
-            FieldGap::Set => Slot::Root,
+        space: Constraints,
+        direction: LayoutDirection,
+        children: &mut dyn ChildMeasure,
+    ) -> (Size, Vec<Rect>) {
+        let width = space.max.width;
+        let count = children.len();
+        let loose = |width: f64| Constraints::loose(Size::new(width, f64::INFINITY));
+        let mut sizes = Vec::with_capacity(count);
+        if self.field.is_horizontal(width) && count >= 2 {
+            let lead = children.measure(0, loose(width)).size;
+            let column = (width - lead.width - self.item_gap).max(0.0);
+            sizes.push(lead);
+            sizes.extend((1..count).map(|index| children.measure(index, loose(column)).size));
+        } else {
+            sizes.extend((0..count).map(|index| children.measure(index, loose(width)).size));
+        }
+        let rects = self.place(width, direction == LayoutDirection::Rtl, &sizes);
+        let extent = |edge: fn(Rect) -> f64| rects.iter().copied().map(edge).fold(0.0, f64::max);
+        let used = if width.is_finite() {
+            width
+        } else {
+            extent(Rect::max_x)
         };
-        let gap = styles
-            .resolve(tokens, StyleQuery::new(ControlKind::Field, slot))
-            .gap;
-        let sizes: Vec<Size> = heights
-            .iter()
-            .map(|height| Size::new(bounds.size.width, *height))
-            .collect();
-        stack(bounds.origin, gap, &sizes, |size| size)
+        (Size::new(used, extent(Rect::max_y)), rects)
     }
 }
 

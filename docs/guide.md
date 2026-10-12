@@ -82,7 +82,8 @@ The toolkit gives these views:
 
 | Group | Views |
 | --- | --- |
-| Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Form`, `FormRow`, `Group`, `ScrollView`, `Spacer`, `Divider` |
+| Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Form`, `FormRow`, `Group`, `ScrollView`, `Spacer`, `Divider`, `Resizable` |
+| Fields | `Field`, `FieldSet`, `FieldGroup`, `FieldContent`, `FieldTitle`, `FieldSeparator` |
 | Text | `Text`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `Branch`, `ForEach`, `Either`, `AnyView`, `Empty` |
 | Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
@@ -216,6 +217,87 @@ impl View for Inbox {
             })
             .alignment(HorizontalAlignment::Leading),
         )
+    }
+}
+```
+
+### Form fields
+
+A `Field` shows a label, a control, and optional help text. The field takes the width that it gets, and its text wraps to it:
+
+- `Field::new(label, control)` stacks the label above the control.
+- `.description(text)` adds muted help text below the control.
+- `.error(message, shown)` shows `message` while `shown` is true. The control is then invalid, and the message is its accessibility description.
+- `.orientation(FieldOrientation::Horizontal)` puts the label at the leading edge, and the other parts beside it.
+- `FieldOrientation::Responsive` is horizontal when the field gets 448 points or more, and vertical when it gets less. A window resize can change it.
+
+The control gets a `LabelledBy` relation to the label and a `DescribedBy` relation to the description. Side-by-side parts mirror in a right-to-left locale.
+
+Use these views to group fields:
+
+- `FieldSet::new(legend, content)` puts a legend above the content. `.description(text)` adds text below the legend. The set is a group that its legend names.
+- `FieldGroup::new(fields)` stacks whole fields.
+- `FieldContent::new(parts)` stacks text parts, for example a `FieldTitle` above a description.
+- `FieldSeparator::new()` draws a rule between groups. `.text(text)` puts text in its middle.
+
+The gaps come from the `Field` recipe. [Field and FieldText](controls.md#field-and-fieldtext) gives the values.
+
+```rust
+use choscorui::prelude::*;
+
+struct Profile;
+
+impl View for Profile {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let name = cx.state(String::new());
+        let news = cx.state(false);
+        FieldSet::new(
+            t!("profile.title"),
+            FieldGroup::new((
+                Field::new(t!("profile.name"), Input::new(t!("profile.name"), name.binding()))
+                    .orientation(FieldOrientation::Responsive)
+                    .error(t!("profile.name_needed"), move || name.get().is_empty()),
+                FieldSeparator::new(),
+                Field::new(t!("profile.news"), Switch::new(t!("profile.news"), news.binding()))
+                    .description(t!("profile.news_help"))
+                    .orientation(FieldOrientation::Horizontal),
+            )),
+        )
+    }
+}
+```
+
+### Panel groups
+
+`Resizable::new(name, orientation, panes, sizes)` puts each view of the `panes` tuple in a pane, with a handle between each two neighbors:
+
+- `sizes` is a `Binding<Vec<f64>>` with the size of each pane but the last. The last pane takes the rest.
+- A drag on a handle changes only the two panes next to it, and writes `sizes`. A change to `sizes` moves the panes.
+- `.minimums(values)` gives the smallest size of each pane. `.grip(true)` shows a grip on each handle.
+- The group takes the space that it gets. A horizontal group mirrors in a right-to-left locale.
+
+The group is one control. The arrow keys move the active handle, and Tab goes to the next handle. [Resizable](controls.md#resizable) gives the keys and the semantics.
+
+```rust
+use choscorui::prelude::*;
+
+struct Workspace;
+
+impl View for Workspace {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let sizes = cx.state(vec![200.0, 400.0]);
+        Resizable::new(
+            t!("workspace.panels"),
+            SplitOrientation::Horizontal,
+            (
+                Text::new(t!("workspace.files")),
+                Text::new(t!("workspace.editor")),
+                Text::new(t!("workspace.outline")),
+            ),
+            sizes.binding(),
+        )
+        .minimums(vec![120.0, 200.0, 120.0])
+        .grip(true)
     }
 }
 ```

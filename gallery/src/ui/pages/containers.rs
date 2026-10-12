@@ -10,11 +10,10 @@ use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     Alignment, AnyView, Button, Configured, Dynamic, Env, FocusFrame, Frame, HStack,
-    HorizontalAlignment, Spacer, State, Text, VStack, View, ViewExt, ZStack,
+    HorizontalAlignment, Resizable, Spacer, Text, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
-    ButtonVariant, ControlKind, ControlMessage, ControlValue, Resizable, SplitOrientation,
-    StackedContainer,
+    ButtonVariant, ControlKind, ControlValue, SplitOrientation, StackedContainer,
 };
 use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space, TextPreset};
 
@@ -89,8 +88,6 @@ fn group(env: &Env, title: &'static str, members: [&'static str; 3]) -> impl Vie
 // ---------------------------------------------------------------------------
 // Resizable
 
-/// The handle's thickness, in points.
-const HANDLE: f64 = 6.0;
 /// The smallest pane, in points.
 const MINIMUM: f64 = 60.0;
 
@@ -106,75 +103,41 @@ fn pane(env: &Env, label: &'static str) -> impl View + use<> {
     .accessibility_label(env.text(label, &[]))
 }
 
-/// A handle labelled with catalog string `label` that moves `position`,
-/// the first pane's extent; the panes sit above it in a stack laid out
-/// with the same geometry.
-fn splitter(
-    label: &'static str,
-    orientation: SplitOrientation,
-    initial: f64,
-    position: State<f64>,
-) -> impl View {
-    Configured::try_custom(ControlKind::Resizable, move |env| {
-        let label = env.text(label, &[]);
-        Resizable::hosted(&label, orientation, MINIMUM, MINIMUM, HANDLE, initial)
-            .map(|splitter| splitter.with_grip(true))
-    })
-    .value(move || ControlValue::Number(position.get()))
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Number(moved)) = message {
-            position.set(*moved);
-        }
-    })
-}
-
-/// A horizontal splitter whose trailing pane holds a vertical one. The
-/// arrow keys and the increment and decrement actions move each handle.
+/// A workspace of three panes: a sidebar, an editor above a console, and
+/// an inspector. The arrow keys, Tab between handles, and the increment
+/// and decrement actions move each handle.
 pub fn resizable(_: &PageCx) -> AnyView {
-    // The sample is 700 × 420 pt; each handle starts at 40%.
+    // The sample is 700 × 420 pt.
     const WIDTH: f64 = 700.0;
     const HEIGHT: f64 = 420.0;
     stateful(|cx| {
-        let sidebar = cx.state(WIDTH * 0.4);
-        let editor = cx.state(HEIGHT * 0.4);
-        let (editor_env, sidebar_env) = (cx.env().clone(), cx.env().clone());
-        let console = ZStack::new((
-            splitter(
-                "resizable.console_height",
-                SplitOrientation::Vertical,
-                HEIGHT * 0.4,
-                editor,
-            ),
-            VStack::new((
-                Dynamic::new(move || {
-                    pane(&editor_env, "resizable.editor")
-                        .frame(Frame::new().max_width(f64::INFINITY).height(editor.get()))
-                }),
+        let columns = cx.state(vec![WIDTH * 0.25, WIDTH * 0.45]);
+        let rows = cx.state(vec![HEIGHT * 0.6]);
+        let editor = Resizable::new(
+            t!("resizable.console_height"),
+            SplitOrientation::Vertical,
+            (
+                pane(cx.env(), "resizable.editor"),
                 pane(cx.env(), "resizable.console"),
-            ))
-            .alignment(HorizontalAlignment::Fill)
-            .spacing(HANDLE),
-        ))
-        .alignment(Alignment::FILL);
-        let split = ZStack::new((
-            splitter(
-                "resizable.sidebar_width",
-                SplitOrientation::Horizontal,
-                WIDTH * 0.4,
-                sidebar,
             ),
-            HStack::new((
-                Dynamic::new(move || {
-                    pane(&sidebar_env, "resizable.sidebar")
-                        .frame(Frame::new().width(sidebar.get()).max_height(f64::INFINITY))
-                }),
-                console.frame(fill()),
-            ))
-            .spacing(HANDLE),
-        ))
-        .alignment(Alignment::FILL)
+            rows.binding(),
+        )
+        .minimums(vec![MINIMUM; 2])
+        .grip(true);
+        let workspace = Resizable::new(
+            t!("resizable.workspace"),
+            SplitOrientation::Horizontal,
+            (
+                pane(cx.env(), "resizable.sidebar"),
+                editor,
+                pane(cx.env(), "resizable.inspector"),
+            ),
+            columns.binding(),
+        )
+        .minimums(vec![MINIMUM; 3])
+        .grip(true)
         .frame(Frame::size(WIDTH, HEIGHT));
-        column(split)
+        column(workspace)
     })
 }
 
@@ -331,20 +294,32 @@ mod tests {
     }
 
     #[test]
-    fn splitter_handles_move_and_resize_their_panes() {
+    fn panel_group_handles_move_and_resize_their_panes() {
         let mut page = Harness::new("resizable");
-        assert_eq!(page.value("Sidebar width").as_deref(), Some("280"));
-        let sidebar = page.node("Sidebar");
-        let before = page.host.tree().bounds(sidebar).unwrap().size.width;
-        assert!(page.act("Sidebar width", SemanticAction::Increment));
-        assert_eq!(page.value("Sidebar width").as_deref(), Some("290"));
-        let sidebar = page.node("Sidebar");
-        let after = page.host.tree().bounds(sidebar).unwrap().size.width;
-        assert_eq!(after, before + 10.0);
+        assert_eq!(page.value("Workspace").as_deref(), Some("175"));
+        let width = |page: &mut Harness, name: &str| {
+            let node = page.node(name);
+            page.host.tree().bounds(node).unwrap().size.width
+        };
+        let (sidebar, inspector) = (width(&mut page, "Sidebar"), width(&mut page, "Inspector"));
+        assert!(page.act("Workspace", SemanticAction::Increment));
+        assert_eq!(page.value("Workspace").as_deref(), Some("185"));
+        assert_eq!(width(&mut page, "Sidebar"), sidebar + 10.0);
+        assert_eq!(
+            width(&mut page, "Inspector"),
+            inspector,
+            "only neighbors change"
+        );
+
+        // Tab goes to the second handle, which moves the inspector.
+        assert!(page.act("Workspace", SemanticAction::Focus));
+        assert!(press(&mut page, Key::Tab));
+        assert!(press(&mut page, Key::ArrowLeft));
+        assert_eq!(width(&mut page, "Inspector"), inspector + 10.0);
 
         assert!(page.act("Console height", SemanticAction::Focus));
         assert!(press(&mut page, Key::ArrowUp));
-        assert_eq!(page.value("Console height").as_deref(), Some("158"));
+        assert_eq!(page.value("Console height").as_deref(), Some("242"));
     }
 
     #[test]

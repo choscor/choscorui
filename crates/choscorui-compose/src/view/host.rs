@@ -128,6 +128,13 @@ pub(crate) struct Access {
     /// The text of a `tooltip` modifier, which describes the view when no
     /// hint does.
     pub tooltip: Option<String>,
+    /// The description or error of the field around a control, which
+    /// describes it when no hint or tooltip does.
+    pub field: Option<String>,
+    /// Whether the field around a control shows an error.
+    pub invalid: bool,
+    /// Relations from the field around a control to its label and text.
+    pub relations: Vec<choscorui_core::SemanticRelation>,
 }
 
 impl Access {
@@ -137,6 +144,9 @@ impl Access {
             || self.value.is_some()
             || self.hidden
             || self.tooltip.is_some()
+            || self.field.is_some()
+            || self.invalid
+            || !self.relations.is_empty()
     }
 }
 
@@ -1556,8 +1566,20 @@ impl ViewHost {
         if let Some(label) = &data.access.label {
             semantic.name.clone_from(label);
         }
-        if let Some(hint) = data.access.hint.as_ref().or(data.access.tooltip.as_ref()) {
+        let access = &data.access;
+        if let Some(hint) = access
+            .hint
+            .as_ref()
+            .or(access.tooltip.as_ref())
+            .or(access.field.as_ref())
+        {
             semantic.description.clone_from(hint);
+        }
+        semantic.state.invalid |= access.invalid;
+        for relation in &access.relations {
+            if !semantic.relations.contains(relation) {
+                semantic.relations.push(*relation);
+            }
         }
         if data.show_menu.is_some()
             && !semantic.state.disabled

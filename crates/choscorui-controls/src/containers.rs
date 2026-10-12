@@ -590,6 +590,8 @@ impl Resizable {
 /// The arrow keys along the split axis, Home, End, and the `Increment` and
 /// `Decrement` actions move the active handle. Each change reports
 /// `Changed(Number(size))` with the size of the pane before the handle.
+/// After a change, [`active`](Self::active) names the handle that moved,
+/// and [`sizes`](Self::sizes) gives every pane.
 /// In a right-to-left layout a horizontal split puts the first pane on
 /// the right and mirrors the arrow keys and the drag.
 #[derive(Clone, Debug, PartialEq)]
@@ -636,7 +638,9 @@ impl HostedResizable {
         self.layout()
     }
 
-    /// The handle that the keys and actions move, from 0.
+    /// The handle that the keys and actions move, from 0. A press on a
+    /// handle makes it active, so after a change it is the handle that
+    /// moved.
     pub fn active(&self) -> usize {
         self.active
     }
@@ -653,32 +657,69 @@ impl HostedResizable {
     /// them.
     pub fn rects(&self) -> (Vec<Rect>, Vec<Rect>) {
         let count = self.minimums.len();
-        let Some(bounds) = self.bounds else {
-            return (
+        match self.bounds {
+            Some(bounds) => self.rects_in(bounds, self.rtl),
+            None => (
                 vec![Rect::default(); count],
                 vec![Rect::default(); count - 1],
-            );
-        };
+            ),
+        }
+    }
+
+    /// Each pane rectangle and each handle rectangle in `bounds`, in pane
+    /// order, for the stored sizes. `rtl` mirrors a horizontal split. A
+    /// view layer uses it to place pane views before the control arranges.
+    pub fn rects_in(&self, bounds: Rect, rtl: bool) -> (Vec<Rect>, Vec<Rect>) {
+        let count = self.minimums.len();
         let mut panes = Vec::with_capacity(count);
         let mut handles = Vec::with_capacity(count - 1);
         let mut start = 0.0;
-        for (index, size) in self.layout().into_iter().enumerate() {
-            panes.push(self.span(bounds, start, size));
+        for (index, size) in self.layout_in(Some(bounds)).into_iter().enumerate() {
+            panes.push(self.span(bounds, rtl, start, size));
             start += size;
             if index + 1 < count {
-                handles.push(self.span(bounds, start, self.handle_extent));
+                handles.push(self.span(bounds, rtl, start, self.handle_extent));
                 start += self.handle_extent;
             }
         }
         (panes, handles)
     }
 
+    /// Gives each pane but the last the size in `sizes`, as
+    /// [`Resizable::hosted_group`] takes them. Returns false and changes
+    /// nothing for a wrong count, or a size that is not finite or is below
+    /// its pane minimum. The layout keeps the sizes within the bounds.
+    pub fn set_sizes(&mut self, sizes: &[f64]) -> bool {
+        if sizes.len() != self.sizes.len()
+            || sizes
+                .iter()
+                .zip(&self.minimums)
+                .any(|(size, minimum)| !size.is_finite() || size < minimum)
+        {
+            return false;
+        }
+        self.sizes = sizes.to_vec();
+        true
+    }
+
+    /// The smallest extent along the split: each pane minimum and each
+    /// handle.
+    pub fn minimum_extent(&self) -> f64 {
+        self.minimums.iter().sum::<f64>() + self.handle_extent * (self.minimums.len() - 1) as f64
+    }
+
     /// The size of each pane: each stored size kept between its minimum
     /// and the space that the later pane minimums leave. The last pane
     /// takes the rest. Before the first arrange the space has no limit.
     fn layout(&self) -> Vec<f64> {
+        self.layout_in(self.bounds)
+    }
+
+    /// The size of each pane in `bounds`, as [`layout`](Self::layout)
+    /// gives them. Without bounds the space has no limit.
+    fn layout_in(&self, bounds: Option<Rect>) -> Vec<f64> {
         let count = self.minimums.len();
-        let mut free = self.bounds.map_or(f64::INFINITY, |bounds| {
+        let mut free = bounds.map_or(f64::INFINITY, |bounds| {
             primary_size(bounds, self.orientation) - self.handle_extent * (count - 1) as f64
         });
         let mut reserved: f64 = self.minimums.iter().sum();
@@ -696,11 +737,11 @@ impl HostedResizable {
     }
 
     /// The rectangle `extent` long that starts `start` from the start edge
-    /// of `bounds` along the split.
-    fn span(&self, bounds: Rect, start: f64, extent: f64) -> Rect {
+    /// of `bounds` along the split. `rtl` mirrors a horizontal split.
+    fn span(&self, bounds: Rect, rtl: bool, start: f64, extent: f64) -> Rect {
         match self.orientation {
             SplitOrientation::Horizontal => {
-                let x = if self.rtl {
+                let x = if rtl {
                     bounds.max_x() - start - extent
                 } else {
                     bounds.origin.x + start
@@ -871,8 +912,7 @@ impl HostedResizable {
 
 impl crate::CustomControl for HostedResizable {
     fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
-        let along = self.minimums.iter().sum::<f64>()
-            + self.handle_extent * (self.minimums.len() - 1) as f64;
+        let along = self.minimum_extent();
         let natural = match self.orientation {
             SplitOrientation::Horizontal => Size::new(along, 0.0),
             SplitOrientation::Vertical => Size::new(0.0, along),

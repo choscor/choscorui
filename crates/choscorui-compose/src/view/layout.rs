@@ -137,7 +137,7 @@ fn stack<C: View>(
 
 /// A new stack node along `axis`.
 #[inline(never)]
-fn stack_node(
+pub(super) fn stack_node(
     cx: &mut Cx<'_>,
     axis: Axis,
     spacing: Metric,

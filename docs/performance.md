@@ -89,7 +89,7 @@ The baselines are from the reference machine, measured on 2026-10-08. The `views
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.95 MiB | ≤ 3 |
+| `size.choscorui-gallery_mib` | 2.96 MiB | ≤ 3 |
 
 These correctness counters have a budget of 0:
 

@@ -15,7 +15,7 @@ mod textarea;
 mod toggle;
 
 pub use date_picker::DatePicker;
-pub use field::{Field, FieldGap, FieldPart, FieldText};
+pub use field::{Field, FieldGap, FieldLayout, FieldPart, FieldText};
 pub use input::Input;
 pub use input_group::{AddonContent, InputGroup, InputGroupAddon};
 pub use kbd::Kbd;

@@ -70,37 +70,36 @@ fn field_layout_stacks_or_places_side_by_side() {
     let label = Size::new(80.0, 14.0);
     let input = Size::new(240.0, 36.0);
     let help = Size::new(200.0, 20.0);
-    let bounds = rect(0.0, 0.0, 400.0, 200.0);
 
-    let vertical = Field::new(FieldOrientation::Vertical);
-    let rects = vertical.layout(&styles, &tokens, bounds, false, &[label, input, help]);
+    let vertical = Field::new(FieldOrientation::Vertical).layout(&styles, &tokens);
+    let rects = vertical.place(400.0, false, &[label, input, help]);
     assert_eq!(rects[1].origin.y, 14.0 + 12.0, "the 12 pt field gap");
     assert_eq!(rects[2].origin.y, 14.0 + 12.0 + 36.0 + 12.0);
     assert!(rects.iter().all(|rect| rect.size.width == 400.0));
 
     let switch = Size::new(32.0, 18.4);
-    let horizontal = Field::new(FieldOrientation::Horizontal);
-    let rects = horizontal.layout(&styles, &tokens, bounds, false, &[switch, label, help]);
+    let horizontal = Field::new(FieldOrientation::Horizontal).layout(&styles, &tokens);
+    let rects = horizontal.place(400.0, false, &[switch, label, help]);
     assert_eq!(rects[0].origin, Point::new(0.0, 0.0));
     assert_eq!(rects[1].origin.x, 32.0 + 12.0);
     assert_eq!(rects[2].origin.y, 14.0 + 4.0, "the content gap");
-    let mirrored = horizontal.layout(&styles, &tokens, bounds, true, &[switch, label, help]);
+    let mirrored = horizontal.place(400.0, true, &[switch, label, help]);
     assert_eq!(
         mirrored[0].max_x(),
         400.0,
         "the lead goes to the right in RTL"
     );
+    let natural = horizontal.place(f64::INFINITY, false, &[label, help]);
+    assert_eq!(natural[1], rect(80.0 + 12.0, 0.0, 200.0, 20.0));
 
     let responsive = Field::new(FieldOrientation::Responsive);
     assert!(!responsive.is_horizontal(300.0));
     assert!(responsive.is_horizontal(500.0));
-    assert_eq!(
-        responsive.height(&styles, &tokens, 300.0, &[label, input]),
-        14.0 + 12.0 + 36.0
-    );
+    let rects = responsive
+        .layout(&styles, &tokens)
+        .place(300.0, false, &[label, input]);
+    assert_eq!(rects[1].max_y(), 14.0 + 12.0 + 36.0);
 
-    let fields = Field::stack(&styles, &tokens, bounds, FieldGap::Group, &[60.0, 60.0]);
-    assert_eq!(fields[1].origin.y, 60.0 + 28.0);
-    let set = Field::stack(&styles, &tokens, bounds, FieldGap::Set, &[20.0, 60.0]);
-    assert_eq!(set[1].origin.y, 20.0 + 24.0);
+    assert_eq!(FieldGap::Group.resolve(&styles, &tokens), 28.0);
+    assert_eq!(FieldGap::Set.resolve(&styles, &tokens), 24.0);
 }

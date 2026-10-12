@@ -1,0 +1,330 @@
+//! Form fields as views: a labelled control with its description and
+//! error, field sets with a legend, groups of fields, and the text parts
+//! inside a field. A field lowers onto a core custom layout node that the
+//! controls' `Field` layout places, so a responsive field changes its
+//! orientation with the width it gets at each layout.
+
+use super::View;
+use super::dynamic::Dynamic;
+use super::host::Cx;
+use super::layout::{parent_tokens, stack_node};
+use super::state::{IntoLive, Live};
+use super::text::TextContent;
+use super::widgets::{FieldText, Label, label, text};
+use choscorui_controls::{self as controls, FieldGap, FieldOrientation, FieldPart};
+use choscorui_core::{
+    Axis, Dirty, ItemAlign, LayoutKind, LayoutStyle, MainAlign, NodeId, SemanticRelation,
+    SharedLayout,
+};
+
+/// One form field: a label, a control, and an optional description and
+/// error. A `Vertical` field, the default, stacks them. A `Horizontal`
+/// field puts the label at the leading edge and stacks the others beside
+/// it. A `Responsive` field is horizontal when it gets the breakpoint
+/// width of the `Field` layout or more, and vertical when narrower. The
+/// gaps come from the `Field` recipe, and side-by-side parts mirror in
+/// right-to-left layouts.
+///
+/// The control gets a `LabelledBy` relation to the label and a
+/// `DescribedBy` relation to the description. The description text, or
+/// the error while it shows, becomes its accessibility description. While
+/// the error shows, the control is invalid.
+pub struct Field<C> {
+    label: Label,
+    control: C,
+    orientation: FieldOrientation,
+    description: Option<Label>,
+    error: Option<(Label, Live<bool>)>,
+}
+
+impl<C: View> Field<C> {
+    /// A vertical field with `label` above `control`. The label takes
+    /// literal text or a catalog string (`t!`).
+    pub fn new<M>(label: impl IntoLive<TextContent, M>, control: C) -> Self {
+        Self {
+            label: self::label(label),
+            control,
+            orientation: FieldOrientation::Vertical,
+            description: None,
+            error: None,
+        }
+    }
+
+    /// How the field places its parts.
+    #[must_use]
+    pub fn orientation(mut self, orientation: FieldOrientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    /// Muted help text below the control.
+    #[must_use]
+    pub fn description<M>(mut self, description: impl IntoLive<TextContent, M>) -> Self {
+        self.description = Some(label(description));
+        self
+    }
+
+    /// A validation message below the control, shown while `shown` is
+    /// true. While it shows, the control is invalid.
+    #[must_use]
+    pub fn error<M, N>(
+        mut self,
+        message: impl IntoLive<TextContent, M>,
+        shown: impl IntoLive<bool, N>,
+    ) -> Self {
+        self.error = Some((label(message), shown.into_live()));
+        self
+    }
+}
+
+impl<C: View> View for Field<C> {
+    fn mount(self, cx: &mut Cx<'_>) {
+        let node = field_node(cx, self.orientation);
+        let env = cx.env.clone();
+        let mut inside = cx.within(node, env);
+        let label = part(
+            &mut inside,
+            FieldText::new(FieldPart::Label, self.label.clone()),
+        );
+        let control = part(&mut inside, self.control);
+        let description = self
+            .description
+            .clone()
+            .map(|text| part(&mut inside, FieldText::new(FieldPart::Description, text)));
+        if let Some((message, shown)) = self.error.clone() {
+            inside.mount(Dynamic::new(move || {
+                shown
+                    .get()
+                    .then(|| FieldText::new(FieldPart::Error, message.clone()))
+            }));
+        }
+        let control = control
+            .into_iter()
+            .find_map(|node| first_control(&inside, node));
+        if let Some(control) = control {
+            let relations = label
+                .first()
+                .copied()
+                .map(SemanticRelation::LabelledBy)
+                .into_iter()
+                .chain(
+                    description
+                        .and_then(|nodes| nodes.first().copied())
+                        .map(SemanticRelation::DescribedBy),
+                )
+                .collect();
+            inside.inner.data(control).access.relations = relations;
+            describe(&mut inside, control, self.description, self.error);
+        }
+    }
+}
+
+/// A new custom layout node that the controls' field layout places.
+#[inline(never)]
+fn field_node(cx: &mut Cx<'_>, orientation: FieldOrientation) -> NodeId {
+    let tokens = parent_tokens(cx);
+    let layout = controls::Field::new(orientation).layout(&cx.inner.styles, &tokens);
+    cx.node(LayoutStyle {
+        kind: LayoutKind::Custom(SharedLayout::new(layout)),
+        ..LayoutStyle::default()
+    })
+}
+
+/// Mounts `view` in a fragment of its own, and returns its nodes.
+fn part<V: View>(cx: &mut Cx<'_>, view: V) -> Vec<NodeId> {
+    let fragment = cx.inner.fragments.child(cx.fragment);
+    {
+        let mut part = Cx {
+            inner: &mut *cx.inner,
+            parent: cx.parent,
+            fragment,
+            scope: cx.scope,
+            env: cx.env.clone(),
+        };
+        part.mount(view);
+    }
+    cx.inner.fragments.nodes(fragment)
+}
+
+/// The first focusable control at or under `node`, in tree order.
+fn first_control(cx: &Cx<'_>, node: NodeId) -> Option<NodeId> {
+    let inner = &*cx.inner;
+    if inner
+        .controls
+        .get(node)
+        .is_some_and(|control| control.focusable())
+    {
+        return Some(node);
+    }
+    let children = inner.tree.children(node).unwrap_or(&[]).to_vec();
+    children
+        .into_iter()
+        .find_map(|child| first_control(cx, child))
+}
+
+/// Keeps the accessibility description and the invalid state of
+/// `control` in step with the field's description and error.
+fn describe(
+    cx: &mut Cx<'_>,
+    control: NodeId,
+    description: Option<Label>,
+    error: Option<(Label, Live<bool>)>,
+) {
+    let env = cx.env.clone();
+    cx.react(move |inner| {
+        let failed = error.as_ref().filter(|(_, shown)| shown.get());
+        let invalid = failed.is_some();
+        let field = failed
+            .map(|(message, _)| message)
+            .or(description.as_ref())
+            .map(|content| text(content, &env));
+        let access = &mut inner.data(control).access;
+        if access.invalid == invalid && access.field == field {
+            return;
+        }
+        access.invalid = invalid;
+        access.field = field;
+        inner.touch(control, Dirty::SEMANTICS);
+    });
+}
+
+/// Mounts `children` in a column that fills its width, with the `Field`
+/// recipe gap of `gap`, and returns the column.
+#[inline(never)]
+fn column_node(cx: &mut Cx<'_>, gap: FieldGap) -> NodeId {
+    let tokens = parent_tokens(cx);
+    let spacing = gap.resolve(&cx.inner.styles, &tokens);
+    stack_node(
+        cx,
+        Axis::Vertical,
+        spacing.into(),
+        ItemAlign::Stretch,
+        MainAlign::Start,
+    )
+}
+
+/// Fields or other content under a legend, with an optional description
+/// between them, 24 pt apart. The set is a group named by its legend.
+pub struct FieldSet<C> {
+    legend: Label,
+    description: Option<Label>,
+    content: C,
+}
+
+impl<C: View> FieldSet<C> {
+    /// A set with the caption `legend` above `content`, which is often a
+    /// [`FieldGroup`].
+    pub fn new<M>(legend: impl IntoLive<TextContent, M>, content: C) -> Self {
+        Self {
+            legend: label(legend),
+            description: None,
+            content,
+        }
+    }
+
+    /// Muted text between the legend and the content.
+    #[must_use]
+    pub fn description<M>(mut self, description: impl IntoLive<TextContent, M>) -> Self {
+        self.description = Some(label(description));
+        self
+    }
+}
+
+impl<C: View> View for FieldSet<C> {
+    fn mount(self, cx: &mut Cx<'_>) {
+        let node = column_node(cx, FieldGap::Set);
+        let env = cx.env.clone();
+        let legend = self.legend.clone();
+        cx.react(move |inner| {
+            let name = text(&legend, &env);
+            let access = &mut inner.data(node).access;
+            if access.label.as_deref() != Some(name.as_str()) {
+                access.label = Some(name);
+                inner.touch(node, Dirty::SEMANTICS);
+            }
+        });
+        let env = cx.env.clone();
+        let mut inside = cx.within(node, env);
+        inside.mount(FieldText::new(FieldPart::Legend, self.legend));
+        if let Some(description) = self.description {
+            inside.mount(FieldText::new(FieldPart::Description, description));
+        }
+        inside.mount(self.content);
+    }
+}
+
+/// Whole fields stacked 28 pt apart, each filling the width.
+pub struct FieldGroup<C>(C);
+
+impl<C: View> FieldGroup<C> {
+    pub fn new(fields: C) -> Self {
+        Self(fields)
+    }
+}
+
+impl<C: View> View for FieldGroup<C> {
+    fn mount(self, cx: &mut Cx<'_>) {
+        let node = column_node(cx, FieldGap::Group);
+        let env = cx.env.clone();
+        cx.within(node, env).mount(self.0);
+    }
+}
+
+/// Text parts stacked 4 pt apart, such as a [`FieldTitle`] above a
+/// description, beside a choice control.
+pub struct FieldContent<C>(C);
+
+impl<C: View> FieldContent<C> {
+    pub fn new(parts: C) -> Self {
+        Self(parts)
+    }
+}
+
+impl<C: View> View for FieldContent<C> {
+    fn mount(self, cx: &mut Cx<'_>) {
+        let node = column_node(cx, FieldGap::Content);
+        let env = cx.env.clone();
+        cx.within(node, env).mount(self.0);
+    }
+}
+
+/// A title inside a field's content, in the label style.
+pub struct FieldTitle(Label);
+
+impl FieldTitle {
+    pub fn new<M>(title: impl IntoLive<TextContent, M>) -> Self {
+        Self(label(title))
+    }
+}
+
+impl View for FieldTitle {
+    fn mount(self, cx: &mut Cx<'_>) {
+        cx.mount(FieldText::new(FieldPart::Title, self.0));
+    }
+}
+
+/// A rule between field groups, with optional text in its middle.
+#[derive(Default)]
+pub struct FieldSeparator(Option<Label>);
+
+impl FieldSeparator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Text on a chip in the middle of the rule.
+    #[must_use]
+    pub fn text<M>(mut self, text: impl IntoLive<TextContent, M>) -> Self {
+        self.0 = Some(label(text));
+        self
+    }
+}
+
+impl View for FieldSeparator {
+    fn mount(self, cx: &mut Cx<'_>) {
+        let content = self
+            .0
+            .unwrap_or(Live::Value(TextContent::Plain(String::new())));
+        cx.mount(FieldText::new(FieldPart::Separator, content));
+    }
+}

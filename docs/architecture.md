@@ -88,6 +88,7 @@ The `view` module is the declarative view layer:
 - The `tooltip` and `context_menu` modifiers wrap the view in a control that watches its hover, presses, and keys. The wrapper publishes no semantic node. A child of a tooltip wrapper publishes the `Tooltip` node while the tooltip shows.
 - The `toaster` modifier mounts a `Toaster` above the window content and puts its queue in the environment.
 - `Form` lowers onto the two-column form grid of the core layout engine.
+- `Field` and `Resizable` lower onto `LayoutKind::Custom` nodes. The controls' `FieldLayout` places the parts of a field for the width at each layout. The pane rectangles of the hosted panel group place the panes.
 - `ViewHost` runs layout, paint, semantics, and input for a mounted view. A window backend calls it for each frame, and tests drive it without a window.
 
 Dependencies: `choscorui-core` and `choscorui-controls`.

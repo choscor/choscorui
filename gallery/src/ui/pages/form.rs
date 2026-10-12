@@ -4,16 +4,16 @@
 use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Cx, DatePicker, Env, FieldText, Frame, HStack, HorizontalAlignment, Input,
-    InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup, VStack, View,
+    AnyView, Configured, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
+    Input, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup, View,
     ViewExt,
 };
 use choscorui::controls::{
-    self, AddonAlign, CalendarMode, ControlKind, ControlSize, FieldPart, InputGroup,
+    self, AddonAlign, CalendarMode, ControlKind, ControlSize, FieldOrientation, InputGroup,
     InputGroupAddon, KbdVariant, ListEntry, Orientation, TextField, ToggleItem, ToggleVariant,
     ValidationState,
 };
-use choscorui::core::{CivilDate, Icon, Space};
+use choscorui::core::{CivilDate, Icon};
 
 /// The catalog string `key` in `env`.
 fn text(env: &Env, key: &str) -> String {
@@ -473,74 +473,74 @@ pub fn input_otp(_: &PageCx) -> AnyView {
 /// The widest a field gets; its parts wrap to it.
 const FIELD_WIDTH: f64 = 480.0;
 
-/// Parts stacked with the field's item gap, each filling the field width.
-fn stacked(parts: impl View) -> impl View {
-    VStack::new(parts)
-        .alignment(HorizontalAlignment::Fill)
-        .spacing(Space::S3)
-        .frame(Frame::new().max_width(FIELD_WIDTH))
-}
-
-/// A lead part with the other parts stacked beside it, as a horizontal
-/// field places them.
-fn beside(lead: impl View, rest: impl View) -> impl View {
-    HStack::new((
-        lead,
-        // The column takes the rest of the width, and its text wraps.
-        VStack::new(rest)
-            .alignment(HorizontalAlignment::Fill)
-            .spacing(Space::S1)
-            .layout_priority(1.0),
-    ))
-    .spacing(Space::S3)
-    .frame(Frame::new().max_width(FIELD_WIDTH))
+/// `field` no wider than [`FIELD_WIDTH`].
+fn narrow(field: impl View) -> impl View {
+    field.frame(Frame::new().max_width(FIELD_WIDTH))
 }
 
 pub fn field(_: &PageCx) -> AnyView {
     stateful(|cx| {
+        let username = cx.state("a".to_owned());
         column((
             section(
                 t!("field.set"),
-                stacked((
-                    FieldText::new(FieldPart::Legend, t!("field.payment")),
-                    FieldText::new(FieldPart::Description, t!("field.secure")),
-                    FieldText::new(FieldPart::Label, t!("field.name_on_card")),
-                    input(cx, "field.name_on_card", "Evil Rabbit"),
-                )),
+                narrow(
+                    FieldSet::new(
+                        t!("field.payment"),
+                        FieldGroup::new(Field::new(
+                            t!("field.name_on_card"),
+                            input(cx, "field.name_on_card", "Evil Rabbit"),
+                        )),
+                    )
+                    .description(t!("field.secure")),
+                ),
             ),
             section(
                 t!("field.vertical"),
-                stacked((
-                    FieldText::new(FieldPart::Label, t!("input.email")),
-                    input(cx, "input.email", "name@example.com"),
-                    FieldText::new(FieldPart::Description, t!("field.never_share")),
-                )),
+                narrow(
+                    Field::new(
+                        t!("input.email"),
+                        input(cx, "input.email", "name@example.com"),
+                    )
+                    .description(t!("field.never_share")),
+                ),
             ),
             section(
                 t!("field.horizontal"),
-                beside(
-                    switch(cx, "field.marketing", true, ControlSize::Default),
-                    FieldText::new(FieldPart::Description, t!("field.receive")),
+                narrow(
+                    Field::new(
+                        t!("field.marketing"),
+                        switch(cx, "field.marketing", true, ControlSize::Default),
+                    )
+                    .description(t!("field.receive"))
+                    .orientation(FieldOrientation::Horizontal),
                 ),
             ),
+            // The responsive field takes the page width, so a narrow
+            // window stacks it.
             section(
                 t!("field.responsive"),
-                beside(
-                    FieldText::new(FieldPart::Label, t!("field.display_name")),
+                Field::new(
+                    t!("field.display_name"),
                     Input::new(t!("field.display_name"), cx.state(String::new()).binding()),
-                ),
+                )
+                .orientation(FieldOrientation::Responsive),
             ),
             section(
                 t!("field.invalid"),
-                stacked((
-                    FieldText::new(FieldPart::Label, t!("input.username")),
-                    invalid_username(cx),
-                    FieldText::new(FieldPart::Error, t!("field.username_error")),
-                )),
+                narrow(
+                    Field::new(
+                        t!("input.username"),
+                        Input::new(t!("input.username"), username.binding()),
+                    )
+                    .error(t!("field.username_error"), move || {
+                        username.get().chars().count() < 3
+                    }),
+                ),
             ),
             section(
                 t!("field.separator"),
-                stacked(FieldText::new(FieldPart::Separator, t!("field.continue"))),
+                narrow(FieldSeparator::new().text(t!("field.continue"))),
             ),
         ))
     })
@@ -678,6 +678,25 @@ mod tests {
         );
         page.host.layout();
         handled
+    }
+
+    #[test]
+    fn the_invalid_field_clears_its_error_once_the_name_is_long_enough() {
+        const ERROR: &str = "Use at least three characters.";
+        let mut page = Harness::new("field");
+        assert!(page.host.find(ERROR).is_some());
+        let (snapshot, _) = page.host.semantics();
+        let input = snapshot
+            .iter()
+            .find(|entry| entry.node.name == "Username" && entry.node.state.invalid)
+            .map(|entry| entry.id)
+            .expect("the username input is invalid");
+        assert_eq!(page.host.semantic(input).unwrap().description, ERROR);
+        page.host.focus(Some(input));
+        assert!(page.host.text("bcd"));
+        page.host.layout();
+        assert!(page.host.find(ERROR).is_none());
+        assert!(!page.host.semantic(input).unwrap().state.invalid);
     }
 
     #[test]

@@ -74,8 +74,8 @@ pub mod prelude {
     pub use choscorui_compose::t;
     pub use choscorui_compose::view::*;
     pub use choscorui_controls::{
-        ButtonVariant, ControlKind, ControlSize, IntegerRange, SheetSide, TabsVariant, Toast,
-        ToastPosition, ToastVariant, Toasts,
+        ButtonVariant, ControlKind, ControlSize, FieldOrientation, IntegerRange, SheetSide,
+        SplitOrientation, TabsVariant, Toast, ToastPosition, ToastVariant, Toasts,
     };
     pub use choscorui_core::{
         BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, FontWeight, Icon,

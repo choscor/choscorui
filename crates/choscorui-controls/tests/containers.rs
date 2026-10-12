@@ -540,6 +540,40 @@ fn a_hosted_panel_group_moves_each_handle_between_its_neighbors() {
     ));
 }
 
+#[test]
+fn a_panel_group_names_the_moved_handle_and_takes_all_sizes() {
+    let mut control = Resizable::hosted_group(
+        "Panels",
+        SplitOrientation::Horizontal,
+        vec![50.0, 50.0, 50.0],
+        4.0,
+        vec![100.0, 100.0],
+    )
+    .unwrap();
+    assert_eq!(control.minimum_extent(), 158.0);
+    // Pane rectangles in other bounds, before any arrange, mirrored.
+    let (panes, handles) = control.rects_in(rect(0.0, 0.0, 400.0, 100.0), true);
+    assert_eq!(panes[0], rect(300.0, 0.0, 100.0, 100.0));
+    assert_eq!(handles[1], rect(192.0, 0.0, 4.0, 100.0));
+    assert_eq!(panes[2], rect(0.0, 0.0, 192.0, 100.0));
+
+    assert!(control.set_sizes(&[60.0, 120.0]));
+    for bad in [vec![60.0], vec![40.0, 120.0], vec![60.0, f64::NAN]] {
+        assert!(!control.set_sizes(&bad), "{bad:?}");
+    }
+    arrange(&mut control, rect(0.0, 0.0, 400.0, 100.0));
+    assert_eq!(control.sizes(), vec![60.0, 120.0, 212.0]);
+
+    // After a drag of the second handle, `active` names it.
+    let mut h = Harness::new(control);
+    h.place(rect(0.0, 0.0, 400.0, 100.0));
+    let at = |x| Point::new(x, 50.0);
+    drag(&mut h, at(186.0), &[at(206.0)]);
+    assert_eq!(h.messages(), changes(&[140.0]));
+    // The value is the pane before the active handle: the middle one.
+    assert_eq!(h.semantics().value.as_deref(), Some("140"));
+}
+
 /// Arranges `control` in `bounds` as a host would.
 fn arrange(control: &mut HostedResizable, bounds: Rect) {
     let (tokens, styles) = (DesignTokens::light(), Styles::new());

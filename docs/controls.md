@@ -183,7 +183,7 @@ changes as `ControlMessage` values:
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Dismissed` when a panel closes | - |
 | `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
-| `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle | `Number` |
+| `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle; `active` names that handle | `Number` |
 | `HostedStack` | - | `Index(Some(page))` |
 | `StatusBar`, `ScrollArea`, `HostedGroupBox` | - | - |
 | `Combobox`, `FontChooser` | `Changed(Index)`, `Changed(Text)` when editable, `OpenChanged`, `Dismissed` on Escape | `Index`, or `Text` when editable |
@@ -1158,6 +1158,17 @@ mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
 - **Value.** The message, the `set_value` value, and the semantic value
   give the size of the pane before the active handle. `sizes` gives each
   pane size, and `rects` gives each pane and handle rectangle.
+- **Moved handle.** A press on a handle makes it active, so after a
+  `Changed` message, `active` names the handle that moved. Read `sizes`
+  then to get all the panes.
+- **All sizes.** `set_sizes` takes the sizes of all panes but the last.
+  It fails for a wrong count, or for a size that is not finite or is
+  below its pane minimum. The layout keeps the sizes in the bounds.
+- **Pane geometry.** `rects_in` gives the pane and handle rectangles in
+  other bounds, before the control arranges. `minimum_extent` gives the
+  pane minimums and the handles together. The `Resizable` view uses them
+  to place its pane views. The [guide](guide.md#panel-groups) describes
+  the view.
 - **Errors.** `hosted_group` fails with `InvalidGeometry` for fewer than
   two panes or a wrong count of sizes. It fails with `InvalidPosition` for
   a size below its pane minimum.
@@ -2268,16 +2279,27 @@ character that the code does not accept. `set_open` returns false.
   break after spaces. Without a width, they take one line.
 - A `Separator` paints a 1 pt rule across its width. Its text, if any,
   sits on a background chip in the middle.
-- **`Field::layout`.** A `Vertical` field stacks its parts in order. Each
-  fills the width, with the 12 pt field gap between them.
+- **`Field::layout`.** It resolves the gaps of the `Field` recipe and
+  returns a `FieldLayout`. A `FieldLayout` is a core `CustomLayout` for a
+  node whose children are the parts of one field. `FieldLayout::place`
+  gives the same rectangles for sizes that you measure.
+- A `Vertical` field stacks its parts in order. Each fills the width, with
+  the 12 pt field gap between them.
 - A `Horizontal` field puts the first part at the leading edge. The other
-  parts stack beside it, 12 pt away, with the 4 pt content gap. One other
-  part centers on the first; more align to its top.
+  parts stack beside it, 12 pt away, with the 4 pt content gap. They get
+  the rest of the width, and their text wraps to it. One other part
+  centers on the first; more align to its top.
 - A `Responsive` field is horizontal at 448 pt wide or more, and vertical
-  when narrower. In a right-to-left layout, the parts mirror.
-- **`Field::stack`.** `FieldGap::Group` stacks whole fields 28 pt apart.
-  `FieldGap::Set` stacks the legend, description, and group of a field
-  set 24 pt apart.
+  when narrower. The layout decides at each layout pass, so a window
+  resize can change it. In a right-to-left layout, the parts mirror.
+- Without a width limit, each part keeps its own width.
+- **`FieldGap::resolve`.** `Group` gives the 28 pt gap between whole
+  fields. `Set` gives the 24 pt gap between the legend, the description,
+  and the group of a field set. `Content` gives the 4 pt gap between the
+  text parts of a field's content.
+- **Views.** The `Field`, `FieldSet`, `FieldGroup`, `FieldContent`,
+  `FieldTitle`, and `FieldSeparator` views build on these parts. The
+  [guide](guide.md#form-fields) describes them.
 
 | Part | Value |
 | --- | --- |

@@ -187,6 +187,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("DatePicker", "date-picker"),
     ("Field", "field"),
     ("FieldGap", "field"),
+    ("FieldLayout", "field"),
+    ("FieldOrientation", "field"),
     ("FieldPart", "field"),
     ("FieldText", "field"),
     ("AddonContent", "input-group"),
@@ -365,10 +367,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     (
         "EstimatedText",
         "text measurement for headless hosts and tests",
-    ),
-    (
-        "FieldOrientation",
-        "variant key of field rows; read by recipes",
     ),
     ("KbdVariant", "variant key of key caps; read by recipes"),
     (
