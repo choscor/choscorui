@@ -54,5 +54,5 @@ windows.idle_cpu_percent_after_close <= 3
 
 # Release executable size (unstripped). The gallery shows the full component
 # catalog with views; the library code alone is about 1.8 MiB. The limit is
-# 20 % above the measured 4.97 MiB.
+# 18 % above the measured 5.10 MiB.
 size.choscorui-gallery_mib <= 6
