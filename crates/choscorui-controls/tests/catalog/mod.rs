@@ -11,9 +11,26 @@ use choscorui_controls::{
     Select, Sidebar, SidebarItem, Skeleton, Spinner, Switch, TextField, Textarea, Toast, Toaster,
     Toasts, Toggle, ToggleGroup, ToggleItem,
 };
-use choscorui_core::{CivilDate, Icon, Locale, StringListModel};
+use choscorui_core::{CivilDate, Icon, Locale, StringListModel, Tree};
+
+mod builtins;
+pub use builtins::builtins;
 
 pub type Factory = fn() -> Box<dyn CustomControl>;
+
+/// Builds one control of [`every_control`] in a tree.
+pub type AnyFactory = Box<dyn Fn(&mut Tree) -> Box<dyn CustomControl>>;
+
+/// The main catalog, then the built-in controls.
+pub fn every_control() -> Vec<(&'static str, AnyFactory)> {
+    let main = catalog()
+        .into_iter()
+        .map(|(name, factory)| (name, Box::new(move |_: &mut Tree| factory()) as AnyFactory));
+    let builtin = builtins()
+        .into_iter()
+        .map(|(name, factory)| (name, Box::new(factory) as AnyFactory));
+    main.chain(builtin).collect()
+}
 
 fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| item.to_string()).collect()

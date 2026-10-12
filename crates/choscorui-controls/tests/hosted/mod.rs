@@ -55,9 +55,21 @@ impl Harness {
         styles: Styles,
         direction: LayoutDirection,
     ) -> Self {
+        Self::mount_with(|_| control, themes, styles, direction)
+    }
+
+    /// Mounts the control that `build` makes in the harness tree, so that
+    /// it can refer to nodes that it attaches first.
+    pub fn mount_with(
+        build: impl FnOnce(&mut Tree) -> Box<dyn CustomControl>,
+        themes: ThemeResolver,
+        styles: Styles,
+        direction: LayoutDirection,
+    ) -> Self {
         let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 600.0));
         let mut host = ControlHost::new();
         let root = tree.root();
+        let control = build(&mut tree);
         let node = host.mount(&mut tree, root, control).unwrap();
         let mut harness = Self {
             tree,

@@ -2,11 +2,15 @@
 //! control paints: under another recipe, the same keys bring the same
 //! messages, focus, and semantics. Reduced motion finishes every
 //! animation at once.
+//!
+//! The controls are the main catalog and the built-in controls. A guard
+//! test checks that they paint every `ControlKind`, except the kinds in
+//! `EXEMPT`.
 
 mod catalog;
 mod hosted;
 
-use catalog::{Factory, catalog};
+use catalog::{AnyFactory, every_control};
 use choscorui_controls::{
     ControlKind, ControlMessage, Corners, DefaultRecipe, Recipe, ResolvedStyle, StyleQuery, Styles,
 };
@@ -15,6 +19,8 @@ use choscorui_core::{
     ThemeResolver,
 };
 use hosted::Harness;
+use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 /// The color of a solid background.
@@ -77,13 +83,14 @@ struct Step {
 }
 
 /// Mounts the control with `styles` and `tokens`, focuses it, and plays
-/// the script.
-fn play(factory: Factory, styles: Styles, tokens: DesignTokens) -> (Harness, Vec<Step>) {
+/// the script. The control paints after each step.
+fn play(factory: &AnyFactory, styles: Styles, tokens: DesignTokens) -> (Harness, Vec<Step>) {
     let themes = ThemeResolver::new(tokens);
-    let mut h = Harness::mount(factory(), themes, styles, LayoutDirection::Ltr);
+    let mut h = Harness::mount_with(factory, themes, styles, LayoutDirection::Ltr);
     let _ = h.host.advance(&mut h.tree, 0.0);
     let bounds = h.bounds();
     h.place(bounds);
+    let _ = h.paint();
     let mut steps = Vec::new();
     if h.host.get(h.node).unwrap().focusable() {
         h.focus();
@@ -95,6 +102,7 @@ fn play(factory: Factory, styles: Styles, tokens: DesignTokens) -> (Harness, Vec
         let _ = h.host.dispatch_key(&mut h.tree, KeyEvent::Up { key });
         let bounds = h.bounds();
         h.place(bounds);
+        let _ = h.paint();
         steps.push(Step {
             key,
             handled,
@@ -109,9 +117,9 @@ fn play(factory: Factory, styles: Styles, tokens: DesignTokens) -> (Harness, Vec
 
 #[test]
 fn another_recipe_keeps_messages_focus_and_semantics() {
-    for (name, factory) in catalog() {
-        let (_, default) = play(factory, Styles::new(), DesignTokens::light());
-        let (_, swapped) = play(factory, reshaped(), DesignTokens::light());
+    for (name, factory) in every_control() {
+        let (_, default) = play(&factory, Styles::new(), DesignTokens::light());
+        let (_, swapped) = play(&factory, reshaped(), DesignTokens::light());
         assert_eq!(default.len(), swapped.len(), "{name}");
         for (expected, actual) in default.iter().zip(&swapped) {
             assert_eq!(expected, actual, "{name}: {:?}", expected.key);
@@ -123,8 +131,8 @@ fn another_recipe_keeps_messages_focus_and_semantics() {
 fn reduced_motion_finishes_every_animation_at_once() {
     let mut tokens = DesignTokens::light();
     tokens.motion.reduced = true;
-    for (name, factory) in catalog() {
-        let (h, steps) = play(factory, Styles::new(), tokens);
+    for (name, factory) in every_control() {
+        let (h, steps) = play(&factory, Styles::new(), tokens);
         assert!(
             !h.host.animating(&h.tree, h.time),
             "{name} animates at rest"
@@ -133,4 +141,59 @@ fn reduced_motion_finishes_every_animation_at_once() {
             assert!(!step.animating, "{name} animates after {:?}", step.key);
         }
     }
+}
+
+/// Kinds that no hosted control paints, with the reason.
+const EXEMPT: &[(ControlKind, &str)] = &[
+    (
+        ControlKind::Tooltip,
+        "the TooltipController overlay paints it, not a hosted control; popup.rs tests it",
+    ),
+    (
+        ControlKind::Typography,
+        "no built-in control asks for it; text views take TextPreset specs from the tokens",
+    ),
+    (
+        ControlKind::ColorPicker,
+        "ColorPicker paints its fields with the Input kind; the gallery only names the kind",
+    ),
+];
+
+/// The default look that records each kind that a paint asks for.
+struct Recording(Rc<RefCell<BTreeSet<ControlKind>>>);
+
+impl Recipe for Recording {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        self.0.borrow_mut().insert(query.kind);
+        DefaultRecipe.resolve(query, tokens)
+    }
+}
+
+#[test]
+fn the_contract_covers_every_control_kind() {
+    let seen = Rc::new(RefCell::new(BTreeSet::new()));
+    for (_, factory) in every_control() {
+        let mut styles = Styles::new();
+        for kind in ControlKind::ALL {
+            styles.set_recipe(RecipeSet::DEFAULT, *kind, Rc::new(Recording(seen.clone())));
+        }
+        let _ = play(&factory, styles, DesignTokens::light());
+    }
+    let seen = seen.borrow();
+    let exempt: BTreeSet<ControlKind> = EXEMPT.iter().map(|(kind, _)| *kind).collect();
+    let missing: Vec<&str> = ControlKind::ALL
+        .iter()
+        .filter(|kind| !seen.contains(kind) && !exempt.contains(kind))
+        .map(|kind| kind.name())
+        .collect();
+    assert!(missing.is_empty(), "no contract control paints {missing:?}");
+    let stale: Vec<&str> = exempt
+        .iter()
+        .filter(|kind| seen.contains(kind))
+        .map(|kind| kind.name())
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "exempt kinds that a control paints: {stale:?}"
+    );
 }

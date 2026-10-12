@@ -278,7 +278,13 @@ the box. `fill_shape` places the paint on the box.
   recipe then styles that query.
 
 A recipe sees only the query and the tokens. It cannot read input, focus,
-commands, or semantics.
+commands, or semantics. The test
+`another_recipe_keeps_messages_focus_and_semantics` in
+[contract.rs](../crates/choscorui-controls/tests/contract.rs) plays the same
+keys on every hosted control under the default recipe and under another
+recipe. The messages, focus, and semantics must be equal. A guard test checks
+that these controls paint every `ControlKind`. The guard lists each kind
+that no hosted control paints, with the reason.
 
 The default recipe gives each control the reference values. The focus-visible
 state sets the border to `ring` and adds a 3 pt ring at the ring alpha. The
