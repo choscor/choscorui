@@ -2,34 +2,48 @@
 //! and the sidebar.
 
 use crate::ui::page::{Build, PageCx, column, section};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Breadcrumb, Cx, HStack, NavigationMenu, Pagination, Sidebar, View,
+    AnyView, Breadcrumb, Cx, Env, HStack, NavigationMenu, Pagination, Sidebar, View,
 };
 use choscorui::controls::{
     NavigationLink, SheetSide, SidebarCollapse, SidebarItem, SidebarVariant,
 };
 use choscorui::core::{Icon, Space};
 
-fn trail(items: &[&str]) -> Vec<String> {
-    items.iter().map(|item| item.to_string()).collect()
+/// The translation of `key`, for strings that controls keep.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+/// The breadcrumb items with the catalog `keys`.
+fn trail(keys: &'static [&'static str]) -> impl Fn(&Env) -> Vec<String> {
+    move |env| keys.iter().map(|key| text(env, key)).collect()
 }
 
 pub fn breadcrumb(_: &PageCx) -> AnyView {
     column((
         section(
-            "Links",
-            Breadcrumb::new("Location", trail(&["Home", "Components", "Breadcrumb"])),
+            t!("breadcrumb.links"),
+            Breadcrumb::new(
+                t!("breadcrumb.name"),
+                trail(&[
+                    "breadcrumb.home",
+                    "breadcrumb.components",
+                    "breadcrumb.breadcrumb",
+                ]),
+            ),
         ),
         section(
-            "Collapsed",
+            t!("breadcrumb.collapsed"),
             Breadcrumb::new(
-                "Collapsed location",
+                t!("breadcrumb.collapsed_name"),
                 trail(&[
-                    "Home",
-                    "Documentation",
-                    "Building Your App",
-                    "Components",
-                    "Breadcrumb",
+                    "breadcrumb.home",
+                    "breadcrumb.documentation",
+                    "breadcrumb.building",
+                    "breadcrumb.components",
+                    "breadcrumb.breadcrumb",
                 ]),
             )
             .with(|breadcrumb| breadcrumb.with_collapsed(1..4)),
@@ -44,14 +58,27 @@ impl View for PaginationPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let few = cx.state(1);
         let many = cx.state(9);
+        let (previous, next) = (|| t!("pagination.previous"), || t!("pagination.next"));
         column((
             section(
-                "Few pages",
-                Pagination::new("Results", "Previous", "Next", 3, few.binding()),
+                t!("pagination.few"),
+                Pagination::new(
+                    t!("pagination.results"),
+                    previous(),
+                    next(),
+                    3,
+                    few.binding(),
+                ),
             ),
             section(
-                "Many pages",
-                Pagination::new("Archive", "Previous", "Next", 20, many.binding()),
+                t!("pagination.many"),
+                Pagination::new(
+                    t!("pagination.archive"),
+                    previous(),
+                    next(),
+                    20,
+                    many.binding(),
+                ),
             ),
         ))
     }
@@ -61,63 +88,73 @@ pub fn pagination(_: &PageCx) -> AnyView {
     PaginationPage.into_any()
 }
 
-fn link(title: &str, description: &str) -> NavigationLink {
-    NavigationLink::new(title, description)
+/// The navigation menu's groups of links.
+fn menus(env: &Env) -> Vec<(String, Vec<NavigationLink>)> {
+    let link = |title: &str, description: &str| {
+        NavigationLink::new(text(env, title), text(env, description))
+    };
+    vec![
+        (
+            text(env, "navigation-menu.getting_started"),
+            vec![
+                link(
+                    "navigation-menu.introduction",
+                    "navigation-menu.introduction_text",
+                ),
+                link(
+                    "navigation-menu.installation",
+                    "navigation-menu.installation_text",
+                ),
+                link(
+                    "navigation-menu.typography",
+                    "navigation-menu.typography_text",
+                ),
+            ],
+        ),
+        (
+            text(env, "breadcrumb.components"),
+            vec![
+                link(
+                    "navigation-menu.alert_dialog",
+                    "navigation-menu.alert_dialog_text",
+                ),
+                link(
+                    "navigation-menu.hover_card",
+                    "navigation-menu.hover_card_text",
+                ),
+                link("navigation-menu.progress", "navigation-menu.progress_text"),
+                link(
+                    "navigation-menu.scroll_area",
+                    "navigation-menu.scroll_area_text",
+                ),
+            ],
+        ),
+        (text(env, "navigation-menu.docs"), Vec::new()),
+    ]
 }
 
 pub fn navigation_menu(_: &PageCx) -> AnyView {
-    let menus = vec![
-        (
-            "Getting started".to_string(),
-            vec![
-                link(
-                    "Introduction",
-                    "Re-usable components built with design tokens.",
-                ),
-                link(
-                    "Installation",
-                    "How to install dependencies and structure your app.",
-                ),
-                link("Typography", "Styles for headings, paragraphs, and lists."),
-            ],
-        ),
-        (
-            "Components".to_string(),
-            vec![
-                link(
-                    "Alert Dialog",
-                    "A modal dialog that interrupts the user with important content.",
-                ),
-                link(
-                    "Hover Card",
-                    "For sighted users to preview content behind a link.",
-                ),
-                link(
-                    "Progress",
-                    "Shows how far a task has come, as a progress bar.",
-                ),
-                link("Scroll-area", "Visually or semantically separates content."),
-            ],
-        ),
-        ("Docs".to_string(), Vec::new()),
-    ];
-    column(section("Menu", NavigationMenu::new("Site", menus)))
+    column(section(
+        t!("navigation-menu.section"),
+        NavigationMenu::new(t!("navigation-menu.name"), menus),
+    ))
 }
 
-fn sidebar_groups() -> Vec<(String, Vec<SidebarItem>)> {
+fn sidebar_groups(env: &Env) -> Vec<(String, Vec<SidebarItem>)> {
+    let text = |key: &str| text(env, key);
     vec![
         (
-            "Application".to_string(),
+            text("sidebar.application"),
             vec![
-                SidebarItem::new("Home", Icon::House),
-                SidebarItem::new("Inbox", Icon::Inbox).with_badge("24"),
-                SidebarItem::new("Calendar", Icon::Calendar),
-                SidebarItem::new("Search", Icon::Search),
+                SidebarItem::new(text("breadcrumb.home"), Icon::House),
+                SidebarItem::new(text("sidebar.inbox"), Icon::Inbox).with_badge("24"),
+                SidebarItem::new(text("sidebar.calendar"), Icon::Calendar),
+                SidebarItem::new(text("sidebar.search"), Icon::Search),
             ],
         ),
         (
-            "Settings".to_string(),
-            vec![SidebarItem::new("Settings", Icon::Settings)],
+            text("sidebar.settings"),
+            vec![SidebarItem::new(text("sidebar.settings"), Icon::Settings)],
         ),
     ]
 }
@@ -128,34 +165,34 @@ struct SidebarPage;
 impl View for SidebarPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let none = cx.state(None);
-        let mut make = |name: &str, variant: SidebarVariant, collapse: SidebarCollapse| {
+        let mut make = |name: &'static str, variant: SidebarVariant, collapse: SidebarCollapse| {
             let selected = cx.state(Some(1));
             Sidebar::new(
-                name.to_owned(),
-                "Toggle sidebar",
-                sidebar_groups(),
+                t!(name),
+                t!("sidebar.toggle"),
+                sidebar_groups,
                 selected.binding(),
             )
             .with(move |sidebar| sidebar.with_variant(variant).with_collapse(collapse))
         };
         let row = |sidebars| HStack::new(sidebars).spacing(Space::S4);
         let right = Sidebar::new(
-            "Right sidebar",
-            "Toggle sidebar",
-            sidebar_groups(),
+            t!("sidebar.right"),
+            t!("sidebar.toggle"),
+            sidebar_groups,
             none.binding(),
         )
         .with(|sidebar| sidebar.with_side(SheetSide::Right));
         // Two sidebars fit side by side in the narrowest content area.
         let first = row(vec![
             make(
-                "Off-canvas sidebar",
+                "sidebar.offcanvas",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::Offcanvas,
             )
             .into_any(),
             make(
-                "Icon sidebar",
+                "sidebar.icon",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::Icon,
             )
@@ -163,13 +200,13 @@ impl View for SidebarPage {
         ]);
         let second = row(vec![
             make(
-                "Fixed sidebar",
+                "sidebar.fixed",
                 SidebarVariant::Sidebar,
                 SidebarCollapse::None,
             )
             .into_any(),
             make(
-                "Floating sidebar",
+                "sidebar.floating",
                 SidebarVariant::Floating,
                 SidebarCollapse::Icon,
             )
@@ -177,7 +214,7 @@ impl View for SidebarPage {
         ]);
         let third = row(vec![
             make(
-                "Inset sidebar",
+                "sidebar.inset",
                 SidebarVariant::Inset,
                 SidebarCollapse::Icon,
             )
@@ -185,9 +222,9 @@ impl View for SidebarPage {
             right.into_any(),
         ]);
         column((
-            section("Sidebar: off-canvas and icons", first),
-            section("Fixed and floating", second),
-            section("Inset, and on the right side", third),
+            section(t!("sidebar.section_first"), first),
+            section(t!("sidebar.section_second"), second),
+            section(t!("sidebar.section_third"), third),
         ))
     }
 }

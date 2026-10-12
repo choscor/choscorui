@@ -2,40 +2,50 @@
 //! scroller, and questionnaires.
 
 use crate::ui::page::{Build, PageCx, column, portrait, section};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Attachment, Configured, Frame, HStack, HorizontalAlignment, Marker, VStack, View,
-    ViewExt,
+    AnyView, Configured, Env, Frame, HStack, HorizontalAlignment, Marker, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    AttachmentMedia, AttachmentState, Avatar, Bubble, BubbleVariant, ControlKind, ControlSize,
-    Conversation, Message, MessageScroller, Question, Questionnaire, QuestionnaireLabels,
+    self, AttachmentMedia, AttachmentState, Avatar, Bubble, BubbleVariant, ControlKind,
+    ControlSize, Conversation, Message, MessageScroller, Question, Questionnaire,
+    QuestionnaireLabels,
 };
 use choscorui::core::{Icon, Space};
 
+/// The translation of `key`, for strings that controls keep.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
 /// A message as a view.
-fn message_view(build: impl Fn() -> Message + 'static) -> impl View {
-    Configured::custom(ControlKind::Message, move |_| build()).frame(Frame::new().width(480.0))
+fn message_view(build: impl Fn(&Env) -> Message + 'static) -> impl View {
+    Configured::custom(ControlKind::Message, build).frame(Frame::new().width(480.0))
+}
+
+/// The avatar of the reader's own messages.
+fn own_avatar(env: &Env) -> Avatar {
+    Avatar::new(text(env, "message.you"), text(env, "message.you_initials"))
 }
 
 pub fn message(_: &PageCx) -> AnyView {
     let variants = [
-        (BubbleVariant::Default, "A default bubble."),
-        (BubbleVariant::Secondary, "A secondary bubble."),
-        (BubbleVariant::Tinted, "A tinted bubble."),
-        (BubbleVariant::Outline, "An outline bubble."),
-        (BubbleVariant::Ghost, "A ghost bubble."),
-        (BubbleVariant::Destructive, "A destructive bubble."),
+        (BubbleVariant::Default, "message.default"),
+        (BubbleVariant::Secondary, "message.secondary"),
+        (BubbleVariant::Tinted, "message.tinted"),
+        (BubbleVariant::Outline, "message.outline"),
+        (BubbleVariant::Ghost, "message.ghost"),
+        (BubbleVariant::Destructive, "message.destructive"),
     ];
     column((
         section(
-            "Start",
-            message_view(|| {
+            t!("message.start"),
+            message_view(|env| {
                 Message::new(
                     "Ana Lee",
                     vec![
-                        Bubble::new("Hi! Are we still on for lunch tomorrow?")
-                            .with_variant(BubbleVariant::Muted),
-                        Bubble::new("I found a new place near the office.")
+                        Bubble::new(text(env, "message.lunch")).with_variant(BubbleVariant::Muted),
+                        Bubble::new(text(env, "message.new_place"))
                             .with_variant(BubbleVariant::Muted)
                             .with_reactions("👍 2"),
                     ],
@@ -45,22 +55,28 @@ pub fn message(_: &PageCx) -> AnyView {
             }),
         ),
         section(
-            "End",
-            message_view(|| {
-                Message::new("You", vec![Bubble::new("Sounds great. See you at noon!")])
-                    .with_avatar(Avatar::new("You", "ME"))
-                    .with_footer("Read")
-                    .align_end()
+            t!("message.end"),
+            message_view(|env| {
+                Message::new(
+                    text(env, "message.you"),
+                    vec![Bubble::new(text(env, "message.see_you"))],
+                )
+                .with_avatar(own_avatar(env))
+                .with_footer(text(env, "message.read"))
+                .align_end()
             }),
         ),
         section(
-            "Variants",
+            t!("message.variants"),
             VStack::new(
                 variants
                     .into_iter()
-                    .map(|(variant, text)| {
-                        message_view(move || {
-                            Message::new("Sample", vec![Bubble::new(text).with_variant(variant)])
+                    .map(|(variant, key)| {
+                        message_view(move |env| {
+                            Message::new(
+                                text(env, "message.sample"),
+                                vec![Bubble::new(text(env, key)).with_variant(variant)],
+                            )
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -70,47 +86,62 @@ pub fn message(_: &PageCx) -> AnyView {
     ))
 }
 
+/// A file attachment whose control `change` adjusts in `env`.
+fn attachment_view(
+    name: &'static str,
+    change: impl Fn(&Env, controls::Attachment) -> controls::Attachment + 'static,
+) -> impl View {
+    Configured::custom(ControlKind::Attachment, move |env| {
+        change(env, controls::Attachment::new(name))
+    })
+}
+
+/// The label of the button that removes the attachment `name`.
+fn remove(env: &Env, name: &str) -> String {
+    env.text("attachment.remove", &[("name", name)])
+}
+
 pub fn attachment(_: &PageCx) -> AnyView {
     column((
         section(
-            "States",
+            t!("attachment.states"),
             VStack::new((
-                Attachment::new("report.pdf").with(|attachment| {
+                attachment_view("report.pdf", |env, attachment| {
                     attachment
                         .with_detail("2.4 MB")
-                        .with_remove("Remove report.pdf")
+                        .with_remove(remove(env, "report.pdf"))
                 }),
-                Attachment::new("budget.xlsx").with(|attachment| {
+                attachment_view("budget.xlsx", |env, attachment| {
                     attachment
-                        .with_detail("Uploading")
+                        .with_detail(text(env, "attachment.uploading"))
                         .with_state(AttachmentState::Uploading)
                         .with_progress(0.6)
                 }),
-                Attachment::new("video.mp4").with(|attachment| {
+                attachment_view("video.mp4", |env, attachment| {
                     attachment
-                        .with_detail("Processing")
+                        .with_detail(text(env, "attachment.processing"))
                         .with_state(AttachmentState::Processing)
                 }),
-                Attachment::new("photo.png").with(|attachment| {
+                attachment_view("photo.png", |env, attachment| {
                     attachment
-                        .with_detail("Upload failed")
+                        .with_detail(text(env, "attachment.failed"))
                         .with_state(AttachmentState::Error)
-                        .with_remove("Remove photo.png")
+                        .with_remove(remove(env, "photo.png"))
                 }),
             ))
             .alignment(HorizontalAlignment::Leading)
             .spacing(Space::S2),
         ),
         section(
-            "Image and vertical",
+            t!("attachment.image_vertical"),
             HStack::new((
-                Attachment::new("cover.png").with(|attachment| {
+                attachment_view("cover.png", |_, attachment| {
                     attachment
                         .with_detail("1.1 MB")
                         .with_media(AttachmentMedia::Image(portrait()))
                         .with_state(AttachmentState::Done)
                 }),
-                Attachment::new("cover.png").with(|attachment| {
+                attachment_view("cover.png", |_, attachment| {
                     attachment
                         .with_media(AttachmentMedia::Image(portrait()))
                         .vertical()
@@ -119,12 +150,12 @@ pub fn attachment(_: &PageCx) -> AnyView {
             .spacing(Space::S3),
         ),
         section(
-            "Sizes",
+            t!("attachment.sizes"),
             HStack::new(
                 [ControlSize::Default, ControlSize::Sm, ControlSize::Xs]
                     .into_iter()
                     .map(|size| {
-                        Attachment::new("notes.txt").with(move |attachment| {
+                        attachment_view("notes.txt", move |_, attachment| {
                             attachment
                                 .with_media(AttachmentMedia::Icon(Icon::File))
                                 .with_size(size)
@@ -141,20 +172,20 @@ pub fn marker(_: &PageCx) -> AnyView {
     let wide = || Frame::new().width(480.0);
     column((
         section(
-            "Default",
-            Marker::new("Ana joined the chat")
+            t!("marker.default"),
+            Marker::new(t!("marker.joined", name = "Ana"))
                 .with(|marker| marker.with_icon(Icon::Info))
                 .frame(wide()),
         ),
         section(
-            "Border",
-            Marker::new("Unread messages")
+            t!("marker.border"),
+            Marker::new(t!("marker.unread"))
                 .with(|marker| marker.with_variant(choscorui::controls::MarkerVariant::Border))
                 .frame(wide()),
         ),
         section(
-            "Separator",
-            Marker::new("Today")
+            t!("marker.separator"),
+            Marker::new(t!("marker.today"))
                 .with(|marker| marker.with_variant(choscorui::controls::MarkerVariant::Separator))
                 .frame(wide()),
         ),
@@ -162,18 +193,24 @@ pub fn marker(_: &PageCx) -> AnyView {
 }
 
 /// 500 messages, every third one a reply.
-fn conversation() -> Conversation {
+fn conversation(env: &Env) -> Conversation {
     let conversation = Conversation::new();
+    let you = text(env, "message.you");
     for index in 1..=500 {
+        let number = index.to_string();
+        let args = [("index", number.as_str())];
         let message = if index % 3 == 0 {
-            Message::new("You", vec![Bubble::new(format!("Reply number {index}."))])
-                .with_avatar(Avatar::new("You", "ME"))
-                .align_end()
+            Message::new(
+                you.clone(),
+                vec![Bubble::new(env.text("message-scroller.reply", &args))],
+            )
+            .with_avatar(own_avatar(env))
+            .align_end()
         } else {
             Message::new(
                 "Ana Lee",
                 vec![
-                    Bubble::new(format!("Message number {index} in a long conversation."))
+                    Bubble::new(env.text("message-scroller.message", &args))
                         .with_variant(BubbleVariant::Muted),
                 ],
             )
@@ -186,43 +223,63 @@ fn conversation() -> Conversation {
 
 pub fn message_scroller(_: &PageCx) -> AnyView {
     column(section(
-        "500 messages",
-        Configured::custom(ControlKind::MessageScroller, |_| {
-            MessageScroller::new("Conversation", conversation())
+        t!("message-scroller.caption"),
+        Configured::custom(ControlKind::MessageScroller, |env| {
+            MessageScroller::new(text(env, "message-scroller.name"), conversation(env))
         })
         .frame(Frame::new().width(480.0).height(400.0)),
     ))
 }
 
 pub fn questionnaire(_: &PageCx) -> AnyView {
-    let options = |names: &[&str]| names.iter().map(|name| name.to_string()).collect();
     column(section(
-        "Survey",
-        Configured::custom(ControlKind::Questionnaire, move |_| {
+        t!("questionnaire.caption"),
+        Configured::custom(ControlKind::Questionnaire, |env| {
+            let text = |key: &str| text(env, key);
+            let options =
+                |keys: &[&str]| -> Vec<String> { keys.iter().copied().map(text).collect() };
             let labels = QuestionnaireLabels {
-                previous: "Previous".into(),
-                skip: "Skip".into(),
-                next: "Next".into(),
-                submit: "Submit".into(),
-                required: "Choose an answer to continue.".into(),
+                previous: text("questionnaire.previous"),
+                skip: text("questionnaire.skip"),
+                next: text("questionnaire.next"),
+                submit: text("questionnaire.submit"),
+                required: text("questionnaire.required"),
             };
+            let progress = env.clone();
             Questionnaire::new(
-                "Feedback survey",
+                text("questionnaire.name"),
                 vec![
                     Question::choice(
-                        "How did you hear about us?",
-                        options(&["Search engine", "A friend", "Social media"]),
+                        text("questionnaire.heard"),
+                        options(&[
+                            "questionnaire.search_engine",
+                            "questionnaire.friend",
+                            "questionnaire.social",
+                        ]),
                     )
                     .required(),
                     Question::multiple(
-                        "Which features do you use?",
-                        options(&["Charts", "Tables", "Forms"]),
+                        text("questionnaire.features"),
+                        options(&[
+                            "questionnaire.charts",
+                            "questionnaire.tables",
+                            "questionnaire.forms",
+                        ]),
                     ),
-                    Question::freeform("Anything else to share?", "Type your answer"),
+                    Question::freeform(
+                        text("questionnaire.anything"),
+                        text("questionnaire.answer"),
+                    ),
                 ],
                 labels,
             )
-            .with_progress(|current, total| format!("Question {current} of {total}"))
+            .with_progress(move |current, total| {
+                let (current, total) = (current.to_string(), total.to_string());
+                progress.text(
+                    "questionnaire.progress",
+                    &[("current", &current), ("total", &total)],
+                )
+            })
         })
         .frame(Frame::new().width(480.0)),
     ))

@@ -2,31 +2,38 @@
 //! command palette.
 
 use crate::ui::page::{Build, PageCx, column, row, section, stateful};
-use choscorui::compose::view::{
-    AnyView, Command, Configured, ContextMenu, Dialog, Menubar, Popover,
-};
+use choscorui::compose::t;
+use choscorui::compose::view::{AnyView, Configured, ContextMenu, Env, Menubar, Popover};
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandItem, ControlKind, MenuCheck, MenuItem, SheetSide,
 };
 use choscorui::core::Icon;
 
-fn page_items() -> Vec<MenuItem> {
+/// The translation of `key`, for strings that controls keep.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+fn page_items(env: &Env) -> Vec<MenuItem> {
+    let text = |key: &str| text(env, key);
     vec![
-        MenuItem::action("Back", CommandId(1)).with_shortcut("⌘["),
-        MenuItem::action("Forward", CommandId(2)).with_shortcut("⌘]"),
-        MenuItem::action("Reload", CommandId(3)).with_shortcut("⌘R"),
+        MenuItem::action(text("context-menu.back"), CommandId(1)).with_shortcut("⌘["),
+        MenuItem::action(text("context-menu.forward"), CommandId(2)).with_shortcut("⌘]"),
+        MenuItem::action(text("context-menu.reload"), CommandId(3)).with_shortcut("⌘R"),
         MenuItem::submenu(
-            "More Tools",
+            text("context-menu.more_tools"),
             vec![
-                MenuItem::action("Save Page…", CommandId(4)),
-                MenuItem::action("Create Shortcut…", CommandId(5)),
+                MenuItem::action(text("context-menu.save_page"), CommandId(4)),
+                MenuItem::action(text("context-menu.create_shortcut"), CommandId(5)),
                 MenuItem::Separator,
-                MenuItem::action("Delete", CommandId(6)).destructive(),
+                MenuItem::action(text("context-menu.delete"), CommandId(6)).destructive(),
             ],
         ),
         MenuItem::Separator,
-        MenuItem::action("Show Bookmarks", CommandId(7)).with_check(MenuCheck::Checkbox),
-        MenuItem::action("Show Full URLs", CommandId(8)).with_check(MenuCheck::Checkbox),
+        MenuItem::action(text("context-menu.show_bookmarks"), CommandId(7))
+            .with_check(MenuCheck::Checkbox),
+        MenuItem::action(text("context-menu.show_full_urls"), CommandId(8))
+            .with_check(MenuCheck::Checkbox),
         MenuItem::Separator,
         MenuItem::action("Pedro Duarte", CommandId(9)).with_check(MenuCheck::Radio),
         MenuItem::action("Colm Tuite", CommandId(10)).with_check(MenuCheck::Radio),
@@ -35,55 +42,62 @@ fn page_items() -> Vec<MenuItem> {
 
 pub fn context_menu(_: &PageCx) -> AnyView {
     column(section(
-        "Secondary click or Control-click the area",
-        ContextMenu::new("Page actions", "Right click here", page_items()),
+        t!("context-menu.caption"),
+        ContextMenu::new(t!("context-menu.name"), t!("context-menu.area"), page_items),
     ))
 }
 
-pub fn menubar(_: &PageCx) -> AnyView {
-    let menus = vec![
+fn menus(env: &Env) -> Vec<(String, Vec<MenuItem>)> {
+    let text = |key: &str| text(env, key);
+    vec![
         (
-            "File".to_string(),
+            text("menubar.file"),
             vec![
-                MenuItem::action("New Tab", CommandId(20)).with_shortcut("⌘T"),
-                MenuItem::action("New Window", CommandId(21)).with_shortcut("⌘N"),
+                MenuItem::action(text("menubar.new_tab"), CommandId(20)).with_shortcut("⌘T"),
+                MenuItem::action(text("menubar.new_window"), CommandId(21)).with_shortcut("⌘N"),
                 MenuItem::Separator,
                 MenuItem::submenu(
-                    "Share",
+                    text("menubar.share"),
                     vec![
-                        MenuItem::action("Email link", CommandId(22)),
-                        MenuItem::action("Messages", CommandId(23)),
+                        MenuItem::action(text("menubar.email_link"), CommandId(22)),
+                        MenuItem::action(text("menubar.messages"), CommandId(23)),
                     ],
                 ),
                 MenuItem::Separator,
-                MenuItem::action("Print…", CommandId(24)).with_shortcut("⌘P"),
+                MenuItem::action(text("menubar.print"), CommandId(24)).with_shortcut("⌘P"),
             ],
         ),
         (
-            "Edit".to_string(),
+            text("menubar.edit"),
             vec![
-                MenuItem::action("Undo", CommandId(30)).with_shortcut("⌘Z"),
-                MenuItem::action("Redo", CommandId(31)).with_shortcut("⇧⌘Z"),
+                MenuItem::action(text("menubar.undo"), CommandId(30)).with_shortcut("⌘Z"),
+                MenuItem::action(text("menubar.redo"), CommandId(31)).with_shortcut("⇧⌘Z"),
                 MenuItem::Separator,
-                MenuItem::action("Cut", CommandId(32)),
-                MenuItem::action("Copy", CommandId(33)),
-                MenuItem::action("Paste", CommandId(34)),
+                MenuItem::action(text("menubar.cut"), CommandId(32)),
+                MenuItem::action(text("menubar.copy"), CommandId(33)),
+                MenuItem::action(text("menubar.paste"), CommandId(34)),
             ],
         ),
-        ("View".to_string(), page_items()),
-    ];
-    column(section("Menu bar", Menubar::new("Main menu", menus)))
+        (text("menubar.view"), page_items(env)),
+    ]
+}
+
+pub fn menubar(_: &PageCx) -> AnyView {
+    column(section(
+        t!("menubar.section"),
+        Menubar::new(t!("menubar.name"), menus),
+    ))
 }
 
 pub fn popover(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
         column(section(
-            "Press the button",
+            t!("popover.caption"),
             Popover::new(
-                "Open popover",
-                "Dimensions",
-                "Set the dimensions for the layer.",
+                t!("popover.trigger"),
+                t!("popover.title"),
+                t!("popover.description"),
                 open.binding(),
             ),
         ))
@@ -92,40 +106,36 @@ pub fn popover(_: &PageCx) -> AnyView {
 
 pub fn hover_card(_: &PageCx) -> AnyView {
     column(section(
-        "Rest the pointer on the link",
-        Popover::hover_card(
-            "@nextjs",
-            "@nextjs",
-            "The React Framework – created and maintained by @vercel. Joined December 2021.",
-        ),
+        t!("hover-card.caption"),
+        Popover::hover_card("@nextjs", "@nextjs", t!("hover-card.description")),
     ))
 }
 
 /// The profile form's actions and close button.
-fn profile(dialog: controls::Dialog) -> controls::Dialog {
+fn profile(env: &Env, dialog: controls::Dialog) -> controls::Dialog {
     dialog
-        .with_action("Cancel", ButtonVariant::Outline)
-        .with_action("Save changes", ButtonVariant::Default)
-        .with_close("Close")
+        .with_action(text(env, "dialog.cancel"), ButtonVariant::Outline)
+        .with_action(text(env, "dialog.save"), ButtonVariant::Default)
+        .with_close(text(env, "dialog.close"))
 }
-
-const PROFILE: &str = "Make changes to your profile here. Click save when you're done.";
 
 pub fn dialog(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
-        column(section(
-            "Modal dialog",
-            Dialog::new("Edit profile", "Edit profile", PROFILE, open.binding()).with(profile),
-        ))
+        let dialog = Configured::custom(ControlKind::Dialog, |env| {
+            let title = text(env, "dialog.edit_profile");
+            let dialog = controls::Dialog::new(&title, &title, text(env, "dialog.profile"));
+            profile(env, dialog)
+        });
+        column(section(t!("dialog.caption"), dialog.open(open.binding())))
     })
 }
 
 const SIDES: [(SheetSide, &str); 4] = [
-    (SheetSide::Top, "Top"),
-    (SheetSide::Right, "Right"),
-    (SheetSide::Bottom, "Bottom"),
-    (SheetSide::Left, "Left"),
+    (SheetSide::Top, "sheet.top"),
+    (SheetSide::Right, "sheet.right"),
+    (SheetSide::Bottom, "sheet.bottom"),
+    (SheetSide::Left, "sheet.left"),
 ];
 
 pub fn sheet(_: &PageCx) -> AnyView {
@@ -134,10 +144,19 @@ pub fn sheet(_: &PageCx) -> AnyView {
             .into_iter()
             .map(|(side, label)| {
                 let open = cx.state(false);
-                Dialog::sheet(side, label, "Edit profile", PROFILE, open.binding()).with(profile)
+                Configured::custom(ControlKind::Sheet, move |env| {
+                    let sheet = controls::Dialog::sheet(
+                        side,
+                        text(env, label),
+                        text(env, "dialog.edit_profile"),
+                        text(env, "dialog.profile"),
+                    );
+                    profile(env, sheet)
+                })
+                .open(open.binding())
             })
             .collect();
-        column(section("Sides", row(sheets)))
+        column(section(t!("sheet.caption"), row(sheets)))
     })
 }
 
@@ -147,47 +166,44 @@ pub fn drawer(_: &PageCx) -> AnyView {
             .into_iter()
             .map(|(side, label)| {
                 let open = cx.state(false);
-                Dialog::drawer(
-                    side,
-                    label,
-                    "Move goal",
-                    "Set your daily activity goal.",
-                    open.binding(),
-                )
-                .with(|drawer| {
-                    drawer
-                        .with_action("Submit", ButtonVariant::Default)
-                        .with_action("Cancel", ButtonVariant::Outline)
+                Configured::custom(ControlKind::Drawer, move |env| {
+                    controls::Dialog::drawer(
+                        side,
+                        text(env, label),
+                        text(env, "drawer.title"),
+                        text(env, "drawer.description"),
+                    )
+                    .with_action(text(env, "drawer.submit"), ButtonVariant::Default)
+                    .with_action(text(env, "dialog.cancel"), ButtonVariant::Outline)
                 })
+                .open(open.binding())
             })
             .collect();
-        column(section(
-            "Directions; drag toward the edge to dismiss",
-            row(drawers),
-        ))
+        column(section(t!("drawer.caption"), row(drawers)))
     })
 }
 
-fn commands() -> Vec<(String, Vec<CommandItem>)> {
+fn commands(env: &Env) -> Vec<(String, Vec<CommandItem>)> {
+    let text = |key: &str| text(env, key);
     vec![
         (
-            "Suggestions".to_string(),
+            text("command.suggestions"),
             vec![
-                CommandItem::new("Calendar").with_icon(Icon::Calendar),
-                CommandItem::new("Search Emoji").with_icon(Icon::Search),
-                CommandItem::new("Calculator").disabled(),
+                CommandItem::new(text("command.calendar")).with_icon(Icon::Calendar),
+                CommandItem::new(text("command.search_emoji")).with_icon(Icon::Search),
+                CommandItem::new(text("command.calculator")).disabled(),
             ],
         ),
         (
-            "Settings".to_string(),
+            text("command.settings"),
             vec![
-                CommandItem::new("Profile")
+                CommandItem::new(text("command.profile"))
                     .with_icon(Icon::User)
                     .with_shortcut("⌘P"),
-                CommandItem::new("Billing")
+                CommandItem::new(text("command.billing"))
                     .with_icon(Icon::Mail)
                     .with_shortcut("⌘B"),
-                CommandItem::new("Settings")
+                CommandItem::new(text("command.settings"))
                     .with_icon(Icon::Settings)
                     .with_shortcut("⌘S"),
             ],
@@ -196,21 +212,34 @@ fn commands() -> Vec<(String, Vec<CommandItem>)> {
 }
 
 pub fn command(_: &PageCx) -> AnyView {
-    let empty = |command: controls::Command| command.with_empty("No results found.");
+    let empty =
+        |env: &Env, command: controls::Command| command.with_empty(text(env, "command.empty"));
     column((
         section(
-            "Inline",
-            Command::new("Commands", "Type a command or search…", commands()).with(empty),
+            t!("command.inline"),
+            Configured::custom(ControlKind::Command, move |env| {
+                empty(
+                    env,
+                    controls::Command::new(
+                        text(env, "command.name"),
+                        text(env, "command.placeholder"),
+                        commands(env),
+                    ),
+                )
+            }),
         ),
         section(
-            "Dialog",
-            Configured::custom(ControlKind::Command, move |_| {
-                empty(controls::Command::dialog(
-                    "Open command palette",
-                    "Commands",
-                    "Type a command or search…",
-                    commands(),
-                ))
+            t!("command.dialog"),
+            Configured::custom(ControlKind::Command, move |env| {
+                empty(
+                    env,
+                    controls::Command::dialog(
+                        text(env, "command.open_palette"),
+                        text(env, "command.name"),
+                        text(env, "command.placeholder"),
+                        commands(env),
+                    ),
+                )
             }),
         ),
     ))

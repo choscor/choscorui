@@ -1,9 +1,10 @@
 //! Keyboard navigation: mnemonics and default/cancel dialog keys.
 
 use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Cx, Frame, HStack, HorizontalAlignment, Input, State, Text, Textarea, VStack,
-    View, ViewExt,
+    AnyView, Button, Cx, Env, Frame, HStack, HorizontalAlignment, Input, State, Text, TextContent,
+    Textarea, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, CommandId, CommandRegistry, CommandState, DialogKeys, ShortcutModifiers,
@@ -11,8 +12,20 @@ use choscorui::controls::{
 };
 use choscorui::core::{ColorRole, Key, KeyEvent, Space, TextPreset};
 
-/// Labels with mnemonics; `&P` is shared, so pressing it cycles focus.
-const MNEMONIC_LABELS: [&str; 5] = ["&Save", "Save &As…", "&Print", "&Preview", "Fish && Chips"];
+/// The translation of `key`, for strings that state keeps.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+/// Catalog keys of labels with mnemonics; in English `&P` is shared, so
+/// pressing it cycles focus.
+const MNEMONIC_LABELS: [&str; 5] = [
+    "mnemonics.save",
+    "mnemonics.save_as",
+    "mnemonics.print",
+    "mnemonics.preview",
+    "mnemonics.fish",
+];
 
 /// The chord that presses a mnemonic.
 const MNEMONIC_CHORD: ShortcutModifiers = ShortcutModifiers {
@@ -42,9 +55,14 @@ struct Mnemonic {
     focused: State<bool>,
 }
 
+/// The status after activating the button labeled `label`.
+fn activated(env: &Env, label: &str) -> String {
+    env.text("mnemonics.activated", &[("label", label)])
+}
+
 /// Presses Control-Option-`letter` among `buttons`: the status says what
 /// it activated or focused.
-fn press(buttons: &[Mnemonic], letter: char, last: State<String>) {
+fn press(env: &Env, buttons: &[Mnemonic], letter: char, last: State<String>) {
     let matches: Vec<&Mnemonic> = buttons
         .iter()
         .filter(|button| button.letter == Some(letter))
@@ -62,19 +80,20 @@ fn press(buttons: &[Mnemonic], letter: char, last: State<String>) {
     };
     hit.focused.set(true);
     last.set(if activate {
-        format!("Activated “{}”", hit.label)
+        activated(env, &hit.label)
     } else {
-        format!("Focused “{}”; press again for the next match", hit.label)
+        env.text("mnemonics.focused", &[("label", &hit.label)])
     });
 }
 
 impl View for MnemonicsPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state("Press Control-Option and a letter (S, A, P, or F).".to_owned());
+        let env = cx.env().clone();
+        let last = cx.state(text(&env, "mnemonics.prompt"));
         let buttons: Vec<Mnemonic> = MNEMONIC_LABELS
             .iter()
-            .map(|label| {
-                let (label, letter) = parse_mnemonic(label);
+            .map(|key| {
+                let (label, letter) = parse_mnemonic(&text(&env, key));
                 Mnemonic {
                     label,
                     letter,
@@ -86,9 +105,9 @@ impl View for MnemonicsPage {
             buttons
                 .iter()
                 .map(|button| {
-                    let label = button.label.clone();
+                    let (env, label) = (env.clone(), button.label.clone());
                     Button::new(button.label.clone(), move || {
-                        last.set(format!("Activated “{label}”"));
+                        last.set(activated(&env, &label));
                     })
                     .variant(ButtonVariant::Outline)
                     .focused(button.focused.binding())
@@ -107,9 +126,9 @@ impl View for MnemonicsPage {
         letters.dedup();
         let page = column((row, status(last)));
         letters.into_iter().fold(page.into_any(), |page, letter| {
-            let buttons = buttons.clone();
+            let (env, buttons) = (env.clone(), buttons.clone());
             page.keyboard_shortcut(Key::Character(letter), MNEMONIC_CHORD, move || {
-                press(&buttons, letter, last);
+                press(&env, &buttons, letter, last);
             })
             .into_any()
         })
@@ -140,8 +159,8 @@ struct Form {
 impl Form {
     /// Routes a key as the dialog would: the default or cancel command
     /// runs, the note takes Return as a line break, and a disabled OK
-    /// consumes Return.
-    fn route(self, key: Key, modifiers: ShortcutModifiers) {
+    /// consumes Return. The status is in `env`.
+    fn route(self, env: &Env, key: Key, modifiers: ShortcutModifiers) {
         let mut commands = CommandRegistry::new();
         for command in [OK, CANCEL] {
             let _ = commands.insert(command, CommandState::default());
@@ -154,44 +173,44 @@ impl Form {
         let in_note = self.in_note.get();
         let event = KeyEvent::Down { key, repeat: false };
         match keys.route(event, modifiers, in_note, &commands) {
-            Some(command) => self.run(command),
+            Some(command) => self.run(env, command),
             None if key == Key::Enter && in_note => self.note.update(|note| note.push('\n')),
             None if key == Key::Enter && !self.ok_enabled.get() => {
-                self.last.set("Return ignored: OK is disabled".into());
+                self.last.set(text(env, "dialog-keys.return_ignored"));
             }
             None => {}
         }
     }
 
-    fn run(self, command: CommandId) {
+    fn run(self, env: &Env, command: CommandId) {
         self.last.set(if command == OK {
-            format!("OK: saved “{}”", self.name.get())
+            env.text("dialog-keys.saved", &[("name", &self.name.get())])
         } else {
-            "Cancelled".into()
+            text(env, "dialog-keys.cancelled")
         });
     }
 
-    fn toggle_ok(self) {
+    fn toggle_ok(self, env: &Env) {
         let enabled = !self.ok_enabled.get();
         self.ok_enabled.set(enabled);
         self.last.set(if enabled {
-            "OK enabled".into()
+            text(env, "dialog-keys.ok_enabled")
         } else {
-            "OK disabled: Return is consumed but does nothing".into()
+            text(env, "dialog-keys.ok_disabled")
         });
     }
 }
 
 /// A caption above a field. It repeats the field's name, so assistive
 /// technology skips it.
-fn field_caption(text: &str) -> impl View {
-    Text::new(text.to_owned())
+fn field_caption(text: impl Into<TextContent>) -> impl View {
+    Text::new(text.into())
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
         .accessibility_hidden(true)
 }
 
-fn labeled(caption: &str, field: impl View) -> impl View {
+fn labeled(caption: impl Into<TextContent>, field: impl View) -> impl View {
     VStack::new((field_caption(caption), field))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S1)
@@ -199,32 +218,41 @@ fn labeled(caption: &str, field: impl View) -> impl View {
 
 impl View for DialogKeysPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let env = cx.env().clone();
         let form = Form {
             name: cx.state("Lựu".to_owned()),
             note: cx.state(String::new()),
             in_note: cx.state(false),
             ok_enabled: cx.state(true),
-            last: cx.state("Press Return or Escape.".to_owned()),
+            last: cx.state(text(&env, "dialog-keys.prompt")),
         };
         let fields = (
             labeled(
-                "Name",
-                Input::new("Name", form.name.binding()).frame(Frame::new().width(320.0)),
+                t!("dialog-keys.name"),
+                Input::new(t!("dialog-keys.name"), form.name.binding())
+                    .frame(Frame::new().width(320.0)),
             ),
             labeled(
-                "Note (Return inserts a line here)",
-                Textarea::new("Note", form.note.binding())
+                t!("dialog-keys.note_caption"),
+                Textarea::new(t!("dialog-keys.note"), form.note.binding())
                     .focused(form.in_note.binding())
                     .frame(Frame::size(320.0, 80.0)),
             ),
         );
         let ok_enabled = form.ok_enabled;
+        let on = |action: fn(Form, &Env)| {
+            let env = env.clone();
+            move || action(form, &env)
+        };
         let buttons = HStack::new((
-            Button::new("Cancel", move || form.run(CANCEL))
-                .variant(ButtonVariant::Outline)
-                .accessibility_hint("Cancel button (Escape)".to_owned()),
+            Button::new(
+                t!("dialog-keys.cancel"),
+                on(|form, env| form.run(env, CANCEL)),
+            )
+            .variant(ButtonVariant::Outline)
+            .accessibility_hint(text(&env, "dialog-keys.cancel_hint")),
             // The default button takes the primary look while it can run.
-            Button::new("OK", move || form.run(OK))
+            Button::new(t!("dialog-keys.ok"), on(|form, env| form.run(env, OK)))
                 .variant(move || {
                     if ok_enabled.get() {
                         ButtonVariant::Default
@@ -233,16 +261,16 @@ impl View for DialogKeysPage {
                     }
                 })
                 .disabled(move || !ok_enabled.get())
-                .accessibility_hint("Default button (Return)".to_owned()),
+                .accessibility_hint(text(&env, "dialog-keys.ok_hint")),
             Button::new(
                 move || {
                     if ok_enabled.get() {
-                        "Disable OK"
+                        t!("dialog-keys.disable_ok")
                     } else {
-                        "Enable OK"
+                        t!("dialog-keys.enable_ok")
                     }
                 },
-                move || form.toggle_ok(),
+                on(Form::toggle_ok),
             )
             .variant(ButtonVariant::Outline),
         ))
@@ -252,12 +280,18 @@ impl View for DialogKeysPage {
             command: true,
             ..plain
         };
+        let route = |key: Key, modifiers: ShortcutModifiers| {
+            let env = env.clone();
+            move || form.route(&env, key, modifiers)
+        };
         column((fields, buttons, status(form.last)))
-            .keyboard_shortcut(Key::Enter, plain, move || form.route(Key::Enter, plain))
-            .keyboard_shortcut(Key::Escape, plain, move || form.route(Key::Escape, plain))
-            .keyboard_shortcut(Key::Character('.'), command, move || {
-                form.route(Key::Character('.'), command);
-            })
+            .keyboard_shortcut(Key::Enter, plain, route(Key::Enter, plain))
+            .keyboard_shortcut(Key::Escape, plain, route(Key::Escape, plain))
+            .keyboard_shortcut(
+                Key::Character('.'),
+                command,
+                route(Key::Character('.'), command),
+            )
     }
 }
 

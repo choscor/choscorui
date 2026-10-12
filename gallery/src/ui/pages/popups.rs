@@ -1,7 +1,10 @@
 //! Popups: a command-backed popup menu with a submenu, and hover tooltips.
 
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
-use choscorui::compose::view::{AnyView, Button, Configured, HStack, State, Text, View, ViewExt};
+use choscorui::compose::t;
+use choscorui::compose::view::{
+    AnyView, Button, Configured, Env, HStack, State, Text, View, ViewExt,
+};
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
     CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext,
@@ -21,44 +24,50 @@ const PASTE: CommandId = CommandId(3);
 const WRAP: CommandId = CommandId(4);
 const EMAIL: CommandId = CommandId(5);
 
-fn menu_items() -> Vec<MenuItem> {
-    let with_shortcut = |label: &str, command, shortcut: &str| {
-        MenuItem::action(label, command).with_shortcut(shortcut)
+/// The translation of `key`, for strings that controls keep.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+fn menu_items(env: &Env) -> Vec<MenuItem> {
+    let with_shortcut = |key: &str, command, shortcut: &str| {
+        MenuItem::action(text(env, key), command).with_shortcut(shortcut)
     };
     vec![
-        with_shortcut("Cut", CUT, "⌘X"),
-        with_shortcut("Copy", COPY, "⌘C"),
-        with_shortcut("Paste (nothing copied)", PASTE, "⌘V"),
+        with_shortcut("dropdown-menu.cut", CUT, "⌘X"),
+        with_shortcut("dropdown-menu.copy", COPY, "⌘C"),
+        with_shortcut("dropdown-menu.paste_nothing", PASTE, "⌘V"),
         MenuItem::Separator,
-        MenuItem::action("Wrap long lines", WRAP).with_check(MenuCheck::Checkbox),
+        MenuItem::action(text(env, "dropdown-menu.wrap"), WRAP).with_check(MenuCheck::Checkbox),
         MenuItem::submenu(
-            "Share",
+            text(env, "dropdown-menu.share"),
             vec![
-                MenuItem::action("Email", EMAIL),
-                MenuItem::action("Messages", CommandId(6)),
+                MenuItem::action(text(env, "dropdown-menu.email"), EMAIL),
+                MenuItem::action(text(env, "dropdown-menu.messages"), CommandId(6)),
             ],
         ),
     ]
 }
 
 /// The readout for a chosen command.
-fn chose(command: CommandId) -> String {
-    let name = match command {
-        CUT => "Cut",
-        COPY => "Copy",
-        PASTE => "Paste",
-        WRAP => "Wrap long lines",
-        EMAIL => "Share › Email",
-        _ => "Share › Messages",
+fn chose(env: &Env, command: CommandId) -> String {
+    let key = match command {
+        CUT => "dropdown-menu.cut",
+        COPY => "dropdown-menu.copy",
+        PASTE => "dropdown-menu.paste",
+        WRAP => "dropdown-menu.wrap",
+        EMAIL => "dropdown-menu.share_email",
+        _ => "dropdown-menu.share_messages",
     };
-    format!("Chose “{name}”")
+    env.text("dropdown-menu.chose", &[("name", &text(env, key))])
 }
 
 /// The Edit menu: Paste is disabled and Wrap shows `wrap`. A choice
-/// updates `last` and closes the menu, as Escape does.
-fn edit_menu(wrap: State<bool>, last: State<String>, open: State<bool>) -> impl View {
-    Configured::custom(ControlKind::Menu, move |_| {
-        let mut menu = DropdownMenu::new(menu_items()).hosted("Edit");
+/// updates `last` with a readout in `env` and closes the menu, as Escape
+/// does.
+fn edit_menu(env: Env, wrap: State<bool>, last: State<String>, open: State<bool>) -> impl View {
+    Configured::custom(ControlKind::Menu, move |env| {
+        let mut menu = DropdownMenu::new(menu_items(env)).hosted(text(env, "dropdown-menu.edit"));
         let disabled = CommandState {
             enabled: false,
             checked: false,
@@ -75,7 +84,7 @@ fn edit_menu(wrap: State<bool>, last: State<String>, open: State<bool>) -> impl 
         if command == WRAP {
             wrap.update(|on| *on = !*on);
         }
-        last.set(chose(command));
+        last.set(chose(&env, command));
         open.set(false);
     })
     .on_dismiss(move || open.set(false))
@@ -87,11 +96,14 @@ pub fn dropdown_menu(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
         let wrap = cx.state(true);
-        let last = cx.state("Click the button or press Space on it.".to_owned());
+        let env = cx.env().clone();
+        let last = cx.state(text(&env, "dropdown-menu.prompt"));
         column((
-            Button::new("Edit ▾", move || open.set(true))
+            Button::new(t!("dropdown-menu.trigger"), move || open.set(true))
                 .variant(ButtonVariant::Outline)
-                .popover(open.binding(), move || edit_menu(wrap, last, open)),
+                .popover(open.binding(), move || {
+                    edit_menu(env.clone(), wrap, last, open)
+                }),
             Text::new(move || last.get())
                 .text_style(TextPreset::Small)
                 .foreground(ColorRole::MutedForeground),
@@ -100,9 +112,9 @@ pub fn dropdown_menu(_: &PageCx) -> AnyView {
 }
 
 const TIPS: [(&str, &str); 3] = [
-    ("Bold", "Make the selection bold (⌘B)"),
-    ("Italic", "Make the selection italic (⌘I)"),
-    ("Underline", "Underline the selection (⌘U)"),
+    ("tooltip.bold", "tooltip.bold_tip"),
+    ("tooltip.italic", "tooltip.italic_tip"),
+    ("tooltip.underline", "tooltip.underline_tip"),
 ];
 
 /// A button with a hover tooltip. The buttons of a page share one
@@ -110,7 +122,7 @@ const TIPS: [(&str, &str); 3] = [
 /// period.
 struct TipButton {
     button: controls::Button,
-    tip: &'static str,
+    tip: String,
     tips: Rc<RefCell<TooltipController>>,
     /// The node, from the first event.
     node: Option<NodeId>,
@@ -121,7 +133,7 @@ struct TipButton {
 }
 
 impl TipButton {
-    fn new(label: &str, tip: &'static str, tips: Rc<RefCell<TooltipController>>) -> Self {
+    fn new(label: String, tip: String, tips: Rc<RefCell<TooltipController>>) -> Self {
         Self {
             button: controls::Button::new(label, CommandId(0)).with_variant(ButtonVariant::Outline),
             tip,
@@ -163,7 +175,7 @@ impl CustomControl for TipButton {
             let mut tips = self.tips.borrow_mut();
             match event {
                 ControlEvent::Hover(true) => {
-                    tips.hover(cx.node(), self.tip, cx.bounds(), now);
+                    tips.hover(cx.node(), &self.tip, cx.bounds(), now);
                     self.due = tips.poll(now).map(|due| due.as_secs_f64());
                 }
                 ControlEvent::Hover(false) => {
@@ -213,7 +225,7 @@ impl CustomControl for TipButton {
 
     fn semantics(&self) -> SemanticNode {
         let mut node = CustomControl::semantics(&self.button);
-        node.description = self.tip.into();
+        node.description = self.tip.clone();
         node
     }
 
@@ -245,15 +257,15 @@ pub fn tooltip(_: &PageCx) -> AnyView {
     let tips = Rc::new(RefCell::new(TooltipController::new()));
     let buttons: Vec<_> = TIPS
         .iter()
-        .map(|(label, tip)| {
+        .map(|&(label, tip)| {
             let tips = tips.clone();
-            Configured::custom(ControlKind::Button, move |_| {
-                TipButton::new(label, tip, tips.clone())
+            Configured::custom(ControlKind::Button, move |env| {
+                TipButton::new(text(env, label), text(env, tip), tips.clone())
             })
         })
         .collect();
     column((
-        caption("Hover a button and wait; move to the next one to see the grace period."),
+        caption(t!("tooltip.caption")),
         HStack::new(buttons).spacing(Space::S3),
     ))
 }
