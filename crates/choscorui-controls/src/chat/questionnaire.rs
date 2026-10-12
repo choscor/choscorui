@@ -313,11 +313,37 @@ impl Questionnaire {
         cx.request_semantics();
     }
 
-    fn go(&mut self, cx: &mut ControlContext<'_>, question: usize) {
+    /// Shows `question` with the focus on its answer.
+    fn move_to(&mut self, question: usize) {
         self.current = question;
         self.invalid = false;
         self.choice = self.picked[question].first().copied().unwrap_or(0);
         self.focus = Stop::Answer;
+    }
+
+    /// Replaces the picks of the current question. Rejects an option past
+    /// the options, more than one pick of a single choice, and a freeform
+    /// question.
+    fn set_picked(&mut self, indices: &[usize]) -> bool {
+        let Some(Answer::Choices { options, multiple }) =
+            self.question().map(|question| &question.answer)
+        else {
+            return false;
+        };
+        let mut picked = indices.to_vec();
+        picked.sort_unstable();
+        picked.dedup();
+        if picked.iter().any(|index| *index >= options.len()) || (!multiple && picked.len() > 1) {
+            return false;
+        }
+        self.choice = picked.first().copied().unwrap_or(self.choice);
+        self.picked[self.current] = picked;
+        self.invalid = false;
+        true
+    }
+
+    fn go(&mut self, cx: &mut ControlContext<'_>, question: usize) {
+        self.move_to(question);
         cx.emit(ControlMessage::Changed(ControlValue::Index(Some(question))));
         cx.request_layout();
         cx.request_paint();
@@ -826,6 +852,26 @@ impl CustomControl for Questionnaire {
         self.enabled = enabled;
         for editor in self.editors.iter_mut().flatten() {
             editor.field.set_enabled_state(enabled);
+        }
+    }
+
+    /// Takes `Index` to show a question, `Indices` for the picks of a
+    /// choice question, or `Text` for the answer of a freeform question.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Index(Some(question)) if *question < self.questions.len() => {
+                self.move_to(*question);
+                true
+            }
+            ControlValue::Indices(indices) => self.set_picked(indices),
+            ControlValue::Text(_) => match self.editors.get_mut(self.current) {
+                Some(Some(editor)) => {
+                    self.invalid = false;
+                    editor.set_text(value)
+                }
+                _ => false,
+            },
+            _ => false,
         }
     }
 }

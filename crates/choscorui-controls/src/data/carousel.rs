@@ -145,23 +145,32 @@ impl Carousel {
         self.from + (self.current as f64 - self.from) * eased
     }
 
-    /// Shows `slide`, animating from the scroll position `from`.
-    fn show(&mut self, cx: &mut ControlContext<'_>, slide: usize, from: f64) {
+    /// Moves to `slide`, animating from the scroll position `from` at
+    /// `time`. Returns true when the slide changed.
+    fn move_to(&mut self, slide: usize, from: f64, time: f64) -> bool {
         let slide = slide.min(self.last());
         self.from = from;
-        self.changed_at = cx.time();
+        self.changed_at = time;
         self.free = None;
         self.snap_at = None;
-        if slide != self.current {
-            self.current = slide;
-            cx.emit(ControlMessage::Changed(ControlValue::Index(Some(slide))));
-            cx.request_semantics();
-        }
+        let changed = slide != self.current;
+        self.current = slide;
         if !self.can(self.focus) {
             self.focus = match self.focus {
                 Button::Previous => Button::Next,
                 Button::Next => Button::Previous,
             };
+        }
+        changed
+    }
+
+    /// Shows `slide`, animating from the scroll position `from`.
+    fn show(&mut self, cx: &mut ControlContext<'_>, slide: usize, from: f64) {
+        if self.move_to(slide, from, cx.time()) {
+            cx.emit(ControlMessage::Changed(ControlValue::Index(Some(
+                self.current,
+            ))));
+            cx.request_semantics();
         }
         cx.request_paint();
     }
@@ -568,5 +577,18 @@ impl CustomControl for Carousel {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    /// Takes `Index`, the first visible slide, and shows it without an
+    /// animation. Rejects no slide and a slide past the last first slide.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Index(Some(slide)) = *value else {
+            return false;
+        };
+        if slide > self.last() {
+            return false;
+        }
+        self.move_to(slide, slide as f64, f64::NEG_INFINITY);
+        true
     }
 }

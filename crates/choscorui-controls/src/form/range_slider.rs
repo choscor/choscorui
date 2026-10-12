@@ -344,4 +344,17 @@ impl CustomControl for RangeSlider {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Range`, clamped to the bounds and snapped to the step.
+    /// Rejects a value that is not finite and a low value above the high.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Range(low, high) = *value else {
+            return false;
+        };
+        if !low.is_finite() || !high.is_finite() || low > high {
+            return false;
+        }
+        self.values = [self.snap(low), self.snap(high)];
+        true
+    }
 }

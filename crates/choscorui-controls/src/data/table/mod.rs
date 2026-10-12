@@ -377,7 +377,8 @@ impl DataTable {
         }
     }
 
-    fn open_menu(&mut self, cx: &mut ControlContext<'_>, keyboard: bool) {
+    /// Opens the column menu below its button at `time`.
+    fn show_menu(&mut self, time: f64, keyboard: bool) {
         let button = self.geometry.columns;
         let width = self.menu_width();
         let x = if self.rtl {
@@ -386,7 +387,11 @@ impl DataTable {
             button.max_x() - width
         };
         self.menu
-            .open(Point::new(x, button.max_y() + 4.0), cx.time(), keyboard);
+            .open(Point::new(x, button.max_y() + 4.0), time, keyboard);
+    }
+
+    fn open_menu(&mut self, cx: &mut ControlContext<'_>, keyboard: bool) {
+        self.show_menu(cx.time(), keyboard);
         cx.emit(ControlMessage::OpenChanged(true));
         cx.request_paint();
         cx.request_semantics();
@@ -490,10 +495,11 @@ impl DataTable {
         (reply == EventReply::Stop).then_some(EventReply::Stop)
     }
 
-    /// Applies the filter text when it changed.
-    fn refilter(&mut self, cx: &mut ControlContext<'_>) {
+    /// Applies the filter text when it changed. Returns true when it
+    /// changed.
+    fn apply_filter(&mut self) -> bool {
         let Some((editor, column)) = &self.filter else {
-            return;
+            return false;
         };
         let value = editor.field.value().to_string();
         let current = self
@@ -501,7 +507,7 @@ impl DataTable {
             .filter()
             .map_or("", |filter| filter.pattern.as_str());
         if value == current {
-            return;
+            return false;
         }
         let filter = (!value.is_empty()).then(|| TextFilter {
             column: *column,
@@ -511,9 +517,15 @@ impl DataTable {
         self.page = 0;
         self.sync();
         self.cell.row = None;
-        cx.request_layout();
-        cx.request_paint();
-        cx.request_semantics();
+        true
+    }
+
+    fn refilter(&mut self, cx: &mut ControlContext<'_>) {
+        if self.apply_filter() {
+            cx.request_layout();
+            cx.request_paint();
+            cx.request_semantics();
+        }
     }
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
@@ -830,5 +842,44 @@ impl CustomControl for DataTable {
         if !enabled {
             self.menu.reveal = Default::default();
         }
+    }
+
+    /// Takes `Indices`, the selected source rows, or `Text` for the
+    /// filter input. Rejects a row past the model.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Indices(rows) => {
+                let keys: Option<Vec<_>> =
+                    rows.iter().map(|row| self.model.key(None, *row)).collect();
+                let Some(keys) = keys else {
+                    return false;
+                };
+                self.selection.clear();
+                self.selection.select_all(&keys);
+                true
+            }
+            ControlValue::Text(_) => {
+                let Some((editor, _)) = self.filter.as_mut() else {
+                    return false;
+                };
+                editor.set_text(value);
+                self.apply_filter();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Opens or closes the column menu.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if self.columns_label.is_none() || (open && !self.enabled) {
+            return false;
+        }
+        if !open {
+            self.menu.close(time);
+        } else if !self.menu.is_open() {
+            self.show_menu(time, true);
+        }
+        true
     }
 }

@@ -156,6 +156,15 @@ impl CustomControl for Toggle {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Bool`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Bool(on) = value else {
+            return false;
+        };
+        self.on = *on;
+        true
+    }
 }
 
 /// One item of a [`ToggleGroup`].
@@ -547,5 +556,19 @@ impl CustomControl for ToggleGroup {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    /// Takes `Indices`. Rejects an index past the items, and more than
+    /// one index in a single-choice group.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Indices(indices) = value else {
+            return false;
+        };
+        let fits = indices.iter().all(|index| *index < self.items.len())
+            && (self.multiple || indices.len() <= 1);
+        if fits {
+            self.set_selected(indices);
+        }
+        fits
     }
 }

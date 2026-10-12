@@ -183,14 +183,23 @@ impl Dialog {
         }
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    /// Opens or closes the dialog at `time` and ends a press or drag.
+    /// Returns true when it changed.
+    fn apply_open(&mut self, open: bool, time: f64) -> bool {
         self.drag = None;
         self.pressed = None;
         if self.reveal.open == open {
+            return false;
+        }
+        self.reveal.set(open, time);
+        self.focus = 0;
+        true
+    }
+
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if !self.apply_open(open, cx.time()) {
             return;
         }
-        self.reveal.set(open, cx.time());
-        self.focus = 0;
         if open {
             cx.request_focus();
         }
@@ -200,14 +209,14 @@ impl Dialog {
     }
 
     fn dismiss(&mut self, cx: &mut ControlContext<'_>) {
-        self.set_open(cx, false);
+        self.change_open(cx, false);
         cx.emit(ControlMessage::Dismissed);
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, part: usize) {
         if part < self.buttons.buttons.len() {
             cx.emit(ControlMessage::ItemActivated(part));
-            self.set_open(cx, false);
+            self.change_open(cx, false);
         } else if self.has_close() {
             self.dismiss(cx);
         }
@@ -472,7 +481,7 @@ impl CustomControl for Dialog {
         }
         let outcome = self.trigger_press.event(cx, event);
         if let PressOutcome::Activated(_) = outcome {
-            self.set_open(cx, true);
+            self.change_open(cx, true);
         }
         hosted::reply(outcome)
     }
@@ -564,7 +573,7 @@ impl CustomControl for Dialog {
                 true
             }
             SemanticAction::Activate => {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
                 true
             }
             SemanticAction::Dismiss => {
@@ -586,6 +595,14 @@ impl CustomControl for Dialog {
             self.drag = None;
             self.pressed = None;
         }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if open && !self.enabled {
+            return false;
+        }
+        self.apply_open(open, time);
+        true
     }
 }
 

@@ -80,7 +80,7 @@ impl Collapsible {
         }
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
         if open == self.reveal.open {
             return;
         }
@@ -149,7 +149,7 @@ impl CustomControl for Collapsible {
         let outcome = self.press.event(cx, event);
         match outcome {
             PressOutcome::Activated(Some(point)) if !toggle.contains(point) => {}
-            PressOutcome::Activated(_) => self.set_open(cx, !self.reveal.open),
+            PressOutcome::Activated(_) => self.change_open(cx, !self.reveal.open),
             _ => {}
         }
         hosted::reply(outcome)
@@ -233,9 +233,9 @@ impl CustomControl for Collapsible {
         _value: Option<&str>,
     ) -> bool {
         match action {
-            SemanticAction::Activate => self.set_open(cx, !self.reveal.open),
-            SemanticAction::Expand if !self.reveal.open => self.set_open(cx, true),
-            SemanticAction::Collapse if self.reveal.open => self.set_open(cx, false),
+            SemanticAction::Activate => self.change_open(cx, !self.reveal.open),
+            SemanticAction::Expand if !self.reveal.open => self.change_open(cx, true),
+            SemanticAction::Collapse if self.reveal.open => self.change_open(cx, false),
             SemanticAction::Focus => cx.request_focus(),
             _ => return false,
         }
@@ -244,5 +244,10 @@ impl CustomControl for Collapsible {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        self.reveal.set(open, time);
+        true
     }
 }

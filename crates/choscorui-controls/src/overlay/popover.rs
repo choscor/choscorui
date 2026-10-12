@@ -96,15 +96,23 @@ impl Popover {
             .state(state)
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    /// Opens or closes the panel at `time` and cancels a hover delay.
+    /// Returns true when it changed.
+    fn apply_open(&mut self, open: bool, time: f64) -> bool {
         self.deadline = None;
         if self.reveal.open == open {
-            return;
+            return false;
         }
-        self.reveal.set(open, cx.time());
-        cx.emit(ControlMessage::OpenChanged(open));
-        cx.request_paint();
-        cx.request_semantics();
+        self.reveal.set(open, time);
+        true
+    }
+
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if self.apply_open(open, cx.time()) {
+            cx.emit(ControlMessage::OpenChanged(open));
+            cx.request_paint();
+            cx.request_semantics();
+        }
     }
 
     /// Starts the open or close delay of a hover card.
@@ -165,18 +173,18 @@ impl CustomControl for Popover {
             ControlEvent::Timer => {
                 self.deadline = None;
                 let open = self.hovered;
-                self.set_open(cx, open);
+                self.change_open(cx, open);
                 return EventReply::Stop;
             }
             ControlEvent::Key(choscorui_core::KeyEvent::Down {
                 key: Key::Escape, ..
             }) if self.reveal.open => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
                 return EventReply::Stop;
             }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
             }
             _ => {}
         }
@@ -186,7 +194,7 @@ impl CustomControl for Popover {
                 cx.emit(ControlMessage::Activated);
             } else {
                 let open = !self.reveal.open;
-                self.set_open(cx, open);
+                self.change_open(cx, open);
             }
         }
         hosted::reply(outcome)
@@ -276,15 +284,15 @@ impl CustomControl for Popover {
             }
             SemanticAction::Activate => {
                 let open = !self.reveal.open;
-                self.set_open(cx, open);
+                self.change_open(cx, open);
                 true
             }
             SemanticAction::Expand => {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
                 true
             }
             SemanticAction::Collapse => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 true
             }
             SemanticAction::Focus => {
@@ -302,5 +310,13 @@ impl CustomControl for Popover {
             self.deadline = None;
             self.hovered = false;
         }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if open && !self.enabled {
+            return false;
+        }
+        self.apply_open(open, time);
+        true
     }
 }

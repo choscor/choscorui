@@ -10,8 +10,9 @@ use crate::style::{
 };
 use crate::text_editor::{TextEditor, TextEditorChange, TextEditorInput};
 use choscorui_core::{
-    ColorRole, EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, Size, TextLayout, TypeSpec,
+    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Key, KeyEvent, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, Size, TextLayout, TextSize,
+    Tree, TypeSpec,
 };
 use std::cell::{Cell, RefCell};
 
@@ -79,6 +80,25 @@ impl Textarea {
             self.width.max(1.0),
             measure,
         )
+    }
+
+    /// Replaces the value without a `Changed` message, also while
+    /// disabled.
+    fn replace(&mut self, text: &str) {
+        // The editor takes a value from outside through any live node and
+        // any layout; these exist only for the call.
+        let mut scratch = Tree::new(Rect::default());
+        let node = scratch.root();
+        let spec = self
+            .spec
+            .unwrap_or_else(|| DesignTokens::light().text(TextSize::Sm, FontWeight::REGULAR));
+        let layout = measured_layout("", &spec, 1.0, &EstimatedText);
+        let enabled = self.editor.is_enabled();
+        self.editor.set_enabled_state(true);
+        let input = TextEditorInput::SetValue(text.to_string());
+        let _ = self.editor.handle(&mut scratch, node, &layout, input);
+        self.editor.set_enabled_state(enabled);
+        *self.layout.borrow_mut() = None;
     }
 
     fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
@@ -293,5 +313,14 @@ impl CustomControl for Textarea {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.editor.set_enabled_state(enabled);
+    }
+
+    /// Takes `Text`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Text(text) = value else {
+            return false;
+        };
+        self.replace(text);
+        true
     }
 }

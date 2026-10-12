@@ -173,18 +173,57 @@ impl NavigationMenu {
         self.links = links;
     }
 
-    fn open_at(&mut self, cx: &mut ControlContext<'_>, item: usize) {
+    /// Shows the panel of `item` at `time` and cancels the hover delays.
+    /// Returns false when the item has no links.
+    fn show(&mut self, item: usize, time: f64) -> bool {
         self.pending = None;
         self.close_at = None;
-        if !self.has_links(item) || self.open == Some(item) {
-            return;
+        if !self.has_links(item) {
+            return false;
+        }
+        if self.open == Some(item) {
+            return true;
         }
         let was_open = self.open.is_some();
         self.open = Some(item);
         self.shown = item;
         self.place_panel(item);
         if !was_open {
-            self.reveal.set(true, cx.time());
+            self.reveal.set(true, time);
+        }
+        true
+    }
+
+    /// Closes the open panel at `time` and cancels the hover delays.
+    /// Returns true when a panel was open.
+    fn hide(&mut self, time: f64) -> bool {
+        self.pending = None;
+        self.close_at = None;
+        let Some(item) = self.open.take() else {
+            return false;
+        };
+        self.reveal.set(false, time);
+        if let Focus::Link(_) = self.focus {
+            self.focus = Focus::Trigger(item);
+        }
+        true
+    }
+
+    /// The item that `Expand` opens: the focused trigger, or the open
+    /// panel's trigger while a link has focus.
+    fn expand_target(&self) -> usize {
+        match self.focus {
+            Focus::Trigger(item) => item,
+            Focus::Link(_) => self.open.unwrap_or(0),
+        }
+    }
+
+    fn open_at(&mut self, cx: &mut ControlContext<'_>, item: usize) {
+        let before = self.open;
+        if !self.show(item, cx.time()) || before == self.open {
+            return;
+        }
+        if before.is_none() {
             cx.emit(ControlMessage::OpenChanged(true));
         }
         cx.request_paint();
@@ -192,13 +231,7 @@ impl NavigationMenu {
     }
 
     fn close(&mut self, cx: &mut ControlContext<'_>) {
-        self.pending = None;
-        self.close_at = None;
-        if let Some(item) = self.open.take() {
-            self.reveal.set(false, cx.time());
-            if let Focus::Link(_) = self.focus {
-                self.focus = Focus::Trigger(item);
-            }
+        if self.hide(cx.time()) {
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
@@ -648,11 +681,7 @@ impl CustomControl for NavigationMenu {
                 true
             }
             SemanticAction::Expand => {
-                let item = match self.focus {
-                    Focus::Trigger(item) => item,
-                    Focus::Link(_) => self.open.unwrap_or(0),
-                };
-                self.open_at(cx, item);
+                self.open_at(cx, self.expand_target());
                 self.open.is_some()
             }
             SemanticAction::Collapse => {
@@ -675,5 +704,14 @@ impl CustomControl for NavigationMenu {
             self.pending = None;
             self.close_at = None;
         }
+    }
+
+    /// Opens the panel of the focused trigger, as `Expand` does.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !open {
+            self.hide(time);
+            return (0..self.items.len()).any(|item| self.has_links(item));
+        }
+        self.enabled && self.show(self.expand_target(), time)
     }
 }

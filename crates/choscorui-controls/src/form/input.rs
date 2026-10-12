@@ -8,7 +8,7 @@ use crate::style::{ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, V
 use crate::text_field::{TextField, TextFieldChange, TextFieldInput, ValidationState};
 use choscorui_core::{
     EventPhase, EventReply, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, Size, grapheme_boundaries,
+    SemanticAction, SemanticNode, Size, Tree, grapheme_boundaries,
 };
 use std::cell::RefCell;
 
@@ -162,13 +162,29 @@ impl Editor {
         true
     }
 
-    /// Replaces the value without a `Changed` message, for a control
-    /// that resets its own search text.
-    pub fn replace(&mut self, cx: &mut ControlContext<'_>, value: &str) {
-        let node = cx.node();
+    /// Replaces the value without a `Changed` message, also while
+    /// disabled. The field drops line breaks. The caller invalidates the
+    /// node.
+    pub fn replace(&mut self, value: &str) {
+        // The field takes a value from outside through any live node; this
+        // one exists only for the call.
+        let mut scratch = Tree::new(Rect::default());
+        let node = scratch.root();
+        let enabled = self.field.is_enabled();
+        self.field.set_enabled_state(true);
         let input = TextFieldInput::SetValue(value.to_string());
-        let _ = self.field.handle(cx.tree_mut(), node, input);
-        cx.request_paint();
+        let _ = self.field.handle(&mut scratch, node, input);
+        self.field.set_enabled_state(enabled);
+    }
+
+    /// Takes `Text` from the application, as
+    /// [`CustomControl::set_value`] describes.
+    pub fn set_text(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Text(text) = value else {
+            return false;
+        };
+        self.replace(text);
+        true
     }
 
     /// Paints the text in `rect` and records where its caret stops are.
@@ -312,5 +328,10 @@ impl CustomControl for Input {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.editor.field.set_enabled_state(enabled);
+    }
+
+    /// Takes `Text`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        self.editor.set_text(value)
     }
 }

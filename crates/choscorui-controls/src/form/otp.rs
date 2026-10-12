@@ -279,4 +279,18 @@ impl CustomControl for InputOtp {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Text`. Rejects text longer than the code, or with a
+    /// character that the code does not accept.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Text(text) = value else {
+            return false;
+        };
+        let value: Vec<char> = text.chars().collect();
+        let fits = value.len() <= self.length() && value.iter().all(|c| self.accepts(*c));
+        if fits {
+            self.value = value;
+        }
+        fits
+    }
 }

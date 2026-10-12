@@ -115,18 +115,31 @@ impl Breadcrumb {
         self.items[self.hidden.clone()].join("\n")
     }
 
+    /// Opens the menu below the ellipsis at `time`. Returns false when no
+    /// item is collapsed or the trail is not arranged yet.
+    fn open_menu(&mut self, time: f64) -> bool {
+        let Some(rect) = self
+            .parts
+            .iter()
+            .find(|(part, _)| *part == Part::Ellipsis)
+            .map(|(_, rect)| *rect)
+        else {
+            return false;
+        };
+        let x = if self.rtl {
+            rect.max_x()
+        } else {
+            rect.origin.x
+        };
+        let anchor = Point::new(x, rect.max_y() + 4.0);
+        self.menu.open(anchor, time, true);
+        true
+    }
+
     fn activate(&mut self, cx: &mut ControlContext<'_>, part: usize) {
         match self.parts.get(part).map(|(part, _)| *part) {
             Some(Part::Link(index)) => cx.emit(ControlMessage::ItemActivated(index)),
-            Some(Part::Ellipsis) => {
-                let rect = self.parts[part].1;
-                let x = if self.rtl {
-                    rect.max_x()
-                } else {
-                    rect.origin.x
-                };
-                let anchor = Point::new(x, rect.max_y() + 4.0);
-                self.menu.open(anchor, cx.time(), true);
+            Some(Part::Ellipsis) if self.open_menu(cx.time()) => {
                 cx.emit(ControlMessage::OpenChanged(true));
             }
             _ => return,
@@ -440,5 +453,17 @@ impl CustomControl for Breadcrumb {
         if !enabled {
             self.menu.reveal = Default::default();
         }
+    }
+
+    /// Opens the ellipsis menu of the collapsed items.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !open {
+            if self.hidden.is_empty() {
+                return false;
+            }
+            self.menu.close(time);
+            return true;
+        }
+        self.enabled && (self.menu.is_open() || self.open_menu(time))
     }
 }

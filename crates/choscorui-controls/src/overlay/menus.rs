@@ -19,6 +19,9 @@ pub struct ContextMenu {
     hint: String,
     popup: MenuPopup,
     enabled: bool,
+    /// The area's center from the last arrange, where the application
+    /// opens the menu.
+    center: Point,
 }
 
 impl ContextMenu {
@@ -28,6 +31,7 @@ impl ContextMenu {
             hint: hint.into(),
             popup: MenuPopup::new(items),
             enabled: true,
+            center: Point::new(0.0, 0.0),
         }
     }
 
@@ -82,9 +86,10 @@ impl CustomControl for ContextMenu {
         }
     }
 
-    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
         self.popup.arrange(cx, content.min_width);
+        self.center = bounds.center();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -211,6 +216,18 @@ impl CustomControl for ContextMenu {
             self.popup.reveal = Default::default();
         }
     }
+
+    /// Opens the menu at the area's center, as `ShowMenu` does.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !open {
+            self.popup.close(time);
+        } else if !self.enabled {
+            return false;
+        } else if !self.popup.is_open() {
+            self.popup.open(self.center, time, true);
+        }
+        true
+    }
 }
 
 /// One menu of a [`Menubar`]: its title and its items.
@@ -292,18 +309,36 @@ impl Menubar {
         Point::new(x, trigger.max_y() + self.offset)
     }
 
-    fn open_at(&mut self, cx: &mut ControlContext<'_>, index: usize, keyboard: bool) {
+    /// Opens menu `index` at `time` and closes another open menu. Returns
+    /// false when the menu or its title rectangle does not exist.
+    fn show(&mut self, index: usize, time: f64, keyboard: bool) -> bool {
         if index >= self.menus.len() || index >= self.triggers.len() {
-            return;
+            return false;
         }
-        let was_open = self.open.is_some();
         if let Some(old) = self.open.filter(|old| *old != index) {
             self.menus[old].popup.close(f64::NEG_INFINITY);
         }
         let anchor = self.anchor(index);
-        self.menus[index].popup.open(anchor, cx.time(), keyboard);
+        self.menus[index].popup.open(anchor, time, keyboard);
         self.open = Some(index);
         self.current = index;
+        true
+    }
+
+    /// Closes the open menu at `time`. Returns true when a menu was open.
+    fn hide(&mut self, time: f64) -> bool {
+        let Some(index) = self.open.take() else {
+            return false;
+        };
+        self.menus[index].popup.close(time);
+        true
+    }
+
+    fn open_at(&mut self, cx: &mut ControlContext<'_>, index: usize, keyboard: bool) {
+        let was_open = self.open.is_some();
+        if !self.show(index, cx.time(), keyboard) {
+            return;
+        }
         if !was_open {
             cx.emit(ControlMessage::OpenChanged(true));
         }
@@ -312,8 +347,7 @@ impl Menubar {
     }
 
     fn close(&mut self, cx: &mut ControlContext<'_>) {
-        if let Some(index) = self.open.take() {
-            self.menus[index].popup.close(cx.time());
+        if self.hide(cx.time()) {
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
@@ -602,5 +636,17 @@ impl CustomControl for Menubar {
                 menu.popup.reveal = Default::default();
             }
         }
+    }
+
+    /// Opens the menu of the current title, as the keyboard does.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !open {
+            self.hide(time);
+            return true;
+        }
+        if !self.enabled {
+            return false;
+        }
+        self.open.is_some() || self.show(self.current, time, true)
     }
 }

@@ -367,4 +367,24 @@ impl CustomControl for Accordion {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Indices`, the open items, and shows them without an
+    /// animation. Rejects an index past the items, and more than one index
+    /// in a single accordion.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Indices(indices) = value else {
+            return false;
+        };
+        let fits = indices.iter().all(|index| *index < self.items.len())
+            && (self.multiple || indices.len() <= 1);
+        if fits {
+            for (index, reveal) in self.reveals.iter_mut().enumerate() {
+                *reveal = Reveal {
+                    open: indices.contains(&index),
+                    ..Reveal::default()
+                };
+            }
+        }
+        fits
+    }
 }

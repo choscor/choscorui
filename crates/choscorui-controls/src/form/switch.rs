@@ -170,4 +170,13 @@ impl CustomControl for Switch {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Bool`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Bool(checked) = value else {
+            return false;
+        };
+        self.checked = *checked;
+        true
+    }
 }

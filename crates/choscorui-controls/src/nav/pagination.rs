@@ -434,6 +434,28 @@ impl CustomControl for Pagination {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
+
+    /// Takes `Index`, the shown page. Rejects no page and a page past the
+    /// last.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Index(Some(page)) = *value else {
+            return false;
+        };
+        if page >= self.pages {
+            return false;
+        }
+        self.current = page;
+        self.place();
+        let stops = self.stops();
+        let shown = self
+            .parts
+            .iter()
+            .position(|(part, _)| *part == Part::Page(page));
+        self.focus = shown
+            .and_then(|shown| stops.iter().position(|stop| *stop == shown))
+            .unwrap_or_else(|| self.focus.min(stops.len().saturating_sub(1)));
+        true
+    }
 }
 
 impl Pagination {

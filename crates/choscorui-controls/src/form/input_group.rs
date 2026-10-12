@@ -1,7 +1,9 @@
 //! A text input with addons: text, icons, and buttons around the text.
 
 use super::input::{Editor, default_width};
-use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
 use crate::style::{
     AddonAlign, Content, ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot, StyleQuery,
     TextAlign, VisualState, content_rect,
@@ -396,5 +398,10 @@ impl CustomControl for InputGroup {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.editor.field.set_enabled_state(enabled);
+    }
+
+    /// Takes `Text`.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        self.editor.set_text(value)
     }
 }

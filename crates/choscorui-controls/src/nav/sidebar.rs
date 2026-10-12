@@ -247,7 +247,7 @@ impl Sidebar {
         );
         let mut parts = Vec::new();
         let mut y = inner.origin.y;
-        if self.collapse != SidebarCollapse::None || self.mobile {
+        if self.collapsible() {
             let side = toggle.min_width.max(toggle.min_height);
             let x = if cx.rtl() {
                 inner.max_x() - header.padding.inline_start - side
@@ -292,19 +292,35 @@ impl Sidebar {
         parts
     }
 
-    fn set_expanded(&mut self, cx: &mut ControlContext<'_>, expanded: bool) {
+    /// True when the sidebar can open and collapse: in a narrow window,
+    /// or with a collapse style.
+    fn collapsible(&self) -> bool {
+        self.mobile || self.collapse != SidebarCollapse::None
+    }
+
+    /// Opens or collapses the sidebar at `time`. Returns true when it
+    /// changed.
+    fn apply_expanded(&mut self, expanded: bool, time: f64) -> bool {
         if self.mobile {
             if self.reveal.open == expanded {
-                return;
+                return false;
             }
-            self.reveal.set(expanded, cx.time());
-            self.focus = 0;
+            self.reveal.set(expanded, time);
         } else {
-            if self.collapse == SidebarCollapse::None || self.expanded == expanded {
-                return;
+            if !self.collapsible() || self.expanded == expanded {
+                return false;
             }
             self.expanded = expanded;
-            self.focus = 0;
+        }
+        self.focus = 0;
+        true
+    }
+
+    fn set_expanded(&mut self, cx: &mut ControlContext<'_>, expanded: bool) {
+        if !self.apply_expanded(expanded, cx.time()) {
+            return;
+        }
+        if !self.mobile {
             cx.request_layout();
         }
         cx.emit(ControlMessage::OpenChanged(expanded));
@@ -618,7 +634,7 @@ impl CustomControl for Sidebar {
     fn semantics(&self) -> SemanticNode {
         let actions = if self.enabled {
             let mut actions = vec![SemanticAction::Activate];
-            if self.collapse != SidebarCollapse::None || self.mobile {
+            if self.collapsible() {
                 actions.push(if self.is_expanded() {
                     SemanticAction::Collapse
                 } else {
@@ -687,5 +703,27 @@ impl CustomControl for Sidebar {
         if !enabled {
             self.reveal = Reveal::default();
         }
+    }
+
+    /// Takes `Index`, the selected item, or no item. Rejects an index
+    /// past the items.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Index(index) = *value else {
+            return false;
+        };
+        let fits = index.is_none_or(|index| self.item(index).is_some());
+        if fits {
+            self.selected = index;
+        }
+        fits
+    }
+
+    /// Opens or collapses the sidebar, or the sheet in a narrow window.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !self.collapsible() || (open && self.mobile && !self.enabled) {
+            return false;
+        }
+        self.apply_expanded(open, time);
+        true
     }
 }

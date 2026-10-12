@@ -772,6 +772,10 @@ this behavior.
 | State | disabled |
 | Actions | `Increment`, `Decrement`, and `Focus` while enabled; they move the active thumb |
 
+`set_value` takes `Range(low, high)` and clamps and snaps it. It rejects a
+value that is not finite, and a low value above the high value. `set_open`
+returns false.
+
 [range_slider.rs](../crates/choscorui-controls/tests/range_slider.rs) pins this behavior.
 
 ### SpinBox
@@ -1513,6 +1517,8 @@ behavior.
 | State | checked, disabled |
 | Actions | `Activate` and `Focus` while enabled |
 
+From the application, `set_value` takes `Bool`. `set_open` returns false.
+
 ### Toggle and ToggleGroup
 
 - **`Toggle`.** A click, Space, or Enter flips the value and emits
@@ -1549,6 +1555,10 @@ behavior.
 
 `SetValue` with an item label flips that item. An unknown label returns
 false.
+
+`Toggle::set_value` takes `Bool`. `ToggleGroup::set_value` takes `Indices`
+and rejects an index past the items, or two indices in a single-selection
+group. `set_open` returns false for both.
 
 ### Kbd
 
@@ -1620,6 +1630,9 @@ extra-small medium text.
 box with the chevron 10 pt inside its 32 pt end padding. Its behavior and
 list are the same.
 
+`set_value` takes `Index` of an enabled option, or `None`. `set_open` opens
+and closes the list, but not while the select is disabled.
+
 [select.rs](../crates/choscorui-controls/tests/select.rs) pins this behavior.
 
 ### Input and InputGroup
@@ -1665,6 +1678,9 @@ list are the same.
 | State | invalid, disabled | invalid, disabled |
 | Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
 
+`set_value` takes `Text`, also while the input is disabled, and drops line
+breaks. `set_open` returns false.
+
 [input.rs](../crates/choscorui-controls/tests/input.rs) pins the behavior of
 `Input`, `InputGroup`, `Textarea`, and `InputOtp`.
 
@@ -1689,6 +1705,9 @@ list are the same.
 | Name / value | name / value |
 | State | invalid, disabled |
 | Actions | `SetValue` and `Focus` while enabled |
+
+`set_value` takes `Text`, also while the textarea is disabled. `set_open`
+returns false.
 
 ### InputOtp
 
@@ -1718,6 +1737,9 @@ list are the same.
 | Actions | `SetValue` and `Focus` while enabled |
 
 `SetValue` keeps the accepted characters of the value, cut to the length.
+
+`set_value` takes `Text`. It rejects text longer than the code, or with a
+character that the code does not accept. `set_open` returns false.
 
 ### Field and FieldText
 
@@ -1786,6 +1808,11 @@ list are the same.
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
+`set_value` takes `Date` in single mode and `Dates` in the other modes. In
+range mode, it rejects more than two dates and an end before the start.
+`set_open` opens and closes the calendar, but not while the picker is
+disabled.
+
 [date_picker.rs](../crates/choscorui-controls/tests/date_picker.rs) pins this behavior.
 
 ### ContextMenu and Menubar
@@ -1828,6 +1855,10 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | expanded, disabled | expanded, disabled |
 | Actions | `ShowMenu` and `Focus` while enabled | `ShowMenu`, `Expand` or `Collapse`, and `Focus` while enabled |
 
+`set_open` opens the context menu at the center of the area, or the menu of
+the current menu bar title. It closes an open menu. `set_value` returns
+false.
+
 [menus.rs](../crates/choscorui-controls/tests/menus.rs) pins this behavior.
 
 ### Popover
@@ -1859,6 +1890,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Description | the title and the description while open |
 | State | expanded (not for a hover card), disabled |
 | Actions | `Activate`, `Expand` or `Collapse` (not for a hover card), and `Focus` while enabled |
+
+`set_open` opens and closes the popover or the hover card, but not while it
+is disabled. `set_value` returns false.
 
 [overlays.rs](../crates/choscorui-controls/tests/overlays.rs) pins this behavior.
 
@@ -1907,6 +1941,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | expanded false, disabled | expanded |
 | Actions | `Activate` and `Focus` while enabled | `Activate` (the focused part), `Dismiss`, and `Focus` |
 
+`set_open` opens and closes the dialog, but not while it is disabled.
+`set_value` returns false.
+
 [overlays.rs](../crates/choscorui-controls/tests/overlays.rs) pins this behavior.
 
 ### Command and CommandItem
@@ -1951,6 +1988,10 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | expanded, disabled |
 | Actions | `Activate` while a command is highlighted, `SetValue`, `Focus`, and `Dismiss` in the dialog form |
 
+`set_value` takes `Text` as the search and filters the items. `set_open`
+opens and closes the dialog form, and opening clears the search. An inline
+palette returns false.
+
 [command.rs](../crates/choscorui-controls/tests/command.rs) pins this behavior.
 
 ### Breadcrumb
@@ -1982,6 +2023,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | expanded with a collapsed range, disabled |
 | Actions | `Activate` and `Focus` while enabled |
 
+`set_open` opens and closes the ellipsis menu. It returns false when no
+item is collapsed. `set_value` returns false.
+
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 
 ### Pagination
@@ -2010,6 +2054,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Description | the label of the focused part |
 | State | disabled |
 | Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled |
+
+`set_value` takes `Index` of a page. It rejects `None` and a page past the
+last page. `set_open` returns false.
 
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 
@@ -2051,6 +2098,10 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
+`set_open` opens the panel of the focused trigger, or closes the open
+panel. It returns false when no trigger has links. `set_value` returns
+false.
+
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 
 ### Sidebar
@@ -2091,6 +2142,10 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Description | the focused item, or the toggle name |
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse` when it collapses, and `Focus` while enabled |
+
+`set_value` takes `Index` of an item, or `None`. `set_open` expands and
+collapses the sidebar, or opens and closes the sheet in a narrow window.
+With `SidebarCollapse::None` in a wide window, `set_open` returns false.
 
 [sidebar.rs](../crates/choscorui-controls/tests/sidebar.rs) pins this behavior.
 
@@ -2206,6 +2261,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | State | disabled |
 | Actions | `Focus`; `Activate`, `Increment`, and `Decrement` when a move is possible |
 
+`set_value` takes `Index` of the first visible slide and shows that slide
+without an animation. `set_open` returns false.
+
 [carousel.rs](../crates/choscorui-controls/tests/carousel.rs) pins this behavior.
 
 ### DataTable
@@ -2256,6 +2314,10 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Description | the focused header, row cells, button, or filter placeholder |
 | State | expanded with a column menu, disabled |
 | Actions | `Activate`, `Focus`, `Increment` and `Decrement` when a page applies, `SetValue` on the filter |
+
+`set_value` takes `Indices` of source rows as the selection, or `Text` for
+the filter input. `set_open` opens and closes the column menu. Each call
+returns false when the table does not have that part.
 
 [data_table.rs](../crates/choscorui-controls/tests/data_table.rs) pins this
 behavior.
@@ -2471,6 +2533,8 @@ behavior.
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
+`set_open` opens and closes the section. `set_value` returns false.
+
 [layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
 behavior.
 
@@ -2501,6 +2565,10 @@ behavior.
 | Description | the title of the focused item |
 | State | expanded (focused item), disabled |
 | Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while enabled |
+
+`set_value` takes `Indices` of the open items and shows them without an
+animation. A single accordion rejects more than one index. `set_open`
+returns false.
 
 [layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
 behavior.
@@ -2710,6 +2778,9 @@ behavior.
 | State | invalid, disabled |
 | Actions | `Activate` and `Focus` while enabled; `SetValue` for a freeform question |
 
+`set_value` takes `Index` to show a question, `Indices` for the picks of a
+choice question, or `Text` for a freeform answer. `set_open` returns false.
+
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.
 
@@ -2749,11 +2820,16 @@ behavior.
   the earliest deadline, so the frame loop can wait for it.
 - `MeasureContext::viewport` is the root node's bounds. Overlays fit their
   panels in it.
+- `set_value` and `set_open` give a value or an open state from the
+  application to a control. The control emits no message, and focus does
+  not move. The host invalidates the node.
 
 The semantics come from the control's own `semantics`. The
 [guide](guide.md) shows how to write a custom control.
 
 [custom.rs](../crates/choscorui-controls/tests/custom.rs) pins this behavior.
+[protocol.rs](../crates/choscorui-controls/tests/protocol.rs) pins `set_value`
+and `set_open` for each hosted control.
 
 ## Accessibility semantics
 

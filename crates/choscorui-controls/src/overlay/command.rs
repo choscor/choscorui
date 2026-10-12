@@ -1,7 +1,9 @@
 //! A command palette: a search input over grouped commands that filters
 //! as the user types, inline or in a modal dialog.
 
-use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
 use crate::form::input::Editor;
 use crate::hosted::{self, Press, PressOutcome, Reveal};
 use crate::style::{
@@ -359,23 +361,34 @@ impl Command {
     fn run(&mut self, cx: &mut ControlContext<'_>, index: usize) {
         cx.emit(ControlMessage::ItemActivated(index));
         if self.dialog.is_some() {
-            self.set_open(cx, false);
+            self.change_open(cx, false);
         }
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    /// Opens or closes the dialog form at `time`; opening clears the
+    /// search. Returns true when it changed.
+    fn apply_open(&mut self, open: bool, time: f64) -> bool {
         let Some(dialog) = &mut self.dialog else {
-            return;
+            return false;
         };
         if dialog.reveal.open == open {
+            return false;
+        }
+        dialog.reveal.set(open, time);
+        if open {
+            self.editor.replace("");
+            self.filter();
+        }
+        true
+    }
+
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if !self.apply_open(open, cx.time()) {
             return;
         }
-        dialog.reveal.set(open, cx.time());
         cx.emit(ControlMessage::OpenChanged(open));
         if open {
             cx.request_focus();
-            self.editor.replace(cx, "");
-            self.filter();
         }
         cx.request_paint();
         cx.request_semantics();
@@ -390,7 +403,7 @@ impl Command {
                 }
             }
             Key::Escape if self.dialog.is_some() => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
             }
             _ => return None,
@@ -406,7 +419,7 @@ impl Command {
                 position,
                 button: PointerButton::Primary,
             } if self.dialog.is_some() && !self.panel.contains(position) => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
                 Some(EventReply::Stop)
             }
@@ -650,7 +663,7 @@ impl CustomControl for Command {
         {
             let outcome = dialog.press.event(cx, event);
             if let PressOutcome::Activated(_) = outcome {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
             }
             return hosted::reply(outcome);
         }
@@ -782,7 +795,7 @@ impl CustomControl for Command {
             .is_some_and(|dialog| !dialog.reveal.open);
         match action {
             SemanticAction::Activate if closed => {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
                 true
             }
             SemanticAction::Activate => match self.highlighted {
@@ -799,7 +812,7 @@ impl CustomControl for Command {
                 changed
             }
             SemanticAction::Dismiss => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
                 true
             }
@@ -817,6 +830,24 @@ impl CustomControl for Command {
         if !enabled && let Some(dialog) = &mut self.dialog {
             dialog.reveal = Reveal::default();
         }
+    }
+
+    /// Takes `Text` as the search, and filters the commands.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let taken = self.editor.set_text(value);
+        if taken {
+            self.filter();
+        }
+        taken
+    }
+
+    /// Works for the dialog form only.
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if self.dialog.is_none() || (open && !self.enabled) {
+            return false;
+        }
+        self.apply_open(open, time);
+        true
     }
 }
 

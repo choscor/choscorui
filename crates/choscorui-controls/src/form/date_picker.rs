@@ -117,19 +117,27 @@ impl DatePicker {
         (!self.dates().is_empty()).then(|| self.calendar.value_text())
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    /// Opens or closes the popover at `time`. Returns true when it
+    /// changed.
+    fn apply_open(&mut self, open: bool, time: f64) -> bool {
         if self.reveal.open == open {
-            return;
+            return false;
         }
-        self.reveal.set(open, cx.time());
+        self.reveal.set(open, time);
         self.focus = if open {
             CalendarFocus::Grid
         } else {
             CalendarFocus::None
         };
-        cx.emit(ControlMessage::OpenChanged(open));
-        cx.request_paint();
-        cx.request_semantics();
+        true
+    }
+
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if self.apply_open(open, cx.time()) {
+            cx.emit(ControlMessage::OpenChanged(open));
+            cx.request_paint();
+            cx.request_semantics();
+        }
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, date: CivilDate) {
@@ -140,7 +148,7 @@ impl DatePicker {
                 cx.request_semantics();
             }
             self.calendar.select(date);
-            self.set_open(cx, false);
+            self.change_open(cx, false);
         } else if self.calendar.activate(date) {
             cx.emit(ControlMessage::Changed(ControlValue::Dates(
                 self.calendar.dates(),
@@ -170,7 +178,7 @@ impl DatePicker {
         }
         if cx.bounds().contains(position) {
             cx.request_focus();
-            self.set_open(cx, !self.reveal.open);
+            self.change_open(cx, !self.reveal.open);
             return EventReply::Stop;
         }
         EventReply::Continue
@@ -180,7 +188,7 @@ impl DatePicker {
         if !self.reveal.open {
             return match key {
                 Key::Enter | Key::Space | Key::ArrowDown => {
-                    self.set_open(cx, true);
+                    self.change_open(cx, true);
                     EventReply::Stop
                 }
                 _ => EventReply::Continue,
@@ -188,12 +196,12 @@ impl DatePicker {
         }
         match key {
             Key::Escape => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
                 EventReply::Stop
             }
             Key::Tab => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 EventReply::Continue
             }
             Key::Enter | Key::Space => {
@@ -277,7 +285,7 @@ impl CustomControl for DatePicker {
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 EventReply::Continue
             }
             _ => EventReply::Continue,
@@ -372,15 +380,15 @@ impl CustomControl for DatePicker {
     ) -> bool {
         match action {
             SemanticAction::Activate => {
-                self.set_open(cx, !self.reveal.open);
+                self.change_open(cx, !self.reveal.open);
                 true
             }
             SemanticAction::Expand => {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
                 true
             }
             SemanticAction::Collapse => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 true
             }
             SemanticAction::Focus => {
@@ -396,5 +404,36 @@ impl CustomControl for DatePicker {
         if !enabled {
             self.reveal = Reveal::default();
         }
+    }
+
+    /// Takes `Date` in single mode and `Dates` in multiple and range
+    /// modes. Rejects more than two dates, or an end before the start, in
+    /// range mode.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match (self.mode, value) {
+            (CalendarMode::Single, ControlValue::Date(date)) => {
+                self.set_dates(date.as_slice());
+                true
+            }
+            (CalendarMode::Multiple, ControlValue::Dates(dates)) => {
+                self.set_dates(dates);
+                true
+            }
+            (CalendarMode::Range, ControlValue::Dates(dates))
+                if dates.len() <= 2 && dates.is_sorted() =>
+            {
+                self.set_dates(dates);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if open && !self.enabled {
+            return false;
+        }
+        self.apply_open(open, time);
+        true
     }
 }

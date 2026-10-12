@@ -131,18 +131,25 @@ impl Select {
         }
     }
 
-    fn set_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+    /// Opens or closes the popup at `time`. Returns true when it changed.
+    fn apply_open(&mut self, open: bool, time: f64) -> bool {
         if self.reveal.open == open {
-            return;
+            return false;
         }
-        self.reveal.set(open, cx.time());
+        self.reveal.set(open, time);
         if open {
             let start = self.selected.or_else(|| self.list.options().next());
             self.list.highlight(start);
         }
-        cx.emit(ControlMessage::OpenChanged(open));
-        cx.request_paint();
-        cx.request_semantics();
+        true
+    }
+
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if self.apply_open(open, cx.time()) {
+            cx.emit(ControlMessage::OpenChanged(open));
+            cx.request_paint();
+            cx.request_semantics();
+        }
     }
 
     fn choose(&mut self, cx: &mut ControlContext<'_>, index: usize) {
@@ -150,7 +157,7 @@ impl Select {
             self.selected = Some(index);
             cx.emit(ControlMessage::Changed(ControlValue::Index(Some(index))));
         }
-        self.set_open(cx, false);
+        self.change_open(cx, false);
         cx.request_paint();
         cx.request_semantics();
     }
@@ -171,7 +178,7 @@ impl Select {
                 }
                 if cx.bounds().contains(position) {
                     cx.request_focus();
-                    self.set_open(cx, !open);
+                    self.change_open(cx, !open);
                     return EventReply::Stop;
                 }
                 EventReply::Continue
@@ -213,7 +220,7 @@ impl Select {
         if !self.reveal.open {
             return match key {
                 Key::ArrowDown | Key::ArrowUp | Key::Enter | Key::Space => {
-                    self.set_open(cx, true);
+                    self.change_open(cx, true);
                     EventReply::Stop
                 }
                 _ => EventReply::Continue,
@@ -223,17 +230,17 @@ impl Select {
             Key::Enter | Key::Space => {
                 match self.list.highlighted {
                     Some(index) => self.choose(cx, index),
-                    None => self.set_open(cx, false),
+                    None => self.change_open(cx, false),
                 }
                 EventReply::Stop
             }
             Key::Escape => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);
                 EventReply::Stop
             }
             Key::Tab => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 EventReply::Continue
             }
             key if self.list.step(key) => {
@@ -312,7 +319,7 @@ impl CustomControl for Select {
                 EventReply::Stop
             }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 EventReply::Continue
             }
             _ => EventReply::Continue,
@@ -417,11 +424,11 @@ impl CustomControl for Select {
     ) -> bool {
         match action {
             SemanticAction::ShowMenu | SemanticAction::Expand => {
-                self.set_open(cx, true);
+                self.change_open(cx, true);
                 true
             }
             SemanticAction::Collapse => {
-                self.set_open(cx, false);
+                self.change_open(cx, false);
                 true
             }
             SemanticAction::SetValue => {
@@ -448,5 +455,30 @@ impl CustomControl for Select {
         if !enabled {
             self.reveal = Reveal::default();
         }
+    }
+
+    /// Takes `Index`. Rejects an index that is not an enabled option.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Index(index) = value else {
+            return false;
+        };
+        let fits = index.is_none_or(|index| {
+            self.list
+                .entries
+                .get(index)
+                .is_some_and(ListEntry::is_enabled_option)
+        });
+        if fits {
+            self.selected = *index;
+        }
+        fits
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if open && !self.enabled {
+            return false;
+        }
+        self.apply_open(open, time);
+        true
     }
 }
