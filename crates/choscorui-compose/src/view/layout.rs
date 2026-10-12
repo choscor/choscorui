@@ -3,16 +3,16 @@
 //! and `ScrollView` onto a scroll container.
 
 use super::View;
-use super::env::{Fill, Metric};
-use super::host::{Cx, Flex, Inner, Layer};
+use super::env::Metric;
+use super::host::{Cx, Flex, Inner};
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
-    PaintContext,
+    OverlayScrollBar, PaintContext, ScrollOrientation, Separator, SeparatorOrientation,
 };
 use choscorui_core::{
-    Axis, ColorRole, DesignTokens, Dirty, EventPhase, EventReply, ItemAlign, LayoutKind,
-    LayoutStyle, Length, MainAlign, Measured, NodeId, Point, PointerEvent, Rect, SemanticNode,
-    SemanticRole, SemanticState, Size, Space, Track, WheelUnit,
+    Axis, DesignTokens, Dirty, EventPhase, EventReply, ItemAlign, Key, KeyEvent, LayoutKind,
+    LayoutStyle, MainAlign, Measured, NodeId, Point, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, Space, Track, WheelUnit,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -359,33 +359,34 @@ pub struct Divider;
 
 impl View for Divider {
     fn mount(self, cx: &mut Cx<'_>) {
-        let tokens = parent_tokens(cx);
-        let thickness = tokens.border_width.max(1.0);
-        let vertical = stack_axis(cx.inner, cx.parent) == Some(Axis::Horizontal);
-        let (width, height) = if vertical {
-            (Length::Points(thickness), Length::Auto)
-        } else {
-            (Length::Auto, Length::Points(thickness))
-        };
-        let style = LayoutStyle {
-            width,
-            height,
-            align_self: Some(ItemAlign::Stretch),
-            ..LayoutStyle::default()
-        };
-        let node = cx.node(style);
-        cx.inner
-            .data(node)
-            .decor
-            .layers
-            .push(Layer::Background(Fill::Role(ColorRole::Border)));
-        // A divider spans its stack, so the stack takes the space offered.
-        let flex = Flex {
-            wide: !vertical,
-            tall: vertical,
-        };
-        cx.inner.make_flexible(node, flex);
+        divider_node(cx);
     }
+}
+
+/// A new separator control across the parent stack. The `Separator`
+/// recipe gives its thickness and color.
+#[inline(never)]
+fn divider_node(cx: &mut Cx<'_>) {
+    let vertical = stack_axis(cx.inner, cx.parent) == Some(Axis::Horizontal);
+    let orientation = if vertical {
+        SeparatorOrientation::Vertical
+    } else {
+        SeparatorOrientation::Horizontal
+    };
+    let node = cx.control(Box::new(Separator::new(orientation)));
+    let style = LayoutStyle {
+        align_self: Some(ItemAlign::Stretch),
+        ..LayoutStyle::default()
+    };
+    if let Err(error) = cx.inner.engine.set_style(&cx.inner.tree, node, style) {
+        cx.inner.report(super::host::ViewError::Layout(error));
+    }
+    // A divider spans its stack, so the stack takes the space offered.
+    let flex = Flex {
+        wide: !vertical,
+        tall: vertical,
+    };
+    cx.inner.make_flexible(node, flex);
 }
 
 /// A column of a [`Grid`].
@@ -480,15 +481,127 @@ pub(crate) struct ScrollShared {
     pub content: Cell<Size>,
 }
 
-/// How far one wheel line scrolls, in points.
+/// How far one wheel line or arrow key scrolls, in points.
 const WHEEL_LINE: f64 = 40.0;
 
-/// The control on a scroll view's node: it turns wheel input into scroll
-/// deltas and paints the scroll indicator.
+/// The control on a scroll view's node. Its [`OverlayScrollBar`] paints
+/// the scroll bar with the `ScrollArea` recipe above the content, and
+/// handles the thumb drag, the track paging, and the thumb hover. The
+/// control also turns the wheel and, while it has focus, the scroll keys
+/// into offsets. It sends each new offset as a `Changed` number.
 struct ScrollControl {
     shared: Rc<ScrollShared>,
     axis: Axis,
-    bounds: Rect,
+    bar: OverlayScrollBar,
+}
+
+impl ScrollControl {
+    /// Gives the bar the content length and the offset of the scroll node.
+    fn sync(&mut self) {
+        let (content, offset) = self.along();
+        self.bar.set_scroll(content, offset);
+    }
+
+    /// The content length and the offset of the scroll node along the
+    /// axis, as of the last layout or scroll.
+    fn along(&self) -> (f64, f64) {
+        let (content, offset) = (self.shared.content.get(), self.shared.offset.get());
+        match self.axis {
+            Axis::Vertical => (content.height, offset.y),
+            Axis::Horizontal => (content.width, offset.x),
+        }
+    }
+
+    /// Asks the scroll view to move to `offset` along its axis.
+    fn scroll_to(&self, cx: &mut ControlContext<'_>, offset: f64) {
+        let offset = offset.clamp(0.0, self.bar.maximum());
+        if offset != self.bar.offset() {
+            cx.emit(ControlMessage::Changed(ControlValue::Number(offset)));
+        }
+    }
+
+    /// The wheel distance along the axis, in points.
+    fn wheel(&self, delta: Point, unit: WheelUnit) -> f64 {
+        let scale = match unit {
+            WheelUnit::Points => 1.0,
+            WheelUnit::Lines => WHEEL_LINE,
+        };
+        let amount = match self.axis {
+            Axis::Vertical => delta.y,
+            Axis::Horizontal if delta.x == 0.0 => delta.y,
+            Axis::Horizontal => delta.x,
+        };
+        amount * scale
+    }
+
+    /// One page: the viewport less one line of overlap.
+    fn page(&self) -> f64 {
+        (self.bar.length() - WHEEL_LINE).max(WHEEL_LINE)
+    }
+
+    /// The offset that `key` moves to, if it scrolls along the axis.
+    fn key_target(&self, key: Key) -> Option<f64> {
+        let (back, forward) = match self.axis {
+            Axis::Vertical => (Key::ArrowUp, Key::ArrowDown),
+            Axis::Horizontal => (Key::ArrowLeft, Key::ArrowRight),
+        };
+        let offset = self.bar.offset();
+        match key {
+            key if key == back => Some(offset - WHEEL_LINE),
+            key if key == forward => Some(offset + WHEEL_LINE),
+            Key::PageUp => Some(offset - self.page()),
+            Key::PageDown | Key::Space => Some(offset + self.page()),
+            Key::Home => Some(0.0),
+            Key::End => Some(self.bar.maximum()),
+            _ => None,
+        }
+    }
+
+    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+        if let PointerEvent::Wheel { delta, unit, .. } = *event {
+            // The wheel scrolls after the content had its turn.
+            let amount = self.wheel(delta, unit);
+            if cx.phase() == EventPhase::Capture || amount == 0.0 {
+                return EventReply::Continue;
+            }
+            self.scroll_to(cx, self.bar.offset() + amount);
+            return EventReply::Stop;
+        }
+        // The bar is above the content, so it takes the pointer in the
+        // capture phase, before the content under it.
+        if cx.phase() == EventPhase::Bubble {
+            return EventReply::Continue;
+        }
+        let dragging = self.bar.dragging();
+        let reply = self.bar.pointer(event);
+        if dragging != self.bar.dragging() {
+            cx.capture_pointer(self.bar.dragging());
+        }
+        if reply.scrolled {
+            cx.emit(ControlMessage::Changed(ControlValue::Number(
+                self.bar.offset(),
+            )));
+        }
+        if reply.repaint {
+            cx.request_paint();
+        }
+        if reply.consumed {
+            EventReply::Stop
+        } else {
+            EventReply::Continue
+        }
+    }
+
+    /// Ends a drag and the hover, and gives back the pointer capture.
+    fn release(&mut self, cx: &mut ControlContext<'_>) {
+        let dragging = self.bar.dragging();
+        if self.bar.release() {
+            cx.request_paint();
+        }
+        if dragging {
+            cx.capture_pointer(false);
+        }
+    }
 }
 
 impl CustomControl for ScrollControl {
@@ -496,83 +609,79 @@ impl CustomControl for ScrollControl {
         Measured::new(cx.constraints.min)
     }
 
-    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
-        self.bounds = bounds;
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.bar.arrange(cx, bounds);
+        self.sync();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        let ControlEvent::Pointer(PointerEvent::Wheel { delta, unit, .. }) = event else {
-            return EventReply::Continue;
-        };
-        if cx.phase() == EventPhase::Capture {
-            return EventReply::Continue;
-        }
-        let scale = match unit {
-            WheelUnit::Points => 1.0,
-            WheelUnit::Lines => WHEEL_LINE,
-        };
-        let amount = match self.axis {
-            Axis::Vertical => delta.y,
-            Axis::Horizontal => {
-                if delta.x == 0.0 {
-                    delta.y
-                } else {
-                    delta.x
+        self.sync();
+        match event {
+            ControlEvent::Pointer(event) => self.pointer(cx, event),
+            ControlEvent::Key(KeyEvent::Down { key, .. })
+                if cx.is_focused() && cx.phase() == EventPhase::Target =>
+            {
+                match self.key_target(*key) {
+                    Some(target) => {
+                        self.scroll_to(cx, target);
+                        EventReply::Stop
+                    }
+                    None => EventReply::Continue,
                 }
             }
-        } * scale;
-        if amount == 0.0 {
-            return EventReply::Continue;
-        }
-        cx.emit(ControlMessage::Changed(ControlValue::Number(amount)));
-        EventReply::Stop
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        let content = self.shared.content.get();
-        let offset = self.shared.offset.get();
-        let bounds = cx.bounds;
-        let (length, extent, position) = match self.axis {
-            Axis::Vertical => (bounds.size.height, content.height, offset.y),
-            Axis::Horizontal => (bounds.size.width, content.width, offset.x),
-        };
-        if extent <= length + 0.5 || length <= 0.0 {
-            return;
-        }
-        let thumb = (length * length / extent).max(24.0).min(length);
-        let start = position / (extent - length) * (length - thumb);
-        let color = cx.tokens.color(ColorRole::MutedForeground).with_alpha(0.4);
-        let thickness = 4.0;
-        let rect = match self.axis {
-            Axis::Vertical => {
-                let x = if cx.rtl {
-                    bounds.min_x() + 2.0
-                } else {
-                    bounds.max_x() - thickness - 2.0
-                };
-                Rect::from_xywh(x, bounds.min_y() + start, thickness, thumb)
+            ControlEvent::Hover(false) | ControlEvent::Dismiss => {
+                self.release(cx);
+                EventReply::Continue
             }
-            Axis::Horizontal => Rect::from_xywh(
-                bounds.min_x() + start,
-                bounds.max_y() - thickness - 2.0,
-                thumb,
-                thickness,
-            ),
-        };
-        cx.list.fill_rounded_rect(rect, thickness / 2.0, color).ok();
+            _ => EventReply::Continue,
+        }
     }
 
+    /// The layout updates the content size after it arranges the control,
+    /// so paint takes the size and the offset from the scroll node.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let (content, offset) = self.along();
+        let mut bar = self.bar.clone();
+        bar.set_scroll(content, offset);
+        bar.paint(cx);
+    }
+
+    /// The value is the position along the axis in whole percent.
     fn semantics(&self) -> SemanticNode {
+        let (extent, position) = self.along();
+        let range = (extent - self.bar.length()).max(0.0);
+        let percent = if range > 0.0 {
+            (position / range * 100.0).round()
+        } else {
+            0.0
+        };
         SemanticNode {
             role: SemanticRole::ScrollArea,
             name: String::new(),
             description: String::new(),
-            value: None,
+            value: Some(format!("{percent}%")),
             state: SemanticState::default(),
             relations: Vec::new(),
-            actions: Vec::new(),
+            actions: vec![SemanticAction::Increment, SemanticAction::Decrement],
             text: None,
         }
+    }
+
+    /// `Increment` pages forward, and `Decrement` pages back.
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        self.sync();
+        let page = match action {
+            SemanticAction::Increment => self.page(),
+            SemanticAction::Decrement => -self.page(),
+            _ => return false,
+        };
+        self.scroll_to(cx, self.bar.offset() + page);
+        true
     }
 
     fn focusable(&self) -> bool {
@@ -580,8 +689,11 @@ impl CustomControl for ScrollControl {
     }
 }
 
-/// Content that scrolls along one axis. The wheel scrolls it, and moving
-/// focus to a control out of view scrolls that control into view.
+/// Content that scrolls along one axis. The wheel and the scroll bar
+/// scroll it, and moving focus to a control out of view scrolls that
+/// control into view. The scroll bar takes its look from the
+/// `ScrollArea` recipe. With `.focusable(true)`, the scroll view takes
+/// focus, and the arrow, page, Home, and End keys scroll it.
 pub struct ScrollView<C> {
     content: C,
     axis: Axis,
@@ -619,10 +731,14 @@ impl<C: View> View for ScrollView<C> {
 #[inline(never)]
 fn scroll_nodes(cx: &mut Cx<'_>, axis: Axis) -> (NodeId, NodeId) {
     let shared = Rc::new(ScrollShared::default());
+    let orientation = match axis {
+        Axis::Vertical => ScrollOrientation::Vertical,
+        Axis::Horizontal => ScrollOrientation::Horizontal,
+    };
     let node = cx.control(Box::new(ScrollControl {
         shared: shared.clone(),
         axis,
-        bounds: Rect::default(),
+        bar: OverlayScrollBar::new(orientation),
     }));
     let style = LayoutStyle {
         kind: LayoutKind::Scroll { axis },
@@ -648,8 +764,13 @@ fn scroll_nodes(cx: &mut Cx<'_>, axis: Axis) -> (NodeId, NodeId) {
     let data = cx.inner.data(node);
     data.internal = Some(Rc::new(
         move |inner: &mut Inner, message: &ControlMessage| {
-            if let ControlMessage::Changed(ControlValue::Number(amount)) = message {
-                scroll_by(inner, node, axis, *amount);
+            if let ControlMessage::Changed(ControlValue::Number(along)) = message {
+                let offset = inner.engine.scroll_offset(node);
+                let next = match axis {
+                    Axis::Vertical => Point::new(offset.x, *along),
+                    Axis::Horizontal => Point::new(*along, offset.y),
+                };
+                set_scroll(inner, node, next);
             }
         },
     ));
@@ -669,16 +790,6 @@ fn scroll_nodes(cx: &mut Cx<'_>, axis: Axis) -> (NodeId, NodeId) {
     (node, content)
 }
 
-/// Scrolls the scroll node by `amount` points along `axis`.
-pub(crate) fn scroll_by(inner: &mut Inner, node: NodeId, axis: Axis, amount: f64) {
-    let offset = inner.engine.scroll_offset(node);
-    let next = match axis {
-        Axis::Vertical => Point::new(offset.x, offset.y + amount),
-        Axis::Horizontal => Point::new(offset.x + amount, offset.y),
-    };
-    set_scroll(inner, node, next);
-}
-
 /// Moves the scroll node to `offset`, within its content.
 pub(crate) fn set_scroll(inner: &mut Inner, node: NodeId, offset: Point) {
     let bounds = inner.tree.bounds(node).unwrap_or_default();
@@ -690,7 +801,11 @@ pub(crate) fn set_scroll(inner: &mut Inner, node: NodeId, offset: Point) {
     let clamped = Point::new(offset.x.clamp(0.0, max.x), offset.y.clamp(0.0, max.y));
     if clamped != inner.engine.scroll_offset(node) {
         inner.engine.set_scroll_offset(node, clamped);
+        // The control reads the new offset before the next layout.
+        if let Some(shared) = inner.nodes.get(&node).and_then(|data| data.scroll.as_ref()) {
+            shared.offset.set(clamped);
+        }
         inner.needs_layout = true;
-        inner.touch(node, Dirty::PAINT);
+        inner.touch(node, Dirty::PAINT.with(Dirty::SEMANTICS));
     }
 }

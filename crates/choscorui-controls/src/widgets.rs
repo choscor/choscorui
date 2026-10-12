@@ -22,9 +22,11 @@ use std::f64::consts::PI;
 
 mod button_group;
 mod key_sequence;
+mod overlay_scroll_bar;
 mod tool_buttons;
 pub use button_group::{ButtonGroup, ButtonGroupMember, HostedButtonGroup};
 pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_text};
+pub use overlay_scroll_bar::{OverlayScrollBar, OverlayScrollReply};
 pub use tool_buttons::{
     CommandLink, HostedCommandLink, HostedToolButton, ToolButton, ToolButtonAction, ToolButtonMenu,
 };
@@ -215,32 +217,43 @@ impl ScrollBar {
 
     /// Paints the thumb with the flags in `state`.
     fn paint_state(&self, cx: &mut PaintContext<'_>, state: VisualState) {
-        if !self.is_needed() {
-            return;
+        if self.is_needed() {
+            let bounds = cx.bounds;
+            self.paint_track(cx, bounds, state);
         }
-        let bounds = cx.bounds;
+    }
+
+    /// Paints the bar fill in `track`, and the thumb inside it, with the
+    /// `ScrollArea` slots in `state`.
+    fn paint_track(&self, cx: &mut PaintContext<'_>, track: Rect, state: VisualState) {
         let query = |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(state);
         let (bar, thumb) = (
             cx.style(query(Slot::Scrollbar)),
             cx.style(query(Slot::Thumb)),
         );
+        fill_shape(cx.list, track, &bar.radius, cx.rtl, &bar.background);
+        let rect = self.thumb_rect(track);
+        let rect = content_rect(rect, &bar, cx.rtl);
+        fill_shape(cx.list, rect, &thumb.radius, cx.rtl, &thumb.background);
+    }
+
+    /// The thumb in `track`, across the full thickness of the bar.
+    fn thumb_rect(&self, track: Rect) -> Rect {
         let (start, length) = self.thumb();
-        let rect = match self.orientation {
+        match self.orientation {
             ScrollOrientation::Vertical => Rect::from_xywh(
-                bounds.origin.x,
-                bounds.origin.y + start,
-                bounds.size.width,
+                track.origin.x,
+                track.origin.y + start,
+                track.size.width,
                 length,
             ),
             ScrollOrientation::Horizontal => Rect::from_xywh(
-                bounds.origin.x + start,
-                bounds.origin.y,
+                track.origin.x + start,
+                track.origin.y,
                 length,
-                bounds.size.height,
+                track.size.height,
             ),
-        };
-        let rect = content_rect(rect, &bar, cx.rtl);
-        fill_shape(cx.list, rect, &thumb.radius, cx.rtl, &thumb.background);
+        }
     }
 
     /// The offset of `point` along the bar from the start of `bounds`.

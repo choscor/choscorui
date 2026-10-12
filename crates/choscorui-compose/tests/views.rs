@@ -1035,3 +1035,231 @@ fn a_long_column_paints_and_relayouts_only_what_it_must() {
     assert!(changes.len() < 10, "{} semantic changes", changes.len());
     assert!(host.find("Row 0, 1 edits").is_some());
 }
+
+/// A recipe that changes only some slots of a control kind: the
+/// background of each, and their least thickness.
+struct SlotRecipe {
+    fills: Vec<(choscorui_controls::Slot, choscorui_core::Color)>,
+    thickness: f64,
+}
+
+impl choscorui_controls::Recipe for SlotRecipe {
+    fn resolve(
+        &self,
+        query: &choscorui_controls::StyleQuery,
+        tokens: &DesignTokens,
+    ) -> Option<choscorui_controls::ResolvedStyle> {
+        let (_, color) = self.fills.iter().find(|(slot, _)| *slot == query.slot)?;
+        let mut style = choscorui_controls::DefaultRecipe.resolve(query, tokens)?;
+        style.background = (*color).into();
+        style.min_width = self.thickness;
+        style.min_height = self.thickness;
+        Some(style)
+    }
+}
+
+/// A scroll view of `rows` text rows in the 400 × 300 window.
+fn scroll_rows(rows: usize) -> impl View {
+    use choscorui_compose::view::ScrollView;
+    let rows: Vec<usize> = (0..rows).collect();
+    ScrollView::new(VStack::new(ForEach::new(
+        rows,
+        |row| *row,
+        |row: &usize| Text::new(format!("Row {row}")),
+    )))
+}
+
+/// The rounded fills inside the trailing `edge` points of the window.
+fn edge_fills(
+    host: &mut ViewHost,
+    edge: f64,
+) -> Vec<(choscorui_core::Rect, choscorui_core::Color)> {
+    let list = host.paint();
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            choscorui_core::DisplayCommand::FillRoundedRect { rect, color, .. }
+                if rect.min_x() >= 400.0 - edge =>
+            {
+                Some((*rect, *color))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn pointer(host: &mut ViewHost, event: choscorui_core::PointerEvent) {
+    host.pointer(event, choscorui_controls::ShortcutModifiers::default());
+    host.layout();
+}
+
+fn press(position: Point) -> choscorui_core::PointerEvent {
+    choscorui_core::PointerEvent::Down {
+        position,
+        button: choscorui_core::PointerButton::Primary,
+    }
+}
+
+/// The node of the first scroll view.
+fn scroll_node(host: &mut ViewHost) -> NodeId {
+    host.semantics()
+        .0
+        .into_iter()
+        .find(|entry| entry.node.role == SemanticRole::ScrollArea)
+        .unwrap()
+        .id
+}
+
+#[test]
+fn a_scroll_view_paints_its_bar_with_the_scroll_area_recipe() {
+    use choscorui_controls::{ControlKind, Slot};
+    let border = DesignTokens::light().color(ColorRole::Border);
+    let mut plain = host(scroll_rows(60));
+    // The default thumb: a `border` fill, inset 1 pt in the 10 pt bar.
+    let fills = edge_fills(&mut plain, 10.0);
+    let [(thumb, color)] = fills.as_slice() else {
+        panic!("one thumb: {fills:?}");
+    };
+    assert_eq!(*color, border);
+    assert_eq!(thumb.min_x(), 391.0);
+    assert_eq!(thumb.size.width, 8.0);
+    assert_eq!(thumb.min_y(), 1.0);
+    // Content that fits paints no bar.
+    let mut short = host(scroll_rows(2));
+    assert_eq!(edge_fills(&mut short, 10.0), Vec::new());
+    // A custom recipe reaches the bar and the thumb.
+    let red = choscorui_core::Color::rgb8(255, 0, 0);
+    let green = choscorui_core::Color::rgb8(0, 255, 0);
+    let custom = scroll_rows(60).recipe(
+        ControlKind::ScrollArea,
+        Rc::new(SlotRecipe {
+            fills: vec![(Slot::Thumb, red), (Slot::Scrollbar, green)],
+            thickness: 16.0,
+        }),
+    );
+    let mut custom = host(custom);
+    let list = custom.paint();
+    let track = list.commands().iter().find_map(|command| match command {
+        choscorui_core::DisplayCommand::FillRect { rect, color } if *color == green => Some(*rect),
+        _ => None,
+    });
+    assert_eq!(track.map(|rect| rect.min_x()), Some(384.0));
+    let fills = edge_fills(&mut custom, 16.0);
+    assert!(fills.iter().any(|(_, color)| *color == red), "{fills:?}");
+}
+
+#[test]
+fn dragging_the_thumb_scrolls_and_hover_changes_its_look() {
+    let mut host = host(scroll_rows(60));
+    // With reduced motion, the look changes at once.
+    host.set_accessibility(choscorui_core::AccessibilityPreferences {
+        reduced_motion: true,
+        ..Default::default()
+    });
+    let scroll = scroll_node(&mut host);
+    let value = |host: &mut ViewHost| host.semantic(scroll).unwrap().value;
+    assert_eq!(value(&mut host).as_deref(), Some("0%"));
+    let (thumb, _) = edge_fills(&mut host, 10.0)[0];
+    let tokens = DesignTokens::light();
+    // Hover over the thumb.
+    let center = thumb.center();
+    pointer(
+        &mut host,
+        choscorui_core::PointerEvent::Move { position: center },
+    );
+    let active = tokens.color(ColorRole::MutedForeground).with_alpha(0.5);
+    assert_eq!(edge_fills(&mut host, 10.0)[0].1, active);
+    // Drag it down by 50 points.
+    let row = bounds(&mut host, "Row 5").min_y();
+    pointer(&mut host, press(center));
+    let below = Point::new(center.x, center.y + 50.0);
+    pointer(
+        &mut host,
+        choscorui_core::PointerEvent::Move { position: below },
+    );
+    assert!(
+        bounds(&mut host, "Row 5").min_y() < row,
+        "the content moved up"
+    );
+    let (moved, color) = edge_fills(&mut host, 10.0)[0];
+    assert_eq!(color, active);
+    assert!(
+        (moved.min_y() - thumb.min_y() - 50.0).abs() < 1.0,
+        "{moved:?}"
+    );
+    pointer(
+        &mut host,
+        choscorui_core::PointerEvent::Up {
+            position: below,
+            button: choscorui_core::PointerButton::Primary,
+        },
+    );
+    assert_eq!(host.tree().pointer_capture(), None);
+    assert_ne!(value(&mut host).as_deref(), Some("0%"));
+    // Away from the thumb, it takes the resting look again.
+    pointer(
+        &mut host,
+        choscorui_core::PointerEvent::Move {
+            position: Point::new(100.0, 100.0),
+        },
+    );
+    let resting = tokens.color(ColorRole::Border);
+    assert_eq!(edge_fills(&mut host, 10.0)[0].1, resting);
+}
+
+#[test]
+fn a_press_on_the_track_pages_and_keys_scroll_a_focused_scroll_view() {
+    let mut host = host(scroll_rows(60).focusable(true));
+    let scroll = scroll_node(&mut host);
+    let (thumb, _) = edge_fills(&mut host, 10.0)[0];
+    let row = bounds(&mut host, "Row 0").min_y();
+    pointer(&mut host, press(Point::new(thumb.center().x, 290.0)));
+    // A press below the thumb pages one viewport down.
+    let paged = bounds(&mut host, "Row 0").min_y();
+    assert!((row - paged - 300.0).abs() < 1.0, "{row} {paged}");
+    assert_eq!(host.tree().pointer_capture(), None);
+    host.focus(Some(scroll));
+    let key = |key| KeyEvent::Down { key, repeat: false };
+    let modifiers = choscorui_controls::ShortcutModifiers::default();
+    assert!(host.key(key(Key::Home), modifiers));
+    host.layout();
+    assert_eq!(bounds(&mut host, "Row 0").min_y(), row);
+    assert!(host.key(key(Key::ArrowDown), modifiers));
+    host.layout();
+    assert_eq!(bounds(&mut host, "Row 0").min_y(), row - 40.0);
+    assert!(host.perform(scroll, SemanticAction::Increment, None));
+    host.layout();
+    assert!(bounds(&mut host, "Row 0").min_y() < row - 40.0);
+}
+
+#[test]
+fn a_divider_paints_with_the_separator_recipe() {
+    use choscorui_compose::view::Divider;
+    use choscorui_controls::{ControlKind, Slot};
+    let border = DesignTokens::light().color(ColorRole::Border);
+    let fill_of = |host: &mut ViewHost, color| {
+        let list = host.paint();
+        list.commands().iter().find_map(|command| match command {
+            choscorui_core::DisplayCommand::FillRect { rect, color: fill } if *fill == color => {
+                Some(*rect)
+            }
+            _ => None,
+        })
+    };
+    let rows = || VStack::new((Text::new("above"), Divider, Text::new("below")));
+    let mut plain = host(rows());
+    let line = fill_of(&mut plain, border).expect("a border line");
+    assert_eq!(line.size, Size::new(400.0, 1.0));
+    let mut row = host(HStack::new((Text::new("start"), Divider, Text::new("end"))));
+    let line = fill_of(&mut row, border).expect("a vertical line");
+    assert_eq!(line.size.width, 1.0);
+    // A custom recipe gives the line its color and thickness.
+    let red = choscorui_core::Color::rgb8(255, 0, 0);
+    let recipe = Rc::new(SlotRecipe {
+        fills: vec![(Slot::Root, red)],
+        thickness: 3.0,
+    });
+    let mut custom = host(rows().recipe(ControlKind::Separator, recipe));
+    let line = fill_of(&mut custom, red).expect("a red line");
+    assert_eq!(line.size, Size::new(400.0, 3.0));
+}

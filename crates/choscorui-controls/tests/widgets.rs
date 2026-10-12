@@ -38,6 +38,82 @@ fn scroll_bar_pages_drags_and_clamps() {
 }
 
 #[test]
+fn overlay_scroll_bar_sits_at_the_edge_hovers_drags_and_pages() {
+    use choscorui_controls::{MeasureContext, OverlayScrollBar, OverlayScrollReply};
+    use choscorui_core::{Constraints, LayoutDirection, PointerButton, PointerEvent};
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let viewport = rect(0.0, 0.0, 200.0, 100.0);
+    let arranged = |direction| {
+        let cx = MeasureContext {
+            constraints: Constraints::tight(viewport.size),
+            viewport,
+            direction,
+            tokens: &tokens,
+            styles: &styles,
+            text: &EstimatedText,
+        };
+        let mut bar = OverlayScrollBar::new(ScrollOrientation::Vertical);
+        bar.arrange(&cx, viewport);
+        bar
+    };
+    let mut bar = arranged(LayoutDirection::Ltr);
+    bar.set_scroll(100.0, 0.0);
+    assert_eq!(bar.track(), None, "content that fits needs no bar");
+    bar.set_scroll(1000.0, 0.0);
+    // The recipe bar is 10 pt wide at the trailing edge.
+    assert_eq!(bar.track(), Some(rect(190.0, 0.0, 10.0, 100.0)));
+    assert_eq!(bar.thumb(), Some(rect(190.0, 0.0, 10.0, 16.0)));
+    let mut rtl = arranged(LayoutDirection::Rtl);
+    rtl.set_scroll(1000.0, 0.0);
+    assert_eq!(rtl.track().map(|track| track.min_x()), Some(0.0));
+
+    let hover = bar.pointer(&PointerEvent::Move {
+        position: Point::new(195.0, 8.0),
+    });
+    assert_eq!(
+        hover,
+        OverlayScrollReply {
+            consumed: false,
+            scrolled: false,
+            repaint: true,
+        }
+    );
+    let press = |at: f64| PointerEvent::Down {
+        position: Point::new(195.0, at),
+        button: PointerButton::Primary,
+    };
+    assert!(bar.pointer(&press(8.0)).consumed);
+    assert!(bar.dragging());
+    let drag = bar.pointer(&PointerEvent::Move {
+        position: Point::new(195.0, 50.0),
+    });
+    assert!(drag.consumed && drag.scrolled);
+    // 42 of the 84 pt thumb travel.
+    assert_eq!(bar.offset(), 450.0);
+    let up = PointerEvent::Up {
+        position: Point::new(195.0, 50.0),
+        button: PointerButton::Primary,
+    };
+    assert!(bar.pointer(&up).consumed);
+    assert!(!bar.dragging());
+    // A press on the track below the thumb pages one viewport.
+    assert!(bar.pointer(&press(95.0)).scrolled);
+    assert_eq!(bar.offset(), 550.0);
+    // A press outside the bar is not the bar's.
+    let outside = PointerEvent::Down {
+        position: Point::new(100.0, 50.0),
+        button: PointerButton::Primary,
+    };
+    assert!(!bar.pointer(&outside).consumed);
+    let over = PointerEvent::Move {
+        position: Point::new(195.0, 60.0),
+    };
+    assert!(bar.pointer(&over).repaint, "the moved thumb is hovered");
+    assert!(bar.release(), "the hover ends");
+    assert!(!bar.release());
+}
+
+#[test]
 fn indeterminate_progress_animates_only_while_visible() {
     let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
     let id = tree

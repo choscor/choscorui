@@ -56,6 +56,7 @@ to a control. [`Field`](#field-and-fieldtext) and the compose
 | Range | [`DecimalSpinBox`](#decimalspinbox) | Locale-aware decimal value with text editing. |
 | Range | [`Dial`](#dial) | Rotary integer value. |
 | Range | [`ScrollBar`](#scrollbar) | Standalone scroll position. |
+| Range | [`OverlayScrollBar`](#overlayscrollbar) | Scroll bar on the edge of a viewport that another layer scrolls. |
 | Range | [`ScrollArea`](#scrollarea) | Scroll container with overlay scroll bars. |
 | Range | [`Resizable`](#resizable) | Panels with a movable handle between each two neighbors. |
 | Range | [`DateTimeEdit`](#datetimeedit-and-calendar) | Date or time in sections. |
@@ -593,10 +594,13 @@ behavior.
 
 **As a view.** `Label::new(text)` mounts a `Label::hosted` label with
 literal or catalog text. The view builds a new label when the locale
-changes.
+changes. `Divider` mounts a `Separator` across its stack: horizontal in
+a vertical stack, and vertical in a horizontal stack. The `Separator`
+recipe gives its thickness and color, so
+`.recipe(ControlKind::Separator, recipe)` changes it.
 
-[static_controls.rs](../crates/choscorui-controls/tests/static_controls.rs) pins
-this behavior.
+[static_controls.rs](../crates/choscorui-controls/tests/static_controls.rs) and
+[views.rs](../crates/choscorui-compose/tests/views.rs) pin this behavior.
 
 ### Progress
 
@@ -1114,9 +1118,11 @@ directions.
 - The value stays in `0..=content - viewport`. The scroll bar has no focus
   and no disabled state.
 - In a control host, the bar captures the pointer during a thumb drag.
-- **Look.** `paint` uses the `ScrollArea` thumb, inset 1 pt in the bar. A
-  drag changes the thumb to `muted-foreground` at 50% alpha. A bar that is
-  not needed paints nothing.
+- **Look.** `paint` fills the bar with the `ScrollArea` `Scrollbar`
+  background, which is empty by default. Then it paints the `ScrollArea`
+  thumb, inset 1 pt in the bar. A drag changes the thumb to
+  `muted-foreground` at 50% alpha. A bar that is not needed paints
+  nothing.
 
 | Field | `ScrollBar::semantics` |
 | --- | --- |
@@ -1124,6 +1130,49 @@ directions.
 | Name / value | name / position in whole percent |
 | State | hidden when the content fits |
 | Actions | `Increment`, `Decrement` |
+
+[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
+
+### OverlayScrollBar
+
+`OverlayScrollBar` is one scroll bar on the edge of a viewport. Another
+layer keeps the scroll offset, for example a layout engine. A
+`ScrollBar` gives the thumb geometry, the track paging, and the drag. The
+work does not change with the content size.
+
+- `arrange(cx, viewport)` records the viewport bounds, the direction, and
+  the bar thickness from the `ScrollArea` `Scrollbar` slot. Call it from
+  `CustomControl::arrange`.
+- `set_scroll(content, offset)` sets the content length and the offset.
+  The offset stays in `0..=maximum()`.
+- A vertical bar is at the trailing edge: the right edge, or the left
+  edge in a right-to-left layout. A horizontal bar is at the bottom.
+- The bar shows only when the content is longer than the viewport by more
+  than 0.5 pt. Then `track` and `thumb` return its rectangles.
+- `pointer(event)` returns an `OverlayScrollReply`. A primary press on the
+  thumb starts a drag, and a press on the track pages one viewport. A
+  move sets the thumb hover and moves a drag. A primary release ends the
+  drag.
+- `consumed` tells the caller to stop the event, `scrolled` tells it to
+  read `offset`, and `repaint` tells it that the look changed. The caller
+  holds the pointer capture while `dragging` is true.
+- `release` ends the drag and the hover. Call it when the pointer leaves
+  the viewport or the input stops.
+- **Look.** `paint` fills the bar and paints the thumb like `ScrollBar`.
+  The thumb hover and the drag set `HOVERED` and `PRESSED` in place of
+  the context flags. Paint it after the content.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bar | `ScrollArea` `Scrollbar` | 10 pt wide, 1 pt inset, no fill |
+| Thumb | `ScrollArea` `Thumb` | `border` fill, radius full |
+| Active thumb | `ScrollArea` `Thumb`, hovered or pressed | `muted-foreground` at 50% |
+
+The bar publishes no semantic node. The control that owns the viewport
+publishes the scroll semantics.
+
+**As a view.** `ScrollView` paints its scroll bar with an
+`OverlayScrollBar` (see [ScrollArea](#scrollarea)).
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
@@ -1168,8 +1217,32 @@ the area scrolls it there. The wheel also scrolls over content controls.
 A press focuses the area, because the host focuses a pressed control.
 `with_name` sets the accessible name. The area sends no messages.
 
-[navigation.rs](../crates/choscorui-controls/tests/navigation.rs) pins this
-behavior.
+**As a view.** `ScrollView::new(content)` scrolls `content` along one
+axis in the layout engine. An [`OverlayScrollBar`](#overlayscrollbar)
+paints its scroll bar above the content with the `ScrollArea` recipe, so
+`.recipe(ControlKind::ScrollArea, recipe)` changes it. Lazy stacks in the
+scroll view use the same bar.
+
+- The bar takes a press before the content under it. A thumb drag and a
+  press on the track scroll the view, and the thumb hover changes its
+  look.
+- The wheel scrolls the view after the content had the event.
+- With `.focusable(true)`, the view takes focus. Then the arrow keys
+  scroll 40 pt, PageUp, PageDown, and Space scroll one page, and Home and
+  End go to the ends.
+- A page is the viewport less 40 pt of overlap. Semantic `Increment` and
+  `Decrement` page forward and back.
+- A press does not focus the view.
+
+| Field | `ScrollView` semantics |
+| --- | --- |
+| Role | `ScrollArea` (AXScrollArea) |
+| Name / value | `.accessibility_label` / position along the axis in whole percent |
+| State | - |
+| Actions | `Increment`, `Decrement` |
+
+[navigation.rs](../crates/choscorui-controls/tests/navigation.rs) and
+[views.rs](../crates/choscorui-compose/tests/views.rs) pin this behavior.
 
 ### Resizable
 

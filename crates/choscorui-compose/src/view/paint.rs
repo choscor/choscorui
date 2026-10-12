@@ -92,6 +92,10 @@ impl Painter<'_, '_> {
         };
         let mut pushed = Vec::new();
         let mut clip = clip;
+        let scrolls = matches!(
+            inner.engine.style(node).map(|style| &style.kind),
+            Some(LayoutKind::Scroll { .. })
+        );
         if let Some(data) = inner.nodes.get(&node) {
             let decor = &data.decor;
             if decor.opacity < 1.0 && self.list.push_opacity(decor.opacity.max(0.0)).is_ok() {
@@ -135,16 +139,12 @@ impl Painter<'_, '_> {
                     pushed.push(Pop::Clip);
                 }
             }
-            if data.control {
+            if data.control && !scrolls {
                 inner
                     .controls
                     .paint_node(&inner.tree, node, self.list, self.env, &tokens);
             }
         }
-        let scrolls = matches!(
-            inner.engine.style(node).map(|style| &style.kind),
-            Some(LayoutKind::Scroll { .. })
-        );
         if scrolls {
             clip = clip.intersection(bounds).unwrap_or_default();
             self.list.push_clip(bounds);
@@ -154,6 +154,12 @@ impl Painter<'_, '_> {
             for child in visible_children(inner, node, children, clip) {
                 self.node(*child, &raw, &tokens, clip);
             }
+        }
+        // A scroll view paints its scroll bar above its content.
+        if scrolls && inner.nodes.get(&node).is_some_and(|data| data.control) {
+            inner
+                .controls
+                .paint_node(&inner.tree, node, self.list, self.env, &tokens);
         }
         if self.frames_focus(node) {
             let mut cx = PaintContext::new(self.list, bounds, &tokens, &inner.styles, &*inner.text);

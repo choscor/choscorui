@@ -282,6 +282,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("HostedStack", "stacked"),
     ("StackPage", "stacked"),
     ("ScrollArea", "scroll-area"),
+    ("OverlayScrollBar", "scroll-area"),
+    ("OverlayScrollReply", "scroll-area"),
     ("ToolBox", "tool-box"),
     ("DockLayout", "dock"),
     ("DockPanel", "dock"),

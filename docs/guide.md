@@ -151,7 +151,8 @@ Stacks place their children along one axis:
 | `Grid` | Columns of `GridItem::Fixed`, `GridItem::Flexible`, or `GridItem::Fit` |
 | `Form`, `FormRow` | Labels in one column beside their fields in another |
 | `Spacer` | Flexible space that pushes its siblings apart |
-| `ScrollView` | Content that scrolls when it is larger than the space |
+| `ScrollView` | Content that scrolls when it is larger than the space, with a scroll bar in the `ScrollArea` look |
+| `Divider` | A line across its stack in the `Separator` look |
 | `LazyVStack`, `LazyHStack` | A column or a row that mounts only the items in view, with `.spacing` and `.alignment` |
 | `List` | The rows of an `ItemModel`, painted only while they show, with a selection binding |
 | `.padding(edges)` | Space around the view, from a `Space` token or `Edges` |
