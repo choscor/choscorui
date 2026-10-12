@@ -6,7 +6,7 @@
 use crate::page::{Category, PageInfo};
 use crate::pages::{
     containers, data, datetime, dialogs, display, feedback, form, inputs, nav, navigation, overlay,
-    popups, range, recipes, selection, shell, statics, system, text,
+    popups, range, recipes, sections, selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -127,6 +127,20 @@ pub const PAGES: &[PageInfo] = &[
         containers::scroll_area
     ),
     page!("tool-box", "Tool box", Containers, containers::tool_box),
+    page!(
+        "aspect-ratio",
+        "Aspect ratio",
+        Containers,
+        sections::aspect_ratio
+    ),
+    page!(
+        "collapsible",
+        "Collapsible",
+        Containers,
+        sections::collapsible
+    ),
+    page!("accordion", "Accordion", Containers, sections::accordion),
+    page!("item", "Item", Containers, sections::item),
     page!("dock", "Dock layout", Containers, containers::dock),
     page!("size-grip", "Size grip", Containers, containers::size_grip),
     page!(
@@ -249,6 +263,13 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("ToastVariant", "toast"),
     ("Toaster", "toast"),
     ("Toasts", "toast"),
+    ("AspectRatio", "aspect-ratio"),
+    ("Collapsible", "collapsible"),
+    ("Accordion", "accordion"),
+    ("Item", "item"),
+    ("ItemGroup", "item"),
+    ("ItemMedia", "item"),
+    ("ItemVariant", "item"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -432,7 +453,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "FieldOrientation",
         "variant key of field rows; read by recipes",
     ),
-    ("ItemVariant", "variant key of item rows; read by recipes"),
     ("KbdVariant", "variant key of key caps; read by recipes"),
     (
         "MarkerVariant",

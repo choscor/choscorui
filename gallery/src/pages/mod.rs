@@ -15,6 +15,7 @@ pub mod overlay;
 pub mod popups;
 pub mod range;
 pub mod recipes;
+pub mod sections;
 pub mod selection;
 pub mod shell;
 pub mod statics;

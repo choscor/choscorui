@@ -109,6 +109,10 @@ in parentheses is the role that the macOS backend gives to that
 | Feedback | [`Skeleton`](#spinner-and-skeleton) | Pulsing placeholder block. |
 | Feedback | [`Empty`](#empty) | Centered empty state with media and actions. |
 | Feedback | [`Toaster`](#toast-and-toaster) | Stack of toasts at a window corner. |
+| Layout | [`AspectRatio`](#aspectratio) | Box with a fixed ratio, filled with an image. |
+| Layout | [`Collapsible`](#collapsible) | Section that shows or hides its items. |
+| Layout | [`Accordion`](#accordion) | Stacked sections that open under their headers. |
+| Layout | [`ItemGroup`](#item-and-itemgroup) | Rows of media, text, and actions. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2385,6 +2389,126 @@ behavior.
 | Actions | `Activate` and `Focus` while toasts show |
 
 [toast.rs](../crates/choscorui-controls/tests/toast.rs) pins this behavior.
+
+### AspectRatio
+
+- The height follows the width at a fixed ratio, such as 16 by 9. A ratio
+  that is not positive counts as 1.
+- `with_image(image)` covers the box with the image. The image keeps its
+  own ratio and is cropped at the center.
+- Without a bounded width, the box is 448 pt wide. It takes no focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | `muted` fill, radius lg; the image is clipped to the radius |
+
+| Field | `AspectRatio::semantics` |
+| --- | --- |
+| Role | `Image` (AXImage) |
+| Name | the name from `new` |
+| Actions | none |
+
+[layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
+behavior.
+
+### Collapsible
+
+- The header shows the title and a ghost icon button at the end. The
+  summary item always shows. The other items show while the section is
+  open.
+- The toggle, Enter, Space, `Activate`, `Expand`, and `Collapse` open or
+  close the section and emit `OpenChanged`. A click on the title does
+  nothing.
+- The items fade in with the content motion. The height changes at once.
+- The toggle sits at the left in a right-to-left layout.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Title | `Collapsible` `Trigger` | sm medium text |
+| Toggle | `Button` `Root`, `Ghost`, `IconSm` | ghost icon button with a chevron |
+| Item box | `Item` `Root`, `Outline`, `Xs` | outlined item row, 8 pt apart |
+| Fade | `Collapsible` `Content` | 200 ms motion |
+
+| Field | `Collapsible::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | title / summary |
+| Description | the toggle label |
+| State | expanded, disabled |
+| Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
+
+[layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
+behavior.
+
+### Accordion
+
+- Each item has a header and content text. By default, opening an item
+  closes the open one. `multiple()` lets items open together.
+- Each header is a tab stop. ArrowDown, ArrowUp, Home, and End move
+  between the headers.
+- Enter, Space, a click, or `Activate` toggles the focused item and emits
+  `Changed(Indices(open))`. `Expand` and `Collapse` act on the focused
+  item.
+- The chevron turns over while the item opens. The content fades in. With
+  reduced motion, both change at once.
+- The chevron sits at the left in a right-to-left layout.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Item | `Item` | 1 pt `border` line below |
+| Header | `Trigger` | sm medium text, 16 pt padding above and below, underline on hover, focus ring |
+| Chevron | `Icon` | 16 pt `muted-foreground` icon |
+| Content | `Content` | sm text, 16 pt below, 200 ms motion |
+
+| Field | `Accordion::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / titles of the open items |
+| Description | the title of the focused item |
+| State | expanded (focused item), disabled |
+| Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while enabled |
+
+[layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
+behavior.
+
+### Item and ItemGroup
+
+- An `Item` row shows media, a title, a description, and actions at the
+  end. Mount rows through an `ItemGroup`.
+- `ItemMedia` is an icon, an image in a rounded square, or an avatar.
+- `as_link()` makes the whole row a link with a chevron at the end. A link
+  row shows the hover look.
+- `ItemVariant` selects `Default`, `Outline`, or `Muted`. The size is
+  `Default`, `Sm`, or `Xs`.
+- Link rows and action buttons are tab stops, in order. Enter, Space, a
+  click, or `Activate` emits `ItemActivated(stop)`.
+- `with_separators()` draws a line between rows instead of the group gap.
+- The media sits at the right in a right-to-left layout. The chevron
+  points left.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Row | `Root` | sm text, radius md, 16 by 14 pt padding, 14 pt gap; `Sm` 12 by 10, `Xs` 10 by 8 |
+| Outline | `Root`, `Outline` | 1 pt `border` |
+| Muted | `Root`, `Muted` | `muted` fill at 50% |
+| Link hover | `Root`, hovered | `muted` fill |
+| Image media | `Media`, image | 40 pt square, radius sm; `Sm` 32, `Xs` 24 |
+| Icon media | `Media`, icon | 16 pt icon |
+| Title | `Title` | sm medium text |
+| Description | `Description` | sm `muted-foreground` text; `Xs` uses xs text |
+| Group | `Group` | 16 pt gap; `Sm` 10, `Xs` 8 |
+| Separator | `Separator` | 1 pt `border` line, 8 pt above and below |
+
+| Field | `ItemGroup::semantics` |
+| --- | --- |
+| Role | `List` (AXList) |
+| Name / value | name / row titles |
+| Description | the label of the focused stop |
+| State | disabled |
+| Actions | `Activate` and `Focus` with stops while enabled |
+
+[layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
+behavior.
 
 ### CustomControl and ControlHost
 

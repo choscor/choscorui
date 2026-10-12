@@ -17,6 +17,7 @@ pub(super) fn resolve(cx: &Cx) -> ResolvedStyle {
         ControlKind::Typography => typography(cx),
         ControlKind::TextEditor => editor(cx),
         ControlKind::Canvas => canvas(cx),
+        ControlKind::AspectRatio => aspect_ratio(cx),
         _ => cx.base(),
     }
 }
@@ -36,6 +37,14 @@ fn canvas(cx: &Cx) -> ResolvedStyle {
         }
         _ => {}
     }
+    style
+}
+
+/// The placeholder box behind an aspect-ratio image.
+fn aspect_ratio(cx: &Cx) -> ResolvedStyle {
+    let mut style = cx.base();
+    style.background = cx.c(ColorRole::Muted);
+    style.radius = Corners::all(cx.r(RadiusScale::Lg));
     style
 }
 

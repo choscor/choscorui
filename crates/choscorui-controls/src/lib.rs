@@ -106,6 +106,7 @@ mod data;
 mod feedback;
 mod form;
 mod hosted;
+mod layout;
 mod listbox;
 mod nav;
 mod overlay;
@@ -125,6 +126,7 @@ pub use form::{
     InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,
     ToggleItem,
 };
+pub use layout::{Accordion, AspectRatio, Collapsible, Item, ItemGroup, ItemMedia};
 pub use listbox::ListEntry;
 pub use nav::{
     Breadcrumb, NAVIGATION_CLOSE_DELAY, NAVIGATION_OPEN_DELAY, NavigationLink, NavigationMenu,

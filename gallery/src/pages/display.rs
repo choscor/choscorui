@@ -94,7 +94,7 @@ pub fn badge(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
 }
 
 /// A small diagonal gradient that stands in for a photo.
-fn portrait() -> Image {
+pub(crate) fn portrait() -> Image {
     let side = 32u32;
     let pixels = (0..side * side)
         .flat_map(|index| {
