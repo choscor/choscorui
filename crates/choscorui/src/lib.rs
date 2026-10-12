@@ -71,9 +71,9 @@ pub mod prelude {
 }
 
 pub use choscorui_compose::{
-    Binding, ComposeError, DeclarativeState, Element, Key as ElementKey, Property, ReactiveError,
-    ReconcileReport, Reconciler, Runtime, StateAssignment, StateError, StateMachine, StateName,
-    TransitionDescription,
+    ComposeError, DeclarativeState, Element, Key as ElementKey, Property, PropertyBinding,
+    ReactiveError, ReconcileReport, Reconciler, Runtime, StateAssignment, StateError, StateMachine,
+    StateName, TransitionDescription,
 };
 pub use choscorui_controls::{
     Button, ButtonInput, ButtonVariant, Checkbox, CheckboxInput, CommandError, CommandId,
@@ -94,6 +94,10 @@ pub use choscorui_core::{
     SemanticTree, Size, TextBuffer, TextError, TextMotion, ThemeError, ThemeInvalidation,
     ThemeOverride, ThemeResolver, Tree, TreeError, WheelUnit,
 };
+
+/// The connection that [`Runtime::bind`] returns.
+#[deprecated(note = "renamed to `PropertyBinding`")]
+pub type Binding = PropertyBinding;
 
 /// Stable retained identity of a UI node.
 pub type Node = NodeId;

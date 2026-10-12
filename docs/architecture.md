@@ -61,7 +61,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-compose
 
-`choscorui-compose` gives declarative composition in Rust. `Reconciler` applies a keyed `Element` description to a `Tree` and keeps each `NodeId` when a keyed element stays. `Runtime` holds typed `Property` values and `Binding` connections. `StateMachine` applies named states and animated transitions through `AnimationClock`.
+`choscorui-compose` gives declarative composition in Rust. `Reconciler` applies a keyed `Element` description to a `Tree` and keeps each `NodeId` when a keyed element stays. `Runtime` holds typed `Property` values and `PropertyBinding` connections. `Runtime::track` records the properties that a closure reads. `Runtime::computed` and `Runtime::effect` use it to compute again only when a value that they read changes. `StateMachine` applies named states and animated transitions through `AnimationClock`.
 
 Dependencies: `choscorui-core` only.
 

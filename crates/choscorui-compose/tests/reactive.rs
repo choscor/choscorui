@@ -109,3 +109,112 @@ fn a_panicking_batch_does_not_disable_later_propagation() {
     source.set(3);
     assert_eq!(derived.get(), 6);
 }
+
+#[test]
+fn track_records_the_properties_read_once_each() {
+    let runtime = Runtime::new();
+    let a = runtime.property(1);
+    let b = runtime.property(2);
+    let other = Runtime::new().property(3);
+    let (sum, reads) = runtime.track(|| a.get() + b.get() + a.get() + other.get());
+    assert_eq!(sum, 7);
+    assert_eq!(reads, vec![a.identity(), b.identity()]);
+    let (_, outer) = runtime.track(|| {
+        let (_, inner) = runtime.track(|| b.get());
+        assert_eq!(inner, vec![b.identity()]);
+        a.get_untracked()
+    });
+    assert!(outer.is_empty());
+}
+
+#[test]
+fn computed_follows_the_branch_it_last_read() {
+    let runtime = Runtime::new();
+    let flag = runtime.property(true);
+    let left = runtime.property(1);
+    let right = runtime.property(10);
+    let runs = Rc::new(RefCell::new(0));
+    let counter = runs.clone();
+    let (f, l, r) = (flag.clone(), left.clone(), right.clone());
+    let value = runtime.computed(move || {
+        *counter.borrow_mut() += 1;
+        if f.get() { l.get() } else { r.get() }
+    });
+    assert_eq!(value.get(), 1);
+    right.set(11);
+    assert_eq!(*runs.borrow(), 1, "an unread property does not recompute");
+    left.set(2);
+    assert_eq!(value.get(), 2);
+    flag.set(false);
+    assert_eq!(value.get(), 11);
+    left.set(3);
+    assert_eq!(*runs.borrow(), 3, "the old branch no longer recomputes");
+    right.set(12);
+    assert_eq!(value.get(), 12);
+}
+
+#[test]
+fn computed_values_are_current_inside_observers() {
+    let runtime = Runtime::new();
+    let count = runtime.property(1);
+    let source = count.clone();
+    let doubled = runtime.computed(move || source.get() * 2);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let sink = seen.clone();
+    let reader = doubled.clone();
+    count.subscribe(move |_| sink.borrow_mut().push(reader.get()));
+    count.set(5);
+    assert_eq!(*seen.borrow(), vec![10]);
+}
+
+#[test]
+fn effects_rerun_after_each_flush_until_unsubscribed() {
+    let runtime = Runtime::new();
+    let a = runtime.property(0);
+    let b = runtime.property(0);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let sink = seen.clone();
+    let (ra, rb) = (a.clone(), b.clone());
+    let effect = runtime.effect(move || sink.borrow_mut().push((ra.get(), rb.get())));
+    runtime.batch(|| {
+        a.set(1);
+        b.set(2);
+    });
+    assert_eq!(*seen.borrow(), vec![(0, 0), (1, 2)], "one run per flush");
+    runtime.unsubscribe(effect);
+    a.set(3);
+    assert_eq!(seen.borrow().len(), 2);
+}
+
+#[test]
+fn disposed_properties_stop_notifying() {
+    let runtime = Runtime::new();
+    let a = runtime.property(0);
+    let seen = Rc::new(RefCell::new(0));
+    let sink = seen.clone();
+    a.subscribe(move |_| *sink.borrow_mut() += 1);
+    a.set(1);
+    runtime.dispose(a.identity());
+    a.set(2);
+    assert_eq!(*seen.borrow(), 1);
+    assert_eq!(a.get(), 2);
+}
+
+#[test]
+fn values_that_keep_changing_each_other_report_a_cycle() {
+    let runtime = Runtime::new();
+    let a = runtime.property(0u64);
+    let writer = a.clone();
+    let _effect = runtime.effect(move || {
+        let value = writer.get();
+        writer.set(value + 1);
+    });
+    a.set(100);
+    assert!(runtime.take_errors().contains(&ReactiveError::Cycle));
+    let b = runtime.property(0);
+    let seen = Rc::new(RefCell::new(0));
+    let sink = seen.clone();
+    b.subscribe(move |_| *sink.borrow_mut() += 1);
+    b.set(1);
+    assert_eq!(*seen.borrow(), 1, "propagation works after a cycle");
+}
