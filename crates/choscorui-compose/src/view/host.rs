@@ -1031,10 +1031,12 @@ impl ViewHost {
     }
 
     /// Runs the reactions of changed state until nothing changes.
-    /// Returns true when any ran.
+    /// Returns true when any ran. Focus bindings follow focus that a
+    /// reaction moved, for example through another focus binding.
     pub fn flush(&mut self) -> bool {
         let mut ran = false;
         for _ in 0..MAX_ROUNDS {
+            self.inner.sync_focus();
             let mut due = std::mem::take(&mut *self.inner.queue.borrow_mut());
             if due.is_empty() {
                 break;
@@ -1260,7 +1262,6 @@ impl ViewHost {
             }
         }
         self.inner.sync_control_dirt();
-        self.inner.sync_focus();
         self.flush();
     }
 

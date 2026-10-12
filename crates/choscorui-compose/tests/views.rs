@@ -4,7 +4,8 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, Text, VStack, View, ViewExt, ViewHost,
+    Binding, ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, Text, VStack, View, ViewExt,
+    ViewHost,
 };
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlMessage, CustomControl, EstimatedText, MeasureContext,
@@ -205,6 +206,47 @@ fn a_state_change_dirties_the_same_nodes_at_any_size() {
     }
     assert_eq!(counts[0], counts[1]);
     assert!(counts[0] <= 2, "dirtied {} nodes", counts[0]);
+}
+
+#[test]
+fn a_focus_binding_turns_false_when_another_binding_takes_focus() {
+    let runtime = Runtime::new();
+    let first = runtime.property(false);
+    let second = runtime.property(false);
+    struct Pair(
+        choscorui_compose::Property<bool>,
+        choscorui_compose::Property<bool>,
+    );
+    fn binding(property: &choscorui_compose::Property<bool>) -> Binding<bool> {
+        let (get, set) = (property.clone(), property.clone());
+        Binding::new(move || get.get(), move |value| set.set(value))
+    }
+    impl View for Pair {
+        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+            VStack::new((
+                tap("first", || {}).focused(binding(&self.0)),
+                tap("second", || {}).focused(binding(&self.1)),
+            ))
+        }
+    }
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(Pair(first.clone(), second.clone()));
+    host.layout();
+    let (one, two) = (host.find("first").unwrap(), host.find("second").unwrap());
+    first.set(true);
+    host.flush();
+    assert_eq!(host.tree().focus(), Some(one));
+    second.set(true);
+    host.flush();
+    assert_eq!(host.tree().focus(), Some(two));
+    assert!(!first.get(), "the first binding still claims focus");
+    assert_eq!(host.take_errors(), Vec::new());
 }
 
 #[test]
