@@ -359,6 +359,7 @@ fn page_area(shared: &Shared, window: &WindowState) -> impl View {
         store: window.store.clone(),
     };
     let language = shared.language.clone();
+    let titles = shared.clone();
     VStack::new((Dynamic::new(move || {
         let index = shown.get();
         // Pages read some sample strings while they build, so a new
@@ -368,7 +369,10 @@ fn page_area(shared: &Shared, window: &WindowState) -> impl View {
             .text_style(TextPreset::H3);
         let content: AnyView = match crate::ui::pages::find(PAGES[index].id) {
             Some(build) => build(&cx),
-            None => Text::new(format!("{} is not a view yet", PAGES[index].title)).into_any(),
+            None => {
+                let title = titles.page_title(index);
+                Text::new(Localized::new("app.not_a_view").arg("title", title)).into_any()
+            }
         };
         VStack::new((title, content))
             .alignment(HorizontalAlignment::Leading)

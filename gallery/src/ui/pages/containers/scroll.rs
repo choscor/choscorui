@@ -20,10 +20,12 @@ const TILES: usize = 14;
 struct TileArea {
     tree: Tree,
     area: ScrollArea,
+    /// The area's accessible name.
+    name: String,
 }
 
 impl TileArea {
-    fn new() -> Result<Self, String> {
+    fn new(name: String) -> Result<Self, String> {
         let mut tree = Tree::new(Rect::default());
         let viewport = tree
             .attach(tree.root(), Rect::default())
@@ -44,6 +46,7 @@ impl TileArea {
         Ok(Self {
             tree,
             area: ScrollArea::new(viewport),
+            name,
         })
     }
 
@@ -169,7 +172,7 @@ impl CustomControl for TileArea {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.area.semantics(&self.tree, "Tiles")
+        self.area.semantics(&self.tree, &self.name)
     }
 
     fn perform(
@@ -197,8 +200,10 @@ impl CustomControl for TileArea {
 
 pub fn scroll_area(_: &PageCx) -> AnyView {
     column(
-        Configured::try_custom(ControlKind::ScrollArea, |_| TileArea::new())
-            .frame(Frame::size(560.0, 380.0)),
+        Configured::try_custom(ControlKind::ScrollArea, |env| {
+            TileArea::new(env.text("scroll-area.tiles", &[]))
+        })
+        .frame(Frame::size(560.0, 380.0)),
     )
 }
 

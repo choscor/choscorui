@@ -2,10 +2,10 @@
 //! arrangement that the page store keeps across restarts.
 
 use crate::ui::page::{PageCx, column, stateful};
-use choscorui::compose::Property;
 use choscorui::compose::view::{
-    AnyView, Button, Configured, Dynamic, Frame, HStack, Text, ViewExt,
+    AnyView, Button, Configured, Dynamic, Env, Frame, HStack, Text, ViewExt,
 };
+use choscorui::compose::{Property, t};
 use choscorui::controls::{
     ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
     CustomControl, DockArea, DockLayout, DockPanel, DockTarget, MeasureContext, PaintContext,
@@ -21,16 +21,30 @@ const OUTLINE: PanelId = PanelId(2);
 const INSPECTOR: PanelId = PanelId(3);
 const CONSOLE: PanelId = PanelId(4);
 
+/// The default arrangement. Panels are titled with their persistence
+/// keys, which the saved text holds; [`titled_dock`] titles them for
+/// display.
 pub(crate) fn default_dock() -> DockLayout {
+    arranged(str::to_owned)
+}
+
+/// The default arrangement with its panels titled in `env`.
+fn titled_dock(env: &Env) -> DockLayout {
+    arranged(|key| env.text(&format!("dock.{key}"), &[]))
+}
+
+/// The default arrangement, with the panel stored under `key` titled
+/// `title(key)`.
+fn arranged(title: impl Fn(&str) -> String) -> DockLayout {
     let mut dock = DockLayout::new(24.0);
     let tab = |area| DockTarget::Tab { area, group: 0 };
-    for (id, key, title, target) in [
-        (FILES, "files", "Files", tab(DockArea::Left)),
-        (OUTLINE, "outline", "Outline", tab(DockArea::Left)),
-        (INSPECTOR, "inspector", "Inspector", tab(DockArea::Right)),
-        (CONSOLE, "console", "Console", tab(DockArea::Bottom)),
+    for (id, key, target) in [
+        (FILES, "files", tab(DockArea::Left)),
+        (OUTLINE, "outline", tab(DockArea::Left)),
+        (INSPECTOR, "inspector", tab(DockArea::Right)),
+        (CONSOLE, "console", tab(DockArea::Bottom)),
     ] {
-        let _ = dock.add(id, DockPanel::new(key, title), target);
+        let _ = dock.add(id, DockPanel::new(key, title(key)), target);
     }
     dock.set_extent(DockArea::Left, 180.0);
     dock.set_extent(DockArea::Right, 170.0);
@@ -38,24 +52,30 @@ pub(crate) fn default_dock() -> DockLayout {
     dock
 }
 
-/// The arrangement that `saved` describes, with a note when the page
-/// could not use all of it. Empty text, or text that does not restore,
-/// gives the default arrangement.
-fn restored(saved: &str) -> (DockLayout, Option<String>) {
-    let mut dock = default_dock();
+/// Why the page could not use all of a saved arrangement.
+#[derive(Clone, Debug, PartialEq)]
+enum Note {
+    /// The saved text named these unknown panels.
+    Skipped(String),
+    /// The saved text did not restore, for this reason.
+    Ignored(String),
+}
+
+/// `dock`, the default arrangement, rearranged as `saved` describes, with
+/// a note when the page could not use all of it. Empty text, or text that
+/// does not restore, keeps the default arrangement.
+fn restored(saved: &str, mut dock: DockLayout) -> (DockLayout, Option<Note>) {
     if saved.is_empty() {
         return (dock, None);
     }
     match dock.restore(saved) {
         Ok(report) if !report.unknown_keys.is_empty() => {
-            let note = format!("Skipped unknown panels: {}", report.unknown_keys.join(", "));
+            let note = Note::Skipped(report.unknown_keys.join(", "));
             (dock, Some(note))
         }
         Ok(_) => (dock, None),
-        Err(error) => (
-            default_dock(),
-            Some(format!("Saved layout ignored ({error}); using the default")),
-        ),
+        // A failed restore leaves the layout unchanged.
+        Err(error) => (dock, Some(Note::Ignored(error.to_string()))),
     }
 }
 
@@ -89,7 +109,7 @@ fn toggle_outline(dock: &mut DockLayout) -> bool {
 
 /// Changes the saved arrangement with `change` and saves the result.
 fn edit(saved: &Property<String>, change: fn(&mut DockLayout) -> bool) {
-    let (mut dock, _) = restored(&saved.get_untracked());
+    let (mut dock, _) = restored(&saved.get_untracked(), default_dock());
     if change(&mut dock) {
         saved.set(dock.save());
     }
@@ -101,6 +121,28 @@ fn edit(saved: &Property<String>, change: fn(&mut DockLayout) -> bool) {
 /// saved text as its value.
 struct DockView {
     dock: DockLayout,
+    /// The center's caption.
+    editor: String,
+    /// Each panel's caption.
+    captions: Vec<(PanelId, String)>,
+}
+
+impl DockView {
+    /// `dock`, whose panels have titles in `env`, captioned in `env`.
+    fn new(env: &Env, dock: DockLayout) -> Self {
+        let captions = [FILES, OUTLINE, INSPECTOR, CONSOLE]
+            .into_iter()
+            .filter_map(|id| {
+                let title = &dock.panel(id)?.title;
+                Some((id, env.text("dock.panel", &[("title", title)])))
+            })
+            .collect();
+        Self {
+            dock,
+            editor: env.text("dock.editor", &[]),
+            captions,
+        }
+    }
 }
 
 impl DockView {
@@ -133,18 +175,19 @@ impl CustomControl for DockView {
         CustomControl::paint(&self.dock, cx);
         let arrangement = self.dock.arrange(cx.bounds);
         let style = cx.style(StyleQuery::new(ControlKind::Card, Slot::Description));
-        cx.label(arrangement.center, "Editor", &style, TextAlign::Center);
+        cx.label(arrangement.center, &self.editor, &style, TextAlign::Center);
         for group in &arrangement.groups {
-            let title = self
-                .dock
-                .panel(group.active)
-                .map_or("", |panel| panel.title.as_str());
+            let caption = self
+                .captions
+                .iter()
+                .find(|(id, _)| *id == group.active)
+                .map_or("", |(_, caption)| caption.as_str());
             let inner = group.content.inset(8.0);
             let line = Rect::new(
                 Point::new(inner.origin.x, inner.origin.y),
                 Size::new(inner.size.width, style.text.line_height),
             );
-            cx.label(line, &format!("{title} panel"), &style, TextAlign::Start);
+            cx.label(line, caption, &style, TextAlign::Start);
         }
     }
 
@@ -189,18 +232,18 @@ impl CustomControl for DockView {
 pub fn dock(cx: &PageCx) -> AnyView {
     let saved = cx.store.dock.clone();
     stateful(move |cx| {
-        let (initial, note) = restored(&saved.get_untracked());
+        let (initial, note) = restored(&saved.get_untracked(), titled_dock(cx.env()));
         let note = cx.state(note);
-        let button = |label: &str, change: fn(&mut DockLayout) -> bool| {
+        let button = |label: &'static str, change: fn(&mut DockLayout) -> bool| {
             let saved = saved.clone();
-            Button::new(label.to_owned(), move || {
+            Button::new(t!(label), move || {
                 note.set(None);
                 edit(&saved, change);
             })
         };
         let reset = {
             let saved = saved.clone();
-            Button::new("Reset layout", move || {
+            Button::new(t!("dock.reset"), move || {
                 note.set(None);
                 saved.set(default_dock().save());
             })
@@ -208,14 +251,14 @@ pub fn dock(cx: &PageCx) -> AnyView {
         let (value, written) = (saved.clone(), saved.clone());
         column((
             HStack::new((
-                button("Move Console", move_console),
-                button("Toggle Outline", toggle_outline),
+                button("dock.move_console", move_console),
+                button("dock.toggle_outline", toggle_outline),
                 reset,
             ))
             .spacing(Space::S2)
             .button_variant(ButtonVariant::Outline),
-            Configured::custom(ControlKind::Dock, move |_| DockView {
-                dock: initial.clone(),
+            Configured::custom(ControlKind::Dock, move |env| {
+                DockView::new(env, initial.clone())
             })
             .value(move || ControlValue::Text(value.get()))
             .on_message(move |message| {
@@ -226,7 +269,11 @@ pub fn dock(cx: &PageCx) -> AnyView {
             .frame(Frame::new().max_width(760.0).height(440.0)),
             Dynamic::new(move || {
                 note.get().map(|note| {
-                    Text::new(note)
+                    let text = match note {
+                        Note::Skipped(panels) => t!("dock.skipped", panels = panels),
+                        Note::Ignored(error) => t!("dock.ignored", error = error),
+                    };
+                    Text::new(text)
                         .text_style(TextPreset::Small)
                         .foreground(ColorRole::MutedForeground)
                 })
@@ -239,13 +286,14 @@ pub fn dock(cx: &PageCx) -> AnyView {
 mod tests {
     use super::{default_dock, move_console, restored, toggle_outline};
     use crate::page::{NoDesktop, PageState};
+    use crate::strings;
     use crate::ui::page::{PageCx, PageStore};
     use crate::ui::pages::tests::Harness;
     use choscorui::compose::Runtime;
     use choscorui::compose::view::{Env, ViewHost};
     use choscorui::controls::{DockArea, EstimatedText, PanelLocation, ShortcutModifiers};
     use choscorui::core::{
-        Catalog, DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticRole, Size,
+        DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticRole, Size,
     };
     use std::rc::Rc;
 
@@ -262,7 +310,9 @@ mod tests {
             desktop: Rc::new(NoDesktop),
             store: store.clone(),
         };
-        let env = Env::new(Rc::new(Catalog::new()), Locale::parse("en").unwrap());
+        let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+        let (catalog, _, _) = strings::load(&resources);
+        let env = Env::new(Rc::new(catalog), Locale::parse("en").unwrap());
         let mut host = ViewHost::new(
             Size::new(900.0, 700.0),
             DesignTokens::light(),
@@ -276,7 +326,7 @@ mod tests {
     }
 
     fn console_area(saved: &str) -> Option<DockArea> {
-        match restored(saved).0.location(super::CONSOLE) {
+        match restored(saved, default_dock()).0.location(super::CONSOLE) {
             Some(PanelLocation::Docked { area, .. }) => Some(area),
             _ => None,
         }
@@ -336,7 +386,7 @@ mod tests {
         }
         assert!(press(&mut page, Key::ArrowLeft));
         assert_eq!(page.host.semantic(dock).unwrap().name, "Files");
-        let (arranged, _) = restored(&store.dock.get());
+        let (arranged, _) = restored(&store.dock.get(), default_dock());
         assert!(arranged.is_active(super::FILES));
 
         assert!(page.act("Toggle Outline", SemanticAction::Activate));

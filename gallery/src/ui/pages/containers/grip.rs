@@ -1,7 +1,7 @@
 //! The size grip page: a mock window resized by its grip.
 
 use crate::ui::page::{PageCx, column, stateful};
-use choscorui::compose::view::{AnyView, Configured, VStack, ViewExt};
+use choscorui::compose::view::{AnyView, Configured, Env, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
     MeasureContext, PaintContext, SizeGrip, Slot, StyleQuery, TextAlign, paint_box,
@@ -25,14 +25,17 @@ struct MockWindow {
     grip: SizeGrip,
     size: Size,
     dragging: bool,
+    /// The environment that the grip's semantics are read in.
+    env: Env,
 }
 
 impl MockWindow {
-    fn new(size: Size) -> Self {
+    fn new(env: &Env, size: Size) -> Self {
         Self {
             grip: SizeGrip::new(Size::new(220.0, 140.0), Size::new(620.0, 400.0), false),
             size,
             dragging: false,
+            env: env.clone(),
         }
     }
 
@@ -152,11 +155,16 @@ impl CustomControl for MockWindow {
     }
 
     fn semantics(&self) -> SemanticNode {
+        let (width, height) = (
+            format!("{:.0}", self.size.width),
+            format!("{:.0}", self.size.height),
+        );
+        let size = [("width", width.as_str()), ("height", height.as_str())];
         SemanticNode {
             role: SemanticRole::Button,
-            name: "Resize".into(),
-            description: "Arrow keys resize by 10 points".into(),
-            value: Some(format!("{:.0} by {:.0}", self.size.width, self.size.height)),
+            name: self.env.text("size-grip.resize", &[]),
+            description: self.env.text("size-grip.resize_hint", &[]),
+            value: Some(self.env.text("size-grip.size", &size)),
             state: SemanticState::default(),
             relations: Vec::new(),
             actions: vec![
@@ -213,9 +221,9 @@ impl CustomControl for MockWindow {
 pub fn size_grip(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let size = cx.state((360.0, 220.0));
-        let window = Configured::custom(ControlKind::SizeGrip, move |_| {
+        let window = Configured::custom(ControlKind::SizeGrip, move |env| {
             let (width, height) = size.get_untracked().unwrap_or((360.0, 220.0));
-            MockWindow::new(Size::new(width, height))
+            MockWindow::new(env, Size::new(width, height))
         })
         .value(move || {
             let (width, height) = size.get();
@@ -226,7 +234,8 @@ pub fn size_grip(_: &PageCx) -> AnyView {
                 size.set((*width, *height));
             }
         });
-        column(VStack::new(window).accessibility_label("Mock window"))
+        let name = cx.env().text("size-grip.window", &[]);
+        column(VStack::new(window).accessibility_label(name))
     })
 }
 

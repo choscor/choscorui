@@ -2,8 +2,9 @@
 //! input dialogs with validation, the color picker, and the font dialog.
 
 use crate::ui::page::{Build, PageCx, column, row};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Fill, FontDialog,
+    AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Env, Fill, FontDialog,
     Frame, HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text, TextContent, VStack,
     View, ViewExt,
 };
@@ -23,24 +24,31 @@ fn readout<M>(text: impl IntoLive<TextContent, M>) -> impl View {
 // ---------------------------------------------------------------------------
 // Alert dialog
 
-fn save_alert() -> AlertDialog {
+/// The catalog string `key` in `env`.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+fn save_alert(env: &Env) -> AlertDialog {
+    let text = |key: &str| text(env, key);
     let mut dialog = AlertDialog::new(
-        "Unsaved changes",
-        "Do you want to save the changes you made to “Notes.txt”?",
+        text("alert-dialog.title"),
+        env.text("alert-dialog.message", &[("file", "Notes.txt")]),
         vec![
-            DialogButton::new("Save", DialogButtonRole::Accept),
-            DialogButton::new("Don't Save", DialogButtonRole::Discard),
-            DialogButton::new("Cancel", DialogButtonRole::Reject),
+            DialogButton::new(text("alert-dialog.save"), DialogButtonRole::Accept),
+            DialogButton::new(text("alert-dialog.dont_save"), DialogButtonRole::Discard),
+            DialogButton::new(text("alert-dialog.cancel"), DialogButtonRole::Reject),
             DialogButton::new("?", DialogButtonRole::Help),
         ],
     );
-    dialog.detail = Some("Your changes will be lost if you don't save them.".into());
+    dialog.detail = Some(text("alert-dialog.detail"));
     dialog
 }
 
 /// The readout for choosing button `index` of `dialog`.
-fn chose(dialog: &AlertDialog, index: usize) -> String {
-    format!("Chose “{}”", dialog.buttons[index].title)
+fn chose(env: &Env, dialog: &AlertDialog, index: usize) -> String {
+    let button = &dialog.buttons[index].title;
+    env.text("alert-dialog.chose", &[("button", button)])
 }
 
 /// Opens a modal "save changes" alert or a modeless note. While the modal
@@ -50,40 +58,41 @@ struct AlertDialogPage;
 
 impl View for AlertDialogPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state("No dialog open.".to_owned());
+        let last = cx.state(text(cx.env(), "alert-dialog.none"));
         let modal = cx.state(false);
         let tip = cx.state(false);
-        let alert = Configured::custom(ControlKind::AlertDialog, |_| save_alert().hosted())
+        let (item_env, dismiss_env, tip_env) =
+            (cx.env().clone(), cx.env().clone(), cx.env().clone());
+        let alert = Configured::custom(ControlKind::AlertDialog, |env| save_alert(env).hosted())
             .open(modal.binding())
-            .on_item(move |index| last.set(chose(&save_alert(), index)))
+            .on_item(move |index| last.set(chose(&item_env, &save_alert(&item_env), index)))
             // Dismissing chooses the button that Escape chooses.
             .on_dismiss(move || {
-                let dialog = save_alert();
+                let dialog = save_alert(&dismiss_env);
                 if let Some(index) = dialog_key_button(&dialog.buttons, Key::Escape) {
-                    last.set(chose(&dialog, index));
+                    last.set(chose(&dismiss_env, &dialog, index));
                 }
             });
         let note = Dynamic::new(move || {
             tip.get().then(|| {
-                Card::new(
-                    "Tip",
-                    "This note is modeless: the rest of the page keeps working.",
-                )
-                .with(|card| card.with_footer("OK", ButtonVariant::Default))
-                .on_item(move |_| {
-                    last.set("Chose “OK”".to_owned());
-                    tip.set(false);
-                })
-                .frame(Frame::new().max_width(512.0))
+                let ok = text(&tip_env, "alert-dialog.ok");
+                let chose_ok = tip_env.text("alert-dialog.chose", &[("button", &ok)]);
+                Card::new(t!("alert-dialog.tip"), t!("alert-dialog.tip_text"))
+                    .with(move |card| card.with_footer(ok.clone(), ButtonVariant::Default))
+                    .on_item(move |_| {
+                        last.set(chose_ok.clone());
+                        tip.set(false);
+                    })
+                    .frame(Frame::new().max_width(512.0))
             })
         });
         column((
             row((
-                Button::new("Close document…", move || {
+                Button::new(t!("alert-dialog.close_document"), move || {
                     tip.set(false);
                     modal.set(true);
                 }),
-                Button::new("Show tip", move || tip.set(true)),
+                Button::new(t!("alert-dialog.show_tip"), move || tip.set(true)),
             )),
             readout(move || last.get()),
             note,
@@ -99,7 +108,8 @@ pub fn alert_dialog(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Input dialog
 
-/// The title, prompt, kind, and starting text of one input dialog.
+/// The title and prompt keys, kind, and starting text of one input
+/// dialog.
 type Spec = (&'static str, &'static str, InputKind, String);
 
 /// Four input dialogs shown inline: text, integer, decimal, and choice.
@@ -108,17 +118,19 @@ struct InputDialogPage;
 
 impl InputDialogPage {
     fn specs(cx: &Cx<'_>) -> [Spec; 4] {
-        let locale = cx.env().locale();
+        let env = cx.env();
+        let locale = env.locale();
+        let size = |key: &str| text(env, key);
         [
             (
-                "Rename",
-                "New name",
+                "input-dialog.rename",
+                "input-dialog.new_name",
                 InputKind::Text { allow_empty: false },
                 "Notes.txt".into(),
             ),
             (
-                "Go to line",
-                "Line (1 – 500)",
+                "input-dialog.go_to_line",
+                "input-dialog.line",
                 InputKind::Integer {
                     minimum: 1,
                     maximum: 500,
@@ -126,8 +138,8 @@ impl InputDialogPage {
                 "42".into(),
             ),
             (
-                "Price",
-                "Price (0 – 1,000,000; 2 decimals)",
+                "input-dialog.price",
+                "input-dialog.price_prompt",
                 InputKind::Decimal {
                     minimum: 0.0,
                     maximum: 1e6,
@@ -138,10 +150,14 @@ impl InputDialogPage {
                     .unwrap_or_else(|_| "9.50".into()),
             ),
             (
-                "Size",
-                "Size (Small, Medium, or Large)",
-                InputKind::Choice(vec!["Small".into(), "Medium".into(), "Large".into()]),
-                "Medium".into(),
+                "input-dialog.size",
+                "input-dialog.size_prompt",
+                InputKind::Choice(vec![
+                    size("input-dialog.small"),
+                    size("input-dialog.medium"),
+                    size("input-dialog.large"),
+                ]),
+                size("input-dialog.medium"),
             ),
         ]
     }
@@ -149,17 +165,23 @@ impl InputDialogPage {
 
 impl View for InputDialogPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state("Type a value and press Return.".to_owned());
+        let last = cx.state(text(cx.env(), "input-dialog.start"));
         let mut dialogs = Vec::new();
         for (title, prompt, kind, initial) in Self::specs(cx) {
-            let text = cx.state(initial);
+            let typed = cx.state(initial);
+            let env = cx.env().clone();
             dialogs.push(InputDialog::new(
-                title,
-                prompt,
-                "OK",
+                t!(title),
+                t!(prompt),
+                t!("input-dialog.ok"),
                 kind,
-                text.binding(),
-                move |value| last.set(format!("{title}: accepted {value:?}")),
+                typed.binding(),
+                move |value| {
+                    let title = text(&env, title);
+                    let value = format!("{value:?}");
+                    let args = [("title", title.as_str()), ("value", value.as_str())];
+                    last.set(env.text("input-dialog.accepted", &args));
+                },
             ));
         }
         column((
@@ -178,18 +200,23 @@ pub fn input_dialog(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Color picker
 
-const CHANNELS: [&str; 4] = ["Hue", "Saturation", "Brightness", "Opacity"];
+const CHANNELS: [&str; 4] = [
+    "color-picker.hue",
+    "color-picker.saturation",
+    "color-picker.brightness",
+    "color-picker.opacity",
+];
 
 /// The picker's starting color: teal.
 const TEAL: Color = Color::rgba8(0, 128, 128, 255);
 
-/// The readout of channel `index`, such as "Hue 180°".
-fn channel_text(picker: &ColorPicker, index: usize) -> String {
+/// The readout of channel `index` named `name`, such as "Hue 180°".
+fn channel_text(picker: &ColorPicker, index: usize, name: &str) -> String {
     let fraction = picker.channel(ColorChannel::ALL[index]);
     if index == 0 {
-        format!("{} {:.0}°", CHANNELS[index], fraction * 360.0)
+        format!("{name} {:.0}°", fraction * 360.0)
     } else {
-        format!("{} {:.0}%", CHANNELS[index], fraction * 100.0)
+        format!("{name} {:.0}%", fraction * 100.0)
     }
 }
 
@@ -218,8 +245,8 @@ impl View for ColorPickerPage {
                 .with(|picker| picker.recent().to_vec())
                 .unwrap_or_default()
         });
-        let picker = Configured::custom(ControlKind::ColorPicker, |_| {
-            ColorPicker::new(TEAL).with_name("Current color")
+        let picker = Configured::custom(ControlKind::ColorPicker, |env| {
+            ColorPicker::new(TEAL).with_name(text(env, "color-picker.current"))
         })
         .value(move || ControlValue::Text(model.with(ColorPicker::hex).unwrap_or_default()))
         .on_message(move |message| match message {
@@ -245,17 +272,20 @@ impl View for ColorPickerPage {
                 hex_state.set(state);
             },
         );
-        let hex = Input::new("Hex color", typed)
+        let hex = Input::new(t!("color-picker.hex"), typed)
             .with(move |mut input| {
                 input.set_validation(checked());
                 input.with_placeholder("#RRGGBB")
             })
             .frame(Frame::new().width(140.0));
-        let channels: Vec<_> = (0..CHANNELS.len())
-            .map(|index| {
+        let channels: Vec<_> = CHANNELS
+            .iter()
+            .enumerate()
+            .map(|(index, key)| {
+                let name = text(cx.env(), key);
                 readout(move || {
                     model
-                        .with(|picker| channel_text(picker, index))
+                        .with(|picker| channel_text(picker, index, &name))
                         .unwrap_or_default()
                 })
             })
@@ -265,7 +295,7 @@ impl View for ColorPickerPage {
             HStack::new(channels).spacing(Space::S4),
             row((
                 hex,
-                Button::new("Use Color", move || {
+                Button::new(t!("color-picker.use_color"), move || {
                     model.update(|picker| {
                         picker.accept();
                     })
@@ -294,8 +324,6 @@ pub fn color_picker(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Font dialog
 
-const PREVIEW: &str = "Sphinx of black quartz — Chữ Việt — 日本語";
-
 const FAMILIES: [&str; 8] = [
     "Helvetica",
     "Times New Roman",
@@ -316,12 +344,19 @@ impl View for FontDialogPage {
         let style = cx.state(TextStyle::new("Georgia", 22.0));
         let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
         column((
-            FontDialog::new(PREVIEW, "Size", "Bold", "Italic", families, style.binding()),
-            readout(move || {
-                style
-                    .with(|style| format!("{} {} pt", style.family, style.size))
-                    .unwrap_or_default()
-            }),
+            FontDialog::new(
+                t!("font-dialog.preview"),
+                t!("font-dialog.size"),
+                t!("font-dialog.bold"),
+                t!("font-dialog.italic"),
+                families,
+                style.binding(),
+            ),
+            readout(t!(
+                "font-dialog.readout",
+                family = move || style.with(|style| style.family.clone()).unwrap_or_default(),
+                size = move || style.with(|style| style.size).unwrap_or_default(),
+            )),
         ))
     }
 }
@@ -455,7 +490,11 @@ mod tests {
     fn font_dialog_previews_the_chosen_style() {
         let mut page = Harness::new("font-dialog");
         assert!(page.host.find("Georgia 22 pt").is_some());
-        assert_eq!(page.value(super::PREVIEW).as_deref(), Some("Georgia"));
+        assert_eq!(
+            page.value("Sphinx of black quartz — Chữ Việt — 日本語")
+                .as_deref(),
+            Some("Georgia")
+        );
         assert!(page.act("Size", SemanticAction::Increment));
         assert!(page.host.find("Georgia 23 pt").is_some());
         assert!(page.act("Bold", SemanticAction::Activate));

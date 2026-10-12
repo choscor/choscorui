@@ -88,10 +88,11 @@ fn first_selected<M: ItemModel>(model: &SharedModel<M>, selected: &[ItemKey]) ->
 pub const RECORDS: usize = 100_000;
 const CITIES: [&str; 6] = ["Hà Nội", "Huế", "Đà Lạt", "Hội An", "Sa Pa", "Tel Aviv"];
 
-fn records() -> StringListModel {
+/// The records, each starting with the word `record`.
+fn records(record: &str) -> StringListModel {
     StringListModel::from_strings((0..RECORDS).map(|i| {
         format!(
-            "Record {i:06} · {} · {}.{:02} ₫",
+            "{record} {i:06} · {} · {}.{:02} ₫",
             CITIES[i % CITIES.len()],
             (i * 37) % 10_000,
             i % 100
@@ -105,7 +106,7 @@ struct ItemViewPage;
 
 impl View for ItemViewPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let model = SharedModel::proxied(records());
+        let model = SharedModel::proxied(records(&cx.env().text("item-view.record", &[])));
         let matches = cx.state(RECORDS);
         let revision = cx.state(0_u64);
         let search = cx.state(String::new());

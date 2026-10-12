@@ -7,8 +7,9 @@ mod scroll;
 mod tool_box;
 
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Dynamic, FocusFrame, Frame, HStack,
+    Alignment, AnyView, Button, Configured, Dynamic, Env, FocusFrame, Frame, HStack,
     HorizontalAlignment, Spacer, State, Text, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
@@ -42,31 +43,47 @@ fn fill() -> Frame {
 
 /// Two titled groups of related buttons.
 pub fn group_box(_: &PageCx) -> AnyView {
-    let group = |title: &'static str, members: [&'static str; 3]| {
-        let buttons: Vec<_> = members
-            .into_iter()
-            .map(|label| Button::new(label, || {}))
-            .collect();
-        panel(
-            VStack::new((
-                Text::new(title)
-                    .text_style(TextPreset::Small)
-                    .font_weight(FontWeight::MEDIUM),
-                HStack::new(buttons).spacing(Space::S2),
-            ))
-            .alignment(HorizontalAlignment::Leading)
-            .spacing(Space::S3)
-            .padding(Space::S4)
-            .frame(Frame::new().width(400.0).alignment(Alignment::LEADING)),
-        )
-        .accessibility_label(title)
-    };
-    column((
-        group("Shipping", ["Standard", "Express", "Pick up"]),
-        group("Notifications", ["Email", "SMS", "Push"]),
-    ))
-    .button_variant(ButtonVariant::Outline)
-    .into_any()
+    stateful(|cx| {
+        column((
+            group(
+                cx.env(),
+                "group-box.shipping",
+                [
+                    "group-box.standard",
+                    "group-box.express",
+                    "group-box.pick_up",
+                ],
+            ),
+            group(
+                cx.env(),
+                "group-box.notifications",
+                ["group-box.email", "group-box.sms", "group-box.push"],
+            ),
+        ))
+        .button_variant(ButtonVariant::Outline)
+    })
+}
+
+/// The group titled `title` with a button for each of `members`, all
+/// catalog keys.
+fn group(env: &Env, title: &'static str, members: [&'static str; 3]) -> impl View + use<> {
+    let buttons: Vec<_> = members
+        .into_iter()
+        .map(|label| Button::new(t!(label), || {}))
+        .collect();
+    panel(
+        VStack::new((
+            Text::new(t!(title))
+                .text_style(TextPreset::Small)
+                .font_weight(FontWeight::MEDIUM),
+            HStack::new(buttons).spacing(Space::S2),
+        ))
+        .alignment(HorizontalAlignment::Leading)
+        .spacing(Space::S3)
+        .padding(Space::S4)
+        .frame(Frame::new().min_width(400.0).alignment(Alignment::LEADING)),
+    )
+    .accessibility_label(env.text(title, &[]))
 }
 
 // ---------------------------------------------------------------------------
@@ -77,27 +94,30 @@ const HANDLE: f64 = 6.0;
 /// The smallest pane, in points.
 const MINIMUM: f64 = 60.0;
 
-/// A labelled pane that fills the space it gets.
-fn pane(label: &'static str) -> impl View {
+/// A pane labelled with catalog string `label` that fills the space it
+/// gets.
+fn pane(env: &Env, label: &'static str) -> impl View + use<> {
     panel(
-        Text::new(label)
+        Text::new(t!(label))
             .foreground(ColorRole::MutedForeground)
             .accessibility_hidden(true)
             .frame(fill()),
     )
-    .accessibility_label(label)
+    .accessibility_label(env.text(label, &[]))
 }
 
-/// A handle that moves `position`, the first pane's extent; the panes sit
-/// above it in a stack laid out with the same geometry.
+/// A handle labelled with catalog string `label` that moves `position`,
+/// the first pane's extent; the panes sit above it in a stack laid out
+/// with the same geometry.
 fn splitter(
     label: &'static str,
     orientation: SplitOrientation,
     initial: f64,
     position: State<f64>,
 ) -> impl View {
-    Configured::try_custom(ControlKind::Resizable, move |_| {
-        Resizable::hosted(label, orientation, MINIMUM, MINIMUM, HANDLE, initial)
+    Configured::try_custom(ControlKind::Resizable, move |env| {
+        let label = env.text(label, &[]);
+        Resizable::hosted(&label, orientation, MINIMUM, MINIMUM, HANDLE, initial)
             .map(|splitter| splitter.with_grip(true))
     })
     .value(move || ControlValue::Number(position.get()))
@@ -117,18 +137,20 @@ pub fn resizable(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let sidebar = cx.state(WIDTH * 0.4);
         let editor = cx.state(HEIGHT * 0.4);
+        let (editor_env, sidebar_env) = (cx.env().clone(), cx.env().clone());
         let console = ZStack::new((
             splitter(
-                "Console height",
+                "resizable.console_height",
                 SplitOrientation::Vertical,
                 HEIGHT * 0.4,
                 editor,
             ),
             VStack::new((
                 Dynamic::new(move || {
-                    pane("Editor").frame(Frame::new().max_width(f64::INFINITY).height(editor.get()))
+                    pane(&editor_env, "resizable.editor")
+                        .frame(Frame::new().max_width(f64::INFINITY).height(editor.get()))
                 }),
-                pane("Console"),
+                pane(cx.env(), "resizable.console"),
             ))
             .alignment(HorizontalAlignment::Fill)
             .spacing(HANDLE),
@@ -136,14 +158,14 @@ pub fn resizable(_: &PageCx) -> AnyView {
         .alignment(Alignment::FILL);
         let split = ZStack::new((
             splitter(
-                "Sidebar width",
+                "resizable.sidebar_width",
                 SplitOrientation::Horizontal,
                 WIDTH * 0.4,
                 sidebar,
             ),
             HStack::new((
                 Dynamic::new(move || {
-                    pane("Sidebar")
+                    pane(&sidebar_env, "resizable.sidebar")
                         .frame(Frame::new().width(sidebar.get()).max_height(f64::INFINITY))
                 }),
                 console.frame(fill()),
@@ -159,21 +181,23 @@ pub fn resizable(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Stacked container
 
+/// The title and text keys of each settings page.
 const STACK_PAGES: [(&str, &str); 3] = [
-    ("General", "Name, language, and startup behavior."),
-    ("Network", "Proxies, timeouts, and offline mode."),
-    ("Advanced", "Logging and experimental features."),
+    ("stacked.general", "stacked.general_text"),
+    ("stacked.network", "stacked.network_text"),
+    ("stacked.advanced", "stacked.advanced_text"),
 ];
 
 /// Settings page `index` on the card surface.
-fn stack_page(index: usize) -> impl View {
+fn stack_page(env: &Env, index: usize) -> impl View + use<> {
     let (title, body) = STACK_PAGES[index];
+    let title = env.text(title, &[]);
     panel(
         VStack::new((
-            Text::new(title).font_weight(FontWeight::MEDIUM),
-            caption(body),
+            Text::new(title.clone()).font_weight(FontWeight::MEDIUM),
+            caption(t!(body)),
             Spacer::new(),
-            Button::new(format!("Reset {title}"), || {}),
+            Button::new(t!("stacked.reset", page = title.clone()), || {}),
         ))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S1)
@@ -188,12 +212,13 @@ fn stack_page(index: usize) -> impl View {
 pub fn stacked(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let current = cx.state(0usize);
+        let env = cx.env().clone();
         let selectors: Vec<_> = STACK_PAGES
             .iter()
             .enumerate()
             .map(|(index, (title, _))| {
                 VStack::new((
-                    Button::new(*title, move || current.set(index))
+                    Button::new(t!(*title), move || current.set(index))
                         .frame(Frame::new().width(110.0)),
                     Spacer::new()
                         .frame(Frame::new().width(94.0).height(2.0))
@@ -204,11 +229,12 @@ pub fn stacked(_: &PageCx) -> AnyView {
             })
             .collect();
         let stack = ZStack::new((
-            Configured::try_custom(ControlKind::Card, |_| {
-                StackedContainer::hosted("Settings pages", STACK_PAGES.len(), 0)
+            Configured::try_custom(ControlKind::Card, |env| {
+                let name = env.text("stacked.settings_pages", &[]);
+                StackedContainer::hosted(&name, STACK_PAGES.len(), 0)
             })
             .value(move || ControlValue::Index(Some(current.get()))),
-            Dynamic::new(move || stack_page(current.get())),
+            Dynamic::new(move || stack_page(&env, current.get())),
         ))
         .alignment(Alignment::FILL)
         .frame(Frame::size(420.0, 160.0));
@@ -220,7 +246,11 @@ pub fn stacked(_: &PageCx) -> AnyView {
 // ---------------------------------------------------------------------------
 // Focus frame
 
-const FRAMED: [&str; 3] = ["First", "Second", "Third"];
+const FRAMED: [&str; 3] = [
+    "focus-frame.first",
+    "focus-frame.second",
+    "focus-frame.third",
+];
 /// A framed button's size and the space between buttons, in points.
 const FRAMED_SIZE: (f64, f64) = (120.0, 60.0);
 const FRAMED_GAP: f64 = 10.0;
@@ -231,31 +261,33 @@ const RING_ROOM: f64 = 8.0;
 /// outside the focused button's bounds, above the clipped buttons, so
 /// focus stays visible even at the clip edge.
 pub fn focus_frame(_: &PageCx) -> AnyView {
-    let (width, height) = FRAMED_SIZE;
-    let panel_width = width * 3.0 + FRAMED_GAP * 2.0;
-    let buttons: Vec<_> = FRAMED
-        .iter()
-        .map(|label| {
-            Button::new(*label, || {}).frame(Frame::size(width, height).alignment(Alignment::FILL))
-        })
-        .collect();
-    // Buttons sit flush with the panel edges, where a ring drawn by the
-    // button itself is clipped.
-    let clipped = HStack::new(buttons)
-        .spacing(FRAMED_GAP)
-        .frame(Frame::size(panel_width, height))
-        .clip_shape()
-        .accessibility_label("Clipped panel");
-    column((
-        FocusFrame::new(ZStack::new((
-            panel(Spacer::new().frame(Frame::size(panel_width, height))),
-            clipped,
-        )))
-        .padding(RING_ROOM),
-        caption("Press Tab to move focus; the frame is drawn outside the clip."),
-    ))
-    .button_variant(ButtonVariant::Outline)
-    .into_any()
+    stateful(|cx| {
+        let (width, height) = FRAMED_SIZE;
+        let panel_width = width * 3.0 + FRAMED_GAP * 2.0;
+        let buttons: Vec<_> = FRAMED
+            .iter()
+            .map(|label| {
+                Button::new(t!(*label), || {})
+                    .frame(Frame::size(width, height).alignment(Alignment::FILL))
+            })
+            .collect();
+        // Buttons sit flush with the panel edges, where a ring drawn by the
+        // button itself is clipped.
+        let clipped = HStack::new(buttons)
+            .spacing(FRAMED_GAP)
+            .frame(Frame::size(panel_width, height))
+            .clip_shape()
+            .accessibility_label(cx.env().text("focus-frame.clipped", &[]));
+        column((
+            FocusFrame::new(ZStack::new((
+                panel(Spacer::new().frame(Frame::size(panel_width, height))),
+                clipped,
+            )))
+            .padding(RING_ROOM),
+            caption(t!("focus-frame.hint")),
+        ))
+        .button_variant(ButtonVariant::Outline)
+    })
 }
 
 /// The view of page `id`, when this module has it.

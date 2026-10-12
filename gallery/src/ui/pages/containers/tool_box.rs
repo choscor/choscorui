@@ -1,31 +1,33 @@
 //! The tool box page: an accordion of tool pages, one open at a time.
 
 use crate::ui::page::{PageCx, column, stateful};
-use choscorui::compose::view::{AnyView, Configured, Frame, VStack, ViewExt};
+use choscorui::compose::view::{AnyView, Configured, Env, Frame, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
     MeasureContext, PaintContext, Slot, StyleQuery, TextAlign, ToolBox,
 };
 use choscorui::core::{EventReply, Measured, Rect, SemanticAction, SemanticNode, Size};
 
+/// The title and text keys of each tool page.
 const TOOL_PAGES: [(&str, &str); 3] = [
-    (
-        "Brushes",
-        "Round, flat, and fan brushes with pressure sensitivity.",
-    ),
-    (
-        "Layers",
-        "Background, Sketch, and Ink layers; drag to reorder.",
-    ),
-    (
-        "History",
-        "The last 50 strokes; choose one to step back to it.",
-    ),
+    ("tool-box.brushes", "tool-box.brushes_text"),
+    ("tool-box.layers", "tool-box.layers_text"),
+    ("tool-box.history", "tool-box.history_text"),
 ];
+
+/// The title and text of each tool page in `env`.
+fn tool_pages(env: &Env) -> Vec<(String, String)> {
+    TOOL_PAGES
+        .iter()
+        .map(|(title, text)| (env.text(title, &[]), env.text(text, &[])))
+        .collect()
+}
 
 /// The tool box with the open page's text, which the host paints.
 struct ToolBoxPages {
     toolbox: ToolBox,
+    /// Each page's text.
+    texts: Vec<String>,
     /// The header height from the last arrange.
     header: f64,
 }
@@ -52,7 +54,10 @@ impl CustomControl for ToolBoxPages {
             page.origin,
             Size::new(page.size.width, style.text.line_height),
         );
-        let text = TOOL_PAGES[self.toolbox.current()].1;
+        let text = self
+            .texts
+            .get(self.toolbox.current())
+            .map_or("", String::as_str);
         cx.label(line, text, &style, TextAlign::Start);
     }
 
@@ -90,25 +95,26 @@ impl CustomControl for ToolBoxPages {
 pub fn tool_box(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(0usize);
-        let toolbox = Configured::custom(ControlKind::Accordion, |_| ToolBoxPages {
-            toolbox: ToolBox::new(
-                TOOL_PAGES
-                    .iter()
-                    .map(|(title, _)| (*title).to_owned())
-                    .collect(),
-            ),
-            header: 0.0,
+        let toolbox = Configured::custom(ControlKind::Accordion, |env| {
+            let (titles, texts) = tool_pages(env).into_iter().unzip();
+            ToolBoxPages {
+                toolbox: ToolBox::new(titles),
+                texts,
+                header: 0.0,
+            }
         })
         .on_message(move |message| {
             if let ControlMessage::Changed(ControlValue::Index(Some(page))) = message {
                 open.set(*page);
             }
         });
+        let pages = tool_pages(cx.env());
+        let hints = pages.clone();
         column(
             VStack::new(toolbox.frame(Frame::size(320.0, 260.0)))
-                .accessibility_label("Tool box")
-                .accessibility_value(move || TOOL_PAGES[open.get()].0.to_owned())
-                .accessibility_hint(move || TOOL_PAGES[open.get()].1.to_owned()),
+                .accessibility_label(cx.env().text("tool-box.name", &[]))
+                .accessibility_value(move || pages[open.get()].0.clone())
+                .accessibility_hint(move || hints[open.get()].1.clone()),
         )
     })
 }
