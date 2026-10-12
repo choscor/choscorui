@@ -387,8 +387,9 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## calendar
 sizes default
-slot root: root track thumb indicator icon label content header title description footer action value placeholder item item-indicator separator shortcut group group-label overlay handle cell row header-cell media fallback badge close input addon text ellipsis link legend error viewport scrollbar panel bar avatar choice progress
+slot root: root track thumb indicator label content header title description footer action value placeholder item item-indicator separator shortcut group group-label overlay handle cell row header-cell media fallback badge close input addon text ellipsis link legend error viewport scrollbar panel bar avatar choice progress
 slot range: range
+slot icon: icon
 slot trigger: trigger
 slot caption: caption
 slot previous: previous next
@@ -406,24 +407,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar default default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar default default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar default default caption
 # rest
@@ -510,24 +516,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar today default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar today default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar today default caption
 # rest
@@ -610,24 +621,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar outside default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar outside default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar outside default caption
 # rest
@@ -714,24 +730,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar range-start default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar range-start default caption
 # rest
@@ -810,24 +831,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar range-middle default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar range-middle default caption
 # rest
@@ -910,24 +936,29 @@ fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default icon
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #737373ff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### calendar range-end default trigger
 # rest
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 # focus-visible
 shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 38,30.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### calendar range-end default caption
 # rest
