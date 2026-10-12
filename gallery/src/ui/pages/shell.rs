@@ -429,12 +429,8 @@ fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View +
         }),
         middle,
         status.then(|| {
-            Configured::custom(ControlKind::StatusBar, |env| {
-                let mut status = StatusBar::new();
-                status.set_default_text(env.text("main-window.status_bar", &[]));
-                status
-            })
-            .frame(fill().height(STATUS_BAR))
+            choscorui::compose::view::StatusBar::new(t!("main-window.status_bar"), Vec::new())
+                .frame(fill().height(STATUS_BAR))
         }),
     ))
     .spacing(0.0);

@@ -4,12 +4,12 @@
 use crate::ui::page::{Build, PageCx, column, portrait, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Env, Frame, HStack, HorizontalAlignment, Marker, VStack, View, ViewExt,
+    AnyView, Configured, Env, Frame, HStack, HorizontalAlignment, Marker, MessageScroller, VStack,
+    View, ViewExt,
 };
 use choscorui::controls::{
     self, AttachmentMedia, AttachmentState, Avatar, Bubble, BubbleVariant, ControlKind,
-    ControlSize, Conversation, Message, MessageScroller, Question, Questionnaire,
-    QuestionnaireLabels,
+    ControlSize, Message, Question, Questionnaire, QuestionnaireLabels,
 };
 use choscorui::core::{Icon, Space};
 
@@ -214,9 +214,9 @@ pub fn marker(_: &PageCx) -> AnyView {
 }
 
 /// 500 messages, every third one a reply.
-fn conversation(env: &Env) -> Conversation {
-    let conversation = Conversation::new();
+fn conversation(env: &Env) -> Vec<Message> {
     let you = text(env, "message.you");
+    let mut conversation = Vec::new();
     for index in 1..=500 {
         let number = index.to_string();
         let args = [("index", number.as_str())];
@@ -245,10 +245,8 @@ fn conversation(env: &Env) -> Conversation {
 pub fn message_scroller(_: &PageCx) -> AnyView {
     column(section(
         t!("message-scroller.caption"),
-        Configured::custom(ControlKind::MessageScroller, |env| {
-            MessageScroller::new(text(env, "message-scroller.name"), conversation(env))
-        })
-        .frame(Frame::new().width(480.0).height(400.0)),
+        MessageScroller::new(t!("message-scroller.name"), conversation)
+            .frame(Frame::new().width(480.0).height(400.0)),
     ))
 }
 

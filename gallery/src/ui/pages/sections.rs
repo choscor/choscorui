@@ -4,11 +4,9 @@
 use crate::ui::page::{Build, PageCx, column, portrait, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Accordion, AnyView, AspectRatio, Collapsible, Configured, Cx, Env, Frame, VStack, View, ViewExt,
+    Accordion, AnyView, AspectRatio, Collapsible, Cx, Env, Frame, ItemGroup, VStack, View, ViewExt,
 };
-use choscorui::controls::{
-    self, ButtonVariant, ControlKind, ControlSize, Item, ItemGroup, ItemMedia, ItemVariant,
-};
+use choscorui::controls::{self, ButtonVariant, ControlSize, Item, ItemMedia, ItemVariant};
 use choscorui::core::{Icon, Space};
 
 pub fn aspect_ratio(_: &PageCx) -> AnyView {
@@ -104,58 +102,52 @@ pub fn accordion(_: &PageCx) -> AnyView {
 }
 
 pub fn item(_: &PageCx) -> AnyView {
-    let group = |build: fn(&Env) -> ItemGroup| {
-        Configured::custom(ControlKind::Item, build).frame(Frame::new().width(420.0))
-    };
+    let group = |name: &'static str, items: fn(&Env) -> Vec<Item>| ItemGroup::new(t!(name), items);
     column((
         section(
             t!("item.variants"),
-            group(|env| {
+            group("item.variants_name", |env| {
                 let text = |key| env.text(key, &[]);
-                ItemGroup::new(
-                    text("item.variants_name"),
-                    vec![
-                        Item::new(text("item.default"))
-                            .with_description(text("item.default_text"))
-                            .with_action(text("item.open"), ButtonVariant::Outline),
-                        Item::new(text("item.outline"))
-                            .with_header(text("item.header"))
-                            .with_description(text("item.outline_text"))
-                            .with_footer(text("item.footer"))
-                            .with_variant(ItemVariant::Outline)
-                            .with_action(text("item.open"), ButtonVariant::Outline),
-                        Item::new(text("item.muted"))
-                            .with_description(text("item.muted_text"))
-                            .with_variant(ItemVariant::Muted)
-                            .with_action(text("item.open"), ButtonVariant::Outline),
-                    ],
-                )
-            }),
+                vec![
+                    Item::new(text("item.default"))
+                        .with_description(text("item.default_text"))
+                        .with_action(text("item.open"), ButtonVariant::Outline),
+                    Item::new(text("item.outline"))
+                        .with_header(text("item.header"))
+                        .with_description(text("item.outline_text"))
+                        .with_footer(text("item.footer"))
+                        .with_variant(ItemVariant::Outline)
+                        .with_action(text("item.open"), ButtonVariant::Outline),
+                    Item::new(text("item.muted"))
+                        .with_description(text("item.muted_text"))
+                        .with_variant(ItemVariant::Muted)
+                        .with_action(text("item.open"), ButtonVariant::Outline),
+                ]
+            })
+            .frame(Frame::new().width(420.0)),
         ),
         section(
             t!("item.media_links"),
-            group(|env| {
+            group("item.media_name", |env| {
                 let text = |key| env.text(key, &[]);
-                ItemGroup::new(
-                    text("item.media_name"),
-                    vec![
-                        Item::new(text("item.verified"))
-                            .with_media(ItemMedia::Icon(Icon::CircleCheck))
-                            .with_variant(ItemVariant::Outline)
-                            .with_size(ControlSize::Sm)
-                            .as_link(),
-                        // A song and its artist stand for user data.
-                        Item::new("Midnight City")
-                            .with_description("Silent Echo")
-                            .with_media(ItemMedia::Image(portrait())),
-                        Item::new("Ana Lee")
-                            .with_description(text("item.last_seen"))
-                            .with_media(ItemMedia::Avatar(controls::Avatar::new("Ana Lee", "AL")))
-                            .with_action(text("item.invite"), ButtonVariant::Default),
-                    ],
-                )
-                .with_separators()
-            }),
+                vec![
+                    Item::new(text("item.verified"))
+                        .with_media(ItemMedia::Icon(Icon::CircleCheck))
+                        .with_variant(ItemVariant::Outline)
+                        .with_size(ControlSize::Sm)
+                        .as_link(),
+                    // A song and its artist stand for user data.
+                    Item::new("Midnight City")
+                        .with_description("Silent Echo")
+                        .with_media(ItemMedia::Image(portrait())),
+                    Item::new("Ana Lee")
+                        .with_description(text("item.last_seen"))
+                        .with_media(ItemMedia::Avatar(controls::Avatar::new("Ana Lee", "AL")))
+                        .with_action(text("item.invite"), ButtonVariant::Default),
+                ]
+            })
+            .with(|group| group.with_separators())
+            .frame(Frame::new().width(420.0)),
         ),
         section(
             t!("item.sizes"),
@@ -163,20 +155,18 @@ pub fn item(_: &PageCx) -> AnyView {
                 [ControlSize::Default, ControlSize::Sm, ControlSize::Xs]
                     .into_iter()
                     .map(|size| {
-                        Configured::custom(ControlKind::Item, move |env| {
-                            let text = |key| env.text(key, &[]);
-                            let items = ITEM_VARIANTS
+                        let items = move |env: &Env| {
+                            ITEM_VARIANTS
                                 .into_iter()
                                 .map(|(variant, key)| {
-                                    Item::new(text(key))
+                                    Item::new(env.text(key, &[]))
                                         .with_media(ItemMedia::Icon(Icon::Inbox))
                                         .with_variant(variant)
                                         .with_size(size)
                                 })
-                                .collect();
-                            ItemGroup::new(text(size_key(size)), items)
-                        })
-                        .frame(Frame::new().width(420.0))
+                                .collect()
+                        };
+                        ItemGroup::new(t!(size_key(size)), items).frame(Frame::new().width(420.0))
                     })
                     .collect::<Vec<_>>(),
             )

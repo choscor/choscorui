@@ -4,13 +4,13 @@
 use crate::ui::page::{Build, PageCx, caption, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Canvas, Configured, Cx, Env, Frame, HStack, HorizontalAlignment, Localized,
-    Progress, Slider, SpinBox, State, Text, VStack, View, ViewExt,
+    AnyView, Button, Canvas, Configured, Cx, DecimalSpinBox, Dial, Env, Frame, HStack,
+    HorizontalAlignment, Localized, Progress, Slider, SpinBox, State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
-    CustomControl, DecimalSpinBox, Dial, HostedNumericDisplay, IntegerRange, MeasureContext,
-    NumberBase, NumericDisplay, PaintContext, ScrollBar, ScrollOrientation, TextAlign,
+    CustomControl, HostedNumericDisplay, IntegerRange, MeasureContext, NumberBase, NumericDisplay,
+    PaintContext, ScrollBar, ScrollOrientation, TextAlign,
 };
 use choscorui::core::{
     ColorRole, EventPhase, EventReply, FontWeight, Key, KeyEvent, Measured, Point, RadiusScale,
@@ -266,16 +266,8 @@ impl View for DialPage {
             let value = cx.state(range.value());
             let readout = named_value(cx.env(), key, value);
             VStack::new((
-                Configured::custom(ControlKind::Dial, move |env| {
-                    Dial::new(range, wrapping).hosted(env.text(key, &[]))
-                })
-                .value(move || ControlValue::Number(f64::from(value.get())))
-                .on_message(move |message| {
-                    if let ControlMessage::Changed(ControlValue::Number(number)) = message {
-                        value.set(number.round() as i32);
-                    }
-                })
-                .frame(Frame::new().width(140.0).height(140.0)),
+                Dial::new(t!(key), range, wrapping, value.binding())
+                    .frame(Frame::new().width(140.0).height(140.0)),
                 Text::new(readout)
                     .align(TextAlign::Center)
                     .text_style(TextPreset::Small)
@@ -308,16 +300,8 @@ impl View for DecimalSpinBoxPage {
             let name = cx.env().text(key, &[]);
             captioned(
                 readout(t!("decimal-spin-box.readout", name = name, value = value)),
-                Configured::custom(ControlKind::Input, move |env| {
-                    let label = env.text(key, &[]);
-                    DecimalSpinBox::new(label, env.locale(), limits, step, digits, start)
-                })
-                .on_message(move |message| {
-                    if let ControlMessage::Changed(ControlValue::Number(number)) = message {
-                        value.set(*number);
-                    }
-                })
-                .frame(Frame::new().width(220.0)),
+                DecimalSpinBox::new(t!(key), limits.0..=limits.1, step, digits, value.binding())
+                    .frame(Frame::new().width(220.0)),
             )
         };
         column((
