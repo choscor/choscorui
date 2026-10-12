@@ -133,6 +133,14 @@ user asked for.
 After you remove items from the scene, call `prune`. It removes those items
 from the selection and from the focus of the view.
 
+### Canvas view
+
+The `Canvas` view of `choscorui-compose` draws with a closure on a
+`CanvasView` that has no scene items. It sets the viewport to the bounds of
+its node and pushes the view transform, so the closure draws in canvas
+coordinates. A canvas with `.zoomable(true)` sends the wheel and the keys to
+`handle`, and a drag pans the view. [guide.md](guide.md) shows how to use it.
+
 ### Painting
 
 `CanvasView::paint` clips to the viewport and applies the view transform. It

@@ -463,13 +463,21 @@ assert!(host.take_errors().is_empty());
 
 `Canvas::new(draw)` draws with display-list commands in the space that the canvas gets. It fills the space it is offered, so give it a size with `.frame`. Give it a name with `.label` for assistive technology.
 
+A `Canvas` wraps a `CanvasView`. The `draw` closure draws in canvas coordinates, and the point (0, 0) is the top-left corner of the node. The `size` argument is the size of the node in points. These `CanvasContext` fields help you draw:
+
+- `bounds` is the part of the canvas in view, in canvas coordinates. Draw only what touches it.
+- `zoom` is the scale from canvas coordinates to points.
+- `tokens` and `rtl` give the theme tokens and the layout direction.
+
+`.zoomable(true)` lets the user pan and zoom the drawing. A drag, the wheel, or the arrow keys pan it. Command with the wheel zooms about the pointer, and `+`, `-`, and `0` zoom about the center. A zoomable canvas takes focus.
+
 ```rust
 use choscorui::prelude::*;
 
 fn swatch() -> impl View {
     Canvas::new(|ctx, size| {
         let color = Fill::Role(ColorRole::Primary).resolve(ctx.tokens);
-        ctx.list.fill_rect(Rect::new(ctx.bounds.origin, size), color);
+        ctx.list.fill_rect(Rect::new(Point::new(0.0, 0.0), size), color);
     })
     .label("Primary color")
     .frame(Frame::size(48.0, 48.0))

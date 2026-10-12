@@ -1824,7 +1824,16 @@ sends `Changed(Indices(ids))`, and Enter sends `ItemActivated(id)`, with
 `SceneItemId` numbers. Delete and Backspace remove the selected items from
 the scene. The hosted node publishes only the container.
 
-[canvas.rs](../crates/choscorui-controls/tests/canvas.rs) pins this behavior.
+**In a view.** The `Canvas` view of `choscorui-compose` holds a
+`CanvasView` with no scene items and draws with a closure. Its node is an
+`Image` with the `.label` name, and it is hidden without a label. With
+`.zoomable(true)`, the node takes focus and has the `Focus` action. A drag
+pans, the wheel pans, and Command makes the wheel zoom. The arrow keys pan,
+and `+`, `-`, and `0` zoom.
+
+[canvas.rs](../crates/choscorui-controls/tests/canvas.rs) and
+[canvas_view.rs](../crates/choscorui-compose/tests/canvas_view.rs) pin this
+behavior.
 
 ### NumberInput, InputMask, and DateInput
 

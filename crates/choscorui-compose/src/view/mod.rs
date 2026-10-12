@@ -3,6 +3,7 @@
 //! update only what depends on the state that changed.
 
 mod builtins;
+mod canvas;
 mod configured;
 mod control;
 mod dialogs;
@@ -23,8 +24,9 @@ mod widgets;
 pub use builtins::{
     Calendar, Combobox, Progress, RadioGroup, Slider, SpinBox, Tabs, TextEditor, TextField,
 };
+pub use canvas::{Canvas, CanvasContext};
 pub use configured::Configured;
-pub use control::{Canvas, CanvasContext, ControlView, CustomView};
+pub use control::{ControlView, CustomView};
 pub use dialogs::{FontDialog, InputDialog};
 pub use dynamic::{Dynamic, ForEach};
 pub use env::{Corner, Elevation, Env, Fill, Metric, TextEnv};
