@@ -224,6 +224,9 @@ The value tables give the default recipe of each `ControlKind`. Sizes are in
 points, and colors are theme roles. A `<kind>_matches_its_reference_table`
 test in a `styles_*.rs` file of
 [the controls tests](../crates/choscorui-controls/tests/) pins each table.
+The `painted_<group>.txt` golden files of the
+[compatibility suite](versioning.md#compatibility-suite) pin the painted
+output of each kind, variant, size, slot, and key state.
 
 ### Button
 

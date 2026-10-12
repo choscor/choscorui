@@ -1,0 +1,1399 @@
+## table
+sizes default
+slot root: root track range thumb icon label content title description action trigger value placeholder item-indicator separator shortcut group-label overlay handle media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot indicator: indicator
+slot header: header
+slot footer: footer
+slot item: item row
+slot group: group
+slot caption: caption
+slot cell: cell
+slot header-cell: header-cell
+### table default default root
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 123x39 r9.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
+### table default default indicator
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default header
+# rest
+fill-rect 10,45 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default footer
+# rest
+fill-rect 10,10 120x36 #f5f5f580
+fill-rect 10,10 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default item
+# rest
+fill-rect 10,45 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+fill-rect 10,10 120x36 #f5f5f580
+fill-rect 10,45 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# selected
+fill-rect 10,10 120x36 #f5f5f5ff
+fill-rect 10,45 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
+### table default default group
+# rest
+stroke 10.5,10.5 119x35 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default caption
+# rest
+stroke-path M23.333333333333332,32 L16,39.33333333333333 L12.666666666666666,36 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,40.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default cell
+# rest
+stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### table default default header-cell
+# rest
+stroke-path M31.333333333333332,26 L24,33.33333333333333 L20.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,34.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill-rect 10,10 120x40 #f5f5f580
+stroke-path M31.333333333333332,26 L24,33.33333333333333 L20.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,34.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## card
+sizes default sm
+slot root: root track range thumb indicator icon label trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot content: content footer action
+slot header: header
+slot title: title
+slot description: description
+### card default default root
+# rest
+shadow 10,10 120x36 r14 offset 0,1 blur2 spread0 #0000000d
+stroke 9.5,9.5 121x37 r14.5 w1 #0a0a0a1a
+fill 10,10 120x36 r14 #ffffffff
+stroke-path M23.333333333333332,30 L16,37.33333333333333 L12.666666666666666,34 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 50,38.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default default content
+# rest
+stroke-path M47.33333333333333,24 L40,31.333333333333332 L36.666666666666664,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 62,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default default header
+# rest
+stroke-path M47.33333333333333,24 L40,31.333333333333332 L36.666666666666664,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default default title
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,33.6 system-ui 16 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default default description
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default sm root
+# rest
+shadow 10,10 120x36 r14 offset 0,1 blur2 spread0 #0000000d
+stroke 9.5,9.5 121x37 r14.5 w1 #0a0a0a1a
+fill 10,10 120x36 r14 #ffffffff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default sm content
+# rest
+stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default sm header
+# rest
+stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 46,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default sm title
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### card default sm description
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## badge
+sizes default
+slot root: root track range thumb indicator icon label content header title description footer action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+### badge default default root
+# rest
+fill 10,10 120x20 r26 #171717ff
+stroke-path M28,17 L22.5,22.5 L20,20 #fafafaff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #fafafaff
+# hovered
+fill 10,10 120x20 r26 #171717cc
+stroke-path M28,17 L22.5,22.5 L20,20 #fafafaff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #fafafaff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #a1a1a180
+fill 10,10 120x20 r26 #171717ff
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #fafafaff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #fafafaff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+fill 10,10 120x20 r26 #171717ff
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #fafafaff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #fafafaff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+### badge secondary default root
+# rest
+fill 10,10 120x20 r26 #f5f5f5ff
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+# hovered
+fill 10,10 120x20 r26 #f5f5f5cc
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #a1a1a180
+fill 10,10 120x20 r26 #f5f5f5ff
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+fill 10,10 120x20 r26 #f5f5f5ff
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+### badge destructive default root
+# rest
+fill 10,10 120x20 r26 #e7000b1a
+stroke-path M28,17 L22.5,22.5 L20,20 #e7000bff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #e7000bff
+# hovered
+fill 10,10 120x20 r26 #e7000b33
+stroke-path M28,17 L22.5,22.5 L20,20 #e7000bff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #e7000bff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+fill 10,10 120x20 r26 #e7000b1a
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #e7000bff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #e7000bff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+fill 10,10 120x20 r26 #e7000b1a
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #e7000bff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #e7000bff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+### badge outline default root
+# rest
+stroke 10.5,10.5 119x19 r25.5 w1 #e5e5e5ff
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 120x20 r26 #f5f5f5ff
+stroke 10.5,10.5 119x19 r25.5 w1 #e5e5e5ff
+stroke-path M28,17 L22.5,22.5 L20,20 #737373ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #737373ff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #a1a1a180
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+### badge ghost default root
+# rest
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 120x20 r26 #f5f5f5ff
+stroke-path M28,17 L22.5,22.5 L20,20 #737373ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #737373ff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #a1a1a180
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #0a0a0aff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+### badge link default root
+# rest
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+# hovered
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+fill-rect 34,25.64 13.200000000000001x1 #171717ff
+# focus-visible
+stroke 8.5,8.5 123x23 r27.5 w3 #a1a1a180
+stroke 10.5,10.5 119x19 r25.5 w1 #a1a1a1ff
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+# invalid
+stroke 8.5,8.5 123x23 r27.5 w3 #e7000b33
+stroke 10.5,10.5 119x19 r25.5 w1 #e7000bff
+stroke-path M28,17 L22.5,22.5 L20,20 #171717ff w1 Round Round dash[]
+text "Aa" at 34,24.2 system-ui 12 w500 t0 #171717ff
+= rest: pressed focused disabled checked indeterminate selected open highlighted
+## avatar
+sizes default sm lg
+slot root: root track range thumb indicator icon label content header title description footer action trigger value placeholder item item-indicator separator shortcut group-label overlay handle caption cell row header-cell media close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot group: group fallback
+slot badge: badge
+### avatar default default root
+# rest
+stroke 9,9 34x34 r10000 w2 #ffffffff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 18,30.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default default group
+# rest
+fill 10,10 32x32 r9999 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default default badge
+# rest
+stroke 9,9 12x12 r10000 w2 #ffffffff
+fill 10,10 10x10 r9999 #171717ff
+stroke-path M16.666666666666664,13 L13,16.666666666666664 L11.333333333333334,15 #fafafaff w0.6666666666666666 Round Round dash[]
+text "Aa" at 18,19.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default sm root
+# rest
+stroke 9,9 26x26 r10000 w2 #ffffffff
+stroke-path M23.333333333333332,18 L16,25.333333333333332 L12.666666666666666,22 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 18,26.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default sm group
+# rest
+fill 10,10 24x24 r9999 #f5f5f5ff
+stroke-path M20,19 L14.5,24.5 L12,22 #737373ff w1 Round Round dash[]
+text "Aa" at 22,26.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default sm badge
+# rest
+stroke 9,9 10x10 r10000 w2 #ffffffff
+fill 10,10 8x8 r9999 #171717ff
+text "Aa" at 10,18.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default lg root
+# rest
+stroke 9,9 42x42 r10000 w2 #ffffffff
+stroke-path M23.333333333333332,26 L16,33.33333333333333 L12.666666666666666,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 18,34.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default lg group
+# rest
+fill 10,10 40x40 r9999 #f5f5f5ff
+stroke-path M26.666666666666668,25 L17.5,34.16666666666667 L13.333333333333334,30 #737373ff w1.6666666666666667 Round Round dash[]
+text "Aa" at 30,34.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### avatar default lg badge
+# rest
+stroke 9,9 14x14 r10000 w2 #ffffffff
+fill 10,10 12x12 r9999 #171717ff
+stroke-path M16.666666666666664,14 L13,17.666666666666664 L11.333333333333334,16 #fafafaff w0.6666666666666666 Round Round dash[]
+text "Aa" at 18,20.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## chart
+sizes default
+slot root: root range thumb icon header title description footer action trigger placeholder item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday error viewport scrollbar panel bar avatar choice progress
+slot track: track
+slot indicator: indicator
+slot label: label legend
+slot content: content
+slot value: value
+slot item: item
+### chart default default root
+# rest
+stroke-path M23.333333333333332,106 L16,113.33333333333333 L12.666666666666666,110 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,114.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default track
+# rest
+fill-rect 10,10 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,6.5 L16,13.833333333333332 L12.666666666666666,10.5 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.399999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default indicator
+# rest
+stroke-path M23.333333333333332,11 L16,18.333333333333332 L12.666666666666666,15 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 20,19.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default label
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 32,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default content
+# rest
+shadow 10,10 120x36 r10 offset 0,20 blur25 spread-5 #0000001a
+shadow 10,10 120x36 r10 offset 0,8 blur10 spread-6 #0000001a
+fill 10,10 120x36 r10 #ffffffff
+stroke 10.5,10.5 119x35 r9.5 w1 #e5e5e580
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 42,32.2 system-ui 12 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default value
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.2 system-ui 12 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### chart default default item
+# rest
+opacity 0.4 {
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## calendar
+sizes default
+slot root: root track thumb indicator icon label content header title description footer action value placeholder item item-indicator separator shortcut group group-label overlay handle cell row header-cell media fallback badge close input addon text ellipsis link legend error viewport scrollbar panel bar avatar choice progress
+slot range: range
+slot trigger: trigger
+slot caption: caption
+slot previous: previous next
+slot day: day
+slot weekday: weekday
+### calendar default default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar default default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar default default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar default default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar default default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar default default day
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# selected
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: pressed focused checked indeterminate highlighted
+### calendar default default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar today default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar today default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar today default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar today default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar today default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar today default day
+# rest
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# selected
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused checked indeterminate open highlighted
+### calendar today default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar outside default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar outside default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar outside default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar outside default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar outside default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar outside default day
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+# selected
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused checked indeterminate highlighted
+### calendar outside default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-start default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar range-start default day
+# rest
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+fill 10,10 32x32 r8 #171717ff
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# disabled
+opacity 0.5 {
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+fill 10,10 32x32 r8 #171717ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused checked indeterminate selected open highlighted
+### calendar range-start default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-middle default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar range-middle default day
+# rest
+fill-rect 10,10 32x32 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r1.5 w3 #a1a1a180
+fill-rect 10,10 32x32 #f5f5f5ff
+stroke 10.5,10.5 31x31 r0 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+fill-rect 10,10 32x32 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r1.5 w3 #e7000b33
+fill-rect 10,10 32x32 #f5f5f5ff
+stroke 10.5,10.5 31x31 r0 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
+# selected
+fill-rect 10,10 32x32 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused checked indeterminate open highlighted
+### calendar range-middle default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default root
+# rest
+fill-rect 10,10 248x36 #ffffffff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 54,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default range
+# rest
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default trigger
+# rest
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x31 r7.5 w1 #e5e5e5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focused
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x32 r8 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 119x31 r7.5 w1 #a1a1a1ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default caption
+# rest
+stroke-path M55.33333333333333,22 L48,29.333333333333332 L44.666666666666664,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 64,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### calendar range-end default previous
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+### calendar range-end default day
+# rest
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# focus-visible
+stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
+fill 10,10 32x32 r8 #171717ff
+stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+# disabled
+opacity 0.5 {
+fill 10,10 32x32 r8 #171717ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
+}
+# invalid
+stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
+fill 10,10 32x32 r8 #171717ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #fafafaff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #fafafaff
+= rest: hovered pressed focused checked indeterminate selected open highlighted
+### calendar range-end default weekday
+# rest
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.48 system-ui 12.8 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## carousel
+sizes default
+slot root: root track range thumb indicator icon label content header title description footer action trigger value placeholder item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot item: item
+slot previous: previous next
+### carousel default default root
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### carousel default default item
+# rest
+stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### carousel default default previous
+# rest
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r9999 #ffffffff
+stroke 10.5,10.5 31x31 r9998.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r9999 #f5f5f5ff
+stroke 10.5,10.5 31x31 r9998.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+shadow 10,11 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+fill 10,11 32x32 r9999 #ffffffff
+stroke 10.5,11.5 31x31 r9998.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,23 L16,30.333333333333332 L12.666666666666666,27 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,31.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 35x35 r10000.5 w3 #a1a1a180
+fill 10,10 32x32 r9999 #ffffffff
+stroke 10.5,10.5 31x31 r9998.5 w1 #a1a1a1ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r9999 #ffffffff
+stroke 10.5,10.5 31x31 r9998.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# invalid
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 35x35 r10000.5 w3 #e7000b33
+fill 10,10 32x32 r9999 #ffffffff
+stroke 10.5,10.5 31x31 r9998.5 w1 #e7000bff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+# open
+shadow 10,10 32x32 r9999 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r9999 #f5f5f5ff
+stroke 10.5,10.5 31x31 r9998.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused checked indeterminate selected highlighted
+## list-view
+sizes default
+slot root: root track range thumb icon label content title description action trigger value placeholder item-indicator separator shortcut group-label overlay handle media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot indicator: indicator
+slot header: header
+slot footer: footer
+slot item: item row
+slot group: group
+slot caption: caption
+slot cell: cell
+slot header-cell: header-cell
+### list-view default default root
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 123x39 r9.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
+### list-view default default indicator
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default header
+# rest
+fill-rect 10,45 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default footer
+# rest
+fill-rect 10,10 120x36 #f5f5f580
+fill-rect 10,10 120x1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default item
+# rest
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+fill 10,10 120x32 r6 #f5f5f580
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+# selected
+fill 10,10 120x32 r6 #f5f5f5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+# highlighted
+fill 10,10 120x32 r6 #f5f5f5ff
+stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+= rest: pressed focused focus-visible disabled invalid checked indeterminate open
+### list-view default default group
+# rest
+stroke 10.5,10.5 119x35 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default caption
+# rest
+stroke-path M23.333333333333332,32 L16,39.33333333333333 L12.666666666666666,36 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,40.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default cell
+# rest
+stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### list-view default default header-cell
+# rest
+stroke-path M31.333333333333332,26 L24,33.33333333333333 L20.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,34.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill-rect 10,10 120x40 #f5f5f580
+stroke-path M31.333333333333332,26 L24,33.33333333333333 L20.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,34.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## dial
+sizes default
+slot root: root icon content header title description footer action trigger placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot track: track
+slot range: range indicator
+slot thumb: thumb
+slot label: label
+slot value: value
+### dial default default root
+# rest
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 123x39 r10000.5 w3 #a1a1a180
+stroke 10.5,10.5 119x35 r9998.5 w1 #a1a1a1ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+# invalid
+stroke 8.5,8.5 123x39 r10000.5 w3 #e7000b33
+stroke 10.5,10.5 119x35 r9998.5 w1 #e7000bff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused checked indeterminate selected open highlighted
+### dial default default track
+# rest
+fill-rect 10,10 6x36 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### dial default default range
+# rest
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+# disabled
+opacity 0.5 {
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+}
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
+### dial default default thumb
+# rest
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
+### dial default default label
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### dial default default value
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,36.4 ui-monospace 24 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## numeric-display
+sizes default
+slot root: root icon content header title description footer action trigger placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot track: track
+slot range: range indicator
+slot thumb: thumb
+slot label: label
+slot value: value
+### numeric-display default default root
+# rest
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x35 r9.5 w1 #e5e5e5ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x39 r11.5 w3 #a1a1a180
+stroke 10.5,10.5 119x35 r9.5 w1 #a1a1a1ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x35 r9.5 w1 #e5e5e5ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+# invalid
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x39 r11.5 w3 #e7000b33
+stroke 10.5,10.5 119x35 r9.5 w1 #e7000bff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused checked indeterminate selected open highlighted
+### numeric-display default default track
+# rest
+fill-rect 10,10 6x36 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### numeric-display default default range
+# rest
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+# disabled
+opacity 0.5 {
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+}
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
+### numeric-display default default thumb
+# rest
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
+### numeric-display default default label
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### numeric-display default default value
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,36.4 ui-monospace 24 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+## color-picker
+sizes default
+slot root: root icon content header title description footer action trigger placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot track: track
+slot range: range indicator
+slot thumb: thumb
+slot label: label
+slot value: value
+### color-picker default default root
+# rest
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x35 r9.5 w1 #e5e5e5ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x39 r11.5 w3 #a1a1a180
+stroke 10.5,10.5 119x35 r9.5 w1 #a1a1a1ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 10.5,10.5 119x35 r9.5 w1 #e5e5e5ff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+}
+# invalid
+shadow 10,10 120x36 r10 offset 0,1 blur2 spread0 #0000000d
+stroke 8.5,8.5 123x39 r11.5 w3 #e7000b33
+stroke 10.5,10.5 119x35 r9.5 w1 #e7000bff
+stroke-path M35.33333333333333,24 L28,31.333333333333332 L24.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused checked indeterminate selected open highlighted
+### color-picker default default track
+# rest
+fill-rect 10,10 6x36 #f5f5f5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### color-picker default default range
+# rest
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+# disabled
+opacity 0.5 {
+fill-rect 10,10 6x36 #171717ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+}
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
+### color-picker default default thumb
+# rest
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# hovered
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
+shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
+stroke 8,8 20x20 r10001 w4 #a1a1a180
+fill 10,10 16x16 r9999 #ffffffff
+stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
+stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
+### color-picker default default label
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### color-picker default default value
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,36.4 ui-monospace 24 w500 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted

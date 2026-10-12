@@ -8,7 +8,8 @@
 //! review the golden diff and note it in the release notes.
 //!
 //! The hosted controls come from the catalog that the controls contract
-//! tests use, so a control added there is pinned here too.
+//! tests use, so a control added there is pinned here too. The
+//! `painted_slots` module pins the default recipe of every control kind.
 
 use choscorui::controls::{
     Alert, AlertVariant, Avatar, Badge, BadgeVariant, Bubble, BubbleVariant, Button, ButtonVariant,
@@ -29,6 +30,8 @@ use std::path::PathBuf;
 
 #[path = "../../choscorui-controls/tests/catalog/mod.rs"]
 mod catalog;
+#[path = "compatibility/painted_slots.rs"]
+mod painted_slots;
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect::new(Point::new(x, y), Size::new(width, height))
