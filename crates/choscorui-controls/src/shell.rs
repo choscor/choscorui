@@ -5,11 +5,16 @@
 //! On macOS the menu bar is the native global menu (`MainMenu`), so it
 //! takes no space in the window.
 
+use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
+use crate::hosted::Reveal;
+use crate::menu::MenuResponse;
+use crate::overlay::menu_popup::{CommandResult, MenuPopup};
 use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
-use crate::{CommandId, CommandRegistry, MenuItem};
+use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
-    Icon, Key, LayoutDirection, NodeId, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, NodeId, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    Size,
 };
 use std::time::Duration;
 
@@ -772,5 +777,399 @@ pub fn compose_main_window(
         toolbars: frames,
         status_bar,
         content: rest,
+    }
+}
+
+impl Toolbar {
+    /// The toolbar as a control for a [`crate::ControlHost`], with its own
+    /// command states. Every command starts enabled and unchecked.
+    pub fn hosted(self) -> HostedToolbar {
+        let mut commands = CommandRegistry::new();
+        for item in &self.items {
+            if let ToolbarItemKind::Command { command, .. } = item.kind {
+                // A command listed twice keeps one state.
+                let _ = commands.insert(command, CommandState::default());
+            }
+        }
+        HostedToolbar {
+            toolbar: self,
+            commands,
+            layout: ToolbarLayout {
+                rect: Rect::default(),
+                items: Vec::new(),
+                overflow: Vec::new(),
+                overflow_button: None,
+            },
+            direction: LayoutDirection::Ltr,
+            pressed: None,
+            menu: MenuPopup::new(Vec::new()),
+            menu_items: Vec::new(),
+        }
+    }
+
+    /// The length of the visible items along the bar, with the spacing.
+    fn natural_length(&self) -> f64 {
+        let visible: Vec<&ToolbarItem> = self.items.iter().filter(|item| item.visible).collect();
+        let items: f64 = visible.iter().map(|item| self.item_length(item)).sum();
+        items + (visible.len() + 1) as f64 * self.spacing
+    }
+}
+
+/// A [`Toolbar`] mounted in a [`crate::ControlHost`]: it owns the command
+/// states, places the items in its bounds, and opens the overflowed
+/// commands in a menu below the chevron. Make it with [`Toolbar::hosted`].
+pub struct HostedToolbar {
+    toolbar: Toolbar,
+    commands: CommandRegistry,
+    layout: ToolbarLayout,
+    direction: LayoutDirection,
+    /// The command item under a pointer press.
+    pressed: Option<usize>,
+    menu: MenuPopup,
+    /// The commands in the overflow menu.
+    menu_items: Vec<CommandId>,
+}
+
+impl HostedToolbar {
+    pub fn toolbar(&self) -> &Toolbar {
+        &self.toolbar
+    }
+
+    /// Sets the enabled and checked state of a toolbar command.
+    pub fn set_command(&mut self, command: CommandId, state: CommandState) -> CommandResult {
+        self.commands.set_enabled(command, state.enabled)?;
+        self.commands.set_checked(command, state.checked)?;
+        // The overflow menu lists only the overflowed commands.
+        let _ = self.menu.set_command(command, state);
+        Ok(())
+    }
+
+    pub fn command(&self, command: CommandId) -> Option<CommandState> {
+        self.commands.state(command).ok()
+    }
+
+    /// The placed items, the overflow, and the chevron of the last
+    /// arrangement. The view layer places embedded controls in the item
+    /// rectangles.
+    pub fn layout(&self) -> &ToolbarLayout {
+        &self.layout
+    }
+
+    fn item_at(&self, point: Point) -> Option<usize> {
+        self.layout
+            .items
+            .iter()
+            .find(|(_, rect)| rect.contains(point))
+            .map(|(index, _)| *index)
+    }
+
+    fn activate(&mut self, cx: &mut ControlContext<'_>, index: usize) {
+        if let ToolbarItemKind::Command { command, .. } = self.toolbar.items[index].kind
+            && let Ok(Some(command)) = self.commands.activate(command)
+        {
+            cx.emit(ControlMessage::Command(command));
+        }
+    }
+
+    /// Opens the overflow menu below the chevron at host `time`. Returns
+    /// false when nothing overflows.
+    fn open_menu(&mut self, time: f64) -> bool {
+        let Some(button) = self.layout.overflow_button else {
+            return false;
+        };
+        if !self.menu.is_open() {
+            let x = if self.direction == LayoutDirection::Rtl {
+                button.max_x()
+            } else {
+                button.origin.x
+            };
+            self.menu.open(Point::new(x, button.max_y()), time, false);
+        }
+        true
+    }
+
+    fn close_menu(&mut self, cx: &mut ControlContext<'_>) {
+        if self.menu.is_open() {
+            self.menu.close(cx.time());
+            cx.emit(ControlMessage::OpenChanged(false));
+            cx.request_paint();
+            cx.request_semantics();
+        }
+    }
+
+    fn respond(&mut self, cx: &mut ControlContext<'_>, response: MenuResponse) {
+        if self.menu.finish(cx, response) {
+            cx.emit(ControlMessage::OpenChanged(false));
+            cx.request_semantics();
+        }
+        cx.request_paint();
+    }
+
+    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: PointerEvent) -> EventReply {
+        if self.menu.is_open() {
+            let released = matches!(event, PointerEvent::Up { .. });
+            if let Some(response) = self.menu.pointer(event.position(), released) {
+                if released {
+                    self.respond(cx, response);
+                }
+                cx.request_paint();
+                return EventReply::Stop;
+            }
+        }
+        match event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => {
+                if self
+                    .layout
+                    .overflow_button
+                    .is_some_and(|button| button.contains(position))
+                {
+                    if self.menu.is_open() {
+                        self.close_menu(cx);
+                    } else if self.open_menu(cx.time()) {
+                        cx.emit(ControlMessage::OpenChanged(true));
+                        cx.request_paint();
+                        cx.request_semantics();
+                    }
+                    return EventReply::Stop;
+                }
+                self.close_menu(cx);
+                let Some(index) = self.item_at(position) else {
+                    return EventReply::Continue;
+                };
+                if self.toolbar.items[index].focusable(&self.commands) {
+                    self.toolbar.focused = Some(index);
+                }
+                if matches!(
+                    self.toolbar.items[index].kind,
+                    ToolbarItemKind::Command { .. }
+                ) {
+                    self.pressed = Some(index);
+                    cx.capture_pointer(true);
+                }
+                cx.request_paint();
+                EventReply::Stop
+            }
+            PointerEvent::Up { position, .. } => {
+                let Some(index) = self.pressed.take() else {
+                    return EventReply::Continue;
+                };
+                cx.capture_pointer(false);
+                if self.item_at(position) == Some(index) {
+                    self.activate(cx, index);
+                }
+                cx.request_paint();
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        if self.menu.is_open() {
+            if key == Key::Tab {
+                self.close_menu(cx);
+                return EventReply::Continue;
+            }
+            let response = self.menu.menu.handle_key(key, &self.menu.commands);
+            self.respond(cx, response);
+            return EventReply::Stop;
+        }
+        let before = self.toolbar.focused;
+        let command = self
+            .toolbar
+            .handle_key(key, &self.layout, &self.commands, self.direction);
+        if let Some(command) = command {
+            cx.emit(ControlMessage::Command(command));
+        }
+        if self.toolbar.focused != before {
+            cx.request_paint();
+        }
+        match key {
+            Key::Home
+            | Key::End
+            | Key::Enter
+            | Key::Space
+            | Key::ArrowLeft
+            | Key::ArrowRight
+            | Key::ArrowUp
+            | Key::ArrowDown => EventReply::Stop,
+            _ => EventReply::Continue,
+        }
+    }
+}
+
+impl CustomControl for HostedToolbar {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let length = self.toolbar.natural_length();
+        let thickness = self.toolbar.thickness;
+        let size = if self.toolbar.area.horizontal() {
+            Size::new(length, thickness)
+        } else {
+            Size::new(thickness, length)
+        };
+        Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.direction = cx.direction;
+        self.layout = self.toolbar.layout(bounds, cx.direction);
+        let mut commands = Vec::new();
+        let mut items = Vec::new();
+        for index in &self.layout.overflow {
+            if let ToolbarItemKind::Command { command, label } = &self.toolbar.items[*index].kind {
+                commands.push(*command);
+                items.push(MenuItem::action(label.clone(), *command));
+            }
+        }
+        if commands != self.menu_items {
+            // Embedded controls stay with the view layer, so the menu
+            // lists only the overflowed commands.
+            self.menu = MenuPopup::new(items);
+            for command in &commands {
+                if let Ok(state) = self.commands.state(*command) {
+                    let _ = self.menu.set_command(*command, state);
+                }
+            }
+            self.menu_items = commands;
+        }
+        self.menu.arrange(cx, 0.0);
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer),
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
+            ControlEvent::FocusChanged(true) => {
+                // Focus entering the toolbar goes to the first item.
+                if self.toolbar.focused.is_none() {
+                    self.toolbar.handle_key(
+                        Key::Home,
+                        &self.layout,
+                        &self.commands,
+                        self.direction,
+                    );
+                }
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
+                if self.pressed.take().is_some() {
+                    cx.capture_pointer(false);
+                }
+                self.close_menu(cx);
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let focus_visible = cx.state.focus_visible();
+        self.toolbar
+            .paint(cx, &self.layout, &self.commands, focus_visible);
+    }
+
+    fn overlay(&self) -> Option<Rect> {
+        self.menu.frame()
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        self.menu.paint(cx);
+    }
+
+    fn animating(&self, time: f64) -> bool {
+        self.menu.animating(time)
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let mut node = self.toolbar.semantics();
+        if self.layout.overflow_button.is_some() {
+            node.state.expanded = Some(self.menu.is_open());
+        }
+        node
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.pressed = None;
+            self.menu.reveal = Reveal::default();
+        }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if !open {
+            self.menu.close(time);
+            return self.layout.overflow_button.is_some();
+        }
+        self.open_menu(time)
+    }
+}
+
+impl CustomControl for StatusBar {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::StatusBar, Slot::Root));
+        let message = cx.text.width(self.text(), &style.text) + style.padding.horizontal();
+        let sections: f64 = self.sections.iter().map(|section| section.width).sum();
+        Measured::new(
+            cx.constraints
+                .constrain(Size::new(message + sections, self.height)),
+        )
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if *event != ControlEvent::Timer {
+            return EventReply::Continue;
+        }
+        self.poll(Duration::from_secs_f64(cx.time().max(0.0)));
+        cx.request_paint();
+        cx.request_semantics();
+        EventReply::Stop
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let direction = if cx.rtl {
+            LayoutDirection::Rtl
+        } else {
+            LayoutDirection::Ltr
+        };
+        let layout = self.layout(cx.bounds, direction);
+        StatusBar::paint(self, cx, &layout);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        StatusBar::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Focus {
+            return false;
+        }
+        cx.request_focus();
+        true
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    /// The expiry of a timed message, in host time: pass the host time as
+    /// `now` to [`StatusBar::show_message`].
+    fn deadline(&self) -> Option<f64> {
+        match &self.message {
+            Some((_, Some(deadline))) => Some(deadline.as_secs_f64()),
+            _ => None,
+        }
     }
 }

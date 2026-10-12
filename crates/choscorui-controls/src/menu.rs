@@ -1,14 +1,16 @@
 //! A custom-drawn dropdown menu backed by commands, painted with the
 //! `Menu` recipe.
 
+use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
+use crate::overlay::menu_popup::{CommandResult, MenuPopup};
 use crate::style::{
     ControlKind, MenuItemVariant, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
     content_rect, fill_shape,
 };
-use crate::{CommandId, CommandRegistry};
+use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    DesignTokens, Icon, Key, Point, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size, fold_for_search,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, fold_for_search,
 };
 
 /// How an action shows its command's checked state.
@@ -580,4 +582,200 @@ fn trim_start(rect: Rect, width: f64, rtl: bool) -> Rect {
 
 fn trim_end(rect: Rect, width: f64, rtl: bool) -> Rect {
     split_end(rect, width, rtl).1
+}
+
+impl DropdownMenu {
+    /// The menu as a control for a [`crate::ControlHost`], named `name`,
+    /// with its own command states. Every action starts enabled and
+    /// unchecked.
+    pub fn hosted(self, name: impl Into<String>) -> HostedDropdownMenu {
+        let mut popup = MenuPopup::new(self.items);
+        // Always shown: nothing animates.
+        popup.open(Point::new(0.0, 0.0), f64::NEG_INFINITY, false);
+        HostedDropdownMenu {
+            name: name.into(),
+            popup,
+            anchor: Point::new(0.0, 0.0),
+        }
+    }
+}
+
+/// A [`DropdownMenu`] shown in place in a [`crate::ControlHost`]: the root
+/// level fills the control's bounds, and open submenus float beside it.
+/// An activated action reports `Command`; Escape or ArrowLeft at the root
+/// reports `Dismissed`. Make it with [`DropdownMenu::hosted`].
+pub struct HostedDropdownMenu {
+    name: String,
+    popup: MenuPopup,
+    /// The top-start corner of the root level, in window coordinates.
+    anchor: Point,
+}
+
+impl HostedDropdownMenu {
+    /// Sets the enabled and checked state of a menu command.
+    pub fn set_command(&mut self, command: CommandId, state: CommandState) -> CommandResult {
+        self.popup.set_command(command, state)
+    }
+
+    pub fn command(&self, command: CommandId) -> Option<CommandState> {
+        self.popup.commands.state(command).ok()
+    }
+
+    pub fn menu(&self) -> &DropdownMenu {
+        &self.popup.menu
+    }
+
+    /// Closes the submenus and clears the highlight.
+    fn reset(&mut self, time: f64) {
+        self.popup.close(time);
+        self.popup.open(self.anchor, time, false);
+    }
+
+    fn respond(&mut self, cx: &mut ControlContext<'_>, response: MenuResponse) {
+        if self.popup.finish(cx, response) {
+            // The menu stays in place after a choice.
+            self.reset(cx.time());
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+}
+
+impl CustomControl for HostedDropdownMenu {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
+        self.popup.arrange(cx, content.min_width);
+        let size = self
+            .popup
+            .panels()
+            .first()
+            .map_or(Size::new(0.0, 0.0), |panel| panel.size);
+        Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
+        self.popup
+            .arrange(cx, content.min_width.max(bounds.size.width));
+        let x = if cx.rtl() {
+            bounds.max_x()
+        } else {
+            bounds.origin.x
+        };
+        let anchor = Point::new(x, bounds.origin.y);
+        if anchor != self.anchor {
+            self.anchor = anchor;
+            self.reset(f64::NEG_INFINITY);
+        }
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down { position, .. }) => {
+                match self.popup.pointer(*position, false) {
+                    Some(_) => {
+                        cx.request_paint();
+                        cx.request_semantics();
+                        EventReply::Stop
+                    }
+                    None => EventReply::Continue,
+                }
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position }) => {
+                if self.popup.pointer(*position, false).is_some() {
+                    cx.request_paint();
+                    cx.request_semantics();
+                }
+                EventReply::Continue
+            }
+            ControlEvent::Pointer(PointerEvent::Up { position, .. }) => {
+                match self.popup.pointer(*position, true) {
+                    Some(response) => {
+                        self.respond(cx, response);
+                        EventReply::Stop
+                    }
+                    None => EventReply::Continue,
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if *key != Key::Tab => {
+                let response = self.popup.menu.handle_key(*key, &self.popup.commands);
+                self.respond(cx, response);
+                EventReply::Stop
+            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
+                self.reset(cx.time());
+                cx.request_paint();
+                cx.request_semantics();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        if let Some(panel) = self.popup.panels().first() {
+            self.popup
+                .menu
+                .paint(&mut cx.at(*panel), 0, &self.popup.commands);
+        }
+    }
+
+    fn overlay(&self) -> Option<Rect> {
+        self.popup
+            .panels()
+            .into_iter()
+            .skip(1)
+            .reduce(|a, b| a.union(b))
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        for (level, panel) in self.popup.panels().into_iter().enumerate().skip(1) {
+            let mut panel_cx = cx.at(panel);
+            panel_cx.state = VisualState::OPEN;
+            self.popup
+                .menu
+                .paint(&mut panel_cx, level, &self.popup.commands);
+        }
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let mut actions = vec![SemanticAction::Focus];
+        if self.popup.menu.highlighted().is_some() {
+            actions.insert(0, SemanticAction::Activate);
+        }
+        let mut node = crate::hosted::node(SemanticRole::Menu, &self.name, actions);
+        if let Some(label) = self.popup.highlighted_label() {
+            node.description = label.to_string();
+        }
+        node
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        match action {
+            SemanticAction::Activate => {
+                let response = self.popup.menu.handle_key(Key::Enter, &self.popup.commands);
+                self.respond(cx, response);
+                true
+            }
+            SemanticAction::Focus => {
+                cx.request_focus();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.reset(f64::NEG_INFINITY);
+        }
+    }
 }

@@ -7,14 +7,19 @@
 //! dialogs here are drawn by the toolkit and use the same ordering and
 //! keyboard rules so both kinds behave alike.
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
+use crate::hosted::{self, Reveal};
 use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
     TextMeasure, VisualState,
 };
 use crate::{ComboChange, ComboInput, FontChooser, NumberInput, ValidationState};
 use choscorui_core::{
-    Color, DesignTokens, FontSlant, FontWeight, Key, Locale, NodeId, Point, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
+    Color, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent, Locale,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -250,6 +255,15 @@ pub struct ColorPicker {
     value: f64,
     alpha: f64,
     recent: Vec<Color>,
+    /// The accessible name in a control host.
+    name: String,
+    /// The hosted parts: the focused channel, the channel under a drag,
+    /// and the geometry of the last arrangement.
+    focus: ColorChannel,
+    drag: Option<ColorChannel>,
+    swatch: Rect,
+    strips: [Rect; 4],
+    rtl: bool,
 }
 
 impl ColorPicker {
@@ -260,9 +274,22 @@ impl ColorPicker {
             value: 0.0,
             alpha: 1.0,
             recent: Vec::new(),
+            name: String::new(),
+            focus: ColorChannel::Hue,
+            drag: None,
+            swatch: Rect::default(),
+            strips: [Rect::default(); 4],
+            rtl: false,
         };
         picker.set_color(color);
         picker
+    }
+
+    /// Sets the accessible name that the picker has in a control host.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
     }
 
     pub fn color(&self) -> Color {
@@ -460,6 +487,226 @@ impl ColorPicker {
             relations: Vec::new(),
             actions: vec![SemanticAction::SetValue, SemanticAction::Focus],
             text: None,
+        }
+    }
+}
+
+/// The keyboard step of a channel, and the step of PageUp and PageDown.
+const CHANNEL_STEP: f64 = 0.01;
+const CHANNEL_PAGE: f64 = 0.1;
+
+impl ColorPicker {
+    /// The hosted row heights: the swatch, one channel strip, and the gap
+    /// between rows.
+    fn rows(styles: &Styles, tokens: &DesignTokens) -> (f64, f64, f64) {
+        let input = styles.resolve(tokens, StyleQuery::new(ControlKind::Input, Slot::Root));
+        let thumb = styles.resolve(tokens, StyleQuery::new(ControlKind::Slider, Slot::Thumb));
+        (input.min_height, thumb.min_height, tokens.spacing * 2.0)
+    }
+
+    fn channel_index(channel: ColorChannel) -> usize {
+        ColorChannel::ALL
+            .iter()
+            .position(|candidate| *candidate == channel)
+            .unwrap_or(0)
+    }
+
+    /// The channel strip that `point` is on, across the full row height.
+    fn strip_at(&self, point: Point) -> Option<ColorChannel> {
+        ColorChannel::ALL.into_iter().find(|channel| {
+            let strip = self.strips[Self::channel_index(*channel)];
+            let row = Rect::from_xywh(
+                self.swatch.origin.x,
+                strip.origin.y,
+                self.swatch.size.width,
+                strip.size.height,
+            );
+            row.contains(point)
+        })
+    }
+
+    /// Sets `channel` from a pointer at `x`, in reading order.
+    fn drag_to(&mut self, cx: &mut ControlContext<'_>, channel: ColorChannel, x: f64) {
+        let strip = self.strips[Self::channel_index(channel)];
+        let along = ((x - strip.origin.x) / strip.size.width.max(1.0)).clamp(0.0, 1.0);
+        let fraction = if self.rtl { 1.0 - along } else { along };
+        self.change(cx, channel, fraction);
+    }
+
+    /// Sets `channel` to `fraction` and reports the color when it moved.
+    fn change(&mut self, cx: &mut ControlContext<'_>, channel: ColorChannel, fraction: f64) {
+        let before = self.channel(channel);
+        self.set_channel(channel, fraction);
+        cx.request_paint();
+        if self.channel(channel) != before {
+            cx.request_semantics();
+            cx.emit(ControlMessage::Changed(ControlValue::Text(self.hex())));
+        }
+    }
+
+    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        let channel = self.focus;
+        let value = self.channel(channel);
+        let (forward, back) = if self.rtl {
+            (Key::ArrowLeft, Key::ArrowRight)
+        } else {
+            (Key::ArrowRight, Key::ArrowLeft)
+        };
+        let target = match key {
+            Key::ArrowUp | Key::ArrowDown => {
+                let current = Self::channel_index(channel);
+                if let Some(next) =
+                    hosted::rove(key, current, ColorChannel::ALL.len(), false, self.rtl)
+                {
+                    self.focus = ColorChannel::ALL[next];
+                    cx.request_paint();
+                }
+                return EventReply::Stop;
+            }
+            Key::Enter => {
+                self.accept();
+                cx.emit(ControlMessage::Activated);
+                return EventReply::Stop;
+            }
+            k if k == forward => value + CHANNEL_STEP,
+            k if k == back => value - CHANNEL_STEP,
+            Key::PageUp => value + CHANNEL_PAGE,
+            Key::PageDown => value - CHANNEL_PAGE,
+            Key::Home => 0.0,
+            Key::End => 1.0,
+            _ => return EventReply::Continue,
+        };
+        self.change(cx, channel, target);
+        EventReply::Stop
+    }
+}
+
+impl CustomControl for ColorPicker {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let (swatch, strip, gap) = Self::rows(cx.styles, cx.tokens);
+        let height = swatch + 4.0 * (strip + gap);
+        // A strip is 60 spacing units wide, so each 1% step moves visibly.
+        let width = cx.tokens.spacing * 60.0;
+        Measured::new(cx.constraints.constrain(Size::new(width, height)))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let (swatch, strip, gap) = Self::rows(cx.styles, cx.tokens);
+        let thumb = cx.style(StyleQuery::new(ControlKind::Slider, Slot::Thumb));
+        self.rtl = cx.rtl();
+        self.swatch = Rect::from_xywh(bounds.origin.x, bounds.origin.y, bounds.size.width, swatch);
+        // The strips leave room for half a thumb at each end.
+        let inset = thumb.min_width / 2.0;
+        let mut y = bounds.origin.y + swatch + gap;
+        for rect in &mut self.strips {
+            *rect = Rect::from_xywh(
+                bounds.origin.x + inset,
+                y,
+                (bounds.size.width - 2.0 * inset).max(0.0),
+                strip,
+            );
+            y += strip + gap;
+        }
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                let Some(channel) = self.strip_at(*position) else {
+                    return EventReply::Continue;
+                };
+                self.focus = channel;
+                self.drag = Some(channel);
+                cx.capture_pointer(true);
+                self.drag_to(cx, channel, position.x);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position }) => match self.drag {
+                Some(channel) => {
+                    self.drag_to(cx, channel, position.x);
+                    EventReply::Stop
+                }
+                None => EventReply::Continue,
+            },
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.drag.is_some() => {
+                self.drag = None;
+                cx.capture_pointer(false);
+                cx.request_paint();
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.drag.is_some() => {
+                self.drag = None;
+                cx.capture_pointer(false);
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::FocusChanged(_) => {
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let host = cx.state;
+        self.paint_swatch(&mut cx.at(self.swatch));
+        for (channel, strip) in ColorChannel::ALL.into_iter().zip(self.strips) {
+            let focused = channel == self.focus;
+            let state = VisualState::NONE
+                .set(VisualState::DISABLED, host.disabled())
+                .set(VisualState::FOCUSED, focused && host.focused())
+                .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
+                .set(VisualState::PRESSED, self.drag == Some(channel));
+            self.paint_channel(&mut cx.at(strip), channel, state);
+        }
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        ColorPicker::semantics(self, &self.name)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        match (action, value) {
+            (SemanticAction::SetValue, Some(text)) => {
+                if self.set_hex(text) != ValidationState::Valid {
+                    return false;
+                }
+                cx.request_paint();
+                cx.request_semantics();
+                cx.emit(ControlMessage::Changed(ControlValue::Text(self.hex())));
+                true
+            }
+            (SemanticAction::Focus, _) => {
+                cx.request_focus();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.drag = None;
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Text(text) => self.set_hex(text) == ValidationState::Valid,
+            _ => false,
         }
     }
 }
@@ -841,6 +1088,21 @@ impl AlertDialog {
         });
     }
 
+    /// The alert as a modal control for a [`crate::ControlHost`]. It
+    /// starts closed; open it with [`crate::ControlHost::set_open`].
+    pub fn hosted(self) -> HostedAlertDialog {
+        HostedAlertDialog {
+            alert: self,
+            reveal: Reveal::default(),
+            viewport: Rect::default(),
+            panel: Rect::default(),
+            buttons: Vec::new(),
+            focus: 0,
+            pressed: None,
+            motion_ms: 0,
+        }
+    }
+
     pub fn semantics(&self) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::Dialog,
@@ -855,5 +1117,276 @@ impl AlertDialog {
             actions: vec![SemanticAction::Dismiss],
             text: None,
         }
+    }
+}
+
+/// An [`AlertDialog`] mounted in a [`crate::ControlHost`]: a modal panel
+/// centered in the window over a scrim. The node itself takes no space.
+/// Make it with [`AlertDialog::hosted`].
+///
+/// - Tab and Shift+Tab move focus between the buttons in display order.
+///   Space activates the focused button.
+/// - Enter activates the `Accept` button, or the focused button when
+///   there is none. Escape activates the `Reject` button, or dismisses.
+/// - A button reports `ItemActivated(index into buttons)` and closes the
+///   alert. A dismissal reports `Dismissed`. Each close also reports
+///   `OpenChanged(false)`. A press outside the panel does nothing.
+pub struct HostedAlertDialog {
+    alert: AlertDialog,
+    reveal: Reveal,
+    viewport: Rect,
+    panel: Rect,
+    /// The button rectangles in display order, by index into `buttons`.
+    buttons: Vec<(usize, Rect)>,
+    /// The focused button, by index into `buttons`.
+    focus: usize,
+    pressed: Option<usize>,
+    motion_ms: u32,
+}
+
+impl HostedAlertDialog {
+    pub fn alert(&self) -> &AlertDialog {
+        &self.alert
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.reveal.open
+    }
+
+    /// The default button: `Accept`, else the first button in display
+    /// order.
+    fn default_focus(&self) -> usize {
+        self.alert
+            .buttons
+            .iter()
+            .position(|button| button.role == DialogButtonRole::Accept)
+            .or_else(|| self.buttons.first().map(|(index, _)| *index))
+            .unwrap_or(0)
+    }
+
+    fn open(&mut self, open: bool, time: f64) {
+        self.pressed = None;
+        if open && !self.reveal.open {
+            self.focus = self.default_focus();
+        }
+        self.reveal.set(open, time);
+    }
+
+    fn close(&mut self, cx: &mut ControlContext<'_>) {
+        if self.pressed.take().is_some() {
+            cx.capture_pointer(false);
+        }
+        self.open(false, cx.time());
+        cx.emit(ControlMessage::OpenChanged(false));
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    fn activate(&mut self, cx: &mut ControlContext<'_>, index: usize) {
+        if index < self.alert.buttons.len() {
+            cx.emit(ControlMessage::ItemActivated(index));
+            self.close(cx);
+        }
+    }
+
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) {
+        self.close(cx);
+        cx.emit(ControlMessage::Dismissed);
+    }
+
+    fn button_at(&self, point: Point) -> Option<usize> {
+        self.buttons
+            .iter()
+            .find(|(_, rect)| rect.contains(point))
+            .map(|(index, _)| *index)
+    }
+
+    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) {
+        match key {
+            Key::Tab if !self.buttons.is_empty() => {
+                let count = self.buttons.len();
+                let current = self
+                    .buttons
+                    .iter()
+                    .position(|(index, _)| *index == self.focus)
+                    .unwrap_or(0);
+                let next = if cx.modifiers().shift {
+                    (current + count - 1) % count
+                } else {
+                    (current + 1) % count
+                };
+                self.focus = self.buttons[next].0;
+                cx.request_paint();
+            }
+            Key::Space => self.activate(cx, self.focus),
+            Key::Enter => {
+                let index = self.alert.handle_key(Key::Enter).unwrap_or(self.focus);
+                self.activate(cx, index);
+            }
+            Key::Escape => match self.alert.handle_key(Key::Escape) {
+                Some(index) => self.activate(cx, index),
+                None => self.dismiss(cx),
+            },
+            _ => {}
+        }
+    }
+
+    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: PointerEvent) {
+        match event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => {
+                if let Some(index) = self.button_at(position) {
+                    self.pressed = Some(index);
+                    self.focus = index;
+                    cx.capture_pointer(true);
+                    cx.request_paint();
+                }
+            }
+            PointerEvent::Up { position, .. } => {
+                if let Some(index) = self.pressed.take() {
+                    cx.capture_pointer(false);
+                    cx.request_paint();
+                    if self.button_at(position) == Some(index) {
+                        self.activate(cx, index);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Paints the buttons. `host` carries the node's focus flags, which
+    /// the focused button shows.
+    fn paint_buttons(&self, cx: &mut PaintContext<'_>, host: VisualState) {
+        for (index, rect) in &self.buttons {
+            let button = &self.alert.buttons[*index];
+            let focused = self.focus == *index;
+            let state = VisualState::NONE
+                .set(VisualState::FOCUSED, focused && host.focused())
+                .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
+                .set(VisualState::PRESSED, self.pressed == Some(*index));
+            let style = cx.style(
+                StyleQuery::new(ControlKind::Button, Slot::Root)
+                    .variant(AlertDialog::button_variant(button.role))
+                    .state(state),
+            );
+            let content = Content::label(&button.title);
+            cx.slot(*rect, &style, |cx, inner| {
+                content.draw(cx, inner, &style, TextAlign::Center);
+            });
+        }
+    }
+}
+
+impl CustomControl for HostedAlertDialog {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        Measured::new(cx.constraints.constrain(Size::new(0.0, 0.0)))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.viewport = cx.viewport;
+        let root = cx.style(StyleQuery::new(ControlKind::AlertDialog, Slot::Root));
+        self.motion_ms = root.motion_ms;
+        // The panel keeps a margin of 4 spacing units from the window edges.
+        let margin = cx.tokens.spacing * 4.0;
+        let available = Size::new(
+            (self.viewport.size.width - 2.0 * margin).max(0.0),
+            (self.viewport.size.height - 2.0 * margin).max(0.0),
+        );
+        let size = self.alert.measure(available, cx.styles, cx.tokens, cx.text);
+        let center = self.viewport.center();
+        self.panel = Rect::from_xywh(
+            center.x - size.width / 2.0,
+            center.y - size.height / 2.0,
+            size.width,
+            size.height,
+        );
+        self.buttons = self
+            .alert
+            .button_rects(self.panel, cx.styles, cx.tokens, cx.text, cx.rtl());
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target || !self.reveal.open {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer),
+            ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => self.key(cx, *key),
+            ControlEvent::Key(_) => {}
+            _ => return EventReply::Continue,
+        }
+        EventReply::Stop
+    }
+
+    fn paint(&self, _cx: &mut PaintContext<'_>) {
+        // The node takes no space; the panel paints above every control.
+    }
+
+    fn overlay(&self) -> Option<Rect> {
+        self.reveal.open.then_some(self.viewport)
+    }
+
+    fn modal(&self) -> bool {
+        self.reveal.open
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        let progress = self.reveal.progress(cx.tokens, self.motion_ms, cx.time);
+        if progress <= 0.0 {
+            return;
+        }
+        let host = cx.state;
+        let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
+        self.alert.paint_overlay(&mut cx.at(self.viewport));
+        let _ = cx.list.pop_opacity();
+        Reveal::paint(cx, self.panel, progress, (0.0, 0.0), |cx| {
+            self.alert.paint(&mut cx.at(self.panel));
+            self.paint_buttons(cx, host);
+        });
+    }
+
+    fn animating(&self, time: f64) -> bool {
+        self.reveal.animating(self.motion_ms, time)
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let mut node = self.alert.semantics();
+        if !self.reveal.open {
+            node.state.hidden = true;
+            node.actions.clear();
+        }
+        node
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Dismiss || !self.reveal.open {
+            return false;
+        }
+        self.dismiss(cx);
+        true
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.reveal = Reveal::default();
+            self.pressed = None;
+        }
+    }
+
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        self.open(open, time);
+        true
     }
 }

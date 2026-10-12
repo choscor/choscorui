@@ -3,10 +3,15 @@
 //! (Miller) browser, and undo-history rows.
 
 use crate::ValidationState;
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
+use crate::hosted::Routed;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    CivilDate, EditableModel, Icon, ItemKey, ItemModel, Key, Locale, ModelError, Point, Rect, Role,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
+    CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Locale,
+    Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
 };
 use std::collections::HashMap;
 
@@ -657,4 +662,378 @@ pub fn undo_history<T>(stack: &UndoStack<T>, empty_label: &str) -> Vec<UndoHisto
 /// negative means undo that many groups, positive means redo.
 pub fn undo_steps_to<T>(stack: &UndoStack<T>, target: usize) -> isize {
     target.min(stack.len()) as isize - stack.applied() as isize
+}
+
+impl HeaderView {
+    /// Runs `input` and reports the response: a sort change as
+    /// `ItemActivated(column)` and a resize as `Changed(Index(column))`.
+    fn hosted_input(&mut self, cx: &mut ControlContext<'_>, input: HeaderInput) {
+        let response = self.handle(input);
+        if response.sort_changed {
+            cx.emit(ControlMessage::ItemActivated(self.focused));
+            cx.request_semantics();
+        }
+        if let Some(column) = response.resized {
+            cx.emit(ControlMessage::Changed(ControlValue::Index(Some(column))));
+            cx.request_layout();
+            cx.request_semantics();
+        }
+        cx.request_paint();
+    }
+}
+
+impl CustomControl for HeaderView {
+    /// The columns' widths side by side, one header cell high.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let cell = cx.style(StyleQuery::new(ControlKind::Table, Slot::HeaderCell));
+        let height = cell
+            .min_height
+            .max(cell.text.line_height + cell.padding.vertical());
+        let width = self.columns.iter().map(|column| column.width).sum();
+        Measured::new(cx.constraints.constrain(Size::new(width, height)))
+    }
+
+    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+        self.origin_x = bounds.origin.x;
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return EventReply::Continue;
+        };
+        match routed {
+            Routed::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                self.hosted_input(cx, HeaderInput::Press { x: position.x });
+                if self.resizing.is_some() {
+                    cx.capture_pointer(true);
+                }
+                EventReply::Stop
+            }
+            Routed::Pointer(PointerEvent::Move { position }) if self.resizing.is_some() => {
+                self.hosted_input(cx, HeaderInput::Drag { x: position.x });
+                EventReply::Stop
+            }
+            Routed::Pointer(PointerEvent::Up { .. }) | Routed::Cancel
+                if self.resizing.is_some() =>
+            {
+                self.handle(HeaderInput::Release);
+                cx.capture_pointer(false);
+                EventReply::Stop
+            }
+            Routed::Key(KeyEvent::Down { key, .. }) => {
+                let handled = matches!(
+                    key,
+                    Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::Space
+                        | Key::Enter
+                        | Key::Character('+' | '=' | '-')
+                );
+                if !handled {
+                    return EventReply::Continue;
+                }
+                let focused = self.focused;
+                self.hosted_input(cx, HeaderInput::Key(key));
+                if self.focused != focused {
+                    cx.request_semantics();
+                }
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let focus_visible = cx.state.focus_visible();
+        HeaderView::paint(self, cx, focus_visible);
+    }
+
+    /// The focused column's node: the header is one tab stop whose arrow
+    /// keys move between columns.
+    fn semantics(&self) -> SemanticNode {
+        self.column_semantics(self.focused)
+            .unwrap_or_else(|| crate::hosted::node(SemanticRole::ColumnHeader, "", Vec::new()))
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        match action {
+            SemanticAction::Activate => {
+                self.hosted_input(cx, HeaderInput::Key(Key::Enter));
+                true
+            }
+            SemanticAction::Focus => {
+                cx.request_focus();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.resizing = None;
+        }
+    }
+}
+
+impl ColumnBrowser {
+    /// A browser over its own `model` that mounts in a
+    /// [`crate::ControlHost`] as a single node named `name`.
+    pub fn hosted(self, name: impl Into<String>, model: Box<dyn ItemModel>) -> HostedColumnBrowser {
+        HostedColumnBrowser {
+            name: name.into(),
+            browser: self,
+            model,
+            column_width: 0.0,
+            row_height: 1.0,
+            bounds: Rect::default(),
+            rtl: false,
+        }
+    }
+}
+
+/// A [`ColumnBrowser`] with its model, mounted in a
+/// [`crate::ControlHost`]. It paints one column per level and reports the
+/// path as `Changed(Indices(rows))`: the row of each path item among its
+/// siblings.
+pub struct HostedColumnBrowser {
+    name: String,
+    browser: ColumnBrowser,
+    model: Box<dyn ItemModel>,
+    column_width: f64,
+    row_height: f64,
+    bounds: Rect,
+    rtl: bool,
+}
+
+impl HostedColumnBrowser {
+    pub fn browser(&self) -> &ColumnBrowser {
+        &self.browser
+    }
+
+    pub fn model(&self) -> &dyn ItemModel {
+        self.model.as_ref()
+    }
+
+    /// The row of each path item among its siblings.
+    pub fn path_rows(&self) -> Vec<usize> {
+        self.browser
+            .path()
+            .iter()
+            .filter_map(|key| self.model.row(*key))
+            .collect()
+    }
+
+    /// The rectangle of column `column`; columns follow reading order.
+    fn column_rect(&self, column: usize) -> Rect {
+        let offset = column as f64 * self.column_width;
+        let x = if self.rtl {
+            self.bounds.max_x() - offset - self.column_width
+        } else {
+            self.bounds.origin.x + offset
+        };
+        Rect::from_xywh(
+            x,
+            self.bounds.origin.y,
+            self.column_width,
+            self.bounds.size.height,
+        )
+    }
+
+    /// Rows that fit in a column.
+    fn page(&self) -> usize {
+        ((self.bounds.size.height / self.row_height).floor() as usize).max(1)
+    }
+
+    /// The first row a column shows: it scrolls to keep the path item in
+    /// view.
+    fn first_row(&self, column: usize) -> usize {
+        let selected = self
+            .browser
+            .path()
+            .get(column)
+            .and_then(|key| self.model.row(*key))
+            .unwrap_or(0);
+        (selected + 1).saturating_sub(self.page())
+    }
+
+    fn changed(&self, cx: &mut ControlContext<'_>) {
+        cx.emit(ControlMessage::Changed(ControlValue::Indices(
+            self.path_rows(),
+        )));
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    fn press(&mut self, cx: &mut ControlContext<'_>, position: Point) -> EventReply {
+        let columns = self.browser.columns(self.model.as_ref());
+        let Some(column) =
+            (0..columns.len()).find(|column| self.column_rect(*column).contains(position))
+        else {
+            return EventReply::Continue;
+        };
+        let line = ((position.y - self.bounds.origin.y) / self.row_height).floor() as usize;
+        let row = self.first_row(column) + line;
+        if let Some(key) = self.model.key(columns[column], row) {
+            let before = self.browser.clone();
+            self.browser.select(column, key);
+            if self.browser != before {
+                self.changed(cx);
+            }
+        }
+        EventReply::Stop
+    }
+}
+
+impl CustomControl for HostedColumnBrowser {
+    /// A browser takes the offered size; unbounded, it shows three
+    /// columns of ten rows.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let row = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row));
+        let row_height = row
+            .min_height
+            .max(row.text.line_height + row.padding.vertical());
+        let max = cx.constraints.max;
+        let width = if max.width.is_finite() {
+            max.width
+        } else {
+            cx.tokens.spacing * 50.0 * 3.0
+        };
+        let height = if max.height.is_finite() {
+            max.height
+        } else {
+            row_height * 10.0
+        };
+        Measured::new(Size::new(width, height))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let row = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row));
+        self.row_height = row
+            .min_height
+            .max(row.text.line_height + row.padding.vertical())
+            .max(1.0);
+        self.column_width = cx.tokens.spacing * 50.0;
+        self.bounds = bounds;
+        self.rtl = cx.rtl();
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return EventReply::Continue;
+        };
+        match routed {
+            Routed::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => self.press(cx, position),
+            Routed::Key(KeyEvent::Down { key, .. }) => {
+                // Columns follow reading order, so the keys mirror too.
+                let key = match (key, self.rtl) {
+                    (Key::ArrowLeft, true) => Key::ArrowRight,
+                    (Key::ArrowRight, true) => Key::ArrowLeft,
+                    (key, _) => key,
+                };
+                if !matches!(
+                    key,
+                    Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
+                ) {
+                    return EventReply::Continue;
+                }
+                let before = self.browser.clone();
+                self.browser.handle_key(self.model.as_ref(), key);
+                if self.browser.path() != before.path() {
+                    self.changed(cx);
+                } else if self.browser != before {
+                    cx.request_paint();
+                }
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints only the rows that fit in each column.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let focused = cx.state.focused();
+        let page = self.page();
+        for (column, parent) in self.browser.columns(self.model.as_ref()).iter().enumerate() {
+            let rect = self.column_rect(column);
+            let first = self.first_row(column);
+            let end = self.model.row_count(*parent).min(first + page + 1);
+            let selected = self.browser.path().get(column).copied();
+            let active = focused && column == self.browser.focused_column();
+            for row in first..end {
+                let Some(key) = self.model.key(*parent, row) else {
+                    continue;
+                };
+                let entry = Rect::from_xywh(
+                    rect.origin.x,
+                    rect.origin.y + (row - first) as f64 * self.row_height,
+                    rect.size.width,
+                    self.row_height,
+                );
+                let label = self.model.data(key, 0, Role::Display).to_display_string();
+                let has_children =
+                    self.model.has_children(key) || self.model.can_fetch_more(Some(key));
+                ColumnBrowser::paint_entry(
+                    &mut cx.at(entry),
+                    &label,
+                    has_children,
+                    selected == Some(key),
+                    active,
+                );
+            }
+        }
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let mut node =
+            crate::hosted::node(SemanticRole::Tree, &self.name, vec![SemanticAction::Focus]);
+        node.value = self
+            .browser
+            .path()
+            .get(self.browser.focused_column())
+            .map(|key| self.model.data(*key, 0, Role::Display).to_display_string());
+        node
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Focus {
+            return false;
+        }
+        cx.request_focus();
+        true
+    }
+
+    /// Takes `Indices`: the row of each path item among its siblings.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Indices(rows) = value else {
+            return false;
+        };
+        let mut browser = ColumnBrowser::new();
+        let mut parent = None;
+        for (column, row) in rows.iter().enumerate() {
+            let Some(key) = self.model.key(parent, *row) else {
+                return false;
+            };
+            browser.select(column, key);
+            parent = Some(key);
+        }
+        self.browser = browser;
+        true
+    }
 }

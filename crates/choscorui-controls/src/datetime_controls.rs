@@ -6,15 +6,20 @@
 //! sections. Values outside the minimum/maximum are reported as
 //! `Intermediate` while typing and clamped on commit.
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
     CalendarDay, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
+    content_rect,
 };
 use crate::{STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, Icon, Key, Locale, Point, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid,
-    month_name, weekday_short_name,
+    CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, EventPhase, EventReply, Icon,
+    Key, KeyEvent, Locale, Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid, month_name,
+    weekday_short_name,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +50,8 @@ pub struct DateTimeEdit {
     fields: Vec<DateTimeField>,
     focused: usize,
     typed: String,
+    /// The layout direction of a hosted editor, from `arrange`.
+    rtl: bool,
 }
 
 impl DateTimeEdit {
@@ -64,6 +71,7 @@ impl DateTimeEdit {
             fields: Vec::new(),
             focused: 0,
             typed: String::new(),
+            rtl: false,
         };
         edit.fields = edit.field_order();
         edit
@@ -396,6 +404,12 @@ pub struct Calendar {
     /// The chosen days of a `Multiple` calendar, in order, or the start
     /// and end of a `Range` calendar.
     chosen: Vec<CivilDate>,
+    /// The accessible name of a hosted calendar.
+    name: String,
+    /// The day a hosted calendar marks as today.
+    today: Option<CivilDate>,
+    /// The parts of a hosted calendar, from `arrange`.
+    layout: Option<CalendarLayout>,
 }
 
 /// How a calendar chooses days.
@@ -450,6 +464,9 @@ impl Calendar {
             maximum: None,
             mode: CalendarMode::Single,
             chosen: Vec::new(),
+            name: String::new(),
+            today: None,
+            layout: None,
         }
     }
 
@@ -804,6 +821,361 @@ impl Calendar {
                 Vec::new()
             },
             text: None,
+        }
+    }
+}
+
+/// `HH:MM:SS`, the locale-independent time a hosted editor reports.
+fn time_iso(time: CivilTime) -> String {
+    format!(
+        "{:02}:{:02}:{:02}",
+        time.hour(),
+        time.minute(),
+        time.second()
+    )
+}
+
+impl DateTimeEdit {
+    /// The value a hosted editor reports: `Date` for a date editor, and
+    /// ISO 8601 text (`HH:MM:SS`, or `YYYY-MM-DDTHH:MM:SS`) otherwise.
+    fn hosted_value(&self) -> ControlValue {
+        match self.kind {
+            DateTimeKind::Date => ControlValue::Date(Some(self.value.date)),
+            DateTimeKind::Time => ControlValue::Text(time_iso(self.value.time)),
+            DateTimeKind::DateTime => ControlValue::Text(format!(
+                "{}T{}",
+                self.value.date.iso(),
+                time_iso(self.value.time)
+            )),
+        }
+    }
+
+    /// Runs `keys` and reports one change when the value changed.
+    fn hosted_keys(&mut self, cx: &mut ControlContext<'_>, keys: impl IntoIterator<Item = Key>) {
+        let mut changed = false;
+        for key in keys {
+            changed |= self.handle_key(key);
+        }
+        if changed {
+            cx.emit(ControlMessage::Changed(self.hosted_value()));
+        }
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// The stepper rectangle at the end of `bounds`.
+    fn steppers(bounds: Rect, rtl: bool) -> Rect {
+        let width = STEPPER_WIDTH.min(bounds.size.width);
+        let x = if rtl {
+            bounds.origin.x
+        } else {
+            bounds.max_x() - width
+        };
+        Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height)
+    }
+}
+
+impl CustomControl for DateTimeEdit {
+    /// The text, the padding, and the steppers, at least the `Input`
+    /// height.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let width =
+            cx.text.width(&self.text(), &style.text) + style.padding.horizontal() + STEPPER_WIDTH;
+        let height = style
+            .min_height
+            .max(style.text.line_height + style.padding.vertical());
+        Measured::new(cx.constraints.constrain(Size::new(width, height)))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.rtl = cx.rtl();
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                // A press on the steppers steps the focused field.
+                let steppers = Self::steppers(cx.bounds(), self.rtl);
+                if steppers.contains(*position) {
+                    let key = if position.y < steppers.center().y {
+                        Key::ArrowUp
+                    } else {
+                        Key::ArrowDown
+                    };
+                    self.hosted_keys(cx, [key]);
+                }
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. })
+                if matches!(
+                    key,
+                    Key::ArrowUp
+                        | Key::ArrowDown
+                        | Key::ArrowLeft
+                        | Key::ArrowRight
+                        | Key::PageUp
+                        | Key::PageDown
+                        | Key::Home
+                        | Key::End
+                        | Key::Enter
+                ) =>
+            {
+                self.hosted_keys(cx, [*key]);
+                EventReply::Stop
+            }
+            ControlEvent::Text(text) => {
+                self.hosted_keys(cx, text.chars().map(Key::Character));
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(_) => {
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state;
+        DateTimeEdit::paint(self, cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        DateTimeEdit::semantics(self)
+    }
+
+    /// `Increment` and `Decrement` step the focused field as ArrowUp and
+    /// ArrowDown do.
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        let key = match action {
+            SemanticAction::Increment => Key::ArrowUp,
+            SemanticAction::Decrement => Key::ArrowDown,
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
+            }
+            _ => return false,
+        };
+        self.hosted_keys(cx, [key]);
+        true
+    }
+
+    /// Takes `Date` for a date editor, and ISO 8601 text for a time
+    /// (`HH:MM` or `HH:MM:SS`) or a date and time (`YYYY-MM-DDTHH:MM`).
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let next = match (self.kind, value) {
+            (DateTimeKind::Date, ControlValue::Date(Some(date))) => CivilDateTime {
+                date: *date,
+                time: self.value.time,
+            },
+            (DateTimeKind::Time, ControlValue::Text(text)) => match CivilTime::parse(text) {
+                Ok(time) => CivilDateTime {
+                    date: self.value.date,
+                    time,
+                },
+                Err(_) => return false,
+            },
+            (DateTimeKind::DateTime, ControlValue::Text(text)) => {
+                let parsed = text.split_once('T').and_then(|(date, time)| {
+                    Some(CivilDateTime {
+                        date: CivilDate::parse_iso(date).ok()?,
+                        time: CivilTime::parse(time).ok()?,
+                    })
+                });
+                match parsed {
+                    Some(value) => value,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        };
+        self.typed.clear();
+        self.value = next;
+        true
+    }
+}
+
+impl Calendar {
+    /// Names the calendar for its hosted semantics.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
+    }
+
+    /// The day a hosted calendar marks as today.
+    #[must_use]
+    pub fn with_today(mut self, today: CivilDate) -> Self {
+        self.today = Some(today);
+        self
+    }
+
+    /// Reports the chosen days: `Date` in `Single` mode, else `Dates`.
+    fn report(&self, cx: &mut ControlContext<'_>) {
+        let value = match self.mode {
+            CalendarMode::Single => ControlValue::Date(Some(self.selected)),
+            _ => ControlValue::Dates(self.dates()),
+        };
+        cx.emit(ControlMessage::Changed(value));
+        cx.request_semantics();
+    }
+
+    fn hosted_press(&mut self, cx: &mut ControlContext<'_>, position: Point) -> EventReply {
+        let Some(layout) = &self.layout else {
+            return EventReply::Continue;
+        };
+        if layout.previous.contains(position) {
+            self.show_month(-1);
+            cx.request_semantics();
+        } else if layout.next.contains(position) {
+            self.show_month(1);
+            cx.request_semantics();
+        } else if let Some(index) = layout.days.iter().position(|day| day.contains(position)) {
+            let cell = self.cells().get(index).copied();
+            if let Some(cell) = cell.filter(|cell| cell.enabled)
+                && self.activate(cell.date)
+            {
+                self.report(cx);
+            }
+        }
+        cx.request_paint();
+        EventReply::Stop
+    }
+
+    fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        match key {
+            // A single calendar leaves choosing to the application.
+            Key::Enter | Key::Space if self.mode == CalendarMode::Single => {
+                cx.emit(ControlMessage::Activated);
+            }
+            Key::Enter | Key::Space => {
+                if self.handle_key(key) {
+                    self.report(cx);
+                }
+            }
+            Key::ArrowLeft
+            | Key::ArrowRight
+            | Key::ArrowUp
+            | Key::ArrowDown
+            | Key::PageUp
+            | Key::PageDown
+            | Key::Home
+            | Key::End => {
+                if self.handle_key(key) {
+                    if self.mode == CalendarMode::Single {
+                        self.report(cx);
+                    } else {
+                        cx.request_semantics();
+                    }
+                }
+            }
+            _ => return EventReply::Continue,
+        }
+        cx.request_paint();
+        EventReply::Stop
+    }
+}
+
+impl CustomControl for Calendar {
+    /// The day grid inside the `Calendar` root padding.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let root = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
+        let grid = Calendar::size(cx.styles, cx.tokens);
+        let size = Size::new(
+            grid.width + root.padding.horizontal(),
+            grid.height + root.padding.vertical(),
+        );
+        Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let root = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
+        let inner = content_rect(bounds, &root, cx.rtl());
+        self.layout = Some(Calendar::layout(
+            inner.origin,
+            cx.styles,
+            cx.tokens,
+            cx.rtl(),
+        ));
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => self.hosted_press(cx, *position),
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.hosted_key(cx, *key),
+            ControlEvent::FocusChanged(_) => {
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let root = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
+        let bounds = cx.bounds;
+        cx.slot(bounds, &root, |_, _| {});
+        let focus = if cx.state.focus_visible() {
+            CalendarFocus::Grid
+        } else {
+            CalendarFocus::None
+        };
+        if let Some(layout) = &self.layout {
+            Calendar::paint(self, cx, layout, self.today, focus);
+        }
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        Calendar::semantics(self, &self.name)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Focus {
+            return false;
+        }
+        cx.request_focus();
+        true
+    }
+
+    /// Takes `Date` in `Single` mode and `Dates` in the other modes.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match (self.mode, value) {
+            (CalendarMode::Single, ControlValue::Date(Some(date))) if self.allowed(*date) => {
+                self.select(*date);
+                true
+            }
+            (CalendarMode::Multiple | CalendarMode::Range, ControlValue::Dates(dates)) => {
+                self.set_dates(dates);
+                if let Some(date) = self.chosen.first() {
+                    self.selected = *date;
+                    self.shown = (date.year(), date.month());
+                }
+                true
+            }
+            _ => false,
         }
     }
 }

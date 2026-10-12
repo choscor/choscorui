@@ -57,6 +57,7 @@ in parentheses is the role that the macOS backend gives to that
 | Data and item views | [`CellEdit`](#celledit-and-datamapper) | Edits one model cell with a typed editor. |
 | Data and item views | [`DataMapper`](#celledit-and-datamapper) | Binds form fields to the current model item. |
 | Data and item views | [`ColumnBrowser`](#columnbrowser-and-undo-history) | Column (Miller) browser for a tree model. |
+| Data and item views | [`HostedColumnBrowser`](#columnbrowser-and-undo-history) | Column browser that owns its model and mounts in a control host. |
 | Data and item views | [`undo_history`](#columnbrowser-and-undo-history) | Rows for an undo history list. |
 | Popups and dialogs | [`DropdownMenu`](#dropdownmenu) | Custom-drawn menu backed by commands. |
 | Popups and dialogs | [`PopupStack`](#popupstack) | Open popups, dismissal, and focus restore. |
@@ -547,6 +548,15 @@ this behavior.
 A group box has a `LabelledBy` relation to its title and a `Controls`
 relation to each member. A stack has a `Controls` relation to each page.
 
+**In a control host.** `GroupBox::hosted(label)` makes a group box with
+no member nodes. It paints the card and the title, and it takes no input
+or focus. `content_rect` gives the members' area from the last arranged
+bounds, and the view layer places the members there.
+`StackedContainer::hosted(label, pages, current)` makes a stack with no
+page nodes. It paints nothing and takes no focus. `set_value` with
+`Index(Some(page))` selects the page, and the view layer shows page
+`current` in the stack's bounds.
+
 [containers.rs](../crates/choscorui-controls/tests/containers.rs) pins this
 behavior.
 
@@ -909,6 +919,13 @@ this behavior.
 | State | disabled |
 | Actions | `Increment`, `Decrement`, `Focus` while enabled |
 
+**In a control host.** The host's node takes focus and pointer capture.
+Before each input, the area moves its viewport node to the host node's
+bounds. The view layer puts the content node in the viewport node, and
+the area scrolls it there. The wheel also scrolls over content controls.
+A press focuses the area, because the host focuses a pressed control.
+`with_name` sets the accessible name. The area sends no messages.
+
 [navigation.rs](../crates/choscorui-controls/tests/navigation.rs) pins this
 behavior.
 
@@ -938,6 +955,14 @@ behavior.
 | Actions | `Increment`, `Decrement`, `Focus` |
 
 The node has a `Controls` relation to each pane.
+
+**In a control host.** `Resizable::hosted` makes a resizable with no pane
+nodes. Its node covers both panes and the handle. The keys and actions
+above move the handle and send `Changed(Number(position))`. `panes` gives
+the pane and handle rectangles from the last arranged bounds, and the view
+layer places the panes there. In a right-to-left layout, a horizontal
+split puts the first pane on the right and mirrors ArrowLeft and
+ArrowRight. The hosted node has no `Controls` relations.
 
 [containers.rs](../crates/choscorui-controls/tests/containers.rs) pins this
 behavior.
@@ -998,7 +1023,21 @@ behavior.
 `DateTimeEdit` has no handler for these actions. The host maps them to
 `handle_key`.
 
-[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
+**In a control host.** A hosted `DateTimeEdit` maps `Increment` and
+`Decrement` to ArrowUp and ArrowDown. Digits and separators arrive as text.
+A press on the steppers steps the focused field. A date editor reports
+`Date`. A time editor reports `HH:MM:SS` text, and a date and time editor
+reports `YYYY-MM-DDTHH:MM:SS` text.
+
+A hosted `Calendar` takes its name from `with_name` and its today from
+`with_today`. A press on a month button shows the previous or the next
+month. A press on an enabled day activates it. In `Single` mode, Enter or
+Space reports `Activated`, and a selection change reports `Date`. The other
+modes report `Dates`. Keyboard focus rings the cursor day.
+
+[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) and
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
+pin this behavior.
 
 ### ItemView
 
@@ -1056,8 +1095,16 @@ behavior.
 declares the full item count and the index of each realized item (see
 [Virtualized content](#virtualized-content)).
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) pins this
-behavior.
+**In a control host.** `with_model` gives the view its own model and
+delegate. A hosted view is one node: it realizes no child nodes and paints
+only the rows in the viewport, plus the overscan. It takes the offered size.
+Two presses on one row within 0.5 seconds activate it. Typed text arrives as
+text for type-ahead. A secondary press selects the row, but no message
+reports the context menu. Rows that the model must fetch are not reported.
+
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
+pin this behavior.
 
 ### HeaderView
 
@@ -1082,8 +1129,15 @@ behavior.
 | State | selected for the focused column; the width is the description |
 | Actions | `Activate`, `Focus` |
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) pins this
-behavior.
+**In a control host.** A hosted header is one tab stop. Its node is the node
+of the focused column. A sort change reports `ItemActivated(column)`, and
+`sort` returns the order. A resize reports `Changed(Index(column))`, and
+`widths` returns the widths. A press on a column edge captures the pointer
+until the release. `Activate` sorts the focused column.
+
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
+pin this behavior.
 
 ### CellEdit and DataMapper
 
@@ -1125,8 +1179,17 @@ behavior.
 
 These types have no semantic node. Show the rows in an `ItemView`.
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) pins this
-behavior.
+**In a control host.** `ColumnBrowser::hosted` returns a
+`HostedColumnBrowser` that owns the model and mounts as one node. It paints
+one column for each level, and each column shows the rows that fit. A
+column scrolls to keep the path item visible. A press selects the row under
+the pointer. Columns follow reading order, so ArrowLeft and ArrowRight
+mirror in right-to-left layouts. The node has the `Tree` role, the name,
+and the focused path item as its value. Its only action is `Focus`.
+
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
+pin this behavior.
 
 ### DropdownMenu
 
@@ -1143,6 +1206,12 @@ behavior.
   submenus. These items never activate.
 - Right-to-left layouts do not mirror ArrowLeft and ArrowRight.
 - `PopupMenu` is a deprecated alias of `DropdownMenu`.
+- **In a control host.** `hosted(name)` makes a `HostedDropdownMenu` with
+  its own command states. The root level fills the node, and open
+  submenus float beside it.
+- An activated action reports `Command`. Escape or ArrowLeft at the root
+  reports `Dismissed`. The menu then closes its submenus and stays in
+  place.
 - **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
   shortcut text, and `destructive` sets the destructive look.
   `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`
@@ -1169,7 +1238,9 @@ behavior.
 | State | disabled, checked for a checkable action, selected when highlighted, expanded for an open submenu |
 | Actions | `Activate` while enabled |
 
-Separators have no node.
+Separators have no node. In a control host, the menu publishes one
+`Menu` node with its name. The description is the highlighted label, and
+the actions are `Activate` and `Focus`.
 
 [popup.rs](../crates/choscorui-controls/tests/popup.rs) pins this behavior.
 
@@ -1253,6 +1324,15 @@ behavior.
   default button.
 - In right-to-left layouts, `order_dialog_buttons` mirrors the whole row.
 - `MessageDialog` is a deprecated alias of `AlertDialog`.
+- **In a control host.** `hosted` makes a modal `HostedAlertDialog` that
+  starts closed. `ControlHost::set_open` opens it over a scrim, centered
+  in the window. The node takes no space.
+- Tab moves focus between the buttons, and Space activates the focused
+  button. A button reports `ItemActivated` with its index, then
+  `OpenChanged(false)`.
+- Escape without a `Reject` button, or the `Dismiss` action, reports
+  `OpenChanged(false)` and `Dismissed`. A press outside the panel does
+  nothing.
 - **Look.** `measure` sizes the panel, and `button_rects` places the
   buttons in platform order. `paint_overlay` draws the scrim, and `paint`
   draws the panel and its text. The host paints each button with
@@ -1281,8 +1361,11 @@ behavior.
 | State | - |
 | Actions | `Dismiss` |
 
+While closed, the hosted alert node is hidden and has no actions.
+
 `InputDialog` has no semantic node. Its field and buttons publish their
-own semantics.
+own semantics. The control host has no `InputDialog` control: put an
+`Input` in a `Dialog`, and call `validate`.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
@@ -1300,6 +1383,14 @@ own semantics.
   `Input` border, with the `Slider` thumb at the value. The gradient
   fills from the end in right-to-left layouts.
 - `paint_swatch` fills the color in the `Input` frame.
+- **In a control host.** `ColorPicker` shows the swatch and one strip for
+  each channel. `with_name` sets its accessible name.
+- ArrowUp and ArrowDown move between the channels. ArrowLeft and
+  ArrowRight change the channel by 1%. Right-to-left layouts swap them.
+- PageUp and PageDown change the channel by 10%, and Home and End go to
+  the ends. A press or a drag on a strip sets the channel.
+- A change reports `Changed(Text)` with the hex value. Enter accepts the
+  color and reports `Activated`. `SetValue` takes a hex value.
 - **`FontDialog::set_size`** accepts 1 to 4096 points. Other sizes are
   `Invalid`.
 - `FontDialog` uses a `FontChooser`. A missing family resolves to
@@ -1313,7 +1404,8 @@ own semantics.
 | Actions | `SetValue`, `Focus` |
 
 `FontDialog` has no semantic node. Its family combobox publishes the
-`FontChooser` semantics.
+`FontChooser` semantics. The control host has no `FontDialog` control:
+mount its `FontChooser` and its size field.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
@@ -1339,6 +1431,12 @@ own semantics.
   separators are 1 pt `border` lines.
 - The overflow chevron is a ghost button. The host paints the embedded
   controls.
+- **In a control host.** `hosted` makes a `HostedToolbar` with its own
+  command states. A command reports `Command`. Focus that enters the
+  toolbar goes to the first item.
+- A click on the chevron opens the overflowed commands in a menu and
+  reports `OpenChanged`. The view layer places the embedded controls in
+  the `layout()` rectangles.
 
 | Field | `Toolbar::semantics` |
 | --- | --- |
@@ -1363,6 +1461,9 @@ The items publish their own semantics.
   them.
 - **Look.** `paint` uses the `StatusBar` recipe: a top border, xs muted
   text, and a 1 pt rule before each section.
+- **In a control host.** `StatusBar` takes no keyboard focus. Its
+  deadline is the end of a timed message, so give `show_message` the
+  host time as `now`.
 
 | Field | `StatusBar::semantics` |
 | --- | --- |
@@ -1396,6 +1497,17 @@ The items publish their own semantics.
 | Name / value | panel title / - | area name and "panel size" / extent in points |
 | State | selected when active; the description is "Floating" for a floating panel | - |
 | Actions | `Focus`, and `Dismiss` when closable | `Increment`, `Decrement` |
+
+**In a control host.** The dock's node covers its whole area. It paints
+the frames, the tab bars, and the splitters. The view layer places the
+center and the panel contents in the frames of `arrange` for the node's
+bounds. Each group and each splitter is a tab stop, and Tab moves between
+them. A press or the arrow keys select a tab and send
+`ItemActivated(panel)`, with the `PanelId` number. A splitter drag, the
+splitter keys, and `Increment` or `Decrement` send
+`Changed(Number(extent))`. `Dismiss` closes the focused panel and sends
+`Dismissed`. The node's semantics are those of the focused tab's panel or
+splitter.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 
@@ -1456,6 +1568,13 @@ These types have no semantic node.
 
 The container declares the count of accessible items. Only items in view
 get a node, with their index among all accessible items.
+
+**In a control host.** `CanvasView::hosted(scene)` makes a control that
+owns the scene. Its viewport follows the node's bounds. Shift or Command
+extends a press, and Command makes the wheel zoom. A selection change
+sends `Changed(Indices(ids))`, and Enter sends `ItemActivated(id)`, with
+`SceneItemId` numbers. Delete and Backspace remove the selected items from
+the scene. The hosted node publishes only the container.
 
 [canvas.rs](../crates/choscorui-controls/tests/canvas.rs) pins this behavior.
 

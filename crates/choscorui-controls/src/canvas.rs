@@ -5,13 +5,21 @@
 //! Several views may show one scene; each keeps its own zoom, pan, and
 //! selection.
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
+use crate::hosted::Routed;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    DisplayList, DisplayListError, Key, Paint, Path, Point, Rect, Scene, SceneItemId,
-    SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
-    StrokeStyle, Transform,
+    DisplayList, DisplayListError, EventReply, Key, KeyEvent, Measured, Paint, Path, Point,
+    PointerButton, PointerEvent, Rect, Scene, SceneItemId, SemanticAction, SemanticCollection,
+    SemanticNode, SemanticRole, SemanticState, Size, StrokeStyle, Transform, WheelUnit,
 };
+use std::cell::RefCell;
 use std::collections::BTreeSet;
+
+/// Points that one wheel line pans in a control host.
+const WHEEL_LINE: f64 = 20.0;
 
 pub const MIN_ZOOM: f64 = 0.05;
 pub const MAX_ZOOM: f64 = 32.0;
@@ -586,4 +594,221 @@ fn rect_from(a: Point, b: Point) -> Rect {
         Point::new(a.x.min(b.x), a.y.min(b.y)),
         Size::new((a.x - b.x).abs(), (a.y - b.y).abs()),
     )
+}
+
+impl CanvasView {
+    /// The view for a control host, over its own `scene`. The hosted
+    /// control lays the viewport out on its node's bounds.
+    pub fn hosted(self, scene: Scene) -> HostedCanvas {
+        HostedCanvas {
+            view: self,
+            scene: RefCell::new(scene),
+            pressed: false,
+        }
+    }
+}
+
+/// A [`CanvasView`] mounted in a control host, with the scene it shows.
+/// The scene sits in a `RefCell` because painting the scene updates its
+/// spatial index.
+///
+/// - Pointer, wheel, and key input go to [`CanvasView::handle`]. Shift or
+///   Command extends a press, and Command turns the wheel into zoom.
+/// - A selection change reports `Changed(Indices(ids))` and Enter reports
+///   `ItemActivated(id)`, with the `SceneItemId` numbers.
+/// - Delete and Backspace remove the selected items from the scene.
+pub struct HostedCanvas {
+    view: CanvasView,
+    scene: RefCell<Scene>,
+    /// A primary press is down, so moves drag.
+    pressed: bool,
+}
+
+impl HostedCanvas {
+    pub fn view(&self) -> &CanvasView {
+        &self.view
+    }
+    pub fn view_mut(&mut self) -> &mut CanvasView {
+        &mut self.view
+    }
+    pub fn scene_mut(&mut self) -> &mut Scene {
+        self.scene.get_mut()
+    }
+
+    fn selection_value(&self) -> ControlValue {
+        ControlValue::Indices(
+            self.view
+                .selection()
+                .iter()
+                .map(|id| id.0 as usize)
+                .collect(),
+        )
+    }
+
+    /// Applies one input and reports what changed. Returns whether the
+    /// input changed anything.
+    fn apply(&mut self, cx: &mut ControlContext<'_>, input: CanvasInput) -> bool {
+        let scene = self.scene.get_mut();
+        let response = self.view.handle(scene, input);
+        if !response.delete_requested.is_empty() {
+            for id in &response.delete_requested {
+                scene.remove(*id);
+            }
+            self.view.prune(scene);
+        }
+        let selection_changed = response.selection_changed || !response.delete_requested.is_empty();
+        let changed = response.repaint
+            || selection_changed
+            || response.moved.is_some()
+            || response.activated.is_some();
+        if changed {
+            cx.request_paint();
+            cx.request_semantics();
+        }
+        if selection_changed {
+            cx.emit(ControlMessage::Changed(self.selection_value()));
+        }
+        if let Some(id) = response.activated {
+            cx.emit(ControlMessage::ItemActivated(id.0 as usize));
+        }
+        changed
+    }
+}
+
+impl CustomControl for HostedCanvas {
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        // A canvas takes the offered size, and its viewport's size when
+        // unbounded.
+        let max = cx.constraints.max;
+        let viewport = self.view.viewport().size;
+        let size = Size::new(
+            if max.width.is_finite() {
+                max.width
+            } else {
+                viewport.width
+            },
+            if max.height.is_finite() {
+                max.height
+            } else {
+                viewport.height
+            },
+        );
+        Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+        self.view.set_viewport(bounds);
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let modifiers = cx.modifiers();
+        let input = match crate::hosted::route(cx, event) {
+            Some(Routed::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            })) => {
+                self.pressed = true;
+                cx.capture_pointer(true);
+                CanvasInput::Press {
+                    at: position,
+                    extend: modifiers.shift || modifiers.command,
+                }
+            }
+            Some(Routed::Pointer(PointerEvent::Move { position })) if self.pressed => {
+                CanvasInput::Drag { at: position }
+            }
+            Some(Routed::Pointer(PointerEvent::Up { position, .. })) if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                CanvasInput::Release { at: position }
+            }
+            Some(Routed::Pointer(PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            })) => {
+                let scale = match unit {
+                    WheelUnit::Points => 1.0,
+                    WheelUnit::Lines => WHEEL_LINE,
+                };
+                CanvasInput::Wheel {
+                    dx: delta.x * scale,
+                    dy: delta.y * scale,
+                    at: position,
+                    zoom: modifiers.command,
+                }
+            }
+            Some(Routed::Key(KeyEvent::Down { key, .. })) => CanvasInput::Key {
+                key,
+                shift: modifiers.shift,
+            },
+            Some(Routed::Cancel) if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                CanvasInput::Release {
+                    at: self.view.viewport().origin,
+                }
+            }
+            _ => {
+                if let ControlEvent::FocusChanged(_) = event {
+                    cx.request_paint();
+                }
+                return EventReply::Continue;
+            }
+        };
+        let stop = matches!(
+            input,
+            CanvasInput::Press { .. } | CanvasInput::Drag { .. } | CanvasInput::Release { .. }
+        );
+        if self.apply(cx, input) || stop {
+            EventReply::Stop
+        } else {
+            EventReply::Continue
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        // Paint has no error channel. The view fails only on an unbalanced
+        // clip or transform stack, and it pops everything it pushes.
+        let _ = self.view.paint(cx, &mut self.scene.borrow_mut());
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        self.view.semantics(&mut self.scene.borrow_mut()).0
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Focus {
+            return false;
+        }
+        cx.request_focus();
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled && self.pressed {
+            self.pressed = false;
+            let at = self.view.viewport().origin;
+            self.view
+                .handle(self.scene.get_mut(), CanvasInput::Release { at });
+        }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Indices(ids) = value else {
+            return false;
+        };
+        let scene = self.scene.get_mut();
+        let ids: Vec<SceneItemId> = ids.iter().map(|id| SceneItemId(*id as u64)).collect();
+        if ids.iter().any(|id| scene.item(*id).is_none()) {
+            return false;
+        }
+        self.view.set_selection(ids);
+        true
+    }
 }

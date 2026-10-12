@@ -6,17 +6,21 @@
 //! keyed by [`ItemKey`] and survive sorting, filtering, and incremental
 //! model updates.
 
+use crate::custom::{
+    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+};
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TextLine, VisualState, content_rect, draw_text,
     paint_box,
 };
 use choscorui_core::{
-    Icon, ItemKey, ItemModel, Key, NodeId, Point, Rect, Role, Selection, SelectionCommand,
-    SelectionMode, SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode,
-    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, fold_for_search,
-    visible_keys,
+    EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Measured, NodeId, Point,
+    PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode,
+    SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode, SemanticRole,
+    SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, fold_for_search, visible_keys,
 };
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::time::Duration;
 
 /// How long typed characters accumulate into one type-ahead search.
@@ -137,6 +141,18 @@ pub struct ItemView {
     realized: Vec<RealizedItem>,
     type_ahead: String,
     type_ahead_at: Option<Duration>,
+    /// The model, delegate, and column widths of a hosted view.
+    source: Option<ItemSource>,
+    /// The index and host time of the last hosted press, for double
+    /// clicks.
+    last_press: Option<(usize, f64)>,
+}
+
+/// What a view mounted in a [`crate::ControlHost`] reads its rows from.
+struct ItemSource {
+    model: Box<dyn ItemModel>,
+    delegate: Box<dyn ItemDelegate>,
+    columns: Vec<f64>,
 }
 
 impl ItemView {
@@ -161,6 +177,43 @@ impl ItemView {
             realized: Vec::new(),
             type_ahead: String::new(),
             type_ahead_at: None,
+            source: None,
+            last_press: None,
+        }
+    }
+
+    /// Gives the view its own `model` and `delegate`, so it can mount in a
+    /// [`crate::ControlHost`] as a single node. A hosted view realizes no
+    /// child nodes: it paints the rows in the viewport itself.
+    #[must_use]
+    pub fn with_model(
+        mut self,
+        model: Box<dyn ItemModel>,
+        delegate: Box<dyn ItemDelegate>,
+    ) -> Self {
+        self.dirty = true;
+        self.source = Some(ItemSource {
+            model,
+            delegate,
+            columns: Vec::new(),
+        });
+        self
+    }
+
+    /// The model given to [`with_model`](Self::with_model).
+    pub fn model(&self) -> Option<&dyn ItemModel> {
+        self.source.as_ref().map(|source| source.model.as_ref())
+    }
+
+    /// Sets the table column widths that a hosted view paints; empty
+    /// means one column across the row. Returns false without a model.
+    pub fn set_column_widths(&mut self, widths: Vec<f64>) -> bool {
+        match &mut self.source {
+            Some(source) => {
+                source.columns = widths;
+                true
+            }
+            None => false,
         }
     }
 
@@ -328,14 +381,19 @@ impl ItemView {
         self.realize(tree, id)
     }
 
-    fn realize(&mut self, tree: &mut Tree, id: NodeId) -> Result<(), TreeError> {
+    /// The indices of the rows in the viewport, plus the overscan.
+    fn visible_range(&self) -> Range<usize> {
         let columns = self.columns_per_row();
         let first_line = (self.offset / self.row_height).floor() as usize;
         let last_line =
             ((self.offset + self.viewport.size.height) / self.row_height).ceil() as usize;
         let first = first_line.saturating_sub(self.overscan) * columns;
         let end = ((last_line + self.overscan) * columns).min(self.order.len());
-        let wanted: Vec<usize> = (first..end.max(first)).collect();
+        first..end.max(first)
+    }
+
+    fn realize(&mut self, tree: &mut Tree, id: NodeId) -> Result<(), TreeError> {
+        let wanted: Vec<usize> = self.visible_range().collect();
         let mut by_key: HashMap<ItemKey, NodeId> = self
             .realized
             .iter()
@@ -783,29 +841,45 @@ impl ItemView {
         columns: &[f64],
         state: VisualState,
     ) {
+        let rows = self
+            .realized
+            .iter()
+            .map(|item| (item.key, item.depth, item.bounds));
+        self.paint_rows(cx, model, delegate, columns, state, rows);
+    }
+
+    /// Paints `rows` (key, depth, and bounds) clipped to the viewport.
+    fn paint_rows(
+        &self,
+        cx: &mut PaintContext<'_>,
+        model: &dyn ItemModel,
+        delegate: &dyn ItemDelegate,
+        columns: &[f64],
+        state: VisualState,
+        rows: impl Iterator<Item = (ItemKey, usize, Rect)>,
+    ) {
         cx.list.push_clip(self.viewport);
-        for item in &self.realized {
-            let has_children = model.has_children(item.key);
+        for (key, depth, bounds) in rows {
             let item_state = ItemState {
-                selected: self.selection.is_selected(item.key),
-                current: self.selection.current() == Some(item.key),
+                selected: self.selection.is_selected(key),
+                current: self.selection.current() == Some(key),
                 focused: state.focused(),
                 focus_visible: state.focus_visible(),
-                depth: item.depth,
+                depth,
                 indent: self.indent,
-                has_children,
-                expanded: self.expanded.contains(&item.key),
+                has_children: model.has_children(key),
+                expanded: self.expanded.contains(&key),
             };
             if columns.is_empty() {
-                delegate.paint_cell(&mut cx.at(item.bounds), model, item.key, 0, item_state);
+                delegate.paint_cell(&mut cx.at(bounds), model, key, 0, item_state);
             } else {
-                let mut x = item.bounds.origin.x;
+                let mut x = bounds.origin.x;
                 for (column, width) in columns.iter().enumerate() {
                     let rect = Rect::new(
-                        Point::new(x, item.bounds.origin.y),
-                        Size::new(*width, item.bounds.size.height),
+                        Point::new(x, bounds.origin.y),
+                        Size::new(*width, bounds.size.height),
                     );
-                    delegate.paint_cell(&mut cx.at(rect), model, item.key, column, item_state);
+                    delegate.paint_cell(&mut cx.at(rect), model, key, column, item_state);
                     x += width;
                 }
             }
@@ -899,5 +973,246 @@ impl ItemDelegate for TextItemDelegate {
             let ring = cx.style(focus);
             cx.slot(rect, &ring, |_, _| {});
         }
+    }
+}
+
+/// Two presses on the same item within this many seconds activate it.
+const DOUBLE_PRESS_SECONDS: f64 = 0.5;
+
+/// The keys a focused hosted view consumes.
+fn view_key(key: Key, modifiers: ItemModifiers) -> bool {
+    match key {
+        Key::ArrowUp
+        | Key::ArrowDown
+        | Key::ArrowLeft
+        | Key::ArrowRight
+        | Key::PageUp
+        | Key::PageDown
+        | Key::Home
+        | Key::End
+        | Key::Enter
+        | Key::Space => true,
+        Key::Character('a' | 'A') => modifiers.command,
+        _ => false,
+    }
+}
+
+impl ItemView {
+    /// Runs `input` against the hosted model and reports the response as
+    /// messages. Returns the response, or `None` without a model.
+    fn hosted_input(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        input: ItemViewInput,
+    ) -> Option<ItemViewResponse> {
+        let source = self.source.take()?;
+        let node = cx.node();
+        let response = self.handle(cx.tree_mut(), node, source.model.as_ref(), input);
+        self.source = Some(source);
+        let response = response.ok()?;
+        if response.selection_changed {
+            cx.emit(ControlMessage::Changed(ControlValue::Indices(
+                self.selected_indices(),
+            )));
+        }
+        if let Some(index) = response.activated.and_then(|key| self.index_of(key)) {
+            cx.emit(ControlMessage::ItemActivated(index));
+        }
+        if response.selection_changed || response.current_changed || response.expansion_changed {
+            cx.request_semantics();
+        }
+        cx.request_paint();
+        Some(response)
+    }
+
+    /// Rebuilds the visible order from the hosted model.
+    fn sync_source(&mut self) {
+        if let Some(source) = self.source.take() {
+            self.sync(source.model.as_ref());
+            self.source = Some(source);
+        }
+    }
+
+    /// The selected items' positions in the visible order, ascending.
+    fn selected_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = self
+            .selection
+            .keys()
+            .filter_map(|key| self.index_of(key))
+            .collect();
+        indices.sort_unstable();
+        indices
+    }
+
+    /// The click count of a primary press at `position`, at host `time`.
+    fn press_clicks(&mut self, position: Point, time: f64) -> u32 {
+        let index = self.index_at(position);
+        let double = matches!(
+            (self.last_press, index),
+            (Some((last, at)), Some(index)) if last == index && time - at <= DOUBLE_PRESS_SECONDS
+        );
+        self.last_press = if double {
+            None
+        } else {
+            index.map(|index| (index, time))
+        };
+        if double { 2 } else { 1 }
+    }
+}
+
+impl CustomControl for ItemView {
+    /// A view takes the offered size; unbounded, it is as wide as a medium
+    /// container and ten rows high.
+    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        let max = cx.constraints.max;
+        let width = if max.width.is_finite() {
+            max.width
+        } else {
+            cx.tokens.spacing * 120.0
+        };
+        let height = if max.height.is_finite() {
+            max.height
+        } else {
+            self.row_height * 10.0
+        };
+        Measured::new(Size::new(width, height))
+    }
+
+    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+        self.sync_source();
+        self.viewport = bounds;
+        self.clamp_offset();
+    }
+
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let shortcut = cx.modifiers();
+        let modifiers = ItemModifiers {
+            shift: shortcut.shift,
+            command: shortcut.command,
+        };
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down { position, button })
+                if self.viewport.contains(*position) =>
+            {
+                let input = match button {
+                    PointerButton::Primary => ItemViewInput::Press {
+                        position: *position,
+                        modifiers,
+                        clicks: self.press_clicks(*position, cx.time()),
+                    },
+                    _ => ItemViewInput::ContextMenu {
+                        position: *position,
+                    },
+                };
+                self.hosted_input(cx, input);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Wheel { delta, unit, .. }) => {
+                let scale = match unit {
+                    WheelUnit::Points => 1.0,
+                    WheelUnit::Lines => self.row_height,
+                };
+                if delta.y == 0.0 {
+                    return EventReply::Continue;
+                }
+                let input = ItemViewInput::Wheel {
+                    delta_y: delta.y * scale,
+                };
+                match self.hosted_input(cx, input) {
+                    Some(response) if response.scrolled => EventReply::Stop,
+                    _ => EventReply::Continue,
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if view_key(*key, modifiers) => {
+                let input = ItemViewInput::Key {
+                    key: *key,
+                    modifiers,
+                };
+                self.hosted_input(cx, input);
+                EventReply::Stop
+            }
+            ControlEvent::Text(text) => {
+                let at = Duration::from_secs_f64(cx.time().max(0.0));
+                for character in text.chars() {
+                    self.hosted_input(cx, ItemViewInput::Type { character, at });
+                }
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(_) => {
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints only the rows in the viewport, plus the overscan.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let Some(source) = &self.source else {
+            return;
+        };
+        let rows = self.visible_range().map(|index| {
+            let key = self.order[index];
+            let depth = self.depth.get(&key).copied().unwrap_or(0);
+            (key, depth, self.item_rect(index))
+        });
+        let state = cx.state;
+        self.paint_rows(
+            cx,
+            source.model.as_ref(),
+            source.delegate.as_ref(),
+            &source.columns,
+            state,
+            rows,
+        );
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        ItemView::semantics(self)
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Focus {
+            return false;
+        }
+        cx.request_focus();
+        true
+    }
+
+    /// Takes `Indices`: the selected positions in the visible order.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Indices(indices) = value else {
+            return false;
+        };
+        self.sync_source();
+        let fits = match self.mode {
+            SelectionMode::None => indices.is_empty(),
+            SelectionMode::Single => indices.len() <= 1,
+            SelectionMode::Extended | SelectionMode::Multi => true,
+        };
+        if !fits || indices.iter().any(|index| *index >= self.order.len()) {
+            return false;
+        }
+        self.selection.clear();
+        for index in indices {
+            let key = self.order[*index];
+            if !self.selection.is_selected(key) {
+                self.selection.apply(
+                    SelectionMode::Multi,
+                    SelectionCommand::Toggle,
+                    key,
+                    &self.order,
+                );
+            }
+        }
+        true
     }
 }

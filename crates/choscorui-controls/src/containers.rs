@@ -238,38 +238,9 @@ impl Resizable {
     /// Paints the 1 pt divider centered in the handle bounds, across the
     /// split, and the grip when it has one.
     pub fn paint_handle(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
-        let state = self.visual_state(tree);
-        let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle).state(state));
         let bounds = cx.bounds;
-        let center = bounds.center();
-        let divider = match self.orientation {
-            SplitOrientation::Horizontal => Rect::from_xywh(
-                center.x - line.min_width / 2.0,
-                bounds.origin.y,
-                line.min_width,
-                bounds.size.height,
-            ),
-            SplitOrientation::Vertical => Rect::from_xywh(
-                bounds.origin.x,
-                center.y - line.min_height / 2.0,
-                bounds.size.width,
-                line.min_height,
-            ),
-        };
-        cx.slot(divider, &line, |_, _| {});
-        if !self.grip {
-            return;
-        }
-        let grip = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Thumb).state(state));
-        let size = match self.orientation {
-            SplitOrientation::Horizontal => Size::new(grip.min_width, grip.min_height),
-            SplitOrientation::Vertical => Size::new(grip.min_height, grip.min_width),
-        };
-        let rect = Rect::new(
-            Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
-            size,
-        );
-        fill_shape(cx.list, rect, &grip.radius, cx.rtl, grip.background);
+        let state = self.visual_state(tree);
+        paint_divider(cx, bounds, self.orientation, self.grip, state);
     }
 
     fn maximum(&self) -> f64 {
@@ -358,40 +329,439 @@ impl GroupBox {
     /// The members' area in `bounds`: under the title, inside the small
     /// `Card` padding.
     pub fn content_rect(&self, bounds: Rect, styles: &Styles, tokens: &DesignTokens) -> Rect {
-        let card = |slot| {
-            styles.resolve(
-                tokens,
-                StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm),
-            )
-        };
-        let (root, header, title) = (card(Slot::Root), card(Slot::Header), card(Slot::Title));
-        let top = root.padding.block_start + title.text.line_height + root.gap;
-        Rect::from_xywh(
-            bounds.origin.x + header.padding.inline_start,
-            bounds.origin.y + top,
-            (bounds.size.width - header.padding.horizontal()).max(0.0),
-            (bounds.size.height - top - root.padding.block_end).max(0.0),
-        )
+        group_content(bounds, styles, tokens)
     }
 
     /// Paints the small `Card` surface and the title in the context's
     /// bounds. The host paints the members.
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
-        let card = |slot| StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm);
-        let (root, header, title) = (
-            cx.style(card(Slot::Root)),
-            cx.style(card(Slot::Header)),
-            cx.style(card(Slot::Title)),
+        paint_group(cx, &self.label);
+    }
+
+    /// A group box for a control host, with no member nodes: the hosted
+    /// control paints the card and the title, and the view layer places
+    /// the members in [`HostedGroupBox::content_rect`].
+    pub fn hosted(label: impl Into<String>) -> HostedGroupBox {
+        HostedGroupBox {
+            label: label.into(),
+            content: Rect::default(),
+        }
+    }
+}
+
+/// The members' area in `bounds`: under the title, inside the small
+/// `Card` padding.
+fn group_content(bounds: Rect, styles: &Styles, tokens: &DesignTokens) -> Rect {
+    let (inline_start, top, chrome) = group_chrome(styles, tokens);
+    Rect::from_xywh(
+        bounds.origin.x + inline_start,
+        bounds.origin.y + top,
+        (bounds.size.width - chrome.width).max(0.0),
+        (bounds.size.height - chrome.height).max(0.0),
+    )
+}
+
+/// The inline start inset, the top inset, and the total chrome size of a
+/// group box: the small `Card` padding and the title line.
+fn group_chrome(styles: &Styles, tokens: &DesignTokens) -> (f64, f64, Size) {
+    let card = |slot| {
+        styles.resolve(
+            tokens,
+            StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm),
+        )
+    };
+    let (root, header, title) = (card(Slot::Root), card(Slot::Header), card(Slot::Title));
+    let top = root.padding.block_start + title.text.line_height + root.gap;
+    (
+        header.padding.inline_start,
+        top,
+        Size::new(header.padding.horizontal(), top + root.padding.block_end),
+    )
+}
+
+/// Paints the small `Card` surface and `label` in the context's bounds.
+fn paint_group(cx: &mut PaintContext<'_>, label: &str) {
+    let card = |slot| StyleQuery::new(ControlKind::Card, slot).size(ControlSize::Sm);
+    let (root, header, title) = (
+        cx.style(card(Slot::Root)),
+        cx.style(card(Slot::Header)),
+        cx.style(card(Slot::Title)),
+    );
+    let bounds = cx.bounds;
+    cx.slot(bounds, &root, |_, _| {});
+    let line = Rect::from_xywh(
+        bounds.origin.x + header.padding.inline_start,
+        bounds.origin.y + root.padding.block_start,
+        (bounds.size.width - header.padding.horizontal()).max(0.0),
+        title.text.line_height,
+    );
+    cx.label(line, label, &title, TextAlign::Start);
+}
+
+/// The size a hosted container takes: the offered size on each bounded
+/// axis, and `natural` on an unbounded one.
+fn offered(cx: &crate::MeasureContext<'_>, natural: Size) -> choscorui_core::Measured {
+    let max = cx.constraints.max;
+    let size = Size::new(
+        if max.width.is_finite() {
+            max.width
+        } else {
+            natural.width
+        },
+        if max.height.is_finite() {
+            max.height
+        } else {
+            natural.height
+        },
+    );
+    choscorui_core::Measured::new(cx.constraints.constrain(size))
+}
+
+/// A [`GroupBox`] mounted in a control host. It paints the card and the
+/// title, takes no input, and reports the members' area, from its last
+/// arranged bounds, in [`content_rect`](Self::content_rect).
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostedGroupBox {
+    label: String,
+    content: Rect,
+}
+
+impl HostedGroupBox {
+    /// The members' area from the last arrange: under the title, inside
+    /// the small `Card` padding.
+    pub fn content_rect(&self) -> Rect {
+        self.content
+    }
+}
+
+impl crate::CustomControl for HostedGroupBox {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let (_, _, chrome) = group_chrome(cx.styles, cx.tokens);
+        offered(cx, chrome)
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
+        self.content = group_content(bounds, cx.styles, cx.tokens);
+    }
+
+    fn event(
+        &mut self,
+        _cx: &mut crate::ControlContext<'_>,
+        _event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        choscorui_core::EventReply::Continue
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        paint_group(cx, &self.label);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        crate::hosted::node(SemanticRole::Group, &self.label, Vec::new())
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+}
+
+impl Resizable {
+    /// A resizable for a control host, with no pane nodes. The hosted node
+    /// covers both panes and the handle: it paints the handle and takes
+    /// the keys, and the view layer places the panes in
+    /// [`HostedResizable::panes`]. Fails like [`Resizable::new`] for
+    /// geometry that is not finite, a handle that is not positive, or a
+    /// position below `minimum_first`.
+    pub fn hosted(
+        label: impl Into<String>,
+        orientation: SplitOrientation,
+        minimum_first: f64,
+        minimum_second: f64,
+        handle_extent: f64,
+        position: f64,
+    ) -> Result<HostedResizable, ContainerError> {
+        if !valid_number(minimum_first)
+            || !valid_number(minimum_second)
+            || !valid_number(handle_extent)
+            || handle_extent <= 0.0
+        {
+            return Err(ContainerError::InvalidGeometry);
+        }
+        if !position.is_finite() || position < minimum_first {
+            return Err(ContainerError::InvalidPosition);
+        }
+        Ok(HostedResizable {
+            label: label.into(),
+            orientation,
+            minimum_first,
+            minimum_second,
+            handle_extent,
+            step: 10.0,
+            position,
+            grip: false,
+            bounds: None,
+            rtl: false,
+        })
+    }
+}
+
+/// A [`Resizable`] mounted in a control host. The node covers both panes
+/// and the handle. The arrow keys along the split axis, Home, End, and
+/// the `Increment` and `Decrement` actions move the handle and report
+/// `Changed(Number(position))`. In a right-to-left layout a horizontal
+/// split puts the first pane on the right and mirrors the arrow keys.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostedResizable {
+    label: String,
+    orientation: SplitOrientation,
+    minimum_first: f64,
+    minimum_second: f64,
+    handle_extent: f64,
+    step: f64,
+    position: f64,
+    grip: bool,
+    /// The bounds from the last arrange.
+    bounds: Option<Rect>,
+    rtl: bool,
+}
+
+impl HostedResizable {
+    /// Shows a grip on the handle.
+    #[must_use]
+    pub fn with_grip(mut self, grip: bool) -> Self {
+        self.grip = grip;
+        self
+    }
+
+    /// The first pane's width or height, within the pane minimums of the
+    /// last arranged bounds. Bounds too small for the position keep it for
+    /// when they grow again.
+    pub fn position(&self) -> f64 {
+        self.clamp(self.position)
+    }
+
+    /// The first pane, the handle, and the second pane in the last
+    /// arranged bounds. A right-to-left horizontal split mirrors them.
+    pub fn panes(&self) -> (Rect, Rect, Rect) {
+        let bounds = self.bounds.unwrap_or_default();
+        let (first, handle, second) = split_rects(
+            bounds,
+            self.orientation,
+            self.position(),
+            self.handle_extent,
         );
-        let bounds = cx.bounds;
-        cx.slot(bounds, &root, |_, _| {});
-        let line = Rect::from_xywh(
-            bounds.origin.x + header.padding.inline_start,
-            bounds.origin.y + root.padding.block_start,
-            (bounds.size.width - header.padding.horizontal()).max(0.0),
-            title.text.line_height,
+        if self.rtl && self.orientation == SplitOrientation::Horizontal {
+            let mirror = |rect: Rect| {
+                Rect::from_xywh(
+                    bounds.origin.x + bounds.max_x() - rect.max_x(),
+                    rect.origin.y,
+                    rect.size.width,
+                    rect.size.height,
+                )
+            };
+            (mirror(first), mirror(handle), mirror(second))
+        } else {
+            (first, handle, second)
+        }
+    }
+
+    /// The largest position, once the control has bounds.
+    fn maximum(&self) -> Option<f64> {
+        let bounds = self.bounds?;
+        let maximum =
+            primary_size(bounds, self.orientation) - self.handle_extent - self.minimum_second;
+        Some(maximum.max(self.minimum_first))
+    }
+
+    fn clamp(&self, position: f64) -> f64 {
+        let position = position.max(self.minimum_first);
+        self.maximum()
+            .map_or(position, |maximum| position.min(maximum))
+    }
+
+    /// Moves the handle to `target`, clamped, and reports a change.
+    fn move_to(&mut self, cx: &mut crate::ControlContext<'_>, target: f64) {
+        let target = self.clamp(target);
+        if target == self.position() {
+            return;
+        }
+        self.position = target;
+        cx.request_layout();
+        cx.request_paint();
+        cx.request_semantics();
+        cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+            target,
+        )));
+    }
+}
+
+impl crate::CustomControl for HostedResizable {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let along = self.minimum_first + self.handle_extent + self.minimum_second;
+        let natural = match self.orientation {
+            SplitOrientation::Horizontal => Size::new(along, 0.0),
+            SplitOrientation::Vertical => Size::new(0.0, along),
+        };
+        offered(cx, natural)
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
+        self.bounds = Some(bounds);
+        self.rtl = cx.rtl();
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::EventReply;
+        if let crate::ControlEvent::FocusChanged(_) = event {
+            cx.request_paint();
+            return EventReply::Continue;
+        }
+        let Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) =
+            crate::hosted::route(cx, event)
+        else {
+            return EventReply::Continue;
+        };
+        let (back, forward) = match (self.orientation, self.rtl) {
+            (SplitOrientation::Horizontal, false) => (Key::ArrowLeft, Key::ArrowRight),
+            (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
+            (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
+        };
+        let target = match key {
+            Key::Home => self.minimum_first,
+            Key::End => f64::INFINITY,
+            key if key == back => self.position() - self.step,
+            key if key == forward => self.position() + self.step,
+            _ => return EventReply::Continue,
+        };
+        self.move_to(cx, target);
+        EventReply::Stop
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let (_, handle, _) = self.panes();
+        let state = cx.state;
+        paint_divider(cx, handle, self.orientation, self.grip, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let mut node = crate::hosted::node(
+            SemanticRole::Slider,
+            &self.label,
+            vec![
+                SemanticAction::Increment,
+                SemanticAction::Decrement,
+                SemanticAction::Focus,
+            ],
         );
-        cx.label(line, &self.label, &title, TextAlign::Start);
+        node.value = Some(format_number(self.position()));
+        node
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        match action {
+            SemanticAction::Increment => self.move_to(cx, self.position() + self.step),
+            SemanticAction::Decrement => self.move_to(cx, self.position() - self.step),
+            SemanticAction::Focus => cx.request_focus(),
+            _ => return false,
+        }
+        true
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        let crate::ControlValue::Number(position) = *value else {
+            return false;
+        };
+        if !position.is_finite() || self.clamp(position) != position {
+            return false;
+        }
+        self.position = position;
+        true
+    }
+}
+
+impl StackedContainer {
+    /// A stack for a control host, with `pages` pages and no page nodes.
+    /// The hosted control paints nothing and takes no input; the view
+    /// layer shows page [`HostedStack::current`] in the stack's bounds.
+    /// Fails with `Empty` for no pages and `InvalidPosition` for a
+    /// current page past the end.
+    pub fn hosted(
+        label: impl Into<String>,
+        pages: usize,
+        current: usize,
+    ) -> Result<HostedStack, ContainerError> {
+        if pages == 0 {
+            return Err(ContainerError::Empty);
+        }
+        if current >= pages {
+            return Err(ContainerError::InvalidPosition);
+        }
+        Ok(HostedStack {
+            label: label.into(),
+            pages,
+            current,
+        })
+    }
+}
+
+/// A [`StackedContainer`] mounted in a control host. The application
+/// selects the page with `set_value(Index(Some(page)))`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostedStack {
+    label: String,
+    pages: usize,
+    current: usize,
+}
+
+impl HostedStack {
+    /// The page shown, from 0.
+    pub fn current(&self) -> usize {
+        self.current
+    }
+}
+
+impl crate::CustomControl for HostedStack {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        offered(cx, Size::new(0.0, 0.0))
+    }
+
+    fn event(
+        &mut self,
+        _cx: &mut crate::ControlContext<'_>,
+        _event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        choscorui_core::EventReply::Continue
+    }
+
+    fn paint(&self, _cx: &mut PaintContext<'_>) {}
+
+    fn semantics(&self) -> SemanticNode {
+        let mut node = crate::hosted::node(SemanticRole::Group, &self.label, Vec::new());
+        node.value = Some((self.current + 1).to_string());
+        node
+    }
+
+    fn focusable(&self) -> bool {
+        false
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match *value {
+            crate::ControlValue::Index(Some(page)) if page < self.pages => {
+                self.current = page;
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -587,6 +957,47 @@ fn split_rects(
             ),
         ),
     }
+}
+
+/// Paints the 1 pt divider centered in `bounds`, across the split, and the
+/// grip when `grip` is set.
+fn paint_divider(
+    cx: &mut PaintContext<'_>,
+    bounds: Rect,
+    orientation: SplitOrientation,
+    grip: bool,
+    state: VisualState,
+) {
+    let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle).state(state));
+    let center = bounds.center();
+    let divider = match orientation {
+        SplitOrientation::Horizontal => Rect::from_xywh(
+            center.x - line.min_width / 2.0,
+            bounds.origin.y,
+            line.min_width,
+            bounds.size.height,
+        ),
+        SplitOrientation::Vertical => Rect::from_xywh(
+            bounds.origin.x,
+            center.y - line.min_height / 2.0,
+            bounds.size.width,
+            line.min_height,
+        ),
+    };
+    cx.slot(divider, &line, |_, _| {});
+    if !grip {
+        return;
+    }
+    let grip = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Thumb).state(state));
+    let size = match orientation {
+        SplitOrientation::Horizontal => Size::new(grip.min_width, grip.min_height),
+        SplitOrientation::Vertical => Size::new(grip.min_height, grip.min_width),
+    };
+    let rect = Rect::new(
+        Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
+        size,
+    );
+    fill_shape(cx.list, rect, &grip.radius, cx.rtl, grip.background);
 }
 
 fn primary_size(bounds: Rect, orientation: SplitOrientation) -> f64 {

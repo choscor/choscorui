@@ -60,6 +60,10 @@ pub struct ScrollArea {
     enabled: bool,
     drag: Option<ThumbDrag>,
     thumb_hovered: bool,
+    /// The accessible name in a control host.
+    name: String,
+    /// The bounds from the last host arrange.
+    bounds: Rect,
 }
 
 const MIN_THUMB: f64 = 20.0;
@@ -72,7 +76,16 @@ impl ScrollArea {
             enabled: true,
             drag: None,
             thumb_hovered: false,
+            name: String::new(),
+            bounds: Rect::default(),
         }
+    }
+
+    /// Sets the accessible name that the area reports in a control host.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
+        self
     }
 
     pub fn viewport(&self) -> &ScrollViewport {
@@ -91,13 +104,16 @@ impl ScrollArea {
         }
         self.enabled = enabled;
         if !enabled {
-            self.release(tree)?;
+            self.release(tree, self.node())?;
         }
         self.invalidate(tree)
     }
 
     fn geometry(&self, tree: &Tree, bar: Bar) -> Option<ScrollbarGeometry> {
-        let bounds = tree.bounds(self.node())?;
+        self.geometry_in(tree.bounds(self.node())?, bar)
+    }
+
+    fn geometry_in(&self, bounds: Rect, bar: Bar) -> Option<ScrollbarGeometry> {
         let content = self.viewport.content_size();
         let offset = self.viewport.offset();
         let (visible, total, position) = match bar {
@@ -145,10 +161,10 @@ impl ScrollArea {
         self.geometry(tree, Bar::Horizontal)
     }
 
-    fn contains_node(&self, tree: &Tree, node: Option<NodeId>) -> bool {
+    fn contains_node(tree: &Tree, owner: NodeId, node: Option<NodeId>) -> bool {
         let mut current = node;
         while let Some(id) = current {
-            if id == self.node() {
+            if id == owner {
                 return true;
             }
             current = tree.parent(id);
@@ -158,6 +174,17 @@ impl ScrollArea {
 
     /// Handles one input; returns whether the scroll offset changed.
     pub fn handle(&mut self, tree: &mut Tree, input: ScrollAreaInput) -> Result<bool, LayoutError> {
+        self.handle_for(tree, self.node(), input)
+    }
+
+    /// Handles one input for `owner`, the node that takes focus and
+    /// pointer capture: the viewport node, or the control host's node.
+    fn handle_for(
+        &mut self,
+        tree: &mut Tree,
+        owner: NodeId,
+        input: ScrollAreaInput,
+    ) -> Result<bool, LayoutError> {
         if !tree.contains(self.node()) {
             return Err(LayoutError::MissingNode);
         }
@@ -167,10 +194,8 @@ impl ScrollArea {
         let before = self.viewport.offset();
         let visual = self.visual_state(tree);
         match input {
-            ScrollAreaInput::Pointer(event) => self.pointer(tree, event)?,
-            ScrollAreaInput::Key(KeyEvent::Down { key, .. })
-                if tree.focus() == Some(self.node()) =>
-            {
+            ScrollAreaInput::Pointer(event) => self.pointer(tree, owner, event)?,
+            ScrollAreaInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(owner) => {
                 let action = match key {
                     Key::ArrowUp => Some(ScrollAction::LineUp),
                     Key::ArrowDown => Some(ScrollAction::LineDown),
@@ -194,10 +219,10 @@ impl ScrollArea {
                 self.perform(tree, ScrollAction::PageUp)?;
             }
             ScrollAreaInput::Semantic(SemanticAction::Focus) => {
-                tree.set_focus(Some(self.node()))
+                tree.set_focus(Some(owner))
                     .map_err(|_| LayoutError::MissingNode)?;
             }
-            ScrollAreaInput::Cancel => self.release(tree)?,
+            ScrollAreaInput::Cancel => self.release(tree, owner)?,
             _ => {}
         }
         let changed = self.viewport.offset() != before;
@@ -227,7 +252,12 @@ impl ScrollArea {
         self.viewport.scroll_to(tree, target)
     }
 
-    fn pointer(&mut self, tree: &mut Tree, event: PointerEvent) -> Result<(), LayoutError> {
+    fn pointer(
+        &mut self,
+        tree: &mut Tree,
+        owner: NodeId,
+        event: PointerEvent,
+    ) -> Result<(), LayoutError> {
         match event {
             PointerEvent::Down {
                 position,
@@ -243,7 +273,7 @@ impl ScrollArea {
                             Bar::Horizontal => position.x - geometry.thumb.origin.x,
                         };
                         self.drag = Some(ThumbDrag { bar, grab });
-                        tree.set_pointer_capture(Some(self.node()))
+                        tree.set_pointer_capture(Some(owner))
                             .map_err(|_| LayoutError::MissingNode)?;
                         return Ok(());
                     }
@@ -274,13 +304,13 @@ impl ScrollArea {
             PointerEvent::Up {
                 button: PointerButton::Primary,
                 ..
-            } if self.drag.is_some() => self.release(tree)?,
+            } if self.drag.is_some() => self.release(tree, owner)?,
             PointerEvent::Wheel {
                 position,
                 delta,
                 unit,
-            } if self.contains_node(tree, tree.pointer_capture())
-                || self.contains_node(tree, tree.hit_test(position)) =>
+            } if Self::contains_node(tree, owner, tree.pointer_capture())
+                || Self::contains_node(tree, owner, tree.hit_test(position)) =>
             {
                 self.viewport.scroll_by(tree, delta, unit)?;
             }
@@ -329,9 +359,9 @@ impl ScrollArea {
         self.viewport.scroll_to(tree, target)
     }
 
-    fn release(&mut self, tree: &mut Tree) -> Result<(), LayoutError> {
+    fn release(&mut self, tree: &mut Tree, owner: NodeId) -> Result<(), LayoutError> {
         self.drag = None;
-        if tree.pointer_capture() == Some(self.node()) {
+        if tree.pointer_capture() == Some(owner) {
             tree.set_pointer_capture(None)
                 .map_err(|_| LayoutError::MissingNode)?;
         }
@@ -357,7 +387,10 @@ impl ScrollArea {
 
     /// Scroll area semantics; the value is the vertical position in percent.
     pub fn semantics(&self, tree: &Tree, name: impl Into<String>) -> SemanticNode {
-        let bounds = tree.bounds(self.node()).unwrap_or_default();
+        self.semantics_in(tree.bounds(self.node()).unwrap_or_default(), name.into())
+    }
+
+    fn semantics_in(&self, bounds: Rect, name: String) -> SemanticNode {
         let range = (self.viewport.content_size().height - bounds.size.height).max(0.0);
         let percent = if range > 0.0 {
             (self.viewport.offset().y / range * 100.0).round()
@@ -366,7 +399,7 @@ impl ScrollArea {
         };
         SemanticNode {
             role: SemanticRole::ScrollArea,
-            name: name.into(),
+            name,
             description: String::new(),
             value: Some(format!("{percent}%")),
             state: SemanticState {
@@ -390,15 +423,20 @@ impl ScrollArea {
     /// Paints the overlay scrollbars above the content, and the focus
     /// ring around the area. Paint it after the content.
     pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
-        let state = self.visual_state(tree);
+        if let Some(bounds) = tree.bounds(self.node()) {
+            self.paint_in(cx, bounds, self.visual_state(tree));
+        }
+    }
+
+    fn paint_in(&self, cx: &mut PaintContext<'_>, bounds: Rect, state: VisualState) {
         let query = |slot| StyleQuery::new(ControlKind::ScrollArea, slot).state(state);
         let (bar, thumb) = (
             cx.style(query(Slot::Scrollbar)),
             cx.style(query(Slot::Thumb)),
         );
         for geometry in [
-            self.vertical_scrollbar(tree),
-            self.horizontal_scrollbar(tree),
+            self.geometry_in(bounds, Bar::Vertical),
+            self.geometry_in(bounds, Bar::Horizontal),
         ]
         .into_iter()
         .flatten()
@@ -407,10 +445,154 @@ impl ScrollArea {
             fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
         }
         let root = cx.style(query(Slot::Root));
-        if root.ring.is_some()
-            && let Some(bounds) = tree.bounds(self.node())
-        {
+        if root.ring.is_some() {
             cx.slot(bounds, &root, |_, _| {});
+        }
+    }
+}
+
+/// In a control host the area's node holds focus and pointer capture.
+/// Before each input it keeps the viewport node on its own bounds, so the
+/// view layer places the content node inside the viewport node and the
+/// area scrolls it there.
+impl crate::CustomControl for ScrollArea {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        // A scroll area takes the offered size, and its content size when
+        // unbounded.
+        let max = cx.constraints.max;
+        let content = self.viewport.content_size();
+        let size = Size::new(
+            if max.width.is_finite() {
+                max.width
+            } else {
+                content.width
+            },
+            if max.height.is_finite() {
+                max.height
+            } else {
+                content.height
+            },
+        );
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, _cx: &crate::MeasureContext<'_>, bounds: Rect) {
+        self.bounds = bounds;
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        use choscorui_core::{EventPhase, EventReply};
+        // The wheel also scrolls while the pointer is over the content.
+        let input = match (cx.phase(), event) {
+            (
+                EventPhase::Target | EventPhase::Bubble,
+                crate::ControlEvent::Pointer(event @ PointerEvent::Wheel { .. }),
+            ) => ScrollAreaInput::Pointer(*event),
+            _ => match crate::hosted::route(cx, event) {
+                Some(crate::hosted::Routed::Pointer(event)) => ScrollAreaInput::Pointer(event),
+                Some(crate::hosted::Routed::Key(event)) => ScrollAreaInput::Key(event),
+                Some(crate::hosted::Routed::Cancel) => ScrollAreaInput::Cancel,
+                None => {
+                    if let crate::ControlEvent::FocusChanged(_) = event {
+                        cx.request_paint();
+                    }
+                    return EventReply::Continue;
+                }
+            },
+        };
+        let (node, bounds) = (cx.node(), cx.bounds());
+        let tree = cx.tree_mut();
+        if tree.bounds(self.node()) != Some(bounds) && self.viewport.arrange(tree, bounds).is_err()
+        {
+            return EventReply::Continue;
+        }
+        let (drag, hovered) = (self.drag.is_some(), self.thumb_hovered);
+        let Ok(scrolled) = self.handle_for(tree, node, input) else {
+            return EventReply::Continue;
+        };
+        if scrolled {
+            cx.request_semantics();
+        }
+        if scrolled || drag != self.drag.is_some() || hovered != self.thumb_hovered {
+            cx.request_paint();
+        }
+        let consumed = match input {
+            ScrollAreaInput::Pointer(PointerEvent::Wheel { .. }) => scrolled,
+            ScrollAreaInput::Pointer(PointerEvent::Down { .. }) => scrolled || self.drag.is_some(),
+            ScrollAreaInput::Pointer(PointerEvent::Up { .. }) => drag,
+            ScrollAreaInput::Pointer(PointerEvent::Move { .. }) => drag,
+            ScrollAreaInput::Key(KeyEvent::Down { key, .. }) => matches!(
+                key,
+                Key::ArrowUp
+                    | Key::ArrowDown
+                    | Key::ArrowLeft
+                    | Key::ArrowRight
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Space
+                    | Key::Home
+                    | Key::End
+            ),
+            _ => false,
+        };
+        if consumed {
+            EventReply::Stop
+        } else {
+            EventReply::Continue
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx
+            .state
+            .set(VisualState::HOVERED, self.thumb_hovered)
+            .set(VisualState::PRESSED, self.drag.is_some());
+        let bounds = cx.bounds;
+        self.paint_in(cx, bounds, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        self.semantics_in(self.bounds, self.name.clone())
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        let input = match action {
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
+            }
+            SemanticAction::Increment | SemanticAction::Decrement => {
+                ScrollAreaInput::Semantic(action)
+            }
+            _ => return false,
+        };
+        let (node, bounds) = (cx.node(), cx.bounds());
+        let tree = cx.tree_mut();
+        if tree.bounds(self.node()) != Some(bounds) && self.viewport.arrange(tree, bounds).is_err()
+        {
+            return false;
+        }
+        if let Ok(true) = self.handle_for(tree, node, input) {
+            cx.request_paint();
+            cx.request_semantics();
+        }
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.drag = None;
+            self.thumb_hovered = false;
         }
     }
 }

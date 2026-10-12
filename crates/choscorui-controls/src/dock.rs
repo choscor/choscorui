@@ -10,7 +10,8 @@ use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
 };
 use choscorui_core::{
-    Key, Point, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size,
 };
 use std::collections::BTreeMap;
 
@@ -199,6 +200,8 @@ pub struct DockLayout {
     floating: Vec<(PanelId, Rect)>,
     hidden: BTreeMap<PanelId, PanelLocation>,
     tab_height: f64,
+    /// Focus and drag state in a control host.
+    hosted: HostState,
 }
 
 impl DockLayout {
@@ -213,6 +216,7 @@ impl DockLayout {
             floating: Vec::new(),
             hidden: BTreeMap::new(),
             tab_height,
+            hosted: HostState::default(),
         }
     }
 
@@ -810,6 +814,7 @@ impl DockLayout {
                 }
             }
         }
+        next.hosted = self.hosted;
         *self = next;
         Ok(report)
     }
@@ -886,5 +891,300 @@ fn split_edge(rect: Rect, area: DockArea, extent: f64) -> (Rect, Rect, Rect) {
                 Size::new(size.width, size.height - extent - SPLITTER),
             ),
         ),
+    }
+}
+
+/// The dock's focus, splitter drag, and geometry in a control host.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct HostState {
+    /// The tab stop that has keyboard focus.
+    focus: DockFocus,
+    /// The splitter being dragged: its area, the pointer position along
+    /// the drag axis at the press, and the area's extent then.
+    drag: Option<(DockArea, f64, f64)>,
+    /// The bounds and the direction from the last arrange.
+    bounds: Rect,
+    rtl: bool,
+}
+
+impl DockLayout {
+    /// The tab stops of `arrangement`: one per group, on its active tab,
+    /// then one per splitter.
+    fn stops(arrangement: &DockArrangement) -> Vec<DockFocus> {
+        arrangement
+            .groups
+            .iter()
+            .map(|group| DockFocus::Tab(group.active))
+            .chain(
+                arrangement
+                    .splitters
+                    .iter()
+                    .map(|(area, _)| DockFocus::Splitter(*area)),
+            )
+            .collect()
+    }
+
+    /// The focused stop in `bounds`, or the first one when the focused
+    /// part is gone.
+    fn host_focus(&self, bounds: Rect) -> DockFocus {
+        let arrangement = self.arrange(bounds);
+        let stops = Self::stops(&arrangement);
+        let focus = match self.hosted.focus {
+            DockFocus::Tab(panel) => arrangement
+                .groups
+                .iter()
+                .find(|group| group.tabs.contains(&panel))
+                .map(|group| DockFocus::Tab(group.active)),
+            other => Some(other).filter(|focus| stops.contains(focus)),
+        };
+        focus.or_else(|| stops.first().copied()).unwrap_or_default()
+    }
+
+    /// Selects `panel` and reports it when it was not active.
+    fn host_activate(&mut self, cx: &mut crate::ControlContext<'_>, panel: PanelId) {
+        self.hosted.focus = DockFocus::Tab(panel);
+        cx.request_paint();
+        cx.request_semantics();
+        if !self.is_active(panel) && self.activate(panel).is_ok() {
+            cx.request_layout();
+            cx.emit(crate::ControlMessage::ItemActivated(panel.0 as usize));
+        }
+    }
+
+    /// Sets the extent of `area` and reports a change.
+    fn host_resize(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea, extent: f64) {
+        let before = self.extent(area);
+        self.set_extent(area, extent);
+        self.report_extent(cx, area, before);
+    }
+
+    fn report_extent(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea, before: f64) {
+        let after = self.extent(area);
+        if after != before {
+            cx.request_layout();
+            cx.request_paint();
+            cx.request_semantics();
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+                after,
+            )));
+        }
+    }
+
+    fn host_key(&mut self, cx: &mut crate::ControlContext<'_>, key: Key) -> EventReply {
+        let arrangement = self.arrange(cx.bounds());
+        let focus = self.host_focus(cx.bounds());
+        if key == Key::Tab {
+            let stops = Self::stops(&arrangement);
+            let current = stops.iter().position(|stop| *stop == focus).unwrap_or(0);
+            let back = cx.modifiers().shift;
+            return match crate::hosted::tab_stop(current, stops.len(), back) {
+                Some(next) => {
+                    self.hosted.focus = stops[next];
+                    cx.request_paint();
+                    cx.request_semantics();
+                    EventReply::Stop
+                }
+                None => EventReply::Continue,
+            };
+        }
+        match focus {
+            DockFocus::Tab(panel) => {
+                let Some(group) = arrangement
+                    .groups
+                    .iter()
+                    .find(|group| group.tabs.contains(&panel))
+                else {
+                    return EventReply::Continue;
+                };
+                let current = group.tabs.iter().position(|tab| *tab == panel).unwrap_or(0);
+                let rtl = self.hosted.rtl;
+                match crate::hosted::rove(key, current, group.tabs.len(), true, rtl) {
+                    Some(next) => {
+                        self.host_activate(cx, group.tabs[next]);
+                        EventReply::Stop
+                    }
+                    None => EventReply::Continue,
+                }
+            }
+            DockFocus::Splitter(area) => {
+                let before = self.extent(area);
+                if self.handle_splitter_key(area, key) {
+                    self.report_extent(cx, area, before);
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
+                }
+            }
+            DockFocus::None => EventReply::Continue,
+        }
+    }
+
+    fn host_pointer(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: PointerEvent,
+    ) -> EventReply {
+        let along = |area: DockArea, point: Point| {
+            if area.horizontal() { point.x } else { point.y }
+        };
+        match event {
+            PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            } => {
+                let arrangement = self.arrange(cx.bounds());
+                let rtl = self.hosted.rtl;
+                for group in &arrangement.groups {
+                    let tab = (0..group.tabs.len())
+                        .find(|index| group.tab_rect(*index, rtl).contains(position));
+                    if let Some(index) = tab {
+                        self.host_activate(cx, group.tabs[index]);
+                        return EventReply::Stop;
+                    }
+                }
+                let splitter = arrangement
+                    .splitters
+                    .iter()
+                    .find(|(_, rect)| rect.contains(position));
+                if let Some((area, _)) = splitter {
+                    self.hosted.focus = DockFocus::Splitter(*area);
+                    self.hosted.drag = Some((*area, along(*area, position), self.extent(*area)));
+                    cx.capture_pointer(true);
+                    cx.request_paint();
+                    cx.request_semantics();
+                    return EventReply::Stop;
+                }
+                EventReply::Continue
+            }
+            PointerEvent::Move { position } => {
+                let Some((area, start, extent)) = self.hosted.drag else {
+                    return EventReply::Continue;
+                };
+                let delta = along(area, position) - start;
+                let grow = match area {
+                    DockArea::Left | DockArea::Top => delta,
+                    DockArea::Right | DockArea::Bottom => -delta,
+                };
+                self.host_resize(cx, area, extent + grow);
+                EventReply::Stop
+            }
+            PointerEvent::Up { .. } if self.hosted.drag.is_some() => {
+                self.hosted.drag = None;
+                cx.capture_pointer(false);
+                cx.request_paint();
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+}
+
+/// In a control host the dock's node covers its whole area. It paints the
+/// group frames, the tab bars, and the splitters, and the view layer
+/// places the center and the panel contents in the frames that
+/// [`DockLayout::arrange`] returns for the node's bounds.
+impl crate::CustomControl for DockLayout {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> Measured {
+        let max = cx.constraints.max;
+        let size = Size::new(
+            if max.width.is_finite() {
+                max.width
+            } else {
+                cx.tokens.spacing * 120.0
+            },
+            if max.height.is_finite() {
+                max.height
+            } else {
+                cx.tokens.spacing * 96.0
+            },
+        );
+        Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
+        self.hosted.bounds = bounds;
+        self.hosted.rtl = cx.rtl();
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> EventReply {
+        match crate::hosted::route(cx, event) {
+            Some(crate::hosted::Routed::Pointer(event)) => self.host_pointer(cx, event),
+            Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) => self.host_key(cx, key),
+            Some(crate::hosted::Routed::Cancel) => {
+                if self.hosted.drag.take().is_some() {
+                    cx.capture_pointer(false);
+                }
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => {
+                if let crate::ControlEvent::FocusChanged(_) = event {
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
+        }
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let arrangement = self.arrange(cx.bounds);
+        let focus = if cx.state.focus_visible() {
+            self.host_focus(cx.bounds)
+        } else {
+            DockFocus::None
+        };
+        DockLayout::paint(self, cx, &arrangement, focus);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        let group = || crate::hosted::node(SemanticRole::Group, "", Vec::new());
+        match self.host_focus(self.hosted.bounds) {
+            DockFocus::Tab(panel) => self.panel_semantics(panel).unwrap_or_else(group),
+            DockFocus::Splitter(area) => {
+                let mut node = self.splitter_semantics(area);
+                node.actions.push(SemanticAction::Focus);
+                node
+            }
+            DockFocus::None => group(),
+        }
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        match (action, self.host_focus(cx.bounds())) {
+            (SemanticAction::Focus, _) => cx.request_focus(),
+            (SemanticAction::Increment, DockFocus::Splitter(area)) => {
+                self.host_resize(cx, area, self.extent(area) + KEY_STEP);
+            }
+            (SemanticAction::Decrement, DockFocus::Splitter(area)) => {
+                self.host_resize(cx, area, self.extent(area) - KEY_STEP);
+            }
+            (SemanticAction::Dismiss, DockFocus::Tab(panel)) => {
+                let Ok(next) = self.close(panel) else {
+                    return false;
+                };
+                self.hosted.focus = next.map_or(DockFocus::None, DockFocus::Tab);
+                cx.request_layout();
+                cx.request_paint();
+                cx.request_semantics();
+                cx.emit(crate::ControlMessage::Dismissed);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.hosted.drag = None;
+        }
     }
 }
