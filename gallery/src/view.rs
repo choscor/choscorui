@@ -28,7 +28,7 @@ const TITLE_HEIGHT: f64 = 34.0;
 const READOUT_HEIGHT: f64 = 22.0;
 
 /// The application-wide appearance.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Theme {
     Dark,
     Light,

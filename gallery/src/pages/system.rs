@@ -4,30 +4,11 @@
 use crate::page::{Align, Column, Env, Page, Push, node, sem};
 use choscorui::controls::ShortcutModifiers;
 use choscorui::core::{
-    BackendCapabilities, ColorRole, DisplayList, KeyEvent, NodeId, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Support, Tree,
+    ColorRole, DisplayList, KeyEvent, NodeId, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, Support, Tree,
 };
 
-/// Every capability the backend reports, by display name.
-pub fn capability_rows(capabilities: &BackendCapabilities) -> Vec<(&'static str, Support)> {
-    vec![
-        ("Multiple windows", capabilities.multiple_windows),
-        ("Native menus", capabilities.native_menus),
-        ("Context menus", capabilities.context_menus),
-        ("Native dialogs", capabilities.native_dialogs),
-        ("Clipboard", capabilities.clipboard),
-        ("Drag and drop", capabilities.drag_and_drop),
-        ("Input methods", capabilities.input_methods),
-        ("Accessibility", capabilities.accessibility),
-        ("Status items", capabilities.status_items),
-        ("Notifications", capabilities.notifications),
-        ("Open URLs", capabilities.open_urls),
-        ("System appearance", capabilities.system_appearance),
-        ("Text shaping", capabilities.text_shaping),
-        ("Image codecs", capabilities.image_codecs),
-        ("GPU painting", capabilities.gpu_painting),
-    ]
-}
+pub use crate::ui::pages::system::capability_rows;
 
 fn support_text(support: Support) -> String {
     match support {

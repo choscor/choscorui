@@ -39,6 +39,8 @@ mod settings;
 #[cfg(any(target_os = "macos", test))]
 mod strings;
 #[cfg(any(target_os = "macos", test))]
+mod ui;
+#[cfg(any(target_os = "macos", test))]
 mod view;
 
 #[cfg(target_os = "macos")]
@@ -58,6 +60,17 @@ fn main() {
             std::process::exit(2);
         }
     };
+    if std::env::var_os("CHOSCORUI_GALLERY_VIEWS").is_some() {
+        let autoclose = std::env::var("CHOSCORUI_GALLERY_AUTOCLOSE_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .map(Duration::from_millis);
+        if let Err(error) = ui::app::run(ui::app::Launch { page, autoclose }) {
+            eprintln!("choscorui-gallery: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let app =
         choscorui::platform::Application::new().expect("AppKit must start on the main thread");
     let mut gallery = app::Gallery::new(&app, app::Launch { page });
