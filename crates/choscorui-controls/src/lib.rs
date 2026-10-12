@@ -117,7 +117,10 @@ pub use form::{
     ToggleItem,
 };
 pub use listbox::ListEntry;
-pub use nav::{Breadcrumb, Pagination};
+pub use nav::{
+    Breadcrumb, NAVIGATION_CLOSE_DELAY, NAVIGATION_OPEN_DELAY, NavigationLink, NavigationMenu,
+    Pagination,
+};
 pub use overlay::{
     Command, CommandItem, ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY,
     Menubar, Popover,

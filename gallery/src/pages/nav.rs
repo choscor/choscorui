@@ -3,7 +3,7 @@
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
-use choscorui::controls::{Breadcrumb, CustomControl, Pagination};
+use choscorui::controls::{Breadcrumb, CustomControl, NavigationLink, NavigationMenu, Pagination};
 use choscorui::core::{NodeId, Tree};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
@@ -54,6 +54,55 @@ pub fn pagination(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Pa
             vec![boxed(Pagination::new("Archive", "Previous", "Next", 20, 9))],
         ),
     ];
+    HostedPage::build(tree, parent, rows)
+}
+
+pub fn navigation_menu(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let menu = NavigationMenu::new(
+        "Site",
+        vec![
+            (
+                "Getting started".to_string(),
+                vec![
+                    NavigationLink::new(
+                        "Introduction",
+                        "Re-usable components built with design tokens.",
+                    ),
+                    NavigationLink::new(
+                        "Installation",
+                        "How to install dependencies and structure your app.",
+                    ),
+                    NavigationLink::new(
+                        "Typography",
+                        "Styles for headings, paragraphs, and lists.",
+                    ),
+                ],
+            ),
+            (
+                "Components".to_string(),
+                vec![
+                    NavigationLink::new(
+                        "Alert Dialog",
+                        "A modal dialog that interrupts the user with important content.",
+                    ),
+                    NavigationLink::new(
+                        "Hover Card",
+                        "For sighted users to preview content behind a link.",
+                    ),
+                    NavigationLink::new(
+                        "Progress",
+                        "Shows how far a task has come, as a progress bar.",
+                    ),
+                    NavigationLink::new(
+                        "Scroll-area",
+                        "Visually or semantically separates content.",
+                    ),
+                ],
+            ),
+            ("Docs".to_string(), Vec::new()),
+        ],
+    );
+    let rows: Vec<Row> = vec![("Menu", vec![boxed(menu)])];
     HostedPage::build(tree, parent, rows)
 }
 

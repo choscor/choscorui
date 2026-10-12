@@ -134,6 +134,12 @@ pub const PAGES: &[PageInfo] = &[
     page!("breadcrumb", "Breadcrumb", Navigation, nav::breadcrumb),
     page!("pagination", "Pagination", Navigation, nav::pagination),
     page!(
+        "navigation-menu",
+        "Navigation menu",
+        Navigation,
+        nav::navigation_menu
+    ),
+    page!(
         "dropdown-menu",
         "Dropdown menu",
         Popups,
@@ -203,6 +209,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Command", "command"),
     ("Breadcrumb", "breadcrumb"),
     ("Pagination", "pagination"),
+    ("NavigationMenu", "navigation-menu"),
+    ("NavigationLink", "navigation-menu"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -559,6 +567,11 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "timing constant of Popover::hover_card",
     ),
     ("TOOLTIP_GRACE", "timing constant of TooltipController"),
+    ("NAVIGATION_OPEN_DELAY", "timing constant of NavigationMenu"),
+    (
+        "NAVIGATION_CLOSE_DELAY",
+        "timing constant of NavigationMenu",
+    ),
     (
         "TYPE_AHEAD_TIMEOUT",
         "timing constant of ItemView type-ahead",

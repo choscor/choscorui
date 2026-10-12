@@ -95,6 +95,7 @@ in parentheses is the role that the macOS backend gives to that
 | Overlay | [`Command`](#command-and-commanditem) | Search input over grouped commands, inline or in a modal dialog. |
 | Navigation | [`Breadcrumb`](#breadcrumb) | Trail of links to the current page, with an optional collapsed middle. |
 | Navigation | [`Pagination`](#pagination) | Page links with previous and next buttons. |
+| Navigation | [`NavigationMenu`](#navigationmenu-and-navigationlink) | Row of site links whose triggers open panels of described links. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1958,6 +1959,46 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Description | the label of the focused part |
 | State | disabled |
 | Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled |
+
+[nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
+
+### NavigationMenu and NavigationLink
+
+- A trigger with links opens a panel below the row, aligned with its
+  start. A trigger without links is a link itself.
+- **Pointer.** A click on a trigger opens or closes its panel. Rest on a
+  trigger for `NAVIGATION_OPEN_DELAY` (0.2 s) to open its panel. While a
+  panel is open, hover on another trigger switches at once. The panel
+  closes `NAVIGATION_CLOSE_DELAY` (0.3 s) after the pointer leaves the menu
+  and the panel.
+- **Keys.** ArrowLeft and ArrowRight move between the triggers in reading
+  order and close the panel. ArrowDown opens the panel and focuses its
+  first link. ArrowDown and ArrowUp move between the links; ArrowUp from
+  the first link goes back to the trigger.
+- Tab stops are each trigger, then the links of its open panel. Tab past
+  the panel closes it.
+- Enter or Space on a link, or on a trigger without links, emits
+  `ItemActivated(index)` and closes the panel. Links count in order, and a
+  trigger without links counts as one link. Escape closes the panel and
+  emits `Dismissed`.
+- A panel with more than three links shows them in two 240 pt columns.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Trigger | `Trigger` | 36 pt high, sm medium text, padding 16 by 8 pt, radius md; `muted` fill while hovered or focused, 50% while open |
+| Chevron | `Icon` | 12 pt; points up while open |
+| Panel | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius lg, shadow sm, 8 pt padding (10 pt at the end) |
+| Link | `Link` | radius md, 8 pt padding; `muted` fill while hovered or focused |
+| Link title | `Title` | sm medium `foreground` text |
+| Link description | `Description` | sm `muted-foreground` text, 4 pt below the title |
+
+| Field | `NavigationMenu::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / focused trigger or link title |
+| Description | the focused link's description |
+| State | expanded, disabled |
+| Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 

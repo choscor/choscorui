@@ -1,8 +1,11 @@
-//! Breadcrumb and Pagination through the control host.
+//! Breadcrumb, Pagination, and NavigationMenu through the control host.
 
 mod hosted;
 
-use choscorui_controls::{Breadcrumb, ControlMessage, ControlValue, Pagination, ShortcutModifiers};
+use choscorui_controls::{
+    Breadcrumb, ControlMessage, ControlValue, NAVIGATION_OPEN_DELAY, NavigationLink,
+    NavigationMenu, Pagination, ShortcutModifiers,
+};
 use choscorui_core::{Key, KeyEvent, LayoutDirection, Point, SemanticAction, SemanticRole};
 use hosted::{Harness, texts};
 
@@ -131,5 +134,100 @@ fn pagination_previous_and_next_follow_the_direction() {
         rtl.messages(),
         [ControlMessage::Changed(ControlValue::Index(Some(4)))],
         "Next is at the left end"
+    );
+}
+
+fn site() -> NavigationMenu {
+    let links = |titles: &[&str]| {
+        titles
+            .iter()
+            .map(|title| NavigationLink::new(*title, "Re-usable components built with tokens."))
+            .collect::<Vec<_>>()
+    };
+    NavigationMenu::new(
+        "Site",
+        vec![
+            (
+                "Getting started".to_string(),
+                links(&["Introduction", "Installation", "Typography"]),
+            ),
+            (
+                "Components".to_string(),
+                links(&["Alert Dialog", "Hover Card", "Progress", "Scroll-area"]),
+            ),
+            ("Docs".to_string(), Vec::new()),
+        ],
+    )
+}
+
+#[test]
+fn navigation_menu_keys_open_panels_and_activate_links() {
+    let mut h = Harness::new(site());
+    assert_eq!(h.measure().height, 36.0);
+    h.focus();
+    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().value.as_deref(), Some("Introduction"));
+    h.key(Key::ArrowDown);
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(true),
+            ControlMessage::ItemActivated(1),
+            ControlMessage::OpenChanged(false),
+        ]
+    );
+    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+    h.key(Key::ArrowRight);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().value.as_deref(), Some("Docs"));
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), [ControlMessage::ItemActivated(7)]);
+}
+
+#[test]
+fn navigation_menu_tab_walks_through_the_open_panel() {
+    let mut h = Harness::new(site());
+    h.focus();
+    h.key(Key::ArrowRight);
+    h.key(Key::Enter);
+    let panel = h.host.get(h.node).unwrap().overlay().expect("open");
+    assert!(panel.size.width > 480.0, "four links take two columns");
+    for title in ["Alert Dialog", "Hover Card", "Progress", "Scroll-area"] {
+        assert!(tab(&mut h));
+        assert_eq!(h.semantics().value.as_deref(), Some(title));
+    }
+    assert!(tab(&mut h));
+    assert_eq!(h.semantics().value.as_deref(), Some("Docs"));
+    assert_eq!(
+        h.semantics().state.expanded,
+        Some(false),
+        "the panel closed"
+    );
+    assert!(!tab(&mut h), "Tab leaves after the last trigger");
+}
+
+#[test]
+fn navigation_menu_opens_on_hover_after_a_delay() {
+    let mut h = Harness::new(site());
+    let bounds = h.bounds();
+    h.hover(Point::new(bounds.origin.x + 10.0, bounds.center().y));
+    assert_eq!(h.host.next_deadline(&h.tree), Some(NAVIGATION_OPEN_DELAY));
+    assert!(h.host.advance(&mut h.tree, NAVIGATION_OPEN_DELAY));
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    // Another trigger switches at once while a panel is open.
+    let components = Point::new(bounds.center().x, bounds.center().y);
+    h.hover(components);
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+    h.hover(Point::new(790.0, 590.0));
+    assert!(h.host.advance(&mut h.tree, 1.0));
+    assert_eq!(h.semantics().state.expanded, Some(false));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(true),
+            ControlMessage::OpenChanged(false)
+        ]
     );
 }
