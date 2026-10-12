@@ -105,6 +105,7 @@ mod custom;
 mod form;
 mod hosted;
 mod listbox;
+mod nav;
 mod overlay;
 pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
@@ -116,6 +117,7 @@ pub use form::{
     ToggleItem,
 };
 pub use listbox::ListEntry;
+pub use nav::{Breadcrumb, Pagination};
 pub use overlay::{
     Command, CommandItem, ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY,
     Menubar, Popover,

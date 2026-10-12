@@ -5,8 +5,8 @@
 
 use crate::page::{Category, PageInfo};
 use crate::pages::{
-    containers, data, datetime, dialogs, form, inputs, navigation, overlay, popups, range, recipes,
-    selection, shell, statics, system, text,
+    containers, data, datetime, dialogs, form, inputs, nav, navigation, overlay, popups, range,
+    recipes, selection, shell, statics, system, text,
 };
 
 macro_rules! page {
@@ -131,6 +131,8 @@ pub const PAGES: &[PageInfo] = &[
         Navigation,
         navigation::dialog_keys
     ),
+    page!("breadcrumb", "Breadcrumb", Navigation, nav::breadcrumb),
+    page!("pagination", "Pagination", Navigation, nav::pagination),
     page!(
         "dropdown-menu",
         "Dropdown menu",
@@ -199,6 +201,8 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Popover", "popover"),
     ("Dialog", "dialog"),
     ("Command", "command"),
+    ("Breadcrumb", "breadcrumb"),
+    ("Pagination", "pagination"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),

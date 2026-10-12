@@ -7,6 +7,7 @@ pub mod dialogs;
 pub mod form;
 pub mod hosted;
 pub mod inputs;
+pub mod nav;
 pub mod navigation;
 pub mod overlay;
 pub mod popups;

@@ -113,6 +113,17 @@ pub(crate) fn rove(
     }
 }
 
+/// The tab stop that Tab, or Shift+Tab with `back`, moves to among
+/// `count` stops inside one control. `None` means focus leaves the
+/// control.
+pub(crate) fn tab_stop(current: usize, count: usize, back: bool) -> Option<usize> {
+    if back {
+        current.checked_sub(1)
+    } else {
+        (current + 1 < count).then_some(current + 1)
+    }
+}
+
 /// The index of the first rectangle that contains `point`.
 pub(crate) fn hit(rects: &[Rect], point: Point) -> Option<usize> {
     rects.iter().position(|rect| rect.contains(point))

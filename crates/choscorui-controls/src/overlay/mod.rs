@@ -3,7 +3,7 @@
 
 mod command;
 mod dialog;
-mod menu_popup;
+pub(crate) mod menu_popup;
 mod menus;
 mod panel;
 mod popover;

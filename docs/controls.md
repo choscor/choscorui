@@ -93,6 +93,8 @@ in parentheses is the role that the macOS backend gives to that
 | Overlay | [`Popover`](#popover) | Button with a floating panel; `Popover::hover_card` opens it on hover. |
 | Overlay | [`Dialog`](#dialog) | Button with a modal panel; `Dialog::sheet` and `Dialog::drawer` slide it in from an edge. |
 | Overlay | [`Command`](#command-and-commanditem) | Search input over grouped commands, inline or in a modal dialog. |
+| Navigation | [`Breadcrumb`](#breadcrumb) | Trail of links to the current page, with an optional collapsed middle. |
+| Navigation | [`Pagination`](#pagination) | Page links with previous and next buttons. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -1898,6 +1900,66 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | `Activate` while a command is highlighted, `SetValue`, `Focus`, and `Dismiss` in the dialog form |
 
 [command.rs](../crates/choscorui-controls/tests/command.rs) pins this behavior.
+
+### Breadcrumb
+
+- Every item but the last is a link. The last item is the current page and
+  is not a link. Chevrons separate the items and point along the reading
+  order.
+- Each link is a tab stop inside the control. Tab and Shift+Tab move
+  between the links, and leave the control after the last or the first.
+- Enter, Space, a click, or `Activate` on a link emits
+  `ItemActivated(index)`.
+- `with_collapsed(range)` hides those items behind an ellipsis. The first
+  and the last item always show. Activating the ellipsis opens a menu of
+  the hidden items. A choice emits `ItemActivated(index)`.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Trail | `Root` | sm `muted-foreground` text, 10 pt gap |
+| Link | `Link` | sm `muted-foreground` text; `foreground` while hovered |
+| Current page | `Item` | sm `foreground` text |
+| Separator | `Separator` | 14 pt chevron in `muted-foreground` |
+| Ellipsis | `Ellipsis` | 20 by 20 pt box with a 16 pt icon |
+
+| Field | `Breadcrumb::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / current page |
+| Description | the focused link, or the hidden items for the ellipsis |
+| State | expanded with a collapsed range, disabled |
+| Actions | `Activate` and `Focus` while enabled |
+
+[nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
+
+### Pagination
+
+- At most seven page slots show. With more pages, the first and the last
+  page show around the current page and its neighbors, and ellipses stand
+  for the rest.
+- Each enabled part is a tab stop inside the control. Previous is disabled
+  on the first page, and Next on the last.
+- Enter, Space, or a click on a page shows it and emits
+  `Changed(Index(page))`. Focus stays on the part that shows the page.
+- `Increment` and `Decrement` show the next and the previous page.
+- The chevrons of Previous and Next point along the reading order.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Row | `Root` | 4 pt gap |
+| Page | `Link` | 36 pt icon button; ghost, outline for the current page |
+| Previous, Next | `Previous`, `Next` | ghost default button with 8 pt padding on the icon side |
+| Ellipsis | `Ellipsis` | 36 by 36 pt with a 16 pt icon |
+
+| Field | `Pagination::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / current page number |
+| Description | the label of the focused part |
+| State | disabled |
+| Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled |
+
+[nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 
