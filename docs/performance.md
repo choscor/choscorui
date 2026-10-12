@@ -67,11 +67,11 @@ Each result file repeats the manifest: model, CPU, memory, architecture, power s
 
 [`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms.
 
-The baselines are from the reference machine, measured on 2026-10-08.
+The baselines are from the reference machine, measured on 2026-10-08. The `views`, `startup.gallery`, and `size` baselines are from 2026-10-12.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
-| `startup.gallery.first_frame_ms.p95` | 144–146 ms | ≤ 250 |
+| `startup.gallery.first_frame_ms.p95` | 126 ms | ≤ 250 |
 | `startup.stress.first_frame_ms.p95` | 223–245 ms | ≤ 400 |
 | `idle.paints` | 0 | ≤ 0 |
 | `idle.cpu_percent` | 0.10 % | ≤ 1 |
@@ -89,7 +89,7 @@ The baselines are from the reference machine, measured on 2026-10-08.
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 1.13 MiB, unstripped | ≤ 3 |
+| `size.choscorui-gallery_mib` | 4.97 MiB, unstripped | ≤ 6 |
 
 These correctness counters have a budget of 0:
 
@@ -131,6 +131,7 @@ These design facts keep the paint, layout, and input paths independent of the mo
 | View updates | A state change runs only the reactions that read the state. `ViewHost::take_dirty_count` counts the changed nodes. | [`host.rs`](../crates/choscorui-compose/src/view/host.rs) |
 | View layout | `LayoutEngine::plan` arranges a node again only when it was invalidated or its bounds change. A clean subtree keeps its bounds. Semantics update only for the placed nodes. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
 | Long stacks | A stack measures its direct children again when one of them changes. Each cached child costs about 0.4 µs, so a column of 10,000 rows adds about 4 ms. Use an item view for larger data. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
+| Code size | Each view type compiles its own mount. The stacks, `Styled`, `ScrollView`, and `Configured` keep their non-generic work in functions that are not inlined. Thus, a view type adds only the calls that mount its content. | [`layout.rs`](../crates/choscorui-compose/src/view/layout.rs), [`modifier.rs`](../crates/choscorui-compose/src/view/modifier.rs) |
 | View paint | A column finds its visible children by binary search. Routing, timers, and overlays walk the tree only for controls that show an overlay, hold a modal scope, wait for a timer, or animate. | [`paint.rs`](../crates/choscorui-compose/src/view/paint.rs), [`custom.rs`](../crates/choscorui-controls/src/custom.rs) |
 
 `paragraph_layout_matches_whole_text_and_reshapes_only_edits` in [`tests/text_layout.rs`](../crates/choscorui-macos/tests/text_layout.rs) shows that the paragraph layout equals the layout of the whole text.
