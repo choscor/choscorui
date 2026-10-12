@@ -233,16 +233,19 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
         }),
     );
 
-    // A base color swatch restyles and repaints.
+    // A base color swatch restyles and repaints. The swatch differs from
+    // the base that the settings file restored.
+    let base = if gallery.base == BaseColor::Mauve {
+        BaseColor::Olive
+    } else {
+        BaseColor::Mauve
+    };
     let before = paint_count(gallery, 0);
-    let mauve = gallery.windows[0]
-        .view
-        .base_button(BaseColor::Mauve)
-        .center();
-    click(gallery, app, 0, mauve);
+    let swatch = gallery.windows[0].view.base_button(base).center();
+    click(gallery, app, 0, swatch);
     check(
-        "the Mauve base swatch restyles and repaints",
-        gallery.base == BaseColor::Mauve && painted_after(app, gallery, 0, before),
+        "a base color swatch restyles and repaints",
+        gallery.base == base && painted_after(app, gallery, 0, before),
     );
 
     // The Enabled toggle disables the page and enables it again.
@@ -441,7 +444,7 @@ pub fn run(app: &Application, gallery: &mut Gallery) -> usize {
             && restored
             && expected.page.as_deref() == Some("canvas")
             && expected.theme == Theme::Brand
-            && expected.base == BaseColor::Mauve
+            && expected.base == base
             && expected.language == "vi"
             && expected.filter == "canvas"
             && (expected.state.canvas_zoom - 2.5).abs() < 1e-9
