@@ -71,6 +71,7 @@ page.alert = Cảnh báo
 page.spinner = Vòng quay tải
 page.skeleton = Khung chờ
 page.empty = Trạng thái trống
+page.toast = Thông báo nhanh
 page.scroll-bar = Thanh cuộn
 page.dial = Núm xoay
 page.numeric-display = Màn hình số

@@ -73,6 +73,7 @@ page.alert = Alert
 page.spinner = Spinner
 page.skeleton = Skeleton
 page.empty = Empty
+page.toast = Toast
 page.scroll-bar = Scroll bar
 page.dial = Dial
 page.numeric-display = Numeric display

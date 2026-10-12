@@ -117,7 +117,9 @@ pub use data::{
     Avatar, AvatarGroup, Badge, Card, Carousel, Chart, ChartKind, ChartSeries, DataTable,
     StatusText,
 };
-pub use feedback::{Alert, Empty, Skeleton, Spinner};
+pub use feedback::{
+    Alert, Empty, Skeleton, Spinner, TOAST_DURATION, Toast, ToastId, ToastPosition, Toaster, Toasts,
+};
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
     InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,

@@ -108,6 +108,7 @@ in parentheses is the role that the macOS backend gives to that
 | Feedback | [`Spinner`](#spinner-and-skeleton) | Spinning loader icon. |
 | Feedback | [`Skeleton`](#spinner-and-skeleton) | Pulsing placeholder block. |
 | Feedback | [`Empty`](#empty) | Centered empty state with media and actions. |
+| Feedback | [`Toaster`](#toast-and-toaster) | Stack of toasts at a window corner. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2341,6 +2342,49 @@ behavior.
 
 [feedback.rs](../crates/choscorui-controls/tests/feedback.rs) pins this
 behavior.
+
+### Toast and Toaster
+
+- The app pushes a `Toast` through a `Toasts` handle. Clones of the handle
+  share one queue. `push` returns a `ToastId` for `update` and `dismiss`.
+- A `Toaster` made with the handle shows the queued changes at the next
+  `ControlHost::advance`. It asks for that advance through its deadline.
+- **Stack.** The newest toast is at the front, at the window edge of the
+  `ToastPosition`. Start and end follow the reading order. While
+  collapsed, at most three toasts show; the ones behind the front toast
+  are 5% smaller per step and peek out by the gap. `expanded()` always
+  lists every toast.
+- **Timers.** A toast closes after `TOAST_DURATION` (4 s) or its own
+  duration. A `Loading` toast stays until it is updated or dismissed. An
+  update starts the timer again.
+- **Hover and focus.** While the pointer rests on the stack, or the stack
+  has focus, the stack expands and the timers pause. They resume with the
+  time that was left.
+- **Keys.** The action and the close buttons are tab stops, top first.
+  Enter, Space, or a click on an action emits `ItemActivated(id)` and
+  closes the toast. The close button emits `Dismissed`.
+- Toasts slide in from the window edge and fade. With reduced motion,
+  they show and close at once.
+- The toaster takes focus only while it shows toasts.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Stack | `Group` | 16 pt from the window edges, 12 pt gap, 500 ms motion |
+| Toast | `Root` | `popover` fill, 1 pt `border`, radius 2xl, shadow lg, 16 pt padding, 12 pt gap, at most 384 pt wide |
+| Icon | `Icon` | 16 pt; check, info, alert, error, or a turning loader |
+| Title | `Title` | sm medium `popover-foreground` text |
+| Description | `Description` | sm `muted-foreground` text, 2 pt below the title |
+| Close | `Close` | 16 pt icon in `muted-foreground`; `foreground` while hovered |
+| Action | `Button` `Root` | default button |
+
+| Field | `Toaster::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / the title and the description of the newest toast |
+| Description | the label of the focused button |
+| Actions | `Activate` and `Focus` while toasts show |
+
+[toast.rs](../crates/choscorui-controls/tests/toast.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 
