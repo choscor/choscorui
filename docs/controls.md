@@ -2573,8 +2573,12 @@ false.
   wrap. Home and End go to the ends.
 - Enter, Space, or a click on an item selects it and emits
   `Changed(Index(item))`. Items count in order across the groups.
-- The toggle, Command+B while the sidebar has focus, `Expand`, and
-  `Collapse` open or collapse it and emit `OpenChanged`.
+- The toggle, Command+B, `Expand`, and `Collapse` open or collapse it and
+  emit `OpenChanged`.
+- **Command+B.** The sidebar lists Command+B in its `window_shortcuts`. The
+  shortcut works from anywhere in the window. A focused control that uses
+  Command+B, such as a text editor, gets it first. A disabled sidebar, or
+  one with `SidebarCollapse::None` in a wide window, leaves the key unused.
 - **`SidebarCollapse`.** `Offcanvas` collapses to the toggle alone.
   `Icon` collapses to 48 pt with the item icons. `None` never collapses
   and shows no toggle.
@@ -3261,6 +3265,9 @@ behavior.
 - `dispatch_key` routes a key event through the tree and returns whether a
   control stopped it. `dispatch_text` gives committed text to the focused
   control.
+- When no control stops a key press, `dispatch_key` sends `Shortcut` to
+  the first visible, enabled control that lists the key in its
+  `window_shortcuts`. An open modal limits this to its own controls.
 - `move_focus` sends `FocusChanged` to the old and the new control.
 - The host sends `Hover(true)` and `Hover(false)` to each control on the
   path under the pointer when the path changes.

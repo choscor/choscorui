@@ -5,16 +5,16 @@
 //! Built-in controls and application controls use the same protocol. No
 //! platform or FFI code is involved.
 
-use crate::ShortcutModifiers;
 use crate::style::{
     PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, TransitionStats, Transitions,
     VisualState,
 };
+use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
     CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
-    KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NodeId, Point, PointerEvent,
-    Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree, ThemeResolver,
-    Tree, TreeError,
+    Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NodeId, Point,
+    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree,
+    ThemeResolver, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -34,6 +34,10 @@ pub enum ControlEvent {
     Dismiss,
     /// The host time reached the control's [`CustomControl::deadline`].
     Timer,
+    /// The user pressed one of the control's
+    /// [`CustomControl::window_shortcuts`], and the focused control did
+    /// not use the key.
+    Shortcut(Shortcut),
 }
 
 /// A value a control reports in [`ControlMessage::Changed`].
@@ -245,6 +249,12 @@ pub trait CustomControl {
 
     fn focusable(&self) -> bool {
         true
+    }
+
+    /// Shortcuts that reach the control from anywhere in its window, as
+    /// [`ControlEvent::Shortcut`]. The focused control gets the key first.
+    fn window_shortcuts(&self) -> &[Shortcut] {
+        &[]
     }
 
     /// Enables or disables the control. A disabled control gets no input
@@ -739,7 +749,42 @@ impl ControlHost {
             stopped |= reply == EventReply::Stop;
             reply
         });
+        if let KeyEvent::Down { key, .. } = event
+            && !stopped
+        {
+            stopped = self.dispatch_shortcut(tree, key);
+        }
         stopped
+    }
+
+    /// Sends a key that no focused control used to the first visible,
+    /// enabled control that declares it in
+    /// [`CustomControl::window_shortcuts`]. An open modal limits the
+    /// search to its own controls. Returns true when a control stopped it.
+    fn dispatch_shortcut(&mut self, tree: &mut Tree, key: Key) -> bool {
+        let shortcut = Shortcut {
+            key,
+            modifiers: self.modifiers,
+        };
+        let modal = self.modal(tree);
+        let mut owners: Vec<(Vec<usize>, NodeId)> = self
+            .controls
+            .iter()
+            .filter(|(_, control)| control.window_shortcuts().contains(&shortcut))
+            .map(|(node, _)| *node)
+            .filter(|node| !self.disabled.contains(node) && tree.visible(*node) == Some(true))
+            .filter(|node| modal.is_none_or(|modal| tree.is_within(*node, modal)))
+            .filter_map(|node| Some((tree_path(tree, node)?, node)))
+            .collect();
+        owners.sort();
+        owners.into_iter().any(|(_, node)| {
+            self.deliver(
+                tree,
+                node,
+                EventPhase::Target,
+                &ControlEvent::Shortcut(shortcut),
+            ) == EventReply::Stop
+        })
     }
 
     /// Moves keyboard focus forward or back, inside an open modal.

@@ -9,6 +9,7 @@ use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, SheetSide, SidebarVariant, Slot,
     StyleQuery, TextAlign, VisualState,
 };
+use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
     Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
@@ -16,6 +17,18 @@ use choscorui_core::{
 
 /// Below this window width the sidebar becomes a sheet, in points.
 pub const SIDEBAR_MOBILE_BREAKPOINT: f64 = 768.0;
+
+/// Command+B, which opens and collapses the sidebar from anywhere in
+/// its window.
+const TOGGLE_SHORTCUT: [Shortcut; 1] = [Shortcut {
+    key: Key::Character('b'),
+    modifiers: ShortcutModifiers {
+        shift: false,
+        control: false,
+        option: false,
+        command: true,
+    },
+}];
 
 /// The width of the sheet in a narrow window, in points.
 const MOBILE_WIDTH: f64 = 288.0;
@@ -573,6 +586,11 @@ impl CustomControl for Sidebar {
         match event {
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
+            ControlEvent::Shortcut(_) if self.collapse != SidebarCollapse::None || self.mobile => {
+                let expanded = !self.is_expanded();
+                self.set_expanded(cx, expanded);
+                EventReply::Stop
+            }
             ControlEvent::Hover(false) => {
                 self.hovered = None;
                 cx.request_paint();
@@ -601,6 +619,10 @@ impl CustomControl for Sidebar {
 
     fn modal(&self) -> bool {
         self.mobile && self.reveal.open
+    }
+
+    fn window_shortcuts(&self) -> &[Shortcut] {
+        &TOGGLE_SHORTCUT
     }
 
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {

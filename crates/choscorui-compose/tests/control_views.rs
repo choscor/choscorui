@@ -1,14 +1,14 @@
 //! Headless tests of the views over control models: the focus frame, the
-//! input dialog, and the font dialog.
+//! input dialog, the font dialog, and the sidebar shortcut.
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Text, VStack, View, ViewExt,
-    ViewHost,
+    Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Text, VStack, View,
+    ViewExt, ViewHost,
 };
-use choscorui_controls::{EstimatedText, InputKind, InputValue, ShortcutModifiers};
+use choscorui_controls::{EstimatedText, InputKind, InputValue, ShortcutModifiers, SidebarItem};
 use choscorui_core::{
-    Catalog, DesignTokens, DisplayCommand, DisplayList, Key, KeyEvent, Locale, Point,
+    Catalog, DesignTokens, DisplayCommand, DisplayList, Icon, Key, KeyEvent, Locale, Point,
     PointerButton, PointerEvent, Rect, SemanticAction, Size, TextStyle,
 };
 use std::cell::RefCell;
@@ -282,5 +282,63 @@ fn a_missing_family_falls_back_and_stays_in_the_field() {
     assert!(!chooser.state.invalid);
     assert_eq!(chooser.value.as_deref(), Some("Menlo"));
     assert_eq!(value(&mut host, "Sample").as_deref(), Some("Menlo"));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar shortcut
+
+/// A sidebar beside a button, with the sidebar's open state shown as text.
+struct Shell;
+
+impl View for Shell {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let open = cx.state(true);
+        let selected = cx.state(None);
+        HStack::new((
+            Sidebar::new(
+                "Navigation",
+                "Toggle sidebar",
+                vec![(
+                    "Application".to_string(),
+                    vec![SidebarItem::new("Inbox", Icon::Inbox)],
+                )],
+                selected.binding(),
+            )
+            .open(open.binding()),
+            choscorui_compose::view::Button::new("Save", || {}),
+            Text::new(move || format!("open {}", open.get())),
+        ))
+    }
+}
+
+#[test]
+fn command_b_toggles_the_sidebar_view_while_another_view_has_focus() {
+    let mut host = ViewHost::new(
+        Size::new(1000.0, 400.0),
+        DesignTokens::light(),
+        Env::new(Rc::new(Catalog::new()), Locale::parse("en").unwrap()),
+        Runtime::new(),
+        Rc::new(EstimatedText),
+    );
+    host.mount(Shell);
+    host.layout();
+    let save = node(&mut host, "Save");
+    host.focus(Some(save));
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    let key = KeyEvent::Down {
+        key: Key::Character('b'),
+        repeat: false,
+    };
+    assert!(host.key(key, command));
+    host.layout();
+    assert!(host.find("open false").is_some());
+    assert_eq!(host.tree().focus(), Some(save), "focus stays on the button");
+    assert!(host.key(key, command));
+    host.layout();
+    assert!(host.find("open true").is_some());
     assert_eq!(host.take_errors(), Vec::new());
 }

@@ -3,7 +3,7 @@
 mod hosted;
 
 use choscorui_controls::{
-    ControlMessage, ControlValue, ShortcutModifiers, Sidebar, SidebarCollapse, SidebarItem,
+    ControlMessage, ControlValue, Input, ShortcutModifiers, Sidebar, SidebarCollapse, SidebarItem,
 };
 use choscorui_core::{Icon, Key, KeyEvent, Rect, SemanticAction};
 use hosted::{Harness, texts};
@@ -67,6 +67,64 @@ fn items_rove_and_select_and_command_b_collapses() {
     assert!(h.perform(SemanticAction::Expand, None));
     relayout(&mut h);
     assert_eq!(h.measure().width, 256.0);
+}
+
+fn command_b(h: &mut Harness) {
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    });
+    h.key(Key::Character('b'));
+    h.modifiers(ShortcutModifiers::default());
+}
+
+#[test]
+fn command_b_toggles_the_sidebar_from_anywhere_in_the_window() {
+    let mut h = Harness::new(sidebar());
+    let root = h.tree.root();
+    let input = h
+        .host
+        .mount(&mut h.tree, root, Box::new(Input::new("Search", "")))
+        .unwrap();
+
+    // No focus: the window-wide shortcut reaches the sidebar.
+    command_b(&mut h);
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(false)]);
+
+    // Focus in a text input that does not use Command+B.
+    h.host.move_focus(&mut h.tree, Some(input));
+    command_b(&mut h);
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(true)]);
+    assert_eq!(h.tree.focus(), Some(input), "focus stays in the input");
+
+    // Focus in the sidebar toggles it once.
+    h.focus();
+    command_b(&mut h);
+    assert_eq!(h.messages(), [ControlMessage::OpenChanged(false)]);
+
+    // A disabled sidebar ignores the shortcut.
+    h.host.move_focus(&mut h.tree, Some(input));
+    h.set_enabled(false);
+    command_b(&mut h);
+    assert!(h.messages().is_empty());
+}
+
+#[test]
+fn a_sidebar_that_never_collapses_leaves_command_b_to_others() {
+    let mut h = Harness::new(sidebar().with_collapse(SidebarCollapse::None));
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    });
+    let used = h.host.dispatch_key(
+        &mut h.tree,
+        KeyEvent::Down {
+            key: Key::Character('b'),
+            repeat: false,
+        },
+    );
+    assert!(!used, "the key stays unused");
+    assert!(h.messages().is_empty());
 }
 
 #[test]
