@@ -29,10 +29,15 @@ flowchart LR
 
 The repository has no changelog file. The release notes become the text of the GitHub Release.
 
+`scripts/release-notes.sh` groups the commits by type. It also writes two draft sections:
+
+- **Breaking changes** lists each breaking commit with the text of its `BREAKING CHANGE:` paragraphs.
+- **Deprecated** lists each commit whose body says "deprecated", with the sentences that say it.
+
 1. Run `scripts/release-notes.sh <previous-tag> HEAD` to get the list of changes.
 2. Write the notes in an ignored file, for example `dist/release-notes-<version>.md`.
 3. Write the highlights by hand.
-4. Write the **Breaking changes**, **Deprecated**, **Known limitations**, and **Upgrading**, as [versioning.md](versioning.md) describes.
+4. Write the **Breaking changes**, **Deprecated**, **Known limitations**, and **Upgrading**, as [versioning.md](versioning.md) describes. Start from the draft sections.
 5. Paste the generated list of changes.
 6. Run `git diff <previous-tag> -- crates/choscorui/tests/golden`.
 7. If a golden file changed, describe the behavior change under **Breaking changes**.

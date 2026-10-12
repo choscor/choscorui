@@ -8,7 +8,9 @@
 #   scripts/release-notes.sh                 # whole history
 #
 # Commits whose body contains "BREAKING CHANGE:" or whose type ends in
-# "!" (feat!: …) are also listed under "Breaking changes".
+# "!" (feat!: …) are also listed under "Breaking changes", each with its
+# "BREAKING CHANGE:" paragraphs. Commits whose body says "deprecated" are
+# also listed under "Deprecated", each with the sentences that say it.
 set -eu
 
 from=${1:-}
@@ -42,10 +44,45 @@ breaking=$(printf '%s' "$log" | awk -v RS='\036' -v FS='\037' '
     { sub(/^\n/, "") }
     $2 ~ /^[a-z]+(\([^)]*\))?!: / || $3 ~ /BREAKING CHANGE:/ {
         printf "- %s (%s)\n", $2, substr($1, 1, 7)
+        # Each "BREAKING CHANGE:" paragraph becomes one nested item.
+        n = split($3, body, "\n")
+        note = ""
+        for (i = 1; i <= n; i++) {
+            if (body[i] ~ /^BREAKING CHANGE:/) {
+                if (note != "") printf "  - %s\n", note
+                note = body[i]
+                sub(/^BREAKING CHANGE:[ \t]*/, "", note)
+            } else if (note != "" && body[i] ~ /^[ \t]*$/) {
+                printf "  - %s\n", note
+                note = ""
+            } else if (note != "") {
+                note = note " " body[i]
+            }
+        }
+        if (note != "") printf "  - %s\n", note
+    }')
+
+# Commits whose body says "deprecated", with each sentence that does.
+deprecated=$(printf '%s' "$log" | awk -v RS='\036' -v FS='\037' '
+    { sub(/^\n/, "") }
+    tolower($3) ~ /deprecated/ {
+        printf "- %s (%s)\n", $2, substr($1, 1, 7)
+        text = $3
+        gsub(/\n/, " ", text)
+        gsub(/BREAKING CHANGE:[ \t]*/, "", text)
+        n = split(text, sentences, /[.;] /)
+        for (i = 1; i <= n; i++) {
+            if (tolower(sentences[i]) !~ /deprecated/) continue
+            sentence = sentences[i]
+            sub(/^[ \t]+/, "", sentence)
+            sub(/[. \t]+$/, "", sentence)
+            printf "  - %s.\n", sentence
+        }
     }')
 
 printf '## Changes %s\n\n' "${from:+since $from}"
 [ -n "$breaking" ] && printf '### Breaking changes\n\n%s\n\n' "$breaking"
+[ -n "$deprecated" ] && printf '### Deprecated\n\n%s\n\n' "$deprecated"
 section "Features" '^feat'
 section "Fixes" '^fix'
 section "Performance" '^perf'
