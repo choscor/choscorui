@@ -29,6 +29,10 @@ mod text;
 mod toast;
 mod tooltip;
 mod widgets;
+mod widgets_chat;
+mod widgets_data;
+mod widgets_form;
+mod widgets_shell;
 
 pub use builtins::{
     Calendar, Combobox, Progress, RadioGroup, Slider, SpinBox, Tabs, TextEditor, TextField,
@@ -60,6 +64,13 @@ pub use widgets::{
     NavigationMenu, Pagination, Popover, RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch,
     Textarea, Toggle, ToggleGroup,
 };
+pub use widgets_chat::{Message, MessageScroller, Questionnaire};
+pub use widgets_data::{ColumnBrowser, HeaderView, ItemGroup};
+pub use widgets_form::{
+    ColorPicker, DateTimeEdit, DecimalSpinBox, Dial, InputGroup, KeySequenceEdit, Label,
+    NumericDisplay,
+};
+pub use widgets_shell::{Dock, SizeGrip, StatusBar, Toolbar};
 
 /// A piece of user interface. A component implements [`View::body`] and
 /// returns other views; the toolkit's primitive views (stacks, text,

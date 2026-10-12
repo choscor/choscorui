@@ -8,14 +8,24 @@ use choscorui_core::{
 };
 
 pub struct Label {
-    node: NodeId,
+    /// The node that `set_text` invalidates. A hosted label has none.
+    node: Option<NodeId>,
     text: String,
 }
 
 impl Label {
     pub fn new(node: NodeId, text: impl Into<String>) -> Self {
         Self {
-            node,
+            node: Some(node),
+            text: text.into(),
+        }
+    }
+
+    /// A label for a control host, which owns the node. The host changes
+    /// the text by mounting a new label, so `set_text` fails on this one.
+    pub fn hosted(text: impl Into<String>) -> Self {
+        Self {
+            node: None,
             text: text.into(),
         }
     }
@@ -29,17 +39,17 @@ impl Label {
         tree: &mut Tree,
         text: impl Into<String>,
     ) -> Result<bool, TreeError> {
-        if !tree.contains(self.node) {
+        let Some(node) = self.node.filter(|node| tree.contains(*node)) else {
             return Err(TreeError::MissingNode);
-        }
+        };
         let text = text.into();
         if self.text == text {
             return Ok(false);
         }
         self.text = text;
-        tree.invalidate(self.node, Dirty::LAYOUT)?;
-        tree.invalidate(self.node, Dirty::PAINT)?;
-        tree.invalidate(self.node, Dirty::SEMANTICS)?;
+        tree.invalidate(node, Dirty::LAYOUT)?;
+        tree.invalidate(node, Dirty::PAINT)?;
+        tree.invalidate(node, Dirty::SEMANTICS)?;
         Ok(true)
     }
 

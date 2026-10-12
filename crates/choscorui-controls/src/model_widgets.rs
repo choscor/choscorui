@@ -86,6 +86,10 @@ impl HeaderView {
             }
         }
     }
+    /// Restores a saved sort. A column past the last column clears it.
+    pub fn restore_sort(&mut self, sort: Option<(usize, SortOrder)>) {
+        self.sort = sort.filter(|(column, _)| *column < self.columns.len());
+    }
 
     fn edge_at(&self, x: f64) -> Option<usize> {
         let mut right = self.origin_x;

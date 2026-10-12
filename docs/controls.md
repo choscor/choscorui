@@ -566,6 +566,8 @@ behavior.
 - `Label` takes no input. `Label::set_text` invalidates `LAYOUT`, `PAINT`,
   and `SEMANTICS`, and returns whether the text changed. It fails when the
   node is not in the tree.
+- `Label::hosted(text)` makes a label for a control host. It has no node, so
+  `set_text` returns `MissingNode`.
 - `Separator` takes no input and publishes no semantic node, because it is
   decorative. `paint` centers a 1 pt `border` line in either orientation.
   In a control host, its node is a hidden `Group`.
@@ -588,6 +590,10 @@ behavior.
 | Name / value | text / - |
 | State | - |
 | Actions | - |
+
+**As a view.** `Label::new(text)` mounts a `Label::hosted` label with
+literal or catalog text. The view builds a new label when the locale
+changes.
 
 [static_controls.rs](../crates/choscorui-controls/tests/static_controls.rs) pins
 this behavior.
@@ -651,6 +657,10 @@ this behavior.
 | State | description "Value too large to display" on overflow |
 | Actions | - |
 
+**As a view.** `NumericDisplay::new(name, digits, base, value)` mounts a
+`HostedNumericDisplay`. The view gives the live `i64` value as `Number`. A
+change of `base` builds the display again.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
 ### KeySequenceEdit
@@ -677,6 +687,10 @@ this behavior.
 | Name / value | name / the sequence, for example `⌘K, ⇧⌘S` |
 | State | read-only; a description while it records |
 | Actions | `Activate`, `Focus` |
+
+**As a view.** `KeySequenceEdit::new(name, max_chords, sequence)` edits a
+`Binding<String>` through the `Text` value in both directions, for example
+`⌘K, ⇧⌘S`.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
@@ -1040,6 +1054,10 @@ this behavior.
 | State | invalid; the error message is the description |
 | Actions | `Increment`, `Decrement`, `SetValue`, `Focus` |
 
+**As a view.** `DecimalSpinBox::new(name, bounds, step, fraction_digits,
+value)` edits a `Binding<f64>` through the `Number` value in both
+directions. It formats numbers in the locale of the environment.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
 ### Dial
@@ -1075,6 +1093,10 @@ this behavior.
 
 `Dial` has no handler for these actions. The host maps them to
 `handle_key` and `point_to`.
+
+**As a view.** `Dial::new(name, range, wrapping, value)` mounts a
+`HostedDial`. It edits a `Binding<i32>` through the `Number` value in both
+directions.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
@@ -1338,6 +1360,12 @@ Shift+Tab at the grid. Tab and Shift+Tab leave the calendar at the ends.
   highlighted option while the list is open. `ShowMenu` and `Expand` open
   the list, and `Collapse` closes it.
 
+**As a view.** `DateTimeEdit::new(name, kind, value)` edits a
+`Binding<CivilDateTime>` in both directions. A date editor uses the `Date`
+value, and the other kinds use ISO 8601 text. A date or time editor keeps
+the other part of the bound value. The fields follow the locale of the
+environment.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs),
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
 and [calendar_caption.rs](../crates/choscorui-controls/tests/calendar_caption.rs)
@@ -1425,6 +1453,9 @@ reports the context menu. Rows that the model must fetch are not reported.
 with a `TextItemDelegate` and styled rows. `selection` follows the
 `Indices` value in both directions. `List::selection_mode` sets the
 selection mode, and `on_item` receives `ItemActivated`.
+`List::table(name, model, selection)` mounts a hosted table with
+`TextItemDelegate::table` and the `Table` kind. Its selection binds in the
+same way.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
@@ -1440,6 +1471,8 @@ pin this behavior.
 - **Keys.** ArrowLeft and ArrowRight move the focused column and stop at
   the ends. Space or Enter toggles the sort of the focused column.
 - `+` or `=` widens the focused column by 10 points, and `-` narrows it.
+- `restore_sort` sets a saved sort. A column past the last column clears the
+  sort.
 - **Look.** `paint` uses the `Table` recipe. The `Header` slot draws a
   bottom `border` line. Each `HeaderCell` draws its title in sm medium
   `foreground` text with 8 pt inline padding. The sorted column shows a
@@ -1458,6 +1491,11 @@ of the focused column. A sort change reports `ItemActivated(column)`, and
 `sort` returns the order. A resize reports `Changed(Index(column))`, and
 `widths` returns the widths. A press on a column edge captures the pointer
 until the release. `Activate` sorts the focused column.
+
+**As a view.** `HeaderView::new(columns, sort)` edits a
+`Binding<Option<(usize, SortOrder)>>` in both directions. `restore_sort`
+gives the header the bound sort. `on_resize` receives the widths after each
+resize. The view keeps the widths when it builds the header again.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
@@ -1510,6 +1548,10 @@ column scrolls to keep the path item visible. A press selects the row under
 the pointer. Columns follow reading order, so ArrowLeft and ArrowRight
 mirror in right-to-left layouts. The node has the `Tree` role, the name,
 and the focused path item as its value. Its only action is `Focus`.
+
+**As a view.** `ColumnBrowser::new(name, model, path)` mounts a
+`HostedColumnBrowser`. `path` follows the `Indices` value in both
+directions.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
@@ -1789,6 +1831,9 @@ It edits a `Binding<TextStyle>`.
   weight on the `Card` surface. Its node has the `StaticText` role, the
   sample text as its name, and the family as its value.
 
+**As a view.** `ColorPicker::new(name, hex)` edits a `Binding<String>`
+through the `Text` value in both directions. Accept runs `on_activate`.
+
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
 ### Toolbar
@@ -1835,6 +1880,9 @@ It edits a `Binding<TextStyle>`.
 
 The items publish their own semantics.
 
+**As a view.** `Toolbar::new(name, area, items)` mounts a `HostedToolbar` on
+the `area` edge. A command runs `on_command`.
+
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 
 ### StatusBar
@@ -1864,6 +1912,9 @@ The items publish their own semantics.
 | Name / value | "Status" / the message and the sections, joined |
 | State | - |
 | Actions | `Focus` |
+
+**As a view.** `StatusBar::new(message, sections)` shows the message as the
+default text and the sections at the end. It has no binding.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 
@@ -1908,6 +1959,10 @@ splitter keys, and `Increment` or `Decrement` send
 `Dismissed`. The node's semantics are those of the focused tab's panel or
 splitter.
 
+**As a view.** `Dock::new(layout)` mounts the `DockLayout` that `layout`
+makes from the environment. `on_item` receives the id of an activated panel.
+`on_dismiss` runs when a panel closes.
+
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 
 ### FocusFrame and SizeGrip
@@ -1931,6 +1986,8 @@ splitter.
 - **As a view.** The `FocusFrame` view of `choscorui-compose` paints the
   ring after its content, outside the clip of the containers in the
   content. It paints only for focus in its content.
+- **As a view.** `SizeGrip::new(minimum, maximum, on_resize)` runs
+  `on_resize` with the size of each `Changed(Range)` message.
 - When frames are nested, the frame nearest to the focused node paints
   the ring. The layout mirrors the focused node in right-to-left layouts,
   and the ring follows it.
@@ -2044,6 +2101,11 @@ time field, use `DateTimeEdit`.
 | `N` / `n` | letter or digit | yes / no |
 | `X` / `x` | any character | yes / no |
 | `\c` | the literal `c` | - |
+
+**As a view.** `Input::masked(name, mask, raw)` shows the masked text of
+`raw` and the mask placeholder. `raw` keeps the typed characters without the
+literals. A deletion at the end removes typed characters until the shown
+text fits. Use `InputMask::validate` to check the value.
 
 [input_rules.rs](../crates/choscorui-controls/tests/input_rules.rs) and
 [properties.rs](../crates/choscorui-controls/tests/properties.rs) pin this
@@ -2224,6 +2286,10 @@ list are the same.
 `set_value` takes `Index` of an enabled option, or `None`. `set_open` opens
 and closes the list, but not while the select is disabled.
 
+**As a view.** `Select::new(name, entries, selected)` edits a
+`Binding<Option<usize>>` through the `Index` value in both directions.
+`Select::native` mounts the native look with the `NativeSelect` kind.
+
 [select.rs](../crates/choscorui-controls/tests/select.rs) pins this behavior.
 
 ### Input and InputGroup
@@ -2272,6 +2338,10 @@ and closes the list, but not while the select is disabled.
 
 `set_value` takes `Text`, also while the input is disabled, and drops line
 breaks. `set_open` returns false.
+
+**As a view.** `InputGroup::new(name, addons, value)` edits a
+`Binding<String>` through the `Text` value in both directions. A button
+addon reports its index through `on_item`.
 
 [input.rs](../crates/choscorui-controls/tests/input.rs) pins the behavior of
 `Input`, `InputGroup`, `Textarea`, and `InputOtp`.
@@ -3274,6 +3344,10 @@ behavior.
 | State | disabled |
 | Actions | `Activate` and `Focus` with stops while enabled |
 
+**As a view.** `ItemGroup::new(name, items)` mounts the rows. An item is
+content of the group and has no view. `on_item` receives the index of an
+activated tab stop.
+
 [layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
 behavior.
 
@@ -3312,6 +3386,10 @@ behavior.
 | Name / value | author / bubble texts |
 | Description | header and footer |
 | Actions | none |
+
+**As a view.** `Message::new(author, bubbles)` mounts a message. A bubble is
+content of a message and has no view. `.with` adds the avatar, the header,
+and the footer.
 
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.
@@ -3401,6 +3479,10 @@ behavior.
 | State | disabled |
 | Actions | `Increment`, `Decrement`, and `Focus` while enabled |
 
+**As a view.** `MessageScroller::new(name, messages)` puts the messages in a
+new `Conversation` at each build. The scroller shows them at the next
+`advance`.
+
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.
 
@@ -3446,6 +3528,10 @@ behavior.
 
 `set_value` takes `Index` to show a question, `Indices` for the picks of a
 choice question, or `Text` for a freeform answer. `set_open` returns false.
+
+**As a view.** `Questionnaire::new(name, questions, labels, current)` edits
+the shown question through the `Index` value in both directions. Submit runs
+`on_activate`.
 
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.

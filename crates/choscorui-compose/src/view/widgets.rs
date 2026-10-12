@@ -93,7 +93,7 @@ pub(super) fn to_position(index: usize) -> ControlValue {
     ControlValue::Index(Some(index))
 }
 
-fn as_indices(value: &ControlValue) -> Option<Vec<usize>> {
+pub(super) fn as_indices(value: &ControlValue) -> Option<Vec<usize>> {
     match value {
         ControlValue::Indices(indices) => Some(indices.clone()),
         ControlValue::Index(index) => Some(index.iter().copied().collect()),
@@ -331,6 +331,20 @@ impl Configured<controls::Select> {
         let name = label(name);
         Configured::custom(ControlKind::Select, move |env| {
             controls::Select::new(text(&name, env), entries.items(env))
+        })
+        .bind(selected, ControlValue::Index, as_index)
+    }
+
+    /// A select with the native-select look: a plain input box with a
+    /// chevron. It behaves like [`Select::new`].
+    pub fn native<M>(
+        name: impl IntoLive<TextContent, M>,
+        entries: impl Items<ListEntry>,
+        selected: Binding<Option<usize>>,
+    ) -> Self {
+        let name = label(name);
+        Configured::custom(ControlKind::NativeSelect, move |env| {
+            controls::Select::native(text(&name, env), entries.items(env))
         })
         .bind(selected, ControlValue::Index, as_index)
     }

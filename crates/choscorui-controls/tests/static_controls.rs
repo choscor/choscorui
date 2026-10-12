@@ -94,3 +94,16 @@ fn separator_centers_a_border_rule_in_either_orientation() {
             if *line == rect(14.5, 20.0, 1.0, 100.0))
     );
 }
+
+#[test]
+fn a_hosted_label_has_its_text_and_no_node_to_change() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 50.0));
+    let mut label = Label::hosted("Email");
+    assert_eq!(label.text(), "Email");
+    assert_eq!(label.semantics().name, "Email");
+    assert_eq!(
+        label.set_text(&mut tree, "Name"),
+        Err(choscorui_core::TreeError::MissingNode)
+    );
+    assert_eq!(label.text(), "Email");
+}

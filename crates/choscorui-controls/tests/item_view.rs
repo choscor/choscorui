@@ -298,6 +298,14 @@ fn header_sorts_resizes_and_exposes_semantics() {
     assert_eq!(header.widths()[0], 50.0);
     header.handle(HeaderInput::Key(Key::Enter));
     assert_eq!(header.sort(), Some((0, SortOrder::Ascending)));
+    header.restore_sort(Some((1, SortOrder::Descending)));
+    assert_eq!(header.sort(), Some((1, SortOrder::Descending)));
+    header.restore_sort(Some((2, SortOrder::Ascending)));
+    assert_eq!(
+        header.sort(),
+        None,
+        "a column past the last clears the sort"
+    );
 }
 
 #[test]

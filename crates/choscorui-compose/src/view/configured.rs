@@ -130,12 +130,34 @@ impl<C: CustomControl + 'static> Configured<C> {
         })
     }
 
-    /// Connects the control's value to `binding` in both directions.
-    pub(crate) fn bind<T: Clone + PartialEq + Default + 'static>(
+    /// Connects the control's value to `binding` in both directions. `to`
+    /// turns the bound value into the value that the control takes in
+    /// [`CustomControl::set_value`]. `from` reads a
+    /// [`ControlMessage::Changed`] value, and returns `None` for a value
+    /// of another kind, which leaves the binding as it is. Use it to bind
+    /// a control that has no view constructor of its own:
+    ///
+    /// ```
+    /// use choscorui_compose::view::{Binding, Configured};
+    /// use choscorui_controls::{ControlKind, ControlValue, Toggle};
+    ///
+    /// fn starred(on: Binding<bool>) -> Configured<Toggle> {
+    ///     Configured::custom(ControlKind::Toggle, |_| Toggle::new("Star", false)).bind(
+    ///         on,
+    ///         ControlValue::Bool,
+    ///         |value| match value {
+    ///             ControlValue::Bool(on) => Some(*on),
+    ///             _ => None,
+    ///         },
+    ///     )
+    /// }
+    /// ```
+    #[must_use]
+    pub fn bind<T: Clone + PartialEq + Default + 'static>(
         self,
         binding: Binding<T>,
-        to: fn(T) -> ControlValue,
-        from: fn(&ControlValue) -> Option<T>,
+        to: impl Fn(T) -> ControlValue + 'static,
+        from: impl Fn(&ControlValue) -> Option<T> + 'static,
     ) -> Self {
         self.value(move || to(binding.get()))
             .on_message(move |message| {
