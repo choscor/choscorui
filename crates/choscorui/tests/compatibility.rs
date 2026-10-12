@@ -118,6 +118,10 @@ fn focus_order() {
             .unwrap();
         }
     }
+    for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
+        writeln!(out, "# every hosted control {direction:?}").unwrap();
+        out.push_str(&tab_order(catalog::every_control(), direction));
+    }
     golden("focus_order", &out);
 }
 
@@ -237,6 +241,20 @@ fn control_semantics() {
     view.arrange(&mut tree, node, rect(0.0, 0.0, 200.0, 100.0))
         .unwrap();
     writeln!(out, "{:?}", view.semantics()).unwrap();
+    let themes = ThemeResolver::new(DesignTokens::light());
+    let styles = Styles::new();
+    for (name, factory) in catalog::every_control() {
+        for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
+            let (_, host, node) = mount_hosted(&factory, &themes, &styles, direction);
+            let node = host.get(node).unwrap().semantics();
+            writeln!(
+                out,
+                "{name} {direction:?}: role {:?} name {:?} value {:?} state {:?} actions {:?}",
+                node.role, node.name, node.value, node.state, node.actions
+            )
+            .unwrap();
+        }
+    }
     golden("control_semantics", &out);
 }
 
@@ -470,9 +488,10 @@ fn hosted_variants() -> Vec<(String, Box<dyn CustomControl>)> {
     out
 }
 
-/// Mounts `control` at its natural size and settles it.
+/// Mounts the control that `build` makes at its natural size and settles
+/// it.
 fn mount_hosted(
-    control: Box<dyn CustomControl>,
+    build: impl FnOnce(&mut Tree) -> Box<dyn CustomControl>,
     themes: &ThemeResolver,
     styles: &Styles,
     direction: LayoutDirection,
@@ -480,6 +499,7 @@ fn mount_hosted(
     let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 600.0));
     let mut host = ControlHost::new();
     let root = tree.root();
+    let control = build(&mut tree);
     let node = host.mount(&mut tree, root, control).unwrap();
     let env = HostEnv::new(themes, styles, &EstimatedText).direction(direction);
     let size = host
@@ -517,7 +537,7 @@ fn hosted_controls() {
                     .unwrap();
                 factory()
             });
-            let (tree, host, node) = mount_hosted(control, &themes, &styles, *direction);
+            let (tree, host, node) = mount_hosted(|_| control, &themes, &styles, *direction);
             writeln!(out, "# {name} {direction:?}").unwrap();
             writeln!(out, "bounds {:?}", tree.bounds(node).unwrap()).unwrap();
             if *direction == LayoutDirection::Ltr {
@@ -538,17 +558,34 @@ fn hosted_controls() {
 /// tab stops inside a control that keeps Tab.
 #[test]
 fn hosted_focus_order() {
+    let main = catalog::catalog()
+        .into_iter()
+        .map(|(name, factory)| {
+            let build: catalog::AnyFactory = Box::new(move |_: &mut Tree| factory());
+            (name, build)
+        })
+        .collect();
+    golden("hosted_focus_order", &tab_order(main, LayoutDirection::Ltr));
+}
+
+/// The names that Tab and Shift-Tab reach, forward then backward, with
+/// `controls` mounted in a column in `direction`.
+fn tab_order(
+    controls: Vec<(&'static str, catalog::AnyFactory)>,
+    direction: LayoutDirection,
+) -> String {
     let mut out = String::new();
     let themes = ThemeResolver::new(DesignTokens::light());
     let styles = Styles::new();
-    let env = HostEnv::new(&themes, &styles, &EstimatedText);
+    let env = HostEnv::new(&themes, &styles, &EstimatedText).direction(direction);
     let mut tree = Tree::new(rect(0.0, 0.0, 800.0, 20000.0));
     let mut host = ControlHost::new();
     let root = tree.root();
     let mut nodes = Vec::new();
     let mut top = 0.0;
-    for (name, factory) in catalog::catalog() {
-        let node = host.mount(&mut tree, root, factory()).unwrap();
+    for (name, factory) in controls {
+        let control = factory(&mut tree);
+        let node = host.mount(&mut tree, root, control).unwrap();
         let size = host
             .measure(&tree, node, Constraints::UNBOUNDED, &env)
             .unwrap()
@@ -588,5 +625,5 @@ fn hosted_focus_order() {
             writeln!(out, "{name}{}", if kept { " (inside)" } else { "" }).unwrap();
         }
     }
-    golden("hosted_focus_order", &out);
+    out
 }

@@ -47,6 +47,8 @@ Query capabilities, not the OS version or `cfg!(target_os)`. For example, on mac
 
 [`compatibility.rs`](../crates/choscorui/tests/compatibility.rs) records fixed scenes. For each scene, it records focus order, layout geometry, accessibility semantics, theme tokens, and display-list output. It compares the records with the golden files in `crates/choscorui/tests/golden/`. A change to any of these values makes the suite fail. It also records every hosted control from the [catalog](../crates/choscorui-controls/tests/catalog/mod.rs) and each variant. For each control, it records the bounds, semantics, and display list, in both directions. It also records the Tab order through all hosted controls.
 
+`control_semantics.txt` and `focus_order.txt` start with fixed scenes of a few controls. Then they record every hosted control: the catalog and the built-in controls in [builtins.rs](../crates/choscorui-controls/tests/catalog/builtins.rs). For each control, `control_semantics.txt` records the role, name, value, state, and actions, in both directions. `focus_order.txt` records the forward and backward Tab order through all of them, in both directions.
+
 The `painted_<group>.txt` files pin the default recipe of each `ControlKind`, with one file for each recipe group. For each kind, variant, size, and slot, the general slot painter paints a box, an icon, and a label. The file records the `rest` paint, and each key state that paints differently. A list names the states that paint the same as `rest`. A size shows only if it paints differently from `default`. Slots with equal styles in all cases share one record.
 
 To accept an intended change, do these steps:

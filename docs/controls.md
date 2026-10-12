@@ -227,6 +227,11 @@ uses it to build a control again, for example after a locale change.
 Each section gives the behavior, then the semantics of the node that the
 control publishes. A dash means that the field is empty.
 
+The [contract tests](../crates/choscorui-controls/tests/contract.rs) play
+the same keys on every hosted control under two recipes, and the results
+must be equal. The `control_semantics.txt` and `focus_order.txt` golden
+files record the semantics and the Tab order of every hosted control.
+
 The value tables give the default recipe of each `ControlKind`. Sizes are in
 points, and colors are theme roles. Each default fill is a solid `Paint`. A
 custom recipe can give a gradient fill, as

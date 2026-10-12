@@ -4,3 +4,689 @@ backward: cancel > ok > form.group.no > form.group.yes > form.group > form.name 
 # Rtl
 forward: toolbar.back > toolbar.search > form.name > form.group > form.group.yes > form.group.no > ok > cancel > toolbar.back > toolbar.search
 backward: cancel > ok > form.group.no > form.group.yes > form.group > form.name > toolbar.search > toolbar.back > cancel > ok
+# every hosted control Ltr
+# forward
+switch
+toggle
+toggle-group
+select
+input
+input-group
+textarea
+input-otp
+date-picker
+range-slider
+range-slider (inside)
+context-menu
+menubar
+popover
+hover-card
+dialog
+command
+breadcrumb
+breadcrumb (inside)
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+navigation-menu
+sidebar
+card
+badge
+carousel
+data-table
+chart
+alert
+empty
+toaster
+toaster (inside)
+collapsible
+accordion
+accordion (inside)
+item-group
+item-group (inside)
+attachment
+message-scroller
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+button
+checkbox
+text-field
+slider
+spin-box
+combobox
+font-chooser
+radio-group
+tabs
+resizable
+scroll-area
+dropdown-menu
+calendar
+date-time-edit
+button-group
+tool-button
+command-link
+native-select
+sheet
+drawer
+dial
+tool-box
+item-view
+header-view
+column-browser
+toolbar
+dock
+dock (inside)
+dock (inside)
+dock (inside)
+color-picker
+decimal-spin-box
+key-sequence-edit
+text-editor
+canvas
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+# backward
+canvas
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+# every hosted control Rtl
+# forward
+switch
+toggle
+toggle-group
+select
+input
+input-group
+textarea
+input-otp
+date-picker
+range-slider
+range-slider (inside)
+context-menu
+menubar
+popover
+hover-card
+dialog
+command
+breadcrumb
+breadcrumb (inside)
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+navigation-menu
+sidebar
+card
+badge
+carousel
+data-table
+chart
+alert
+empty
+toaster
+toaster (inside)
+collapsible
+accordion
+accordion (inside)
+item-group
+item-group (inside)
+attachment
+message-scroller
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+button
+checkbox
+text-field
+slider
+spin-box
+combobox
+font-chooser
+radio-group
+tabs
+resizable
+scroll-area
+dropdown-menu
+calendar
+date-time-edit
+button-group
+tool-button
+command-link
+native-select
+sheet
+drawer
+dial
+tool-box
+item-view
+header-view
+column-browser
+toolbar
+dock
+dock (inside)
+dock (inside)
+dock (inside)
+color-picker
+decimal-spin-box
+key-sequence-edit
+text-editor
+canvas
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+# backward
+canvas
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
+canvas (inside)
