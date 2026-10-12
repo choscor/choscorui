@@ -166,6 +166,10 @@ changes as `ControlMessage` values:
 | --- | --- | --- |
 | `Button` | `Activated` | - |
 | `Checkbox` | `Changed(Bool)` | `Bool`, or `Mixed` for the mixed state |
+| `Label`, `Separator`, `Progress` | - | - |
+| `Slider`, `SpinBox` | `Changed(Number)` | `Number`, rounded and clamped to the range |
+| `TextField` | `Changed(Text)` on an edit, `Activated` on Enter | `Text` |
+| `HostedRadioGroup`, `HostedTabs` | `Changed(Index(Some(i)))` | `Index(Some(i))` for an enabled option |
 
 Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and

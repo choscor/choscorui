@@ -29,7 +29,8 @@ mod selection_controls;
 )]
 pub use selection_controls::TabSet;
 pub use selection_controls::{
-    RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
+    HostedRadioGroup, HostedTabs, RadioGroup, RadioInput, RadioOption, SelectionError, Tab,
+    TabInput, Tabs,
 };
 mod chat;
 mod containers;

@@ -9,6 +9,7 @@ use choscorui_core::{
 use std::collections::HashSet;
 
 mod hosted;
+pub use hosted::{HostedRadioGroup, HostedTabs};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SelectionError {
