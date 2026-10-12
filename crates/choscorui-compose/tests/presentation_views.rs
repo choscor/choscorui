@@ -160,6 +160,28 @@ fn tip_shows(host: &ViewHost, wrapper: NodeId) -> bool {
 }
 
 #[test]
+fn a_hover_change_eases_in_a_view_and_then_stops_asking_for_frames() {
+    let mut host = host(toolbar());
+    host.advance(1.0);
+    host.paint();
+    let center = bounds(&mut host, "Other").center();
+    pointer(&mut host, PointerEvent::Move { position: center });
+    let start = host.paint();
+    assert!(host.needs_frame(), "the hover color eases in");
+    host.advance(1.075);
+    let middle = host.paint();
+    assert!(host.needs_frame());
+    assert_ne!(middle, start);
+    host.advance(1.15);
+    assert!(host.needs_frame(), "the last frame paints the hover style");
+    let end = host.paint();
+    assert_ne!(end, middle);
+    host.advance(1.2);
+    assert!(!host.needs_frame(), "an idle view asks for no frames");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
 fn tooltip_shows_after_the_hover_delay_and_hides_on_exit() {
     let mut host = host(toolbar());
     let save = node(&mut host, "Save");

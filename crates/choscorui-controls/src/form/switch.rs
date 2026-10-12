@@ -3,7 +3,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::{self, Press, PressOutcome};
+use crate::hosted::{self, Press, PressOutcome, Reveal};
 use crate::style::{
     ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
@@ -20,6 +20,10 @@ pub struct Switch {
     size: ControlSize,
     enabled: bool,
     press: Press,
+    /// The thumb slide: `open` is the checked state.
+    slide: Reveal,
+    /// The track's transition duration, from the last arrange.
+    motion_ms: u32,
 }
 
 impl Switch {
@@ -30,6 +34,11 @@ impl Switch {
             size: ControlSize::Default,
             enabled: true,
             press: Press::default(),
+            slide: Reveal {
+                open: checked,
+                ..Reveal::default()
+            },
+            motion_ms: 0,
         }
     }
 
@@ -44,8 +53,13 @@ impl Switch {
         self.checked
     }
 
+    /// Sets the state without a slide.
     pub fn set_checked(&mut self, checked: bool) {
         self.checked = checked;
+        self.slide = Reveal {
+            open: checked,
+            ..Reveal::default()
+        };
     }
 
     /// The flags the recipe reads: `host` with checked and pressed.
@@ -62,6 +76,7 @@ impl Switch {
 
     fn flip(&mut self, cx: &mut ControlContext<'_>) {
         self.checked = !self.checked;
+        self.slide.set(self.checked, cx.time());
         cx.emit(ControlMessage::Changed(ControlValue::Bool(self.checked)));
         cx.request_paint();
         cx.request_semantics();
@@ -81,6 +96,12 @@ impl CustomControl for Switch {
             size,
             baseline: None,
         }
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.motion_ms = cx
+            .style(self.query(Slot::Root, VisualState::NONE))
+            .motion_ms;
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -108,13 +129,18 @@ impl CustomControl for Switch {
         let rail = Rect::from_xywh(x, y, track.min_width, track.min_height);
         cx.slot(rail, &track, |_, _| {});
         // The thumb rests inside the track's border at the start, and at
-        // the end while checked.
+        // the end while checked. It slides between them over the track's
+        // transition duration.
         let inset = (track.min_height - thumb.min_height) / 2.0;
-        let at_end = self.checked != cx.rtl;
-        let thumb_x = if at_end {
-            rail.max_x() - inset - thumb.min_width
-        } else {
-            rail.origin.x + inset
+        let (start, end) = (
+            rail.origin.x + inset,
+            rail.max_x() - inset - thumb.min_width,
+        );
+        let (start, end) = if cx.rtl { (end, start) } else { (start, end) };
+        let thumb_x = match self.slide.progress(cx.tokens, track.motion_ms, cx.time) {
+            along if along >= 1.0 => end,
+            along if along <= 0.0 => start,
+            along => start + (end - start) * along,
         };
         let knob = Rect::new(
             Point::new(thumb_x, rail.origin.y + inset),
@@ -171,12 +197,16 @@ impl CustomControl for Switch {
         self.enabled = enabled;
     }
 
-    /// Takes `Bool`.
+    fn animating(&self, time: f64) -> bool {
+        self.slide.animating(self.motion_ms, time)
+    }
+
+    /// Takes `Bool`, without a slide.
     fn set_value(&mut self, value: &ControlValue) -> bool {
         let ControlValue::Bool(checked) = value else {
             return false;
         };
-        self.checked = *checked;
+        self.set_checked(*checked);
         true
     }
 }

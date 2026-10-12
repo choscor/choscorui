@@ -383,6 +383,10 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("TextAlign", "placement of a text line in a slot"),
     ("TextLine", "one line of text for draw_text"),
     ("TextMeasure", "text measurement trait for layout and paint"),
+    (
+        "TransitionStats",
+        "counters of the state transitions, for tests",
+    ),
     ("ToggleVariant", "variant key of toggles; read by recipes"),
     ("Variant", "variant key of style queries"),
     ("VisualState", "visual flags of style queries"),

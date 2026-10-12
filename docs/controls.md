@@ -211,6 +211,12 @@ flowchart LR
     Semantics --> Change["SemanticChange to the backend"]
 ```
 
+**State transitions.** In a `ControlHost`, a change of visual state eases.
+The background, foreground, border, ring, and shadows of each slot go from
+the old resolved style to the new one. The blend uses the slot's
+`motion_ms` and the `motion.easing` curve. The other values change at once.
+[Theming](theming.md#state-transitions) gives the rules.
+
 **Replacing a control.** `ControlHost::replace` puts a new control on a
 mounted node. The node keeps its identity, focus, and disabled state. A view
 uses it to build a control again, for example after a locale change.
@@ -1893,6 +1899,9 @@ behavior.
   the track is at the right edge.
 - The thumb rests at the start of the track while off, and at the end while
   on. In a right-to-left layout, the ends change places.
+- A flip from input slides the thumb over the track's `motion_ms` with the
+  `motion.easing` curve. `set_value` and `set_checked` move it at once, and
+  reduced motion skips the slide.
 - `with_size` takes `Default` or `Sm`.
 
 | Size | Track | Thumb |

@@ -239,6 +239,37 @@ ring, the background, the inset shadows, and the border, in that order. Then
 it calls a closure with the box inside the padding. `draw_text` and
 `draw_icon` draw the content of a slot.
 
+## State transitions
+
+When the visual state of a control changes, its colors ease. A
+`ControlHost` blends two resolved styles; the recipes stay pure.
+
+- **Values.** The background, foreground, border, ring color and width, and
+  shadows blend. Colors mix with premultiplied alpha. A ring that appears
+  grows from zero width. The other values, such as the offset and the
+  padding, change at once.
+- **Timing.** A blend lasts the target style's `motion_ms`, by default the
+  `motion.duration_ms` token of 150 ms. It follows the `motion.easing`
+  curve and starts at the first paint after the change.
+- **Reduced motion.** With `motion.reduced`, the new style shows at once.
+- **Interruption.** A change during a blend starts a new blend from the
+  color on the screen. A recipe change during a blend works the same way.
+- **Time.** Paint reads the `HostEnv` time. `ControlHost::advance` ends the
+  finished blends and marks their nodes for a last paint.
+- **Frame requests.** `ControlHost::animating` is true only while a blend
+  runs on a visible node.
+- **Memory.** The host keeps a record only for a hot node or a node that
+  runs a blend. A hot node is under the pointer, has focus, or has pointer
+  capture.
+  `ControlHost::transition_stats` gives the counts.
+- **Scope.** A hover or focus change on any node eases. A change from the
+  control, such as press or checked, eases on a node under the pointer or
+  with focus. Other changes, such as `set_value` from the application,
+  show at once. Overlays do not blend.
+
+A control slot is a call of `PaintContext::style` with a kind and a slot.
+The host matches the calls of one node by their order in each paint.
+
 ## Animation
 
 `AnimationClock` in `choscorui-core` runs on monotonic time that the caller

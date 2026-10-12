@@ -6,7 +6,10 @@
 //! platform or FFI code is involved.
 
 use crate::ShortcutModifiers;
-use crate::style::{PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, VisualState};
+use crate::style::{
+    PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, TransitionStats, Transitions,
+    VisualState,
+};
 use choscorui_core::{
     CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
     KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NodeId, Point, PointerEvent,
@@ -294,6 +297,8 @@ pub struct ControlHost {
     /// Controls that are new or changed since the last layout, which
     /// arrange again even when their bounds stay the same.
     unarranged: HashSet<NodeId>,
+    /// Running state transitions, and the last styles of hot nodes.
+    transitions: Transitions,
 }
 
 impl ControlHost {
@@ -323,6 +328,7 @@ impl ControlHost {
         self.disabled.remove(&node);
         self.hovered.retain(|id| *id != node);
         self.unarranged.remove(&node);
+        self.transitions.remove(node);
         let _ = tree.detach(node);
         Some(control)
     }
@@ -355,6 +361,7 @@ impl ControlHost {
         self.disabled.retain(|node| tree.contains(*node));
         self.hovered.retain(|node| tree.contains(*node));
         self.unarranged.retain(|node| tree.contains(*node));
+        self.transitions.retain(|node| tree.contains(node));
         before - self.controls.len()
     }
 
@@ -610,7 +617,13 @@ impl ControlHost {
             .copied()
             .filter(|node| !self.hovered.contains(node))
             .collect();
+        let before: Vec<(NodeId, VisualState)> = [self.hovered.first(), path.first()]
+            .into_iter()
+            .flatten()
+            .map(|node| (*node, self.visual_state(tree, *node)))
+            .collect();
         self.hovered = path;
+        self.note_changes(tree, &before);
         for node in left {
             self.deliver(tree, node, EventPhase::Target, &ControlEvent::Hover(false));
             let _ = tree.invalidate(node, Dirty::PAINT);
@@ -619,6 +632,32 @@ impl ControlHost {
             self.deliver(tree, node, EventPhase::Target, &ControlEvent::Hover(true));
             let _ = tree.invalidate(node, Dirty::PAINT);
         }
+    }
+
+    /// Records each node of `before` whose host state changed, so that its
+    /// next paint eases from the earlier state. Then drops the records of
+    /// nodes that are no longer hot and run nothing.
+    fn note_changes(&self, tree: &Tree, before: &[(NodeId, VisualState)]) {
+        for (node, was) in before {
+            if self.visual_state(tree, *node) != *was {
+                self.transitions.note(*node, *was);
+            }
+        }
+        self.transitions.retain(|node| self.is_hot(tree, node));
+    }
+
+    /// A node that the pointer is on, that has focus, or that captures the
+    /// pointer: its state can change at the next input, so paint keeps its
+    /// last styles.
+    fn is_hot(&self, tree: &Tree, node: NodeId) -> bool {
+        self.hovered.first() == Some(&node)
+            || tree.focus() == Some(node)
+            || tree.pointer_capture() == Some(node)
+    }
+
+    /// The counters of the transition store.
+    pub fn transition_stats(&self) -> TransitionStats {
+        self.transitions.stats()
     }
 
     /// True while the pointer is over the node, a descendant, or its
@@ -737,6 +776,14 @@ impl ControlHost {
     }
 
     fn notify_focus(&mut self, tree: &mut Tree, previous: Option<NodeId>, next: Option<NodeId>) {
+        // Focus is already on `next`; before, it had no focus flags. The
+        // previous node was hot, so its last styles are known.
+        let focus = VisualState::FOCUSED.with(VisualState::FOCUS_VISIBLE);
+        let before: Vec<(NodeId, VisualState)> = next
+            .map(|node| (node, self.visual_state(tree, node).without(focus)))
+            .into_iter()
+            .collect();
+        self.note_changes(tree, &before);
         if let Some(previous) = previous {
             self.deliver(
                 tree,
@@ -827,11 +874,20 @@ impl ControlHost {
             return false;
         };
         list.push_clip(bounds);
+        let state = self.visual_state(tree, node);
+        let hot = self.is_hot(tree, node);
         let mut cx = PaintContext::new(list, bounds, tokens, env.styles, env.text)
             .rtl(env.direction == LayoutDirection::Rtl)
-            .state(self.visual_state(tree, node))
+            .state(state)
             .time(env.time);
+        let eased = self.transitions.begin(node, hot, state, env.time);
+        if eased {
+            cx = cx.transitions(&self.transitions);
+        }
         control.paint(&mut cx);
+        if eased {
+            self.transitions.end(hot);
+        }
         let _ = list.pop_clip();
         true
     }
@@ -893,10 +949,18 @@ impl ControlHost {
     }
 
     /// Sets the host time and sends [`ControlEvent::Timer`] to each
-    /// visible control whose deadline is at or before `time`. Returns
-    /// true when a timer fired.
+    /// visible control whose deadline is at or before `time`. It also ends
+    /// the state transitions that are finished at `time` and marks their
+    /// nodes for paint. Returns true when a timer fired or a transition
+    /// ended.
     pub fn advance(&mut self, tree: &mut Tree, time: f64) -> bool {
         self.time = time;
+        let ended = self
+            .transitions
+            .finish(time, |node| self.is_hot(tree, node));
+        for node in &ended {
+            let _ = tree.invalidate(*node, Dirty::PAINT);
+        }
         let due: Vec<NodeId> = self
             .layered(tree)
             .into_iter()
@@ -910,7 +974,7 @@ impl ControlHost {
         for node in &due {
             self.deliver(tree, *node, EventPhase::Target, &ControlEvent::Timer);
         }
-        !due.is_empty()
+        !due.is_empty() || !ended.is_empty()
     }
 
     /// The earliest deadline of a visible control.
@@ -921,11 +985,15 @@ impl ControlHost {
             .reduce(f64::min)
     }
 
-    /// True while any visible control animates at `time`.
+    /// True while any visible control animates or runs a state
+    /// transition at `time`.
     pub fn animating(&self, tree: &Tree, time: f64) -> bool {
         self.controls
             .iter()
             .any(|(node, control)| tree.visible(*node) == Some(true) && control.animating(time))
+            || self
+                .transitions
+                .running(time, |node| tree.visible(node) == Some(true))
     }
 
     /// The messages controls emitted since the last call, in order.

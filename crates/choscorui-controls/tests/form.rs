@@ -29,6 +29,9 @@ fn switch_flips_on_click_keys_and_actions_and_slides_its_thumb() {
         "a click on the label flips it"
     );
     let primary = tokens.color(ColorRole::Primary);
+    // The track color and the thumb ease over the transition duration.
+    h.paint();
+    h.set_time(1.0);
     let list = h.paint();
     assert!(fills(&list, primary), "an on track fills primary");
     // The thumb (16 pt, background) sits at the end of the 32 pt track.

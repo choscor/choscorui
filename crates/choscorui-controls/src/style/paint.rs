@@ -1,7 +1,8 @@
 //! The general slot painter and text helpers that every control uses.
 
 use super::{
-    ControlKind, Corners, Orientation, ResolvedStyle, Slot, StyleQuery, Styles, VisualState,
+    ControlKind, Corners, Orientation, ResolvedStyle, Slot, StyleQuery, Styles, Transitions,
+    VisualState,
 };
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Paint, Path, Point, Rect, Shadow, Size,
@@ -343,6 +344,8 @@ pub struct PaintContext<'a> {
     /// Monotonic time in seconds, for running animations.
     pub time: f64,
     key: u64,
+    /// The host's transition store, when the host eases state changes.
+    transitions: Option<&'a Transitions>,
 }
 
 impl<'a> PaintContext<'a> {
@@ -363,6 +366,7 @@ impl<'a> PaintContext<'a> {
             state: VisualState::NONE,
             time: 0.0,
             key: tokens.fingerprint(),
+            transitions: None,
         }
     }
 
@@ -384,6 +388,14 @@ impl<'a> PaintContext<'a> {
         self
     }
 
+    /// Eases the styles that [`PaintContext::style`] returns through the
+    /// host's transition store.
+    #[must_use]
+    pub(crate) fn transitions(mut self, transitions: &'a Transitions) -> Self {
+        self.transitions = Some(transitions);
+        self
+    }
+
     /// The same context for another rectangle, such as a child part.
     pub fn at(&mut self, bounds: Rect) -> PaintContext<'_> {
         PaintContext {
@@ -396,12 +408,21 @@ impl<'a> PaintContext<'a> {
             state: self.state,
             time: self.time,
             key: self.key,
+            transitions: self.transitions,
         }
     }
 
-    /// The resolved style of `query`, from the cache.
+    /// The resolved style of `query`, from the cache. While the host eases
+    /// a state change of the node, the colors, ring, and shadows are part
+    /// of the way from the earlier style.
     pub fn style(&self, query: StyleQuery) -> ResolvedStyle {
-        self.styles.resolve_keyed(self.key, self.tokens, query)
+        let target = self.styles.resolve_keyed(self.key, self.tokens, query);
+        match self.transitions {
+            Some(transitions) => transitions.apply(&query, target, self.tokens, |earlier| {
+                self.styles.resolve_keyed(self.key, self.tokens, earlier)
+            }),
+            None => target,
+        }
     }
 
     /// Paints a slot box like [`paint_slot`], then calls `content` with

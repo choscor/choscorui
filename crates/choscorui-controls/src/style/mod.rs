@@ -7,6 +7,7 @@ mod paint;
 mod recipe;
 mod resolved;
 mod state;
+mod transition;
 mod variants;
 
 pub(crate) use kind::variant_enum;
@@ -19,4 +20,6 @@ pub(crate) use paint::{choice_size, join_segment, paint_choice};
 pub use recipe::{DefaultRecipe, Recipe, StyleCacheStats, StyleQuery, Styles};
 pub use resolved::{Corners, Cursor, Edges, ResolvedStyle, Ring, Sides};
 pub use state::VisualState;
+pub use transition::TransitionStats;
+pub(crate) use transition::Transitions;
 pub use variants::*;

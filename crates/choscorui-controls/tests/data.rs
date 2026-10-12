@@ -115,6 +115,9 @@ fn a_plain_badge_is_text_and_a_link_badge_activates() {
     assert_eq!(link.semantics().role, SemanticRole::Link);
     let center = link.bounds().center();
     link.hover(center);
+    // The hover color eases in over the transition duration.
+    link.paint();
+    link.set_time(1.0);
     assert!(fills(&link.paint(), hovered_secondary));
     link.click(center);
     link.focus();
