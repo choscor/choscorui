@@ -200,6 +200,8 @@ pub(crate) struct NodeData {
     pub describes: Option<(NodeId, NodeId)>,
     /// Opens the context menu of the view, for the `ShowMenu` action.
     pub show_menu: Option<MenuOpener>,
+    /// The hover card of a hover card wrapper.
+    pub card: Option<Rc<super::hover_card::Card>>,
     /// The open and close motion of a presented panel, which moves the
     /// node and its subtree when it paints.
     pub motion: Option<Rc<super::motion::Motion>>,
@@ -486,6 +488,7 @@ impl Inner {
             }
         }
         super::tooltip::follow_focus(self, old, focus);
+        super::hover_card::follow_focus(self, old, focus);
         if focus.is_some() {
             self.reveal = focus;
             self.needs_layout = true;

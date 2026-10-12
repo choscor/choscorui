@@ -374,6 +374,20 @@ impl View for Delete {
 
 `.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It also shows after keyboard focus moves into the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one. While the tooltip shows, a `Tooltip` accessibility node holds the text, with a `DescribedBy` relation to the view. The tooltip fades, zooms, and slides in and out, and shows and hides at once with reduced motion.
 
+### Hover cards
+
+`.hover_card(content)` shows `content` in a hover card below the view, or above it when only that side fits. The card opens after the pointer rests on the view for `HOVER_CARD_OPEN_DELAY`. It also opens after keyboard focus moves into the view, after the same delay. It closes `HOVER_CARD_CLOSE_DELAY` after the pointer leaves the view and the card. It closes at once when focus leaves the view, on a press outside, or on Escape while focus is in the view. Escape goes no further.
+
+The card is not modal. It takes no focus, Tab skips its content, and the pointer on the card only keeps it open. Thus, put preview content in a hover card, not controls. The card uses the `HoverCard` recipe. It fades, zooms, and slides in and out like a popover, and shows and closes at once with reduced motion.
+
+```rust
+use choscorui::prelude::*;
+
+fn profile() -> impl View {
+    Text::new("@nextjs").hover_card(|| Text::new("The React Framework"))
+}
+```
+
 ### Menus
 
 A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::checkbox(label, checked)` shows a check mark while the `Binding<bool>` is true, and a choice flips it. `MenuChoice::radio(label, selection, value)` shows a dot while `selection` is `value`, and a choice sets it. The radio rows of one binding make a group. A check row closes the menu as an action does. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.

@@ -2481,6 +2481,9 @@ false.
   `HOVER_CARD_OPEN_DELAY` (0.7 s). It closes
   `HOVER_CARD_CLOSE_DELAY` (0.3 s) after the pointer leaves the link and
   the panel.
+- **In a view.** The `hover_card` view modifier shows view content in a
+  `HoverCard` panel with the same delays. See the
+  [guide](guide.md#hover-cards).
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |

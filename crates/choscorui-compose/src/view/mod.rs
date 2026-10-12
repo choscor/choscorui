@@ -14,6 +14,7 @@ mod focus;
 mod form;
 mod fragment;
 mod host;
+mod hover_card;
 mod layout;
 mod lazy;
 mod menus;

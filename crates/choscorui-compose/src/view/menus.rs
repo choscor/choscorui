@@ -179,6 +179,7 @@ const MENU: Presentation = Presentation {
     variant: Variant(0),
     placement: Placement::Anchored,
     surface: false,
+    modal: true,
 };
 
 /// The accessible name of `node`, which names its menu.
@@ -244,7 +245,13 @@ pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoi
     Modifier::Present(Rc::new(move |cx: &mut Cx<'_>, anchor| {
         let name = name_of(cx.inner, anchor);
         let content = menu_content(name, items.clone(), presented);
-        mount_presentation(cx, Anchor::Node(anchor), presented, (MENU, None), content);
+        mount_presentation(
+            cx,
+            Anchor::Node(anchor),
+            presented,
+            (MENU, None),
+            (Rc::default(), content),
+        );
     }))
 }
 
@@ -339,7 +346,13 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
             }));
             let name = name_of(cx.inner, view);
             let content = menu_content(name, items, open);
-            mount_presentation(cx, Anchor::Point(point), open, (MENU, None), content);
+            mount_presentation(
+                cx,
+                Anchor::Point(point),
+                open,
+                (MENU, None),
+                (Rc::default(), content),
+            );
         }),
     })
 }

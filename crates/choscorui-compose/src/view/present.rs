@@ -1,8 +1,10 @@
-//! Presentation: dialogs, sheets, popovers, and menus. A presented view
-//! mounts above the window content in a modal layer. Focus moves into it
-//! and stays there; Escape or a press on the scrim closes it; closing
-//! returns focus to where it was. The layer animates in and out as
-//! [`Motion`] describes, and unmounts when its close motion ends.
+//! Presentation: dialogs, sheets, popovers, menus, and hover cards. A
+//! presented view mounts above the window content in a layer. In a modal
+//! layer, focus moves into it and stays there; Escape or a press on the
+//! scrim closes it; closing returns focus to where it was. A layer that
+//! is not modal takes no input and no focus, as a hover card. The layer
+//! animates in and out as [`Motion`] describes, and unmounts when its
+//! close motion ends.
 
 use super::host::{Cx, Inner, ScopeId};
 use super::layout::{Alignment, HorizontalAlignment, VerticalAlignment, parent_tokens};
@@ -45,6 +47,9 @@ pub(crate) struct Presentation {
     /// Whether the panel paints the surface of its kind's root slot. A
     /// menu paints its own panel.
     pub surface: bool,
+    /// Whether the layer keeps focus and input inside. A layer that is
+    /// not modal lets the pointer through and takes no focus.
+    pub modal: bool,
 }
 
 impl Presentation {
@@ -104,6 +109,7 @@ const DRAG_DISMISS: f64 = 0.25;
 struct ModalLayer {
     query: StyleQuery,
     scrim: bool,
+    modal: bool,
     panel: Rc<Cell<Rect>>,
     motion: Rc<Motion>,
 }
@@ -160,7 +166,7 @@ impl CustomControl for ModalLayer {
     }
 
     fn modal(&self) -> bool {
-        self.motion.is_open()
+        self.modal && self.motion.is_open()
     }
 
     fn animating(&self, time: f64) -> bool {
@@ -312,12 +318,13 @@ fn alignment(placement: Placement) -> Alignment {
     }
 }
 
-/// Mounts the modal layer with `content` in the root's fragment. Returns
-/// the layer node, the panel node, and the motion of both.
+/// Mounts the layer with `content` in the root's fragment. The panel
+/// records its bounds in `panel_bounds`. Returns the layer node, the
+/// panel node, and the motion of both.
 fn mount_layer(
     cx: &mut Cx<'_>,
-    presentation: Presentation,
-    title: Option<Live<TextContent>>,
+    (presentation, title): (Presentation, Option<Live<TextContent>>),
+    panel_bounds: Rc<Cell<Rect>>,
     content: impl View,
 ) -> (NodeId, NodeId, Rc<Motion>) {
     let query = presentation.query();
@@ -328,10 +335,10 @@ fn mount_layer(
         style.motion_ms,
         cx.inner.time,
     ));
-    let panel_bounds: Rc<Cell<Rect>> = Rc::default();
     let layer = cx.control(Box::new(ModalLayer {
         query,
         scrim: presentation.placement != Placement::Anchored,
+        modal: presentation.modal,
         panel: panel_bounds.clone(),
         motion: motion.clone(),
     }));
@@ -425,6 +432,13 @@ fn mount_layer(
     inside.inner.set_style(panel, column);
     let env = inside.env.clone();
     inside.within(panel, env).mount(content);
+    if !presentation.modal {
+        // The pointer goes through the layer, and Tab skips its content.
+        if let Err(error) = cx.inner.tree.set_hit_testable(layer, false) {
+            cx.inner.report(super::host::ViewError::Tree(error));
+        }
+        unfocus(cx.inner, layer);
+    }
     (layer, panel, motion)
 }
 
@@ -497,7 +511,7 @@ pub(crate) fn present<V: View, C: View>(
             Anchor::Node(anchor),
             presented,
             (presentation, title.clone()),
-            content.clone(),
+            (Rc::default(), content.clone()),
         );
     })
 }
@@ -518,6 +532,11 @@ fn retire(inner: &mut Inner, layer: NodeId) {
     if let Err(error) = inner.tree.set_hit_testable(layer, false) {
         inner.report(super::host::ViewError::Tree(error));
     }
+    unfocus(inner, layer);
+}
+
+/// Takes `layer` and its subtree out of focus traversal.
+fn unfocus(inner: &mut Inner, layer: NodeId) {
     let mut stack = vec![layer];
     while let Some(node) = stack.pop() {
         if let Err(error) = inner.tree.set_focusable(node, false) {
@@ -531,15 +550,16 @@ fn retire(inner: &mut Inner, layer: NodeId) {
 }
 
 /// Shows `content` in a layer above the window while `presented` is
-/// true. An anchored layer sits next to `anchor`. Focus moves into the
-/// layer when it opens and returns when it closes. The closed layer
-/// stays, without input or semantics, until its close motion ends.
+/// true. An anchored layer sits next to `anchor`. Focus moves into a
+/// modal layer when it opens and returns when it closes. The panel
+/// records its bounds in `panel_bounds`. The closed layer stays, without
+/// input or semantics, until its close motion ends.
 pub(crate) fn mount_presentation(
     cx: &mut Cx<'_>,
     anchor: Anchor,
     presented: Binding<bool>,
     (presentation, title): (Presentation, Option<Live<TextContent>>),
-    content: Content,
+    (panel_bounds, content): (Rc<Cell<Rect>>, Content),
 ) {
     let root = cx.inner.tree.root();
     let root_fragment = cx.inner.fragments.root_of(root);
@@ -558,7 +578,7 @@ pub(crate) fn mount_presentation(
                 (true, None) => {
                     // A layer that still closes goes at once.
                     clear(inner, fragment);
-                    let returns = inner.tree.focus();
+                    let returns = inner.tree.focus().filter(|_| presentation.modal);
                     let scope = inner.child_scope(owner);
                     let _owner = scope::enter(inner.owned(scope));
                     let mut layer_cx = Cx {
@@ -568,8 +588,12 @@ pub(crate) fn mount_presentation(
                         scope,
                         env: env.clone(),
                     };
-                    let (layer, panel, motion) =
-                        mount_layer(&mut layer_cx, presentation, title.clone(), content());
+                    let (layer, panel, motion) = mount_layer(
+                        &mut layer_cx,
+                        (presentation, title.clone()),
+                        panel_bounds.clone(),
+                        content(),
+                    );
                     let dismiss: super::host::Handler = Rc::new(move |message: &ControlMessage| {
                         if *message == ControlMessage::Dismissed {
                             presented.set(false);
@@ -585,7 +609,9 @@ pub(crate) fn mount_presentation(
                     if presentation.placement == Placement::Anchored {
                         inner.anchors.insert(layer, anchor.clone());
                     }
-                    inner.controls.focus_next(&mut inner.tree, false);
+                    if presentation.modal {
+                        inner.controls.focus_next(&mut inner.tree, false);
+                    }
                     *open.borrow_mut() = Some(Open {
                         scope,
                         returns,

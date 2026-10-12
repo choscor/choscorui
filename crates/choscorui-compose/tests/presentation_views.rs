@@ -1,6 +1,6 @@
 //! Headless tests of the form view and the presentation modifiers: the
 //! form layout in both directions, tooltips, context and dropdown menus,
-//! toasts, and dialog and drawer panels.
+//! toasts, dialog and drawer panels, and hover cards.
 
 use choscorui_compose::view::{
     Button, Cx, Env, Form, FormRow, MenuChoice, State, Text, VStack, View, ViewError, ViewExt,
@@ -1011,5 +1011,140 @@ fn checkbox_and_radio_rows_set_their_bindings() {
     let small = dots(&host.paint());
     assert_eq!(small.len(), 1, "one radio row of the group is chosen");
     assert!(small[0] < large[0], "the dot moved one row up");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Hover card
+
+const CARD_TEXT: &str = "The React Framework";
+
+/// A link with a hover card that holds text and a button.
+fn profile() -> impl View {
+    VStack::new((
+        Button::new("@nextjs", || {})
+            .hover_card(|| VStack::new((Text::new(CARD_TEXT), Button::new("Follow", || {})))),
+        Button::new("Other", || {}),
+    ))
+}
+
+/// Rests the pointer on the view named `name` from host time `from`
+/// until its hover card opens.
+fn rest_until_open(host: &mut ViewHost, name: &str, from: f64) {
+    let center = bounds(host, name).center();
+    host.advance(from);
+    pointer(host, PointerEvent::Move { position: center });
+    host.advance(from + 0.7);
+    host.layout();
+}
+
+#[test]
+fn hover_card_opens_after_the_hover_delay_and_closes_after_the_pointer_leaves() {
+    let mut host = host(profile());
+    let center = bounds(&mut host, "@nextjs").center();
+    host.advance(10.0);
+    pointer(&mut host, PointerEvent::Move { position: center });
+    assert!(!shown(&mut host, CARD_TEXT));
+    let due = host.next_deadline().expect("the card waits for its delay");
+    assert!((due - 10.7).abs() < 1e-6, "due at {due}");
+    host.advance(10.4);
+    assert!(!shown(&mut host, CARD_TEXT));
+    host.advance(10.7);
+    host.layout();
+    assert!(shown(&mut host, CARD_TEXT));
+    assert_eq!(host.tree().focus(), None, "the card takes no focus");
+    let anchor = bounds(&mut host, "@nextjs");
+    let card = bounds(&mut host, CARD_TEXT);
+    assert!(card.min_y() >= anchor.max_y(), "below its view: {card:?}");
+    // The pointer moves onto the card, which keeps it open.
+    pointer(
+        &mut host,
+        PointerEvent::Move {
+            position: card.center(),
+        },
+    );
+    host.advance(12.0);
+    assert!(shown(&mut host, CARD_TEXT));
+    assert_eq!(host.next_deadline(), None);
+    // The pointer leaves the view and the card.
+    leave(&mut host);
+    assert!(
+        shown(&mut host, CARD_TEXT),
+        "the card waits before it closes"
+    );
+    let due = host.next_deadline().expect("the card waits to close");
+    assert!((due - 12.3).abs() < 1e-6, "due at {due}");
+    host.advance(due);
+    host.layout();
+    assert!(!shown(&mut host, CARD_TEXT));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn hover_card_closes_on_a_press_outside() {
+    let mut host = host(profile());
+    rest_until_open(&mut host, "@nextjs", 10.0);
+    assert!(shown(&mut host, CARD_TEXT));
+    pointer(
+        &mut host,
+        PointerEvent::Down {
+            position: Point::new(590.0, 395.0),
+            button: PointerButton::Primary,
+        },
+    );
+    assert!(!shown(&mut host, CARD_TEXT));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn hover_card_opens_on_keyboard_focus_and_closes_on_escape_and_blur() {
+    let mut host = host(profile());
+    let (link, other) = (node(&mut host, "@nextjs"), node(&mut host, "Other"));
+    host.advance(20.0);
+    assert_eq!(host.focus_next(false), Some(link));
+    assert!(!shown(&mut host, CARD_TEXT));
+    host.advance(20.7);
+    host.layout();
+    assert!(shown(&mut host, CARD_TEXT));
+    // Tab skips the card's content, and leaving the view closes the card
+    // at once.
+    assert_eq!(host.focus_next(false), Some(other));
+    host.layout();
+    assert!(!shown(&mut host, CARD_TEXT));
+    // Back in the view, it opens again; Escape closes it and stops.
+    host.advance(30.0);
+    assert_eq!(host.focus_next(true), Some(link));
+    host.advance(30.7);
+    host.layout();
+    assert!(shown(&mut host, CARD_TEXT));
+    assert!(press(&mut host, Key::Escape), "Escape closes the card");
+    assert!(!shown(&mut host, CARD_TEXT));
+    assert_eq!(host.tree().focus(), Some(link), "focus stays on the view");
+    host.advance(32.0);
+    host.layout();
+    assert!(!shown(&mut host, CARD_TEXT), "it does not open again");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn hover_card_fades_in_and_shows_at_once_with_reduced_motion() {
+    let mut host = host(profile());
+    rest_until_open(&mut host, "@nextjs", 10.0);
+    assert_eq!(text_opacity(&host.paint(), CARD_TEXT), Some(0.0));
+    assert!(host.needs_frame(), "the card fades in");
+
+    let mut host = host_in(profile(), "en");
+    host.set_accessibility(AccessibilityPreferences {
+        reduced_motion: true,
+        ..AccessibilityPreferences::default()
+    });
+    rest_until_open(&mut host, "@nextjs", 10.0);
+    assert_eq!(text_opacity(&host.paint(), CARD_TEXT), Some(1.0));
+    let text = node(&mut host, CARD_TEXT);
+    leave(&mut host);
+    host.advance(11.0);
+    host.layout();
+    assert!(!host.tree().contains(text), "no closing motion");
+    assert_eq!(host.next_deadline(), None);
     assert_eq!(host.take_errors(), Vec::new());
 }

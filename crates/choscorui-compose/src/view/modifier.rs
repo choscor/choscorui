@@ -14,8 +14,8 @@ use super::present::{Placement, Presentation, present};
 use super::state::{Binding, IntoLive, Live};
 use super::text::TextContent;
 use super::toast::{self, MakeToast, ToasterSpec};
-use super::tooltip;
 use super::widgets::Items;
+use super::{hover_card, tooltip};
 use choscorui_controls::{
     ButtonVariant, ControlKind, ControlMessage, ControlSize, Corners, CustomControl, DefaultRecipe,
     Recipe, ResolvedStyle, SheetSide, ShortcutModifiers, Slot, StyleQuery, Toast, ToastPosition,
@@ -287,7 +287,7 @@ impl<V: View> Styled<V> {
 macro_rules! modifiers {
     ($(
         $(#[$doc:meta])*
-        fn $name:ident $(<$($generic:ident),*>)? ($($arg:ident : $ty:ty),*) => $build:expr;
+        fn $name:ident $(<$($generic:ident $(: $bound:path)?),*>)? ($($arg:ident : $ty:ty),*) => $build:expr;
     )*
     present {$(
         $(#[$pdoc:meta])*
@@ -298,7 +298,7 @@ macro_rules! modifiers {
         pub trait ViewExt: View + Sized {
             $(
                 $(#[$doc])*
-                fn $name $(<$($generic),*>)? (self, $($arg: $ty),*) -> Styled<Self> {
+                fn $name $(<$($generic $(: $bound)?),*>)? (self, $($arg: $ty),*) -> Styled<Self> {
                     Styled::new(self).push($build)
                 }
             )*
@@ -315,7 +315,7 @@ macro_rules! modifiers {
         impl<V: View> Styled<V> {
             $(
                 $(#[$doc])*
-                pub fn $name $(<$($generic),*>)? (self, $($arg: $ty),*) -> Self {
+                pub fn $name $(<$($generic $(: $bound)?),*>)? (self, $($arg: $ty),*) -> Self {
                     self.push($build)
                 }
             )*
@@ -417,6 +417,11 @@ modifiers! {
     /// after keyboard focus moves into it. The text also describes the
     /// view for assistive technology.
     fn tooltip<M>(text: impl IntoLive<TextContent, M>) => tooltip::tooltip(text.into_live());
+    /// Shows `content` in a hover card next to the view after the
+    /// pointer rests on the view, or after keyboard focus moves into it.
+    /// The card closes when the pointer leaves the view and the card, when
+    /// focus leaves the view, or on Escape. It takes no focus.
+    fn hover_card<C: View>(content: impl Fn() -> C + 'static) => hover_card::hover_card(content);
     /// Opens a menu of `items` at the pointer on a secondary click or a
     /// Control-click on the view, or for the `ShowMenu` action.
     fn context_menu(items: impl Items<MenuChoice>) => menus::context_menu(items);
@@ -441,6 +446,7 @@ modifiers! {
             variant: Variant::default(),
             placement: Placement::Center,
             surface: true,
+            modal: true,
         }, Some(title.into_live()));
         /// Shows `content` in an alert dialog, which asks the user to
         /// confirm or cancel. `title` names it.
@@ -449,6 +455,7 @@ modifiers! {
             variant: Variant::default(),
             placement: Placement::Center,
             surface: true,
+            modal: true,
         }, Some(title.into_live()));
         /// Shows `content` in a sheet along the `side` edge. `title`
         /// names it.
@@ -457,6 +464,7 @@ modifiers! {
             variant: side.into(),
             placement: Placement::Edge(side),
             surface: true,
+            modal: true,
         }, Some(title.into_live()));
         /// Shows `content` in a drawer along the `side` edge. A pointer
         /// drag toward the edge past a quarter of its size sets
@@ -466,6 +474,7 @@ modifiers! {
             variant: side.into(),
             placement: Placement::Edge(side),
             surface: true,
+            modal: true,
         }, Some(title.into_live()));
         /// Shows `content` in a popover next to the view.
         fn popover() => (Presentation {
@@ -473,6 +482,7 @@ modifiers! {
             variant: Variant::default(),
             placement: Placement::Anchored,
             surface: true,
+            modal: true,
         }, None);
     }
 }
