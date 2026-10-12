@@ -570,6 +570,50 @@ fn sheet_and_popover_close_on_a_press_outside() {
 }
 
 #[test]
+fn sheet_and_popover_trap_focus_close_on_escape_and_return_focus() {
+    struct Screen {
+        sheet: bool,
+    }
+    impl View for Screen {
+        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+            let open = cx.state(false);
+            let content = move || VStack::new((tap("first", || {}), tap("second", || {})));
+            let base = VStack::new((tap("open", move || open.set(true)), tap("other", || {})));
+            if self.sheet {
+                Either::Left(base.sheet(open.binding(), SheetSide::Right, "Settings", content))
+            } else {
+                Either::Right(base.popover(open.binding(), content))
+            }
+        }
+    }
+    for sheet in [true, false] {
+        let mut host = host(Screen { sheet });
+        let open = host.find("open").unwrap();
+        host.focus(Some(open));
+        host.perform(open, SemanticAction::Activate, None);
+        host.layout();
+        let first = host.find("first").unwrap();
+        let second = host.find("second").unwrap();
+        assert_eq!(host.tree().focus(), Some(first), "sheet: {sheet}");
+        // Tab and Shift-Tab stay inside the panel.
+        assert_eq!(host.focus_next(false), Some(second), "sheet: {sheet}");
+        assert_eq!(host.focus_next(false), Some(first), "sheet: {sheet}");
+        assert_eq!(host.focus_next(true), Some(second), "sheet: {sheet}");
+        let handled = host.key(
+            KeyEvent::Down {
+                key: Key::Escape,
+                repeat: false,
+            },
+            Default::default(),
+        );
+        assert!(handled, "sheet: {sheet}");
+        assert_eq!(host.find("first"), None, "sheet: {sheet}");
+        assert_eq!(host.tree().focus(), Some(open), "sheet: {sheet}");
+        assert_eq!(host.take_errors(), Vec::new());
+    }
+}
+
+#[test]
 fn removed_nodes_leave_no_stale_ids() {
     let mut host = host(Counter);
     let before: Vec<NodeId> = host.semantics().0.iter().map(|entry| entry.id).collect();
