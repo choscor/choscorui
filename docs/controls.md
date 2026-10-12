@@ -181,6 +181,10 @@ flowchart LR
     Semantics --> Change["SemanticChange to the backend"]
 ```
 
+**Replacing a control.** `ControlHost::replace` puts a new control on a
+mounted node. The node keeps its identity, focus, and disabled state. A view
+uses it to build a control again, for example after a locale change.
+
 ## Control sections
 
 Each section gives the behavior, then the semantics of the node that the

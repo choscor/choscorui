@@ -122,7 +122,8 @@ pub enum TextContent {
 }
 
 impl TextContent {
-    fn resolve(&self, env: &Env) -> String {
+    /// The text in `env`: the literal text, or the translation.
+    pub fn resolve(&self, env: &Env) -> String {
         match self {
             Self::Plain(text) => text.clone(),
             Self::Localized(localized) => localized.resolve(env),

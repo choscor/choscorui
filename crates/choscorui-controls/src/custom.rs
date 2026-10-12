@@ -320,6 +320,26 @@ impl ControlHost {
         Some(control)
     }
 
+    /// Puts `control` on `node` in place of its control. The node keeps
+    /// its identity, focus, and disabled state, for example when a view
+    /// rebuilds a control for a new label.
+    pub fn replace(
+        &mut self,
+        tree: &mut Tree,
+        node: NodeId,
+        mut control: Box<dyn CustomControl>,
+    ) -> Result<(), TreeError> {
+        if !tree.contains(node) || !self.controls.contains_key(&node) {
+            return Err(TreeError::MissingNode);
+        }
+        let enabled = !self.disabled.contains(&node);
+        control.set_enabled(enabled);
+        tree.set_focusable(node, enabled && control.focusable())?;
+        self.controls.insert(node, control);
+        Self::mark(tree, node);
+        Ok(())
+    }
+
     /// Drops controls whose nodes were detached elsewhere.
     pub fn prune(&mut self, tree: &Tree) -> usize {
         let before = self.controls.len();

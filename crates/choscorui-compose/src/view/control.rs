@@ -3,16 +3,18 @@
 //! disabled state. [`Canvas`] draws with display-list commands.
 
 use super::View;
-use super::host::{Cx, Handler, Inner};
+use super::env::Env;
+use super::host::{Cx, Handler, Inner, ViewError};
 use super::state::{IntoLive, Live};
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
     MeasureContext, PaintContext,
 };
 use choscorui_core::{
-    DesignTokens, DisplayList, EventReply, Measured, NodeId, Rect, SemanticNode, SemanticRole,
-    SemanticState, Size,
+    DesignTokens, Dirty, DisplayList, EventReply, Measured, NodeId, Rect, SemanticNode,
+    SemanticRole, SemanticState, Size,
 };
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// The low-level extension point for new controls: a type that measures,
@@ -22,11 +24,20 @@ pub trait CustomView: CustomControl + 'static {}
 
 impl<T: CustomControl + 'static> CustomView for T {}
 
+/// Builds a control from the environment.
+type Build = Rc<dyn Fn(&Env) -> Box<dyn CustomControl>>;
+
+/// Where a [`ControlView`] gets its control.
+enum Source {
+    Fixed(Box<dyn CustomControl>),
+    Built(Build),
+}
+
 /// A control mounted as a view. The control keeps its behavior, keyboard
 /// handling, and semantics; the view configures it and connects it to
 /// state.
 pub struct ControlView {
-    control: Box<dyn CustomControl>,
+    source: Source,
     kind: Option<ControlKind>,
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
@@ -39,8 +50,20 @@ impl ControlView {
     }
 
     pub fn boxed(control: Box<dyn CustomControl>) -> Self {
+        Self::with_source(Source::Fixed(control))
+    }
+
+    /// A control that `build` makes from the environment. When state or
+    /// an environment value that `build` read changes, the view builds
+    /// the control again on the same node. The node keeps its focus, and
+    /// the view gives the new control the current value and open state.
+    pub fn build(build: impl Fn(&Env) -> Box<dyn CustomControl> + 'static) -> Self {
+        Self::with_source(Source::Built(Rc::new(build)))
+    }
+
+    fn with_source(source: Source) -> Self {
         Self {
-            control,
+            source,
             kind: None,
             value: None,
             open: None,
@@ -78,12 +101,47 @@ impl ControlView {
     }
 }
 
+/// The value and open state that the control last had, so a rebuilt
+/// control gets them and an unchanged value is not set again.
+#[derive(Default)]
+struct Current {
+    value: RefCell<Option<ControlValue>>,
+    open: Cell<Option<bool>>,
+}
+
+impl Current {
+    /// Gives `control` the current value and open state.
+    fn restore(&self, control: &mut dyn CustomControl, time: f64) {
+        if let Some(value) = &*self.value.borrow() {
+            control.set_value(value);
+        }
+        if let Some(open) = self.open.get() {
+            control.set_open(open, time);
+        }
+    }
+}
+
 impl View for ControlView {
     fn mount(self, cx: &mut Cx<'_>) {
-        let node = cx.control(self.control);
+        let current: Rc<Current> = Rc::default();
+        let node = match self.source {
+            Source::Fixed(control) => cx.control(control),
+            Source::Built(build) => mount_built(cx, build, current.clone()),
+        };
         {
+            let recorder = current.clone();
             let data = cx.inner.data(node);
-            data.handlers = self.handlers;
+            // The value that the user chose is current before the
+            // handlers write it to state.
+            data.handlers
+                .push(Rc::new(move |message: &ControlMessage| match message {
+                    ControlMessage::Changed(value) => {
+                        *recorder.value.borrow_mut() = Some(value.clone())
+                    }
+                    ControlMessage::OpenChanged(open) => recorder.open.set(Some(*open)),
+                    _ => {}
+                }));
+            data.handlers.extend(self.handlers);
             data.kind = self.kind;
         }
         let disabled = cx.env.disabled.clone();
@@ -91,18 +149,58 @@ impl View for ControlView {
             set_enabled(inner, node, !disabled)
         });
         if let Some(value) = self.value {
+            let current = current.clone();
             cx.bind(value, move |inner, value| {
+                if current.value.borrow().as_ref() == Some(&value) {
+                    return;
+                }
                 inner.controls.set_value(&mut inner.tree, node, &value);
-                inner.touch(node, choscorui_core::Dirty::LAYOUT);
+                *current.value.borrow_mut() = Some(value);
+                inner.touch(node, Dirty::LAYOUT.with(Dirty::SEMANTICS));
             });
         }
         if let Some(open) = self.open {
             cx.bind(open, move |inner, open| {
+                if current.open.get() == Some(open) {
+                    return;
+                }
                 inner.controls.set_open(&mut inner.tree, node, open);
-                inner.touch(node, choscorui_core::Dirty::PAINT);
+                current.open.set(Some(open));
+                inner.touch(node, Dirty::PAINT.with(Dirty::SEMANTICS));
             });
         }
     }
+}
+
+/// Mounts the control that `build` makes, and builds it again on the same
+/// node when what `build` read changes.
+fn mount_built(cx: &mut Cx<'_>, build: Build, current: Rc<Current>) -> NodeId {
+    let env = cx.env.clone();
+    let first: Rc<RefCell<Option<Box<dyn CustomControl>>>> = Rc::default();
+    let mounted: Rc<Cell<Option<NodeId>>> = Rc::default();
+    {
+        let (first, mounted) = (first.clone(), mounted.clone());
+        cx.react(move |inner| {
+            let mut control = build(&env);
+            match mounted.get() {
+                None => *first.borrow_mut() = Some(control),
+                Some(node) => {
+                    current.restore(control.as_mut(), inner.time);
+                    if let Err(error) = inner.controls.replace(&mut inner.tree, node, control) {
+                        inner.report(ViewError::Tree(error));
+                    }
+                    inner.touch(node, Dirty::LAYOUT.with(Dirty::SEMANTICS));
+                }
+            }
+        });
+    }
+    let control = first.borrow_mut().take();
+    let node = match control {
+        Some(control) => cx.control(control),
+        None => cx.parent,
+    };
+    mounted.set(Some(node));
+    node
 }
 
 fn set_enabled(inner: &mut Inner, node: NodeId, enabled: bool) {
@@ -110,12 +208,9 @@ fn set_enabled(inner: &mut Inner, node: NodeId, enabled: bool) {
         return;
     }
     if let Err(error) = inner.controls.set_enabled(&mut inner.tree, node, enabled) {
-        inner.report(super::host::ViewError::Tree(error));
+        inner.report(ViewError::Tree(error));
     }
-    inner.touch(
-        node,
-        choscorui_core::Dirty::PAINT.with(choscorui_core::Dirty::SEMANTICS),
-    );
+    inner.touch(node, Dirty::PAINT.with(Dirty::SEMANTICS));
 }
 
 /// What a [`Canvas`] draws with: the display list, its bounds, the tokens,

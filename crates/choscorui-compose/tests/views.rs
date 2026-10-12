@@ -495,3 +495,173 @@ fn removed_nodes_leave_no_stale_ids() {
     assert!(before.iter().all(|node| !host.tree().contains(*node)));
     assert_eq!(after.len(), 1);
 }
+
+/// The background that the button named `name` paints.
+fn button_fill(host: &mut ViewHost, name: &str) -> choscorui_core::Color {
+    let node = host.find(name).unwrap();
+    let bounds = host.tree().bounds(node).unwrap();
+    let list = host.paint();
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            choscorui_core::DisplayCommand::FillRoundedRect { rect, color, .. }
+                if *rect == bounds =>
+            {
+                Some(*color)
+            }
+            _ => None,
+        })
+        .unwrap_or(choscorui_core::Color::TRANSPARENT)
+}
+
+/// The background of a button of `variant` in the tokens of `node`.
+fn variant_fill(
+    host: &ViewHost,
+    node: NodeId,
+    variant: choscorui_controls::ButtonVariant,
+) -> choscorui_core::Color {
+    let tokens = host.tokens(node);
+    choscorui_controls::Styles::new()
+        .resolve(
+            &tokens,
+            choscorui_controls::StyleQuery::new(
+                choscorui_controls::ControlKind::Button,
+                choscorui_controls::Slot::Root,
+            )
+            .variant(variant),
+        )
+        .background
+}
+
+#[test]
+fn environment_button_variant_reaches_nested_buttons_only() {
+    use choscorui_compose::view::Button;
+    use choscorui_controls::ButtonVariant;
+    struct Screen(choscorui_compose::Property<ButtonVariant>);
+    impl View for Screen {
+        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+            let variant = self.0.clone();
+            VStack::new((
+                VStack::new((
+                    Button::new("a", || {}),
+                    HStack::new(Button::new("b", || {})),
+                ))
+                .button_variant(move || variant.get()),
+                Button::new("outside", || {}),
+            ))
+        }
+    }
+    let runtime = Runtime::new();
+    let variant = runtime.property(ButtonVariant::Outline);
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(Screen(variant.clone()));
+    host.layout();
+    let a = host.find("a").unwrap();
+    let b = host.find("b").unwrap();
+    let outside = host.find("outside").unwrap();
+    assert_eq!(
+        button_fill(&mut host, "a"),
+        variant_fill(&host, a, ButtonVariant::Outline)
+    );
+    assert_eq!(
+        button_fill(&mut host, "b"),
+        variant_fill(&host, b, ButtonVariant::Outline)
+    );
+    assert_eq!(
+        button_fill(&mut host, "outside"),
+        variant_fill(&host, outside, ButtonVariant::Default)
+    );
+    let _ = host.take_dirty_count();
+    variant.set(ButtonVariant::Secondary);
+    host.flush();
+    // Only the two buttons under the modifier change; they keep their
+    // nodes.
+    assert_eq!(host.take_dirty_count(), 2);
+    assert_eq!(host.find("a"), Some(a));
+    assert_eq!(
+        button_fill(&mut host, "b"),
+        variant_fill(&host, b, ButtonVariant::Secondary)
+    );
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn style_precedence_ends_with_accessibility() {
+    use choscorui_compose::view::{Button, Fill};
+    use choscorui_controls::ButtonVariant;
+    let red = choscorui_core::Color::rgb8(255, 0, 0);
+    let button = |own: Option<ButtonVariant>| {
+        let button = Button::new("save", || {});
+        match own {
+            Some(variant) => button.variant(variant),
+            None => button,
+        }
+    };
+    // The application theme alone.
+    let mut plain = host(button(None));
+    let node = plain.find("save").unwrap();
+    let fill = button_fill(&mut plain, "save");
+    assert_eq!(fill, variant_fill(&plain, node, ButtonVariant::Default));
+    // The environment over the theme.
+    let mut layered = host(VStack::new(button(None)).button_variant(ButtonVariant::Outline));
+    let node = layered.find("save").unwrap();
+    let fill = button_fill(&mut layered, "save");
+    assert_eq!(fill, variant_fill(&layered, node, ButtonVariant::Outline));
+    // The control argument over the environment.
+    let own = || VStack::new(button(Some(ButtonVariant::Secondary)));
+    let mut argument = host(own().button_variant(ButtonVariant::Outline));
+    let node = argument.find("save").unwrap();
+    let fill = button_fill(&mut argument, "save");
+    assert_eq!(
+        fill,
+        variant_fill(&argument, node, ButtonVariant::Secondary)
+    );
+    // A local modifier over the control argument.
+    let local = VStack::new(button(Some(ButtonVariant::Secondary)).background(Fill::Color(red)));
+    let mut local = host(local.button_variant(ButtonVariant::Outline));
+    assert_eq!(button_fill(&mut local, "save"), red);
+    // Accessibility over everything: high contrast keeps the recipe's
+    // colors.
+    local.set_accessibility(choscorui_core::AccessibilityPreferences {
+        high_contrast: true,
+        ..Default::default()
+    });
+    let node = local.find("save").unwrap();
+    let fill = button_fill(&mut local, "save");
+    assert_ne!(fill, red);
+    assert_eq!(fill, variant_fill(&local, node, ButtonVariant::Secondary));
+}
+
+#[test]
+fn checkbox_binds_both_ways() {
+    use choscorui_compose::view::Checkbox;
+    struct Screen;
+    impl View for Screen {
+        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+            let on = cx.state(false);
+            VStack::new((
+                Checkbox::new("remember", on.binding()),
+                Text::new(move || format!("on {}", on.get())),
+                tap("reset", move || on.set(false)),
+            ))
+        }
+    }
+    let mut host = host(Screen);
+    let check = host.find("remember").unwrap();
+    host.perform(check, SemanticAction::Activate, None);
+    assert!(names(&mut host).contains(&"on true".to_owned()));
+    assert_eq!(host.semantic(check).unwrap().value.as_deref(), Some("true"));
+    let reset = host.find("reset").unwrap();
+    host.perform(reset, SemanticAction::Activate, None);
+    assert_eq!(
+        host.semantic(check).unwrap().value.as_deref(),
+        Some("false")
+    );
+    assert_eq!(host.take_errors(), Vec::new());
+}

@@ -14,6 +14,7 @@ mod present;
 mod scope;
 mod state;
 mod text;
+mod widgets;
 
 pub use control::{Canvas, CanvasContext, ControlView, CustomView};
 pub use dynamic::{Dynamic, ForEach};
@@ -26,6 +27,7 @@ pub use layout::{
 pub use modifier::{Edges, Styled, ViewExt};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{Localized, Text, TextContent};
+pub use widgets::{Button, Checkbox};
 
 /// A piece of user interface. A component implements [`View::body`] and
 /// returns other views; the toolkit's primitive views (stacks, text,
