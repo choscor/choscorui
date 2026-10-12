@@ -238,6 +238,18 @@ pub struct Shortcut {
     pub modifiers: ShortcutModifiers,
 }
 
+impl Shortcut {
+    /// Whether this chord opens a context menu from the keyboard: Shift-F10
+    /// with no other modifier, or the Menu key of a PC keyboard.
+    pub fn opens_context_menu(self) -> bool {
+        let shift = ShortcutModifiers {
+            shift: true,
+            ..ShortcutModifiers::default()
+        };
+        self.key == Key::ContextMenu || self.key == Key::F(10) && self.modifiers == shift
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShortcutScope {
     Application,

@@ -161,6 +161,11 @@ impl ControlContext<'_> {
     pub fn is_focused(&self) -> bool {
         self.tree.focus() == Some(self.node)
     }
+    /// The bounds of the focused node, for a control that acts for a
+    /// focused descendant, such as a context menu that opens at it.
+    pub fn focus_bounds(&self) -> Option<Rect> {
+        self.tree.focus().and_then(|focus| self.tree.bounds(focus))
+    }
     /// The host time in seconds, for delays such as a tooltip's.
     pub fn time(&self) -> f64 {
         self.time

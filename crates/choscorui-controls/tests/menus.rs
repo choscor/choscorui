@@ -100,6 +100,43 @@ fn a_secondary_click_opens_the_menu_at_the_pointer() {
 }
 
 #[test]
+fn shift_f10_and_the_menu_key_open_the_menu_at_the_center() {
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    let mut h = Harness::new(area());
+    h.focus();
+    let center = h.bounds().center();
+    // F10 alone and Shift-Command-F10 are not the open key.
+    h.key(Key::F(10));
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..shift
+    });
+    h.key(Key::F(10));
+    assert!(h.host.get(h.node).unwrap().overlay().is_none());
+    h.modifiers(shift);
+    h.key(Key::F(10));
+    let frame = h.host.get(h.node).unwrap().overlay().expect("open");
+    assert_eq!(frame.origin, center, "the menu opens at the area's center");
+    assert_eq!(h.semantics().description, "Back", "the first item");
+    h.modifiers(ShortcutModifiers::default());
+    h.key(Key::Escape);
+    h.key(Key::ContextMenu);
+    assert_eq!(h.semantics().description, "Back");
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(true),
+            ControlMessage::Dismissed,
+            ControlMessage::OpenChanged(false),
+            ControlMessage::OpenChanged(true),
+        ]
+    );
+}
+
+#[test]
 fn keys_move_the_highlight_and_checks_follow_their_kind() {
     let mut h = Harness::new(area());
     h.focus();

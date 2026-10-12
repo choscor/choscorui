@@ -120,6 +120,33 @@ fn key_messages_and_utf16_surrogates_have_owned_events() {
 }
 
 #[test]
+fn function_and_menu_keys_have_named_keys() {
+    let mut input = InputTranslator::new(96).unwrap();
+    let modifiers = Modifiers {
+        shift: true,
+        ..Modifiers::default()
+    };
+    for (virtual_key, key) in [
+        (0x70, Key::F(1)),
+        (0x79, Key::F(10)),
+        (0x87, Key::F(24)),
+        (0x5d, Key::ContextMenu),
+    ] {
+        assert_eq!(
+            input.translate(NativeMessage::KeyDown {
+                virtual_key,
+                repeat: false,
+                modifiers
+            }),
+            vec![WindowEvent::Key {
+                event: KeyEvent::Down { key, repeat: false },
+                modifiers
+            }]
+        );
+    }
+}
+
+#[test]
 fn malformed_utf16_does_not_leak_across_focus_loss() {
     let mut input = InputTranslator::new(96).unwrap();
     assert!(input.translate(NativeMessage::Character(0xd83d)).is_empty());

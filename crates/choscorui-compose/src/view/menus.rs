@@ -15,11 +15,12 @@ use super::text::TextContent;
 use super::widgets::Items;
 use choscorui_controls::{
     CommandId, CommandState, ControlContext, ControlEvent, ControlKind, ControlMessage,
-    CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext, Variant,
+    CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext, Shortcut,
+    Variant,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Measured, NodeId, Point, PointerButton, PointerEvent, SemanticNode,
-    SemanticRole, SemanticState,
+    EventPhase, EventReply, KeyEvent, Measured, NodeId, Point, PointerButton, PointerEvent,
+    SemanticNode, SemanticRole, SemanticState,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -200,22 +201,26 @@ fn name_of(inner: &Inner, node: NodeId) -> String {
 
 /// The menu content: a hosted dropdown menu of `items`. A chosen row
 /// sets `presented` to false and runs its action; Escape sets it to
-/// false.
+/// false. While `keyboard` is true, the menu opens with the first row
+/// highlighted.
 fn menu_content(
     name: String,
     items: Rc<dyn Items<MenuChoice>>,
     presented: Binding<bool>,
+    keyboard: Rc<Cell<bool>>,
 ) -> Content {
     Rc::new(move || {
         let actions: Actions = Rc::default();
         let built = actions.clone();
-        let (name, items) = (name.clone(), items.clone());
+        let (name, items, keyboard) = (name.clone(), items.clone(), keyboard.clone());
         Configured::custom(ControlKind::Menu, move |env| {
             let mut list = Vec::new();
             let mut states = Vec::new();
             let items = build(&items.items(env), env, &mut list, &mut states);
             *built.borrow_mut() = list;
-            let mut menu = DropdownMenu::new(items).hosted(name.clone());
+            let mut menu = DropdownMenu::new(items)
+                .hosted(name.clone())
+                .opened_from_keyboard(keyboard.get());
             for (command, state) in states {
                 // Every row of the menu has a command, so this cannot
                 // fail.
@@ -244,7 +249,7 @@ pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoi
     let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
     Modifier::Present(Rc::new(move |cx: &mut Cx<'_>, anchor| {
         let name = name_of(cx.inner, anchor);
-        let content = menu_content(name, items.clone(), presented);
+        let content = menu_content(name, items.clone(), presented, Rc::default());
         mount_presentation(
             cx,
             Anchor::Node(anchor),
@@ -258,10 +263,14 @@ pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoi
 /// The control that wraps a view with a context menu: a secondary press
 /// or a Control-press inside the view records the point and reports
 /// `OpenChanged(true)`. It sees the press before the views inside, which
-/// keep it. It paints nothing and takes no focus.
+/// keep it. Shift-F10 or the Menu key that no focused view inside uses
+/// does the same at the focused view's center, and the menu opens with
+/// the first row highlighted. It paints nothing and takes no focus.
 struct MenuTrigger {
     point: Rc<Cell<Point>>,
     enabled: Rc<Cell<bool>>,
+    /// Whether the keyboard opened the menu.
+    keyboard: Rc<Cell<bool>>,
 }
 
 impl CustomControl for MenuTrigger {
@@ -270,20 +279,41 @@ impl CustomControl for MenuTrigger {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        if cx.phase() != EventPhase::Capture || !self.enabled.get() {
+        if !self.enabled.get() {
             return EventReply::Continue;
         }
-        let ControlEvent::Pointer(PointerEvent::Down { position, button }) = event else {
-            return EventReply::Continue;
-        };
-        let secondary = *button == PointerButton::Secondary
-            || *button == PointerButton::Primary && cx.modifiers().control;
-        if !secondary {
-            return EventReply::Continue;
+        match (cx.phase(), event) {
+            (
+                EventPhase::Capture,
+                ControlEvent::Pointer(PointerEvent::Down { position, button }),
+            ) => {
+                let secondary = *button == PointerButton::Secondary
+                    || *button == PointerButton::Primary && cx.modifiers().control;
+                if secondary {
+                    self.point.set(*position);
+                    self.keyboard.set(false);
+                    cx.emit(ControlMessage::OpenChanged(true));
+                }
+                EventReply::Continue
+            }
+            // The key bubbles from the focused view, so the innermost
+            // context menu opens and stops it.
+            (EventPhase::Bubble, ControlEvent::Key(KeyEvent::Down { key, .. })) => {
+                let shortcut = Shortcut {
+                    key: *key,
+                    modifiers: cx.modifiers(),
+                };
+                if !shortcut.opens_context_menu() {
+                    return EventReply::Continue;
+                }
+                let at = cx.focus_bounds().unwrap_or_else(|| cx.bounds());
+                self.point.set(at.center());
+                self.keyboard.set(true);
+                cx.emit(ControlMessage::OpenChanged(true));
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
         }
-        self.point.set(*position);
-        cx.emit(ControlMessage::OpenChanged(true));
-        EventReply::Continue
     }
 
     fn paint(&self, _cx: &mut PaintContext<'_>) {}
@@ -311,12 +341,15 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
     let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
     let point: Rc<Cell<Point>> = Rc::new(Cell::new(Point::new(0.0, 0.0)));
     let enabled = Rc::new(Cell::new(true));
-    let (control_point, control_enabled) = (point.clone(), enabled.clone());
+    let keyboard: Rc<Cell<bool>> = Rc::default();
+    let (control_point, control_enabled, control_keyboard) =
+        (point.clone(), enabled.clone(), keyboard.clone());
     Modifier::Trigger(Trigger {
         control: Box::new(move |_inner: &mut Inner| {
             Box::new(MenuTrigger {
                 point: control_point,
                 enabled: control_enabled,
+                keyboard: control_keyboard,
             })
         }),
         mount: Box::new(move |cx: &mut Cx<'_>, wrapper, view| {
@@ -334,7 +367,7 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
                         *press.borrow_mut() = Some(Rc::new(move || open.set(true)));
                     }
                 }));
-            let center = point.clone();
+            let (center, shown_by_action) = (point.clone(), keyboard.clone());
             cx.inner.data(view).show_menu = Some(Rc::new(move |inner: &Inner| {
                 if !enabled.get() {
                     return;
@@ -342,10 +375,11 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
                 if let Some(bounds) = inner.tree.bounds(wrapper) {
                     center.set(bounds.center());
                 }
+                shown_by_action.set(true);
                 open.set(true);
             }));
             let name = name_of(cx.inner, view);
-            let content = menu_content(name, items, open);
+            let content = menu_content(name, items, open, keyboard);
             mount_presentation(
                 cx,
                 Anchor::Point(point),

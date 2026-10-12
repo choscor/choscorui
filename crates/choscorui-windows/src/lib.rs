@@ -346,6 +346,10 @@ fn key(virtual_key: u32) -> Key {
         0x23 => Key::End,
         0x08 => Key::Backspace,
         0x2e => Key::Delete,
+        // VK_F1 to VK_F24.
+        0x70..=0x87 => Key::F((virtual_key - 0x6f) as u8),
+        // VK_APPS: the Menu key.
+        0x5d => Key::ContextMenu,
         other => Key::Other(other),
     }
 }

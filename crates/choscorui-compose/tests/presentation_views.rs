@@ -328,6 +328,7 @@ fn context_menu_closes_on_escape_and_opens_for_show_menu() {
     let panel = host.tree().bounds(menu).unwrap();
     let center = bounds(&mut host, "Target").center();
     assert!((panel.min_x() - center.x).abs() < 0.5);
+    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
     // Tab stays in the menu.
     host.focus_next(false);
     assert_eq!(host.tree().focus(), Some(menu));
@@ -356,6 +357,92 @@ fn context_menu_closes_on_escape_and_opens_for_show_menu() {
         },
     );
     assert!(host.semantic(menu).is_none());
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+fn press_with(host: &mut ViewHost, key: Key, modifiers: ShortcutModifiers) -> bool {
+    let handled = host.key(KeyEvent::Down { key, repeat: false }, modifiers);
+    host.layout();
+    handled
+}
+
+const SHIFT: ShortcutModifiers = ShortcutModifiers {
+    shift: true,
+    control: false,
+    option: false,
+    command: false,
+};
+
+#[test]
+fn context_menu_opens_from_the_keyboard_with_the_first_row_highlighted() {
+    let mut host = host(Editor);
+    let target = node(&mut host, "Target");
+    host.focus(Some(target));
+    assert!(
+        !press(&mut host, Key::F(10)),
+        "F10 alone is not the open key"
+    );
+    assert_eq!(host.tree().focus(), Some(target));
+    assert!(press_with(&mut host, Key::F(10), SHIFT));
+    let menu = focused_menu(&mut host);
+    let panel = host.tree().bounds(menu).unwrap();
+    let center = bounds(&mut host, "Target").center();
+    assert!(
+        (panel.min_x() - center.x).abs() < 0.5,
+        "{panel:?} at {center:?}"
+    );
+    assert!(
+        (panel.min_y() - center.y).abs() < 0.5,
+        "{panel:?} at {center:?}"
+    );
+    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    press(&mut host, Key::Enter);
+    assert!(shown(&mut host, "chosen copied"));
+    assert_eq!(host.tree().focus(), Some(target), "focus returns");
+    // The Menu key opens it too.
+    assert!(press(&mut host, Key::ContextMenu));
+    let menu = focused_menu(&mut host);
+    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    press(&mut host, Key::Escape);
+    // A secondary click after a keyboard open highlights no row.
+    pointer(
+        &mut host,
+        PointerEvent::Down {
+            position: center,
+            button: PointerButton::Secondary,
+        },
+    );
+    let menu = focused_menu(&mut host);
+    press(&mut host, Key::ArrowDown);
+    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn the_keyboard_opens_the_innermost_context_menu_of_the_focus() {
+    let view = VStack::new((
+        Button::new("Inner", || {}).context_menu(vec![MenuChoice::action("Inner item", || {})]),
+        Button::new("Outer area", || {}),
+    ))
+    .context_menu(vec![MenuChoice::action("Outer item", || {})]);
+    let mut host = host(view);
+    let inner = node(&mut host, "Inner");
+    host.focus(Some(inner));
+    press(&mut host, Key::ContextMenu);
+    let menu = focused_menu(&mut host);
+    assert_eq!(host.semantic(menu).unwrap().description, "Inner item");
+    press(&mut host, Key::Escape);
+    let outer = node(&mut host, "Outer area");
+    host.focus(Some(outer));
+    press_with(&mut host, Key::F(10), SHIFT);
+    let menu = focused_menu(&mut host);
+    assert_eq!(host.semantic(menu).unwrap().description, "Outer item");
+    let panel = host.tree().bounds(menu).unwrap();
+    let center = bounds(&mut host, "Outer area").center();
+    assert!(
+        (panel.min_x() - center.x).abs() < 0.5,
+        "at the focused view"
+    );
     assert_eq!(host.take_errors(), Vec::new());
 }
 

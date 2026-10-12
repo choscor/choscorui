@@ -673,6 +673,8 @@ change of `base` builds the display again.
 - `finish` with nothing recorded cancels.
 - A `Key::Other` key does nothing. This includes a press of a modifier key
   only.
+- A function key shows as `F1` to `F24`, and the Menu key shows as `Menu`.
+  `set_value` reads these names.
 - **Look.** `paint` draws the `Input` box with one `Kbd` key cap per
   chord. While it records, the chords so far show. An empty sequence
   shows the placeholder in the `Input` placeholder style.
@@ -1581,6 +1583,9 @@ pin this behavior.
 - **In a view.** The `context_menu` and `dropdown_menu` view modifiers
   show a `HostedDropdownMenu` in an anchored layer. `Command` runs the
   chosen action and closes the layer, and `Dismissed` closes it.
+  `opened_from_keyboard(true)` highlights the first row when the arrange
+  places the menu. A context menu that the keyboard or `ShowMenu` opens
+  uses it.
   `MenuChoice::checkbox` and `MenuChoice::radio` make check rows. The
   command state of a check row follows its binding when the menu opens.
   Its `Command` sets the binding and closes the layer.
@@ -2521,8 +2526,13 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   right-to-left layouts, the menus open toward the left.
 - **`ContextMenu`.** A secondary press or a Control-press in the area
   opens the menu with its top-start corner at the pointer. Enter, Space,
-  or `ShowMenu` opens it at the center of the area. A release over an
-  action after the press activates the action.
+  Shift-F10, the Menu key, or `ShowMenu` opens it at the center of the
+  area, with the first item highlighted. A release over an action after
+  the press activates the action.
+- **Keyboard open.** `Shortcut::opens_context_menu` is true for
+  Shift-F10 with no other modifier and for the Menu key
+  (`Key::ContextMenu`). Every control that opens a context menu from the
+  keyboard uses it.
 - **`Menubar`.** ArrowLeft and ArrowRight move between the titles in
   reading order, and wrap. Home and End go to the ends.
 - Enter, Space, ArrowDown, or a press opens the menu of a title 4 pt below

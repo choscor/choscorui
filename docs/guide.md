@@ -396,7 +396,7 @@ fn profile() -> impl View {
 
 A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::checkbox(label, checked)` shows a check mark while the `Binding<bool>` is true, and a choice flips it. `MenuChoice::radio(label, selection, value)` shows a dot while `selection` is `value`, and a choice sets it. The radio rows of one binding make a group. A check row closes the menu as an action does. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.
 
-- `.context_menu(items)` opens a menu at the pointer on a secondary click or a Control-click on the view. The `ShowMenu` action of assistive technology opens it at the center of the view. Of nested context menus, the innermost one opens.
+- `.context_menu(items)` opens a menu at the pointer on a secondary click or a Control-click on the view. When focus is in the view, Shift-F10 or the Menu key opens it at the center of the focused view. A focused view that uses the key keeps it. The `ShowMenu` action of assistive technology opens it at the center of the view. A menu that the keyboard or `ShowMenu` opens highlights the first row. Of nested context menus, the innermost one opens.
 - `.dropdown_menu(presented, items)` shows a menu below the view while `presented` is true. A chosen row or Escape sets `presented` to false.
 
 Focus moves into an open menu. The menu keys, hover, and type-ahead of [DropdownMenu](controls.md#dropdownmenu) apply. Escape or a press outside closes the menu, and focus returns to where it was.

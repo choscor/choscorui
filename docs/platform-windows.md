@@ -66,7 +66,7 @@ The [window smoke test](../crates/choscorui-windows/tests/window_smoke.rs) runs 
 | `WM_KEYDOWN`, `WM_SYSKEYDOWN`, `WM_KEYUP`, `WM_SYSKEYUP` | `Key`, with the repeat flag on key down |
 | `WM_CHAR` | `Text` |
 
-- The translator maps Tab, Enter, Space, Escape, the arrow keys, Home, End, Backspace, and Delete to `Key` values. Other virtual keys become `Key::Other`.
+- The translator maps Tab, Enter, Space, Escape, the arrow keys, Home, End, Backspace, Delete, F1 to F24, and the Menu key (`VK_APPS`) to `Key` values. Other virtual keys become `Key::Other`.
 - A standard wheel delta of 120 is one line. The translator converts a precise delta from pixels to points.
 - `WM_CHAR` gives UTF-16 units. The translator keeps a high surrogate until the low surrogate arrives and then sends one `Text` event.
 - A focus loss drops a high surrogate that has no low surrogate, so it cannot join text that arrives later.

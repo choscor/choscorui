@@ -264,6 +264,10 @@ pub enum Key {
     PageDown,
     Backspace,
     Delete,
+    /// A function key by number: `F(1)` is F1.
+    F(u8),
+    /// The Menu key of a PC keyboard, which opens a context menu.
+    ContextMenu,
     /// A printable key, lowercased and independent of modifiers, from the
     /// active keyboard layout (so shortcuts follow AZERTY or Dvorak).
     Character(char),

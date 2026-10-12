@@ -291,7 +291,7 @@ impl CustomControl for KeySequenceEdit {
 const MODIFIER_GLYPHS: [char; 4] = ['⌃', '⌥', '⇧', '⌘'];
 
 /// The text of each named key.
-const KEY_NAMES: [(Key, &str); 14] = [
+const KEY_NAMES: [(Key, &str); 15] = [
     (Key::Enter, "↩"),
     (Key::Tab, "⇥"),
     (Key::Space, "Space"),
@@ -306,6 +306,7 @@ const KEY_NAMES: [(Key, &str); 14] = [
     (Key::End, "↘"),
     (Key::PageUp, "⇞"),
     (Key::PageDown, "⇟"),
+    (Key::ContextMenu, "Menu"),
 ];
 
 /// macOS modifier glyphs in canonical order, then the key.
@@ -326,6 +327,7 @@ pub fn shortcut_text(shortcut: Shortcut) -> String {
     let named = KEY_NAMES.iter().find(|(key, _)| *key == shortcut.key);
     match (shortcut.key, named) {
         (Key::Character(character), _) => text.extend(character.to_uppercase()),
+        (Key::F(number), _) => text.push_str(&format!("F{number}")),
         (_, Some((_, name))) => text.push_str(name),
         (other, None) => text.push_str(&format!("{other:?}")),
     }
@@ -355,6 +357,7 @@ fn parse_shortcut(text: &str) -> Option<Shortcut> {
     let mut characters = key_text.chars();
     let key = match (named, characters.next(), characters.next()) {
         (Some((key, _)), _, _) => *key,
+        (None, Some('F'), Some(_)) => Key::F(key_text[1..].parse().ok().filter(|n| *n > 0)?),
         (None, Some(character), None) => Key::Character(character.to_lowercase().next()?),
         _ => return None,
     };

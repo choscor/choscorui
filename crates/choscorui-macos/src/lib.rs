@@ -912,6 +912,50 @@ unsafe extern "C" fn view_pointer_event(view: Id, _: Sel, native_event: Id) {
     }));
 }
 
+/// Maps a macOS virtual keycode for a named key to its [`Key`]. A keycode
+/// that is not here becomes a character or [`Key::Other`] from the event text.
+fn key_from_code(code: u16) -> Option<Key> {
+    Some(match code {
+        0x30 => Key::Tab,
+        0x24 => Key::Enter,
+        0x31 => Key::Space,
+        0x35 => Key::Escape,
+        0x7e => Key::ArrowUp,
+        0x7d => Key::ArrowDown,
+        0x7b => Key::ArrowLeft,
+        0x7c => Key::ArrowRight,
+        0x73 => Key::Home,
+        0x77 => Key::End,
+        0x33 => Key::Backspace,
+        0x75 => Key::Delete,
+        0x74 => Key::PageUp,
+        0x79 => Key::PageDown,
+        0x7a => Key::F(1),
+        0x78 => Key::F(2),
+        0x63 => Key::F(3),
+        0x76 => Key::F(4),
+        0x60 => Key::F(5),
+        0x61 => Key::F(6),
+        0x62 => Key::F(7),
+        0x64 => Key::F(8),
+        0x65 => Key::F(9),
+        0x6d => Key::F(10),
+        0x67 => Key::F(11),
+        0x6f => Key::F(12),
+        0x69 => Key::F(13),
+        0x6b => Key::F(14),
+        0x71 => Key::F(15),
+        0x6a => Key::F(16),
+        0x40 => Key::F(17),
+        0x4f => Key::F(18),
+        0x50 => Key::F(19),
+        0x5a => Key::F(20),
+        // kVK_ContextualMenu: the Menu key of a PC keyboard.
+        0x6e => Key::ContextMenu,
+        _ => return None,
+    })
+}
+
 unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: AppKit supplies a live NSEvent and attached NSView. Keycodes
@@ -921,22 +965,10 @@ unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
             if window.is_null() {
                 return;
             }
-            let key = match send_u16(native_event, c"keyCode") {
-                0x30 => Key::Tab,
-                0x24 => Key::Enter,
-                0x31 => Key::Space,
-                0x35 => Key::Escape,
-                0x7e => Key::ArrowUp,
-                0x7d => Key::ArrowDown,
-                0x7b => Key::ArrowLeft,
-                0x7c => Key::ArrowRight,
-                0x73 => Key::Home,
-                0x77 => Key::End,
-                0x33 => Key::Backspace,
-                0x75 => Key::Delete,
-                0x74 => Key::PageUp,
-                0x79 => Key::PageDown,
-                other => {
+            let code = send_u16(native_event, c"keyCode");
+            let key = match key_from_code(code) {
+                Some(key) => key,
+                None => {
                     let chars = send_id(native_event, c"charactersIgnoringModifiers");
                     let text = if chars.is_null() {
                         std::ptr::null()
@@ -950,7 +982,7 @@ unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
                         .filter(|ch| !ch.is_control() && !('\u{F700}'..='\u{F8FF}').contains(ch));
                     match printable {
                         Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
-                        None => Key::Other(u32::from(other)),
+                        None => Key::Other(u32::from(code)),
                     }
                 }
             };
@@ -2503,4 +2535,21 @@ unsafe fn send_window_init(
     let f: unsafe extern "C" fn(Id, Sel, NSRect, usize, usize, i8) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), frame, style, backing, defer) }
+}
+
+#[cfg(test)]
+mod key_code_tests {
+    use super::*;
+
+    #[test]
+    fn function_and_menu_keycodes_map_to_named_keys() {
+        assert_eq!(key_from_code(0x7a), Some(Key::F(1)));
+        assert_eq!(key_from_code(0x6d), Some(Key::F(10)));
+        assert_eq!(key_from_code(0x6f), Some(Key::F(12)));
+        assert_eq!(key_from_code(0x5a), Some(Key::F(20)));
+        assert_eq!(key_from_code(0x6e), Some(Key::ContextMenu));
+        assert_eq!(key_from_code(0x30), Some(Key::Tab));
+        // The keycode of the A key is a character, read from the event text.
+        assert_eq!(key_from_code(0x00), None);
+    }
 }

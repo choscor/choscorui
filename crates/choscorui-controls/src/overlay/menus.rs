@@ -5,15 +5,15 @@ use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl,
 use crate::hosted;
 use crate::menu::{MenuItem, MenuResponse};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
-use crate::{CommandId, CommandState};
+use crate::{CommandId, CommandState, Shortcut};
 use choscorui_core::{
     EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// An area that opens a menu at the pointer on a secondary click or a
-/// Control-click. Enter, Space, or the `ShowMenu` action opens it at the
-/// area's center. The area shows a hint text in a bordered box.
+/// Control-click. Enter, Space, Shift-F10, the Menu key, or the `ShowMenu`
+/// action opens it at the area's center with the first row highlighted. The area shows a hint text in a bordered box.
 pub struct ContextMenu {
     name: String,
     hint: String,
@@ -129,13 +129,17 @@ impl CustomControl for ContextMenu {
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                 if !self.popup.is_open() {
-                    return match key {
-                        Key::Enter | Key::Space => {
-                            self.open(cx, bounds.center(), true);
-                            EventReply::Stop
-                        }
-                        _ => EventReply::Continue,
+                    let shortcut = Shortcut {
+                        key: *key,
+                        modifiers: cx.modifiers(),
                     };
+                    let opens =
+                        matches!(key, Key::Enter | Key::Space) || shortcut.opens_context_menu();
+                    if opens {
+                        self.open(cx, bounds.center(), true);
+                        return EventReply::Stop;
+                    }
+                    return EventReply::Continue;
                 }
                 if *key == Key::Tab {
                     self.close(cx);

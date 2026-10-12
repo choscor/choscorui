@@ -1,10 +1,10 @@
 use choscorui_controls::{
     ButtonGroup, ButtonGroupMember, ButtonVariant, Calendar, CalendarFocus, CommandId, CommandLink,
-    CommandRegistry, CommandState, DateTimeEdit, DateTimeField, DateTimeKind, DecimalSpinBox, Dial,
-    EstimatedText, FocusFrame, IntegerRange, KeySequenceChange, KeySequenceEdit, NumberBase,
-    NumericDisplay, Orientation, PaintContext, Progress, ScrollBar, ScrollBarInput,
-    ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox, ToolButton, ToolButtonAction,
-    ToolButtonMenu, ValidationState, VisualState,
+    CommandRegistry, CommandState, ControlValue, CustomControl, DateTimeEdit, DateTimeField,
+    DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange, KeySequenceChange,
+    KeySequenceEdit, NumberBase, NumericDisplay, Orientation, PaintContext, Progress, ScrollBar,
+    ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox, ToolButton,
+    ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
@@ -297,6 +297,25 @@ fn key_sequence_edit_records_cancels_and_clears() {
         KeySequenceChange::Cleared
     );
     assert!(edit.sequence().is_empty());
+}
+
+#[test]
+fn key_sequence_edit_names_function_and_menu_keys() {
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    let mut edit = KeySequenceEdit::new(2);
+    edit.start();
+    edit.press(Key::F(10), shift);
+    edit.press(Key::ContextMenu, ShortcutModifiers::default());
+    assert_eq!(edit.text(), "⇧F10, Menu");
+
+    let mut copy = KeySequenceEdit::new(2);
+    assert!(copy.set_value(&ControlValue::Text(edit.text())));
+    assert_eq!(copy.sequence(), edit.sequence());
+    assert!(!copy.set_value(&ControlValue::Text("F0".into())));
+    assert_eq!(copy.sequence(), edit.sequence(), "F0 is not a key");
 }
 
 fn datetime(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> CivilDateTime {

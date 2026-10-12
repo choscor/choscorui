@@ -74,6 +74,8 @@ A panic in a posted task, a timer, or a menu callback does not unwind into AppKi
 | `Drag(DragEvent)` | A drag over the content view. See [Clipboard and drag and drop](#clipboard-and-drag-and-drop). |
 | `DragEnded(DragOperation)` | A drag that the window started has ended. |
 
+A `Key` event names the navigation and editing keys, F1 to F20, and the Menu key of a PC keyboard (`Key::ContextMenu`). Another key is a lowercase `Key::Character` from the active keyboard layout, or `Key::Other` with the virtual keycode.
+
 `Window::set_display_list` invalidates only the region that changed. An identical display list schedules no frame. Core Graphics paints the display list on the CPU in `drawRect:`.
 
 Other window operations:

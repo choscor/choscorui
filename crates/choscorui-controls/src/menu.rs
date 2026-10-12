@@ -596,6 +596,7 @@ impl DropdownMenu {
             name: name.into(),
             popup,
             anchor: Point::new(0.0, 0.0),
+            keyboard: false,
         }
     }
 }
@@ -609,9 +610,20 @@ pub struct HostedDropdownMenu {
     popup: MenuPopup,
     /// The top-start corner of the root level, in window coordinates.
     anchor: Point,
+    /// Whether the keyboard opened the menu, so placing it highlights the
+    /// first row.
+    keyboard: bool,
 }
 
 impl HostedDropdownMenu {
+    /// Marks a menu that the keyboard opened: when the arrange places it,
+    /// the first row is highlighted, as in a keyboard-opened popup.
+    #[must_use]
+    pub fn opened_from_keyboard(mut self, keyboard: bool) -> Self {
+        self.keyboard = keyboard;
+        self
+    }
+
     /// Sets the enabled and checked state of a menu command.
     pub fn set_command(&mut self, command: CommandId, state: CommandState) -> CommandResult {
         self.popup.set_command(command, state)
@@ -665,7 +677,8 @@ impl CustomControl for HostedDropdownMenu {
         let anchor = Point::new(x, bounds.origin.y);
         if anchor != self.anchor {
             self.anchor = anchor;
-            self.reset(f64::NEG_INFINITY);
+            self.popup.close(f64::NEG_INFINITY);
+            self.popup.open(anchor, f64::NEG_INFINITY, self.keyboard);
         }
     }
 
