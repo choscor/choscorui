@@ -114,7 +114,7 @@ Dependencies: none.
 
 The gallery depends only on the facade, as an external application does. A test in [coverage.rs](../gallery/src/coverage.rs) reads `gallery/Cargo.toml` and makes sure that `choscorui` is the only dependency. The gallery also has `#![forbid(unsafe_code)]`.
 
-The benchmark depends directly on `choscorui-core`, `choscorui-controls`, and `choscorui-macos`, for macOS targets only.
+The benchmark depends directly on `choscorui-core`, `choscorui-controls`, `choscorui-compose`, and `choscorui-macos`, for macOS targets only. The `views` scenario uses compose to measure view updates.
 
 ## Layering rules
 
@@ -153,6 +153,7 @@ flowchart BT
     facade -.-> macos
     gallery --> facade
     bench -.-> controls
+    bench -.-> compose
     bench -.-> macos
 ```
 

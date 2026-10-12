@@ -565,3 +565,36 @@ fn styles_and_bounds_are_validated() {
         Some(EngineError::InvalidBounds)
     );
 }
+
+#[test]
+fn layout_places_only_what_changed() {
+    let (mut tree, mut engine, mut text) = setup();
+    let root = tree.root();
+    engine
+        .set_style(&tree, root, LayoutStyle::column(4.0))
+        .unwrap();
+    let rows: Vec<NodeId> = (0..100)
+        .map(|index| {
+            let row = add(&mut tree, &mut engine, root, LayoutStyle::row(4.0));
+            let label = add(&mut tree, &mut engine, row, LayoutStyle::leaf());
+            text.texts.insert(label, format!("Row {index}"));
+            label
+        })
+        .collect();
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 3000.0));
+    assert_eq!(engine.placed().len(), 201);
+    // Nothing changed, so nothing moves.
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 3000.0));
+    assert!(engine.placed().is_empty());
+    // A longer label in the last row moves only that row's nodes and the
+    // root.
+    text.texts.insert(rows[99], "Row ninety-nine".into());
+    engine.invalidate(&tree, rows[99]);
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 3000.0));
+    assert!(engine.placed().len() <= 3, "{:?}", engine.placed());
+    assert_eq!(tree.bounds(rows[99]).unwrap().size.width, 105.0);
+    // A metric change arranges everything again.
+    engine.invalidate_all();
+    run(&mut tree, &mut engine, &mut text, Size::new(400.0, 3000.0));
+    assert_eq!(engine.placed().len(), 201);
+}

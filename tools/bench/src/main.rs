@@ -19,6 +19,8 @@ mod scenarios;
 #[cfg(target_os = "macos")]
 mod sys;
 #[cfg(target_os = "macos")]
+mod views;
+#[cfg(target_os = "macos")]
 mod workspace;
 
 /// Counts Rust heap allocations so frames can report allocation churn.
@@ -58,8 +60,8 @@ mod alloc {
 }
 
 #[cfg(target_os = "macos")]
-const SCENARIOS: [&str; 8] = [
-    "startup", "idle", "resize", "scroll", "theme", "document", "windows", "size",
+const SCENARIOS: [&str; 9] = [
+    "startup", "idle", "resize", "scroll", "theme", "document", "views", "windows", "size",
 ];
 
 #[cfg(target_os = "macos")]
@@ -165,6 +167,9 @@ fn main() {
     });
     step("document", &mut |r| {
         scenarios::document(&app, &mut window, &config, r)
+    });
+    step("views", &mut |r| {
+        views::views(&app, &mut window, &config, r)
     });
     window.close();
     drop(window);

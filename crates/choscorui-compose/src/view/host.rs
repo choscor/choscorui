@@ -1166,13 +1166,17 @@ impl ViewHost {
         }
         for _ in 0..LAYOUT_PASSES {
             self.layout_pass();
+            // Moved nodes publish their new bounds; the others keep theirs.
+            let inner = &mut self.inner;
+            inner
+                .semantic_dirty
+                .extend(inner.engine.placed().iter().copied());
             if !self.inner.after_layout() {
                 break;
             }
         }
         self.inner.needs_layout = false;
         self.inner.needs_paint = true;
-        self.inner.semantic_all = true;
     }
 
     fn layout_pass(&mut self) {

@@ -26,6 +26,8 @@ pub struct Config {
     pub document_edits: usize,
     pub theme_switches: usize,
     pub windows: usize,
+    pub view_rows: usize,
+    pub view_updates: usize,
 }
 
 impl Config {
@@ -37,6 +39,8 @@ impl Config {
             document_edits: 1_000,
             theme_switches: 100,
             windows: 20,
+            view_rows: 10_000,
+            view_updates: 200,
         }
     }
 
@@ -49,13 +53,15 @@ impl Config {
             document_edits: 50,
             theme_switches: 20,
             windows: 5,
+            view_rows: 2_000,
+            view_updates: 30,
         }
     }
 }
 
 const PRESENT_TIMEOUT: Duration = Duration::from_secs(1);
 
-fn ms(duration: Duration) -> f64 {
+pub fn ms(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1000.0
 }
 
@@ -73,7 +79,7 @@ pub fn present(app: &Application, window: &Window, before: usize) -> Option<Pain
 }
 
 /// Lets queued native work (window server round trips, autorelease) settle.
-fn settle(app: &Application, window: &mut Window, duration: Duration) {
+pub fn settle(app: &Application, window: &mut Window, duration: Duration) {
     let deadline = Instant::now() + duration;
     while Instant::now() < deadline {
         app.pump_once(Duration::from_millis(5));

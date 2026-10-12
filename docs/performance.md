@@ -23,6 +23,7 @@ The harness measures these values:
 | `scroll` | Scroll the 100,000-row list of the stress workload by 10,000 points in each direction. Each frame also paints the 20,000-item canvas. | `scroll.present_ms`, `scroll.frame_interval_ms`, `scroll.peak_realized_rows`, `scroll.allocations_per_frame` |
 | `theme` | Switch between a light theme and a structurally different dark theme on 240 controls, 100 times | `theme.present_ms` |
 | `document` | Type 1,000 edits in the middle of a 100,000-character document with Vietnamese, CJK, emoji, combining marks, and right-to-left text | `document.present_ms`, `document.shape_ms`, `document.caret_mismatches` |
+| `views` | Change the state of one row in a scrolling column of 10,000 view rows, 200 times. A column of 1,000 rows gives the comparison count | `views.present_ms`, `views.update_ms`, `views.dirty_nodes`, `views.dirty_growth` |
 | `windows` | Open, resize, and close 20 windows, two times | `windows.first_frame_ms`, `windows.leaked_native_windows`, `windows.idle_cpu_percent_after_close` |
 | `size` | Read the size of the release executables | `size.choscorui-gallery_mib` |
 
@@ -84,6 +85,8 @@ The baselines are from the reference machine, measured on 2026-10-08.
 | `document.present_ms.p95` | 20.7 ms | ≤ 33 |
 | `document.shape_ms.p95` | 6.8 ms | ≤ 12 |
 | `theme.present_ms.p95` | 2.7–2.9 ms | ≤ 16.7 |
+| `views.present_ms.p95` | 6.5–7.2 ms, 10,000 rows | ≤ 16.7 |
+| `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
 | `size.choscorui-gallery_mib` | 1.13 MiB, unstripped | ≤ 3 |
@@ -94,6 +97,7 @@ These correctness counters have a budget of 0:
 - `resize.missed_configure`
 - `resize.missed_present`, `scroll.missed_present`, `document.missed_present`, `theme.missed_present`, and `windows.missed_present`
 - `document.caret_mismatches`
+- `views.dirty_growth`, `views.missed_present`, and `views.errors`
 - `windows.leaked_native_windows`
 
 ### How `--check` enforces the budgets
@@ -124,6 +128,10 @@ These design facts keep the paint, layout, and input paths independent of the mo
 | Damage | `damage` compares two display lists as sorted multisets of draw regions, with two allocations for each call. Identical lists produce no damage. | [`display.rs`](../crates/choscorui-core/src/display.rs) |
 | Presentation | `Window::set_display_list` invalidates only the damaged region. `drawRect:` replays an `Arc<DisplayList>` and does not copy the list. | [`surface.rs`](../crates/choscorui-macos/src/surface.rs) |
 | Long documents | `TextLayoutCache::layout_paragraphs` reshapes only the edited paragraph and uses the cached layout of every other paragraph. | [`text_layout.rs`](../crates/choscorui-core/src/text_layout.rs) |
+| View updates | A state change runs only the reactions that read the state. `ViewHost::take_dirty_count` counts the changed nodes. | [`host.rs`](../crates/choscorui-compose/src/view/host.rs) |
+| View layout | `LayoutEngine::plan` arranges a node again only when it was invalidated or its bounds change. A clean subtree keeps its bounds. Semantics update only for the placed nodes. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
+| Long stacks | A stack measures its direct children again when one of them changes. Each cached child costs about 0.4 µs, so a column of 10,000 rows adds about 4 ms. Use an item view for larger data. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
+| View paint | A column finds its visible children by binary search. Routing, timers, and overlays walk the tree only for controls that show an overlay, hold a modal scope, wait for a timer, or animate. | [`paint.rs`](../crates/choscorui-compose/src/view/paint.rs), [`custom.rs`](../crates/choscorui-controls/src/custom.rs) |
 
 `paragraph_layout_matches_whole_text_and_reshapes_only_edits` in [`tests/text_layout.rs`](../crates/choscorui-macos/tests/text_layout.rs) shows that the paragraph layout equals the layout of the whole text.
 

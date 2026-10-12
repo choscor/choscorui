@@ -17,6 +17,7 @@ dependencies = [
 name = "choscorui-bench"
 version = "0.0.1"
 dependencies = [
+ "choscorui-compose",
  "choscorui-controls",
  "choscorui-core",
  "choscorui-macos",

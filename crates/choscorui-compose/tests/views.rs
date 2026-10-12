@@ -844,3 +844,50 @@ fn a_divider_spans_the_frame_around_its_stack() {
     // text starts at the frame's leading edge, not centered in it.
     assert!(short.min_x() - edge.max_x() < 20.0, "{edge:?} {short:?}");
 }
+
+#[test]
+fn a_long_column_paints_and_relayouts_only_what_it_must() {
+    use choscorui_compose::view::ScrollView;
+    let rows: Vec<usize> = (0..2_000).collect();
+    let runtime = Runtime::new();
+    let counter = runtime.property(0_u32);
+    let shown = counter.clone();
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(ScrollView::new(VStack::new(ForEach::new(
+        rows,
+        |row| *row,
+        move |row: &usize| {
+            let shown = shown.clone();
+            let row = *row;
+            Text::new(move || {
+                if row == 0 {
+                    format!("Row 0, {} edits", shown.get())
+                } else if row == 1 {
+                    // The widest row, so the edit keeps the column width.
+                    "Row 1 is the widest row in this long column".to_owned()
+                } else {
+                    format!("Row {row}")
+                }
+            })
+        },
+    ))));
+    host.layout();
+    // Only the rows inside the window paint.
+    let painted = host.paint().len();
+    assert!(painted < 200, "{painted} commands");
+    let _ = host.semantics();
+    host.take_dirty_count();
+    counter.set(1);
+    host.flush();
+    assert_eq!(host.take_dirty_count(), 1);
+    host.layout();
+    let (_, changes) = host.semantics();
+    assert!(changes.len() < 10, "{} semantic changes", changes.len());
+    assert!(host.find("Row 0, 1 edits").is_some());
+}

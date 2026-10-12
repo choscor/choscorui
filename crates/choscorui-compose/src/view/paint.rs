@@ -3,10 +3,13 @@
 
 use super::host::{Inner, Layer};
 use choscorui_controls::HostEnv;
-use choscorui_core::{DesignTokens, DisplayList, LayoutKind, NodeId, Path, Rect, Transform};
+use choscorui_core::{Axis, DesignTokens, DisplayList, LayoutKind, NodeId, Path, Rect, Transform};
 
 /// How far a shadow or ring can reach outside its node, for culling.
 const OVERHANG: f64 = 64.0;
+
+/// The child count from which a column paints by binary search.
+const LONG_STACK: usize = 32;
 
 /// Paints the tree under the root, then the overlays.
 pub(crate) fn paint(inner: &Inner, list: &mut DisplayList) {
@@ -24,6 +27,40 @@ pub(crate) fn paint(inner: &Inner, list: &mut DisplayList) {
     };
     painter.node(root, &raw, &tokens, clip);
     inner.controls.paint_overlays(&inner.tree, list, &env);
+}
+
+/// The children of `node` that can reach `clip`. A column places its
+/// children top to bottom, so a long one finds the visible run by binary
+/// search instead of visiting every child.
+fn visible_children<'c>(
+    inner: &Inner,
+    node: NodeId,
+    children: &'c [NodeId],
+    clip: Rect,
+) -> &'c [NodeId] {
+    let column = matches!(
+        inner.engine.style(node).map(|style| &style.kind),
+        Some(LayoutKind::Stack {
+            axis: Axis::Vertical,
+            ..
+        })
+    );
+    if !column || children.len() < LONG_STACK {
+        return children;
+    }
+    let edge = |child: &NodeId, bottom: bool| {
+        inner.tree.bounds(*child).map_or(0.0, |bounds| {
+            if bottom {
+                bounds.max_y()
+            } else {
+                bounds.min_y()
+            }
+        })
+    };
+    let first = children.partition_point(|child| edge(child, true) + OVERHANG < clip.min_y());
+    let end = first
+        + children[first..].partition_point(|child| edge(child, false) - OVERHANG <= clip.max_y());
+    &children[first..end]
 }
 
 struct Painter<'a, 'e> {
@@ -104,7 +141,7 @@ impl Painter<'_, '_> {
             pushed.push(Pop::Clip);
         }
         if let Some(children) = inner.tree.children(node) {
-            for child in children {
+            for child in visible_children(inner, node, children, clip) {
                 self.node(*child, &raw, &tokens, clip);
             }
         }

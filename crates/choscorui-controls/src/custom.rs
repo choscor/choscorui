@@ -289,6 +289,11 @@ pub struct ControlHost {
     messages: Vec<(NodeId, ControlMessage)>,
     time: f64,
     modifiers: ShortcutModifiers,
+    /// The viewport of the last layout.
+    viewport: Option<Rect>,
+    /// Controls that are new or changed since the last layout, which
+    /// arrange again even when their bounds stay the same.
+    unarranged: HashSet<NodeId>,
 }
 
 impl ControlHost {
@@ -308,6 +313,7 @@ impl ControlHost {
         tree.invalidate(node, Dirty::LAYOUT)?;
         tree.invalidate(node, Dirty::SEMANTICS)?;
         self.controls.insert(node, control);
+        self.unarranged.insert(node);
         Ok(node)
     }
 
@@ -316,6 +322,7 @@ impl ControlHost {
         let control = self.controls.remove(&node)?;
         self.disabled.remove(&node);
         self.hovered.retain(|id| *id != node);
+        self.unarranged.remove(&node);
         let _ = tree.detach(node);
         Some(control)
     }
@@ -336,6 +343,7 @@ impl ControlHost {
         control.set_enabled(enabled);
         tree.set_focusable(node, enabled && control.focusable())?;
         self.controls.insert(node, control);
+        self.unarranged.insert(node);
         Self::mark(tree, node);
         Ok(())
     }
@@ -346,6 +354,7 @@ impl ControlHost {
         self.controls.retain(|node, _| tree.contains(*node));
         self.disabled.retain(|node| tree.contains(*node));
         self.hovered.retain(|node| tree.contains(*node));
+        self.unarranged.retain(|node| tree.contains(*node));
         before - self.controls.len()
     }
 
@@ -353,7 +362,9 @@ impl ControlHost {
         self.controls.get(&node).map(|control| control.as_ref())
     }
     pub fn get_mut(&mut self, node: NodeId) -> Option<&mut (dyn CustomControl + 'static)> {
-        self.controls.get_mut(&node).map(|control| control.as_mut())
+        let control = self.controls.get_mut(&node)?;
+        self.unarranged.insert(node);
+        Some(control.as_mut())
     }
     pub fn contains(&self, node: NodeId) -> bool {
         self.controls.contains_key(&node)
@@ -447,23 +458,36 @@ impl ControlHost {
         env: &HostEnv<'_>,
         leaves: &mut dyn LeafMeasure,
     ) -> Result<(), EngineError> {
-        // The engine borrows the tree mutably, so resolve tokens first.
-        let tokens: HashMap<NodeId, DesignTokens> = self
-            .controls
-            .keys()
-            .filter(|node| tree.is_within(**node, root) && tree.visible(**node) == Some(true))
-            .map(|node| (*node, env.tokens(tree, *node)))
-            .collect();
         let viewport = tree.bounds(tree.root()).unwrap_or_default();
-        let mut measure =
-            |node: NodeId, constraints: Constraints, direction| match tokens.get(&node).and_then(
-                |tokens| self.measure_with(node, constraints, direction, tokens, viewport, env),
-            ) {
-                Some(measured) => measured,
-                None => leaves.measure(node, constraints, direction),
+        let placements = {
+            let tree: &Tree = tree;
+            let mut measure = |node: NodeId, constraints: Constraints, direction| {
+                let hosted = self.controls.contains_key(&node)
+                    && tree.is_within(node, root)
+                    && tree.visible(node) == Some(true);
+                let measured = hosted.then(|| env.tokens(tree, node)).and_then(|tokens| {
+                    self.measure_with(node, constraints, direction, &tokens, viewport, env)
+                });
+                measured.unwrap_or_else(|| leaves.measure(node, constraints, direction))
             };
-        engine.layout(tree, root, bounds, &mut measure)?;
-        self.arrange(tree, env);
+            engine.plan(tree, root, bounds, &mut measure)?
+        };
+        engine.place(tree, placements)?;
+        let unarranged = std::mem::take(&mut self.unarranged);
+        if self.viewport == Some(viewport) {
+            // Controls that kept their bounds and content keep their part
+            // geometry.
+            let placed = engine
+                .placed()
+                .iter()
+                .filter(|node| !unarranged.contains(node));
+            for node in placed.chain(&unarranged) {
+                self.arrange_one(tree, *node, viewport, env);
+            }
+        } else {
+            self.viewport = Some(viewport);
+            self.arrange(tree, env);
+        }
         Ok(())
     }
 
@@ -471,24 +495,34 @@ impl ControlHost {
     /// current bounds. Call after layout and after theme changes.
     pub fn arrange(&mut self, tree: &Tree, env: &HostEnv<'_>) {
         let viewport = tree.bounds(tree.root()).unwrap_or_default();
-        for (node, control) in &mut self.controls {
-            let Some(bounds) = tree.bounds(*node) else {
-                continue;
-            };
-            if tree.visible(*node) != Some(true) {
-                continue;
-            }
-            let tokens = env.tokens(tree, *node);
-            let cx = MeasureContext {
-                constraints: Constraints::tight(bounds.size),
-                viewport,
-                direction: env.direction,
-                tokens: &tokens,
-                styles: env.styles,
-                text: env.text,
-            };
-            control.arrange(&cx, bounds);
+        let nodes: Vec<NodeId> = self.controls.keys().copied().collect();
+        for node in nodes {
+            self.arrange_one(tree, node, viewport, env);
         }
+    }
+
+    /// Lets the control on `node`, if it is visible, record its part
+    /// geometry for its current bounds.
+    fn arrange_one(&mut self, tree: &Tree, node: NodeId, viewport: Rect, env: &HostEnv<'_>) {
+        let Some(bounds) = tree.bounds(node) else {
+            return;
+        };
+        if tree.visible(node) != Some(true) {
+            return;
+        }
+        let Some(control) = self.controls.get_mut(&node) else {
+            return;
+        };
+        let tokens = env.tokens(tree, node);
+        let cx = MeasureContext {
+            constraints: Constraints::tight(bounds.size),
+            viewport,
+            direction: env.direction,
+            tokens: &tokens,
+            styles: env.styles,
+            text: env.text,
+        };
+        control.arrange(&cx, bounds);
     }
 
     fn deliver(
@@ -524,7 +558,7 @@ impl ControlHost {
 
     /// The topmost open modal control, if any.
     pub fn modal(&self, tree: &Tree) -> Option<NodeId> {
-        self.paint_order(tree)
+        self.layered(tree)
             .into_iter()
             .rev()
             .find(|node| self.controls.get(node).is_some_and(|c| c.modal()))
@@ -532,7 +566,7 @@ impl ControlHost {
 
     /// The control whose open overlay contains `point`, topmost first.
     fn overlay_at(&self, tree: &Tree, point: Point) -> Option<NodeId> {
-        self.paint_order(tree).into_iter().rev().find(|node| {
+        self.layered(tree).into_iter().rev().find(|node| {
             self.controls
                 .get(node)
                 .and_then(|control| control.overlay())
@@ -604,7 +638,7 @@ impl ControlHost {
         if let PointerEvent::Down { .. } = event {
             tree.set_input_modality(choscorui_core::InputModality::Pointer);
             let open: Vec<NodeId> = self
-                .paint_order(tree)
+                .layered(tree)
                 .into_iter()
                 .filter(|node| {
                     self.controls
@@ -723,6 +757,21 @@ impl ControlHost {
         }
     }
 
+    /// The visible controls that show an overlay, hold a modal scope,
+    /// wait for a timer, or animate, in tree (paint) order. It asks each
+    /// control but walks the tree only for these few.
+    fn layered(&self, tree: &Tree) -> Vec<NodeId> {
+        let time = self.time;
+        let mut layered: Vec<(Vec<usize>, NodeId)> = self
+            .controls
+            .iter()
+            .filter(|(_, control)| is_active(control.as_ref(), time))
+            .filter_map(|(node, _)| Some((tree_path(tree, *node)?, *node)))
+            .collect();
+        layered.sort();
+        layered.into_iter().map(|(_, node)| node).collect()
+    }
+
     /// Visible mounted nodes in tree (paint) order.
     fn paint_order(&self, tree: &Tree) -> Vec<NodeId> {
         let mut order = Vec::new();
@@ -791,7 +840,7 @@ impl ControlHost {
     /// animates, above the controls, in tree order.
     pub fn paint_overlays(&self, tree: &Tree, list: &mut DisplayList, env: &HostEnv<'_>) {
         let rtl = env.direction == LayoutDirection::Rtl;
-        for node in self.paint_order(tree) {
+        for node in self.layered(tree) {
             let (Some(control), Some(bounds)) = (self.controls.get(&node), tree.bounds(node))
             else {
                 continue;
@@ -849,7 +898,7 @@ impl ControlHost {
     pub fn advance(&mut self, tree: &mut Tree, time: f64) -> bool {
         self.time = time;
         let due: Vec<NodeId> = self
-            .paint_order(tree)
+            .layered(tree)
             .into_iter()
             .filter(|node| {
                 self.controls
@@ -866,7 +915,7 @@ impl ControlHost {
 
     /// The earliest deadline of a visible control.
     pub fn next_deadline(&self, tree: &Tree) -> Option<f64> {
-        self.paint_order(tree)
+        self.layered(tree)
             .into_iter()
             .filter_map(|node| self.controls.get(&node)?.deadline())
             .reduce(f64::min)
@@ -945,4 +994,36 @@ impl ControlHost {
         };
         control.perform(&mut context, action, value)
     }
+}
+
+/// Whether `control` shows an overlay, holds a modal scope, waits for a
+/// timer, or animates at `time`.
+fn is_active(control: &dyn CustomControl, time: f64) -> bool {
+    control.overlay().is_some()
+        || control.modal()
+        || control.deadline().is_some()
+        || control.animating(time)
+}
+
+/// The child indices from the root down to `node`, which sort in tree
+/// order, or `None` when `node` or an ancestor is hidden or detached.
+fn tree_path(tree: &Tree, node: NodeId) -> Option<Vec<usize>> {
+    let mut path = Vec::new();
+    let mut current = node;
+    while let Some(parent) = tree.parent(current) {
+        if tree.visible(current) != Some(true) {
+            return None;
+        }
+        let index = tree
+            .children(parent)?
+            .iter()
+            .position(|child| *child == current)?;
+        path.push(index);
+        current = parent;
+    }
+    if current != tree.root() || tree.visible(current) == Some(false) {
+        return None;
+    }
+    path.reverse();
+    Some(path)
 }

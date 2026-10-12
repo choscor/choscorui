@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+choscorui-compose = { path = "../../crates/choscorui-compose" }
 choscorui-core = { path = "../../crates/choscorui-core" }
 choscorui-controls = { path = "../../crates/choscorui-controls" }
 choscorui-macos = { path = "../../crates/choscorui-macos" }

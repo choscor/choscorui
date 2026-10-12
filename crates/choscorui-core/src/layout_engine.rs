@@ -462,6 +462,11 @@ struct NodeCache {
 pub struct LayoutEngine {
     styles: HashMap<NodeId, LayoutStyle>,
     cache: HashMap<NodeId, NodeCache>,
+    /// The bounds and direction that each node's subtree was last arranged
+    /// in. A clean node that gets the same again keeps its subtree as is.
+    arranged: HashMap<NodeId, (Rect, u8)>,
+    /// The nodes that the last layout placed.
+    placed: Vec<NodeId>,
     scroll_offsets: HashMap<NodeId, Point>,
     content_sizes: HashMap<NodeId, Size>,
     strict: bool,
@@ -483,6 +488,8 @@ impl LayoutEngine {
         Self {
             styles: HashMap::new(),
             cache: HashMap::new(),
+            arranged: HashMap::new(),
+            placed: Vec::new(),
             scroll_offsets: HashMap::new(),
             content_sizes: HashMap::new(),
             strict: cfg!(debug_assertions),
@@ -520,6 +527,7 @@ impl LayoutEngine {
     pub fn prune(&mut self, tree: &Tree) {
         self.styles.retain(|node, _| tree.contains(*node));
         self.cache.retain(|node, _| tree.contains(*node));
+        self.arranged.retain(|node, _| tree.contains(*node));
         self.scroll_offsets.retain(|node, _| tree.contains(*node));
         self.content_sizes.retain(|node, _| tree.contains(*node));
     }
@@ -530,6 +538,7 @@ impl LayoutEngine {
         let mut current = Some(node);
         while let Some(id) = current {
             self.cache.remove(&id);
+            self.arranged.remove(&id);
             current = tree.parent(id);
         }
     }
@@ -537,6 +546,7 @@ impl LayoutEngine {
     /// A theme metric, scale, or locale change invalidates everything.
     pub fn invalidate_all(&mut self) {
         self.cache.clear();
+        self.arranged.clear();
     }
 
     pub fn scroll_offset(&self, node: NodeId) -> Point {
@@ -545,7 +555,9 @@ impl LayoutEngine {
 
     /// Scrolling changes placement only; cached measurements stay valid.
     pub fn set_scroll_offset(&mut self, node: NodeId, offset: Point) {
-        self.scroll_offsets.insert(node, offset);
+        if self.scroll_offsets.insert(node, offset) != Some(offset) {
+            self.arranged.remove(&node);
+        }
     }
 
     /// Content size of a scroll node from the last layout.
@@ -580,11 +592,29 @@ impl LayoutEngine {
         bounds: Rect,
         leaves: &mut dyn LeafMeasure,
     ) -> Result<&LayoutStats, EngineError> {
+        let placements = self.plan(tree, root, bounds, leaves)?;
+        self.place(tree, placements)?;
+        Ok(&self.stats)
+    }
+
+    /// Measures and arranges `root` in `bounds` without changing the tree,
+    /// and returns the bounds to give each node. Only invalidated nodes and
+    /// nodes whose bounds change are arranged again, so the work follows
+    /// what changed, not the size of the tree. Give the result to
+    /// [`LayoutEngine::place`].
+    pub fn plan(
+        &mut self,
+        tree: &Tree,
+        root: NodeId,
+        bounds: Rect,
+        leaves: &mut dyn LeafMeasure,
+    ) -> Result<Vec<(NodeId, Rect)>, EngineError> {
         if !bounds.is_finite() || bounds.size.width < 0.0 || bounds.size.height < 0.0 {
             return Err(EngineError::InvalidBounds);
         }
         self.stats = LayoutStats::default();
         let direction = self.inherited_direction(tree, root);
+        let mut placements = Vec::new();
         let result = self
             .measure_node(
                 tree,
@@ -594,15 +624,37 @@ impl LayoutEngine {
                 leaves,
             )
             .and_then(|_| {
-                let mut placements = Vec::new();
-                self.arrange_node(tree, root, bounds, direction, leaves, &mut placements)?;
-                for (node, rect) in placements {
-                    tree.set_layout_bounds(node, rect)
-                        .map_err(|_| EngineError::MissingNode(node))?;
-                }
-                Ok(())
+                self.arrange_node(tree, root, bounds, direction, leaves, &mut placements)
             });
-        result.map(|()| &self.stats)
+        if let Err(error) = result {
+            // A failed pass leaves some subtrees unarranged.
+            self.arranged.clear();
+            return Err(error);
+        }
+        Ok(placements)
+    }
+
+    /// Writes the bounds that [`LayoutEngine::plan`] returned to the tree.
+    pub fn place(
+        &mut self,
+        tree: &mut Tree,
+        placements: Vec<(NodeId, Rect)>,
+    ) -> Result<(), EngineError> {
+        self.placed.clear();
+        for (node, rect) in placements {
+            if tree.set_layout_bounds(node, rect).is_err() {
+                self.arranged.clear();
+                return Err(EngineError::MissingNode(node));
+            }
+            self.placed.push(node);
+        }
+        Ok(())
+    }
+
+    /// The nodes that the last layout placed. The other nodes kept their
+    /// bounds and the arrangement of their subtrees.
+    pub fn placed(&self) -> &[NodeId] {
+        &self.placed
     }
 
     fn inherited_direction(&self, tree: &Tree, node: NodeId) -> LayoutDirection {
@@ -640,8 +692,11 @@ impl LayoutEngine {
         if !tree.contains(node) {
             return Err(EngineError::MissingNode(node));
         }
-        let style = self.style_of(node);
-        let direction = style.direction.unwrap_or(inherited);
+        let direction = self
+            .styles
+            .get(&node)
+            .and_then(|style| style.direction)
+            .unwrap_or(inherited);
         let key = constraints.key();
         let dir_key = direction as u8;
         if let Some(hit) = self.cache.get(&node).and_then(|cache| {
@@ -654,6 +709,7 @@ impl LayoutEngine {
             self.stats.cache_hits += 1;
             return Ok(hit);
         }
+        let style = self.style_of(node);
         let own = own_constraints(&style, constraints);
         let pad = style.padding;
         let pad_w = pad.left + pad.right;
@@ -1007,6 +1063,11 @@ impl LayoutEngine {
         leaves: &mut dyn LeafMeasure,
         out: &mut Vec<(NodeId, Rect)>,
     ) -> Result<(), EngineError> {
+        let arranged = (rect, inherited as u8);
+        if self.arranged.get(&node) == Some(&arranged) {
+            return Ok(());
+        }
+        self.arranged.insert(node, arranged);
         out.push((node, rect));
         let style = self.style_of(node);
         let direction = style.direction.unwrap_or(inherited);
