@@ -320,6 +320,8 @@ struct Node {
     dirty: Dirty,
     focusable: bool,
     visible: bool,
+    /// Whether hit testing can find the node and its subtree.
+    hit_testable: bool,
 }
 
 /// Retained ownership and geometry. Bounds are absolute logical coordinates;
@@ -354,6 +356,7 @@ impl Tree {
                 dirty: Dirty(Dirty::LAYOUT.0 | Dirty::PAINT.0 | Dirty::SEMANTICS.0),
                 focusable: false,
                 visible: true,
+                hit_testable: true,
             },
         )]);
         Self {
@@ -464,6 +467,7 @@ impl Tree {
                 dirty: Dirty(Dirty::LAYOUT.0 | Dirty::PAINT.0 | Dirty::SEMANTICS.0),
                 focusable: false,
                 visible: true,
+                hit_testable: true,
             },
         );
         self.mark_ancestors(parent, Dirty::LAYOUT);
@@ -658,6 +662,23 @@ impl Tree {
             }
         }
         self.mark_ancestors(id, Dirty(Dirty::PAINT.0 | Dirty::SEMANTICS.0));
+        Ok(())
+    }
+
+    /// Sets whether pointer hit testing can find the node and its
+    /// subtree. The nodes still paint, for example while a closed panel
+    /// fades out, and presses go to the nodes below them. Pointer
+    /// capture inside the subtree ends.
+    pub fn set_hit_testable(&mut self, id: NodeId, hit_testable: bool) -> Result<(), TreeError> {
+        let node = self.nodes.get_mut(&id).ok_or(TreeError::MissingNode)?;
+        node.hit_testable = hit_testable;
+        if !hit_testable
+            && self
+                .pointer_capture
+                .is_some_and(|captured| self.is_descendant_or_self(captured, id))
+        {
+            self.pointer_capture = None;
+        }
         Ok(())
     }
 
@@ -857,7 +878,7 @@ impl Tree {
 
     fn hit_node(&self, id: NodeId, point: Point) -> Option<NodeId> {
         let node = self.nodes.get(&id)?;
-        if !node.visible || !node.bounds.contains(point) {
+        if !node.visible || !node.hit_testable || !node.bounds.contains(point) {
             return None;
         }
         for child in node.children.iter().rev() {

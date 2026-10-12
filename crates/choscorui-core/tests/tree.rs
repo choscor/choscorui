@@ -16,6 +16,28 @@ fn hit_testing_prefers_last_child_and_respects_parent_clip() {
 }
 
 #[test]
+fn a_node_out_of_hit_testing_lets_presses_through_and_ends_capture() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
+    let root = tree.root();
+    let back = tree.attach(root, rect(0.0, 0.0, 100.0, 100.0)).unwrap();
+    let front = tree.attach(root, rect(0.0, 0.0, 100.0, 100.0)).unwrap();
+    let child = tree.attach(front, rect(10.0, 10.0, 20.0, 20.0)).unwrap();
+    tree.set_pointer_capture(Some(child)).unwrap();
+    tree.set_hit_testable(front, false).unwrap();
+    assert_eq!(tree.hit_test(Point::new(15.0, 15.0)), Some(back));
+    assert_eq!(tree.pointer_capture(), None);
+    assert_eq!(tree.visible(child), Some(true), "the subtree still paints");
+    tree.set_hit_testable(front, true).unwrap();
+    assert_eq!(tree.hit_test(Point::new(15.0, 15.0)), Some(child));
+    let missing = tree.attach(root, rect(0.0, 0.0, 1.0, 1.0)).unwrap();
+    tree.detach(missing).unwrap();
+    assert_eq!(
+        tree.set_hit_testable(missing, false),
+        Err(TreeError::MissingNode)
+    );
+}
+
+#[test]
 fn detached_identity_is_never_reused_and_descendants_disappear() {
     let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
     let root = tree.root();
