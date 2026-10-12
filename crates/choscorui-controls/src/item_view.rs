@@ -146,6 +146,18 @@ pub struct ItemView {
     /// The index and host time of the last hosted press, for double
     /// clicks.
     last_press: Option<(usize, f64)>,
+    /// Whether a hosted view takes its row height from the `ListView` row
+    /// recipe in each arrange.
+    styled_rows: bool,
+}
+
+/// The height of a `ListView` row: the minimum height of the row recipe,
+/// or its text line and vertical padding when they are taller.
+pub(crate) fn list_row_height(cx: &MeasureContext<'_>) -> f64 {
+    let row = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row));
+    row.min_height
+        .max(row.text.line_height + row.padding.vertical())
+        .max(1.0)
 }
 
 /// What a view mounted in a [`crate::ControlHost`] reads its rows from.
@@ -179,7 +191,17 @@ impl ItemView {
             type_ahead_at: None,
             source: None,
             last_press: None,
+            styled_rows: false,
         }
+    }
+
+    /// Makes a hosted view take its row height from the `ListView` row
+    /// recipe when it measures and arranges, in place of the height given
+    /// to [`new`](Self::new).
+    #[must_use]
+    pub fn with_styled_rows(mut self) -> Self {
+        self.styled_rows = true;
+        self
     }
 
     /// Gives the view its own `model` and `delegate`, so it can mount in a
@@ -1064,6 +1086,9 @@ impl CustomControl for ItemView {
     /// A view takes the offered size; unbounded, it is as wide as a medium
     /// container and ten rows high.
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        if self.styled_rows {
+            self.row_height = list_row_height(cx);
+        }
         let max = cx.constraints.max;
         let width = if max.width.is_finite() {
             max.width
@@ -1078,7 +1103,10 @@ impl CustomControl for ItemView {
         Measured::new(Size::new(width, height))
     }
 
-    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        if self.styled_rows {
+            self.row_height = list_row_height(cx);
+        }
         self.sync_source();
         self.viewport = bounds;
         self.clamp_offset();

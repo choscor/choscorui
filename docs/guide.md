@@ -82,12 +82,12 @@ The toolkit gives these views:
 
 | Group | Views |
 | --- | --- |
-| Layout | `VStack`, `HStack`, `ZStack`, `Grid`, `Group`, `ScrollView`, `Spacer`, `Divider` |
+| Layout | `VStack`, `HStack`, `LazyVStack`, `LazyHStack`, `ZStack`, `Grid`, `Group`, `ScrollView`, `Spacer`, `Divider` |
 | Text | `Text`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `ForEach`, `Either`, `AnyView`, `Empty` |
 | Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
 | Dialogs | `Dialog`, `InputDialog`, `FontDialog` |
-| Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `EmptyState`, `Skeleton`, `Spinner` |
+| Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `List`, `EmptyState`, `Skeleton`, `Spinner` |
 | Navigation | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Menubar`, `Sidebar`, `Command` |
 | Drawing | `Canvas`, `FocusFrame`, `ControlView`, `Configured` |
 
@@ -143,6 +143,8 @@ Stacks place their children along one axis:
 | `Grid` | Columns of `GridItem::Fixed`, `GridItem::Flexible`, or `GridItem::Fit` |
 | `Spacer` | Flexible space that pushes its siblings apart |
 | `ScrollView` | Content that scrolls when it is larger than the space |
+| `LazyVStack`, `LazyHStack` | A column or a row that mounts only the items in view, with `.spacing` and `.alignment` |
+| `List` | The rows of an `ItemModel`, painted only while they show, with a selection binding |
 | `.padding(edges)` | Space around the view, from a `Space` token or `Edges` |
 | `.frame(Frame)` | A fixed, minimum, or maximum size, with the content aligned in it |
 | `.layout_priority(share)` | A share of the leftover space along the stack |
@@ -162,6 +164,36 @@ fn toolbar() -> impl View {
     ))
     .padding(Space::S3)
     .frame(Frame::new().max_width(f64::INFINITY))
+}
+```
+
+### Long lists
+
+A stack mounts all of its children. For a long list, use a lazy stack or a `List`. Then layout, paint, and input do not grow with the item count:
+
+- `LazyVStack::new(count, item_extent, view)` makes `count` items. Each item is `item_extent` points high. `view` takes the index of an item and returns its view.
+- `LazyHStack::new(count, item_extent, view)` makes a row of items, each `item_extent` points wide. It mirrors in a right-to-left locale.
+- `List::new(name, model, selection)` shows the rows of an `ItemModel` as text. `selection` is a `Binding<Vec<usize>>` of the selected row positions. The [ItemView](controls.md#itemview) control gives its keys and semantics.
+
+A lazy stack mounts an item only while the item shows in the scroll view around it, or in the window. When an item goes out of view, it unmounts, and its state ends. When it comes back, it mounts again with new state. Keep the data in state outside the items, and read it in live properties.
+
+All items of a lazy stack have the same extent. Tab cannot move focus to an item that does not show. An item with focus loses the focus when it unmounts.
+
+```rust
+use choscorui::prelude::*;
+
+struct Inbox;
+
+impl View for Inbox {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let count = cx.state(10_000_usize);
+        ScrollView::new(
+            LazyVStack::new(move || count.get(), 32.0, |index| {
+                Text::new(format!("Message {index}"))
+            })
+            .alignment(HorizontalAlignment::Leading),
+        )
+    }
 }
 ```
 

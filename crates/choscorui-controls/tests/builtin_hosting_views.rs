@@ -92,6 +92,18 @@ fn a_hosted_item_view_selects_activates_and_scrolls() {
 }
 
 #[test]
+fn a_hosted_item_view_with_styled_rows_takes_the_list_row_height() {
+    let mut h = Harness::new(rows(50).with_styled_rows());
+    // The `ListView` row recipe is 32 pt high, so this point is in row 3,
+    // not in row 5 of 20 pt rows.
+    h.click(Point::new(50.0, 10.0 + 3.0 * 32.0 + 16.0));
+    assert_eq!(
+        h.messages(),
+        vec![ControlMessage::Changed(ControlValue::Indices(vec![3]))]
+    );
+}
+
+#[test]
 fn a_hosted_item_view_takes_a_selection_and_focus_action() {
     let mut h = Harness::new(rows(20));
     assert!(set_value(&mut h, ControlValue::Indices(vec![1, 2])));

@@ -6,6 +6,7 @@ use super::View;
 use super::env::{Corner, Elevation, Env, Fill};
 use super::fragment::{FragmentId, Fragments};
 use super::layout::ScrollShared;
+use super::lazy::LazyHook;
 use super::scope::{self, Owned};
 use super::state::{Binding, Live, Memo, State};
 use crate::reactive::{ReactiveError, Runtime, Subscription};
@@ -21,7 +22,7 @@ use choscorui_core::{
     ThemeOverride, ThemeResolver, Track, Tree, TreeError,
 };
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
 /// What can go wrong while the runtime updates a view tree.
@@ -239,15 +240,19 @@ pub(crate) struct Inner {
     reveal: Option<NodeId>,
     /// Anchored presentation layers and the nodes they sit next to.
     pub anchors: HashMap<NodeId, NodeId>,
+    /// The track nodes of lazy stacks, and the work that mounts their
+    /// visible items after layout.
+    pub lazies: BTreeMap<NodeId, LazyHook>,
 }
 
 /// The first recipe set that instances use, above any set an
 /// application registers by hand.
 const INSTANCE_SETS: u32 = 1 << 24;
 
-/// The most layout passes in one frame: aspect ratios and scrolling a
-/// focused control into view need a second one.
-const LAYOUT_PASSES: usize = 3;
+/// The most layout passes in one frame: aspect ratios, scrolling a
+/// focused control into view, and the items that a lazy stack mounts
+/// need another one.
+const LAYOUT_PASSES: usize = 4;
 
 /// The most rounds of reactions in one flush.
 const MAX_ROUNDS: usize = 1_000;
@@ -336,7 +341,7 @@ impl Inner {
         self.needs_layout = true;
     }
 
-    /// Updates scroll views and aspect ratios after layout. Returns true
+    /// Updates scroll views, aspect ratios, and lazy stacks after layout. Returns true
     /// when the layout has to run again.
     fn after_layout(&mut self) -> bool {
         let mut again = false;
@@ -370,6 +375,10 @@ impl Inner {
                     .content
                     .set(self.engine.content_size(*node).unwrap_or(bounds.size));
             }
+        }
+        let hooks: Vec<LazyHook> = self.lazies.values().cloned().collect();
+        for hook in hooks {
+            again |= hook(self);
         }
         again
     }
@@ -725,6 +734,7 @@ impl Inner {
             self.aspects.remove(node);
             self.arrange.remove(node);
             self.anchors.remove(node);
+            self.lazies.remove(node);
         }
         let tree = &self.tree;
         self.anchors
@@ -957,6 +967,7 @@ impl ViewHost {
             focus: None,
             reveal: None,
             anchors: HashMap::new(),
+            lazies: BTreeMap::new(),
         };
         let mut host = Self {
             inner,

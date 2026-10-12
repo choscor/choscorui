@@ -1272,6 +1272,13 @@ only the rows in the viewport, plus the overscan. It takes the offered size.
 Two presses on one row within 0.5 seconds activate it. Typed text arrives as
 text for type-ahead. A secondary press selects the row, but no message
 reports the context menu. Rows that the model must fetch are not reported.
+`with_styled_rows` makes a hosted view take its row height from the
+`ListView` row recipe each time that it measures and arranges.
+
+**As a view.** `List::new(name, model, selection)` mounts a hosted view
+with a `TextItemDelegate` and styled rows. `selection` follows the
+`Indices` value in both directions. `List::selection_mode` sets the
+selection mode, and `on_item` receives `ItemActivated`.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)

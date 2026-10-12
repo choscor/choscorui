@@ -31,7 +31,7 @@ pub enum HorizontalAlignment {
 }
 
 impl HorizontalAlignment {
-    fn item(self) -> ItemAlign {
+    pub(super) fn item(self) -> ItemAlign {
         match self {
             Self::Leading => ItemAlign::Start,
             Self::Center => ItemAlign::Center,
@@ -55,7 +55,7 @@ pub enum VerticalAlignment {
 }
 
 impl VerticalAlignment {
-    fn item(self) -> ItemAlign {
+    pub(super) fn item(self) -> ItemAlign {
         match self {
             Self::Top => ItemAlign::Start,
             Self::Center => ItemAlign::Center,
@@ -107,7 +107,7 @@ impl Default for Alignment {
 }
 
 /// The default distance between stacked children.
-const DEFAULT_SPACING: Space = Space::S2;
+pub(super) const DEFAULT_SPACING: Space = Space::S2;
 
 /// The tokens that apply where a new node mounts, before it exists.
 pub(crate) fn parent_tokens(cx: &Cx<'_>) -> DesignTokens {

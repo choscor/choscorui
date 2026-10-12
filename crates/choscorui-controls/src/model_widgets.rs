@@ -7,6 +7,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::Routed;
+use crate::item_view::list_row_height;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
     CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Locale,
@@ -897,10 +898,7 @@ impl CustomControl for HostedColumnBrowser {
     /// A browser takes the offered size; unbounded, it shows three
     /// columns of ten rows.
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        let row = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row));
-        let row_height = row
-            .min_height
-            .max(row.text.line_height + row.padding.vertical());
+        let row_height = list_row_height(cx);
         let max = cx.constraints.max;
         let width = if max.width.is_finite() {
             max.width
@@ -916,11 +914,7 @@ impl CustomControl for HostedColumnBrowser {
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
-        let row = cx.style(StyleQuery::new(ControlKind::ListView, Slot::Row));
-        self.row_height = row
-            .min_height
-            .max(row.text.line_height + row.padding.vertical())
-            .max(1.0);
+        self.row_height = list_row_height(cx);
         self.column_width = cx.tokens.spacing * 50.0;
         self.bounds = bounds;
         self.rtl = cx.rtl();

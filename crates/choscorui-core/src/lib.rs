@@ -34,6 +34,8 @@ pub use layout_engine::{
 };
 mod scroll;
 pub use scroll::ScrollViewport;
+mod stack_window;
+pub use stack_window::UniformStack;
 mod semantics;
 pub use semantics::{
     AnnouncementPriority, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry,

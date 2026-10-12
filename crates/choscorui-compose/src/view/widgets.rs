@@ -19,7 +19,7 @@ use choscorui_controls::{
     ControlMessage, ControlSize, ControlValue, ListEntry, MenuItem, NavigationLink, SheetSide,
     SidebarItem, ToggleItem,
 };
-use choscorui_core::{CivilDate, Icon, ItemModel};
+use choscorui_core::{CivilDate, Icon, ItemModel, SelectionMode, SemanticRole};
 use std::rc::Rc;
 
 /// The command id that view buttons report; views run closures instead.
@@ -740,6 +740,38 @@ impl Configured<controls::DataTable> {
             )
         })
         .bind(selected, ControlValue::Indices, as_indices)
+    }
+}
+
+/// The rows of the model that `model` makes, one line of text each;
+/// `selection` edits the positions of the selected rows. The list is
+/// virtualized: it paints only the rows in view, so its cost does not
+/// grow with the model. The row height comes from the `ListView` recipe.
+pub type List = Configured<controls::ItemView>;
+
+impl Configured<controls::ItemView> {
+    pub fn new<M>(
+        name: impl IntoLive<TextContent, M>,
+        model: impl Fn() -> Box<dyn ItemModel> + 'static,
+        selection: Binding<Vec<usize>>,
+    ) -> Self {
+        let name = label(name);
+        Configured::custom(ControlKind::ListView, move |env| {
+            controls::ItemView::new(text(&name, env), SemanticRole::List, 1.0)
+                .with_model(model(), Box::new(controls::TextItemDelegate::default()))
+                .with_styled_rows()
+        })
+        .bind(selection, ControlValue::Indices, as_indices)
+    }
+
+    /// How many rows the user can select; the default is
+    /// `SelectionMode::Extended`.
+    #[must_use]
+    pub fn selection_mode(self, mode: SelectionMode) -> Self {
+        self.with(move |mut view| {
+            view.set_selection_mode(mode);
+            view
+        })
     }
 }
 

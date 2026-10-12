@@ -13,6 +13,7 @@ mod focus;
 mod fragment;
 mod host;
 mod layout;
+mod lazy;
 mod modifier;
 mod paint;
 mod present;
@@ -36,14 +37,16 @@ pub use layout::{
     Alignment, Divider, Grid, GridItem, Group, HStack, HorizontalAlignment, ScrollView, Spacer,
     VStack, VerticalAlignment, ZStack,
 };
+pub use lazy::{LazyHStack, LazyVStack};
 pub use modifier::{Edges, Frame, Styled, ViewExt};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{IntoTextArg, Localized, Text, TextContent};
 pub use widgets::{
     Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, Card, Carousel,
     Chart, Checkbox, Collapsible, Command, ContextMenu, DataTable, DatePicker, Dialog, EmptyState,
-    FieldText, Input, InputOtp, Items, Kbd, Marker, Menubar, NavigationMenu, Pagination, Popover,
-    RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch, Textarea, Toggle, ToggleGroup,
+    FieldText, Input, InputOtp, Items, Kbd, List, Marker, Menubar, NavigationMenu, Pagination,
+    Popover, RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch, Textarea, Toggle,
+    ToggleGroup,
 };
 
 /// A piece of user interface. A component implements [`View::body`] and

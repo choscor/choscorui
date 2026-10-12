@@ -26,7 +26,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 /// Mounts `view` in `fragment` under a new scope inside `owner`.
-fn mount_in(
+pub(super) fn mount_in(
     inner: &mut Inner,
     owner: ScopeId,
     parent: NodeId,
@@ -206,7 +206,7 @@ where
 }
 
 /// Moves the fragment's nodes so that the tree follows the fragment.
-fn reorder_nodes(inner: &mut Inner, parent: NodeId, fragment: FragmentId) {
+pub(super) fn reorder_nodes(inner: &mut Inner, parent: NodeId, fragment: FragmentId) {
     let base = inner.fragments.offset(fragment);
     let nodes = inner.fragments.nodes(fragment);
     for (index, node) in nodes.into_iter().enumerate() {
