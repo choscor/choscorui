@@ -1,7 +1,8 @@
 //! Feedback components: alerts, spinners, skeletons, empty states, and
 //! toasts.
 
-use crate::ui::page::{Build, PageCx, column, row, section};
+use crate::ui::page::{Build, PageCx, column, row, section, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{Alert, AnyView, Button, Configured, EmptyState, Skeleton, Spinner};
 use choscorui::controls::{
     AlertVariant, Avatar, ButtonVariant, ControlKind, Toast, ToastPosition, ToastVariant, Toaster,
@@ -10,159 +11,167 @@ use choscorui::controls::{
 use choscorui::core::Icon;
 
 pub fn alert(_: &PageCx) -> AnyView {
-    column((
-        section(
-            "Default",
-            Alert::new(
-                "Success! Your changes have been saved",
-                "This is an alert with an icon, a title, and a description.",
-            )
-            .with(|alert| alert.with_icon(Icon::CircleCheck)),
-        ),
-        section(
-            "Destructive",
-            Alert::new(
-                "Unable to process your payment.",
-                "Please verify your billing information and try again.",
-            )
-            .with(|alert| {
-                alert
-                    .with_variant(AlertVariant::Destructive)
-                    .with_icon(Icon::CircleAlert)
-            }),
-        ),
-        section(
-            "With actions",
-            Alert::new(
-                "A new version is available",
-                "Restart to install the update.",
-            )
-            .with(|alert| {
-                alert
-                    .with_icon(Icon::Info)
-                    .with_action("Restart", ButtonVariant::Outline)
-            }),
-        ),
-    ))
+    stateful(|cx| {
+        let env = cx.env().clone();
+        column((
+            section(
+                t!("alert.default"),
+                Alert::new(t!("alert.success_title"), t!("alert.success_description"))
+                    .with(|alert| alert.with_icon(Icon::CircleCheck)),
+            ),
+            section(
+                t!("alert.destructive"),
+                Alert::new(t!("alert.payment_title"), t!("alert.payment_description")).with(
+                    |alert| {
+                        alert
+                            .with_variant(AlertVariant::Destructive)
+                            .with_icon(Icon::CircleAlert)
+                    },
+                ),
+            ),
+            section(
+                t!("alert.with_actions"),
+                Alert::new(t!("alert.update_title"), t!("alert.update_description")).with(
+                    move |alert| {
+                        alert
+                            .with_icon(Icon::Info)
+                            .with_action(env.text("alert.restart", &[]), ButtonVariant::Outline)
+                    },
+                ),
+            ),
+        ))
+    })
 }
 
 pub fn spinner(_: &PageCx) -> AnyView {
     column(section(
-        "Spinner",
-        row((Spinner::new("Loading"), Spinner::new("Saving"))),
+        t!("spinner.spinner"),
+        row((
+            Spinner::new(t!("spinner.loading")),
+            Spinner::new(t!("spinner.saving")),
+        )),
     ))
 }
 
 pub fn skeleton(_: &PageCx) -> AnyView {
     column((
         section(
-            "Profile",
+            t!("skeleton.profile"),
             row((
-                Skeleton::new("Loading avatar", 48.0, 48.0).with(|skeleton| skeleton.circle()),
-                Skeleton::new("Loading name", 250.0, 16.0),
-                Skeleton::new("Loading email", 200.0, 16.0),
+                Skeleton::new(t!("skeleton.loading_avatar"), 48.0, 48.0)
+                    .with(|skeleton| skeleton.circle()),
+                Skeleton::new(t!("skeleton.loading_name"), 250.0, 16.0),
+                Skeleton::new(t!("skeleton.loading_email"), 200.0, 16.0),
             )),
         ),
         section(
-            "Card",
+            t!("skeleton.card"),
             row((
-                Skeleton::new("Loading image", 250.0, 125.0),
-                Skeleton::new("Loading title", 250.0, 16.0),
+                Skeleton::new(t!("skeleton.loading_image"), 250.0, 125.0),
+                Skeleton::new(t!("skeleton.loading_title"), 250.0, 16.0),
             )),
         ),
     ))
 }
 
 pub fn empty(_: &PageCx) -> AnyView {
-    column((
-        section(
-            "Icon media",
-            EmptyState::new(
-                "No projects yet",
-                "You haven't created any projects yet. Get started by creating your first project.",
-            )
-            .with(|empty| {
-                empty
-                    .with_icon(Icon::Inbox)
-                    .with_action("Create project", ButtonVariant::Default)
-                    .with_action("Import project", ButtonVariant::Outline)
-            }),
-        ),
-        section(
-            "Avatar media",
-            EmptyState::new(
-                "User offline",
-                "This user is currently offline. You can leave a message.",
-            )
-            .with(|empty| {
-                empty
-                    .with_avatar(Avatar::new("Ana Lee", "AL"))
-                    .with_action("Leave message", ButtonVariant::Default)
-            }),
-        ),
-    ))
+    stateful(|cx| {
+        let (projects, offline) = (cx.env().clone(), cx.env().clone());
+        column((
+            section(
+                t!("empty.icon_media"),
+                EmptyState::new(t!("empty.no_projects"), t!("empty.no_projects_description")).with(
+                    move |empty| {
+                        let text = |key| projects.text(key, &[]);
+                        empty
+                            .with_icon(Icon::Inbox)
+                            .with_action(text("empty.create_project"), ButtonVariant::Default)
+                            .with_action(text("empty.import_project"), ButtonVariant::Outline)
+                    },
+                ),
+            ),
+            section(
+                t!("empty.avatar_media"),
+                EmptyState::new(t!("empty.offline"), t!("empty.offline_description")).with(
+                    move |empty| {
+                        empty.with_avatar(Avatar::new("Ana Lee", "AL")).with_action(
+                            offline.text("empty.leave_message", &[]),
+                            ButtonVariant::Default,
+                        )
+                    },
+                ),
+            ),
+        ))
+    })
 }
 
 pub fn toast(_: &PageCx) -> AnyView {
     let toasts = Toasts::new();
-    let trigger = |label: &'static str, toast: Toast| {
-        let toasts = toasts.clone();
-        Button::new(label, move || {
-            toasts.push(toast.clone());
-        })
-        .variant(ButtonVariant::Outline)
-    };
-    let toaster = {
-        let toasts = toasts.clone();
-        Configured::custom(ControlKind::Toast, move |_| {
-            Toaster::new("Notifications", toasts.clone(), "Close")
+    stateful(move |cx| {
+        let env = cx.env().clone();
+        let text = |key| env.text(key, &[]);
+        let trigger = |label: &'static str, toast: Toast| {
+            let toasts = toasts.clone();
+            Button::new(t!(label), move || {
+                toasts.push(toast.clone());
+            })
+            .variant(ButtonVariant::Outline)
+        };
+        let toaster = {
+            let toasts = toasts.clone();
+            Configured::custom(ControlKind::Toast, move |env| {
+                Toaster::new(
+                    env.text("toast.notifications", &[]),
+                    toasts.clone(),
+                    env.text("toast.close", &[]),
+                )
                 .with_position(ToastPosition::BottomEnd)
-        })
-    };
-    column((
-        section(
-            "Variants",
-            row((
-                trigger(
-                    "Default",
-                    Toast::new("Event has been created")
-                        .with_description("Sunday, December 3 at 9:00 AM"),
-                ),
-                trigger(
-                    "Success",
-                    Toast::new("Changes saved").with_variant(ToastVariant::Success),
-                ),
-                trigger(
-                    "Info",
-                    Toast::new("Be at the area 10 minutes before the event time")
-                        .with_variant(ToastVariant::Info),
-                ),
-                trigger(
-                    "Warning",
-                    Toast::new("Event start time cannot be earlier than 8am")
-                        .with_variant(ToastVariant::Warning),
-                ),
-                trigger(
-                    "Error",
-                    Toast::new("Event has not been created").with_variant(ToastVariant::Error),
-                ),
-                trigger(
-                    "Loading",
-                    Toast::new("Loading...")
-                        .with_variant(ToastVariant::Loading)
-                        .with_duration(Some(4.0)),
-                ),
-            )),
-        ),
-        section(
-            "Action",
-            trigger(
-                "With action",
-                Toast::new("Message deleted").with_action("Undo"),
+            })
+        };
+        column((
+            section(
+                t!("toast.variants"),
+                row((
+                    trigger(
+                        "toast.default",
+                        Toast::new(text("toast.created"))
+                            .with_description(text("toast.created_when")),
+                    ),
+                    trigger(
+                        "toast.success",
+                        Toast::new(text("toast.saved")).with_variant(ToastVariant::Success),
+                    ),
+                    trigger(
+                        "toast.info",
+                        Toast::new(text("toast.info_message")).with_variant(ToastVariant::Info),
+                    ),
+                    trigger(
+                        "toast.warning",
+                        Toast::new(text("toast.warning_message"))
+                            .with_variant(ToastVariant::Warning),
+                    ),
+                    trigger(
+                        "toast.error",
+                        Toast::new(text("toast.error_message")).with_variant(ToastVariant::Error),
+                    ),
+                    trigger(
+                        "toast.loading",
+                        Toast::new(text("toast.loading_message"))
+                            .with_variant(ToastVariant::Loading)
+                            .with_duration(Some(4.0)),
+                    ),
+                )),
             ),
-        ),
-        section("Toaster", toaster),
-    ))
+            section(
+                t!("toast.action"),
+                trigger(
+                    "toast.with_action",
+                    Toast::new(text("toast.deleted")).with_action(text("toast.undo")),
+                ),
+            ),
+            section(t!("toast.toaster"), toaster),
+        ))
+    })
 }
 
 /// The view of page `id`, when this module has it.

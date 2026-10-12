@@ -1,10 +1,11 @@
 //! Extension points: swappable button recipes and an application-defined
 //! control mounted as a view.
 
-use crate::ui::page::{Build, PageCx, column};
+use crate::ui::page::{Build, PageCx, column, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, ControlView, Cx, Frame, HorizontalAlignment, State,
-    Text, VStack, View, ViewExt,
+    Alignment, AnyView, Button, Configured, ControlView, Cx, Env, Frame, HorizontalAlignment,
+    State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, CommandId, CommandLink, ControlContext, ControlEvent, ControlKind,
@@ -49,28 +50,47 @@ struct ButtonRecipesPage;
 
 impl View for ButtonRecipesPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state("Each button runs the same behavior.".to_owned());
-        let activated = move |title: &'static str| move || last.set(format!("Activated “{title}”"));
+        let env = cx.env().clone();
+        let text = |key| env.text(key, &[]);
+        let last = cx.state(text("button-recipes.intro"));
+        // Reports the button whose label is the catalog string `key`.
+        let activated = |key: &'static str| {
+            let env = env.clone();
+            move || {
+                let title = env.text(key, &[]);
+                last.set(env.text("button-recipes.activated", &[("title", &title)]));
+            }
+        };
         let width = Frame::new().width(300.0).alignment(Alignment::FILL);
         column((
-            Button::new("Default", activated("Default"))
-                .accessibility_hint("The default button recipe".to_owned())
-                .frame(width),
-            Button::new("Square", activated("Square"))
-                .recipe(ControlKind::Button, Rc::new(Square))
-                .accessibility_hint(
-                    "An application recipe registered for the button kind".to_owned(),
+            Button::new(
+                t!("button-recipes.default"),
+                activated("button-recipes.default"),
+            )
+            .accessibility_hint(text("button-recipes.default_hint"))
+            .frame(width),
+            Button::new(
+                t!("button-recipes.square"),
+                activated("button-recipes.square"),
+            )
+            .recipe(ControlKind::Button, Rc::new(Square))
+            .accessibility_hint(text("button-recipes.square_hint"))
+            .frame(width),
+            Button::new(
+                t!("button-recipes.delete"),
+                activated("button-recipes.delete"),
+            )
+            .variant(ButtonVariant::Destructive)
+            .accessibility_hint(text("button-recipes.delete_hint"))
+            .frame(width),
+            Configured::custom(ControlKind::Item, |env| {
+                CommandLink::new(
+                    env.text("button-recipes.continue", &[]),
+                    env.text("button-recipes.link_description", &[]),
                 )
-                .frame(width),
-            Button::new("Delete", activated("Delete"))
-                .variant(ButtonVariant::Destructive)
-                .accessibility_hint("The destructive variant".to_owned())
-                .frame(width),
-            Configured::custom(ControlKind::Item, |_| {
-                CommandLink::new("Continue setup", "Command link: a title and a description")
-                    .hosted(CommandId(4))
+                .hosted(CommandId(4))
             })
-            .on_activate(activated("Continue setup"))
+            .on_activate(activated("button-recipes.continue"))
             .frame(width),
             status(last),
         ))
@@ -93,14 +113,17 @@ struct StarRating {
     name: String,
     value: u8,
     hover: Option<u8>,
+    /// Translates the description and the spoken value.
+    env: Env,
 }
 
 impl StarRating {
-    fn new(name: &str, value: u8) -> Self {
+    fn new(name: String, value: u8, env: Env) -> Self {
         Self {
-            name: name.to_owned(),
+            name,
             value: value.min(5),
             hover: None,
+            env,
         }
     }
 
@@ -220,8 +243,11 @@ impl CustomControl for StarRating {
         SemanticNode {
             role: SemanticRole::Slider,
             name: self.name.clone(),
-            description: "Five-star rating".into(),
-            value: Some(format!("{} of 5 stars", self.value)),
+            description: self.env.text("custom-control.rating", &[]),
+            value: Some(self.env.text(
+                "custom-control.stars",
+                &[("value", &self.value.to_string())],
+            )),
             state: SemanticState::default(),
             relations: Vec::new(),
             actions: vec![
@@ -251,22 +277,28 @@ impl CustomControl for StarRating {
     }
 }
 
-/// A captioned star rating. The caption repeats the rating's name, so
-/// assistive technology skips it.
-fn rating(name: &'static str, value: u8) -> impl View {
+/// A captioned star rating named by the catalog string `key`. The caption
+/// repeats the rating's name, so assistive technology skips it.
+fn rating(env: &Env, key: &'static str, value: u8) -> impl View {
     VStack::new((
-        Text::new(name)
+        Text::new(t!(key))
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground)
             .accessibility_hidden(true),
-        ControlView::new(StarRating::new(name, value)),
+        ControlView::new(StarRating::new(env.text(key, &[]), value, env.clone())),
     ))
     .alignment(HorizontalAlignment::Leading)
     .spacing(Space::S1)
 }
 
 pub fn custom_control(_: &PageCx) -> AnyView {
-    column((rating("Food", 4), rating("Service", 2)))
+    stateful(|cx| {
+        let env = cx.env();
+        column((
+            rating(env, "custom-control.food", 4),
+            rating(env, "custom-control.service", 2),
+        ))
+    })
 }
 
 /// The view of page `id`, when this module has it.

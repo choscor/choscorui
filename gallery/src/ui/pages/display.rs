@@ -2,8 +2,9 @@
 //! table, and charts.
 
 use crate::ui::page::{Build, PageCx, column, portrait, row, section, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Avatar, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, View, ViewExt,
+    AnyView, Avatar, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, Env, View, ViewExt,
 };
 use choscorui::controls::{
     self, AvatarGroup, BadgeVariant, ButtonVariant, ChartKind, ChartSeries, ControlKind,
@@ -12,75 +13,77 @@ use choscorui::controls::{
 use choscorui::core::{Icon, ItemData, ItemModel, ListStore, Role, Value};
 
 pub fn card(_: &PageCx) -> AnyView {
-    column((
-        section(
-            "Header action and footer",
-            Card::new(
-                "Login to your account",
-                "Enter your email below to login to your account.",
-            )
-            .with(|card| {
-                card.with_action("Sign Up", ButtonVariant::Link)
-                    .with_content("Use the email address that your team invited.")
-                    .with_footer("Login with Google", ButtonVariant::Outline)
-                    .with_footer("Login", ButtonVariant::Default)
-            }),
-        ),
-        section(
-            "Small",
-            Card::new("Scheduled reports", "Weekly summary of your workspace.").with(|card| {
-                card.with_content("The next report goes out on Monday at 9:00.")
-                    .with_footer("Manage", ButtonVariant::Outline)
-                    .with_size(ControlSize::Sm)
-            }),
-        ),
-    ))
+    stateful(|cx| {
+        let (login, reports) = (cx.env().clone(), cx.env().clone());
+        column((
+            section(
+                t!("card.header_action"),
+                Card::new(t!("card.login_title"), t!("card.login_description")).with(move |card| {
+                    let text = |key| login.text(key, &[]);
+                    card.with_action(text("card.sign_up"), ButtonVariant::Link)
+                        .with_content(text("card.login_content"))
+                        .with_footer(text("card.login_google"), ButtonVariant::Outline)
+                        .with_footer(text("card.login"), ButtonVariant::Default)
+                }),
+            ),
+            section(
+                t!("card.small"),
+                Card::new(t!("card.reports_title"), t!("card.reports_description")).with(
+                    move |card| {
+                        card.with_content(reports.text("card.reports_content", &[]))
+                            .with_footer(reports.text("card.manage", &[]), ButtonVariant::Outline)
+                            .with_size(ControlSize::Sm)
+                    },
+                ),
+            ),
+        ))
+    })
 }
 
 pub fn badge(_: &PageCx) -> AnyView {
     let variants = [
-        ("Default", BadgeVariant::Default),
-        ("Secondary", BadgeVariant::Secondary),
-        ("Destructive", BadgeVariant::Destructive),
-        ("Outline", BadgeVariant::Outline),
-        ("Ghost", BadgeVariant::Ghost),
-        ("Link", BadgeVariant::Link),
+        ("badge.default", BadgeVariant::Default),
+        ("badge.secondary", BadgeVariant::Secondary),
+        ("badge.destructive", BadgeVariant::Destructive),
+        ("badge.outline", BadgeVariant::Outline),
+        ("badge.ghost", BadgeVariant::Ghost),
+        ("badge.link", BadgeVariant::Link),
     ];
-    let badge = |label: &'static str, variant: BadgeVariant| {
-        Badge::new(label).with(move |badge| badge.with_variant(variant))
+    let badge = |key: &'static str, variant: BadgeVariant| {
+        Badge::new(t!(key)).with(move |badge| badge.with_variant(variant))
     };
-    let iconic = |label: &'static str, variant: BadgeVariant, icon: Icon| {
-        badge(label, variant).with(move |badge| badge.with_icon(icon))
+    let iconic = |key: &'static str, variant: BadgeVariant, icon: Icon| {
+        badge(key, variant).with(move |badge| badge.with_icon(icon))
     };
     column((
         section(
-            "Variants",
+            t!("badge.variants"),
             row(variants
                 .into_iter()
-                .map(|(label, variant)| badge(label, variant))
+                .map(|(key, variant)| badge(key, variant))
                 .collect::<Vec<_>>()),
         ),
         section(
-            "With icons",
+            t!("badge.with_icons"),
             row((
-                iconic("Verified", BadgeVariant::Secondary, Icon::Check),
-                iconic("Failed", BadgeVariant::Destructive, Icon::OctagonX),
-                iconic("Syncing", BadgeVariant::Outline, Icon::LoaderCircle),
+                iconic("badge.verified", BadgeVariant::Secondary, Icon::Check),
+                iconic("badge.failed", BadgeVariant::Destructive, Icon::OctagonX),
+                iconic("badge.syncing", BadgeVariant::Outline, Icon::LoaderCircle),
             )),
         ),
         section(
-            "Links",
+            t!("badge.links"),
             row((
-                Badge::new("Open issue").with(|badge| badge.as_link()),
-                badge("Changelog", BadgeVariant::Outline).with(|badge| badge.as_link()),
+                Badge::new(t!("badge.open_issue")).with(|badge| badge.as_link()),
+                badge("badge.changelog", BadgeVariant::Outline).with(|badge| badge.as_link()),
             )),
         ),
     ))
 }
 
-/// A group of three people at `size`.
+/// A group of three people at `size`, named by the catalog string `name`.
 fn team(name: &'static str, size: ControlSize, count: Option<&'static str>) -> impl View {
-    Configured::custom(ControlKind::Avatar, move |_| {
+    Configured::custom(ControlKind::Avatar, move |env| {
         let people = vec![
             controls::Avatar::new("Ana Lee", "AL").with_image(portrait()),
             controls::Avatar::new("Bao Tran", "BT"),
@@ -89,7 +92,7 @@ fn team(name: &'static str, size: ControlSize, count: Option<&'static str>) -> i
         .into_iter()
         .map(|avatar| avatar.with_size(size))
         .collect();
-        let group = AvatarGroup::new(name, people).with_size(size);
+        let group = AvatarGroup::new(env.text(name, &[]), people).with_size(size);
         match count {
             Some(count) => group.with_count(count),
             None => group,
@@ -101,18 +104,18 @@ pub fn avatar(_: &PageCx) -> AnyView {
     let ana = || Avatar::new("Ana Lee", "AL").with(|avatar| avatar.with_image(portrait()));
     column((
         section(
-            "Image and fallback",
+            t!("avatar.image_fallback"),
             row((ana(), Avatar::new("Bao Tran", "BT"))),
         ),
         section(
-            "Sizes",
+            t!("avatar.sizes"),
             row([ControlSize::Sm, ControlSize::Default, ControlSize::Lg]
                 .into_iter()
                 .map(|size| Avatar::new("Chi Vo", "CV").with(move |avatar| avatar.with_size(size)))
                 .collect::<Vec<_>>()),
         ),
         section(
-            "Badges",
+            t!("avatar.badges"),
             row((
                 Avatar::new("Ana Lee", "AL").with(|avatar| avatar.with_badge(None)),
                 Avatar::new("Bao Tran", "BT").with(|avatar| {
@@ -123,10 +126,10 @@ pub fn avatar(_: &PageCx) -> AnyView {
             )),
         ),
         section(
-            "Groups",
+            t!("avatar.groups"),
             row((
-                team("Design team", ControlSize::Default, Some("+3")),
-                team("Small team", ControlSize::Sm, None),
+                team("avatar.design_team", ControlSize::Default, Some("+3")),
+                team("avatar.small_team", ControlSize::Sm, None),
             )),
         ),
     ))
@@ -136,15 +139,16 @@ fn numbers(count: usize) -> Vec<String> {
     (1..=count).map(|n| n.to_string()).collect()
 }
 
+/// A carousel named by the catalog string `name`.
 fn carousel_of(
     cx: &mut Cx<'_>,
     name: &'static str,
     count: usize,
 ) -> Configured<controls::Carousel> {
     Carousel::new(
-        name,
-        "Previous slide",
-        "Next slide",
+        t!(name),
+        t!("carousel.previous"),
+        t!("carousel.next"),
         numbers(count),
         cx.state(0).binding(),
     )
@@ -153,14 +157,18 @@ fn carousel_of(
 pub fn carousel(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
-            section("Horizontal", carousel_of(cx, "Slides", 5)),
             section(
-                "Three per view",
-                carousel_of(cx, "Thumbnails", 8).with(|carousel| carousel.with_per_view(3)),
+                t!("carousel.horizontal"),
+                carousel_of(cx, "carousel.slides", 5),
             ),
             section(
-                "Vertical",
-                carousel_of(cx, "Stacked slides", 5).with(|carousel| {
+                t!("carousel.three_per_view"),
+                carousel_of(cx, "carousel.thumbnails", 8)
+                    .with(|carousel| carousel.with_per_view(3)),
+            ),
+            section(
+                t!("carousel.vertical"),
+                carousel_of(cx, "carousel.stacked", 5).with(|carousel| {
                     carousel
                         .with_orientation(Orientation::Vertical)
                         .with_per_view(2)
@@ -171,12 +179,12 @@ pub fn carousel(_: &PageCx) -> AnyView {
 }
 
 /// One payment row: status, email, and amount.
-struct Payment(&'static str, &'static str, f64);
+struct Payment(String, &'static str, f64);
 
 impl ItemData for Payment {
     fn data(&self, column: usize, role: Role) -> Value {
         match (column, role) {
-            (0, Role::Display | Role::Sort) => Value::Text(self.0.into()),
+            (0, Role::Display | Role::Sort) => Value::Text(self.0.clone()),
             (1, Role::Display | Role::Sort) => Value::Text(self.1.into()),
             (2, Role::Display) => Value::Text(format!("${:.2}", self.2)),
             (2, Role::Sort) => Value::Float(self.2),
@@ -185,40 +193,54 @@ impl ItemData for Payment {
     }
 }
 
-fn payments() -> Box<dyn ItemModel> {
+fn payments(env: &Env) -> Box<dyn ItemModel> {
+    let text = |key| env.text(key, &[]);
     let mut store = ListStore::new(3);
-    store.set_headers(["Status", "Email", "Amount"]);
-    let rows = vec![
-        Payment("success", "ken99@example.com", 316.0),
-        Payment("success", "abe45@example.com", 242.0),
-        Payment("processing", "monserrat44@example.com", 837.0),
-        Payment("success", "silas22@example.com", 874.0),
-        Payment("failed", "carmella@example.com", 721.0),
-        Payment("pending", "jason78@example.com", 450.0),
-        Payment("success", "sarah23@example.com", 1280.0),
-    ];
+    store.set_headers([
+        text("data-table.status_column"),
+        text("data-table.email_column"),
+        text("data-table.amount_column"),
+    ]);
+    let rows: Vec<Payment> = [
+        ("data-table.success", "ken99@example.com", 316.0),
+        ("data-table.success", "abe45@example.com", 242.0),
+        ("data-table.processing", "monserrat44@example.com", 837.0),
+        ("data-table.success", "silas22@example.com", 874.0),
+        ("data-table.failed", "carmella@example.com", 721.0),
+        ("data-table.pending", "jason78@example.com", 450.0),
+        ("data-table.success", "sarah23@example.com", 1280.0),
+    ]
+    .into_iter()
+    .map(|(status, email, amount)| Payment(text(status), email, amount))
+    .collect();
     store.insert(None, 0, rows).expect("root insert is valid");
     Box::new(store)
 }
 
 pub fn data_table(_: &PageCx) -> AnyView {
     stateful(|cx| {
+        let (model, options) = (cx.env().clone(), cx.env().clone());
         column(section(
-            "Sort, filter, columns, selection, and pages",
+            t!("data-table.features"),
             DataTable::new(
-                "Payments",
-                payments,
-                "Previous",
-                "Next",
+                t!("data-table.payments"),
+                move || payments(&model),
+                t!("data-table.previous"),
+                t!("data-table.next"),
                 cx.state(Vec::new()).binding(),
             )
-            .with(|table| {
+            .with(move |table| {
+                let status = options.clone();
                 table
-                    .with_filter("Filter emails...", Some(1))
-                    .with_column_menu("Columns")
-                    .with_empty("No results.")
-                    .with_status(|selected, total| {
-                        format!("{selected} of {total} row(s) selected.")
+                    .with_filter(options.text("data-table.filter", &[]), Some(1))
+                    .with_column_menu(options.text("data-table.columns", &[]))
+                    .with_empty(options.text("data-table.empty", &[]))
+                    .with_status(move |selected, total| {
+                        let (selected, total) = (selected.to_string(), total.to_string());
+                        status.text(
+                            "data-table.status",
+                            &[("selected", &selected), ("total", &total)],
+                        )
                     })
                     .with_page_size(5)
             }),
@@ -226,47 +248,64 @@ pub fn data_table(_: &PageCx) -> AnyView {
     })
 }
 
-fn months() -> Vec<String> {
-    ["January", "February", "March", "April", "May", "June"]
-        .map(String::from)
-        .to_vec()
+fn months(env: &Env) -> Vec<String> {
+    [
+        "chart.january",
+        "chart.february",
+        "chart.march",
+        "chart.april",
+        "chart.may",
+        "chart.june",
+    ]
+    .map(|key| env.text(key, &[]))
+    .to_vec()
 }
 
 fn visitors(kind: ChartKind) -> impl View {
-    Chart::new(
-        "Visitors by month",
-        kind,
-        months(),
+    Chart::new(t!("chart.visitors_by_month"), kind, months, |env: &Env| {
         vec![
-            ChartSeries::new("Desktop", vec![186.0, 305.0, 237.0, 73.0, 209.0, 214.0]),
-            ChartSeries::new("Mobile", vec![80.0, 200.0, 120.0, 190.0, 130.0, 140.0]),
-        ],
-    )
+            ChartSeries::new(
+                env.text("chart.desktop", &[]),
+                vec![186.0, 305.0, 237.0, 73.0, 209.0, 214.0],
+            ),
+            ChartSeries::new(
+                env.text("chart.mobile", &[]),
+                vec![80.0, 200.0, 120.0, 190.0, 130.0, 140.0],
+            ),
+        ]
+    })
     .with(|chart| chart.with_legend())
 }
 
+/// Browser names are product names; only the rest category translates.
 fn browsers(kind: ChartKind) -> Configured<controls::Chart> {
     Chart::new(
-        "Visitors by browser",
+        t!("chart.visitors_by_browser"),
         kind,
-        ["Chrome", "Safari", "Firefox", "Edge", "Other"]
-            .map(String::from)
-            .to_vec(),
-        vec![ChartSeries::new(
-            "Visitors",
-            vec![275.0, 200.0, 187.0, 173.0, 90.0],
-        )],
+        |env: &Env| {
+            let mut names = ["Chrome", "Safari", "Firefox", "Edge"]
+                .map(String::from)
+                .to_vec();
+            names.push(env.text("chart.other", &[]));
+            names
+        },
+        |env: &Env| {
+            vec![ChartSeries::new(
+                env.text("chart.visitors", &[]),
+                vec![275.0, 200.0, 187.0, 173.0, 90.0],
+            )]
+        },
     )
     .with(|chart| chart.with_legend())
 }
 
 pub fn chart(_: &PageCx) -> AnyView {
     column((
-        section("Bar", visitors(ChartKind::Bar)),
-        section("Area", visitors(ChartKind::Area)),
-        section("Line", visitors(ChartKind::Line)),
+        section(t!("chart.bar"), visitors(ChartKind::Bar)),
+        section(t!("chart.area"), visitors(ChartKind::Area)),
+        section(t!("chart.line"), visitors(ChartKind::Line)),
         section(
-            "Pie and donut",
+            t!("chart.pie_donut"),
             // The two charts share the width.
             row((
                 browsers(ChartKind::Pie).layout_priority(1.0),
@@ -275,8 +314,8 @@ pub fn chart(_: &PageCx) -> AnyView {
                     .layout_priority(1.0),
             )),
         ),
-        section("Radar", visitors(ChartKind::Radar)),
-        section("Radial", browsers(ChartKind::Radial)),
+        section(t!("chart.radar"), visitors(ChartKind::Radar)),
+        section(t!("chart.radial"), browsers(ChartKind::Radial)),
     ))
 }
 

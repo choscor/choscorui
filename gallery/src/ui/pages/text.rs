@@ -2,15 +2,16 @@
 //! inputs (numbers, masks, dates) with validation feedback.
 
 use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Cx, Dynamic, Frame, HorizontalAlignment, Text, TextEditor, VStack, View,
-    ViewExt,
+    AnyView, Configured, Cx, Dynamic, Env, Frame, HorizontalAlignment, Text, TextEditor, VStack,
+    View, ViewExt,
 };
 use choscorui::controls::{
     self, ControlKind, ControlMessage, ControlValue, DateInput, InputMask, NumberInput,
     ValidationState,
 };
-use choscorui::core::{CivilDate, ColorRole, Locale, Space, TextPreset};
+use choscorui::core::{CivilDate, ColorRole, Space, TextPreset};
 use std::rc::Rc;
 
 /// A small muted caption that follows `text`. Captions repeat the name of
@@ -23,21 +24,24 @@ fn field_caption(text: impl Fn() -> String + 'static) -> impl View {
         .accessibility_hidden(true)
 }
 
-fn validate_required(value: &str) -> Option<String> {
+fn validate_required(env: &Env, value: &str) -> Option<String> {
     if value.is_empty() {
-        Some("An email address is required".into())
+        Some(env.text("text-field.email_required", &[]))
     } else if !value.contains('@') {
-        Some("Enter an address like name@example.com".into())
+        Some(env.text(
+            "text-field.email_example",
+            &[("example", "name@example.com")],
+        ))
     } else {
         None
     }
 }
 
 /// One sample text field: its label, first value, and kind.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Sample {
-    label: &'static str,
-    value: &'static str,
+    label: String,
+    value: String,
     password: bool,
     /// Return checks the value; an edit clears the error.
     required: bool,
@@ -49,31 +53,33 @@ struct TextFieldPage;
 
 impl View for TextFieldPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let env = cx.env().clone();
+        let text = |key| env.text(key, &[]);
         let samples = [
             Sample {
-                label: "Name",
-                value: "Nguyễn Thị Lựu",
+                label: text("text-field.name"),
+                value: "Nguyễn Thị Lựu".into(),
                 password: false,
                 required: false,
                 enabled: true,
             },
             Sample {
-                label: "Password",
-                value: "hunter2",
+                label: text("text-field.password"),
+                value: "hunter2".into(),
                 password: true,
                 required: false,
                 enabled: true,
             },
             Sample {
-                label: "Email (required; Return validates)",
-                value: "",
+                label: text("text-field.email"),
+                value: String::new(),
                 password: false,
                 required: true,
                 enabled: true,
             },
             Sample {
-                label: "Disabled",
-                value: "Read only",
+                label: text("text-field.disabled"),
+                value: text("text-field.read_only"),
                 password: false,
                 required: false,
                 enabled: false,
@@ -89,15 +95,23 @@ impl View for TextFieldPage {
 }
 
 fn sample_field(cx: &mut Cx<'_>, sample: Sample) -> AnyView {
-    let value = cx.state(sample.value.to_owned());
+    let env = cx.env().clone();
+    let Sample {
+        label,
+        value,
+        password,
+        required,
+        enabled,
+    } = sample;
+    let value = cx.state(value);
     // The message of a failed check; `None` while the value may be valid.
     let error = cx.state(None::<String>);
-    let label = sample.label;
+    let name = label.clone();
     let input = Configured::custom(ControlKind::Input, move |_| {
-        let mut input = if sample.password {
-            controls::Input::password(label, "")
+        let mut input = if password {
+            controls::Input::password(name.clone(), "")
         } else {
-            controls::Input::new(label, "")
+            controls::Input::new(name.clone(), "")
         };
         input.set_validation(match error.get() {
             Some(message) => ValidationState::Invalid(message),
@@ -109,21 +123,21 @@ fn sample_field(cx: &mut Cx<'_>, sample: Sample) -> AnyView {
     .on_message(move |message| match message {
         ControlMessage::Changed(ControlValue::Text(text)) => {
             value.set(text.clone());
-            if sample.required {
+            if required {
                 error.set(None);
             }
         }
-        ControlMessage::Activated if sample.required => {
-            error.set(validate_required(&value.get()));
+        ControlMessage::Activated if required => {
+            error.set(validate_required(&env, &value.get()));
         }
         _ => {}
     })
     .frame(Frame::new().width(340.0))
-    .disabled(!sample.enabled);
+    .disabled(!enabled);
     VStack::new((
         field_caption(move || match error.get() {
             Some(message) => format!("{label} — {message}"),
-            None => label.to_owned(),
+            None => label.clone(),
         }),
         input,
     ))
@@ -136,17 +150,17 @@ pub fn text_field(_: &PageCx) -> AnyView {
     TextFieldPage.into_any()
 }
 
-const EDITOR_TEXT: &str = "Multilingual editing: Tiếng Việt có dấu, 日本語, 中文, and emoji 👩‍💻.\n\
-Click to place the caret, drag to select, and use the arrow keys with Shift and Option.\n\
-⌘A selects all; ⌘Z undoes and ⇧⌘Z redoes.";
-
 /// The multi-line editor.
 struct TextEditorPage;
 
 impl View for TextEditorPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let text = cx.state(EDITOR_TEXT.to_owned());
-        column(TextEditor::new("Document", text.binding()).frame(Frame::size(620.0, 320.0)))
+        let sample = cx.env().text("text-editor.sample", &[]);
+        let text = cx.state(sample);
+        column(
+            TextEditor::new(t!("text-editor.document"), text.binding())
+                .frame(Frame::size(620.0, 320.0)),
+        )
     }
 }
 
@@ -168,10 +182,10 @@ struct RuleField {
 }
 
 /// The line under a field: whether its value is valid, or why not.
-fn verdict(validation: &ValidationState) -> String {
+fn verdict(env: &Env, validation: &ValidationState) -> String {
     match validation {
-        ValidationState::Valid => "Valid".into(),
-        ValidationState::Intermediate => "Incomplete".into(),
+        ValidationState::Valid => env.text("number-input.valid", &[]),
+        ValidationState::Intermediate => env.text("number-input.incomplete", &[]),
         ValidationState::Invalid(message) => message.clone(),
     }
 }
@@ -201,6 +215,7 @@ fn rule_field(cx: &mut Cx<'_>, field: RuleField) -> AnyView {
         placeholder,
         rule,
     } = field;
+    let env = cx.env().clone();
     let raw = cx.state(raw);
     let checked = {
         let rule = rule.clone();
@@ -244,15 +259,15 @@ fn rule_field(cx: &mut Cx<'_>, field: RuleField) -> AnyView {
         .value(move || ControlValue::Text(shown()))
         .on_message(typed)
         .accessibility_hint({
-            let checked = checked.clone();
-            move || verdict(&checked().1)
+            let (checked, env) = (checked.clone(), env.clone());
+            move || verdict(&env, &checked().1)
         })
         .frame(Frame::new().width(300.0));
     let invalid = {
         let checked = checked.clone();
         move || matches!(checked().1, ValidationState::Invalid(_))
     };
-    let message = Text::new(move || verdict(&checked().1))
+    let message = Text::new(move || verdict(&env, &checked().1))
         .text_style(TextPreset::Small)
         .foreground(move || {
             if invalid() {
@@ -268,19 +283,20 @@ fn rule_field(cx: &mut Cx<'_>, field: RuleField) -> AnyView {
         .into_any()
 }
 
-/// A page of structured fields that `fields` makes for the locale. The
-/// fields are made again when the locale changes.
-struct RulePage(fn(&Locale) -> Vec<RuleField>);
+/// A page of structured fields that `fields` makes for the environment's
+/// locale and catalog. The fields are made again when the locale changes.
+struct RulePage(fn(&Env) -> Vec<RuleField>);
 
 impl View for RulePage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let env = cx.env().clone();
         let fields = self.0;
-        column(Dynamic::new(move || RuleFields(fields(&env.locale()))))
+        column(Dynamic::new(move || RuleFields(fields(&env))))
     }
 }
 
-fn number_fields(locale: &Locale) -> Vec<RuleField> {
+fn number_fields(env: &Env) -> Vec<RuleField> {
+    let locale = env.locale();
     let amount = NumberInput::new(locale.clone(), 2).with_range(Some(0.0), Some(1e9));
     let quantity = NumberInput::new(locale.clone(), 0).with_range(Some(1.0), Some(10_000.0));
     let sample = locale
@@ -288,16 +304,13 @@ fn number_fields(locale: &Locale) -> Vec<RuleField> {
         .unwrap_or_else(|_| "1234.50".into());
     vec![
         RuleField {
-            label: format!(
-                "Amount (0 – 1,000,000,000; 2 decimals, locale {})",
-                locale.tag()
-            ),
+            label: env.text("number-input.amount", &[("locale", &locale.tag())]),
             raw: sample.clone(),
             placeholder: sample,
             rule: Rc::new(move |text| (text.to_owned(), amount.validate(text).0)),
         },
         RuleField {
-            label: "Quantity (1 – 10,000; whole numbers)".into(),
+            label: env.text("number-input.quantity", &[]),
             raw: "12".into(),
             placeholder: "12".into(),
             rule: Rc::new(move |text| (text.to_owned(), quantity.validate(text).0)),
@@ -305,27 +318,24 @@ fn number_fields(locale: &Locale) -> Vec<RuleField> {
     ]
 }
 
-fn mask_fields(_: &Locale) -> Vec<RuleField> {
-    let masked = |label: &str, raw: &str, pattern: &str| {
+fn mask_fields(env: &Env) -> Vec<RuleField> {
+    let masked = |key: &str, raw: &str, pattern: &str| {
         let mask = InputMask::parse(pattern).expect("demo masks are valid");
         RuleField {
-            label: label.into(),
+            label: env.text(key, &[("mask", pattern)]),
             raw: raw.into(),
             placeholder: mask.placeholder('_'),
             rule: Rc::new(move |raw| (mask.apply(raw).display, mask.validate(raw))),
         }
     };
     vec![
-        masked("Phone, mask (999) 999-9999", "0905", "(999) 999-9999"),
-        masked(
-            "Licence plate, mask >AA-99999 (uppercased)",
-            "",
-            ">AA-99999",
-        ),
+        masked("input-mask.phone", "0905", "(999) 999-9999"),
+        masked("input-mask.plate", "", ">AA-99999"),
     ]
 }
 
-fn date_fields(locale: &Locale) -> Vec<RuleField> {
+fn date_fields(env: &Env) -> Vec<RuleField> {
+    let locale = env.locale();
     let any = DateInput::new(locale.clone());
     let placeholder = any.placeholder();
     let ranged = DateInput::new(locale.clone()).with_range(
@@ -336,13 +346,13 @@ fn date_fields(locale: &Locale) -> Vec<RuleField> {
     let sample = any.format(today);
     vec![
         RuleField {
-            label: format!("Any date ({placeholder})"),
+            label: env.text("date-input.any", &[("format", &placeholder)]),
             raw: sample,
             placeholder: placeholder.clone(),
             rule: Rc::new(move |text| (text.to_owned(), any.validate(text).0)),
         },
         RuleField {
-            label: "A date in 2026".into(),
+            label: env.text("date-input.in_year", &[("year", "2026")]),
             raw: String::new(),
             placeholder,
             rule: Rc::new(move |text| (text.to_owned(), ranged.validate(text).0)),
