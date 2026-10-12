@@ -5,12 +5,12 @@
 mod hosted;
 
 use choscorui_controls::{
-    ControlMessage, ControlValue, CustomControl, IntegerRange, Label, Progress, RadioGroup,
-    SelectionError, Separator, SeparatorOrientation, Slider, SliderOrientation, SpinBox, Tabs,
-    TextField, VisualState,
+    ControlMessage, ControlValue, CustomControl, IntegerRange, Label, Orientation, Progress,
+    RadioGroup, SelectionError, Separator, SeparatorOrientation, Slider, SliderOrientation,
+    SpinBox, Tabs, TabsVariant, TextField, VisualState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point, Rect,
     SemanticAction, SemanticRole, Tree,
 };
 use hosted::{Harness, paints, rect, rounded_fills, texts};
@@ -375,4 +375,98 @@ fn a_hosted_tab_list_mirrors_in_right_to_left_layouts() {
     // The last tab is at the left in a right-to-left layout.
     rtl.click(along(&rtl, 0.03));
     assert_eq!(rtl.messages(), vec![index(2)]);
+}
+
+/// The baseline of the text run `label` in `list`.
+fn text_at(list: &DisplayList, label: &str) -> Point {
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawText { baseline, text, .. } if text == label => Some(*baseline),
+            _ => None,
+        })
+        .unwrap()
+}
+
+fn vertical_sections() -> impl CustomControl {
+    Tabs::hosted("Sections", ["Account", "Password", "Billing"], 0)
+        .unwrap()
+        .with_variant(TabsVariant::Line)
+        .with_orientation(Orientation::Vertical)
+}
+
+/// The 2 pt line indicator in `list`.
+fn line_indicator(list: &DisplayList) -> Rect {
+    let foreground = DesignTokens::light().color(ColorRole::Foreground);
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::FillRect { color, rect } if *color == foreground => Some(*rect),
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_vertical_hosted_tab_list_stacks_its_tabs_and_moves_with_arrow_keys() {
+    let horizontal = Harness::new(sections()).bounds();
+    let mut h = Harness::new(vertical_sections());
+    let bounds = h.bounds();
+    assert!(bounds.size.height > horizontal.size.height);
+    assert!(bounds.size.width < horizontal.size.width);
+
+    // The tabs form one column from the top, each at the start edge.
+    let list = h.paint();
+    let [account, password, billing] =
+        ["Account", "Password", "Billing"].map(|label| text_at(&list, label));
+    assert!(account.y < password.y && password.y < billing.y);
+    assert_eq!(account.x, password.x);
+    assert_eq!(account.x, billing.x);
+    let indicator = line_indicator(&list);
+    assert_eq!(indicator.size.width, 2.0);
+    assert!(indicator.max_y() < password.y);
+
+    // A press on the bottom row selects the last tab.
+    h.click(Point::new(bounds.center().x, bounds.max_y() - 6.0));
+    h.focus();
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowUp);
+    h.key(Key::ArrowUp);
+    h.key(Key::ArrowLeft);
+    h.key(Key::ArrowRight);
+    h.key(Key::End);
+    h.key(Key::Home);
+    assert_eq!(
+        h.messages(),
+        vec![
+            index(2),
+            index(0),
+            index(2),
+            index(1),
+            index(0),
+            index(1),
+            index(2),
+            index(0)
+        ]
+    );
+    assert_eq!(h.semantics().role, SemanticRole::TabList);
+    assert_eq!(h.semantics().value.as_deref(), Some("Account"));
+}
+
+#[test]
+fn a_vertical_hosted_tab_list_mirrors_its_indicator_in_right_to_left_layouts() {
+    let ltr = Harness::new(vertical_sections());
+    let rtl = Harness::with_direction(vertical_sections(), LayoutDirection::Rtl);
+    let (bounds, mirrored_bounds) = (ltr.bounds(), rtl.bounds());
+    let (line, mirrored) = (line_indicator(&ltr.paint()), line_indicator(&rtl.paint()));
+    // The line sits 4 pt beyond the inline-end edge of the tab, over the
+    // 3 pt list padding: at the right, or at the left in a right-to-left
+    // layout.
+    assert_eq!(line.max_x(), bounds.max_x() + 1.0);
+    assert_eq!(mirrored.origin.x, mirrored_bounds.origin.x - 1.0);
+    assert_eq!(
+        line.max_x() - bounds.origin.x,
+        mirrored_bounds.max_x() - mirrored.origin.x
+    );
+    assert_eq!(line.origin.y, mirrored.origin.y);
 }

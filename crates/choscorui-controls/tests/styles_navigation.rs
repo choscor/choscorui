@@ -172,7 +172,7 @@ fn tabs_matches_its_reference_table() {
             let line = get(&tokens, query(variant, Slot::Indicator, state));
             assert_eq!(
                 (bg(&line), line.min_height, line.padding),
-                (fill, 2.0, Edges::axes(0.0, -5.0)),
+                (fill, 2.0, Edges::axes(-4.0, -5.0)),
                 "{} {state}",
                 variant.name()
             );

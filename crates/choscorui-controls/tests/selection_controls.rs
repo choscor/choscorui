@@ -1,5 +1,5 @@
 use choscorui_controls::{
-    RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
+    Orientation, RadioGroup, RadioInput, RadioOption, SelectionError, Tab, TabInput, Tabs,
 };
 use choscorui_core::{
     Dirty, Key, KeyEvent, Point, Rect, SemanticAction, SemanticRelation, SemanticRole, Size, Tree,
@@ -152,6 +152,67 @@ fn tabs_select_panels_and_expose_bidirectional_relationships() {
     let list = tabs.group_semantics();
     assert_eq!(list.role, SemanticRole::TabList);
     assert_eq!(list.value.as_deref(), Some("About"));
+}
+
+fn press(tabs: &mut Tabs, tree: &mut Tree, key: Key) -> Option<choscorui_core::NodeId> {
+    let focused = tree.focus().unwrap();
+    tabs.handle(
+        tree,
+        focused,
+        TabInput::Key(KeyEvent::Down { key, repeat: false }),
+    )
+    .unwrap()
+}
+
+#[test]
+fn vertical_tabs_navigate_with_every_arrow_key_and_home_and_end() {
+    let mut tree = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(400.0, 300.0)));
+    let tabs_and_panels: Vec<_> = (0..4)
+        .map(|row| {
+            let tab = node(&mut tree, 10.0 + 40.0 * f64::from(row));
+            let panel = node(&mut tree, 200.0);
+            (tab, panel)
+        })
+        .collect();
+    let [(a, a_panel), (b, b_panel), (c, c_panel), (d, d_panel)] = tabs_and_panels[..] else {
+        unreachable!("four tabs");
+    };
+    let mut tabs = Tabs::new(
+        "Settings",
+        vec![
+            Tab::new(a, a_panel, "General"),
+            Tab::new(b, b_panel, "Advanced").disabled(),
+            Tab::new(c, c_panel, "Privacy"),
+            Tab::new(d, d_panel, "About"),
+        ],
+        a,
+    )
+    .unwrap()
+    .with_orientation(Orientation::Vertical);
+    assert_eq!(tabs.orientation(), Orientation::Vertical);
+    tabs.install(&mut tree).unwrap();
+    tree.set_focus(Some(a)).unwrap();
+
+    // ArrowDown skips the disabled tab; ArrowUp wraps from the first tab.
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowDown), Some(c));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowDown), Some(d));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowDown), Some(a));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(d));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(c));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(a));
+    // The horizontal arrows move the same way in a vertical list.
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowRight), Some(c));
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowLeft), Some(a));
+    assert_eq!(press(&mut tabs, &mut tree, Key::End), Some(d));
+    assert_eq!(press(&mut tabs, &mut tree, Key::Home), Some(a));
+    assert_eq!(press(&mut tabs, &mut tree, Key::Home), None);
+
+    assert_eq!(tabs.selected_panel(), a_panel);
+    assert_eq!(tree.focus(), Some(a));
+    // Roving focus: the selected tab is the only tab stop.
+    assert_eq!(tree.focus_next(false), Some(a));
+    assert_eq!(tree.focus_next(true), Some(a));
+    assert_eq!(tabs.group_semantics().role, SemanticRole::TabList);
 }
 
 #[test]
@@ -317,5 +378,69 @@ mod painting {
                 .width
                 > 16.0
         );
+    }
+
+    /// The line indicator that `tabs` paints for the selected tab at
+    /// (3, 3, 80, 30).
+    fn indicator(tabs: &Tabs, tree: &Tree, tab: choscorui_core::NodeId, rtl: bool) -> Rect {
+        let tokens = DesignTokens::light();
+        let styles = Styles::new();
+        let mut list = DisplayList::new();
+        tabs.paint_tab(
+            &mut PaintContext::new(
+                &mut list,
+                rect(3.0, 3.0, 80.0, 30.0),
+                &tokens,
+                &styles,
+                &EstimatedText,
+            )
+            .rtl(rtl),
+            tree,
+            tab,
+        );
+        let foreground = tokens.color(ColorRole::Foreground);
+        match list.commands().last() {
+            Some(DisplayCommand::FillRect { color, rect }) if *color == foreground => *rect,
+            other => panic!("no line indicator: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_vertical_line_tab_draws_its_indicator_at_the_inline_end() {
+        let mut tree = Tree::new(rect(0.0, 0.0, 300.0, 200.0));
+        let root = tree.root();
+        let tab = tree.attach(root, rect(3.0, 3.0, 80.0, 30.0)).unwrap();
+        let panel = tree.attach(root, rect(100.0, 0.0, 200.0, 100.0)).unwrap();
+        let tabs = Tabs::new("Settings", vec![Tab::new(tab, panel, "General")], tab)
+            .unwrap()
+            .with_variant(TabsVariant::Line)
+            .with_orientation(Orientation::Vertical);
+
+        // A 2 pt line along the full tab height, 4 pt outside the right edge.
+        let ltr = indicator(&tabs, &tree, tab, false);
+        assert_eq!(ltr, rect(85.0, 3.0, 2.0, 30.0));
+        // Right-to-left layouts mirror it to 4 pt outside the left edge.
+        let rtl = indicator(&tabs, &tree, tab, true);
+        assert_eq!(rtl, rect(-1.0, 3.0, 2.0, 30.0));
+
+        // The default variant draws no indicator in either orientation.
+        let tokens = DesignTokens::light();
+        let styles = Styles::new();
+        let mut list = DisplayList::new();
+        tabs.with_variant(TabsVariant::Default).paint_tab(
+            &mut PaintContext::new(
+                &mut list,
+                rect(3.0, 3.0, 80.0, 30.0),
+                &tokens,
+                &styles,
+                &EstimatedText,
+            ),
+            &tree,
+            tab,
+        );
+        assert!(!list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillRect { rect, .. } if rect.size.width == 2.0
+        )));
     }
 }

@@ -562,24 +562,30 @@ fn paint_tab(
 ) {
     let style = cx.style(tabs_query(variant, Slot::Trigger, state));
     let bounds = cx.bounds;
+    // A vertical tab fills the list width and starts its label at the
+    // start edge.
+    let align = match orientation {
+        Orientation::Horizontal => TextAlign::Center,
+        Orientation::Vertical => TextAlign::Start,
+    };
     cx.slot(bounds, &style, |cx, rect| {
-        cx.label(rect, label, &style, TextAlign::Center);
+        cx.label(rect, label, &style, align);
     });
     let indicator = cx.style(tabs_query(variant, Slot::Indicator, state));
     if !indicator.has_background() {
         return;
     }
     // The indicator sits just outside the tab, over the list padding.
-    let offset = -indicator.padding.block_start;
     let line = match orientation {
         Orientation::Horizontal => Rect::new(
             Point::new(
                 bounds.origin.x,
-                bounds.max_y() + offset - indicator.min_height,
+                bounds.max_y() - indicator.padding.block_end - indicator.min_height,
             ),
             Size::new(bounds.size.width, indicator.min_height),
         ),
         Orientation::Vertical => {
+            let offset = -indicator.padding.inline_end;
             let x = if cx.rtl {
                 bounds.origin.x - offset
             } else {

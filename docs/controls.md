@@ -382,6 +382,11 @@ behavior.
 - **Tabs look.** `with_variant` takes a `TabsVariant`: `Default` or
   `Line`. `with_orientation` takes an `Orientation`. Paint the list with
   `paint_list`, then each tab with `paint_tab`.
+- **Vertical tabs.** The arrow keys, Home, and End work as in a horizontal
+  list. `HostedTabs` stacks the tabs in one column from the top, and each
+  tab fills the list width. The list height fits the tabs. A vertical tab
+  starts its label at the start edge. The line indicator is at the inline
+  end, so right-to-left layouts mirror it.
 
 | Radio part | Slot | Value |
 | --- | --- | --- |
@@ -393,9 +398,9 @@ behavior.
 
 | Tabs part | `Default` | `Line` |
 | --- | --- | --- |
-| List | `muted` fill, radius lg, padding 3, height 36 | transparent, gap 4 |
+| List | `muted` fill, radius lg, padding 3, height 36 (horizontal) | transparent, gap 4 |
 | Tab | small medium text, padding 8 by 4, radius md; `foreground` at 60% (dark: `muted-foreground`) | same |
-| Selected tab | `background` fill, small shadow, `foreground` text; dark: `input` at 30% fill and `input` edge | `foreground` text and a 2 pt `foreground` line 5 pt outside the tab |
+| Selected tab | `background` fill, small shadow, `foreground` text; dark: `input` at 30% fill and `input` edge | `foreground` text and a 2 pt `foreground` line, 5 pt under a horizontal tab or 4 pt beyond the inline end of a vertical tab |
 
 | Field | Group node | Option or tab node | Tab panel node |
 | --- | --- | --- | --- |

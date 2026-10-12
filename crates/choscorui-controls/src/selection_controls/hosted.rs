@@ -462,8 +462,8 @@ impl HostedTabs {
 }
 
 impl CustomControl for HostedTabs {
-    /// The tabs along the orientation, inside the list padding, at least
-    /// the list height.
+    /// The tabs along the orientation, inside the list padding. A
+    /// horizontal list is at least the list height.
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let list = cx.style(tabs_query(self.variant, Slot::Group, VisualState::NONE));
         let sizes = self.sizes(cx);
@@ -480,9 +480,15 @@ impl CustomControl for HostedTabs {
                 sizes.iter().map(|size| size.height).sum::<f64>() + gaps,
             ),
         };
+        // Only a horizontal list has the fixed list height; a vertical
+        // list fits its tabs.
+        let min_height = match self.orientation {
+            Orientation::Horizontal => list.min_height,
+            Orientation::Vertical => 0.0,
+        };
         let size = Size::new(
             content.width + list.padding.horizontal(),
-            (content.height + list.padding.vertical()).max(list.min_height),
+            (content.height + list.padding.vertical()).max(min_height),
         );
         Measured::new(cx.constraints.constrain(size))
     }

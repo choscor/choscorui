@@ -80,7 +80,9 @@ fn tabs(cx: &Cx) -> ResolvedStyle {
             }
             style.min_height = 2.0;
             style.min_width = 2.0;
-            style.padding = Edges::axes(0.0, -5.0);
+            // The negative padding places the line outside the tab: 5 pt
+            // under a horizontal tab, 4 pt beyond a vertical one.
+            style.padding = Edges::axes(-4.0, -5.0);
             style
         }
         _ => text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL),
