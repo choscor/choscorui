@@ -71,8 +71,8 @@ pub mod prelude {
         ButtonVariant, ControlKind, ControlSize, IntegerRange, SheetSide, TabsVariant,
     };
     pub use choscorui_core::{
-        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, Icon, LayoutDirection,
-        Locale, Point, Rect, Size, Space,
+        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, FontWeight, Icon,
+        LayoutDirection, Locale, Point, Rect, Size, Space, TextPreset,
     };
     #[cfg(target_os = "macos")]
     pub use choscorui_macos::{

@@ -107,7 +107,7 @@ impl Scene {
 pub struct App {
     runtime: Runtime,
     env: Env,
-    tokens: DesignTokens,
+    tokens: Live<DesignTokens>,
     scenes: Vec<Scene>,
     menu: Option<(Menu, CommandHandler)>,
     on_tick: Option<Hook>,
@@ -127,7 +127,7 @@ impl App {
         Self {
             runtime: Runtime::new(),
             env: Env::new(Rc::default(), Locale::root()),
-            tokens: DesignTokens::light(),
+            tokens: Live::Value(DesignTokens::light()),
             scenes: Vec::new(),
             menu: None,
             on_tick: None,
@@ -148,10 +148,11 @@ impl App {
         self
     }
 
-    /// The application tokens that themes start from.
+    /// The application tokens that themes start from. When state that
+    /// `tokens` reads changes, every window takes the new tokens.
     #[must_use]
-    pub fn tokens(mut self, tokens: DesignTokens) -> Self {
-        self.tokens = tokens;
+    pub fn tokens<M>(mut self, tokens: impl IntoLive<DesignTokens, M>) -> Self {
+        self.tokens = tokens.into_live();
         self
     }
 
@@ -204,11 +205,22 @@ impl App {
     pub fn start(self) -> Result<AppContext, AppError> {
         let application = Application::new().map_err(AppError::Platform)?;
         let rebuild = Rc::new(Cell::new(false));
+        let retheme = Rc::new(Cell::new(false));
+        let tokens = self.tokens;
+        let watched = tokens.clone();
+        let flag = retheme.clone();
+        let theme_subscription = self.runtime.effect(move || {
+            let _ = watched.get();
+            flag.set(true);
+        });
         let mut context = AppContext {
             application,
             runtime: self.runtime,
             env: self.env,
-            tokens: self.tokens,
+            current: Runtime::untracked(|| tokens.get()),
+            tokens,
+            retheme,
+            _theme_subscription: theme_subscription,
             text: Rc::new(ShapedText::new(&SHAPER)),
             windows: Vec::new(),
             next_window: 0,
@@ -260,7 +272,11 @@ pub struct AppContext {
     application: Application,
     runtime: Runtime,
     env: Env,
-    tokens: DesignTokens,
+    tokens: Live<DesignTokens>,
+    /// The tokens that the windows have now.
+    current: DesignTokens,
+    retheme: Rc<Cell<bool>>,
+    _theme_subscription: choscorui_compose::Subscription,
     text: Rc<dyn TextMeasure>,
     windows: Vec<AppWindow>,
     next_window: u64,
@@ -304,7 +320,7 @@ impl AppContext {
         let mut window = self.application.create_window(options)?;
         let mut host = ViewHost::new(
             window.content_size(),
-            self.tokens,
+            self.current,
             self.env.clone(),
             self.runtime.clone(),
             self.text.clone(),
@@ -363,6 +379,25 @@ impl AppContext {
         Some(&mut self.windows[index].host)
     }
 
+    /// Runs the `commands` handler for `command`, as if the user chose
+    /// it in the menu bar.
+    pub fn command(&mut self, command: MenuCommandId) {
+        if let Some((_, handler, _)) = &self.menu {
+            let handler = handler.clone();
+            handler(self, command);
+        }
+    }
+
+    /// The tokens that the windows have now.
+    pub fn tokens(&self) -> DesignTokens {
+        self.current
+    }
+
+    /// The installed menu bar, for its item states.
+    pub fn menu(&self) -> Option<&MainMenu> {
+        self.installed.as_ref()
+    }
+
     /// The time since the application started.
     pub fn elapsed(&self) -> Duration {
         self.started.elapsed()
@@ -397,11 +432,8 @@ impl AppContext {
             .as_ref()
             .map(MainMenu::take_activations)
             .unwrap_or_default();
-        if let Some((_, handler, _)) = &self.menu {
-            let handler = handler.clone();
-            for command in commands {
-                handler(self, command);
-            }
+        for command in commands {
+            self.command(command);
         }
         for id in self.windows() {
             self.deliver(id);
@@ -413,6 +445,15 @@ impl AppContext {
             && let Err(error) = self.install_menu()
         {
             eprintln!("choscorui: {error}");
+        }
+        if self.retheme.replace(false) {
+            let tokens = Runtime::untracked(|| self.tokens.get());
+            if tokens != self.current {
+                self.current = tokens;
+                for entry in &mut self.windows {
+                    entry.host.set_tokens(tokens);
+                }
+            }
         }
         for id in self.windows() {
             self.draw(id);

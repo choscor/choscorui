@@ -786,3 +786,61 @@ fn a_control_that_cannot_build_reports_an_error() {
     assert!(matches!(errors.as_slice(), [ViewError::Control(_)]));
     assert!(host.find("after").is_some());
 }
+
+#[test]
+fn scroll_view_content_is_in_the_semantic_tree() {
+    use choscorui_compose::view::ScrollView;
+    let mut host = host(ScrollView::new(VStack::new((
+        Text::new("one"),
+        Text::new("two"),
+    ))));
+    let (snapshot, _) = host.semantics();
+    let roles: Vec<SemanticRole> = snapshot.iter().map(|entry| entry.node.role).collect();
+    assert!(roles.contains(&SemanticRole::ScrollArea));
+    assert_eq!(
+        names(&mut host)
+            .iter()
+            .filter(|name| !name.is_empty())
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn flexible_views_make_their_stacks_fill_the_window() {
+    use choscorui_compose::view::{ScrollView, Spacer};
+    let mut host = host(VStack::new((
+        HStack::new((Text::new("leading"), Spacer::new(), Text::new("trailing"))),
+        ScrollView::new(VStack::new((Text::new("one"), Text::new("two")))),
+    )));
+    let leading = bounds(&mut host, "leading");
+    let trailing = bounds(&mut host, "trailing");
+    let one = bounds(&mut host, "one");
+    // The spacer pushes the texts to the window edges, and the scroll view
+    // takes the height below them, so its content starts at the top.
+    assert_eq!(leading.min_x(), 0.0);
+    assert_eq!(trailing.max_x(), 400.0);
+    assert!(one.min_y() < 40.0, "{one:?}");
+    let (snapshot, _) = host.semantics();
+    let scroll = snapshot
+        .iter()
+        .find(|entry| entry.node.role == SemanticRole::ScrollArea)
+        .unwrap();
+    assert_eq!(scroll.bounds.max_y(), 300.0);
+}
+
+#[test]
+fn a_divider_spans_the_frame_around_its_stack() {
+    use choscorui_compose::view::{Divider, Frame, HorizontalAlignment};
+    let mut host = host(HStack::new((
+        Text::new("edge"),
+        VStack::new((Text::new("short"), Divider))
+            .alignment(HorizontalAlignment::Leading)
+            .frame(Frame::new().width(300.0)),
+    )));
+    let edge = bounds(&mut host, "edge");
+    let short = bounds(&mut host, "short");
+    // The divider stretches its stack to the frame width, so the leading
+    // text starts at the frame's leading edge, not centered in it.
+    assert!(short.min_x() - edge.max_x() < 20.0, "{edge:?} {short:?}");
+}

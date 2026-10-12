@@ -30,9 +30,9 @@ pub use layout::{
     Alignment, Divider, Grid, GridItem, Group, HStack, HorizontalAlignment, ScrollView, Spacer,
     VStack, VerticalAlignment, ZStack,
 };
-pub use modifier::{Edges, Styled, ViewExt};
+pub use modifier::{Edges, Frame, Styled, ViewExt};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
-pub use text::{Localized, Text, TextContent};
+pub use text::{IntoTextArg, Localized, Text, TextContent};
 pub use widgets::{
     Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, Card, Carousel,
     Chart, Checkbox, Collapsible, Command, ContextMenu, DataTable, DatePicker, Dialog, EmptyState,

@@ -6,7 +6,7 @@
 
 use super::View;
 use super::env::{Corner, Elevation, Env, Fill, Metric};
-use super::host::{Cx, Handler, Inner, Layer, ShortcutEntry, ViewError};
+use super::host::{Cx, Flex, Handler, Inner, Layer, ShortcutEntry, ViewError};
 use super::layout::{Alignment, parent_tokens};
 use super::present::{Placement, Presentation, present};
 use super::state::{Binding, IntoLive, Live};
@@ -91,7 +91,8 @@ pub struct Frame {
     width: Option<f64>,
     height: Option<f64>,
     min: Size,
-    max: Size,
+    max_width: Option<f64>,
+    max_height: Option<f64>,
     alignment: Alignment,
 }
 
@@ -101,7 +102,8 @@ impl Default for Frame {
             width: None,
             height: None,
             min: Size::ZERO,
-            max: Size::new(f64::INFINITY, f64::INFINITY),
+            max_width: None,
+            max_height: None,
             alignment: Alignment::CENTER,
         }
     }
@@ -145,13 +147,13 @@ impl Frame {
     /// width its parent offers.
     #[must_use]
     pub fn max_width(mut self, width: f64) -> Self {
-        self.max.width = width;
+        self.max_width = Some(width);
         self
     }
 
     #[must_use]
     pub fn max_height(mut self, height: f64) -> Self {
-        self.max.height = height;
+        self.max_height = Some(height);
         self
     }
 
@@ -644,7 +646,14 @@ fn gather(cx: &mut Cx<'_>, fragment: super::fragment::FragmentId) -> NodeId {
     if let Err(error) = inner.engine.set_style(&inner.tree, wrapper, column) {
         inner.report(ViewError::Layout(error));
     }
-    inner.data(wrapper);
+    let mut flex = Flex::default();
+    for node in &nodes {
+        let own = inner.data(*node).flex;
+        flex.wide |= own.wide;
+        flex.tall |= own.tall;
+        inner.apply_flex(*node);
+    }
+    inner.make_flexible(wrapper, flex);
     inner.touch(wrapper, Dirty::LAYOUT);
     wrapper
 }
@@ -697,7 +706,9 @@ fn wrap(inner: &mut Inner, node: NodeId) -> NodeId {
             inner.report(ViewError::Layout(error));
         }
     }
-    inner.data(wrapper);
+    let flex = inner.data(node).flex;
+    inner.data(wrapper).flex = flex;
+    inner.apply_flex(node);
     inner.touch(wrapper, Dirty::LAYOUT);
     wrapper
 }
@@ -824,29 +835,55 @@ fn apply(
                     style.min.height.max(frame.min.height),
                 );
                 style.max = Size::new(
-                    style.max.width.min(frame.max.width),
-                    style.max.height.min(frame.max.height),
+                    style
+                        .max
+                        .width
+                        .min(frame.max_width.unwrap_or(f64::INFINITY)),
+                    style
+                        .max
+                        .height
+                        .min(frame.max_height.unwrap_or(f64::INFINITY)),
                 );
-                let wide = frame.max.width.is_infinite() && frame.width.is_none();
-                let tall = frame.max.height.is_infinite() && frame.height.is_none();
-                let fills = |flag: bool| {
-                    flag && frame.max != Size::new(f64::INFINITY, f64::INFINITY)
-                        || flag && frame.min != Size::ZERO
-                };
+                // A fixed size along an axis ends the flexibility of the
+                // content along it.
                 match axis {
-                    Some(Axis::Horizontal) if fills(wide) => style.grow = style.grow.max(1.0),
-                    Some(Axis::Vertical) if fills(tall) => style.grow = style.grow.max(1.0),
-                    _ => {}
-                }
-                let cross = match axis {
-                    Some(Axis::Horizontal) => tall,
-                    Some(Axis::Vertical) => wide,
-                    None => false,
-                };
-                if cross && fills(true) {
-                    style.align_self = Some(ItemAlign::Stretch);
+                    Some(Axis::Horizontal) => {
+                        if frame.width.is_some() {
+                            style.grow = 0.0;
+                        }
+                        if frame.height.is_some() && style.align_self == Some(ItemAlign::Stretch) {
+                            style.align_self = None;
+                        }
+                    }
+                    Some(Axis::Vertical) => {
+                        if frame.height.is_some() {
+                            style.grow = 0.0;
+                        }
+                        if frame.width.is_some() && style.align_self == Some(ItemAlign::Stretch) {
+                            style.align_self = None;
+                        }
+                    }
+                    None => {
+                        if frame.width.is_some() && style.justify_self == Some(ItemAlign::Stretch) {
+                            style.justify_self = None;
+                        }
+                        if frame.height.is_some() && style.align_self == Some(ItemAlign::Stretch) {
+                            style.align_self = None;
+                        }
+                    }
                 }
             });
+            let data = cx.inner.data(node);
+            data.flex.wide &= frame.width.is_none();
+            data.flex.tall &= frame.height.is_none();
+            // A frame with an infinite maximum takes the space that its
+            // parent offers along that axis.
+            let infinite = |max: Option<f64>| max.is_some_and(f64::is_infinite);
+            let flex = Flex {
+                wide: frame.width.is_none() && infinite(frame.max_width),
+                tall: frame.height.is_none() && infinite(frame.max_height),
+            };
+            cx.inner.make_flexible(node, flex);
         }
         Modifier::Priority(priority) => {
             let node = target.node;

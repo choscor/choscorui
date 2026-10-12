@@ -4,7 +4,7 @@
 
 use super::View;
 use super::env::{Fill, Metric};
-use super::host::{Cx, Inner, Layer};
+use super::host::{Cx, Flex, Inner, Layer};
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
     PaintContext,
@@ -303,11 +303,22 @@ impl View for Spacer {
     fn mount(self, cx: &mut Cx<'_>) {
         let style = LayoutStyle {
             min: Size::new(self.min, self.min),
-            grow: 1.0,
             shrink: true,
             ..LayoutStyle::default()
         };
-        cx.node(style);
+        let flex = match stack_axis(cx.inner, cx.parent) {
+            Some(Axis::Horizontal) => Flex {
+                wide: true,
+                tall: false,
+            },
+            Some(Axis::Vertical) => Flex {
+                wide: false,
+                tall: true,
+            },
+            None => Flex::default(),
+        };
+        let node = cx.node(style);
+        cx.inner.make_flexible(node, flex);
     }
 }
 
@@ -346,6 +357,12 @@ impl View for Divider {
             .decor
             .layers
             .push(Layer::Background(Fill::Role(ColorRole::Border)));
+        // A divider spans its stack, so the stack takes the space offered.
+        let flex = Flex {
+            wide: !vertical,
+            tall: vertical,
+        };
+        cx.inner.make_flexible(node, flex);
     }
 }
 
@@ -568,20 +585,27 @@ impl<C: View> View for ScrollView<C> {
         }));
         let style = LayoutStyle {
             kind: LayoutKind::Scroll { axis: self.axis },
-            grow: 1.0,
             shrink: true,
-            align_self: Some(ItemAlign::Stretch),
             ..LayoutStyle::default()
         };
         if let Err(error) = cx.inner.engine.set_style(&cx.inner.tree, node, style) {
             cx.inner.report(super::host::ViewError::Layout(error));
         }
+        // Like SwiftUI, a scroll view takes the space it is offered along
+        // its axis, and a vertical one also takes the full width.
+        let flex = match self.axis {
+            Axis::Vertical => Flex::BOTH,
+            Axis::Horizontal => Flex {
+                wide: true,
+                tall: false,
+            },
+        };
+        cx.inner.make_flexible(node, flex);
         let axis = self.axis;
         let data = cx.inner.data(node);
         data.scroll = Some(shared.clone());
         cx.inner.scrolls.insert(node);
         let data = cx.inner.data(node);
-        data.access.hidden = true;
         data.internal = Some(Rc::new(
             move |inner: &mut Inner, message: &ControlMessage| {
                 if let ControlMessage::Changed(ControlValue::Number(amount)) = message {

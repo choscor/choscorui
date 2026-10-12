@@ -14,7 +14,7 @@ use choscorui_controls::{
     TextMeasure,
 };
 use choscorui_core::{
-    Constraints, DesignTokens, Dirty, DisplayList, EngineError, GridPlacement, InputModality,
+    Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, GridPlacement, InputModality,
     ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length,
     Measured, NodeId, Point, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange,
     SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, ThemeError,
@@ -161,6 +161,28 @@ pub(crate) struct NodeData {
     pub focus_binding: Option<Binding<bool>>,
     /// Whether the parent's child alignment set this node's alignment.
     pub placed: bool,
+    /// The axes along which the node takes all the space it is offered.
+    pub flex: Flex,
+}
+
+/// The axes along which a view takes all the space it is offered, as a
+/// scroll view or a frame with an infinite maximum does. A stack or an
+/// overlay with a flexible child is flexible along the same axes.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Flex {
+    pub wide: bool,
+    pub tall: bool,
+}
+
+impl Flex {
+    pub const BOTH: Self = Self {
+        wide: true,
+        tall: true,
+    };
+
+    fn any(self) -> bool {
+        self.wide || self.tall
+    }
 }
 
 /// A message handler that changes the runtime.
@@ -279,6 +301,7 @@ impl Inner {
                         style.justify_self = Some(horizontal);
                         self.set_style(*child, style);
                         self.data(*child).placed = true;
+                        self.apply_flex(*child);
                     }
                 }
             }
@@ -433,6 +456,96 @@ impl Inner {
 
     pub(crate) fn data(&mut self, node: NodeId) -> &mut NodeData {
         self.nodes.entry(node).or_default()
+    }
+
+    /// Makes `node` take the space it is offered along the axes of `flex`,
+    /// and its stack and overlay ancestors with it, up to an ancestor with
+    /// a fixed size along that axis.
+    pub(crate) fn make_flexible(&mut self, node: NodeId, flex: Flex) {
+        let root = self.tree.root();
+        let (mut node, mut flex) = (node, flex);
+        while flex.any() && node != root {
+            let have = self.data(node).flex;
+            let added = Flex {
+                wide: flex.wide && !have.wide,
+                tall: flex.tall && !have.tall,
+            };
+            if !added.any() {
+                return;
+            }
+            self.data(node).flex = Flex {
+                wide: have.wide || added.wide,
+                tall: have.tall || added.tall,
+            };
+            self.apply_flex(node);
+            let Some(parent) = self.tree.parent(node) else {
+                return;
+            };
+            let style = self.engine.style(parent).cloned().unwrap_or_default();
+            if !matches!(style.kind, LayoutKind::Stack { .. } | LayoutKind::Overlay) {
+                return;
+            }
+            flex = Flex {
+                wide: added.wide && style.width == Length::Auto,
+                tall: added.tall && style.height == Length::Auto,
+            };
+            node = parent;
+        }
+    }
+
+    /// Gives `node` the alignment and growth of its flexibility in its
+    /// parent.
+    pub(crate) fn apply_flex(&mut self, node: NodeId) {
+        let flex = self
+            .nodes
+            .get(&node)
+            .map(|data| data.flex)
+            .unwrap_or_default();
+        if !flex.any() {
+            return;
+        }
+        let Some(parent) = self.tree.parent(node) else {
+            return;
+        };
+        let kind = self.engine.style(parent).map(|style| style.kind.clone());
+        let mut style = self.engine.style(node).cloned().unwrap_or_default();
+        match kind {
+            Some(LayoutKind::Stack { axis, .. }) => {
+                let (along, across) = match axis {
+                    Axis::Horizontal => (flex.wide, flex.tall),
+                    Axis::Vertical => (flex.tall, flex.wide),
+                };
+                if along {
+                    style.grow = style.grow.max(1.0);
+                }
+                if across {
+                    style.align_self = Some(ItemAlign::Stretch);
+                }
+            }
+            // In an overlay, `align_self` is vertical and `justify_self`
+            // horizontal.
+            Some(LayoutKind::Overlay) => {
+                let (vertical, horizontal) = self
+                    .nodes
+                    .get(&parent)
+                    .and_then(|data| data.child_align)
+                    .unwrap_or((ItemAlign::Center, ItemAlign::Center));
+                let vertical = style.align_self.unwrap_or(vertical);
+                let horizontal = style.justify_self.unwrap_or(horizontal);
+                style.align_self = Some(if flex.tall {
+                    ItemAlign::Stretch
+                } else {
+                    vertical
+                });
+                style.justify_self = Some(if flex.wide {
+                    ItemAlign::Stretch
+                } else {
+                    horizontal
+                });
+            }
+            _ => return,
+        }
+        self.set_style(node, style);
     }
 
     /// A recipe set that no other node uses.
