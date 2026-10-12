@@ -89,6 +89,7 @@ page.canvas = Canvas
 page.card = Card
 page.badge = Badge
 page.avatar = Avatar
+page.carousel = Carousel
 page.group-box = Group box
 page.resizable = Resizable
 page.stacked = Stacked container

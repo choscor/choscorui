@@ -1,10 +1,11 @@
 //! Data display components mounted through `ControlHost`: cards,
-//! badges, and avatars.
+//! badges, avatars, and carousels.
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, ControlSize, CustomControl,
+    Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, Carousel, ControlSize,
+    CustomControl, Orientation,
 };
 use choscorui::core::{Icon, Image, NodeId, Tree};
 
@@ -158,6 +159,37 @@ pub fn avatar(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> 
     HostedPage::build(tree, parent, rows)
 }
 
+pub fn carousel(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let numbers = |count: usize| (1..=count).map(|n| n.to_string()).collect::<Vec<_>>();
+    let rows: Vec<Row> = vec![
+        (
+            "Horizontal",
+            vec![boxed(Carousel::new(
+                "Slides",
+                "Previous slide",
+                "Next slide",
+                numbers(5),
+            ))],
+        ),
+        (
+            "Three per view",
+            vec![boxed(
+                Carousel::new("Thumbnails", "Previous slide", "Next slide", numbers(8))
+                    .with_per_view(3),
+            )],
+        ),
+        (
+            "Vertical",
+            vec![boxed(
+                Carousel::new("Stacked slides", "Previous slide", "Next slide", numbers(5))
+                    .with_orientation(Orientation::Vertical)
+                    .with_per_view(2),
+            )],
+        ),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::pages::tests::Harness;
@@ -170,6 +202,16 @@ mod tests {
         assert!(h.act(node, SemanticAction::Focus));
         assert!(h.press(Key::Tab));
         assert!(h.press(Key::Enter));
+    }
+
+    #[test]
+    fn carousel_page_moves_with_assistive_actions() {
+        let mut h = Harness::new("carousel");
+        let node = h.node("Slides", Some(SemanticRole::Group));
+        assert!(h.act(node, SemanticAction::Increment));
+        let page = h.get::<crate::pages::hosted::HostedPage>();
+        let value = page.host.get(node).unwrap().semantics().value;
+        assert_eq!(value.as_deref(), Some("2"));
     }
 
     #[test]

@@ -87,6 +87,7 @@ page.canvas = Khung vẽ
 page.card = Thẻ
 page.badge = Huy hiệu
 page.avatar = Ảnh đại diện
+page.carousel = Băng chuyền
 page.group-box = Hộp nhóm
 page.resizable = Bảng co giãn
 page.stacked = Vùng xếp chồng

@@ -101,6 +101,7 @@ in parentheses is the role that the macOS backend gives to that
 | Data | [`Badge`](#badge) | Short status label, optionally a link. |
 | Data | [`Avatar`](#avatar-and-avatargroup) | Round user image with a text fallback. |
 | Data | [`AvatarGroup`](#avatar-and-avatargroup) | Overlapping avatars with a count. |
+| Data | [`Carousel`](#carousel) | Slides that move one at a time and snap. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2129,6 +2130,38 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | none | none |
 
 [data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
+
+### Carousel
+
+- Each slide is a card surface that shows its label. Previous and Next
+  buttons sit outside the slides, at the ends of the orientation.
+- `with_per_view(count)` shows more slides at once. Horizontal slides are
+  square. Vertical slides are half as tall as they are wide. Without
+  constraints, the slides are 320 pt wide.
+- Arrow keys along the orientation, the buttons, `Increment`, and
+  `Decrement` move one slide. Horizontal keys and buttons follow the
+  reading order. Each move emits `Changed(Index(slide))` and animates.
+- The enabled buttons are tab stops inside the carousel. Enter or Space
+  activates the focused button.
+- A drag moves the slides with the pointer. A wheel scrolls them. When
+  the drag ends, or 0.15 s after the last wheel event, the carousel snaps
+  to the nearest slide.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Carousel | `Root` | 16 pt gap to the buttons, 250 ms motion |
+| Slide | `Item` | 16 pt gap before each slide; `Card` `Root` surface with the `Card` `Title` text |
+| Previous, Next | `Previous`, `Next` | outline icon-sm button, fully round |
+
+| Field | `Carousel::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / label of the first visible slide |
+| Description | the label of the focused button |
+| State | disabled |
+| Actions | `Focus`; `Activate`, `Increment`, and `Decrement` when a move is possible |
+
+[carousel.rs](../crates/choscorui-controls/tests/carousel.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

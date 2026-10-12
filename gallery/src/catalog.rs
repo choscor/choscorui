@@ -104,6 +104,7 @@ pub const PAGES: &[PageInfo] = &[
     page!("card", "Card", Data, display::card),
     page!("badge", "Badge", Data, display::badge),
     page!("avatar", "Avatar", Data, display::avatar),
+    page!("carousel", "Carousel", Data, display::carousel),
     page!("group-box", "Group box", Containers, containers::group_box),
     page!("resizable", "Resizable", Containers, containers::resizable),
     page!(
@@ -224,6 +225,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("BadgeVariant", "badge"),
     ("Avatar", "avatar"),
     ("AvatarGroup", "avatar"),
+    ("Carousel", "carousel"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
