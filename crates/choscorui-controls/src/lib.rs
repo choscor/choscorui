@@ -102,7 +102,13 @@ pub use dialogs::{
     order_dialog_buttons,
 };
 mod canvas;
+pub use canvas::HostedCanvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, MAX_ZOOM, MIN_ZOOM};
+pub use containers::{HostedGroupBox, HostedResizable, HostedStack};
+pub use dialogs::HostedAlertDialog;
+pub use menu::HostedDropdownMenu;
+pub use model_widgets::HostedColumnBrowser;
+pub use shell::HostedToolbar;
 mod custom;
 mod data;
 pub(crate) mod feedback;

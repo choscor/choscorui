@@ -171,6 +171,20 @@ changes as `ControlMessage` values:
 | `Slider`, `SpinBox` | `Changed(Number)` | `Number`, rounded and clamped to the range |
 | `TextField` | `Changed(Text)` on an edit, `Activated` on Enter | `Text` |
 | `HostedRadioGroup`, `HostedTabs` | `Changed(Index(Some(i)))` | `Index(Some(i))` for an enabled option |
+| `ItemView` | `Changed(Indices)` of selected visible positions, `ItemActivated(i)` | `Indices` |
+| `HeaderView` | `ItemActivated(column)` on a sort change, `Changed(Index(Some(column)))` on a resize | - |
+| `HostedColumnBrowser` | `Changed(Indices)`: the row of each path item among its siblings | `Indices` |
+| `Calendar` | `Changed(Date)` and `Activated` in single mode, `Changed(Dates)` in the other modes | `Date` in single mode, `Dates` in the other modes |
+| `DateTimeEdit` | `Changed(Date)` for a date, `Changed(Text)` for a time or a date and time | the same kind |
+| `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
+| `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
+| `ColorPicker` | `Changed(Text)` with the hex value, `Activated` on Enter | `Text` with a hex value |
+| `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu | - |
+| `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Dismissed` when a panel closes | - |
+| `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
+| `HostedResizable` | `Changed(Number)` with the position | `Number` |
+| `HostedStack` | - | `Index(Some(page))` |
+| `StatusBar`, `ScrollArea`, `HostedGroupBox` | - | - |
 
 Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and
