@@ -265,6 +265,14 @@ pub enum DisplayCommand {
         run: std::sync::Arc<crate::GlyphRun>,
         color: Color,
     },
+    /// Blurs what the surface already shows inside the rounded `rect`,
+    /// with a Gaussian of standard deviation `blur` points. It reads the
+    /// surface beneath any open opacity group and writes into the group.
+    BackdropBlur {
+        rect: Rect,
+        radius: f64,
+        blur: f64,
+    },
     PushClip(Rect),
     /// Clip to the interior of a path (non-zero rule).
     PushClipPath(Path),
@@ -456,6 +464,24 @@ impl DisplayList {
             radius,
             shadow,
         });
+        Ok(())
+    }
+
+    /// Blurs the painted surface inside the rounded `rect`; see
+    /// [`DisplayCommand::BackdropBlur`].
+    pub fn backdrop_blur(
+        &mut self,
+        rect: Rect,
+        radius: f64,
+        blur: f64,
+    ) -> Result<(), DisplayListError> {
+        validate_radius(radius)?;
+        validate_positive(blur)?;
+        if !rect.is_finite() {
+            return Err(DisplayListError::InvalidGeometry);
+        }
+        self.commands
+            .push(DisplayCommand::BackdropBlur { rect, radius, blur });
         Ok(())
     }
 
@@ -783,6 +809,8 @@ fn draw_bounds(command: &DisplayCommand) -> Option<Rect> {
         }
         DisplayCommand::DrawImage { rect, .. } => *rect,
         DisplayCommand::DrawShadow { rect, shadow, .. } => shadow.bounds(*rect),
+        // The blur reads up to three standard deviations outside `rect`.
+        DisplayCommand::BackdropBlur { rect, blur, .. } => inflate(*rect, blur * 3.0),
         DisplayCommand::DrawText {
             baseline,
             text,
@@ -974,6 +1002,11 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
                 hash_point(*position, hasher);
             }
             color.hash(hasher);
+        }
+        DisplayCommand::BackdropBlur { rect, radius, blur } => {
+            hash_rect(*rect, hasher);
+            hash_f64(*radius, hasher);
+            hash_f64(*blur, hasher);
         }
         DisplayCommand::PushClip(rect) => hash_rect(*rect, hasher),
         DisplayCommand::PushClipPath(path) => hash_path(path, hasher),

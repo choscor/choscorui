@@ -597,7 +597,7 @@ impl CustomControl for Sidebar {
         }
         let scrim = cx.style(StyleQuery::new(ControlKind::Sheet, Slot::Overlay));
         let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
-        cx.list.fill_rect(self.viewport, scrim.background);
+        cx.slot(self.viewport, &scrim, |_, _| {});
         let _ = cx.list.pop_opacity();
         let direction = if self.side == SheetSide::Right {
             1.0

@@ -237,7 +237,8 @@ pub struct ResolvedStyle {
     /// Vertical offset of the slot, for example 1 pt while pressed.
     pub offset_y: f64,
     pub cursor: Cursor,
-    /// Blur radius applied to the content behind the slot, for scrims.
+    /// Standard deviation, in points, of the blur applied to the content
+    /// behind the slot, for scrims.
     pub backdrop_blur: f64,
     /// Duration of the slot's transitions and its open and close
     /// animation, in milliseconds.

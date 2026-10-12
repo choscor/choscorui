@@ -74,6 +74,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Color.** Colors, gradients, and images use one sRGB color space, `CGColorSpaceCreateWithName(kCGColorSpaceSRGB)`. The process keeps one +1 reference.
 - **Commands.** Each push command maps to exactly one `CGContextSaveGState`. Group opacity uses a transparency layer.
 - **Shadows.** A shadow draws the mask from `Shadow::mask` through `CGContextClipToMask`. Thus, it matches the software renderer.
+- **Backdrop blur.** `BackdropBlur` reads the pixels of a 32-bit bitmap context through `CGBitmapContextGetData`. It checks the row stride before it reads rows. It blurs a copy with `blur_pixels` and draws the copy back in device space, clipped to the rounded rectangle. A context that is not a bitmap context gets no blur. [`render_parity.rs`](../crates/choscorui/tests/render_parity.rs) compares the result with the software renderer.
 - **Damage.** `set_display_list` compares the old and new lists with `choscorui_core::damage`. It calls `setNeedsDisplayInRect:` only for the changed area, so an idle window does not draw.
 
 ### Images and ImageIO

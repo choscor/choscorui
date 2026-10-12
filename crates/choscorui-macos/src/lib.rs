@@ -14,6 +14,7 @@ pub use menu::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
     MenuShortcutModifiers, MenuSpec,
 };
+mod backdrop;
 mod dialog;
 mod menu_native;
 mod paint;

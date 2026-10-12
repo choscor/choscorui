@@ -206,6 +206,9 @@ pub(super) unsafe fn paint_commands(context: Id, dirty: NSRect, list: &DisplayLi
                     radius,
                     shadow,
                 } => draw_shadow(context, *rect, *radius, *shadow),
+                DisplayCommand::BackdropBlur { rect, radius, blur } => {
+                    backdrop::backdrop_blur(context, *rect, *radius, *blur);
+                }
                 DisplayCommand::DrawText {
                     baseline,
                     text,
@@ -316,7 +319,7 @@ fn channel(value: u8) -> f64 {
     f64::from(value) / 255.0
 }
 
-unsafe fn add_path(context: Id, path: &Path) {
+pub(crate) unsafe fn add_path(context: Id, path: &Path) {
     unsafe {
         CGContextBeginPath(context);
         for element in path.elements() {

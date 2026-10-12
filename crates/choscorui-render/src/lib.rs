@@ -219,6 +219,9 @@ impl Renderer {
                 radius,
                 shadow,
             } => self.shadow(*rect, *radius, *shadow),
+            DisplayCommand::BackdropBlur { rect, radius, blur } => {
+                self.backdrop(*rect, *radius, *blur);
+            }
             DisplayCommand::DrawText { .. } | DisplayCommand::DrawGlyphs { .. } => {
                 return Err(RenderError::UnsupportedText);
             }
@@ -388,6 +391,57 @@ impl Renderer {
             let u = (local.x - rect.min_x()) / rect.size.width * f64::from(image.width());
             let v = (local.y - rect.min_y()) / rect.size.height * f64::from(image.height());
             Some(sample_image(&image, u, v, sampling))
+        });
+    }
+
+    /// Blurs the base layer inside the rounded `rect` and paints the
+    /// result into the current layer, as the platform painters do.
+    fn backdrop(&mut self, rect: Rect, radius: f64, blur: f64) {
+        let transform = self.state.transform;
+        let Some(inverse) = transform.invert() else {
+            return;
+        };
+        let scale = self.scale;
+        let sigma = blur * transform.determinant().abs().sqrt() * scale;
+        let device = transform.apply_rect(rect);
+        let margin = (sigma * 3.0).ceil();
+        let clamp_x = |value: f64| value.clamp(0.0, f64::from(self.width)) as usize;
+        let clamp_y = |value: f64| value.clamp(0.0, f64::from(self.height)) as usize;
+        let x0 = clamp_x((device.min_x() * scale).floor() - margin);
+        let y0 = clamp_y((device.min_y() * scale).floor() - margin);
+        let x1 = clamp_x((device.max_x() * scale).ceil() + margin);
+        let y1 = clamp_y((device.max_y() * scale).ceil() + margin);
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+        let (width, height) = (x1 - x0, y1 - y0);
+        let stride = self.width as usize;
+        let base = &self.layers[0].0.data;
+        let mut pixels = Vec::with_capacity(width * height * 4);
+        for y in y0..y1 {
+            for pixel in &base[y * stride + x0..y * stride + x1] {
+                pixels.extend(pixel.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8));
+            }
+        }
+        choscorui_core::blur_pixels(&mut pixels, width, height, width * 4, sigma);
+        let polys = Path::rounded_rect(rect, radius).flatten(0.05 / scale);
+        self.paint(device, |point| {
+            if !winding_contains(&polys, inverse.apply(point), FillRule::NonZero) {
+                return None;
+            }
+            let x = ((point.x * scale).floor() as usize).checked_sub(x0)?;
+            let y = ((point.y * scale).floor() as usize).checked_sub(y0)?;
+            if x >= width || y >= height {
+                return None;
+            }
+            let at = (y * width + x) * 4;
+            let [r, g, b, a] = [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]];
+            if a == 0 {
+                return Some(Color::TRANSPARENT);
+            }
+            let un =
+                |c: u8| ((u16::from(c) * 255 + u16::from(a) / 2) / u16::from(a)).min(255) as u8;
+            Some(Color::rgba8(un(r), un(g), un(b), a))
         });
     }
 

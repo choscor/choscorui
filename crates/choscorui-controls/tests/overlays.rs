@@ -171,6 +171,14 @@ fn a_dialog_is_centered_and_a_press_outside_dismisses_it() {
     assert_eq!(h.host.modal(&h.tree), Some(h.node));
     h.set_time(1.0);
     let list = h.paint();
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            choscorui_core::DisplayCommand::BackdropBlur { rect, blur, .. }
+                if *blur == 4.0 && rect.size.width == 800.0
+        )),
+        "the scrim blurs the window"
+    );
     let painted = texts(&list);
     for text in ["Edit profile", "Cancel", "Save changes"] {
         assert!(painted.contains(&text.to_string()), "{text}");

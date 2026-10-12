@@ -173,6 +173,30 @@ fn fixtures() -> Vec<(&'static str, DisplayList)> {
         .unwrap();
     out.push(("focus-ring", list));
 
+    let stripes = || {
+        let mut list = background();
+        for index in 0..8 {
+            let x = f64::from(index) * 8.0;
+            list.fill_rect(
+                Rect::from_xywh(x, 0.0, 4.0, HEIGHT),
+                Color::rgba8(30, 90, 200, 255),
+            );
+        }
+        list
+    };
+    let panel = Rect::from_xywh(12.0, 8.0, 40.0, 32.0);
+    let mut list = stripes();
+    list.backdrop_blur(panel, 6.0, 4.0).unwrap();
+    list.fill_rounded_rect(panel, 6.0, Color::BLACK.with_alpha(0.1))
+        .unwrap();
+    out.push(("backdrop-blur", list));
+
+    let mut list = stripes();
+    list.push_opacity(0.5).unwrap();
+    list.backdrop_blur(panel, 0.0, 2.0).unwrap();
+    list.pop_opacity().unwrap();
+    out.push(("backdrop-blur-opacity", list));
+
     out
 }
 
@@ -195,5 +219,26 @@ fn software_and_core_graphics_agree_at_one_and_two_times_scale() {
                 share * 100.0
             );
         }
+    }
+}
+
+#[test]
+fn backdrop_blur_softens_what_is_beneath() {
+    let mut list = background();
+    list.fill_rect(Rect::from_xywh(0.0, 0.0, 32.0, HEIGHT), Color::BLACK);
+    list.backdrop_blur(Rect::from_xywh(16.0, 8.0, 32.0, 32.0), 0.0, 4.0)
+        .unwrap();
+    let native = MacBitmap::render(&list, WIDTH as u32, HEIGHT as u32, 1.0)
+        .unwrap()
+        .to_image()
+        .unwrap();
+    let software = Raster::render(&list, WIDTH as u32, HEIGHT as u32, 1.0).unwrap();
+    for pixels in [native.pixels(), software.pixels()] {
+        // At the black and white edge, the blur leaves a middle gray.
+        let at = (24 * WIDTH as usize + 32) * 4;
+        assert!((64..192).contains(&pixels[at]), "{}", pixels[at]);
+        // Outside the blurred rectangle, the edge stays sharp.
+        let outside = (4 * WIDTH as usize + 32) * 4;
+        assert_eq!(pixels[outside], 255);
     }
 }

@@ -12,6 +12,8 @@ pub use path::{
     FillRule, GradientStop, Image, ImageError, ImageSampling, LineCap, LineJoin, Paint, Path,
     PathElement, StrokeStyle, lerp_color,
 };
+mod blur;
+pub use blur::blur_pixels;
 mod display;
 pub use display::{
     Color, CursorShape, DisplayCommand, DisplayList, DisplayListError, Shadow, TextRun, damage,

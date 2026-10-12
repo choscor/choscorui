@@ -505,7 +505,7 @@ impl CustomControl for Dialog {
         let focus_visible = cx.state.focus_visible();
         let scrim = cx.style(self.query(Slot::Overlay));
         let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
-        cx.list.fill_rect(self.viewport, scrim.background);
+        cx.slot(self.viewport, &scrim, |_, _| {});
         let _ = cx.list.pop_opacity();
         let panel = cx.style(self.query(Slot::Root).state(VisualState::OPEN));
         if self.side().is_none() {

@@ -69,6 +69,12 @@ shadows. `DisplayList::draw_shadows` draws them in order.
 `DisplayList::draw_ring` draws a focus ring. The ring is a stroke of
 `ring_width` just outside the shape, and it follows the corner radius.
 
+`DisplayList::backdrop_blur` blurs the painted content inside a rounded
+rectangle. The blur is a Gaussian with a standard deviation in points, as in
+CSS `backdrop-filter: blur()`. A style with a `backdrop_blur` above zero gets
+this blur under its background. The modal scrim uses it. Every painter blurs
+with `blur_pixels`, so the pixels match.
+
 `ThemeResolver` returns a `ThemeInvalidation` for each change: `None`, `Paint`,
 or `Layout`. It marks only the changed subtree dirty. A `Layout` change also
 marks the subtree paint-dirty and semantics-dirty.

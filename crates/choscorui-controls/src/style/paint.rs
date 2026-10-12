@@ -106,8 +106,8 @@ pub fn fill_shape(list: &mut DisplayList, rect: Rect, corners: &Corners, rtl: bo
     }
 }
 
-/// Paints the box of a slot: drop shadows, ring, background, inset
-/// shadows, then the border inside the box.
+/// Paints the box of a slot: drop shadows, ring, backdrop blur,
+/// background, inset shadows, then the border inside the box.
 pub fn paint_box(list: &mut DisplayList, rect: Rect, style: &ResolvedStyle, rtl: bool) {
     let radius = style.radius.top_start.max(0.0);
     for shadow in style.shadow.iter().filter(|shadow| !shadow.inset) {
@@ -128,6 +128,9 @@ pub fn paint_box(list: &mut DisplayList, rect: Rect, style: &ResolvedStyle, rtl:
                 StrokeStyle::new(ring.width),
             );
         }
+    }
+    if style.backdrop_blur > 0.0 {
+        let _ = list.backdrop_blur(rect, radius, style.backdrop_blur);
     }
     fill_shape(list, rect, &style.radius, rtl, style.background);
     let insets: Vec<Shadow> = style.shadow.iter().filter(|s| s.inset).copied().collect();
