@@ -373,3 +373,76 @@ impl Button {
         });
     }
 }
+
+impl crate::CustomControl for Button {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let size = Button::measure(self, cx.styles, cx.tokens, cx.text);
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return choscorui_core::EventReply::Continue;
+        };
+        let input = match routed {
+            crate::hosted::Routed::Pointer(event) => ButtonInput::Pointer(event),
+            crate::hosted::Routed::Key(event) => ButtonInput::Key(event),
+            crate::hosted::Routed::Cancel => ButtonInput::Cancel,
+        };
+        let node = cx.node();
+        if let Ok(Some(_)) = self.handle(cx.tree_mut(), node, input) {
+            cx.emit(crate::ControlMessage::Activated);
+        }
+        cx.request_paint();
+        crate::hosted::routed_reply(routed)
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let pressed =
+            self.enabled && ((self.pointer_armed && self.pointer_inside) || self.space_armed);
+        let state = cx
+            .state
+            .set(VisualState::PRESSED, pressed)
+            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::OPEN, self.expanded);
+        self.paint_state(cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        ButtonSemantics {
+            role: "button",
+            name: self.label.clone(),
+            enabled: self.enabled,
+            focused: false,
+            actions: &[],
+        }
+        .shared()
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: CoreSemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != CoreSemanticAction::Activate || !self.enabled {
+            return false;
+        }
+        cx.emit(crate::ControlMessage::Activated);
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.pointer_armed = false;
+            self.pointer_inside = false;
+            self.space_armed = false;
+            self.hovered = false;
+        }
+    }
+}

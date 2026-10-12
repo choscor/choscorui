@@ -220,3 +220,41 @@ impl Reveal {
         let _ = cx.list.pop_opacity();
     }
 }
+
+/// What a built-in control's own `handle` takes from a host event: the
+/// pointer or key event at the target phase, or a cancel when the control
+/// loses focus or a popup above it opens.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Routed {
+    Pointer(PointerEvent),
+    Key(KeyEvent),
+    Cancel,
+}
+
+/// The routed form of `event` for a built-in control, or `None` for an
+/// event that the control ignores.
+pub(crate) fn route(cx: &ControlContext<'_>, event: &ControlEvent) -> Option<Routed> {
+    if cx.phase() != EventPhase::Target {
+        return None;
+    }
+    match event {
+        ControlEvent::Pointer(event) => Some(Routed::Pointer(*event)),
+        ControlEvent::Key(event) => Some(Routed::Key(*event)),
+        ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => Some(Routed::Cancel),
+        _ => None,
+    }
+}
+
+/// The reply for a routed event: pointer presses and releases and the
+/// activation keys stop; moves and other keys continue.
+pub(crate) fn routed_reply(routed: Routed) -> EventReply {
+    match routed {
+        Routed::Pointer(PointerEvent::Down { .. } | PointerEvent::Up { .. })
+        | Routed::Key(KeyEvent::Down {
+            key: Key::Space | Key::Enter,
+            ..
+        })
+        | Routed::Key(KeyEvent::Up { key: Key::Space }) => EventReply::Stop,
+        _ => EventReply::Continue,
+    }
+}

@@ -156,6 +156,17 @@ only the missing-node rule below applies, with `TreeError`. The
   `Cancel` input. It clears an armed press or drag and releases capture. It
   never activates and never restores an earlier value.
 
+**In a control host.** A built-in control also implements
+`CustomControl`, so a `ControlHost` and the views can mount it. The host
+routes pointer and key events to `handle` at the target phase. A loss of
+focus or a `Dismiss` event becomes a `Cancel` input. The control reports
+changes as `ControlMessage` values:
+
+| Control | Message | `set_value` takes |
+| --- | --- | --- |
+| `Button` | `Activated` | - |
+| `Checkbox` | `Changed(Bool)` | `Bool`, or `Mixed` for the mixed state |
+
 Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and
 `Progress` take no input.

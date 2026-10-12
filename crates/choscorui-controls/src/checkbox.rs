@@ -306,3 +306,119 @@ impl Checkbox {
         }
     }
 }
+
+impl Checkbox {
+    /// The state flags that the checkbox keeps itself, without the host's
+    /// hover and focus.
+    fn own_state(&self) -> VisualState {
+        let pressed =
+            self.enabled && ((self.pointer_armed && self.pointer_inside) || self.space_armed);
+        VisualState::NONE
+            .set(VisualState::PRESSED, pressed)
+            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::CHECKED, self.checked && !self.indeterminate)
+            .set(VisualState::INDETERMINATE, self.indeterminate)
+    }
+}
+
+impl crate::CustomControl for Checkbox {
+    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
+        let size = Checkbox::measure(self, cx.styles, cx.tokens, cx.text);
+        choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+    ) -> choscorui_core::EventReply {
+        let Some(routed) = crate::hosted::route(cx, event) else {
+            return choscorui_core::EventReply::Continue;
+        };
+        let input = match routed {
+            crate::hosted::Routed::Pointer(event) => CheckboxInput::Pointer(event),
+            crate::hosted::Routed::Key(event) => CheckboxInput::Key(event),
+            crate::hosted::Routed::Cancel => CheckboxInput::Cancel,
+        };
+        let node = cx.node();
+        if let Ok(Some(value)) = self.handle(cx.tree_mut(), node, input) {
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Bool(
+                value,
+            )));
+        }
+        cx.request_paint();
+        crate::hosted::routed_reply(routed)
+    }
+
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        let state = cx.state.with(self.own_state());
+        self.paint_state(cx, state);
+    }
+
+    fn semantics(&self) -> SemanticNode {
+        CheckboxSemantics {
+            role: "checkbox",
+            name: self.label.clone(),
+            checked: self.checked,
+            mixed: self.indeterminate,
+            invalid: self.invalid,
+            enabled: self.enabled,
+            focused: false,
+            actions: &[],
+        }
+        .shared()
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        action: CoreSemanticAction,
+        value: Option<&str>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        let next = match (action, value) {
+            (CoreSemanticAction::Activate, _) => !self.checked,
+            (CoreSemanticAction::SetValue, Some("true")) => true,
+            (CoreSemanticAction::SetValue, Some("false")) => false,
+            _ => return false,
+        };
+        if next != self.checked || self.indeterminate {
+            self.checked = next;
+            self.indeterminate = false;
+            cx.request_paint();
+            cx.request_semantics();
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Bool(
+                next,
+            )));
+        }
+        true
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.pointer_armed = false;
+            self.pointer_inside = false;
+            self.space_armed = false;
+            self.hovered = false;
+        }
+    }
+
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match value {
+            crate::ControlValue::Bool(checked) => {
+                self.checked = *checked;
+                self.indeterminate = false;
+                true
+            }
+            crate::ControlValue::Mixed(state) => {
+                self.checked = state.unwrap_or(false);
+                self.indeterminate = state.is_none();
+                true
+            }
+            _ => false,
+        }
+    }
+}
