@@ -1,8 +1,362 @@
-//! Pages of the `navigation` group, as views.
+//! Keyboard navigation: mnemonics and default/cancel dialog keys.
 
-use crate::ui::page::Build;
+use crate::ui::page::{Build, PageCx, column};
+use choscorui::compose::view::{
+    AnyView, Button, Cx, Frame, HStack, HorizontalAlignment, Input, State, Text, Textarea, VStack,
+    View, ViewExt,
+};
+use choscorui::controls::{
+    ButtonVariant, CommandId, CommandRegistry, CommandState, DialogKeys, ShortcutModifiers,
+    parse_mnemonic,
+};
+use choscorui::core::{ColorRole, Key, KeyEvent, Space, TextPreset};
+
+/// Labels with mnemonics; `&P` is shared, so pressing it cycles focus.
+const MNEMONIC_LABELS: [&str; 5] = ["&Save", "Save &As…", "&Print", "&Preview", "Fish && Chips"];
+
+/// The chord that presses a mnemonic.
+const MNEMONIC_CHORD: ShortcutModifiers = ShortcutModifiers {
+    shift: false,
+    control: true,
+    option: true,
+    command: false,
+};
+
+/// A small muted line that follows `text`.
+fn status(text: State<String>) -> impl View {
+    Text::new(move || text.get())
+        .text_style(TextPreset::Small)
+        .foreground(ColorRole::MutedForeground)
+}
+
+/// Buttons reachable with Control-Option and their mnemonic letter. A
+/// letter that one button has activates it; a shared letter moves focus
+/// to the next button that has it.
+struct MnemonicsPage;
+
+/// One mnemonic button: its display label, letter, and focus.
+#[derive(Clone)]
+struct Mnemonic {
+    label: String,
+    letter: Option<char>,
+    focused: State<bool>,
+}
+
+/// Presses Control-Option-`letter` among `buttons`: the status says what
+/// it activated or focused.
+fn press(buttons: &[Mnemonic], letter: char, last: State<String>) {
+    let matches: Vec<&Mnemonic> = buttons
+        .iter()
+        .filter(|button| button.letter == Some(letter))
+        .collect();
+    let (hit, activate) = match matches.as_slice() {
+        [] => return,
+        [only] => (*only, true),
+        many => {
+            let next = many
+                .iter()
+                .position(|button| button.focused.get())
+                .map_or(0, |index| (index + 1) % many.len());
+            (many[next], false)
+        }
+    };
+    hit.focused.set(true);
+    last.set(if activate {
+        format!("Activated “{}”", hit.label)
+    } else {
+        format!("Focused “{}”; press again for the next match", hit.label)
+    });
+}
+
+impl View for MnemonicsPage {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let last = cx.state("Press Control-Option and a letter (S, A, P, or F).".to_owned());
+        let buttons: Vec<Mnemonic> = MNEMONIC_LABELS
+            .iter()
+            .map(|label| {
+                let (label, letter) = parse_mnemonic(label);
+                Mnemonic {
+                    label,
+                    letter,
+                    focused: cx.state(false),
+                }
+            })
+            .collect();
+        let row = HStack::new(
+            buttons
+                .iter()
+                .map(|button| {
+                    let label = button.label.clone();
+                    Button::new(button.label.clone(), move || {
+                        last.set(format!("Activated “{label}”"));
+                    })
+                    .variant(ButtonVariant::Outline)
+                    .focused(button.focused.binding())
+                    .accessibility_hint(
+                        button
+                            .letter
+                            .map(|letter| format!("Control-Option-{}", letter.to_uppercase()))
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        )
+        .spacing(Space::S2);
+        let mut letters: Vec<char> = buttons.iter().filter_map(|button| button.letter).collect();
+        letters.sort_unstable();
+        letters.dedup();
+        let page = column((row, status(last)));
+        letters.into_iter().fold(page.into_any(), |page, letter| {
+            let buttons = buttons.clone();
+            page.keyboard_shortcut(Key::Character(letter), MNEMONIC_CHORD, move || {
+                press(&buttons, letter, last);
+            })
+            .into_any()
+        })
+    }
+}
+
+pub fn mnemonics(_: &PageCx) -> AnyView {
+    MnemonicsPage.into_any()
+}
+
+const OK: CommandId = CommandId(1);
+const CANCEL: CommandId = CommandId(2);
+
+/// A small form where Return runs the default button and Escape (or
+/// ⌘-period) cancels, except in the multi-line note, which uses Return.
+struct DialogKeysPage;
+
+/// The form's state.
+#[derive(Clone, Copy)]
+struct Form {
+    name: State<String>,
+    note: State<String>,
+    in_note: State<bool>,
+    ok_enabled: State<bool>,
+    last: State<String>,
+}
+
+impl Form {
+    /// Routes a key as the dialog would: the default or cancel command
+    /// runs, the note takes Return as a line break, and a disabled OK
+    /// consumes Return.
+    fn route(self, key: Key, modifiers: ShortcutModifiers) {
+        let mut commands = CommandRegistry::new();
+        for command in [OK, CANCEL] {
+            let _ = commands.insert(command, CommandState::default());
+        }
+        let _ = commands.set_enabled(OK, self.ok_enabled.get());
+        let keys = DialogKeys {
+            default: Some(OK),
+            cancel: Some(CANCEL),
+        };
+        let in_note = self.in_note.get();
+        let event = KeyEvent::Down { key, repeat: false };
+        match keys.route(event, modifiers, in_note, &commands) {
+            Some(command) => self.run(command),
+            None if key == Key::Enter && in_note => self.note.update(|note| note.push('\n')),
+            None if key == Key::Enter && !self.ok_enabled.get() => {
+                self.last.set("Return ignored: OK is disabled".into());
+            }
+            None => {}
+        }
+    }
+
+    fn run(self, command: CommandId) {
+        self.last.set(if command == OK {
+            format!("OK: saved “{}”", self.name.get())
+        } else {
+            "Cancelled".into()
+        });
+    }
+
+    fn toggle_ok(self) {
+        let enabled = !self.ok_enabled.get();
+        self.ok_enabled.set(enabled);
+        self.last.set(if enabled {
+            "OK enabled".into()
+        } else {
+            "OK disabled: Return is consumed but does nothing".into()
+        });
+    }
+}
+
+/// A caption above a field. It repeats the field's name, so assistive
+/// technology skips it.
+fn field_caption(text: &str) -> impl View {
+    Text::new(text.to_owned())
+        .text_style(TextPreset::Small)
+        .foreground(ColorRole::MutedForeground)
+        .accessibility_hidden(true)
+}
+
+fn labeled(caption: &str, field: impl View) -> impl View {
+    VStack::new((field_caption(caption), field))
+        .alignment(HorizontalAlignment::Leading)
+        .spacing(Space::S1)
+}
+
+impl View for DialogKeysPage {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let form = Form {
+            name: cx.state("Lựu".to_owned()),
+            note: cx.state(String::new()),
+            in_note: cx.state(false),
+            ok_enabled: cx.state(true),
+            last: cx.state("Press Return or Escape.".to_owned()),
+        };
+        let fields = (
+            labeled(
+                "Name",
+                Input::new("Name", form.name.binding()).frame(Frame::new().width(320.0)),
+            ),
+            labeled(
+                "Note (Return inserts a line here)",
+                Textarea::new("Note", form.note.binding())
+                    .focused(form.in_note.binding())
+                    .frame(Frame::size(320.0, 80.0)),
+            ),
+        );
+        let ok_enabled = form.ok_enabled;
+        let buttons = HStack::new((
+            Button::new("Cancel", move || form.run(CANCEL))
+                .variant(ButtonVariant::Outline)
+                .accessibility_hint("Cancel button (Escape)".to_owned()),
+            // The default button takes the primary look while it can run.
+            Button::new("OK", move || form.run(OK))
+                .variant(move || {
+                    if ok_enabled.get() {
+                        ButtonVariant::Default
+                    } else {
+                        ButtonVariant::Outline
+                    }
+                })
+                .disabled(move || !ok_enabled.get())
+                .accessibility_hint("Default button (Return)".to_owned()),
+            Button::new(
+                move || {
+                    if ok_enabled.get() {
+                        "Disable OK"
+                    } else {
+                        "Enable OK"
+                    }
+                },
+                move || form.toggle_ok(),
+            )
+            .variant(ButtonVariant::Outline),
+        ))
+        .spacing(Space::S2);
+        let plain = ShortcutModifiers::default();
+        let command = ShortcutModifiers {
+            command: true,
+            ..plain
+        };
+        column((fields, buttons, status(form.last)))
+            .keyboard_shortcut(Key::Enter, plain, move || form.route(Key::Enter, plain))
+            .keyboard_shortcut(Key::Escape, plain, move || form.route(Key::Escape, plain))
+            .keyboard_shortcut(Key::Character('.'), command, move || {
+                form.route(Key::Character('.'), command);
+            })
+    }
+}
+
+pub fn dialog_keys(_: &PageCx) -> AnyView {
+    DialogKeysPage.into_any()
+}
 
 /// The view of page `id`, when this module has it.
-pub fn page(_id: &str) -> Option<Build> {
-    None
+pub fn page(id: &str) -> Option<Build> {
+    Some(match id {
+        "mnemonics" => mnemonics,
+        "dialog-keys" => dialog_keys,
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MNEMONIC_CHORD;
+    use crate::ui::pages::tests::Harness;
+    use choscorui::controls::ShortcutModifiers;
+    use choscorui::core::{Key, KeyEvent, SemanticAction};
+
+    fn press(page: &mut Harness, key: Key, modifiers: ShortcutModifiers) -> bool {
+        let handled = page
+            .host
+            .key(KeyEvent::Down { key, repeat: false }, modifiers);
+        page.host.layout();
+        handled
+    }
+
+    fn focused(page: &mut Harness, name: &str) -> bool {
+        let node = page.node(name);
+        page.host.tree().focus() == Some(node)
+    }
+
+    #[test]
+    fn a_unique_mnemonic_activates_and_a_shared_one_cycles_focus() {
+        let mut page = Harness::new("mnemonics");
+        let save = page.node("Save");
+        let description = page.host.semantic(save).unwrap().description;
+        assert_eq!(description, "Control-Option-S");
+        assert!(page.host.find("Fish & Chips").is_some());
+        assert!(press(&mut page, Key::Character('a'), MNEMONIC_CHORD));
+        assert!(page.host.find("Activated “Save As…”").is_some());
+        assert!(focused(&mut page, "Save As…"));
+        assert!(press(&mut page, Key::Character('p'), MNEMONIC_CHORD));
+        assert!(focused(&mut page, "Print"));
+        assert!(
+            page.host
+                .find("Focused “Print”; press again for the next match")
+                .is_some()
+        );
+        assert!(press(&mut page, Key::Character('p'), MNEMONIC_CHORD));
+        assert!(focused(&mut page, "Preview"));
+        assert!(press(&mut page, Key::Character('p'), MNEMONIC_CHORD));
+        assert!(focused(&mut page, "Print"));
+        page.act("Save", SemanticAction::Activate);
+        assert!(page.host.find("Activated “Save”").is_some());
+    }
+
+    #[test]
+    fn return_runs_the_default_button_except_in_the_note() {
+        let mut page = Harness::new("dialog-keys");
+        let plain = ShortcutModifiers::default();
+        page.act("Name", SemanticAction::Focus);
+        assert!(press(&mut page, Key::Enter, plain));
+        assert!(page.host.find("OK: saved “Lựu”").is_some());
+        assert!(press(&mut page, Key::Escape, plain));
+        assert!(page.host.find("Cancelled").is_some());
+        page.act("Note", SemanticAction::Focus);
+        assert!(page.host.text("Hi"));
+        assert!(press(&mut page, Key::Enter, plain));
+        assert_eq!(page.value("Note").as_deref(), Some("Hi\n"));
+        assert!(page.host.find("Cancelled").is_some());
+        let command = ShortcutModifiers {
+            command: true,
+            ..plain
+        };
+        page.act("Name", SemanticAction::Focus);
+        assert!(press(&mut page, Key::Enter, plain));
+        assert!(press(&mut page, Key::Character('.'), command));
+        assert!(page.host.find("Cancelled").is_some());
+    }
+
+    #[test]
+    fn a_disabled_ok_consumes_return() {
+        let mut page = Harness::new("dialog-keys");
+        page.act("Disable OK", SemanticAction::Activate);
+        let ok = page.node("OK");
+        assert!(page.host.semantic(ok).unwrap().state.disabled);
+        assert!(
+            page.host
+                .find("OK disabled: Return is consumed but does nothing")
+                .is_some()
+        );
+        assert!(press(&mut page, Key::Enter, ShortcutModifiers::default()));
+        assert!(page.host.find("Return ignored: OK is disabled").is_some());
+        page.act("Enable OK", SemanticAction::Activate);
+        assert!(!page.host.semantic(ok).unwrap().state.disabled);
+    }
 }
