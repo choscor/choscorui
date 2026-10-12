@@ -56,8 +56,8 @@ impl Poster {
         let application = self.inner.application;
         self.post(move || {
             // SAFETY: post executes only while Application is alive, on its
-            // main run loop; `stop:` accepts a nullable sender.
-            unsafe { send_void_id(application as Id, c"stop:", std::ptr::null_mut()) }
+            // main run loop.
+            unsafe { stop_application(application as Id) }
         })
     }
 }

@@ -42,7 +42,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Ownership.** `Application` owns the +1 Core Foundation run-loop source. On `Drop`, it removes, invalidates, and releases the source. An `Arc` keeps the callback context alive through the last callback.
 - **Threads.** Workers signal the source through `Poster`. The source callback runs the queued tasks on the main thread. A mutex stops worker signals during teardown.
 - **Panics.** The callback catches a panic in each posted task, increments a count, and continues with the next task.
-- **Stop.** `Poster::request_stop` posts `NSApplication stop:` to the main thread.
+- **Stop.** `Poster::request_stop` posts `NSApplication stop:` to the main thread. AppKit checks the stop flag only after `run` handles an event. Thus, `stop_application` also posts an application-defined `NSEvent` with `postEvent:atStart:`, and `run` returns without user input.
 
 ### Timers
 

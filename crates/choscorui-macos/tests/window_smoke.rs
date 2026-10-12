@@ -333,6 +333,14 @@ fn main() {
         *received.lock().unwrap(),
         vec![(0, ui_thread), (1, ui_thread), (2, ui_thread)]
     );
+    // A stop from a worker ends `run` even when no input event follows.
+    let quiet_stop = poster.clone();
+    let worker = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        quiet_stop.request_stop().unwrap();
+    });
+    app.run();
+    worker.join().unwrap();
     let completed_after_panic = Arc::new(Mutex::new(false));
     let completed = Arc::clone(&completed_after_panic);
     let previous_hook = std::panic::take_hook();

@@ -1460,9 +1460,8 @@ impl Application {
     }
 
     pub fn stop(&self) {
-        let _pool = Pool::new();
-        // SAFETY: stop: accepts a nullable sender.
-        unsafe { send_void_id(self.raw.as_ptr(), c"stop:", std::ptr::null_mut()) }
+        // SAFETY: NSApplication is initialized and used on the main thread.
+        unsafe { stop_application(self.raw.as_ptr()) }
     }
 
     /// Requests foreground activation. AppKit may complete it asynchronously.
@@ -2202,7 +2201,73 @@ unsafe fn selector(name: &CStr) -> Sel {
     unsafe { sel_registerName(name.as_ptr()) }
 }
 
+/// Stops `[NSApp run]`. AppKit checks the stop flag only after `run`
+/// handles an event, so an application-defined event follows `stop:`.
+/// Without it, a stop from a run loop source waits for the next input.
+///
+/// # Safety
+///
+/// Call on the main thread with an initialized NSApplication.
+unsafe fn stop_application(application: Id) {
+    let _pool = Pool::new();
+    // SAFETY: the caller guarantees the thread and the receiver. stop:
+    // accepts a nullable sender. otherEventWithType:... returns an
+    // autoreleased event or nil, which the pool above owns; postEvent:
+    // retains the event in the queue.
+    unsafe {
+        send_void_id(application, c"stop:", std::ptr::null_mut());
+        let Ok(events) = class(c"NSEvent") else {
+            return;
+        };
+        let event = send_application_event(events);
+        if !event.is_null() {
+            send_void_id_bool(application, c"postEvent:atStart:", event, 1);
+        }
+    }
+}
+
+/// `NSEventTypeApplicationDefined`.
+const APPLICATION_DEFINED_EVENT: usize = 15;
+
 // Each typed cast matches the SDK method signature used at its call site.
+unsafe fn send_application_event(receiver: Id) -> Id {
+    let f: unsafe extern "C" fn(
+        Id,
+        Sel,
+        usize,
+        NSPoint,
+        usize,
+        f64,
+        isize,
+        Id,
+        i16,
+        isize,
+        isize,
+    ) -> Id = unsafe { std::mem::transmute(objc_msgSend as *const ()) };
+    let name = c"otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:";
+    let origin = NSPoint { x: 0.0, y: 0.0 };
+    let null = std::ptr::null_mut();
+    unsafe {
+        f(
+            receiver,
+            selector(name),
+            APPLICATION_DEFINED_EVENT,
+            origin,
+            0,
+            0.0,
+            0,
+            null,
+            0,
+            0,
+            0,
+        )
+    }
+}
+unsafe fn send_void_id_bool(receiver: Id, name: &CStr, value: Id, flag: i8) {
+    let f: unsafe extern "C" fn(Id, Sel, Id, i8) =
+        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
+    unsafe { f(receiver, selector(name), value, flag) }
+}
 unsafe fn send_id(receiver: Id, name: &CStr) -> Id {
     let f: unsafe extern "C" fn(Id, Sel) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
