@@ -95,6 +95,23 @@ fn expectations() -> Vec<Expect> {
             ..expect("checkbox", K::Checkbox)
         },
         Expect {
+            slot: Some(Slot::Root),
+            ..expect("button-group", K::ButtonGroup)
+        },
+        Expect {
+            slot: Some(Slot::Text),
+            ..expect("button-group", K::ButtonGroup)
+        },
+        Expect {
+            slot: Some(Slot::Separator),
+            ..expect("button-group", K::ButtonGroup)
+        },
+        Expect {
+            // The button members of the text size group.
+            variants: all(&[ButtonVariant::Outline]),
+            ..expect("button-group", K::Button)
+        },
+        Expect {
             sizes: SMALL,
             states: &[S::CHECKED, S::INVALID],
             ..expect("switch", K::Switch)
@@ -232,6 +249,22 @@ fn expectations() -> Vec<Expect> {
             sizes: ITEM_SIZES,
             grid: true,
             ..expect("item", K::Item)
+        },
+        Expect {
+            slot: Some(Slot::Header),
+            ..expect("item", K::Item)
+        },
+        Expect {
+            slot: Some(Slot::Footer),
+            ..expect("item", K::Item)
+        },
+        Expect {
+            slot: Some(Slot::Footer),
+            ..expect("header-view", K::Table)
+        },
+        Expect {
+            slot: Some(Slot::Caption),
+            ..expect("header-view", K::Table)
         },
         Expect {
             states: &[S::OPEN],
