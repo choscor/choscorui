@@ -86,9 +86,10 @@ The toolkit gives these views:
 | Text | `Text`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `ForEach`, `Either`, `AnyView`, `Empty` |
 | Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
+| Dialogs | `Dialog`, `InputDialog`, `FontDialog` |
 | Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `EmptyState`, `Skeleton`, `Spinner` |
 | Navigation | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Menubar`, `Sidebar`, `Command` |
-| Drawing | `Canvas`, `ControlView`, `Configured` |
+| Drawing | `Canvas`, `FocusFrame`, `ControlView`, `Configured` |
 
 A tuple of views is one view, so a stack takes a tuple of its children. To keep two branches of different types in one place, use `Either` or `.into_any()`. [controls.md](controls.md) gives the behavior and accessibility semantics of each control.
 

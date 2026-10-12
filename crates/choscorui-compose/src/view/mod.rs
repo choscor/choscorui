@@ -5,8 +5,10 @@
 mod builtins;
 mod configured;
 mod control;
+mod dialogs;
 mod dynamic;
 mod env;
+mod focus;
 mod fragment;
 mod host;
 mod layout;
@@ -23,8 +25,10 @@ pub use builtins::{
 };
 pub use configured::Configured;
 pub use control::{Canvas, CanvasContext, ControlView, CustomView};
+pub use dialogs::{FontDialog, InputDialog};
 pub use dynamic::{Dynamic, ForEach};
 pub use env::{Corner, Elevation, Env, Fill, Metric, TextEnv};
+pub use focus::FocusFrame;
 pub use host::{Cx, ViewError, ViewHost};
 pub use layout::{
     Alignment, Divider, Grid, GridItem, Group, HStack, HorizontalAlignment, ScrollView, Spacer,

@@ -1424,8 +1424,20 @@ behavior.
 While closed, the hosted alert node is hidden and has no actions.
 
 `InputDialog` has no semantic node. Its field and buttons publish their
-own semantics. The control host has no `InputDialog` control: put an
-`Input` in a `Dialog`, and call `validate`.
+own semantics. The control host has no `InputDialog` control.
+
+**As a view.** The `InputDialog` view of `choscorui-compose` shows the
+title, the prompt, an `Input`, an accept button, and the validation
+message. It edits a `Binding<String>` and validates the text in the
+locale of the environment.
+
+- The accept button is enabled only while `can_accept` is true.
+- Return in the field and the accept button call `handle_key` with Enter.
+  The view runs its action only with a valid value.
+- The field shows the validation state. The message line shows only the
+  message of an `Invalid` state.
+- The view is a group with the title as its name. The title and prompt
+  text are hidden, because the group and the field have these names.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
@@ -1464,8 +1476,23 @@ own semantics. The control host has no `InputDialog` control: put an
 | Actions | `SetValue`, `Focus` |
 
 `FontDialog` has no semantic node. Its family combobox publishes the
-`FontChooser` semantics. The control host has no `FontDialog` control:
-mount its `FontChooser` and its size field.
+`FontChooser` semantics. The control host has no `FontDialog` control.
+`into_chooser` gives the `FontChooser` to mount in a control host.
+
+**As a view.** The `FontDialog` view of `choscorui-compose` mounts the
+family combobox, a size `SpinBox`, bold and italic toggles, and a preview.
+It edits a `Binding<TextStyle>`.
+
+- Each change goes through a `FontDialog` model. The view writes the
+  family, size, weight, and slant back to the binding. The other fields
+  of the style do not change.
+- A typed family that is missing stays in the combobox with the invalid
+  state. The binding gets the fallback family.
+- A change of the binding from the application shows in the combobox.
+- Bold sets weight 700, and its toggle is on from weight 600.
+- The preview draws the sample text in the chosen family, size, and
+  weight on the `Card` surface. Its node has the `StaticText` role, the
+  sample text as its name, and the family as its value.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
@@ -1589,6 +1616,12 @@ splitter.
   host, and its hosted node is hidden.
 - `FocusFrame` is not a hosted control. It paints outside its node, at
   the node that has the focus.
+- **As a view.** The `FocusFrame` view of `choscorui-compose` paints the
+  ring after its content, outside the clip of the containers in the
+  content. It paints only for focus in its content.
+- When frames are nested, the frame nearest to the focused node paints
+  the ring. The layout mirrors the focused node in right-to-left layouts,
+  and the ring follows it.
 
 These types have no semantic node.
 

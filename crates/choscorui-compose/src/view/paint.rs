@@ -1,8 +1,9 @@
 //! Paints a mounted view tree: each node's decorations in modifier order,
-//! then its control, then its children, then every open overlay.
+//! then its control, then its children, then the ring of a focus frame,
+//! then every open overlay.
 
 use super::host::{Inner, Layer};
-use choscorui_controls::HostEnv;
+use choscorui_controls::{FocusFrame, HostEnv, PaintContext};
 use choscorui_core::{Axis, DesignTokens, DisplayList, LayoutKind, NodeId, Path, Rect, Transform};
 
 /// How far a shadow or ring can reach outside its node, for culling.
@@ -145,6 +146,10 @@ impl Painter<'_, '_> {
                 self.node(*child, &raw, &tokens, clip);
             }
         }
+        if self.frames_focus(node) {
+            let mut cx = PaintContext::new(self.list, bounds, &tokens, &inner.styles, &*inner.text);
+            FocusFrame.paint(&mut cx, &inner.tree);
+        }
         for pop in pushed.into_iter().rev() {
             let _ = match pop {
                 Pop::Opacity => self.list.pop_opacity(),
@@ -152,6 +157,25 @@ impl Painter<'_, '_> {
                 Pop::Clip => self.list.pop_clip(),
             };
         }
+    }
+
+    /// Whether `node` is the focus frame closest to the focused node.
+    /// The walk goes up from the focused node, so its cost follows the
+    /// depth of the tree, not its size.
+    fn frames_focus(&self, node: NodeId) -> bool {
+        let inner = self.inner;
+        let is_frame = |id: &NodeId| inner.nodes.get(id).is_some_and(|data| data.focus_frame);
+        if !is_frame(&node) {
+            return false;
+        }
+        let mut current = inner.tree.focus();
+        while let Some(id) = current {
+            if is_frame(&id) {
+                return id == node;
+            }
+            current = inner.tree.parent(id);
+        }
+        false
     }
 
     fn layer(&mut self, layer: Layer, bounds: Rect, radius: f64, tokens: &DesignTokens) {

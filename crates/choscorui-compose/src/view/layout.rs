@@ -292,7 +292,7 @@ impl<C: View> View for ZStack<C> {
 
 /// A new node that places its children on top of each other.
 #[inline(never)]
-fn overlay_node(cx: &mut Cx<'_>, alignment: Alignment) -> NodeId {
+pub(super) fn overlay_node(cx: &mut Cx<'_>, alignment: Alignment) -> NodeId {
     let style = LayoutStyle {
         kind: LayoutKind::Overlay,
         ..LayoutStyle::default()

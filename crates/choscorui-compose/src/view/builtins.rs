@@ -13,7 +13,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{CivilDate, ItemKey};
 
-fn as_whole(value: &ControlValue) -> Option<i32> {
+pub(super) fn as_whole(value: &ControlValue) -> Option<i32> {
     match value {
         ControlValue::Number(number) if number.is_finite() => Some(
             number
@@ -24,7 +24,7 @@ fn as_whole(value: &ControlValue) -> Option<i32> {
     }
 }
 
-fn to_number(value: i32) -> ControlValue {
+pub(super) fn to_number(value: i32) -> ControlValue {
     ControlValue::Number(f64::from(value))
 }
 

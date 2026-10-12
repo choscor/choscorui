@@ -155,6 +155,8 @@ fn font_dialog_resolves_missing_family_and_validates_size() {
     assert_eq!(style.size, 18.0);
     assert_eq!(style.weight, FontWeight(1000));
     assert_eq!(style.slant, FontSlant::Italic);
+    // The chooser leaves the model with the family it has.
+    assert_eq!(dialog.into_chooser().resolved_family(), style.family);
 }
 
 #[test]

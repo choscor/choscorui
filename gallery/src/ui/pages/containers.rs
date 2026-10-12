@@ -8,14 +8,14 @@ mod tool_box;
 
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Canvas, Configured, Dynamic, Frame, HStack, HorizontalAlignment,
-    Spacer, State, Text, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Configured, Dynamic, FocusFrame, Frame, HStack,
+    HorizontalAlignment, Spacer, State, Text, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
     ButtonVariant, ControlKind, ControlMessage, ControlValue, Resizable, SplitOrientation,
     StackedContainer,
 };
-use choscorui::core::{ColorRole, FontWeight, RadiusScale, Rect, Space, TextPreset};
+use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space, TextPreset};
 
 pub use dock::dock;
 pub use grip::size_grip;
@@ -227,66 +227,35 @@ const FRAMED_GAP: f64 = 10.0;
 /// Room around the clipping panel for the focus ring.
 const RING_ROOM: f64 = 8.0;
 
-/// Buttons inside a clipping panel. The focus frame draws outside the
-/// focused button's bounds, under the clipped buttons, so focus stays
-/// visible even at the clip edge.
+/// Buttons inside a clipping panel. The focus frame draws the ring
+/// outside the focused button's bounds, above the clipped buttons, so
+/// focus stays visible even at the clip edge.
 pub fn focus_frame(_: &PageCx) -> AnyView {
-    stateful(|cx| {
-        let focused: Vec<State<bool>> = FRAMED.iter().map(|_| cx.state(false)).collect();
-        let (width, height) = FRAMED_SIZE;
-        let panel_width = width * 3.0 + FRAMED_GAP * 2.0;
-        let buttons: Vec<_> = FRAMED
-            .iter()
-            .zip(&focused)
-            .map(|(label, focus)| {
-                Button::new(*label, || {})
-                    .focused(focus.binding())
-                    .frame(Frame::size(width, height).alignment(Alignment::FILL))
-            })
-            .collect();
-        let rings = focused.clone();
-        let frame = Canvas::new(move |ctx, size| {
-            let Some(index) = rings.iter().position(|focus| focus.get()) else {
-                return;
-            };
-            // Buttons sit flush with the panel edges, where a ring drawn
-            // by the button itself would be clipped.
-            let offset = index as f64 * (width + FRAMED_GAP);
-            let x = if ctx.rtl {
-                size.width - RING_ROOM - offset - width
-            } else {
-                RING_ROOM + offset
-            };
-            let rect = Rect::from_xywh(
-                ctx.bounds.origin.x + x,
-                ctx.bounds.origin.y + RING_ROOM,
-                width,
-                height,
-            );
-            let tokens = ctx.tokens;
-            let color = tokens.ring_color(tokens.color(ColorRole::Ring));
-            let radius = tokens.radius(RadiusScale::Md);
-            let _ = ctx.list.draw_ring(rect, radius, tokens.ring_width, color);
+    let (width, height) = FRAMED_SIZE;
+    let panel_width = width * 3.0 + FRAMED_GAP * 2.0;
+    let buttons: Vec<_> = FRAMED
+        .iter()
+        .map(|label| {
+            Button::new(*label, || {}).frame(Frame::size(width, height).alignment(Alignment::FILL))
         })
-        .frame(Frame::size(
-            panel_width + RING_ROOM * 2.0,
-            height + RING_ROOM * 2.0,
-        ));
-        let clipped = HStack::new(buttons)
-            .spacing(FRAMED_GAP)
-            .frame(Frame::size(panel_width, height))
-            .clip_shape()
-            .accessibility_label("Clipped panel");
-        column((
-            ZStack::new((
-                panel(Spacer::new().frame(Frame::size(panel_width, height))),
-                frame,
-                clipped,
-            )),
-            caption("Press Tab to move focus; the frame is drawn outside the clip."),
-        ))
-        .button_variant(ButtonVariant::Outline)
-    })
+        .collect();
+    // Buttons sit flush with the panel edges, where a ring drawn by the
+    // button itself is clipped.
+    let clipped = HStack::new(buttons)
+        .spacing(FRAMED_GAP)
+        .frame(Frame::size(panel_width, height))
+        .clip_shape()
+        .accessibility_label("Clipped panel");
+    column((
+        FocusFrame::new(ZStack::new((
+            panel(Spacer::new().frame(Frame::size(panel_width, height))),
+            clipped,
+        )))
+        .padding(RING_ROOM),
+        caption("Press Tab to move focus; the frame is drawn outside the clip."),
+    ))
+    .button_variant(ButtonVariant::Outline)
+    .into_any()
 }
 
 /// The view of page `id`, when this module has it.

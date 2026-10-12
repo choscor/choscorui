@@ -3,20 +3,15 @@
 
 use crate::ui::page::{Build, PageCx, column, row};
 use choscorui::compose::view::{
-    AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Fill, Frame, HStack,
-    HorizontalAlignment, Input, IntoLive, SpinBox, State, Text, TextContent, Toggle, VStack, View,
-    ViewExt,
+    AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Fill, FontDialog,
+    Frame, HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text, TextContent, VStack,
+    View, ViewExt,
 };
 use choscorui::controls::{
-    AlertDialog, ButtonVariant, ColorChannel, ColorPicker, ControlContext, ControlEvent,
-    ControlKind, ControlMessage, ControlValue, CustomControl, DialogButton, DialogButtonRole,
-    FontChooser, InputDialog, InputKind, IntegerRange, MeasureContext, PaintContext, Slot,
-    StyleQuery, TextAlign, ValidationState, dialog_key_button, paint_box,
+    AlertDialog, ButtonVariant, ColorChannel, ColorPicker, ControlKind, ControlMessage,
+    ControlValue, DialogButton, DialogButtonRole, InputKind, ValidationState, dialog_key_button,
 };
-use choscorui::core::{
-    Color, ColorRole, EventReply, FontFamily, FontSlant, FontWeight, Key, Measured, RadiusScale,
-    Rect, SemanticNode, SemanticRole, SemanticState, Size, Space, TextPreset, TypeSpec,
-};
+use choscorui::core::{Color, ColorRole, Key, RadiusScale, Space, TextPreset, TextStyle};
 
 /// A small caption in `muted-foreground`, for headings and readouts.
 fn readout<M>(text: impl IntoLive<TextContent, M>) -> impl View {
@@ -107,15 +102,6 @@ pub fn alert_dialog(_: &PageCx) -> AnyView {
 /// The title, prompt, kind, and starting text of one input dialog.
 type Spec = (&'static str, &'static str, InputKind, String);
 
-/// The message under a field for its validation state.
-fn validation_message(state: &ValidationState) -> String {
-    match state {
-        ValidationState::Valid => "Valid".into(),
-        ValidationState::Intermediate => "Incomplete".into(),
-        ValidationState::Invalid(message) => message.clone(),
-    }
-}
-
 /// Four input dialogs shown inline: text, integer, decimal, and choice.
 /// Each OK button is enabled only while its value is valid.
 struct InputDialogPage;
@@ -159,62 +145,22 @@ impl InputDialogPage {
             ),
         ]
     }
-
-    /// One dialog: its caption, field, OK button, and validation message.
-    fn dialog(cx: &mut Cx<'_>, spec: Spec, last: State<String>) -> impl View {
-        let (title, prompt, kind, initial) = spec;
-        let locale = cx.env().locale();
-        let text = cx.state(initial);
-        let dialog =
-            move || InputDialog::new(title, prompt, kind.clone(), locale.clone(), text.get());
-        let validation = cx.memo({
-            let dialog = dialog.clone();
-            move || dialog().validate().0
-        });
-        // A memo reads as incomplete after its page unmounts.
-        let current = move || {
-            validation
-                .try_get()
-                .unwrap_or(ValidationState::Intermediate)
-        };
-        let accept = move || match dialog().handle_key(Key::Enter) {
-            Some(Ok(value)) => last.set(format!("{title}: accepted {value:?}")),
-            _ => last.set(format!("{title}: fix the value first")),
-        };
-        let field = Input::new(prompt, text.binding())
-            .with(move |mut input| {
-                input.set_validation(current());
-                input
-            })
-            .on_activate(accept.clone())
-            .frame(Frame::new().width(260.0));
-        let ok = Button::new("OK", accept)
-            .disabled(move || current() != ValidationState::Valid)
-            .accessibility_label(format!("OK ({title})"));
-        let message = Text::new(move || validation_message(&current()))
-            .text_style(TextPreset::Small)
-            .foreground(move || {
-                Fill::Role(match current() {
-                    ValidationState::Invalid(_) => ColorRole::Destructive,
-                    _ => ColorRole::MutedForeground,
-                })
-            });
-        VStack::new((
-            readout(format!("{title} — {prompt}")),
-            row((field, ok)),
-            message,
-        ))
-        .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S1)
-    }
 }
 
 impl View for InputDialogPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let last = cx.state("Type a value and press Return.".to_owned());
         let mut dialogs = Vec::new();
-        for spec in Self::specs(cx) {
-            dialogs.push(Self::dialog(cx, spec, last));
+        for (title, prompt, kind, initial) in Self::specs(cx) {
+            let text = cx.state(initial);
+            dialogs.push(InputDialog::new(
+                title,
+                prompt,
+                "OK",
+                kind,
+                text.binding(),
+                move |value| last.set(format!("{title}: accepted {value:?}")),
+            ));
         }
         column((
             VStack::new(dialogs)
@@ -361,114 +307,21 @@ const FAMILIES: [&str; 8] = [
     "Futura",
 ];
 
-/// The family that a missing one resolves to.
-const FALLBACK: &str = "Helvetica";
-
-/// The preview sample: a card with one line of text in the chosen family,
-/// size, weight, and slant.
-struct Preview {
-    family: &'static str,
-    size: f64,
-    weight: FontWeight,
-    slant: FontSlant,
-}
-
-impl CustomControl for Preview {
-    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        Measured::new(cx.constraints.constrain(Size::new(560.0, 90.0)))
-    }
-
-    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
-        EventReply::Continue
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        let card = cx.style(StyleQuery::new(ControlKind::Card, Slot::Root));
-        paint_box(cx.list, cx.bounds, &card, cx.rtl);
-        let mut style = card;
-        style.text = TypeSpec {
-            family: FontFamily(self.family),
-            size: self.size,
-            line_height: self.size * 1.2,
-            weight: self.weight,
-            slant: self.slant,
-            tracking: 0.0,
-        };
-        let inset = cx.tokens.spacing * 3.0;
-        let bounds = cx.bounds;
-        let line = Rect::from_xywh(
-            bounds.origin.x + inset,
-            bounds.origin.y + inset,
-            (bounds.size.width - 2.0 * inset).max(0.0),
-            style.text.line_height,
-        );
-        cx.list.push_clip(bounds);
-        cx.label(line, PREVIEW, &style, TextAlign::Start);
-        let _ = cx.list.pop_clip();
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        SemanticNode {
-            role: SemanticRole::StaticText,
-            name: format!("Preview in {} {:.0} point", self.family, self.size),
-            description: String::new(),
-            value: None,
-            state: SemanticState::default(),
-            relations: Vec::new(),
-            actions: Vec::new(),
-            text: None,
-        }
-    }
-
-    fn focusable(&self) -> bool {
-        false
-    }
-}
-
-/// Family (with completion), size, weight, and slant, with a live preview.
+/// The font dialog over the sample families, with a readout of the
+/// chosen family and size.
 struct FontDialogPage;
 
 impl View for FontDialogPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let family = cx.state("Georgia");
-        let size = cx.state(22);
-        let bold = cx.state(false);
-        let italic = cx.state(false);
-        let chooser = Configured::custom(ControlKind::Combobox, |_| {
-            let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
-            FontChooser::new(families, "Georgia", FALLBACK)
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Index(index)) = message {
-                let chosen = index.and_then(|index| FAMILIES.get(index).copied());
-                family.set(chosen.unwrap_or(FALLBACK));
-            }
-        })
-        .frame(Frame::new().width(240.0));
-        let sizes = IntegerRange::new(1, 4096, 22, 1, 10).expect("the size range is valid");
-        let preview = Configured::custom(ControlKind::Card, move |_| Preview {
-            family: family.get(),
-            size: f64::from(size.get()),
-            weight: if bold.get() {
-                FontWeight::BOLD
-            } else {
-                FontWeight::REGULAR
-            },
-            slant: if italic.get() {
-                FontSlant::Italic
-            } else {
-                FontSlant::Upright
-            },
-        });
+        let style = cx.state(TextStyle::new("Georgia", 22.0));
+        let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
         column((
-            row((
-                chooser,
-                SpinBox::new("Size", sizes, size.binding()),
-                Toggle::new("Bold", bold.binding()),
-                Toggle::new("Italic", italic.binding()),
-            )),
-            preview,
-            readout(move || format!("{} {} pt", family.get(), size.get())),
+            FontDialog::new(PREVIEW, "Size", "Bold", "Italic", families, style.binding()),
+            readout(move || {
+                style
+                    .with(|style| format!("{} {} pt", style.family, style.size))
+                    .unwrap_or_default()
+            }),
         ))
     }
 }
@@ -492,7 +345,7 @@ pub fn page(id: &str) -> Option<Build> {
 mod tests {
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, NodeId, SemanticAction};
 
     fn press(page: &mut Harness, key: Key) -> bool {
         let handled = page.host.key(
@@ -506,11 +359,6 @@ mod tests {
     fn hidden(page: &mut Harness, name: &str) -> bool {
         let node = page.node(name);
         page.host.semantic(node).unwrap().state.hidden
-    }
-
-    fn disabled(page: &mut Harness, name: &str) -> bool {
-        let node = page.node(name);
-        page.host.semantic(node).unwrap().state.disabled
     }
 
     #[test]
@@ -542,24 +390,47 @@ mod tests {
         assert!(page.host.find("Tip").is_none());
     }
 
+    /// The OK button of the input dialog titled `title`.
+    fn ok_button(page: &mut Harness, title: &str) -> NodeId {
+        let mut pending = vec![page.node(title)];
+        while let Some(node) = pending.pop() {
+            if page
+                .host
+                .semantic(node)
+                .is_some_and(|semantic| semantic.name == "OK")
+            {
+                return node;
+            }
+            pending.extend_from_slice(page.host.tree().children(node).unwrap_or_default());
+        }
+        panic!("the {title:?} dialog has no OK button");
+    }
+
+    fn ok_disabled(page: &mut Harness, title: &str) -> bool {
+        let node = ok_button(page, title);
+        page.host.semantic(node).unwrap().state.disabled
+    }
+
     #[test]
     fn input_dialogs_validate_their_kind() {
         let mut page = Harness::new("input-dialog");
-        assert!(!disabled(&mut page, "OK (Rename)"));
+        assert!(!ok_disabled(&mut page, "Rename"));
         page.act("New name", SemanticAction::SetValue);
-        assert!(disabled(&mut page, "OK (Rename)"), "a name is required");
+        assert!(ok_disabled(&mut page, "Rename"), "a name is required");
         let mut enter = |text: &str| {
             let node = page.node("Line (1 – 500)");
             page.host
                 .perform(node, SemanticAction::SetValue, Some(text));
             page.host.layout();
-            !disabled(&mut page, "OK (Go to line)")
+            !ok_disabled(&mut page, "Go to line")
         };
         assert!(enter("42"));
         assert!(!enter("501"));
         assert!(!enter("forty"));
         assert!(enter("7"));
-        assert!(page.act("OK (Go to line)", SemanticAction::Activate));
+        let ok = ok_button(&mut page, "Go to line");
+        assert!(page.host.perform(ok, SemanticAction::Activate, None));
+        page.host.layout();
         assert!(page.host.find("Go to line: accepted Integer(7)").is_some());
     }
 
@@ -583,11 +454,18 @@ mod tests {
     #[test]
     fn font_dialog_previews_the_chosen_style() {
         let mut page = Harness::new("font-dialog");
-        assert!(page.host.find("Preview in Georgia 22 point").is_some());
+        assert!(page.host.find("Georgia 22 pt").is_some());
+        assert_eq!(page.value(super::PREVIEW).as_deref(), Some("Georgia"));
         assert!(page.act("Size", SemanticAction::Increment));
-        assert!(page.host.find("Preview in Georgia 23 point").is_some());
+        assert!(page.host.find("Georgia 23 pt").is_some());
         assert!(page.act("Bold", SemanticAction::Activate));
         let bold = page.node("Bold");
         assert_eq!(page.host.semantic(bold).unwrap().state.checked, Some(true));
+        let font = page.node("Font");
+        page.host
+            .perform(font, SemanticAction::SetValue, Some("Comic Neue"));
+        page.host.layout();
+        assert!(page.host.find("Helvetica 23 pt").is_some(), "the fallback");
+        assert!(page.host.semantic(font).unwrap().state.invalid);
     }
 }

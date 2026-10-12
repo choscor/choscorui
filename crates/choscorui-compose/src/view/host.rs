@@ -163,6 +163,9 @@ pub(crate) struct NodeData {
     pub placed: bool,
     /// The axes along which the node takes all the space it is offered.
     pub flex: Flex,
+    /// Whether the node draws the focus ring of a descendant, as a
+    /// `FocusFrame` view does.
+    pub focus_frame: bool,
 }
 
 /// The axes along which a view takes all the space it is offered, as a

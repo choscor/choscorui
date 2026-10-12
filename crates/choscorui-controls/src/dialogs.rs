@@ -768,6 +768,10 @@ impl FontDialog {
     pub fn chooser(&self) -> &FontChooser {
         &self.family
     }
+    /// The family chooser, to mount it in a control host.
+    pub fn into_chooser(self) -> FontChooser {
+        self.family
+    }
     pub fn set_size(&mut self, size: f64) -> ValidationState {
         if size.is_finite() && (1.0..=4096.0).contains(&size) {
             self.size = size;
