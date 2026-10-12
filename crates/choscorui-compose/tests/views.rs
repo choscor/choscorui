@@ -665,3 +665,49 @@ fn checkbox_binds_both_ways() {
     );
     assert_eq!(host.take_errors(), Vec::new());
 }
+
+#[test]
+fn control_labels_follow_the_locale_on_the_same_node() {
+    use choscorui_compose::view::{Button, Switch};
+    let runtime = Runtime::new();
+    let locale = runtime.property(en());
+    let vi = Locale::parse("vi").unwrap();
+    let mut catalog = Catalog::new();
+    catalog.insert(&en(), "save", "Save");
+    catalog.insert(&vi, "save", "Lưu");
+    catalog.insert(&en(), "wifi", "Wi-Fi");
+    catalog.insert(&vi, "wifi", "Mạng");
+    let live = locale.clone();
+    let env = Env::new(Rc::new(catalog), move || live.get());
+    struct Screen;
+    impl View for Screen {
+        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+            let on = cx.state(false);
+            VStack::new((
+                Button::new(choscorui_compose::t!("save"), || {}),
+                Switch::new(choscorui_compose::t!("wifi"), on.binding()),
+                Text::new(move || format!("wifi {}", on.get())),
+            ))
+        }
+    }
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env,
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(Screen);
+    host.layout();
+    let save = host.find("Save").unwrap();
+    let wifi = host.find("Wi-Fi").unwrap();
+    host.perform(wifi, SemanticAction::Activate, None);
+    assert!(names(&mut host).contains(&"wifi true".to_owned()));
+    host.focus(Some(save));
+    locale.set(vi);
+    host.flush();
+    assert_eq!(host.find("Lưu"), Some(save));
+    assert_eq!(host.find("Mạng"), Some(wifi));
+    assert_eq!(host.tree().focus(), Some(save));
+    assert_eq!(host.take_errors(), Vec::new());
+}

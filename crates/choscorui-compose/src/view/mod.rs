@@ -2,6 +2,7 @@
 //! views with chained modifiers. The tree is built once; live properties
 //! update only what depends on the state that changed.
 
+mod configured;
 mod control;
 mod dynamic;
 mod env;
@@ -16,6 +17,7 @@ mod state;
 mod text;
 mod widgets;
 
+pub use configured::Configured;
 pub use control::{Canvas, CanvasContext, ControlView, CustomView};
 pub use dynamic::{Dynamic, ForEach};
 pub use env::{Corner, Elevation, Env, Fill, Metric, TextEnv};
@@ -27,7 +29,12 @@ pub use layout::{
 pub use modifier::{Edges, Styled, ViewExt};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{Localized, Text, TextContent};
-pub use widgets::{Button, Checkbox};
+pub use widgets::{
+    Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, Card, Carousel,
+    Chart, Checkbox, Collapsible, Command, ContextMenu, DataTable, DatePicker, Dialog, EmptyState,
+    FieldText, Input, InputOtp, Items, Kbd, Marker, Menubar, NavigationMenu, Pagination, Popover,
+    RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch, Textarea, Toggle, ToggleGroup,
+};
 
 /// A piece of user interface. A component implements [`View::body`] and
 /// returns other views; the toolkit's primitive views (stacks, text,

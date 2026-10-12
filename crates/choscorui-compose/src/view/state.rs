@@ -490,6 +490,12 @@ where
     }
 }
 
+impl<T> IntoLive<T, Handle> for Live<T> {
+    fn into_live(self) -> Live<T> {
+        self
+    }
+}
+
 impl<T> IntoLive<T, Handle> for State<T>
 where
     T: Clone + PartialEq + Default + 'static,
