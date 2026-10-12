@@ -99,6 +99,7 @@ page.dialog-keys = Dialog keys
 page.breadcrumb = Breadcrumb
 page.pagination = Pagination
 page.navigation-menu = Navigation menu
+page.sidebar = Sidebar
 page.dropdown-menu = Dropdown menu
 page.tooltip = Tooltip
 page.context-menu = Context menu

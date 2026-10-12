@@ -96,6 +96,7 @@ in parentheses is the role that the macOS backend gives to that
 | Navigation | [`Breadcrumb`](#breadcrumb) | Trail of links to the current page, with an optional collapsed middle. |
 | Navigation | [`Pagination`](#pagination) | Page links with previous and next buttons. |
 | Navigation | [`NavigationMenu`](#navigationmenu-and-navigationlink) | Row of site links whose triggers open panels of described links. |
+| Navigation | [`Sidebar`](#sidebar) | Grouped navigation items that collapse, and become a sheet in a narrow window. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2001,6 +2002,47 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
+
+### Sidebar
+
+- The sidebar shows a toggle, then groups of items with icons, labels, and
+  optional badges. The selected item takes the accent look.
+- ArrowDown and ArrowUp move focus between the toggle and the items, and
+  wrap. Home and End go to the ends.
+- Enter, Space, or a click on an item selects it and emits
+  `Changed(Index(item))`. Items count in order across the groups.
+- The toggle, Command+B while the sidebar has focus, `Expand`, and
+  `Collapse` open or collapse it and emit `OpenChanged`.
+- **`SidebarCollapse`.** `Offcanvas` collapses to the toggle alone.
+  `Icon` collapses to 48 pt with the item icons. `None` never collapses
+  and shows no toggle.
+- **Narrow window.** Below `SIDEBAR_MOBILE_BREAKPOINT` (768 pt), only the
+  toggle shows. Opening the sidebar shows it as a modal sheet, 288 pt wide,
+  at its side. Tab cycles inside the sheet. Choosing an item, Escape, or a
+  press outside closes it; the last two emit `Dismissed`.
+- `with_side(SheetSide::Right)` puts the border on the left edge and the
+  sheet at the right edge of the window.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Panel | `Root` | `sidebar` fill, 256 pt wide (48 pt collapsed to icons); 1 pt `sidebar-border` at the inner edge |
+| Floating panel | `Root` | 1 pt `sidebar-border` ring, radius lg, shadow sm, 8 pt padding |
+| Toggle | `Button` `Root` | ghost icon-sm button with the panel icon |
+| Header | `Header` | 8 pt padding |
+| Group | `Group` | 8 pt padding, 4 pt gap |
+| Group label | `GroupLabel` | 32 pt high, xs medium text at 70% `sidebar-foreground` |
+| Item | `Item` | 32 pt high, 8 pt padding, radius md; `sidebar-accent` fill while hovered or selected |
+| Badge | `Badge` | xs medium text at the end |
+
+| Field | `Sidebar::semantics` |
+| --- | --- |
+| Role | `Group` (AXGroup) |
+| Name / value | name / selected item |
+| Description | the focused item, or the toggle name |
+| State | expanded, disabled |
+| Actions | `Activate`, `Expand` or `Collapse` when it collapses, and `Focus` while enabled |
+
+[sidebar.rs](../crates/choscorui-controls/tests/sidebar.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

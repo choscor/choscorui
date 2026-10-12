@@ -119,7 +119,7 @@ pub use form::{
 pub use listbox::ListEntry;
 pub use nav::{
     Breadcrumb, NAVIGATION_CLOSE_DELAY, NAVIGATION_OPEN_DELAY, NavigationLink, NavigationMenu,
-    Pagination,
+    Pagination, SIDEBAR_MOBILE_BREAKPOINT, Sidebar, SidebarCollapse, SidebarItem,
 };
 pub use overlay::{
     Command, CommandItem, ContextMenu, Dialog, HOVER_CARD_CLOSE_DELAY, HOVER_CARD_OPEN_DELAY,

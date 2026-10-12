@@ -3,8 +3,11 @@
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
-use choscorui::controls::{Breadcrumb, CustomControl, NavigationLink, NavigationMenu, Pagination};
-use choscorui::core::{NodeId, Tree};
+use choscorui::controls::{
+    Breadcrumb, CustomControl, NavigationLink, NavigationMenu, Pagination, SheetSide, Sidebar,
+    SidebarCollapse, SidebarItem, SidebarVariant,
+};
+use choscorui::core::{Icon, NodeId, Tree};
 
 fn boxed(control: impl CustomControl + 'static) -> Box<dyn CustomControl> {
     Box::new(control)
@@ -103,6 +106,80 @@ pub fn navigation_menu(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<d
         ],
     );
     let rows: Vec<Row> = vec![("Menu", vec![boxed(menu)])];
+    HostedPage::build(tree, parent, rows)
+}
+
+fn sidebar_groups() -> Vec<(String, Vec<SidebarItem>)> {
+    vec![
+        (
+            "Application".to_string(),
+            vec![
+                SidebarItem::new("Home", Icon::House),
+                SidebarItem::new("Inbox", Icon::Inbox).with_badge("24"),
+                SidebarItem::new("Calendar", Icon::Calendar),
+                SidebarItem::new("Search", Icon::Search),
+            ],
+        ),
+        (
+            "Settings".to_string(),
+            vec![SidebarItem::new("Settings", Icon::Settings)],
+        ),
+    ]
+}
+
+pub fn sidebar(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let make = |name: &str, variant, collapse| {
+        boxed(
+            Sidebar::new(name, "Toggle sidebar", sidebar_groups())
+                .with_variant(variant)
+                .with_collapse(collapse)
+                .with_selected(1),
+        )
+    };
+    let rows: Vec<Row> = vec![
+        (
+            "Sidebar: off-canvas, icons, fixed",
+            vec![
+                make(
+                    "Off-canvas sidebar",
+                    SidebarVariant::Sidebar,
+                    SidebarCollapse::Offcanvas,
+                ),
+                make(
+                    "Icon sidebar",
+                    SidebarVariant::Sidebar,
+                    SidebarCollapse::Icon,
+                ),
+                make(
+                    "Fixed sidebar",
+                    SidebarVariant::Sidebar,
+                    SidebarCollapse::None,
+                ),
+            ],
+        ),
+        (
+            "Floating and inset",
+            vec![
+                make(
+                    "Floating sidebar",
+                    SidebarVariant::Floating,
+                    SidebarCollapse::Icon,
+                ),
+                make(
+                    "Inset sidebar",
+                    SidebarVariant::Inset,
+                    SidebarCollapse::Icon,
+                ),
+            ],
+        ),
+        (
+            "Right side",
+            vec![boxed(
+                Sidebar::new("Right sidebar", "Toggle sidebar", sidebar_groups())
+                    .with_side(SheetSide::Right),
+            )],
+        ),
+    ];
     HostedPage::build(tree, parent, rows)
 }
 

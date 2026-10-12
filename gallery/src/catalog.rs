@@ -139,6 +139,7 @@ pub const PAGES: &[PageInfo] = &[
         Navigation,
         nav::navigation_menu
     ),
+    page!("sidebar", "Sidebar", Navigation, nav::sidebar),
     page!(
         "dropdown-menu",
         "Dropdown menu",
@@ -211,6 +212,10 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Pagination", "pagination"),
     ("NavigationMenu", "navigation-menu"),
     ("NavigationLink", "navigation-menu"),
+    ("Sidebar", "sidebar"),
+    ("SidebarCollapse", "sidebar"),
+    ("SidebarItem", "sidebar"),
+    ("SidebarVariant", "sidebar"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),
@@ -409,7 +414,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("Ring", "focus ring of a resolved style"),
     ("ShapedText", "text measurement backed by a shaper"),
     ("Sides", "border sides of a resolved style"),
-    ("SidebarVariant", "variant key of sidebars; read by recipes"),
     ("Slot", "part key of style queries"),
     ("StyleCacheStats", "counters of the style cache, for tests"),
     ("TabsVariant", "variant key of tab lists; read by recipes"),
@@ -567,6 +571,10 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "timing constant of Popover::hover_card",
     ),
     ("TOOLTIP_GRACE", "timing constant of TooltipController"),
+    (
+        "SIDEBAR_MOBILE_BREAKPOINT",
+        "window width below which Sidebar is a sheet",
+    ),
     ("NAVIGATION_OPEN_DELAY", "timing constant of NavigationMenu"),
     (
         "NAVIGATION_CLOSE_DELAY",
