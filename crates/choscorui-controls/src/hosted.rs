@@ -150,7 +150,8 @@ pub(crate) fn node(
 /// The open and close animation of a popup: fade, zoom from 95%, and a
 /// slide from the side it opens toward. Reduced motion skips it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Reveal {
+pub struct Reveal {
+    /// Whether the popup is open, or opens.
     pub open: bool,
     /// When `open` last changed, in host time.
     pub changed_at: f64,
@@ -167,6 +168,7 @@ impl Default for Reveal {
 }
 
 impl Reveal {
+    /// Opens or closes the popup at host `time`.
     pub fn set(&mut self, open: bool, time: f64) {
         if self.open != open {
             self.open = open;
@@ -204,20 +206,27 @@ impl Reveal {
             content(cx);
             return;
         }
+        let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
+        let _ = cx
+            .list
+            .push_transform(Self::transform(rect, progress, slide));
+        content(cx);
+        let _ = cx.list.pop_transform();
+        let _ = cx.list.pop_opacity();
+    }
+
+    /// The transform of `rect` at `progress`: a zoom from 95% about its
+    /// center, and `slide` points of offset that shrink to zero.
+    pub fn transform(rect: Rect, progress: f64, slide: (f64, f64)) -> Transform {
         let scale = 0.95 + 0.05 * progress;
         let center = rect.center();
         let rest = 1.0 - progress;
-        let transform = Transform::translate(-center.x, -center.y)
+        Transform::translate(-center.x, -center.y)
             .then(Transform::scale(scale, scale))
             .then(Transform::translate(
                 center.x + slide.0 * rest,
                 center.y + slide.1 * rest,
-            ));
-        let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
-        let _ = cx.list.push_transform(transform);
-        content(cx);
-        let _ = cx.list.pop_transform();
-        let _ = cx.list.pop_opacity();
+            ))
     }
 }
 

@@ -118,6 +118,7 @@ mod data;
 pub(crate) mod feedback;
 mod form;
 mod hosted;
+pub use hosted::Reveal;
 mod layout;
 mod listbox;
 mod nav;

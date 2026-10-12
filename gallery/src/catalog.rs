@@ -374,6 +374,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
         "MenuItemVariant",
         "variant key of menu items; read by recipes",
     ),
+    ("Reveal", "open and close motion of popups and panels"),
     ("Ring", "focus ring of a resolved style"),
     ("ShapedText", "text measurement backed by a shaper"),
     ("Sides", "border sides of a resolved style"),
