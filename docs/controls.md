@@ -1936,6 +1936,19 @@ behavior.
 These types validate text. They hold no focus and no value, and have no
 semantic node. A `TextField` shows their `ValidationState`.
 
+They have no recipe. They get the `Input` look through the hosted control
+that shows their verdict:
+
+| Rule | Hosted control | Look |
+| --- | --- | --- |
+| `NumberInput` | `DecimalSpinBox`, which validates its text with it | `Input` box with the `SpinBox` steppers; ArrowUp and ArrowDown step |
+| `NumberInput` without steppers | `Input` with `set_validation` | `Input` box |
+| `InputMask` | `Input` with `set_validation` | `Input` box |
+| `DateInput` | `Input` with `set_validation` | `Input` box; free text has no steppers |
+
+An `Invalid` verdict gives the box the invalid look. For a stepped date or
+time field, use `DateTimeEdit`.
+
 - **`NumberInput`** uses the locale separators. Empty or partial numeric
   text is `Intermediate`.
 - Too many fraction digits, or a value above the maximum, is `Invalid`.
@@ -1959,7 +1972,7 @@ semantic node. A `TextField` shows their `ValidationState`.
 
 [input_rules.rs](../crates/choscorui-controls/tests/input_rules.rs) and
 [properties.rs](../crates/choscorui-controls/tests/properties.rs) pin this
-behavior.
+behavior and the look.
 
 ### Switch
 

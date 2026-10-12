@@ -1,5 +1,13 @@
-use choscorui_controls::{DateInput, InputMask, MaskError, NumberInput, ValidationState};
-use choscorui_core::{CivilDate, Locale};
+//! The text rules, and the hosted controls that give them the `Input` look.
+
+mod hosted;
+
+use choscorui_controls::{
+    ControlKind, DateInput, DecimalSpinBox, Input, InputMask, MaskError, NumberInput, Slot,
+    StyleQuery, Styles, ValidationState, VisualState,
+};
+use choscorui_core::{CivilDate, DesignTokens, DisplayCommand, DisplayList, Locale, Paint};
+use hosted::Harness;
 
 fn locale(tag: &str) -> Locale {
     Locale::parse(tag).unwrap()
@@ -91,4 +99,87 @@ fn dates_follow_locale_field_order() {
         us.validate("12/31/2025").0,
         ValidationState::Invalid(_)
     ));
+}
+
+/// True when `list` strokes the `Input` root box in `state`, with its
+/// border color and radius. The stroke sits half its width inside.
+fn strokes_input_box(list: &DisplayList, state: VisualState) -> bool {
+    let query = StyleQuery::new(ControlKind::Input, Slot::Root).state(state);
+    let style = Styles::new().resolve(&DesignTokens::light(), query);
+    list.commands().iter().any(|command| {
+        matches!(
+            command,
+            DisplayCommand::StrokeRoundedRect { color, radius, .. }
+                if *color == style.border
+                    && *radius == style.radius.top_start - style.border_width / 2.0
+        )
+    })
+}
+
+/// The number of paths that `list` strokes in the `Input` icon color: the
+/// stepper chevrons.
+fn chevrons(list: &DisplayList) -> usize {
+    let query = StyleQuery::new(ControlKind::Input, Slot::Icon);
+    let icon = Styles::new().resolve(&DesignTokens::light(), query);
+    list.commands()
+        .iter()
+        .filter(|command| {
+            matches!(
+                command,
+                DisplayCommand::StrokePath { paint: Paint::Solid(color), .. }
+                    if *color == icon.foreground
+            )
+        })
+        .count()
+}
+
+/// An `Input` that shows the verdict of a rule.
+fn ruled(validation: ValidationState) -> Harness {
+    let mut input = Input::new("Field", "");
+    input.set_validation(validation);
+    Harness::new(input)
+}
+
+#[test]
+fn an_input_gives_the_mask_and_date_rules_the_input_look() {
+    let mask = InputMask::parse("(000) 000-0000").unwrap();
+    let h = ruled(mask.validate("0912345678"));
+    let list = h.paint();
+    assert!(strokes_input_box(&list, VisualState::NONE));
+    assert_eq!(chevrons(&list), 0, "a free-text field has no steppers");
+    let h = ruled(mask.validate("09a"));
+    assert!(h.semantics().state.invalid);
+    assert!(strokes_input_box(&h.paint(), VisualState::INVALID));
+
+    let dates = DateInput::new(locale("en"));
+    let h = ruled(dates.validate("10/12/2026").0);
+    let list = h.paint();
+    assert!(strokes_input_box(&list, VisualState::NONE));
+    assert_eq!(chevrons(&list), 0);
+    let h = ruled(dates.validate("13/45/2026").0);
+    assert!(h.semantics().state.invalid);
+    assert!(strokes_input_box(&h.paint(), VisualState::INVALID));
+}
+
+#[test]
+fn a_decimal_spin_box_gives_the_number_rule_the_input_look_with_steppers() {
+    let spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5);
+    let h = Harness::new(spin);
+    let list = h.paint();
+    assert!(strokes_input_box(&list, VisualState::NONE));
+    assert_eq!(chevrons(&list), 2, "the up and down steppers");
+
+    // The spin box validates its text with `NumberInput`.
+    let rule = NumberInput::new(locale("en"), 2).with_range(Some(0.0), Some(100.0));
+    assert!(matches!(
+        rule.validate("120").0,
+        ValidationState::Invalid(_)
+    ));
+    let mut spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5);
+    spin.set_text("120");
+    let h = Harness::new(spin);
+    assert!(h.semantics().state.invalid);
+    let list = h.paint();
+    assert!(strokes_input_box(&list, VisualState::INVALID));
+    assert_eq!(chevrons(&list), 2);
 }
