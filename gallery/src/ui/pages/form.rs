@@ -5,15 +5,15 @@ use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Configured, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
-    Input, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup, View,
-    ViewExt,
+    HorizontalAlignment, Input, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle,
+    ToggleGroup, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, AddonAlign, CalendarMode, ControlKind, ControlSize, FieldOrientation, InputGroup,
     InputGroupAddon, KbdVariant, ListEntry, Orientation, TextField, ToggleItem, ToggleVariant,
     ValidationState,
 };
-use choscorui::core::{CivilDate, Icon};
+use choscorui::core::{CivilDate, Icon, Space};
 
 /// The catalog string `key` in `env`.
 fn text(env: &Env, key: &str) -> String {
