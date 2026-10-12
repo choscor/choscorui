@@ -86,7 +86,7 @@ The toolkit gives these views:
 | Fields | `Field`, `FieldSet`, `FieldGroup`, `FieldContent`, `FieldTitle`, `FieldSeparator` |
 | Text | `Text`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `Branch`, `ForEach`, `Either`, `AnyView`, `Empty` |
-| Controls | `Button`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
+| Controls | `Button`, `ButtonGroup`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker` |
 | Dialogs | `Dialog`, `InputDialog`, `FontDialog` |
 | Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `List`, `EmptyState`, `Skeleton`, `Spinner` |
 | Navigation | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Menubar`, `Sidebar`, `Command` |

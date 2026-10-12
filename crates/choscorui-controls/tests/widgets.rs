@@ -1,10 +1,10 @@
 use choscorui_controls::{
-    ButtonGroup, Calendar, CalendarFocus, CommandId, CommandLink, CommandRegistry, CommandState,
-    DateTimeEdit, DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame,
-    IntegerRange, KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, Orientation,
-    PaintContext, Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers,
-    SizeGrip, Styles, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState,
-    VisualState,
+    ButtonGroup, ButtonGroupMember, ButtonVariant, Calendar, CalendarFocus, CommandId, CommandLink,
+    CommandRegistry, CommandState, DateTimeEdit, DateTimeField, DateTimeKind, DecimalSpinBox, Dial,
+    EstimatedText, FocusFrame, IntegerRange, KeySequenceChange, KeySequenceEdit, NumberBase,
+    NumericDisplay, Orientation, PaintContext, Progress, ScrollBar, ScrollBarInput,
+    ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox, ToolButton, ToolButtonAction,
+    ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
@@ -517,6 +517,74 @@ fn button_group_joins_members_with_square_inner_corners() {
         "the checked member fills muted and overlaps the border before it"
     );
     assert_eq!(group.orientation(), Orientation::Horizontal);
+}
+
+#[test]
+fn button_group_paints_separators_text_and_button_members() {
+    use ButtonGroupMember::{Button, Separator, Text, Toggle};
+    let mut commands = CommandRegistry::new();
+    for id in 1..=3 {
+        commands
+            .insert(CommandId(id), CommandState::default())
+            .unwrap();
+    }
+    commands.set_checked(CommandId(2), true).unwrap();
+    let group = ButtonGroup::from_members(
+        vec![
+            Toggle(CommandId(1)),
+            Separator,
+            Toggle(CommandId(2)),
+            Button(CommandId(3), ButtonVariant::Outline),
+            Text,
+        ],
+        false,
+    );
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let paint = |index: usize, bounds, state| {
+        let mut list = DisplayList::new();
+        group.paint_member(
+            &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+            index,
+            "A",
+            state,
+        );
+        list
+    };
+    let fills_rect = |list: &DisplayList, role: ColorRole, x: f64| {
+        let color = tokens.color(role);
+        list.commands().iter().any(|command| {
+            matches!(command, DisplayCommand::FillRect { rect, color: c }
+                if *c == color && rect.origin.x == x)
+        })
+    };
+    // The separator is a 1 pt `input` line across the member's bounds.
+    let separator = paint(1, rect(40.0, 0.0, 1.0, 36.0), VisualState::NONE);
+    assert!(fills_rect(&separator, ColorRole::Input, 40.0));
+    // A member after a separator keeps its square corners, but does not
+    // overlap the separator.
+    let state = group.member_state(&commands, CommandId(2), VisualState::NONE);
+    let after = paint(2, rect(41.0, 0.0, 40.0, 36.0), state);
+    assert!(fills_rect(&after, ColorRole::Muted, 41.0));
+    // A button member never paints the checked fill, and overlaps the
+    // border before it.
+    let button = paint(3, rect(81.0, 0.0, 40.0, 36.0), VisualState::NONE);
+    assert!(!fills_rect(&button, ColorRole::Muted, 80.0));
+    assert!(texts(&button).contains(&"A"));
+    // The last member is the text part: a `muted` fill with rounded end
+    // corners.
+    let text = paint(4, rect(121.0, 0.0, 30.0, 36.0), VisualState::NONE);
+    let muted = tokens.color(ColorRole::Muted);
+    assert!(text.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::FillPath { paint: Paint::Solid(color), .. } if *color == muted
+    )));
+    assert_eq!(group.members().len(), 5);
+    assert!(group.toggle(&mut commands, CommandId(1)));
+    assert!(
+        !group.toggle(&mut commands, CommandId(3)),
+        "a button member does not toggle"
+    );
+    assert_eq!(group.checked(&commands), vec![CommandId(1), CommandId(2)]);
 }
 
 fn texts(list: &DisplayList) -> Vec<&str> {

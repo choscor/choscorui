@@ -20,12 +20,13 @@ use choscorui_core::{
 };
 use std::f64::consts::PI;
 
+mod button_group;
 mod key_sequence;
 mod tool_buttons;
+pub use button_group::{ButtonGroup, ButtonGroupMember, HostedButtonGroup};
 pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_text};
 pub use tool_buttons::{
-    ButtonGroup, CommandLink, HostedButtonGroup, HostedCommandLink, HostedToolButton, ToolButton,
-    ToolButtonAction, ToolButtonMenu,
+    CommandLink, HostedCommandLink, HostedToolButton, ToolButton, ToolButtonAction, ToolButtonMenu,
 };
 
 // ---------------------------------------------------------------- ScrollBar

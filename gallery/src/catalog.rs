@@ -215,6 +215,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("HostedToolButton", "tool-button"),
     ("ToolButtonMenu", "tool-button"),
     ("ButtonGroup", "button-group"),
+    ("ButtonGroupMember", "button-group"),
     ("HostedButtonGroup", "button-group"),
     ("KeySequenceEdit", "key-sequence"),
     ("Shortcut", "key-sequence"),

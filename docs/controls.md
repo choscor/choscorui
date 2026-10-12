@@ -27,7 +27,7 @@ in parentheses is the role that the macOS backend gives to that
 | Basic | [`RadioGroup`](#radiogroup-and-tabs) | One choice from a group of options. |
 | Basic | [`Tabs`](#radiogroup-and-tabs) | Tabs that show one panel at a time. |
 | Basic | [`ToolButton`](#toolbutton-and-buttongroup) | Toolbar button with an optional check state and menu. |
-| Basic | [`ButtonGroup`](#toolbutton-and-buttongroup) | Exclusive or non-exclusive group of checkable commands. |
+| Basic | [`ButtonGroup`](#toolbutton-and-buttongroup) | Joined toggles, buttons, separators, and text parts. |
 | Basic | [`CommandRegistry`](#commandregistry-and-shortcuts) | Shared command state and keyboard shortcuts. |
 | Basic | [`MnemonicTable`](#mnemonictable-and-parse_mnemonic) | Mnemonic keys for the labels in a window or dialog. |
 | Basic | [`Label`](#label-and-separator) | Static text. |
@@ -191,7 +191,7 @@ changes as `ControlMessage` values:
 | `ScrollBar`, `DecimalSpinBox` | `Changed(Number)` | `Number` |
 | `HostedDial` | `Changed(Number)` | `Number`, rounded |
 | `HostedToolButton` | `Command(id)`, `Changed(Bool)` when checkable, `OpenChanged` for a menu | `Bool` when checkable |
-| `HostedButtonGroup` | `Changed(Indices)` | `Indices`, exactly one when exclusive |
+| `HostedButtonGroup` | `Changed(Indices)` of toggle members, `ItemActivated(member)` for a button member | `Indices` of toggle members, exactly one when exclusive |
 | `HostedCommandLink` | `Activated` | - |
 | `ToolBox` | `Changed(Index)` | `Index` |
 | `HostedNumericDisplay` | - | a whole `Number` |
@@ -426,26 +426,35 @@ pins this behavior.
   checked and disabled state to the host's flags.
 - An `Instant` menu adds a chevron at the end. A `Split` menu adds a 1 pt
   divider and a chevron in `arrow_width`.
-- **`ButtonGroup::toggle`.** A member that is not in the group, or that is
-  disabled, does nothing. An exclusive group checks only the clicked
-  member. A click on the checked member does nothing.
+- **`ButtonGroup` members.** `ButtonGroup::new` makes one `Toggle`
+  member for each command. `from_members` takes `ButtonGroupMember`
+  values: `Toggle(command)`, `Button(command, variant)`, `Separator`, and
+  `Text`.
+- **`ButtonGroup::toggle`.** A command that is not a toggle member, or
+  that is disabled, does nothing. An exclusive group checks only the
+  clicked member. A click on the checked member does nothing.
 - A non-exclusive group toggles the clicked member.
 - **`ButtonGroup::step`.** Moves the check to the next or previous enabled
-  member, and wraps. With no checked member, the search starts at the
-  first member.
-- **`ButtonGroup` look.** `paint_member` draws a member with the outline
-  `ToggleGroup` item look: an `input` border, sm medium text, and a 36 pt
-  height. A checked member fills `muted`. `member_state` adds the
-  command's checked and disabled state to the host's flags.
+  toggle member, and wraps. With no checked member, the search starts at
+  the first toggle member.
+- **`ButtonGroup` look.** `paint_member` draws a toggle member with the
+  outline `ToggleGroup` item look. A checked toggle member fills `muted`.
+  A button member has the `Button` look of its variant and never paints
+  the check. `member_state` adds the command's checked and disabled state
+  to the host's flags.
+- A separator is a 1 pt line across the group. A text part has the `Text`
+  look at its natural width. Neither takes focus.
 - Inner corners are square. Each member after the first overlaps the border
-  before it. `with_orientation` joins the members in a row or a column.
+  before it, but a member after a separator does not overlap it.
+  `with_orientation` joins the members in a row or a column.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
 | Group | `ButtonGroup` `Root` | radius md, 8 pt gap |
-| Text | `ButtonGroup` `Text` | 36 pt high, `muted` fill, 1 pt `border`, radius md, 10 pt sides, sm medium text, shadow xs |
-| Divider | `ButtonGroup` `Separator` | 1 pt `input` line |
-| Member | `ToggleGroup` `Item`, `Outline` | the toggle look |
+| Text part | `ButtonGroup` `Text` | 36 pt high, `muted` fill, 1 pt `border`, radius md, 10 pt sides, sm medium text, shadow xs |
+| Separator | `ButtonGroup` `Separator` | 1 pt `input` line |
+| Toggle member | `ToggleGroup` `Item`, `Outline` | the toggle look |
+| Button member | `Button` `Root`, its variant | the button look, `Outline` in the gallery |
 
 | Field | `ToolButton::semantics` |
 | --- | --- |
@@ -457,16 +466,38 @@ pins this behavior.
 `ButtonGroup` has no node of its own. Its members publish their own
 semantics.
 
+| Field | `HostedButtonGroup::semantics` |
+| --- | --- |
+| Role | the focused member: `Checkbox` (AXCheckBox) for a toggle, `Button` (AXButton) for a button |
+| Name / value | the member label / - |
+| Description | the labels of the text parts |
+| State | disabled; checked for a toggle member |
+| Actions | `Activate`, `Focus`, while the member is enabled |
+
 **In a control host.** `ToolButton::hosted` keeps the command state
 itself, because the host has no `CommandRegistry`. In right-to-left
 layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
-node for the whole group, with a label for each member. That node
-publishes the focused member as a checkable tool button. Arrow keys move
-the focus, and in an exclusive group they also move the check.
-`with_enabled(index, false)` disables a member: it takes no click, key,
-or action, and arrow keys skip it in an exclusive group.
+node for the whole group, with a label for each member. It paints the
+`Root` slot, then each member. That node publishes the focused member.
+Arrow keys move the focus among the toggle and button members, and skip
+separators and text parts. In an exclusive group, arrow keys also move
+the check.
+- In a non-exclusive group, each toggle and button member is a tab stop.
+  Tab and Shift+Tab move the focus in the group, and leave it after the
+  last or the first member.
+- Space, Enter, or a click runs the focused member. A toggle member
+  reports `Changed(Indices)`, and a button member `ItemActivated(member)`.
+- The toggle and button members share the width evenly. Separators and
+  text parts keep their natural width.
+- `with_enabled(index, false)` disables a member: it takes no click, key,
+  or action, and arrow keys skip it in an exclusive group.
+- The compose `ButtonGroup` view takes a `ButtonGroup`, the labels, and a
+  binding for the checked toggle members. Button members report through
+  `.on_item`.
 
-[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
+[widgets.rs](../crates/choscorui-controls/tests/widgets.rs) and
+[builtin_hosting_widgets.rs](../crates/choscorui-controls/tests/builtin_hosting_widgets.rs)
+pin this behavior.
 
 ### CommandRegistry and shortcuts
 

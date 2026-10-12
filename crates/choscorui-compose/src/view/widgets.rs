@@ -288,6 +288,25 @@ impl Configured<controls::ToggleGroup> {
     }
 }
 
+/// Joined members of a [`controls::ButtonGroup`]: toggles, buttons,
+/// separators, and text parts. `labels` names each member, and `checked`
+/// edits the indices of the checked toggle members. A button member
+/// reports its index through `.on_item`.
+pub type ButtonGroup = Configured<controls::HostedButtonGroup>;
+
+impl Configured<controls::HostedButtonGroup> {
+    pub fn new(
+        group: controls::ButtonGroup,
+        labels: impl Items<String>,
+        checked: Binding<Vec<usize>>,
+    ) -> Self {
+        Configured::custom(ControlKind::ButtonGroup, move |env| {
+            group.clone().hosted(labels.items(env))
+        })
+        .bind(checked, ControlValue::Indices, as_indices)
+    }
+}
+
 /// Key caps for a shortcut.
 pub type Kbd = Configured<controls::Kbd>;
 

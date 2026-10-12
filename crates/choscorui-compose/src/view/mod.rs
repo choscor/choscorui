@@ -53,11 +53,11 @@ pub use resizable::Resizable;
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{IntoTextArg, Localized, Text, TextContent};
 pub use widgets::{
-    Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, Card, Carousel,
-    Chart, Checkbox, Collapsible, Command, ContextMenu, DataTable, DatePicker, Dialog, EmptyState,
-    FieldText, Input, InputOtp, Items, Kbd, List, Marker, Menubar, NavigationMenu, Pagination,
-    Popover, RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch, Textarea, Toggle,
-    ToggleGroup,
+    Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, ButtonGroup,
+    Card, Carousel, Chart, Checkbox, Collapsible, Command, ContextMenu, DataTable, DatePicker,
+    Dialog, EmptyState, FieldText, Input, InputOtp, Items, Kbd, List, Marker, Menubar,
+    NavigationMenu, Pagination, Popover, RangeSlider, Select, Sidebar, Skeleton, Spinner, Switch,
+    Textarea, Toggle, ToggleGroup,
 };
 
 /// A piece of user interface. A component implements [`View::body`] and

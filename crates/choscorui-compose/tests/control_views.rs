@@ -1,13 +1,16 @@
 //! Headless tests of the views over control models: the focus frame, the
-//! input dialog, the font dialog, the sidebar shortcut, and the invalid
-//! state of form views.
+//! input dialog, the font dialog, the button group, the sidebar shortcut,
+//! and the invalid state of form views.
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Switch, Text, VStack,
-    View, ViewExt, ViewHost,
+    ButtonGroup, Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Switch,
+    Text, VStack, View, ViewExt, ViewHost,
 };
-use choscorui_controls::{EstimatedText, InputKind, InputValue, ShortcutModifiers, SidebarItem};
+use choscorui_controls::{
+    ButtonGroupMember, ButtonVariant, CommandId, EstimatedText, InputKind, InputValue,
+    ShortcutModifiers, SidebarItem,
+};
 use choscorui_core::{
     Catalog, DesignTokens, DisplayCommand, DisplayList, Icon, Key, KeyEvent, Locale, Point,
     PointerButton, PointerEvent, Rect, SemanticAction, Size, TextStyle,
@@ -374,5 +377,45 @@ fn a_form_view_shows_the_invalid_state_and_follows_its_change() {
     let semantic = host.semantic(switch).unwrap();
     assert!(!semantic.state.invalid);
     assert_eq!(semantic.state.checked, Some(true), "the value stays");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Button group
+
+/// A button, a separator, and a toggle, with a readout of the runs and
+/// the checked members.
+struct Mail;
+
+impl View for Mail {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let (runs, checked) = (cx.state(0_usize), cx.state(Vec::new()));
+        let group = choscorui_controls::ButtonGroup::from_members(
+            vec![
+                ButtonGroupMember::Button(CommandId(1), ButtonVariant::Outline),
+                ButtonGroupMember::Separator,
+                ButtonGroupMember::Toggle(CommandId(2)),
+            ],
+            false,
+        );
+        let labels = ["Archive", "", "Pin"].map(String::from).to_vec();
+        VStack::new((
+            ButtonGroup::new(group, labels, checked.binding())
+                .on_item(move |index| runs.update(|runs| *runs += index + 1)),
+            Text::new(move || format!("runs {} checked {:?}", runs.get(), checked.get())),
+        ))
+    }
+}
+
+#[test]
+fn the_button_group_view_runs_buttons_and_binds_toggles() {
+    let mut host = host(Mail);
+    perform(&mut host, "Archive", SemanticAction::Activate, None);
+    assert!(host.find("runs 1 checked []").is_some());
+    let group = node(&mut host, "Archive");
+    host.focus(Some(group));
+    press(&mut host, Key::ArrowRight);
+    perform(&mut host, "Pin", SemanticAction::Activate, None);
+    assert!(host.find("runs 1 checked [2]").is_some());
     assert_eq!(host.take_errors(), Vec::new());
 }

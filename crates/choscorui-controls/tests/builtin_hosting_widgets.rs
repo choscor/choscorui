@@ -5,16 +5,16 @@
 mod hosted;
 
 use choscorui_controls::{
-    ButtonGroup, ComboItem, Combobox, CommandId, CommandLink, ControlMessage, ControlValue,
-    DecimalSpinBox, Dial, FontChooser, IntegerRange, KeySequenceEdit, NumberBase, NumericDisplay,
-    ScrollBar, ScrollOrientation, ShortcutModifiers, SizeGrip, TextEditor, ToolBox, ToolButton,
-    ToolButtonMenu,
+    ButtonGroup, ButtonGroupMember, ButtonVariant, ComboItem, Combobox, CommandId, CommandLink,
+    ControlMessage, ControlValue, DecimalSpinBox, Dial, FontChooser, IntegerRange, KeySequenceEdit,
+    NumberBase, NumericDisplay, ScrollBar, ScrollOrientation, ShortcutModifiers, SizeGrip,
+    TextEditor, ToolBox, ToolButton, ToolButtonMenu,
 };
 use choscorui_core::{
     ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent, SemanticAction,
     SemanticRole, Size,
 };
-use hosted::{Harness, texts};
+use hosted::{Harness, fills, texts};
 
 fn press(h: &mut Harness, at: Point) {
     let event = PointerEvent::Down {
@@ -460,6 +460,99 @@ fn a_hosted_button_group_skips_a_disabled_member() {
             changed(ControlValue::Indices(vec![0])),
         ]
     );
+}
+
+/// A zoom group: a text part, two outline buttons with a separator
+/// between them, and a toggle.
+fn zoom() -> ButtonGroup {
+    use ButtonGroupMember::{Button, Separator, Text, Toggle};
+    ButtonGroup::from_members(
+        vec![
+            Text,
+            Button(CommandId(1), ButtonVariant::Outline),
+            Separator,
+            Button(CommandId(2), ButtonVariant::Outline),
+            Toggle(CommandId(3)),
+        ],
+        false,
+    )
+}
+
+#[test]
+fn a_hosted_button_group_runs_buttons_and_skips_parts() {
+    let labels = ["Zoom", "Out", "", "In", "Fit"].map(String::from).to_vec();
+    let mut h = Harness::new(zoom().hosted(labels));
+    h.focus();
+    let semantics = h.semantics();
+    assert_eq!(semantics.name, "Out", "focus starts at the first button");
+    assert_eq!(semantics.role, SemanticRole::Button);
+    assert_eq!(semantics.state.checked, None);
+    assert_eq!(semantics.description, "Zoom");
+    // Arrow keys and Tab skip the separator and the text part.
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().name, "In");
+    h.key(Key::Enter);
+    h.key(Key::Tab);
+    assert_eq!(h.semantics().name, "Fit");
+    assert_eq!(h.semantics().role, SemanticRole::Checkbox);
+    h.key(Key::Space);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().name, "Out", "arrow keys wrap");
+    assert!(h.perform(SemanticAction::Activate, None));
+    assert_eq!(
+        h.messages(),
+        vec![
+            ControlMessage::ItemActivated(3),
+            changed(ControlValue::Indices(vec![4])),
+            ControlMessage::ItemActivated(1),
+        ]
+    );
+    // A click on the text part does nothing.
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.origin.x + 2.0, bounds.center().y));
+    assert!(h.messages().is_empty());
+    assert!(!set_value(&mut h, ControlValue::Indices(vec![1])));
+    assert!(set_value(&mut h, ControlValue::Indices(vec![4])));
+    let list = h.paint();
+    assert_eq!(texts(&list), vec!["Zoom", "Out", "In", "Fit"]);
+    let tokens = choscorui_core::DesignTokens::light();
+    assert!(fills(&list, tokens.color(choscorui_core::ColorRole::Input)));
+    assert!(fills(&list, tokens.color(choscorui_core::ColorRole::Muted)));
+}
+
+/// The baseline origin of each text run of `h`, by text.
+fn baselines(h: &Harness) -> Vec<(String, Point)> {
+    h.paint()
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            choscorui_core::DisplayCommand::DrawText { text, baseline, .. } => {
+                Some((text.clone(), *baseline))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_hosted_button_group_keeps_parts_at_their_natural_width() {
+    let labels = ["Zoom", "Out", "", "In", "Fit"].map(String::from).to_vec();
+    let mut h = Harness::new(zoom().hosted(labels).with_enabled(1, false));
+    let before = baselines(&h);
+    let natural = h.bounds();
+    h.place(hosted::rect(10.0, 10.0, natural.size.width + 90.0, 36.0));
+    let after = baselines(&h);
+    // The text part keeps its place, and the three command members share
+    // the extra 90 pt: 30 pt each, so the centered label of the last
+    // member moves 75 pt.
+    assert_eq!(before[0], after[0]);
+    assert!(after[1].1.x > before[1].1.x);
+    assert!((after[3].1.x - before[3].1.x - 75.0).abs() < 0.5);
+    // The disabled button takes no click.
+    h.click(after[1].1);
+    assert!(h.messages().is_empty());
+    assert_eq!(h.semantics().name, "Out");
+    assert!(h.semantics().state.disabled);
 }
 
 #[test]

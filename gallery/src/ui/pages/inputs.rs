@@ -3,11 +3,11 @@
 use crate::ui::page::{Build, PageCx, caption, column, row, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Checkbox, Configured, Cx, Frame, HStack, HorizontalAlignment, Localized,
-    State, Text, VStack, View, ViewExt,
+    AnyView, Button, ButtonGroup, Checkbox, Configured, Cx, Env, Frame, HStack,
+    HorizontalAlignment, Localized, State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonGroup, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlSize,
+    self, ButtonGroupMember, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlSize,
     ControlValue, KeySequenceEdit, Orientation, Shortcut, ShortcutModifiers, ToolButton,
     ToolButtonMenu, shortcut_text,
 };
@@ -190,40 +190,41 @@ pub fn tool_button(_: &PageCx) -> AnyView {
     ToolButtonPage.into_any()
 }
 
-/// A joined group of members named by the catalog strings `labels`, with
-/// the members in `checked` on; members in `disabled` take no input. The
-/// members join along `orientation`.
+/// A joined group of `members` named by the catalog strings `labels`; a
+/// separator has an empty key. `checked` edits the checked toggles, and
+/// the members join along `orientation`.
 fn group(
+    members: Vec<ButtonGroupMember>,
     labels: &'static [&'static str],
     exclusive: bool,
-    disabled: Option<usize>,
     checked: State<Vec<usize>>,
     orientation: Orientation,
-) -> impl View {
-    // Each member is 92 × 36 pt.
-    let count = labels.len() as f64;
-    let frame = match orientation {
-        Orientation::Horizontal => Frame::new().width(92.0 * count),
-        Orientation::Vertical => Frame::new().width(92.0).height(36.0 * count),
+) -> ButtonGroup {
+    let names = move |env: &Env| -> Vec<String> {
+        labels
+            .iter()
+            .map(|key| match *key {
+                "" => String::new(),
+                key => env.text(key, &[]),
+            })
+            .collect()
     };
-    Configured::custom(ControlKind::ToggleGroup, move |env| {
-        let members = (1..=labels.len() as u64).map(CommandId).collect();
-        let names = labels.iter().map(|key| env.text(key, &[])).collect();
-        let group = ButtonGroup::new(members, exclusive)
-            .with_orientation(orientation)
-            .hosted(names);
-        match disabled {
-            Some(index) => group.with_enabled(index, false),
-            None => group,
-        }
-    })
-    .value(move || ControlValue::Indices(checked.get()))
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Indices(indices)) = message {
-            checked.set(indices.clone());
-        }
-    })
-    .frame(frame)
+    let group =
+        controls::ButtonGroup::from_members(members, exclusive).with_orientation(orientation);
+    ButtonGroup::new(group, names, checked.binding())
+}
+
+/// `count` toggle members, each 92 × 36 pt, and the frame that holds them
+/// along `orientation`.
+fn toggles(count: u64, orientation: Orientation) -> (Vec<ButtonGroupMember>, Frame) {
+    let members = (1..=count)
+        .map(|id| ButtonGroupMember::Toggle(CommandId(id)))
+        .collect();
+    let frame = match orientation {
+        Orientation::Horizontal => Frame::new().width(92.0 * count as f64),
+        Orientation::Vertical => Frame::new().width(92.0).height(36.0 * count as f64),
+    };
+    (members, frame)
 }
 
 /// A group under its caption; assistive technology reads the caption as
@@ -234,8 +235,9 @@ fn titled(title: &'static str, name: String, content: impl View) -> impl View {
         .spacing(Space::S2)
 }
 
-/// An exclusive alignment group, a non-exclusive style group, and a
-/// vertical group.
+/// An exclusive alignment group, a non-exclusive style group, a vertical
+/// group, and a text size group of outline buttons with a separator and a
+/// text part.
 struct ButtonGroupPage;
 
 impl View for ButtonGroupPage {
@@ -243,17 +245,31 @@ impl View for ButtonGroupPage {
         let alignment = cx.state(vec![0]);
         let style = cx.state(vec![0]);
         let vertical = cx.state(vec![1]);
+        let size = cx.state(14_u32);
         let text = |key: &str| cx.env().text(key, &[]);
-        let (alignment_name, style_name, vertical_name) = (
+        let (alignment_name, style_name, vertical_name, size_name) = (
             text("button-group.alignment"),
             text("button-group.style"),
             text("button-group.vertical_name"),
+            text("button-group.size"),
         );
+        let (across, down) = (Orientation::Horizontal, Orientation::Vertical);
+        let (four, four_frame) = toggles(4, across);
+        let (three, three_frame) = toggles(3, across);
+        let (stack, stack_frame) = toggles(3, down);
+        let outline = |id| ButtonGroupMember::Button(CommandId(id), ButtonVariant::Outline);
+        let parts = vec![
+            ButtonGroupMember::Text,
+            outline(1),
+            ButtonGroupMember::Separator,
+            outline(2),
+        ];
         column((
             titled(
                 "button-group.exclusive",
                 alignment_name,
                 group(
+                    four,
                     &[
                         "button-group.left",
                         "button-group.center",
@@ -261,41 +277,70 @@ impl View for ButtonGroupPage {
                         "button-group.justify",
                     ],
                     true,
-                    Some(3),
                     alignment,
-                    Orientation::Horizontal,
-                ),
+                    across,
+                )
+                .with(|group| group.with_enabled(3, false))
+                .frame(four_frame),
             ),
             titled(
                 "button-group.non_exclusive",
                 style_name,
                 group(
+                    three,
                     &[
                         "tool-button.bold",
                         "button-group.italic",
                         "button-group.underline",
                     ],
                     false,
-                    None,
                     style,
-                    Orientation::Horizontal,
-                ),
+                    across,
+                )
+                .frame(three_frame),
             ),
             titled(
                 "button-group.vertical",
                 vertical_name,
                 group(
+                    stack,
                     &[
                         "button-group.top",
                         "button-group.middle",
                         "button-group.bottom",
                     ],
                     true,
-                    None,
                     vertical,
-                    Orientation::Vertical,
-                ),
+                    down,
+                )
+                .frame(stack_frame),
             ),
+            titled(
+                "button-group.parts",
+                size_name,
+                group(
+                    parts,
+                    &[
+                        "button-group.size",
+                        "button-group.smaller",
+                        "",
+                        "button-group.larger",
+                    ],
+                    false,
+                    cx.state(Vec::new()),
+                    across,
+                )
+                .on_item(move |index| {
+                    size.update(|size| {
+                        *size = if index == 1 {
+                            size.saturating_sub(1).max(8)
+                        } else {
+                            (*size + 1).min(32)
+                        }
+                    })
+                }),
+            ),
+            readout(t!("button-group.size_value", size = size)),
         ))
     }
 }

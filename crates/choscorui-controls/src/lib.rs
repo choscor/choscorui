@@ -81,9 +81,10 @@ pub use combo::{
 };
 mod widgets;
 pub use widgets::{
-    ButtonGroup, CommandLink, DecimalSpinBox, Dial, FocusFrame, KeySequenceChange, KeySequenceEdit,
-    NumberBase, NumericDisplay, ScrollBar, ScrollBarInput, ScrollOrientation, SizeGrip, ToolBox,
-    ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_text,
+    ButtonGroup, ButtonGroupMember, CommandLink, DecimalSpinBox, Dial, FocusFrame,
+    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, ScrollBar, ScrollBarInput,
+    ScrollOrientation, SizeGrip, ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu,
+    shortcut_text,
 };
 pub use widgets::{
     HostedButtonGroup, HostedCommandLink, HostedDial, HostedNumericDisplay, HostedToolButton,
