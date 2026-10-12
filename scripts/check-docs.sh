@@ -11,6 +11,8 @@
 #      counts as one word. A `<!-- check-docs: no-sentence-check (reason) -->`
 #      comment turns this check off until the next heading. Use it only for
 #      text that must stay verbatim, such as standard license wording.
+#   4. No tracked file of any type outside docs/specs/ contains the name of
+#      the reference design system or its style (case-insensitive).
 #
 # Prints `file:line: message` for each finding and exits 1 when there is a
 # finding (2 when git fails). Runs with macOS bash 3.2 and BSD awk; it needs
@@ -320,4 +322,16 @@ while IFS= read -r file; do
 done <<LIST
 $(printf '%s' "$docs" | sort -u)
 LIST
+
+# Check 4: no tracked file outside docs/specs/ names the reference design
+# system or its style. The brackets keep this script out of its own search.
+if brands=$(git grep -il -e 'shadc[n]' -e 'veg[a]' -- ':!docs/specs'); then
+    printf '%s\n' "$brands" | while IFS= read -r file; do
+        printf '%s: banned term: reference design system name\n' "$file"
+    done
+    status=1
+elif [ $? -ne 1 ]; then
+    echo "check-docs: git grep failed" >&2
+    exit 2
+fi
 exit "$status"

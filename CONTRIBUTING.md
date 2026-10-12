@@ -119,7 +119,7 @@ Do not make a test weaker to hide a race. Required tests run one time. If you mu
 
 ## Documentation
 
-Update the documents in [docs/](docs/README.md) in the same change as the code. Write them in ASD-STE100 Simplified Technical English, and draw diagrams in Mermaid. `scripts/check-docs.sh` checks links, banned terms, and the sentence length.
+Update the documents in [docs/](docs/README.md) in the same change as the code. Write them in ASD-STE100 Simplified Technical English, and draw diagrams in Mermaid. `scripts/check-docs.sh` checks links, banned terms, and the sentence length. It also fails when a tracked file outside `docs/specs/` names the reference design system.
 
 Use these rules:
 
