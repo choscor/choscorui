@@ -1,20 +1,14 @@
 //! Overlay components: menus, popovers, dialogs, sheets, drawers, and the
 //! command palette.
 
-use crate::ui::page::{Build, PageCx, column, section};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{Build, PageCx, column, row, section, stateful};
 use choscorui::compose::view::{
-    AnyView, Command, Configured, ContextMenu, Dialog, HStack, Menubar, Popover, View,
+    AnyView, Command, Configured, ContextMenu, Dialog, Menubar, Popover,
 };
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandItem, ControlKind, MenuCheck, MenuItem, SheetSide,
 };
-use choscorui::core::{Icon, Space};
-
-/// The controls of one sample row, side by side.
-fn row(controls: impl View) -> impl View {
-    HStack::new(controls).spacing(Space::S2)
-}
+use choscorui::core::Icon;
 
 fn page_items() -> Vec<MenuItem> {
     vec![

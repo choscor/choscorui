@@ -1,7 +1,7 @@
 //! Form components: switches, toggles, selects, text inputs, code inputs,
 //! fields, date pickers, range sliders, and keyboard keys.
 
-use crate::ui::page::{Build, PageCx, column, section};
+use crate::ui::page::{Build, PageCx, column, row, section, stateful};
 use choscorui::compose::view::{
     AnyView, Configured, Cx, DatePicker, FieldText, Frame, HStack, HorizontalAlignment, Input,
     InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup, VStack, View,
@@ -13,28 +13,6 @@ use choscorui::controls::{
     ValidationState,
 };
 use choscorui::core::{CivilDate, Icon, Space};
-
-/// A page view whose content creates state when it mounts.
-pub(super) fn stateful<V: View>(content: impl Fn(&mut Cx<'_>) -> V + 'static) -> AnyView {
-    Stateful(content).into_any()
-}
-
-struct Stateful<F>(F);
-
-impl<F, V> View for Stateful<F>
-where
-    F: Fn(&mut Cx<'_>) -> V + 'static,
-    V: View,
-{
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        (self.0)(cx)
-    }
-}
-
-/// Samples side by side with the gap between controls.
-pub(super) fn row(controls: impl View) -> impl View {
-    HStack::new(controls).spacing(Space::S2)
-}
 
 fn switch(cx: &mut Cx<'_>, label: &'static str, on: bool, size: ControlSize) -> impl View {
     Switch::new(label, cx.state(on).binding()).with(move |switch| switch.with_size(size))

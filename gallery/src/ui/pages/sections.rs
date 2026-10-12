@@ -1,27 +1,14 @@
 //! Layout components: aspect-ratio boxes, collapsible sections,
 //! accordions, and item rows.
 
-use crate::ui::page::{Build, PageCx, column, section};
+use crate::ui::page::{Build, PageCx, column, portrait, section};
 use choscorui::compose::view::{
     Accordion, AnyView, AspectRatio, Collapsible, Configured, Cx, Frame, View, ViewExt,
 };
 use choscorui::controls::{
     self, ButtonVariant, ControlKind, ControlSize, Item, ItemGroup, ItemMedia, ItemVariant,
 };
-use choscorui::core::{Icon, Image};
-
-/// A small diagonal gradient that stands in for a photo.
-pub(crate) fn portrait() -> Image {
-    let side = 32u32;
-    let pixels = (0..side * side)
-        .flat_map(|index| {
-            let (x, y) = (index % side, index / side);
-            let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
-            [shade, 96, 255 - shade, 255]
-        })
-        .collect();
-    Image::from_rgba8(side, side, pixels).expect("the pixel count matches the size")
-}
+use choscorui::core::Icon;
 
 pub fn aspect_ratio(_: &PageCx) -> AnyView {
     column((

@@ -1,8 +1,7 @@
 //! Chat components: messages, attachments, markers, the message
 //! scroller, and questionnaires.
 
-use crate::ui::page::{Build, PageCx, column, section};
-use crate::ui::pages::sections::portrait;
+use crate::ui::page::{Build, PageCx, column, portrait, section};
 use choscorui::compose::view::{
     AnyView, Attachment, Configured, Frame, HStack, HorizontalAlignment, Marker, VStack, View,
     ViewExt,

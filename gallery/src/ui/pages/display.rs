@@ -1,8 +1,7 @@
 //! Data display components: cards, badges, avatars, carousels, the data
 //! table, and charts.
 
-use crate::ui::page::{Build, PageCx, column, section};
-use crate::ui::pages::form::{row, stateful};
+use crate::ui::page::{Build, PageCx, column, portrait, row, section, stateful};
 use choscorui::compose::view::{
     AnyView, Avatar, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, View, ViewExt,
 };
@@ -10,7 +9,7 @@ use choscorui::controls::{
     self, AvatarGroup, BadgeVariant, ButtonVariant, ChartKind, ChartSeries, ControlKind,
     ControlSize, Orientation,
 };
-use choscorui::core::{Icon, Image, ItemData, ItemModel, ListStore, Role, Value};
+use choscorui::core::{Icon, ItemData, ItemModel, ListStore, Role, Value};
 
 pub fn card(_: &PageCx) -> AnyView {
     column((
@@ -77,19 +76,6 @@ pub fn badge(_: &PageCx) -> AnyView {
             )),
         ),
     ))
-}
-
-/// A small diagonal gradient that stands in for a photo.
-pub(crate) fn portrait() -> Image {
-    let side = 32u32;
-    let pixels = (0..side * side)
-        .flat_map(|index| {
-            let (x, y) = (index % side, index / side);
-            let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
-            [shade, 96, 255 - shade, 255]
-        })
-        .collect();
-    Image::from_rgba8(side, side, pixels).expect("the pixel count matches the size")
 }
 
 /// A group of three people at `size`.

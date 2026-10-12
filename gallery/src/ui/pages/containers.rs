@@ -6,8 +6,7 @@ mod grip;
 mod scroll;
 mod tool_box;
 
-use crate::ui::page::{Build, PageCx, caption, column};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::view::{
     Alignment, AnyView, Button, Canvas, Configured, Dynamic, Frame, HStack, HorizontalAlignment,
     Spacer, State, Text, VStack, View, ViewExt, ZStack,

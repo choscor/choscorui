@@ -1,7 +1,6 @@
 //! The tool box page: an accordion of tool pages, one open at a time.
 
-use crate::ui::page::{PageCx, column};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{PageCx, column, stateful};
 use choscorui::compose::view::{AnyView, Configured, Frame, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,

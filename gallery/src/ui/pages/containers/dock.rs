@@ -1,8 +1,7 @@
 //! The dock page: four dockable panels around an editor, with an
 //! arrangement that the page store keeps across restarts.
 
-use crate::ui::page::{PageCx, column};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{PageCx, column, stateful};
 use choscorui::compose::Property;
 use choscorui::compose::view::{
     AnyView, Button, Configured, Dynamic, Frame, HStack, Text, ViewExt,

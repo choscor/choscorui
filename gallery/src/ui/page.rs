@@ -3,10 +3,10 @@
 
 use crate::page::{Desktop, PageState};
 use choscorui::compose::view::{
-    AnyView, HorizontalAlignment, ScrollView, Text, VStack, View, ViewExt,
+    AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, VStack, View, ViewExt,
 };
 use choscorui::compose::{Property, Runtime};
-use choscorui::core::{ColorRole, Space, TextPreset};
+use choscorui::core::{ColorRole, Image, Space, TextPreset};
 use std::rc::Rc;
 
 /// Builds a page's view.
@@ -68,4 +68,41 @@ pub fn caption(text: &str) -> impl View {
     Text::new(text.to_owned())
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
+}
+
+/// Samples side by side with the gap between controls.
+pub fn row(controls: impl View) -> impl View {
+    HStack::new(controls).spacing(Space::S2)
+}
+
+/// A view whose body `build` makes from the mount context.
+struct Body<F>(F);
+
+impl<F, V> View for Body<F>
+where
+    F: Fn(&mut Cx<'_>) -> V + 'static,
+    V: View,
+{
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        (self.0)(cx)
+    }
+}
+
+/// A page view that creates its state from the mount context:
+/// `stateful(|cx| { let open = cx.state(false); … })`.
+pub fn stateful<V: View>(build: impl Fn(&mut Cx<'_>) -> V + 'static) -> AnyView {
+    Body(build).into_any()
+}
+
+/// A small diagonal gradient that stands in for a photo.
+pub fn portrait() -> Image {
+    let side = 32u32;
+    let pixels = (0..side * side)
+        .flat_map(|index| {
+            let (x, y) = (index % side, index / side);
+            let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
+            [shade, 96, 255 - shade, 255]
+        })
+        .collect();
+    Image::from_rgba8(side, side, pixels).expect("the pixel count matches the size")
 }

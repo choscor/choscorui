@@ -1,7 +1,6 @@
 //! Popups: a command-backed popup menu with a submenu, and hover tooltips.
 
-use crate::ui::page::{Build, PageCx, caption, column};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::view::{AnyView, Button, Configured, HStack, State, Text, View, ViewExt};
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,

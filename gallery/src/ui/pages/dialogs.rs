@@ -1,8 +1,7 @@
 //! Dialogs: a modal alert with ordered buttons beside a modeless note,
 //! input dialogs with validation, the color picker, and the font dialog.
 
-use crate::ui::page::{Build, PageCx, column};
-use crate::ui::pages::form::row;
+use crate::ui::page::{Build, PageCx, column, row};
 use choscorui::compose::view::{
     AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Fill, Frame, HStack,
     HorizontalAlignment, Input, IntoLive, SpinBox, State, Text, TextContent, Toggle, VStack, View,

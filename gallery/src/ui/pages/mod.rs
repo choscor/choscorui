@@ -10,7 +10,6 @@ pub mod dialogs;
 pub mod display;
 pub mod feedback;
 pub mod form;
-pub mod hosted;
 pub mod inputs;
 pub mod nav;
 pub mod navigation;
@@ -27,7 +26,7 @@ pub mod text;
 
 /// The view of catalog page `id`, when it has one.
 pub fn find(id: &str) -> Option<Build> {
-    let groups: [fn(&str) -> Option<Build>; 22] = [
+    let groups: [fn(&str) -> Option<Build>; 21] = [
         chat::page,
         containers::page,
         data::page,
@@ -36,7 +35,6 @@ pub fn find(id: &str) -> Option<Build> {
         display::page,
         feedback::page,
         form::page,
-        hosted::page,
         inputs::page,
         nav::page,
         navigation::page,

@@ -1,7 +1,6 @@
 //! The size grip page: a mock window resized by its grip.
 
-use crate::ui::page::{PageCx, column};
-use crate::ui::pages::hosted::stateful;
+use crate::ui::page::{PageCx, column, stateful};
 use choscorui::compose::view::{AnyView, Configured, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
