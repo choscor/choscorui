@@ -7,13 +7,13 @@ mod hosted;
 use choscorui_controls::{
     ControlMessage, ControlValue, CustomControl, IntegerRange, Label, Progress, RadioGroup,
     SelectionError, Separator, SeparatorOrientation, Slider, SliderOrientation, SpinBox, Tabs,
-    TextField,
+    TextField, VisualState,
 };
 use choscorui_core::{
-    Color, DisplayCommand, DisplayList, Key, LayoutDirection, Point, SemanticAction, SemanticRole,
-    Tree,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point,
+    SemanticAction, SemanticRole, Tree,
 };
-use hosted::{Harness, rect, rounded_fills, texts};
+use hosted::{Harness, paints, rect, rounded_fills, texts};
 
 fn number(value: f64) -> ControlMessage {
     ControlMessage::Changed(ControlValue::Number(value))
@@ -284,6 +284,27 @@ fn a_hosted_radio_group_selects_by_pointer_key_and_action() {
     h.key(Key::ArrowDown);
     assert!(!h.perform(SemanticAction::Increment, None));
     assert!(h.messages().is_empty());
+}
+
+#[test]
+fn an_invalid_hosted_radio_group_marks_each_option_and_reports_it() {
+    let destructive = DesignTokens::light().color(ColorRole::Destructive);
+    let h = Harness::new(delivery());
+    assert!(!h.semantics().state.invalid);
+    assert!(!paints(&h.paint(), destructive));
+
+    let mut group = RadioGroup::hosted("Delivery", ["Standard", "Pickup"], 0)
+        .unwrap()
+        .with_invalid(true);
+    assert!(group.option_state(VisualState::NONE, 0).invalid());
+    assert!(group.option_state(VisualState::NONE, 1).invalid());
+    group.set_invalid(false);
+    assert!(!group.option_state(VisualState::NONE, 1).invalid());
+    group.set_invalid(true);
+    let h = Harness::new(group);
+    assert!(h.semantics().state.invalid);
+    // The unchecked option has the destructive border.
+    assert!(paints(&h.paint(), destructive));
 }
 
 #[test]

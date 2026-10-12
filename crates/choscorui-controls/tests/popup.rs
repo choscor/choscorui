@@ -457,6 +457,33 @@ fn combobox_paints_trigger_and_popup_from_the_recipe() {
 }
 
 #[test]
+fn an_invalid_combobox_shows_the_destructive_border_and_reports_it() {
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let destructive = tokens.color(ColorRole::Destructive);
+    let paint = |combo: &Combobox| {
+        let mut list = DisplayList::new();
+        let bounds = rect(0.0, 0.0, 200.0, 36.0);
+        let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+        combo.paint(&mut cx, VisualState::NONE, "Pick one");
+        format!("{:?}", list.commands()).contains(&format!("{destructive:?}"))
+    };
+    let mut combo = Combobox::new("Size", false);
+    assert!(!combo.visual_state(VisualState::NONE).invalid());
+    assert!(!combo.semantics().state.invalid);
+    assert!(!paint(&combo));
+    // The host's invalid flag stays when the combobox is valid.
+    assert!(combo.visual_state(VisualState::INVALID).invalid());
+
+    combo.set_invalid(true);
+    assert!(combo.visual_state(VisualState::NONE).invalid());
+    assert!(combo.semantics().state.invalid);
+    assert!(paint(&combo));
+    let combo = Combobox::new("Size", true).with_invalid(true);
+    assert!(combo.semantics().state.invalid);
+}
+
+#[test]
 fn tooltip_bubble_centers_above_the_anchor_and_paints_inverted() {
     let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
     let target = tree

@@ -365,6 +365,10 @@ behavior.
   one-node form that names each option by its index. Its node has the group
   role, the selected label as value, and the `SetValue`, `Increment`,
   `Decrement`, and `Focus` actions.
+- **Invalid radio group.** `HostedRadioGroup::set_invalid(true)` or
+  `with_invalid(true)` gives each option the invalid look. The group node
+  then has the invalid semantic state. `option_state` returns the recipe
+  flags of one option.
 - **Radio look.** `paint_option` draws a 16 pt circle with the same edge,
   focus, invalid, and disabled values as `Checkbox`. The selected option
   has a `primary` fill and an 8 pt `primary-foreground` dot.
@@ -816,6 +820,9 @@ behavior.
 - **Disabled.** All input does nothing, and `set_enabled(false)` closes
   the popup.
 - `set_items` keeps the selection and the highlight by `ItemKey`.
+- **Invalid.** `set_invalid(true)` or `with_invalid(true)` gives the
+  trigger the invalid look and the node the invalid semantic state. The
+  host's invalid flag also shows the invalid look.
 - **In a control host.** The popup shows at most eight suggestions, and
   it animates. A click on a suggestion commits it. Backspace deletes the
   last character of an editable combobox. Escape also reports `Dismissed`.
@@ -830,6 +837,7 @@ behavior.
 | Part | Slot | Value |
 | --- | --- | --- |
 | Trigger | `Trigger` | the input box: `input` border, radius md, shadow xs, 36 pt high; the focus ring while focus is visible |
+| Invalid trigger | `Trigger`, invalid | `destructive` border (dark 50%) and ring at 20% (dark 40%) |
 | Text | `Value` | sm `foreground` text |
 | Placeholder, completion, chevron | `Placeholder` | sm `muted-foreground` text; a 16 pt chevron at the end |
 | Popup | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, padding 4 pt, 4 pt below the anchor |
@@ -844,7 +852,7 @@ behavior.
 | --- | --- | --- |
 | Role | `ComboBox` (AXComboBox) | `ListItem` (AXGroup) |
 | Name / value | label / text | item text / - |
-| State | disabled, expanded | selected when highlighted |
+| State | disabled, expanded, invalid | selected when highlighted |
 | Actions | `ShowMenu`, `SetValue`, `Focus` while enabled | `Activate` |
 
 For a missing family, `FontChooser::semantics` adds the invalid state and
@@ -1965,6 +1973,8 @@ behavior.
   `motion.easing` curve. `set_value` and `set_checked` move it at once, and
   reduced motion skips the slide.
 - `with_size` takes `Default` or `Sm`.
+- **Invalid.** `set_invalid(true)` or `with_invalid(true)` shows the
+  invalid look on the track and sets the invalid semantic state.
 
 | Size | Track | Thumb |
 | --- | --- | --- |
@@ -1975,6 +1985,7 @@ behavior.
 | --- | --- |
 | Off | `input` (80% in dark themes) |
 | On | `primary` |
+| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
 | Disabled | 50% opacity on the track and the thumb |
 
 | Part | Value |
@@ -1986,7 +1997,7 @@ behavior.
 | --- | --- |
 | Role | `Checkbox` (AXCheckBox), description "switch" |
 | Name / value | label / - |
-| State | checked, disabled |
+| State | checked, invalid, disabled |
 | Actions | `Activate` and `Focus` while enabled |
 
 From the application, `set_value` takes `Bool`. `set_open` returns false.
@@ -2005,6 +2016,9 @@ From the application, `set_value` takes `Bool`. `set_open` returns false.
   no clicks.
 - `with_spacing(0.0)` joins the items: inner corners are square and the
   borders overlap. Other values leave that gap between items.
+- **Invalid.** `set_invalid(true)` or `with_invalid(true)` shows the
+  invalid look and sets the invalid semantic state. On a group, each item
+  shows the invalid look.
 
 | Size | Height and minimum width |
 | --- | --- |
@@ -2032,7 +2046,7 @@ text.
 | Role | `Button` (AXButton), description "toggle" | `RadioGroup` for single selection, `Group` for multiple |
 | Name / value | label / - | name / labels of the on items, joined with ", " |
 | Description | "toggle" | label of the focused item |
-| State | checked, disabled | disabled |
+| State | checked, invalid, disabled | invalid, disabled |
 | Actions | `Activate` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
 
 `SetValue` with an item label flips that item. An unknown label returns
@@ -2294,10 +2308,14 @@ character that the code does not accept. `set_open` returns false.
   Tab and Shift+Tab move between the month dropdown, the year dropdown, and
   the grid. Past the ends they close the popover, and focus moves on.
 - Escape closes an open dropdown list first. The popover stays open.
+- **Invalid.** `set_invalid(true)` or `with_invalid(true)` gives the
+  trigger the invalid look and sets the invalid semantic state.
+  `visual_state` returns the trigger flags.
 
 | Part | Value |
 | --- | --- |
 | Trigger | outline button, 36 pt high, 8 pt gap after the icon |
+| Invalid trigger | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
 | Popover | `popover` fill, `lg` radius, medium shadow, no padding |
 | Calendar | 12 pt padding, 32 pt cells |
 
@@ -2306,7 +2324,7 @@ character that the code does not accept. `set_open` returns false.
 | Role | `Button` (AXButton) |
 | Name / value | name / chosen dates, or the placeholder |
 | Description | the cursor day while open; the month or year of a focused caption dropdown |
-| State | expanded, disabled |
+| State | expanded, invalid, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
 `set_value` takes `Date` in single mode and `Dates` in the other modes. In

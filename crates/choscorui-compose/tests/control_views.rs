@@ -1,10 +1,11 @@
 //! Headless tests of the views over control models: the focus frame, the
-//! input dialog, the font dialog, and the sidebar shortcut.
+//! input dialog, the font dialog, the sidebar shortcut, and the invalid
+//! state of form views.
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Text, VStack, View,
-    ViewExt, ViewHost,
+    Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Switch, Text, VStack,
+    View, ViewExt, ViewHost,
 };
 use choscorui_controls::{EstimatedText, InputKind, InputValue, ShortcutModifiers, SidebarItem};
 use choscorui_core::{
@@ -340,5 +341,38 @@ fn command_b_toggles_the_sidebar_view_while_another_view_has_focus() {
     assert!(host.key(key, command));
     host.layout();
     assert!(host.find("open true").is_some());
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Invalid state
+
+/// A switch whose invalid state follows a state value, and a button that
+/// clears it.
+struct Consent;
+
+impl View for Consent {
+    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        let on = cx.state(true);
+        let invalid = cx.state(true);
+        VStack::new((
+            Switch::new("Consent", on.binding())
+                .with(move |switch| switch.with_invalid(invalid.get())),
+            choscorui_compose::view::Button::new("Fix", move || invalid.set(false)),
+        ))
+    }
+}
+
+#[test]
+fn a_form_view_shows_the_invalid_state_and_follows_its_change() {
+    let mut host = host(Consent);
+    let switch = node(&mut host, "Consent");
+    let semantic = host.semantic(switch).unwrap();
+    assert!(semantic.state.invalid);
+    assert_eq!(semantic.state.checked, Some(true));
+    perform(&mut host, "Fix", SemanticAction::Activate, None);
+    let semantic = host.semantic(switch).unwrap();
+    assert!(!semantic.state.invalid);
+    assert_eq!(semantic.state.checked, Some(true), "the value stays");
     assert_eq!(host.take_errors(), Vec::new());
 }

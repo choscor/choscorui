@@ -93,6 +93,8 @@ The toolkit gives these views:
 
 A tuple of views is one view, so a stack takes a tuple of its children. To keep two branches of different types in one place, use `Either` or `.into_any()`. [controls.md](controls.md) gives the behavior and accessibility semantics of each control.
 
+A control view changes its control with `.with(change)` after each build. For example, `.with(move |switch| switch.with_invalid(invalid.get()))` marks a `Switch` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `RadioGroup`, `Combobox`, and `DatePicker` take `with_invalid`.
+
 ## State and bindings
 
 State lives in the reactive runtime. A view reads it in a closure, and the toolkit records what each closure read:

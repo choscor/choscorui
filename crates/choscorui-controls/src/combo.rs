@@ -98,6 +98,7 @@ pub struct Combobox {
     matches: Vec<usize>,
     highlighted: Option<ItemKey>,
     text_before_open: String,
+    invalid: bool,
     enabled: bool,
     metrics: ComboMetrics,
     /// The popup animation, its duration, and the trigger bounds in a
@@ -124,6 +125,7 @@ impl Combobox {
             matches: Vec::new(),
             highlighted: None,
             text_before_open: String::new(),
+            invalid: false,
             enabled: true,
             metrics: ComboMetrics::resolve(&Styles::new(), &DesignTokens::light()),
             reveal: Reveal::default(),
@@ -146,6 +148,18 @@ impl Combobox {
             self.open = false;
         }
     }
+
+    /// The combobox with the invalid state from the start.
+    #[must_use]
+    pub fn with_invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
+        self
+    }
+
+    pub fn set_invalid(&mut self, invalid: bool) {
+        self.invalid = invalid;
+    }
+
     pub fn items(&self) -> &[ComboItem] {
         &self.items
     }
@@ -423,11 +437,13 @@ impl Combobox {
         }
     }
 
-    /// The flags the trigger recipe reads, from the host's focus and
-    /// hover flags in `host`.
+    /// The flags the trigger recipe reads, from the host's focus, hover,
+    /// and invalid flags in `host`. The invalid state of the combobox
+    /// adds to the host's.
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(VisualState::OPEN, self.open)
             .set(VisualState::DISABLED, !self.enabled)
+            .set(VisualState::INVALID, host.invalid() || self.invalid)
     }
 
     /// Paints the trigger in the context's bounds: the field box, the text
@@ -563,6 +579,7 @@ impl Combobox {
             state: SemanticState {
                 disabled: !self.enabled,
                 expanded: Some(self.open),
+                invalid: self.invalid,
                 ..SemanticState::default()
             },
             relations: Vec::new(),

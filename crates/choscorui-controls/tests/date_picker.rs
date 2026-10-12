@@ -2,11 +2,13 @@
 
 mod hosted;
 
-use choscorui_controls::{Calendar, CalendarMode, ControlMessage, ControlValue, DatePicker};
+use choscorui_controls::{
+    Calendar, CalendarMode, ControlMessage, ControlValue, DatePicker, VisualState,
+};
 use choscorui_core::{
     CivilDate, ColorRole, DesignTokens, Key, Locale, SemanticAction, SemanticRole,
 };
-use hosted::{Harness, rounded_fills, texts};
+use hosted::{Harness, paints, rounded_fills, texts};
 
 fn date(day: u8) -> CivilDate {
     CivilDate::new(2026, 10, day).unwrap()
@@ -166,4 +168,21 @@ fn assistive_actions_open_and_close_the_calendar() {
     assert!(h.host.get(h.node).unwrap().overlay().is_some());
     assert!(h.perform(SemanticAction::Collapse, None));
     assert!(h.host.get(h.node).unwrap().overlay().is_none());
+}
+
+#[test]
+fn an_invalid_picker_shows_the_destructive_border_and_reports_it() {
+    let destructive = DesignTokens::light().color(ColorRole::Destructive);
+    let h = Harness::new(picker(CalendarMode::Single));
+    assert!(!h.semantics().state.invalid);
+    assert!(!paints(&h.paint(), destructive));
+
+    let mut invalid = picker(CalendarMode::Single).with_invalid(true);
+    assert!(invalid.visual_state(VisualState::NONE).invalid());
+    invalid.set_invalid(false);
+    assert!(!invalid.visual_state(VisualState::NONE).invalid());
+    invalid.set_invalid(true);
+    let h = Harness::new(invalid);
+    assert!(h.semantics().state.invalid);
+    assert!(paints(&h.paint(), destructive), "the trigger border");
 }

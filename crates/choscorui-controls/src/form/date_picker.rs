@@ -27,6 +27,7 @@ pub struct DatePicker {
     calendar: Calendar,
     mode: CalendarMode,
     today: Option<CivilDate>,
+    invalid: bool,
     enabled: bool,
     reveal: Reveal,
     motion_ms: u32,
@@ -44,6 +45,7 @@ impl DatePicker {
             calendar: Calendar::new(locale, shown).with_mode(CalendarMode::Multiple),
             mode: CalendarMode::Single,
             today: None,
+            invalid: false,
             enabled: true,
             reveal: Reveal::default(),
             motion_ms: 0,
@@ -90,6 +92,17 @@ impl DatePicker {
         self
     }
 
+    /// The picker with the invalid state from the start.
+    #[must_use]
+    pub fn with_invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
+        self
+    }
+
+    pub fn set_invalid(&mut self, invalid: bool) {
+        self.invalid = invalid;
+    }
+
     pub fn calendar(&self) -> &Calendar {
         &self.calendar
     }
@@ -115,6 +128,12 @@ impl DatePicker {
 
     pub fn is_open(&self) -> bool {
         self.reveal.open
+    }
+
+    /// The flags the trigger recipe reads: `host` with open and invalid.
+    pub fn visual_state(&self, host: VisualState) -> VisualState {
+        host.set(VisualState::OPEN, self.reveal.open)
+            .set(VisualState::INVALID, self.invalid)
     }
 
     fn query(slot: Slot, state: VisualState) -> StyleQuery {
@@ -391,7 +410,7 @@ impl CustomControl for DatePicker {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = cx.state.set(VisualState::OPEN, self.reveal.open);
+        let state = self.visual_state(cx.state);
         let root = cx.style(Self::query(Slot::Root, state));
         let text = self.text();
         let placeholder = cx.style(Self::query(Slot::Placeholder, state));
@@ -484,6 +503,7 @@ impl CustomControl for DatePicker {
                 .unwrap_or_default();
         }
         node.state.expanded = Some(self.reveal.open);
+        node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
     }

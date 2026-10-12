@@ -4,12 +4,12 @@ mod hosted;
 
 use choscorui_controls::{
     ControlMessage, ControlSize, ControlValue, Kbd, Switch, Toggle, ToggleGroup, ToggleItem,
-    ToggleVariant,
+    ToggleVariant, VisualState,
 };
 use choscorui_core::{
     ColorRole, DesignTokens, Key, LayoutDirection, Point, SemanticAction, SemanticRole, Size,
 };
-use hosted::{Harness, fills, rounded_fills, texts};
+use hosted::{Harness, fills, paints, rounded_fills, texts};
 
 #[test]
 fn switch_flips_on_click_keys_and_actions_and_slides_its_thumb() {
@@ -187,4 +187,34 @@ fn kbd_paints_one_cap_per_key_and_takes_no_focus() {
     assert_eq!(rounded_fills(&h.paint(), muted).len(), 2);
     assert_eq!(h.host.focus_next(&mut h.tree, false), None);
     assert_eq!(h.semantics().name, "⌘ K");
+}
+
+#[test]
+fn invalid_switch_toggle_and_group_show_the_destructive_border() {
+    let destructive = DesignTokens::light().color(ColorRole::Destructive);
+    let mut switch = Switch::new("Airplane mode", false);
+    assert!(!switch.visual_state(VisualState::NONE).invalid());
+    switch.set_invalid(true);
+    assert!(switch.visual_state(VisualState::NONE).invalid());
+    let h = Harness::new(switch);
+    assert!(h.semantics().state.invalid);
+    assert!(paints(&h.paint(), destructive), "the track border");
+
+    let toggle = Toggle::new("Bold", false).with_invalid(true);
+    assert!(toggle.visual_state(VisualState::NONE).invalid());
+    let h = Harness::new(toggle);
+    assert!(h.semantics().state.invalid);
+    assert!(paints(&h.paint(), destructive));
+    let mut toggle = Toggle::new("Bold", false).with_invalid(true);
+    toggle.set_invalid(false);
+    let h = Harness::new(toggle);
+    assert!(!h.semantics().state.invalid);
+    assert!(!paints(&h.paint(), destructive));
+
+    let h = Harness::new(alignment().with_invalid(true));
+    assert!(h.semantics().state.invalid);
+    assert!(paints(&h.paint(), destructive), "each item");
+    let h = Harness::new(alignment());
+    assert!(!h.semantics().state.invalid);
+    assert!(!paints(&h.paint(), destructive));
 }

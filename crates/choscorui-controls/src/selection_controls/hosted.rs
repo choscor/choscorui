@@ -272,6 +272,7 @@ impl Choices {
 #[derive(Clone, Debug)]
 pub struct HostedRadioGroup {
     choices: Choices,
+    invalid: bool,
 }
 
 impl RadioGroup {
@@ -285,11 +286,32 @@ impl RadioGroup {
     ) -> Result<HostedRadioGroup, SelectionError> {
         Ok(HostedRadioGroup {
             choices: Choices::new(label, options, selected)?,
+            invalid: false,
         })
     }
 }
 
 impl HostedRadioGroup {
+    /// The group with the invalid state from the start. Each option
+    /// shows the invalid look.
+    #[must_use]
+    pub fn with_invalid(mut self, invalid: bool) -> Self {
+        self.invalid = invalid;
+        self
+    }
+
+    pub fn set_invalid(&mut self, invalid: bool) {
+        self.invalid = invalid;
+    }
+
+    /// The recipe flags of the option at `index`: the host's flags on
+    /// the selected option, with checked and invalid.
+    pub fn option_state(&self, host: VisualState, index: usize) -> VisualState {
+        self.choices
+            .part_state(host, index, VisualState::CHECKED)
+            .set(VisualState::INVALID, self.invalid)
+    }
+
     /// Disables the option at `index`. Fails for an index out of range or
     /// the selected option.
     pub fn with_disabled(mut self, index: usize) -> Result<Self, SelectionError> {
@@ -353,13 +375,15 @@ impl CustomControl for HostedRadioGroup {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
         for (index, rect) in self.choices.rects.iter().enumerate() {
-            let state = self.choices.part_state(host, index, VisualState::CHECKED);
+            let state = self.option_state(host, index);
             paint_radio(&mut cx.at(*rect), &self.choices.items[index].label, state);
         }
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.choices.semantics(SemanticRole::RadioGroup)
+        let mut node = self.choices.semantics(SemanticRole::RadioGroup);
+        node.state.invalid = self.invalid;
+        node
     }
 
     fn perform(
