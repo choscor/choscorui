@@ -1,6 +1,7 @@
 //! Dates and times: the month calendar and sectioned date/time editors.
 
 use crate::ui::page::{Build, PageCx, caption, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Calendar, Configured, Cx, Dynamic, FieldText, Frame, HorizontalAlignment, Text,
     VStack, View, ViewExt,
@@ -35,10 +36,11 @@ impl View for CalendarPage {
         let selected = cx.state(today());
         let chosen = cx.state(None::<CivilDate>);
         let locale = cx.env().locale();
+        let name = cx.env().text("calendar.name", &[]);
         let calendar = Calendar::new(selected.binding())
-            .with(|mut calendar| {
+            .with(move |mut calendar| {
                 calendar.set_range(Some(date(2026, 1, 1)), Some(date(2026, 12, 31)));
-                calendar.with_name("Calendar").with_today(today())
+                calendar.with_name(name.clone()).with_today(today())
             })
             .on_message(move |message| match message {
                 ControlMessage::Changed(ControlValue::Date(Some(day))) => chosen.set(Some(*day)),
@@ -49,7 +51,7 @@ impl View for CalendarPage {
             calendar,
             Dynamic::new(move || {
                 chosen.get().map(|day| {
-                    Text::new(format!("Chosen: {}", day.format_long(&locale)))
+                    Text::new(t!("calendar.chosen", date = day.format_long(&locale)))
                         .text_style(TextPreset::Small)
                 })
             }),
@@ -61,8 +63,8 @@ pub fn calendar(_: &PageCx) -> AnyView {
     CalendarPage.into_any()
 }
 
-/// The label of the range-limited editor; scripted checks find it by this
-/// name.
+/// The English label of the range-limited editor, `date-time-edit.limited`
+/// in the catalogs; scripted checks find it by this name.
 pub(crate) const LIMITED: &str = "Meeting (Oct 2026, 09:00 – 17:00 on the 12th)";
 
 /// The office hours that the limited editor allows.
@@ -80,9 +82,11 @@ fn parse_iso(text: &str) -> Option<CivilDateTime> {
     })
 }
 
-/// One editor of `kind` that starts at 09:30 on the demo day.
-fn editor(label: &'static str, kind: DateTimeKind) -> Configured<DateTimeEdit> {
+/// One editor of `kind`, named by the catalog string `key`, that starts at
+/// 09:30 on the demo day.
+fn editor(key: &'static str, kind: DateTimeKind) -> Configured<DateTimeEdit> {
     Configured::custom(ControlKind::Input, move |env| {
+        let label = env.text(key, &[]);
         let mut edit = DateTimeEdit::new(label, env.locale(), kind, date_time(today(), 9, 30));
         if kind == DateTimeKind::DateTime {
             let (minimum, maximum) = limits();
@@ -94,8 +98,8 @@ fn editor(label: &'static str, kind: DateTimeKind) -> Configured<DateTimeEdit> {
 
 /// An editor under its caption. The editor has the same name, so the
 /// caption stays out of the accessibility tree.
-fn labeled(label: &'static str, content: impl View) -> impl View {
-    VStack::new((caption(label).accessibility_hidden(true), content))
+fn labeled(key: &'static str, content: impl View) -> impl View {
+    VStack::new((caption(t!(key)).accessibility_hidden(true), content))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S2)
 }
@@ -109,26 +113,30 @@ impl View for DateTimeEditPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let outside = cx.state(false);
         let width = || Frame::new().width(260.0);
-        let limited = editor(LIMITED, DateTimeKind::DateTime).on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Text(text)) = message
-                && let Some(value) = parse_iso(text)
-            {
-                let (minimum, maximum) = limits();
-                outside.set(value < minimum || value > maximum);
-            }
-        });
+        let limited =
+            editor("date-time-edit.limited", DateTimeKind::DateTime).on_message(move |message| {
+                if let ControlMessage::Changed(ControlValue::Text(text)) = message
+                    && let Some(value) = parse_iso(text)
+                {
+                    let (minimum, maximum) = limits();
+                    outside.set(value < minimum || value > maximum);
+                }
+            });
         column((
-            labeled("Date", editor("Date", DateTimeKind::Date).frame(width())),
-            labeled("Time", editor("Time", DateTimeKind::Time).frame(width())),
             labeled(
-                LIMITED,
+                "date-time-edit.date",
+                editor("date-time-edit.date", DateTimeKind::Date).frame(width()),
+            ),
+            labeled(
+                "date-time-edit.time",
+                editor("date-time-edit.time", DateTimeKind::Time).frame(width()),
+            ),
+            labeled(
+                "date-time-edit.limited",
                 VStack::new((
                     limited.frame(width()),
-                    FieldText::new(
-                        FieldPart::Error,
-                        "Outside the allowed range; Return clamps it",
-                    )
-                    .hidden(move || !outside.get()),
+                    FieldText::new(FieldPart::Error, t!("date-time-edit.outside"))
+                        .hidden(move || !outside.get()),
                 ))
                 .alignment(HorizontalAlignment::Leading)
                 .spacing(Space::S1),

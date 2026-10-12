@@ -1,9 +1,10 @@
 //! Buttons and other momentary or toggled inputs.
 
 use crate::ui::page::{Build, PageCx, caption, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Checkbox, Configured, Cx, Frame, HStack, HorizontalAlignment, State, Text,
-    VStack, View, ViewExt,
+    AnyView, Button, Checkbox, Configured, Cx, Frame, HStack, HorizontalAlignment, Localized,
+    State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, ButtonGroup, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlValue,
@@ -11,8 +12,8 @@ use choscorui::controls::{
 };
 use choscorui::core::{ColorRole, Icon, Key, Space, TextPreset};
 
-/// A small muted line whose text follows state.
-fn readout(text: impl Fn() -> String + 'static) -> impl View {
+/// A small muted line whose catalog string follows state.
+fn readout(text: Localized) -> impl View {
     Text::new(text)
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
@@ -33,18 +34,18 @@ impl View for ButtonPage {
             ..ShortcutModifiers::default()
         };
         column((
-            Button::new("Say hello (⌘↩)", count).frame(width()),
-            Button::new("Outline hello", count)
+            Button::new(t!("button.hello"), count).frame(width()),
+            Button::new(t!("button.outline"), count)
                 .variant(ButtonVariant::Outline)
                 .icon(Icon::Send)
                 .frame(width()),
-            Button::new("Archive (command disabled)", count)
+            Button::new(t!("button.archive"), count)
                 .variant(ButtonVariant::Destructive)
                 .disabled(move || !archive.get())
                 .frame(width()),
-            Checkbox::new("Enable the Archive command", archive.binding())
+            Checkbox::new(t!("button.enable_archive"), archive.binding())
                 .frame(Frame::new().width(320.0)),
-            readout(move || format!("Activations: {}", activations.get())),
+            readout(t!("button.activations", count = activations)),
         ))
         .keyboard_shortcut(Key::Enter, command, count)
     }
@@ -61,10 +62,10 @@ struct CheckboxPage;
 impl View for CheckboxPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         // `None` is the mixed state.
-        let mut row = |label: &'static str, checked: Option<bool>, invalid: bool, enabled: bool| {
+        let mut row = |key: &'static str, checked: Option<bool>, invalid: bool, enabled: bool| {
             let checked: State<Option<bool>> = cx.state(checked);
-            Configured::custom(ControlKind::Checkbox, move |_| {
-                controls::Checkbox::new(label, false).with_invalid(invalid)
+            Configured::custom(ControlKind::Checkbox, move |env| {
+                controls::Checkbox::new(env.text(key, &[]), false).with_invalid(invalid)
             })
             .value(move || ControlValue::Mixed(checked.get()))
             .on_message(move |message| {
@@ -76,11 +77,11 @@ impl View for CheckboxPage {
             .frame(Frame::new().width(320.0))
         };
         column((
-            row("Show line numbers", Some(true), false, true),
-            row("Wrap long lines", Some(false), false, true),
-            row("Select all files", None, false, true),
-            row("Accept the terms", Some(false), true, true),
-            row("Sync settings (unavailable)", Some(true), false, false),
+            row("checkbox.line_numbers", Some(true), false, true),
+            row("checkbox.wrap", Some(false), false, true),
+            row("checkbox.select_all", None, false, true),
+            row("checkbox.terms", Some(false), true, true),
+            row("checkbox.sync", Some(true), false, false),
         ))
     }
 }
@@ -94,33 +95,45 @@ struct ToolButtonPage;
 
 impl View for ToolButtonPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state(String::from("None yet"));
-        let tool = |index: u64, label: &'static str, checkable: bool, menu, width: f64| {
+        let env = cx.env().clone();
+        let last = cx.state(env.text("tool-button.none", &[]));
+        let tool = |index: u64, key: &'static str, checkable: bool, menu, width: f64| {
+            let env = env.clone();
+            let label = env.text(key, &[]);
+            let name = label.clone();
             Configured::custom(ControlKind::Toggle, move |_| {
-                let mut button = ToolButton::new(label, CommandId(index));
+                let mut button = ToolButton::new(label.clone(), CommandId(index));
                 button.checkable = checkable;
                 button.menu = menu;
                 button.hosted()
             })
-            .on_message(move |message| match message {
-                ControlMessage::Command(_) => last.set(format!("{label} activated")),
-                ControlMessage::Changed(ControlValue::Bool(on)) => {
-                    last.set(format!("{label} {}", if *on { "on" } else { "off" }));
+            .on_message(move |message| {
+                let report = |key: &str| last.set(env.text(key, &[("name", &name)]));
+                match message {
+                    ControlMessage::Command(_) => report("tool-button.activated"),
+                    ControlMessage::Changed(ControlValue::Bool(true)) => report("tool-button.on"),
+                    ControlMessage::Changed(ControlValue::Bool(false)) => report("tool-button.off"),
+                    ControlMessage::OpenChanged(true) => report("tool-button.menu_opened"),
+                    _ => {}
                 }
-                ControlMessage::OpenChanged(true) => last.set(format!("{label} menu opened")),
-                _ => {}
             })
             .frame(Frame::new().width(width))
         };
         column((
             HStack::new((
-                tool(1, "Cut", false, ToolButtonMenu::None, 72.0),
-                tool(2, "Bold", true, ToolButtonMenu::None, 72.0),
-                tool(3, "Recent", false, ToolButtonMenu::Instant, 96.0),
-                tool(4, "Undo", false, ToolButtonMenu::Split, 96.0),
+                tool(1, "tool-button.cut", false, ToolButtonMenu::None, 72.0),
+                tool(2, "tool-button.bold", true, ToolButtonMenu::None, 72.0),
+                tool(
+                    3,
+                    "tool-button.recent",
+                    false,
+                    ToolButtonMenu::Instant,
+                    96.0,
+                ),
+                tool(4, "tool-button.undo", false, ToolButtonMenu::Split, 96.0),
             ))
             .spacing(Space::S2),
-            readout(move || format!("Last action: {}", last.get())),
+            readout(t!("tool-button.last", action = last)),
         ))
     }
 }
@@ -129,17 +142,17 @@ pub fn tool_button(_: &PageCx) -> AnyView {
     ToolButtonPage.into_any()
 }
 
-/// A joined group of `labels` with the members in `checked` on; members
-/// in `disabled` take no input.
+/// A joined group of members named by the catalog strings `labels`, with
+/// the members in `checked` on; members in `disabled` take no input.
 fn group(
     labels: &'static [&'static str],
     exclusive: bool,
     disabled: Option<usize>,
     checked: State<Vec<usize>>,
 ) -> impl View {
-    Configured::custom(ControlKind::ToggleGroup, move |_| {
+    Configured::custom(ControlKind::ToggleGroup, move |env| {
         let members = (1..=labels.len() as u64).map(CommandId).collect();
-        let names = labels.iter().map(|label| label.to_string()).collect();
+        let names = labels.iter().map(|key| env.text(key, &[])).collect();
         let group = ButtonGroup::new(members, exclusive).hosted(names);
         match disabled {
             Some(index) => group.with_enabled(index, false),
@@ -158,8 +171,8 @@ fn group(
 
 /// A group under its caption; assistive technology reads the caption as
 /// `name`.
-fn titled(title: &'static str, name: &'static str, content: impl View) -> impl View {
-    VStack::new((caption(title).accessibility_label(name.to_owned()), content))
+fn titled(title: &'static str, name: String, content: impl View) -> impl View {
+    VStack::new((caption(t!(title)).accessibility_label(name), content))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S2)
 }
@@ -171,21 +184,38 @@ impl View for ButtonGroupPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let alignment = cx.state(vec![0]);
         let style = cx.state(vec![0]);
+        let text = |key: &str| cx.env().text(key, &[]);
+        let (alignment_name, style_name) =
+            (text("button-group.alignment"), text("button-group.style"));
         column((
             titled(
-                "Exclusive (arrow keys move the choice; Justify is disabled)",
-                "Alignment",
+                "button-group.exclusive",
+                alignment_name,
                 group(
-                    &["Left", "Center", "Right", "Justify"],
+                    &[
+                        "button-group.left",
+                        "button-group.center",
+                        "button-group.right",
+                        "button-group.justify",
+                    ],
                     true,
                     Some(3),
                     alignment,
                 ),
             ),
             titled(
-                "Non-exclusive (each toggles)",
-                "Style",
-                group(&["Bold", "Italic", "Underline"], false, None, style),
+                "button-group.non_exclusive",
+                style_name,
+                group(
+                    &[
+                        "tool-button.bold",
+                        "button-group.italic",
+                        "button-group.underline",
+                    ],
+                    false,
+                    None,
+                    style,
+                ),
             ),
         ))
     }
@@ -230,28 +260,27 @@ struct KeySequencePage;
 
 impl View for KeySequencePage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let last = cx.state(String::from("None"));
+        let env = cx.env().clone();
+        let last = cx.state(env.text("key-sequence.none", &[]));
         column((
-            Configured::custom(ControlKind::Input, |_| {
+            Configured::custom(ControlKind::Input, |env| {
                 KeySequenceEdit::new(2)
-                    .with_name("Shortcut")
-                    .with_placeholder("Click or press Return to record")
+                    .with_name(env.text("key-sequence.shortcut", &[]))
+                    .with_placeholder(env.text("key-sequence.placeholder", &[]))
             })
             .on_message(move |message| {
                 if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                    last.set(
-                        if text.is_empty() {
-                            "Cleared"
-                        } else {
-                            "Committed"
-                        }
-                        .into(),
-                    );
+                    let key = if text.is_empty() {
+                        "key-sequence.cleared"
+                    } else {
+                        "key-sequence.committed"
+                    };
+                    last.set(env.text(key, &[]));
                 }
             })
             .frame(Frame::new().width(320.0)),
-            readout(move || format!("Last change: {}", last.get())),
-            caption(format!("shortcut_text examples: {}", examples()))
+            readout(t!("key-sequence.last", change = last)),
+            caption(t!("key-sequence.examples", examples = examples()))
                 .accessibility_label(examples()),
         ))
     }

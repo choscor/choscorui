@@ -2,8 +2,9 @@
 //! fields, date pickers, range sliders, and keyboard keys.
 
 use crate::ui::page::{Build, PageCx, column, row, section, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Cx, DatePicker, FieldText, Frame, HStack, HorizontalAlignment, Input,
+    AnyView, Configured, Cx, DatePicker, Env, FieldText, Frame, HStack, HorizontalAlignment, Input,
     InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup, VStack, View,
     ViewExt,
 };
@@ -14,25 +15,30 @@ use choscorui::controls::{
 };
 use choscorui::core::{CivilDate, Icon, Space};
 
-fn switch(cx: &mut Cx<'_>, label: &'static str, on: bool, size: ControlSize) -> impl View {
-    Switch::new(label, cx.state(on).binding()).with(move |switch| switch.with_size(size))
+/// The catalog string `key` in `env`.
+fn text(env: &Env, key: &str) -> String {
+    env.text(key, &[])
+}
+
+fn switch(cx: &mut Cx<'_>, key: &'static str, on: bool, size: ControlSize) -> impl View {
+    Switch::new(t!(key), cx.state(on).binding()).with(move |switch| switch.with_size(size))
 }
 
 pub fn switch_page(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
             section(
-                "Default size",
+                t!("switch.default"),
                 row((
-                    switch(cx, "Airplane mode", false, ControlSize::Default),
-                    switch(cx, "Wi-Fi", true, ControlSize::Default),
+                    switch(cx, "switch.airplane", false, ControlSize::Default),
+                    switch(cx, "switch.wifi", true, ControlSize::Default),
                 )),
             ),
             section(
-                "Small size",
+                t!("switch.small"),
                 row((
-                    switch(cx, "Bluetooth", false, ControlSize::Sm),
-                    switch(cx, "Hotspot", true, ControlSize::Sm),
+                    switch(cx, "switch.bluetooth", false, ControlSize::Sm),
+                    switch(cx, "switch.hotspot", true, ControlSize::Sm),
                 )),
             ),
         ))
@@ -45,13 +51,13 @@ pub fn toggle(_: &PageCx) -> AnyView {
             let toggles: Vec<_> = [ControlSize::Sm, ControlSize::Default, ControlSize::Lg]
                 .into_iter()
                 .zip([
-                    ("Bold", Icon::Bold),
-                    ("Italic", Icon::Italic),
-                    ("Underline", Icon::Underline),
+                    ("toggle.bold", Icon::Bold),
+                    ("toggle.italic", Icon::Italic),
+                    ("toggle.underline", Icon::Underline),
                 ])
                 .enumerate()
-                .map(|(index, (size, (label, icon)))| {
-                    Toggle::new(label, cx.state(index == 1).binding()).with(move |toggle| {
+                .map(|(index, (size, (key, icon)))| {
+                    Toggle::new(t!(key), cx.state(index == 1).binding()).with(move |toggle| {
                         toggle.with_icon(icon).with_variant(variant).with_size(size)
                     })
                 })
@@ -59,219 +65,265 @@ pub fn toggle(_: &PageCx) -> AnyView {
             row(toggles)
         };
         column((
-            section("Default variant", line(cx, ToggleVariant::Default)),
-            section("Outline variant", line(cx, ToggleVariant::Outline)),
+            section(t!("toggle.default"), line(cx, ToggleVariant::Default)),
+            section(t!("toggle.outline"), line(cx, ToggleVariant::Outline)),
         ))
     })
 }
 
-fn alignment() -> Vec<ToggleItem> {
+fn alignment(env: &Env) -> Vec<ToggleItem> {
     vec![
-        ToggleItem::new("Start").with_icon(Icon::TextAlignStart),
-        ToggleItem::new("Center").with_icon(Icon::TextAlignCenter),
-        ToggleItem::new("End").with_icon(Icon::TextAlignEnd),
+        ToggleItem::new(text(env, "toggle-group.start")).with_icon(Icon::TextAlignStart),
+        ToggleItem::new(text(env, "toggle-group.center")).with_icon(Icon::TextAlignCenter),
+        ToggleItem::new(text(env, "toggle-group.end")).with_icon(Icon::TextAlignEnd),
     ]
 }
 
 pub fn toggle_group(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let single = ToggleGroup::single("Alignment", alignment(), cx.state(Some(0)).binding())
-            .with(|group| group.with_variant(ToggleVariant::Outline));
+        let single = ToggleGroup::single(
+            t!("toggle-group.alignment"),
+            alignment,
+            cx.state(Some(0)).binding(),
+        )
+        .with(|group| group.with_variant(ToggleVariant::Outline));
         let multiple = ToggleGroup::multiple(
-            "Text style",
-            vec![
-                ToggleItem::new("Bold").with_icon(Icon::Bold),
-                ToggleItem::new("Italic").with_icon(Icon::Italic),
-                ToggleItem::new("Underline").with_icon(Icon::Underline),
-                ToggleItem::new("Strikethrough").disabled(),
-            ],
+            t!("toggle-group.text_style"),
+            |env: &Env| {
+                vec![
+                    ToggleItem::new(text(env, "toggle.bold")).with_icon(Icon::Bold),
+                    ToggleItem::new(text(env, "toggle.italic")).with_icon(Icon::Italic),
+                    ToggleItem::new(text(env, "toggle.underline")).with_icon(Icon::Underline),
+                    ToggleItem::new(text(env, "toggle-group.strikethrough")).disabled(),
+                ]
+            },
             cx.state(vec![0, 2]).binding(),
         )
         .with(|group| group.with_spacing(4.0));
-        let small = ToggleGroup::single("Small", alignment(), cx.state(None).binding())
-            .with(|group| group.with_size(ControlSize::Sm));
-        let vertical =
-            ToggleGroup::single("Vertical", alignment(), cx.state(None).binding()).with(|group| {
-                group
-                    .with_variant(ToggleVariant::Outline)
-                    .with_orientation(Orientation::Vertical)
-            });
+        let small = ToggleGroup::single(
+            t!("toggle-group.small"),
+            alignment,
+            cx.state(None).binding(),
+        )
+        .with(|group| group.with_size(ControlSize::Sm));
+        let vertical = ToggleGroup::single(
+            t!("toggle-group.vertical"),
+            alignment,
+            cx.state(None).binding(),
+        )
+        .with(|group| {
+            group
+                .with_variant(ToggleVariant::Outline)
+                .with_orientation(Orientation::Vertical)
+        });
         column((
-            section("Single selection, joined", single),
-            section("Multiple selection, spaced", multiple),
-            section("Small and vertical", row((small, vertical))),
+            section(t!("toggle-group.single"), single),
+            section(t!("toggle-group.multiple"), multiple),
+            section(t!("toggle-group.small_vertical"), row((small, vertical))),
         ))
     })
 }
 
-fn fruits() -> Vec<ListEntry> {
+fn fruits(env: &Env) -> Vec<ListEntry> {
     vec![
-        ListEntry::group("Fruits"),
-        ListEntry::option("Apple"),
-        ListEntry::option("Banana"),
-        ListEntry::option("Blueberry"),
-        ListEntry::disabled("Grapes"),
-        ListEntry::option("Pineapple"),
+        ListEntry::group(text(env, "select.fruits")),
+        ListEntry::option(text(env, "select.apple")),
+        ListEntry::option(text(env, "select.banana")),
+        ListEntry::option(text(env, "select.blueberry")),
+        ListEntry::disabled(text(env, "select.grapes")),
+        ListEntry::option(text(env, "select.pineapple")),
         ListEntry::Separator,
-        ListEntry::group("Vegetables"),
-        ListEntry::option("Carrot"),
-        ListEntry::option("Leek"),
+        ListEntry::group(text(env, "select.vegetables")),
+        ListEntry::option(text(env, "select.carrot")),
+        ListEntry::option(text(env, "select.leek")),
     ]
 }
 
+/// The catalog strings of the time zones.
 const ZONES: [&str; 12] = [
-    "Eastern Time",
-    "Central Time",
-    "Mountain Time",
-    "Pacific Time",
-    "Alaska Time",
-    "Hawaii Time",
-    "Greenwich Mean Time",
-    "Central European Time",
-    "Eastern European Time",
-    "India Standard Time",
-    "China Standard Time",
-    "Japan Standard Time",
+    "select.zone_eastern",
+    "select.zone_central",
+    "select.zone_mountain",
+    "select.zone_pacific",
+    "select.zone_alaska",
+    "select.zone_hawaii",
+    "select.zone_gmt",
+    "select.zone_cet",
+    "select.zone_eet",
+    "select.zone_india",
+    "select.zone_china",
+    "select.zone_japan",
 ];
 
 pub fn select(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let fruit = |cx: &mut Cx<'_>, name: &'static str, selected: Option<usize>| {
-            Select::new(name, fruits(), cx.state(selected).binding())
-                .with(|select| select.with_placeholder("Select a fruit"))
+        let fruit = |cx: &mut Cx<'_>, key: &'static str, selected: Option<usize>| {
+            let placeholder = text(cx.env(), "select.fruit_placeholder");
+            Select::new(t!(key), fruits, cx.state(selected).binding())
+                .with(move |select| select.with_placeholder(placeholder.clone()))
         };
-        let native = Configured::custom(ControlKind::NativeSelect, |_| {
+        let native = Configured::custom(ControlKind::NativeSelect, |env| {
             controls::Select::native(
-                "Status",
+                text(env, "select.status"),
                 vec![
-                    ListEntry::option("Todo"),
-                    ListEntry::option("In progress"),
-                    ListEntry::option("Done"),
+                    ListEntry::option(text(env, "select.todo")),
+                    ListEntry::option(text(env, "select.in_progress")),
+                    ListEntry::option(text(env, "select.done")),
                 ],
             )
-            .with_placeholder("Select a status")
+            .with_placeholder(text(env, "select.status_placeholder"))
         });
+        let zone_placeholder = text(cx.env(), "select.zone_placeholder");
         let zones = Select::new(
-            "Time zone",
-            ZONES
-                .iter()
-                .map(|zone| ListEntry::option(*zone))
-                .collect::<Vec<_>>(),
+            t!("select.zone"),
+            |env: &Env| {
+                ZONES
+                    .iter()
+                    .map(|zone| ListEntry::option(text(env, zone)))
+                    .collect()
+            },
             cx.state(None).binding(),
         )
-        .with(|select| select.with_placeholder("Select a time zone"));
+        .with(move |select| select.with_placeholder(zone_placeholder.clone()));
         column((
             section(
-                "Default size",
-                row((fruit(cx, "Fruit", None), fruit(cx, "Fruit", Some(2)))),
+                t!("switch.default"),
+                row((
+                    fruit(cx, "select.fruit", None),
+                    fruit(cx, "select.fruit", Some(2)),
+                )),
             ),
             section(
-                "Small size",
-                fruit(cx, "Small fruit", None).with(|select| select.with_size(ControlSize::Sm)),
+                t!("switch.small"),
+                fruit(cx, "select.small_fruit", None)
+                    .with(|select| select.with_size(ControlSize::Sm)),
             ),
             section(
-                "Invalid",
-                fruit(cx, "Required fruit", None).with(|mut select| {
+                t!("select.invalid"),
+                fruit(cx, "select.required_fruit", None).with(|mut select| {
                     select.set_invalid(true);
                     select
                 }),
             ),
-            section("Native look", native),
-            section("Scrolling list", zones),
+            section(t!("select.native"), native),
+            section(t!("select.scrolling"), zones),
         ))
     })
 }
 
 /// The invalid username sample of the input and field pages.
 fn invalid_username(cx: &mut Cx<'_>) -> impl View {
-    Input::new("Username", cx.state("a".to_owned()).binding()).with(|mut input| {
-        input.set_validation(ValidationState::Invalid(
-            "Use at least three characters".into(),
-        ));
+    let error = text(cx.env(), "input.username_error");
+    Input::new(t!("input.username"), cx.state("a".to_owned()).binding()).with(move |mut input| {
+        input.set_validation(ValidationState::Invalid(error.clone()));
         input
     })
 }
 
-/// An empty input with `placeholder`.
-fn input(cx: &mut Cx<'_>, name: &'static str, placeholder: &'static str) -> impl View {
-    Input::new(name, cx.state(String::new()).binding())
+/// An empty input named by the catalog string `key`, with `placeholder`.
+fn input(cx: &mut Cx<'_>, key: &'static str, placeholder: &'static str) -> impl View {
+    Input::new(t!(key), cx.state(String::new()).binding())
         .with(move |input| input.with_placeholder(placeholder))
 }
 
 pub fn input_page(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
-            section("Text", input(cx, "Email", "name@example.com")),
             section(
-                "Password",
-                Input::password("Password", cx.state("hunter2".to_owned()).binding()),
+                t!("input.text"),
+                input(cx, "input.email", "name@example.com"),
             ),
-            section("Invalid", invalid_username(cx)),
+            section(
+                t!("input.password"),
+                Input::password(
+                    t!("input.password"),
+                    cx.state("hunter2".to_owned()).binding(),
+                ),
+            ),
+            section(t!("select.invalid"), invalid_username(cx)),
         ))
     })
 }
 
-/// A text field with addons.
-fn input_group(field: impl Fn() -> TextField + 'static, addons: Vec<InputGroupAddon>) -> impl View {
-    Configured::custom(ControlKind::InputGroup, move |_| {
-        InputGroup::new(field(), addons.clone())
+/// A text field with addons, both made from the environment.
+fn input_group(
+    field: impl Fn(&Env) -> TextField + 'static,
+    addons: impl Fn(&Env) -> Vec<InputGroupAddon> + 'static,
+) -> impl View {
+    Configured::custom(ControlKind::InputGroup, move |env| {
+        InputGroup::new(field(env), addons(env))
     })
 }
 
 pub fn input_group_page(_: &PageCx) -> AnyView {
     column((
         section(
-            "Inline addons",
+            t!("input-group.inline"),
             input_group(
-                || TextField::new("Search", "").with_placeholder("Search…"),
-                vec![
-                    InputGroupAddon::icon(AddonAlign::InlineStart, Icon::Search),
-                    InputGroupAddon::text(AddonAlign::InlineEnd, "12 results"),
-                ],
+                |env| {
+                    TextField::new(text(env, "input-group.search"), "")
+                        .with_placeholder(text(env, "input-group.search_placeholder"))
+                },
+                |env| {
+                    let results = env.plural("input-group.results", 12, &[("count", "12")]);
+                    vec![
+                        InputGroupAddon::icon(AddonAlign::InlineStart, Icon::Search),
+                        InputGroupAddon::text(AddonAlign::InlineEnd, results),
+                    ]
+                },
             ),
         ),
         section(
-            "Text and buttons",
+            t!("input-group.text_buttons"),
             row((
                 input_group(
-                    || TextField::new("Website", "example"),
-                    vec![
-                        InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
-                        InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
-                    ],
+                    |env| TextField::new(text(env, "input-group.website"), "example"),
+                    |_| {
+                        vec![
+                            InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
+                            InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
+                        ]
+                    },
                 ),
                 input_group(
-                    || TextField::new("Link", "https://choscor.com"),
-                    vec![
-                        InputGroupAddon::button(
-                            AddonAlign::InlineEnd,
-                            "Copy",
-                            Some(Icon::Copy),
-                            ControlSize::IconXs,
-                        ),
-                        InputGroupAddon::button(
-                            AddonAlign::InlineEnd,
-                            "Share",
-                            None,
-                            ControlSize::Xs,
-                        ),
-                    ],
+                    |env| TextField::new(text(env, "input-group.link"), "https://choscor.com"),
+                    |env| {
+                        vec![
+                            InputGroupAddon::button(
+                                AddonAlign::InlineEnd,
+                                text(env, "input-group.copy"),
+                                Some(Icon::Copy),
+                                ControlSize::IconXs,
+                            ),
+                            InputGroupAddon::button(
+                                AddonAlign::InlineEnd,
+                                text(env, "input-group.share"),
+                                None,
+                                ControlSize::Xs,
+                            ),
+                        ]
+                    },
                 ),
             )),
         ),
         section(
-            "Block addons",
+            t!("input-group.block"),
             input_group(
-                || TextField::new("Message", "").with_placeholder("Ask anything"),
-                vec![
-                    InputGroupAddon::text(AddonAlign::BlockStart, "To: Design team"),
-                    InputGroupAddon::button(
-                        AddonAlign::BlockEnd,
-                        "Send",
-                        Some(Icon::Send),
-                        ControlSize::Sm,
-                    ),
-                ],
+                |env| {
+                    TextField::new(text(env, "input-group.message"), "")
+                        .with_placeholder(text(env, "input-group.ask"))
+                },
+                |env| {
+                    vec![
+                        InputGroupAddon::text(AddonAlign::BlockStart, text(env, "input-group.to")),
+                        InputGroupAddon::button(
+                            AddonAlign::BlockEnd,
+                            text(env, "input-group.send"),
+                            Some(Icon::Send),
+                            ControlSize::Sm,
+                        ),
+                    ]
+                },
             ),
         ),
     ))
@@ -279,18 +331,22 @@ pub fn input_group_page(_: &PageCx) -> AnyView {
 
 pub fn textarea(_: &PageCx) -> AnyView {
     stateful(|cx| {
+        let message = text(cx.env(), "textarea.placeholder");
+        let bio = text(cx.env(), "textarea.bio_placeholder");
         column((
             section(
-                "Grows with its text",
-                Textarea::new("Message", cx.state(String::new()).binding())
-                    .with(|textarea| textarea.with_placeholder("Type your message here.")),
+                t!("textarea.grows"),
+                Textarea::new(t!("input-group.message"), cx.state(String::new()).binding())
+                    .with(move |textarea| textarea.with_placeholder(message.clone())),
             ),
             section(
-                "Invalid",
-                Textarea::new("Bio", cx.state(String::new()).binding()).with(|mut textarea| {
-                    textarea.set_invalid(true);
-                    textarea.with_placeholder("Tell us about yourself")
-                }),
+                t!("select.invalid"),
+                Textarea::new(t!("textarea.bio"), cx.state(String::new()).binding()).with(
+                    move |mut textarea| {
+                        textarea.set_invalid(true);
+                        textarea.with_placeholder(bio.clone())
+                    },
+                ),
             ),
         ))
     })
@@ -298,22 +354,23 @@ pub fn textarea(_: &PageCx) -> AnyView {
 
 pub fn input_otp(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let code = |cx: &mut Cx<'_>, name: &'static str| {
-            InputOtp::new(name, 6, cx.state(String::new()).binding())
+        let code = |cx: &mut Cx<'_>, key: &'static str| {
+            InputOtp::new(t!(key), 6, cx.state(String::new()).binding())
         };
         column((
-            section("Six digits", code(cx, "Code")),
+            section(t!("input-otp.six"), code(cx, "input-otp.code")),
             section(
-                "Groups with a separator",
-                code(cx, "Grouped code").with(|otp| otp.with_groups(vec![3, 3])),
+                t!("input-otp.groups"),
+                code(cx, "input-otp.grouped").with(|otp| otp.with_groups(vec![3, 3])),
             ),
             section(
-                "Letters and digits",
-                code(cx, "Recovery code").with(|otp| otp.with_groups(vec![2, 2, 2]).alphanumeric()),
+                t!("input-otp.letters"),
+                code(cx, "input-otp.recovery")
+                    .with(|otp| otp.with_groups(vec![2, 2, 2]).alphanumeric()),
             ),
             section(
-                "Invalid",
-                code(cx, "Invalid code").with(|mut otp| {
+                t!("select.invalid"),
+                code(cx, "input-otp.invalid").with(|mut otp| {
                     otp.set_invalid(true);
                     otp
                 }),
@@ -352,56 +409,47 @@ pub fn field(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
             section(
-                "Field set",
+                t!("field.set"),
                 stacked((
-                    FieldText::new(FieldPart::Legend, "Payment method"),
-                    FieldText::new(
-                        FieldPart::Description,
-                        "All transactions are secure and encrypted.",
-                    ),
-                    FieldText::new(FieldPart::Label, "Name on card"),
-                    input(cx, "Name on card", "Evil Rabbit"),
+                    FieldText::new(FieldPart::Legend, t!("field.payment")),
+                    FieldText::new(FieldPart::Description, t!("field.secure")),
+                    FieldText::new(FieldPart::Label, t!("field.name_on_card")),
+                    input(cx, "field.name_on_card", "Evil Rabbit"),
                 )),
             ),
             section(
-                "Vertical field",
+                t!("field.vertical"),
                 stacked((
-                    FieldText::new(FieldPart::Label, "Email"),
-                    input(cx, "Email", "name@example.com"),
-                    FieldText::new(
-                        FieldPart::Description,
-                        "We never share your email with anyone.",
-                    ),
+                    FieldText::new(FieldPart::Label, t!("input.email")),
+                    input(cx, "input.email", "name@example.com"),
+                    FieldText::new(FieldPart::Description, t!("field.never_share")),
                 )),
             ),
             section(
-                "Horizontal field",
+                t!("field.horizontal"),
                 beside(
-                    switch(cx, "Marketing emails", true, ControlSize::Default),
-                    FieldText::new(
-                        FieldPart::Description,
-                        "Receive emails about new products and features.",
-                    ),
+                    switch(cx, "field.marketing", true, ControlSize::Default),
+                    FieldText::new(FieldPart::Description, t!("field.receive")),
                 ),
             ),
             section(
-                "Responsive field",
+                t!("field.responsive"),
                 beside(
-                    FieldText::new(FieldPart::Label, "Display name"),
-                    Input::new("Display name", cx.state(String::new()).binding()),
+                    FieldText::new(FieldPart::Label, t!("field.display_name")),
+                    Input::new(t!("field.display_name"), cx.state(String::new()).binding()),
                 ),
             ),
             section(
-                "Invalid field",
+                t!("field.invalid"),
                 stacked((
-                    FieldText::new(FieldPart::Label, "Username"),
+                    FieldText::new(FieldPart::Label, t!("input.username")),
                     invalid_username(cx),
-                    FieldText::new(FieldPart::Error, "Use at least three characters."),
+                    FieldText::new(FieldPart::Error, t!("field.username_error")),
                 )),
             ),
             section(
-                "Separator",
-                stacked(FieldText::new(FieldPart::Separator, "Or continue with")),
+                t!("field.separator"),
+                stacked(FieldText::new(FieldPart::Separator, t!("field.continue"))),
             ),
         ))
     })
@@ -410,26 +458,34 @@ pub fn field(_: &PageCx) -> AnyView {
 pub fn date_picker(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let today = CivilDate::new(2026, 10, 12).expect("the demo date is valid");
-        let single = |cx: &mut Cx<'_>, name: &'static str, date: Option<CivilDate>| {
-            DatePicker::new(name, today, cx.state(date).binding())
-                .with(move |picker| picker.with_placeholder("Pick a date").with_today(today))
+        let placeholder = text(cx.env(), "date-picker.placeholder");
+        let pick = move |picker: controls::DatePicker| {
+            picker
+                .with_placeholder(placeholder.clone())
+                .with_today(today)
         };
-        let dates = |cx: &mut Cx<'_>, name: &'static str, mode: CalendarMode| {
-            DatePicker::dates(name, today, mode, cx.state(Vec::new()).binding())
-                .with(move |picker| picker.with_placeholder("Pick a date").with_today(today))
+        let single = |cx: &mut Cx<'_>, key: &'static str, date: Option<CivilDate>| {
+            DatePicker::new(t!(key), today, cx.state(date).binding()).with(pick.clone())
+        };
+        let dates = |cx: &mut Cx<'_>, key: &'static str, mode: CalendarMode| {
+            DatePicker::dates(t!(key), today, mode, cx.state(Vec::new()).binding())
+                .with(pick.clone())
         };
         column((
             section(
-                "Single date",
+                t!("date-picker.single"),
                 row((
-                    single(cx, "Start date", None),
-                    single(cx, "Due date", Some(today)),
+                    single(cx, "date-picker.start", None),
+                    single(cx, "date-picker.due", Some(today)),
                 )),
             ),
-            section("Date range", dates(cx, "Stay", CalendarMode::Range)),
             section(
-                "Several dates",
-                dates(cx, "Meeting days", CalendarMode::Multiple),
+                t!("date-picker.range"),
+                dates(cx, "date-picker.stay", CalendarMode::Range),
+            ),
+            section(
+                t!("date-picker.several"),
+                dates(cx, "date-picker.meeting_days", CalendarMode::Multiple),
             ),
         ))
     })
@@ -439,13 +495,18 @@ pub fn range_slider(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
             section(
-                "Horizontal",
-                RangeSlider::new("Price", 0.0..=100.0, 5.0, cx.state((25.0, 75.0)).binding()),
+                t!("range-slider.horizontal"),
+                RangeSlider::new(
+                    t!("range-slider.price"),
+                    0.0..=100.0,
+                    5.0,
+                    cx.state((25.0, 75.0)).binding(),
+                ),
             ),
             section(
-                "Vertical",
+                t!("toggle-group.vertical"),
                 RangeSlider::new(
-                    "Temperature",
+                    t!("range-slider.temperature"),
                     0.0..=40.0,
                     1.0,
                     cx.state((18.0, 24.0)).binding(),
@@ -467,7 +528,7 @@ pub fn kbd(_: &PageCx) -> AnyView {
     let inverted = |kbd: controls::Kbd| kbd.with_variant(KbdVariant::Inverted);
     column((
         section(
-            "Keys",
+            t!("kbd.keys"),
             row((
                 Kbd::new("Esc"),
                 Kbd::new("⇧"),
@@ -476,7 +537,7 @@ pub fn kbd(_: &PageCx) -> AnyView {
             )),
         ),
         section(
-            "Inverted",
+            t!("kbd.inverted"),
             row((
                 Kbd::new("Enter").with(inverted),
                 keys(&["⌥", "⌫"]).with(inverted),

@@ -2,9 +2,10 @@
 //! numeric displays.
 
 use crate::ui::page::{Build, PageCx, caption, column};
+use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Canvas, Configured, Cx, Frame, HStack, HorizontalAlignment, Progress, Slider,
-    SpinBox, State, Text, VStack, View, ViewExt,
+    AnyView, Button, Canvas, Configured, Cx, Env, Frame, HStack, HorizontalAlignment, Localized,
+    Progress, Slider, SpinBox, State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
@@ -27,8 +28,8 @@ fn captioned(caption: impl View, control: impl View) -> impl View {
         .spacing(Space::S2)
 }
 
-/// A small muted line whose text follows state.
-fn readout(text: impl Fn() -> String + 'static) -> impl View {
+/// A small muted line whose catalog string follows state.
+fn readout(text: Localized) -> impl View {
     Text::new(text)
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground)
@@ -36,8 +37,14 @@ fn readout(text: impl Fn() -> String + 'static) -> impl View {
 
 /// A caption that repeats the control's name; the control carries the
 /// name, so the caption stays out of the accessibility tree.
-fn label(text: &str) -> impl View {
-    caption(text).accessibility_hidden(true)
+fn label(key: &'static str) -> impl View {
+    caption(t!(key)).accessibility_hidden(true)
+}
+
+/// `{name}: {value}`, the readout of a slider or dial named by the
+/// catalog string `key` in `env`.
+fn named_value(env: &Env, key: &str, value: State<i32>) -> Localized {
+    t!("slider.readout", name = env.text(key, &[]), value = value)
 }
 
 /// Horizontal, stepped, vertical, and disabled sliders.
@@ -45,24 +52,22 @@ struct SliderPage;
 
 impl View for SliderPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let mut row = |label: &'static str, range: IntegerRange, vertical: bool, enabled: bool| {
+        let mut row = |key: &'static str, range: IntegerRange, vertical: bool, enabled: bool| {
             let value = cx.state(range.value());
             let slider = if vertical {
-                Slider::vertical(label, range, value.binding())
+                Slider::vertical(t!(key), range, value.binding())
                     .frame(Frame::new().width(16.0).height(140.0))
             } else {
-                Slider::new(label, range, value.binding()).frame(Frame::new().width(320.0))
+                Slider::new(t!(key), range, value.binding()).frame(Frame::new().width(320.0))
             };
-            captioned(
-                readout(move || format!("{label}: {}", value.get())),
-                slider.disabled(!enabled),
-            )
+            let readout = readout(named_value(cx.env(), key, value));
+            captioned(readout, slider.disabled(!enabled))
         };
         column((
-            row("Volume", range(0, 100, 40, 1, 10), false, true),
-            row("Stepped (0–10 by 2)", range(0, 10, 4, 2, 2), false, true),
-            row("Vertical", range(0, 100, 70, 5, 20), true, true),
-            row("Disabled", range(0, 100, 25, 1, 10), false, false),
+            row("slider.volume", range(0, 100, 40, 1, 10), false, true),
+            row("slider.stepped", range(0, 10, 4, 2, 2), false, true),
+            row("slider.vertical", range(0, 100, 70, 5, 20), true, true),
+            row("slider.disabled", range(0, 100, 25, 1, 10), false, false),
         ))
     }
 }
@@ -76,19 +81,19 @@ struct SpinBoxPage;
 
 impl View for SpinBoxPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let mut row = |label: &'static str, range: IntegerRange, enabled: bool| {
+        let mut row = |key: &'static str, range: IntegerRange, enabled: bool| {
             let value = cx.state(range.value());
             captioned(
-                self::label(label),
-                SpinBox::new(label, range, value.binding())
+                label(key),
+                SpinBox::new(t!(key), range, value.binding())
                     .frame(Frame::new().width(140.0))
                     .disabled(!enabled),
             )
         };
         column((
-            row("Copies (1–99)", range(1, 99, 2, 1, 10), true),
-            row("Temperature (−20–40)", range(-20, 40, 21, 1, 5), true),
-            row("Disabled", range(0, 10, 5, 1, 1), false),
+            row("spin-box.copies", range(1, 99, 2, 1, 10), true),
+            row("spin-box.temperature", range(-20, 40, 21, 1, 5), true),
+            row("slider.disabled", range(0, 10, 5, 1, 1), false),
         ))
     }
 }
@@ -106,22 +111,26 @@ impl View for ProgressPage {
         let bar = |progress: Progress| progress.frame(Frame::new().width(360.0));
         column((
             captioned(
-                readout(move || format!("{} of 100", value.get())),
-                bar(Progress::new("Download", move || value.get(), 100)),
+                readout(t!("progress.of", value = value, total = 100)),
+                bar(Progress::new(
+                    t!("progress.download"),
+                    move || value.get(),
+                    100,
+                )),
             ),
             captioned(
-                caption("100 of 100"),
-                bar(Progress::new("Download", 100_u32, 100)),
+                caption(t!("progress.of", value = 100, total = 100)),
+                bar(Progress::new(t!("progress.download"), 100_u32, 100)),
             ),
             captioned(
-                caption("Indeterminate (animates while visible)"),
-                bar(Progress::indeterminate("Indexing")),
+                caption(t!("progress.indeterminate")),
+                bar(Progress::indeterminate(t!("progress.indexing"))),
             ),
             HStack::new((
-                Button::new("Advance 10%", move || {
+                Button::new(t!("progress.advance"), move || {
                     value.update(|v| *v = (*v + 10).min(100))
                 }),
-                Button::new("Reset", move || value.set(0)),
+                Button::new(t!("progress.reset"), move || value.set(0)),
             ))
             .spacing(Space::S2),
         ))
@@ -140,10 +149,10 @@ const VIEW_WIDTH: f64 = 420.0;
 const VIEW_HEIGHT: f64 = 300.0;
 const BAR: f64 = 14.0;
 
-/// A scroll bar over `content` points of which `viewport` show; `offset`
-/// follows the thumb.
+/// A scroll bar named by the catalog string `key` over `content` points
+/// of which `viewport` show; `offset` follows the thumb.
 fn scroll_bar(
-    name: &'static str,
+    key: &'static str,
     orientation: ScrollOrientation,
     content: f64,
     viewport: f64,
@@ -153,8 +162,8 @@ fn scroll_bar(
         ScrollOrientation::Vertical => Frame::new().width(BAR).height(viewport),
         ScrollOrientation::Horizontal => Frame::new().width(viewport).height(BAR),
     };
-    Configured::custom(ControlKind::ScrollArea, move |_| {
-        let mut bar = ScrollBar::new(name, orientation);
+    Configured::custom(ControlKind::ScrollArea, move |env| {
+        let mut bar = ScrollBar::new(env.text(key, &[]), orientation);
         if orientation == ScrollOrientation::Vertical {
             bar.set_line_step(SCROLL_LINE_HEIGHT);
         }
@@ -177,6 +186,14 @@ impl View for ScrollBarPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let top = cx.state(0.0);
         let left = cx.state(0.0);
+        let env = cx.env().clone();
+        let name = env.text("scroll-bar.lines", &[]);
+        let count = SCROLL_LINES.to_string();
+        let lines_value = env.plural(
+            "scroll-bar.count",
+            SCROLL_LINES as u64,
+            &[("count", &count)],
+        );
         // Only the lines in view are drawn, at the offsets of the bars.
         let lines = Canvas::new(move |canvas, size| {
             let (top, left) = (top.get(), left.get());
@@ -190,9 +207,9 @@ impl View for ScrollBarPage {
                 let y = origin.y + line as f64 * SCROLL_LINE_HEIGHT - top;
                 let _ = canvas.list.draw_text(
                     Point::new(origin.x + 10.0 - left, y + 16.0),
-                    &format!(
-                        "Line {:02} — a long line that extends past the right edge of the view so the horizontal bar matters",
-                        line + 1
+                    &env.text(
+                        "scroll-bar.line",
+                        &[("number", &format!("{:02}", line + 1))],
                     ),
                     font,
                     size_pt,
@@ -200,9 +217,9 @@ impl View for ScrollBarPage {
                 );
             }
         })
-        .label("Numbered lines");
+        .label(name);
         let view = lines
-            .accessibility_value(format!("{SCROLL_LINES} lines"))
+            .accessibility_value(lines_value)
             .frame(Frame::new().width(VIEW_WIDTH).height(VIEW_HEIGHT))
             .background(ColorRole::Card)
             .border(ColorRole::Border, 1.0)
@@ -214,7 +231,7 @@ impl View for ScrollBarPage {
                 HStack::new((
                     view,
                     scroll_bar(
-                        "Vertical scroll",
+                        "scroll-bar.vertical",
                         ScrollOrientation::Vertical,
                         content,
                         VIEW_HEIGHT,
@@ -223,7 +240,7 @@ impl View for ScrollBarPage {
                 ))
                 .spacing(Space::S1),
                 scroll_bar(
-                    "Horizontal scroll",
+                    "scroll-bar.horizontal",
                     ScrollOrientation::Horizontal,
                     SCROLL_WIDTH,
                     VIEW_WIDTH,
@@ -245,11 +262,12 @@ struct DialPage;
 
 impl View for DialPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let mut dial = |label: &'static str, range: IntegerRange, wrapping: bool| {
+        let mut dial = |key: &'static str, range: IntegerRange, wrapping: bool| {
             let value = cx.state(range.value());
+            let readout = named_value(cx.env(), key, value);
             VStack::new((
-                Configured::custom(ControlKind::Dial, move |_| {
-                    Dial::new(range, wrapping).hosted(label)
+                Configured::custom(ControlKind::Dial, move |env| {
+                    Dial::new(range, wrapping).hosted(env.text(key, &[]))
                 })
                 .value(move || ControlValue::Number(f64::from(value.get())))
                 .on_message(move |message| {
@@ -258,7 +276,7 @@ impl View for DialPage {
                     }
                 })
                 .frame(Frame::new().width(140.0).height(140.0)),
-                Text::new(move || format!("{label}: {}", value.get()))
+                Text::new(readout)
                     .align(TextAlign::Center)
                     .text_style(TextPreset::Small)
                     .frame(Frame::new().width(140.0)),
@@ -267,8 +285,8 @@ impl View for DialPage {
         };
         column(
             HStack::new((
-                dial("Gain", range(0, 100, 30, 1, 10), false),
-                dial("Heading (wraps)", range(0, 359, 90, 1, 15), true),
+                dial("dial.gain", range(0, 100, 30, 1, 10), false),
+                dial("dial.heading", range(0, 359, 90, 1, 15), true),
             ))
             .spacing(Space::S4),
         )
@@ -285,11 +303,13 @@ struct DecimalSpinBoxPage;
 
 impl View for DecimalSpinBoxPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        let mut row = |label: &'static str, limits: (f64, f64), step: f64, digits, start: f64| {
+        let mut row = |key: &'static str, limits: (f64, f64), step: f64, digits, start: f64| {
             let value = cx.state(start);
+            let name = cx.env().text(key, &[]);
             captioned(
-                readout(move || format!("{label} — value {}", value.get())),
+                readout(t!("decimal-spin-box.readout", name = name, value = value)),
                 Configured::custom(ControlKind::Input, move |env| {
+                    let label = env.text(key, &[]);
                     DecimalSpinBox::new(label, env.locale(), limits, step, digits, start)
                 })
                 .on_message(move |message| {
@@ -301,14 +321,8 @@ impl View for DecimalSpinBoxPage {
             )
         };
         column((
-            row(
-                "Price (0–10,000, 2 decimals)",
-                (0.0, 10_000.0),
-                0.25,
-                2,
-                1_234.5,
-            ),
-            row("Ratio (0–1, 3 decimals)", (0.0, 1.0), 0.005, 3, 0.618),
+            row("decimal-spin-box.price", (0.0, 10_000.0), 0.25, 2, 1_234.5),
+            row("decimal-spin-box.ratio", (0.0, 1.0), 0.005, 3, 0.618),
         ))
     }
 }
@@ -326,9 +340,9 @@ struct Counter {
 }
 
 impl Counter {
-    fn new(base: NumberBase) -> Self {
+    fn new(name: String, base: NumberBase) -> Self {
         Self {
-            display: NumericDisplay::new(8, base).hosted("Counter"),
+            display: NumericDisplay::new(8, base).hosted(name),
             value: 0,
         }
     }
@@ -386,12 +400,13 @@ impl CustomControl for Counter {
     }
 }
 
-/// The bases that the display shows, with their button labels.
+/// The bases that the display shows, with the catalog strings of their
+/// button labels.
 const BASES: [(&str, NumberBase); 4] = [
-    ("DEC", NumberBase::Decimal),
-    ("HEX", NumberBase::Hexadecimal),
-    ("OCT", NumberBase::Octal),
-    ("BIN", NumberBase::Binary),
+    ("numeric-display.dec", NumberBase::Decimal),
+    ("numeric-display.hex", NumberBase::Hexadecimal),
+    ("numeric-display.oct", NumberBase::Octal),
+    ("numeric-display.bin", NumberBase::Binary),
 ];
 
 /// A seven-segment display in four bases.
@@ -402,8 +417,11 @@ impl View for NumericDisplayPage {
         let value = cx.state(2026_i64);
         // The index of the chosen base in `BASES`.
         let base = cx.state(0_usize);
-        let display = Configured::custom(ControlKind::NumericDisplay, move |_| {
-            Counter::new(BASES[base.get()].1)
+        let display = Configured::custom(ControlKind::NumericDisplay, move |env| {
+            Counter::new(
+                env.text("numeric-display.counter", &[]),
+                BASES[base.get()].1,
+            )
         })
         .value(move || ControlValue::Number(value.get() as f64))
         .on_message(move |message| {
@@ -414,7 +432,7 @@ impl View for NumericDisplayPage {
         .frame(Frame::new().width(360.0).height(70.0));
         // The chosen base shows as a secondary (filled) button.
         let choice = |index: usize| {
-            Button::new(BASES[index].0, move || base.set(index))
+            Button::new(t!(BASES[index].0), move || base.set(index))
                 .variant(move || {
                     if base.get() == index {
                         ButtonVariant::Secondary
@@ -427,7 +445,7 @@ impl View for NumericDisplayPage {
         column((
             display,
             HStack::new((choice(0), choice(1), choice(2), choice(3))).spacing(Space::S2),
-            caption("Arrow keys change the value; values wider than 8 digits overflow to dashes"),
+            caption(t!("numeric-display.hint")),
         ))
     }
 }
