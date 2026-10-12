@@ -660,6 +660,12 @@ mod tests {
         assert!(first.starts_with("Bánh mì, "), "{first}");
         assert!(page.act("Name", SemanticAction::Activate));
         assert_eq!(page.value("Name").as_deref(), Some("descending"));
+        // The caption and the total row describe the table.
+        let table = page.node("Products");
+        assert_eq!(
+            page.host.semantic(table).unwrap().description,
+            "Quantities and prices of the products on sale. Total, 1440"
+        );
     }
 
     #[test]

@@ -500,6 +500,25 @@ mod tests {
     }
 
     #[test]
+    fn the_text_size_group_steps_the_size_and_skips_its_parts() {
+        let mut page = Harness::new("button-group");
+        assert!(page.host.find("Text size: 14 pt").is_some());
+        assert!(page.act("Smaller", SemanticAction::Activate));
+        assert!(page.host.find("Text size: 13 pt").is_some());
+        let smaller = page.node("Smaller");
+        assert_eq!(
+            page.host.semantic(smaller).unwrap().description,
+            "Text size"
+        );
+        assert!(page.act("Smaller", SemanticAction::Focus));
+        // The arrow key passes the separator to the other button.
+        press(&mut page, Key::ArrowRight);
+        press(&mut page, Key::Enter);
+        press(&mut page, Key::Enter);
+        assert!(page.host.find("Text size: 15 pt").is_some());
+    }
+
+    #[test]
     fn the_shortcut_field_records_two_chords() {
         let mut page = Harness::new("key-sequence");
         assert!(page.act("Shortcut", SemanticAction::Focus));

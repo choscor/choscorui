@@ -797,11 +797,20 @@ impl ItemView {
                 .collect::<Vec<_>>()
                 .join(", ")
         });
-        let description = std::iter::once(self.caption.clone())
+        // Each part ends as a sentence, unless it already has a full stop.
+        let mut description = String::new();
+        for part in std::iter::once(self.caption.clone())
             .chain(footer)
             .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(". ");
+        {
+            if !description.is_empty() {
+                if !description.ends_with(['.', '!', '?']) {
+                    description.push('.');
+                }
+                description.push(' ');
+            }
+            description.push_str(&part);
+        }
         SemanticNode {
             role: self.role,
             name: self.name.clone(),
