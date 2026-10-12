@@ -305,6 +305,15 @@ fn chart(cx: &Cx) -> ResolvedStyle {
             style.min_height = cx.sp(2.5);
             style
         }
+        Slot::Item => {
+            // A series mark: line width, bar corners, and the fill
+            // opacity of areas and radar shapes.
+            let mut style = cx.base();
+            style.border_width = 2.0;
+            style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            style.opacity = 0.4;
+            style
+        }
         _ => {
             let mut style = muted_text(cx, TextSize::Xs);
             style.min_height = 200.0;

@@ -112,7 +112,10 @@ pub use custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     HostEnv, MeasureContext,
 };
-pub use data::{Avatar, AvatarGroup, Badge, Card, Carousel, DataTable, StatusText};
+pub use data::{
+    Avatar, AvatarGroup, Badge, Card, Carousel, Chart, ChartKind, ChartSeries, DataTable,
+    StatusText,
+};
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldPart, FieldText, Input, InputGroup,
     InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle, ToggleGroup,

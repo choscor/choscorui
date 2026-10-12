@@ -103,6 +103,7 @@ in parentheses is the role that the macOS backend gives to that
 | Data | [`AvatarGroup`](#avatar-and-avatargroup) | Overlapping avatars with a count. |
 | Data | [`Carousel`](#carousel) | Slides that move one at a time and snap. |
 | Data | [`DataTable`](#datatable) | Sorted, filtered, selectable, and paged rows of an item model. |
+| Data | [`Chart`](#chart) | Area, bar, line, pie, radar, and radial charts of app data. |
 | Custom controls | [`CustomControl`](#customcontrol-and-controlhost) | Trait for an application-defined control. |
 | Custom controls | [`ControlHost`](#customcontrol-and-controlhost) | Mounts custom controls on retained nodes. |
 
@@ -2215,6 +2216,45 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 
 [data_table.rs](../crates/choscorui-controls/tests/data_table.rs) pins this
 behavior.
+
+### Chart
+
+- The app gives the categories and the series. `ChartKind` sets the shape:
+  - `Area`, `Bar`, and `Line` are cartesian. Categories sit along the
+    bottom in reading order, and a grid marks the value axis.
+  - `Pie` shows a slice per category from the first series. `donut()`
+    cuts a hole.
+  - `Radar` shows a polygon per series over an axis per category.
+  - `Radial` shows an arc per category from the first series.
+- Series colors are `chart-1` through `chart-5`, then again from
+  `chart-1`. Pie and radial charts color each category.
+- The value axis goes from zero to a round value above the largest value.
+- **Tooltip.** Hover picks the category under the pointer. Arrow keys,
+  Home, and End pick a category while the chart has focus. The tooltip
+  shows the category and its values beside the pick. Escape hides it.
+- `with_legend()` shows the series names, or the category names for pie
+  and radial charts, under the chart.
+- `with_format(format)` formats values in the tooltip and in semantics.
+- Polar charts go clockwise from the top in both directions.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Plot | `Root` | 200 pt high; 480 pt wide without constraints |
+| Grid, radial track | `Track` | 1 pt lines in `border` |
+| Series mark | `Item` | 2 pt lines, radius sm bar tops, 40% fill for areas and radar shapes |
+| Axis labels, legend | `Label`, `Legend` | xs `muted-foreground` text, 6 pt gap |
+| Tooltip | `Content` | `background` fill, 1 pt border at 50% `border`, radius lg, padding 10 by 6 pt, shadow xl, xs text |
+| Tooltip value | `Value` | xs medium `foreground` text |
+| Swatch | `Indicator` | 10 pt square, radius 2 pt |
+
+| Field | `Chart::semantics` |
+| --- | --- |
+| Role | `Image` (AXImage) |
+| Name / value | name / the picked category and its values |
+| Description | the legend entries |
+| Actions | `Focus` |
+
+[chart.rs](../crates/choscorui-controls/tests/chart.rs) pins this behavior.
 
 ### CustomControl and ControlHost
 

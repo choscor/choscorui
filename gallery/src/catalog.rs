@@ -106,6 +106,7 @@ pub const PAGES: &[PageInfo] = &[
     page!("avatar", "Avatar", Data, display::avatar),
     page!("carousel", "Carousel", Data, display::carousel),
     page!("data-table", "Data table", Data, display::data_table),
+    page!("chart", "Chart", Data, display::chart),
     page!("group-box", "Group box", Containers, containers::group_box),
     page!("resizable", "Resizable", Containers, containers::resizable),
     page!(
@@ -229,6 +230,9 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Carousel", "carousel"),
     ("DataTable", "data-table"),
     ("StatusText", "data-table"),
+    ("Chart", "chart"),
+    ("ChartKind", "chart"),
+    ("ChartSeries", "chart"),
     ("CommandItem", "command"),
     ("SheetSide", "sheet"),
     ("RangeSlider", "range-slider"),

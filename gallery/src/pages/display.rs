@@ -1,11 +1,11 @@
 //! Data display components mounted through `ControlHost`: cards,
-//! badges, avatars, carousels, and the data table.
+//! badges, avatars, carousels, the data table, and charts.
 
 use crate::page::{Env, Page};
 use crate::pages::hosted::{HostedPage, Row};
 use choscorui::controls::{
-    Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, Carousel, ControlSize,
-    CustomControl, DataTable, Orientation,
+    Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, Carousel, Chart, ChartKind,
+    ChartSeries, ControlSize, CustomControl, DataTable, Orientation,
 };
 use choscorui::core::{Icon, Image, ItemData, ListStore, NodeId, Role, Tree, Value};
 
@@ -236,6 +236,57 @@ pub fn data_table(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Pa
     HostedPage::build(tree, parent, rows)
 }
 
+pub fn chart(tree: &mut Tree, parent: NodeId, _env: &Env<'_>) -> Box<dyn Page> {
+    let months = || {
+        ["January", "February", "March", "April", "May", "June"]
+            .map(String::from)
+            .to_vec()
+    };
+    let visitors = |kind: ChartKind| {
+        boxed(
+            Chart::new(
+                "Visitors by month",
+                kind,
+                months(),
+                vec![
+                    ChartSeries::new("Desktop", vec![186.0, 305.0, 237.0, 73.0, 209.0, 214.0]),
+                    ChartSeries::new("Mobile", vec![80.0, 200.0, 120.0, 190.0, 130.0, 140.0]),
+                ],
+            )
+            .with_legend(),
+        )
+    };
+    let browsers = |kind: ChartKind| {
+        Chart::new(
+            "Visitors by browser",
+            kind,
+            ["Chrome", "Safari", "Firefox", "Edge", "Other"]
+                .map(String::from)
+                .to_vec(),
+            vec![ChartSeries::new(
+                "Visitors",
+                vec![275.0, 200.0, 187.0, 173.0, 90.0],
+            )],
+        )
+        .with_legend()
+    };
+    let rows: Vec<Row> = vec![
+        ("Bar", vec![visitors(ChartKind::Bar)]),
+        ("Area", vec![visitors(ChartKind::Area)]),
+        ("Line", vec![visitors(ChartKind::Line)]),
+        (
+            "Pie and donut",
+            vec![
+                boxed(browsers(ChartKind::Pie)),
+                boxed(browsers(ChartKind::Pie).donut()),
+            ],
+        ),
+        ("Radar", vec![visitors(ChartKind::Radar)]),
+        ("Radial", vec![boxed(browsers(ChartKind::Radial))]),
+    ];
+    HostedPage::build(tree, parent, rows)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::pages::tests::Harness;
@@ -266,6 +317,14 @@ mod tests {
         let node = h.node("Payments", Some(SemanticRole::Table));
         assert!(h.act(node, SemanticAction::Increment));
         assert!(!h.act(node, SemanticAction::Increment), "two pages");
+    }
+
+    #[test]
+    fn chart_page_charts_take_focus() {
+        let mut h = Harness::new("chart");
+        let node = h.node("Visitors by month", Some(SemanticRole::Image));
+        assert!(h.act(node, SemanticAction::Focus));
+        assert!(h.press(Key::ArrowRight));
     }
 
     #[test]
