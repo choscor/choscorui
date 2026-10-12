@@ -34,7 +34,7 @@ For each sampled metric, the report gives the median, the p95, the maximum, the 
 > **Caution:** The benchmark windows are foreground AppKit windows. Do not run the benchmark at the same time as a smoke test or the gallery.
 
 1. Build the release binaries with `cargo build --release -p choscorui-gallery -p choscorui-bench`.
-   The release profile uses whole-program LTO, one codegen unit, and no symbol table. Compose and the gallery are optimized for size, because each view type compiles its own mount. Core, controls, and the backend keep full optimization. This keeps the gallery inside its size budget.
+   The release profile uses whole-program LTO, one codegen unit, and no symbol table. Compose and the gallery are optimized for size, because each view type compiles its own mount. Controls use the lighter size level `s`. Core and the backend keep full optimization. This keeps the gallery inside its size budget.
 2. Run all scenarios with `target/release/choscorui-bench`.
 
 The driver accepts these options:
