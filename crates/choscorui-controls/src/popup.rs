@@ -6,12 +6,13 @@
 //! reach the control underneath); deactivating the window closes all
 //! popups; closing restores keyboard focus to the popup's owner.
 
+use crate::style::paint_in;
 use crate::style::{
     Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
 };
 use choscorui_core::{
-    DesignTokens, FillRule, LayoutDirection, NodeId, Paint, Path, Point, Rect, SemanticNode,
-    SemanticRole, SemanticState, Size, Tree, TreeError,
+    DesignTokens, FillRule, LayoutDirection, NodeId, Path, Point, Rect, SemanticNode, SemanticRole,
+    SemanticState, Size, Tree, TreeError,
 };
 use std::time::Duration;
 
@@ -321,9 +322,11 @@ impl VisibleTooltip {
             .line_to(Point::new(x, tip))
             .line_to(Point::new(x + half, base))
             .close();
-        let _ = cx
-            .list
-            .fill_path(path, Paint::Solid(arrow.background), FillRule::NonZero);
+        let _ = cx.list.fill_path(
+            path,
+            paint_in(&arrow.background, rect, cx.rtl),
+            FillRule::NonZero,
+        );
         cx.slot(rect, &bubble, |cx, inner| {
             cx.label(inner, &self.text, &bubble, TextAlign::Center);
         });

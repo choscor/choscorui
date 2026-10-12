@@ -35,7 +35,7 @@ impl Recipe for Square {
         style.min_height = tokens.space(9.0);
         style.padding = Edges::axes(tokens.space(3.0), 0.0);
         if query.state.interactive_hover() || query.state.pressed() {
-            style.background = tokens.color(ColorRole::Primary).with_alpha(0.12);
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.12).into();
         }
         if query.state.disabled() {
             style.opacity = 0.5;

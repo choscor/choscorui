@@ -220,7 +220,7 @@ fn visual_recipe_is_swappable_without_changing_text_behavior() {
     impl Recipe for Flat {
         fn resolve(&self, _: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
             Some(ResolvedStyle {
-                background: Color::rgba8(100, 110, 120, 255),
+                background: Color::rgba8(100, 110, 120, 255).into(),
                 ..ResolvedStyle::new(tokens)
             })
         }

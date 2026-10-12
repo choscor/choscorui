@@ -285,7 +285,7 @@ impl CustomControl for RangeSlider {
         if range.opacity < 1.0 {
             let _ = cx.list.push_opacity(range.opacity);
         }
-        fill_shape(cx.list, band, &range.radius, cx.rtl, range.background);
+        fill_shape(cx.list, band, &range.radius, cx.rtl, &range.background);
         if range.opacity < 1.0 {
             let _ = cx.list.pop_opacity();
         }

@@ -37,7 +37,7 @@ fn tabs(cx: &Cx) -> ResolvedStyle {
             if line {
                 style.gap = cx.sp(1.0);
             } else {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
                 style.radius = Corners::all(cx.r(RadiusScale::Lg));
             }
             style
@@ -59,8 +59,9 @@ fn tabs(cx: &Cx) -> ResolvedStyle {
             if s.selected() {
                 style.foreground = cx.c(ColorRole::Foreground);
                 if !line {
-                    style.background =
-                        cx.pick(cx.c(ColorRole::Background), cx.a(ColorRole::Input, 0.3));
+                    style.background = cx
+                        .pick(cx.c(ColorRole::Background), cx.a(ColorRole::Input, 0.3))
+                        .into();
                     if cx.dark() {
                         style.border = cx.c(ColorRole::Input);
                     }
@@ -75,7 +76,7 @@ fn tabs(cx: &Cx) -> ResolvedStyle {
             // The underline of the active tab in the line variant.
             let mut style = cx.base();
             if line && s.selected() {
-                style.background = cx.c(ColorRole::Foreground);
+                style.background = cx.c(ColorRole::Foreground).into();
             }
             style.min_height = 2.0;
             style.min_width = 2.0;
@@ -175,10 +176,10 @@ fn navigation_menu(cx: &Cx) -> ResolvedStyle {
             style.gap = cx.sp(1.5);
             style.min_height = cx.sp(9.0);
             if s.open() || s.selected() {
-                style.background = cx.a(ColorRole::Muted, 0.5);
+                style.background = cx.a(ColorRole::Muted, 0.5).into();
             }
             if s.interactive_hover() || s.focused() {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
             }
             if s.focus_visible() {
                 style.ring = cx.focus_ring();
@@ -218,7 +219,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
     let s = cx.s();
     let variant = SidebarVariant::from_variant(cx.q.variant);
     let accent = |style: &mut ResolvedStyle| {
-        style.background = cx.c(ColorRole::SidebarAccent);
+        style.background = cx.c(ColorRole::SidebarAccent).into();
         style.foreground = cx.c(ColorRole::SidebarAccentForeground);
     };
     match cx.q.slot {
@@ -235,7 +236,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Separator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::SidebarBorder);
+            style.background = cx.c(ColorRole::SidebarBorder).into();
             style.min_height = 1.0;
             style.padding = Edges::axes(cx.sp(2.0), 0.0);
             style
@@ -295,7 +296,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
             let outline =
                 SidebarItemVariant::from_variant(cx.q.variant) == SidebarItemVariant::Outline;
             if outline {
-                style.background = cx.c(ColorRole::Background);
+                style.background = cx.c(ColorRole::Background).into();
                 style.ring = cx.ring(1.0, cx.c(ColorRole::SidebarBorder));
             }
             if s.interactive_hover() || s.pressed() {
@@ -338,7 +339,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Input => {
             let mut style = super::field_box(cx);
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.shadow = choscorui_core::ShadowLayers::NONE;
             style.min_height = cx.sp(8.0);
             super::states(&mut style, cx);
@@ -349,14 +350,14 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
             let mut style = cx.base();
             style.min_width = cx.sp(4.0);
             if s.interactive_hover() {
-                style.background = cx.c(ColorRole::SidebarBorder);
+                style.background = cx.c(ColorRole::SidebarBorder).into();
             }
             style
         }
         Slot::Panel => {
             // The main area beside the sidebar.
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             if variant == SidebarVariant::Inset {
                 style.radius = Corners::all(cx.r(RadiusScale::Xl));
                 style.shadow = cx.shadow(ShadowScale::Sm);
@@ -369,7 +370,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Sidebar);
+            style.background = cx.c(ColorRole::Sidebar).into();
             style.foreground = cx.c(ColorRole::SidebarForeground);
             style.min_width = if cx.q.size == ControlSize::Icon {
                 48.0
@@ -405,7 +406,7 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
         }
         (_, Slot::Separator) => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Border);
+            style.background = cx.c(ColorRole::Border).into();
             style.min_width = 1.0;
             style.min_height = 1.0;
             style.padding = Edges::axes(cx.sp(1.0), cx.sp(1.5));
@@ -414,7 +415,7 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
         (_, Slot::Title) => text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM),
         (ControlKind::StatusBar, _) => {
             let mut style = muted_text(cx, TextSize::Xs);
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
             style.border_sides = Sides::TOP;
@@ -437,14 +438,14 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
             let mut style = cx.base();
             style.min_width = cx.sp(1.0);
             if cx.s().interactive_hover() || cx.s().pressed() {
-                style.background = cx.c(ColorRole::Border);
+                style.background = cx.c(ColorRole::Border).into();
             }
             style.cursor = crate::style::Cursor::ResizeHorizontal;
             style
         }
         (ControlKind::Dock, _) => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Card);
+            style.background = cx.c(ColorRole::Card).into();
             style.foreground = cx.c(ColorRole::CardForeground);
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
@@ -452,7 +453,7 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
             style.border_sides = Sides::BOTTOM;

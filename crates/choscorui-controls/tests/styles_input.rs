@@ -10,6 +10,11 @@ use choscorui_core::{
     ShadowScale, TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -70,7 +75,7 @@ fn assert_input_box(tokens: &DesignTokens, query: StyleQuery) {
         c(ColorRole::Input).with_alpha(0.3),
     );
     assert_eq!(
-        (rest.border, rest.border_width, rest.background),
+        (rest.border, rest.border_width, bg(&rest)),
         (c(ColorRole::Input), 1.0, fill),
         "{} {}",
         query.kind.name(),
@@ -218,7 +223,7 @@ fn input_group_matches_its_reference_table() {
                 "{}",
                 size.name()
             );
-            assert_eq!(action.background, Color::TRANSPARENT);
+            assert_eq!(bg(&action), Color::TRANSPARENT);
         }
     }
 }
@@ -276,7 +281,7 @@ fn input_otp_matches_its_reference_table() {
 
         let caret = get(&tokens, query(Slot::Indicator, VisualState::NONE));
         assert_eq!(
-            (caret.background, caret.min_width, caret.min_height),
+            (bg(&caret), caret.min_width, caret.min_height),
             (c(ColorRole::Foreground), 1.0, 16.0)
         );
         let separator = get(&tokens, query(Slot::Separator, VisualState::NONE));
@@ -292,7 +297,7 @@ fn assert_list(tokens: &DesignTokens, kind: ControlKind) {
     let query = |slot, state| StyleQuery::new(kind, slot).state(state);
     let list = get(tokens, query(Slot::Content, VisualState::NONE));
     assert_eq!(
-        (list.background, list.foreground),
+        (bg(&list), list.foreground),
         (c(ColorRole::Popover), c(ColorRole::PopoverForeground)),
         "{}",
         kind.name()
@@ -323,7 +328,7 @@ fn assert_list(tokens: &DesignTokens, kind: ControlKind) {
 
     let row = get(tokens, query(Slot::Item, VisualState::NONE));
     assert_eq!(
-        (row.min_height, row.radius, row.gap, row.background),
+        (row.min_height, row.radius, row.gap, bg(&row)),
         (
             32.0,
             radius(tokens, RadiusScale::Sm),
@@ -342,7 +347,7 @@ fn assert_list(tokens: &DesignTokens, kind: ControlKind) {
     );
     let highlighted = get(tokens, query(Slot::Item, VisualState::HIGHLIGHTED));
     assert_eq!(
-        (highlighted.background, highlighted.foreground),
+        (bg(&highlighted), highlighted.foreground),
         (c(ColorRole::Accent), c(ColorRole::AccentForeground))
     );
     let disabled = get(tokens, query(Slot::Item, VisualState::DISABLED));
@@ -363,7 +368,7 @@ fn assert_list(tokens: &DesignTokens, kind: ControlKind) {
     assert_eq!(caption.padding, Edges::axes(8.0, 6.0));
     let rule = get(tokens, query(Slot::Separator, VisualState::NONE));
     assert_eq!(
-        (rule.background, rule.min_height, rule.padding.block_start),
+        (bg(&rule), rule.min_height, rule.padding.block_start),
         (c(ColorRole::Border), 1.0, 4.0)
     );
     assert_muted(
@@ -403,14 +408,14 @@ fn select_matches_its_reference_table() {
         let hover = get(&tokens, query(Slot::Trigger).state(VisualState::HOVERED));
         let input = tokens.color(ColorRole::Input);
         assert_eq!(
-            hover.background,
+            bg(&hover),
             pick(&tokens, Color::TRANSPARENT, input.with_alpha(0.5))
         );
         assert_list(&tokens, ControlKind::Select);
         assert_eq!(get(&tokens, query(Slot::Content)).min_height, 0.0);
         let button = get(&tokens, query(Slot::Previous));
         assert_eq!(
-            (button.background, button.min_height, button.padding),
+            (bg(&button), button.min_height, button.padding),
             (
                 tokens.color(ColorRole::Popover),
                 24.0,
@@ -441,7 +446,7 @@ fn native_select_matches_its_reference_table() {
         let hover = get(&tokens, query(Slot::Root).state(VisualState::HOVERED));
         let input = tokens.color(ColorRole::Input);
         assert_eq!(
-            hover.background,
+            bg(&hover),
             pick(&tokens, Color::TRANSPARENT, input.with_alpha(0.5))
         );
         let chevron = get(&tokens, query(Slot::Icon));
@@ -463,7 +468,7 @@ fn combobox_matches_its_reference_table() {
         let search = get(&tokens, query(Slot::Input));
         let faint = c(ColorRole::Input).with_alpha(0.3);
         assert_eq!(
-            (search.background, search.border, search.shadow),
+            (bg(&search), search.border, search.shadow),
             (faint, faint, ShadowLayers::NONE)
         );
         assert_eq!(
@@ -473,7 +478,7 @@ fn combobox_matches_its_reference_table() {
 
         let chip = get(&tokens, query(Slot::Badge));
         assert_eq!(
-            (chip.background, chip.radius, chip.min_height),
+            (bg(&chip), chip.radius, chip.min_height),
             (c(ColorRole::Muted), radius(&tokens, RadiusScale::Sm), 22.0)
         );
         assert_eq!(
@@ -515,11 +520,11 @@ fn date_picker_matches_its_reference_table() {
         );
         assert_eq!(trigger.text, tokens.text(TextSize::Sm, FontWeight::MEDIUM));
         let open = get(&tokens, query(Slot::Root).state(VisualState::OPEN));
-        assert_eq!(open.background, c(ColorRole::Muted));
+        assert_eq!(bg(&open), c(ColorRole::Muted));
 
         let popover = get(&tokens, query(Slot::Content));
         assert_eq!(
-            (popover.background, popover.radius),
+            (bg(&popover), popover.radius),
             (c(ColorRole::Popover), radius(&tokens, RadiusScale::Lg))
         );
         assert_eq!(
@@ -599,11 +604,11 @@ fn field_matches_its_reference_table() {
             )
         );
         let muted = c(ColorRole::Muted).with_alpha(0.5);
-        assert_eq!(card(VisualState::HOVERED).background, muted);
+        assert_eq!(bg(&card(VisualState::HOVERED)), muted);
         let checked = card(VisualState::CHECKED);
         let primary = c(ColorRole::Primary);
         assert_eq!(
-            (checked.background, checked.border),
+            (bg(&checked), checked.border),
             (
                 primary.with_alpha(pick(&tokens, 0.05, 0.1)),
                 primary.with_alpha(pick(&tokens, 0.3, 0.2))
@@ -626,13 +631,13 @@ fn field_matches_its_reference_table() {
         );
         let separator = get(&tokens, query(Slot::Separator));
         assert_eq!(
-            (separator.background, separator.min_height),
+            (bg(&separator), separator.min_height),
             (c(ColorRole::Border), 20.0)
         );
         let chip = get(&tokens, query(Slot::Text));
         assert_muted(&tokens, &chip, TextSize::Sm);
         assert_eq!(
-            (chip.background, chip.padding),
+            (bg(&chip), chip.padding),
             (c(ColorRole::Background), Edges::axes(8.0, 0.0))
         );
     }

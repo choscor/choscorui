@@ -10,6 +10,11 @@ use choscorui_core::{
     ShadowScale, TextSize, Tracking,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -46,7 +51,7 @@ fn text(
 /// The popover surface: fill, hairline ring, and the open motion.
 fn assert_surface(tokens: &DesignTokens, style: &ResolvedStyle, step: RadiusScale) {
     assert_eq!(
-        (style.background, style.foreground),
+        (bg(style), style.foreground),
         (
             tokens.color(ColorRole::Popover),
             tokens.color(ColorRole::PopoverForeground)
@@ -60,7 +65,7 @@ fn assert_surface(tokens: &DesignTokens, style: &ResolvedStyle, step: RadiusScal
 
 fn assert_scrim(style: &ResolvedStyle, motion: u32) {
     assert_eq!(
-        (style.background, style.backdrop_blur, style.motion_ms),
+        (bg(style), style.backdrop_blur, style.motion_ms),
         (Color::BLACK.with_alpha(0.1), 4.0, motion)
     );
 }
@@ -84,7 +89,7 @@ fn assert_close(tokens: &DesignTokens, kind: ControlKind) {
     } else {
         muted
     };
-    assert_eq!(hover.background, fill);
+    assert_eq!(bg(&hover), fill);
 }
 
 #[test]
@@ -122,7 +127,7 @@ fn alert_dialog_matches_its_reference_table() {
         assert_eq!(get(&tokens, query(Slot::Footer)).gap, 8.0);
         let media = get(&tokens, query(Slot::Media));
         assert_eq!(
-            (media.background, media.radius),
+            (bg(&media), media.radius),
             (
                 tokens.color(ColorRole::Muted),
                 radius(&tokens, RadiusScale::Md)
@@ -185,12 +190,7 @@ fn assert_edge_panel(tokens: &DesignTokens, kind: ControlKind) {
     let query = |slot| StyleQuery::new(kind, slot);
     let panel = get(tokens, query(Slot::Root));
     assert_eq!(
-        (
-            panel.background,
-            panel.border,
-            panel.border_width,
-            panel.gap
-        ),
+        (bg(&panel), panel.border, panel.border_width, panel.gap),
         (
             tokens.color(ColorRole::Popover),
             tokens.color(ColorRole::Border),
@@ -277,7 +277,7 @@ fn drawer_matches_its_reference_table() {
         assert_scrim(&get(&tokens, query(Slot::Overlay)), 450);
         let handle = get(&tokens, query(Slot::Handle));
         assert_eq!(
-            (handle.background, handle.radius),
+            (bg(&handle), handle.radius),
             (
                 tokens.color(ColorRole::Muted),
                 radius(&tokens, RadiusScale::Full)
@@ -362,7 +362,7 @@ fn tooltip_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Tooltip, slot);
         let bubble = get(&tokens, query(Slot::Root));
         assert_eq!(
-            (bubble.background, bubble.foreground, bubble.radius),
+            (bg(&bubble), bubble.foreground, bubble.radius),
             (
                 c(ColorRole::Foreground),
                 c(ColorRole::Background),
@@ -381,12 +381,7 @@ fn tooltip_matches_its_reference_table() {
         assert_eq!(bubble.text, tokens.text(TextSize::Xs, FontWeight::NORMAL));
         let arrow = get(&tokens, query(Slot::Indicator));
         assert_eq!(
-            (
-                arrow.background,
-                arrow.min_width,
-                arrow.min_height,
-                arrow.radius
-            ),
+            (bg(&arrow), arrow.min_width, arrow.min_height, arrow.radius),
             (c(ColorRole::Foreground), 10.0, 10.0, Corners::all(2.0))
         );
     }
@@ -410,7 +405,7 @@ fn assert_menu_rows(tokens: &DesignTokens, kind: ControlKind) {
     );
     let highlighted = get(tokens, query(Slot::Item, VisualState::HIGHLIGHTED));
     assert_eq!(
-        (highlighted.background, highlighted.foreground),
+        (bg(&highlighted), highlighted.foreground),
         (c(ColorRole::Accent), c(ColorRole::AccentForeground))
     );
     let destructive = |state| {
@@ -421,7 +416,7 @@ fn assert_menu_rows(tokens: &DesignTokens, kind: ControlKind) {
     };
     let rest = destructive(VisualState::NONE);
     assert_eq!(
-        (rest.foreground, rest.background),
+        (rest.foreground, bg(&rest)),
         (c(ColorRole::Destructive), Color::TRANSPARENT)
     );
     let alpha = if tokens.scheme == ColorScheme::Dark {
@@ -430,7 +425,7 @@ fn assert_menu_rows(tokens: &DesignTokens, kind: ControlKind) {
         0.1
     };
     assert_eq!(
-        destructive(VisualState::HIGHLIGHTED).background,
+        bg(&destructive(VisualState::HIGHLIGHTED)),
         c(ColorRole::Destructive).with_alpha(alpha)
     );
     assert_eq!(
@@ -441,7 +436,7 @@ fn assert_menu_rows(tokens: &DesignTokens, kind: ControlKind) {
     if kind == ControlKind::Menu {
         let open = get(tokens, query(Slot::Trigger, VisualState::OPEN));
         assert_eq!(
-            (open.background, open.foreground),
+            (bg(&open), open.foreground),
             (c(ColorRole::Accent), c(ColorRole::AccentForeground))
         );
     }
@@ -449,7 +444,7 @@ fn assert_menu_rows(tokens: &DesignTokens, kind: ControlKind) {
     assert_eq!((mark.min_width, mark.icon_size), (16.0, 16.0));
     let rule = get(tokens, query(Slot::Separator, VisualState::NONE));
     assert_eq!(
-        (rule.background, rule.min_height, rule.padding),
+        (bg(&rule), rule.min_height, rule.padding),
         (c(ColorRole::Border), 1.0, Edges::axes(-4.0, 4.0))
     );
     let widest = tokens
@@ -519,7 +514,7 @@ fn menubar_matches_its_reference_table() {
             (36.0, Edges::all(4.0), 4.0, radius(&tokens, RadiusScale::Md))
         );
         assert_eq!(
-            (bar.background, bar.border, bar.border_width, bar.shadow),
+            (bg(&bar), bar.border, bar.border_width, bar.shadow),
             (
                 c(ColorRole::Background),
                 c(ColorRole::Border),
@@ -529,7 +524,7 @@ fn menubar_matches_its_reference_table() {
         );
         let title = get(&tokens, query(Slot::Trigger, VisualState::NONE));
         assert_eq!(
-            (title.padding, title.radius, title.background),
+            (title.padding, title.radius, bg(&title)),
             (
                 Edges::axes(8.0, 4.0),
                 radius(&tokens, RadiusScale::Sm),
@@ -543,7 +538,7 @@ fn menubar_matches_its_reference_table() {
             VisualState::HIGHLIGHTED,
         ] {
             let lit = get(&tokens, query(Slot::Trigger, state));
-            assert_eq!(lit.background, c(ColorRole::Muted), "{state}");
+            assert_eq!(bg(&lit), c(ColorRole::Muted), "{state}");
         }
         let disabled = get(&tokens, query(Slot::Trigger, VisualState::DISABLED));
         assert_eq!(disabled.opacity, 0.5);
@@ -570,7 +565,7 @@ fn command_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Command, slot);
         let palette = get(&tokens, query(Slot::Root));
         assert_eq!(
-            (palette.background, palette.foreground),
+            (bg(&palette), palette.foreground),
             (c(ColorRole::Popover), c(ColorRole::PopoverForeground))
         );
         assert_eq!(
@@ -585,7 +580,7 @@ fn command_matches_its_reference_table() {
         let input = get(&tokens, query(Slot::Input));
         let faint = c(ColorRole::Input).with_alpha(0.3);
         assert_eq!(
-            (input.background, input.border, input.border_width),
+            (bg(&input), input.border, input.border_width),
             (faint, faint, 1.0)
         );
         assert_eq!(
@@ -618,7 +613,7 @@ fn command_matches_its_reference_table() {
         for state in [VisualState::HIGHLIGHTED, VisualState::SELECTED] {
             let lit = get(&tokens, query(Slot::Item).state(state));
             assert_eq!(
-                (lit.background, lit.foreground),
+                (bg(&lit), lit.foreground),
                 (c(ColorRole::Muted), c(ColorRole::Foreground)),
                 "{state}"
             );
@@ -640,10 +635,7 @@ fn command_matches_its_reference_table() {
         );
         assert_eq!(lit.foreground, c(ColorRole::Foreground));
         let rule = get(&tokens, query(Slot::Separator));
-        assert_eq!(
-            (rule.background, rule.min_height),
-            (c(ColorRole::Border), 1.0)
-        );
+        assert_eq!((bg(&rule), rule.min_height), (c(ColorRole::Border), 1.0));
         let empty = get(&tokens, query(Slot::Description));
         text(
             &tokens,

@@ -614,6 +614,8 @@ fn variant_fill(
             .variant(variant),
         )
         .background
+        .solid_color()
+        .expect("a solid background")
 }
 
 #[test]

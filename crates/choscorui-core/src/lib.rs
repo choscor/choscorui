@@ -58,8 +58,9 @@ mod theme;
 pub use theme::{
     AccessibilityPreferences, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens,
     FULL_RADIUS, FontFamily, MotionTokens, Oklch, Palette, RadiusScale, RecipeSet, RoleOverrides,
-    ShadowLayers, ShadowScale, Space, TextPreset, TextSize, ThemeError, ThemeInvalidation,
-    ThemeOverride, ThemeResolver, Tracking, TypeSpec, palette_source,
+    ShadowLayers, ShadowScale, ShadowTable, Space, TextPreset, TextSize, ThemeError,
+    ThemeInvalidation, ThemeOverride, ThemeResolver, Tracking, TypeScale, TypeSpec, Typeset,
+    palette_source,
 };
 mod locale;
 pub use locale::{

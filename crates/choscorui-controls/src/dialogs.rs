@@ -400,7 +400,7 @@ impl ColorPicker {
     pub fn paint_swatch(&self, cx: &mut PaintContext<'_>) {
         let frame = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
         let mut swatch = frame;
-        swatch.background = self.color();
+        swatch.background = self.color().into();
         swatch.shadow = choscorui_core::ShadowLayers::NONE;
         let bounds = cx.bounds;
         cx.slot(bounds, &swatch, |_, _| {});

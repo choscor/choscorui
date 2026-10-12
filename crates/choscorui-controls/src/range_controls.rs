@@ -1,3 +1,4 @@
+use crate::style::fill_area;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState, fill_shape,
 };
@@ -376,7 +377,13 @@ impl Slider {
         if faded {
             let _ = cx.list.push_opacity(range.opacity);
         }
-        fill_shape(cx.list, range_rect, &range.radius, cx.rtl, range.background);
+        fill_shape(
+            cx.list,
+            range_rect,
+            &range.radius,
+            cx.rtl,
+            &range.background,
+        );
         if faded {
             let _ = cx.list.pop_opacity();
         }
@@ -573,7 +580,7 @@ pub(crate) fn paint_stepper_field(
             half,
         );
         let down = up.translate(0.0, half);
-        let mut chevron = icon;
+        let mut chevron = icon.clone();
         chevron.icon_size = icon.icon_size.min(half + 2.0);
         cx.icon(up, Icon::ChevronUp, &chevron);
         cx.icon(down, Icon::ChevronDown, &chevron);
@@ -687,7 +694,7 @@ impl Progress {
                 cx.list.push_clip(bar);
             }
             let indicator = Rect::from_xywh(x, bar.origin.y, width, bar.size.height);
-            cx.list.fill_rect(indicator, fill.background);
+            fill_area(cx.list, indicator, cx.rtl, &fill.background);
             let _ = cx.list.pop_clip();
         });
     }

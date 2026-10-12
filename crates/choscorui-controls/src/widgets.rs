@@ -10,13 +10,13 @@ use crate::hosted;
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
-    fill_shape,
+    fill_shape, paint_in,
 };
 use crate::{IntegerRange, NumberInput, STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, Icon, Key, KeyEvent,
-    Locale, Measured, Path, Point, PointerButton, PointerEvent, RadiusScale, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, Tree, grapheme_boundaries,
+    ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, FillRule, Icon, Key, KeyEvent,
+    Locale, Measured, Paint, Path, Point, PointerButton, PointerEvent, RadiusScale, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree, grapheme_boundaries,
 };
 use std::f64::consts::PI;
 
@@ -239,7 +239,7 @@ impl ScrollBar {
             ),
         };
         let rect = content_rect(rect, &bar, cx.rtl);
-        fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
+        fill_shape(cx.list, rect, &thumb.radius, cx.rtl, &thumb.background);
     }
 
     /// The offset of `point` along the bar from the start of `bounds`.
@@ -853,20 +853,22 @@ impl Dial {
             }
             path
         };
-        let stroke = |list: &mut DisplayList, path: Path, color: Color, width: f64| {
-            let _ = list.stroke_path(
-                path,
-                choscorui_core::Paint::Solid(color),
-                choscorui_core::StrokeStyle {
-                    cap: choscorui_core::LineCap::Round,
-                    ..choscorui_core::StrokeStyle::new(width)
-                },
-            );
-        };
+        let rtl = cx.rtl;
+        let stroke =
+            |list: &mut DisplayList, path: Path, paint: &choscorui_core::Paint, width: f64| {
+                let _ = list.stroke_path(
+                    path,
+                    paint_in(paint, circle, rtl),
+                    choscorui_core::StrokeStyle {
+                        cap: choscorui_core::LineCap::Round,
+                        ..choscorui_core::StrokeStyle::new(width)
+                    },
+                );
+            };
         stroke(
             cx.list,
             arc(start, start + self.sweep()),
-            track.background,
+            &track.background,
             track.min_width,
         );
         let angle = self.angle();
@@ -878,7 +880,7 @@ impl Dial {
             stroke(
                 cx.list,
                 arc(start, angle),
-                range.background,
+                &range.background,
                 range.min_width,
             );
             if faded {
@@ -1452,13 +1454,15 @@ impl NumericDisplay {
             cx.style(query(Slot::Value)),
             cx.style(query(Slot::Track)),
         );
-        let (on, off) = (value.foreground, track.background);
+        let on = Paint::Solid(value.foreground);
         cx.slot(cx.bounds, &root, |cx, bounds| {
-            self.paint_segments(cx.list, bounds, on, off)
+            self.paint_segments(cx.list, bounds, &on, &track.background)
         });
     }
 
-    fn paint_segments(&self, list: &mut DisplayList, bounds: Rect, on: Color, off: Color) {
+    /// Fills each lit segment with `on` and each unlit one with `off`,
+    /// both placed on the whole display.
+    fn paint_segments(&self, list: &mut DisplayList, bounds: Rect, on: &Paint, off: &Paint) {
         let text = self.text();
         let cell = bounds.size.width / self.digits as f64;
         let thickness = (cell * 0.12).max(1.0);
@@ -1484,7 +1488,14 @@ impl NumericDisplay {
                 ),
             ];
             for (lit, rect) in Self::segments(character).into_iter().zip(rects) {
-                list.fill_rect(rect, if lit { on } else { off });
+                let paint = if lit { on } else { off };
+                match paint.solid_color() {
+                    Some(color) => list.fill_rect(rect, color),
+                    None => {
+                        let paint = paint_in(paint, bounds, false);
+                        let _ = list.fill_path(Path::rect(rect), paint, FillRule::NonZero);
+                    }
+                }
             }
         }
     }

@@ -480,7 +480,7 @@ impl DropdownMenu {
                         line.size.width,
                         rule.min_height,
                     );
-                    fill_shape(cx.list, line, &rule.radius, cx.rtl, rule.background);
+                    fill_shape(cx.list, line, &rule.radius, cx.rtl, &rule.background);
                 }
                 MenuItem::Action {
                     label,

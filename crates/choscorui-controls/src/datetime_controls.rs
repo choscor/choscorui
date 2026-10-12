@@ -804,7 +804,7 @@ impl Calendar {
                 } else {
                     rect.origin.x
                 };
-                let mut fill = band;
+                let mut fill = band.clone();
                 fill.radius = crate::style::Corners::ZERO;
                 cx.slot(
                     Rect::from_xywh(x, rect.origin.y, half, rect.size.height),

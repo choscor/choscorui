@@ -158,7 +158,7 @@ impl Styles {
     ) -> ResolvedStyle {
         if let Some(style) = self.cache.borrow().get(&(key, query)) {
             self.hits.set(self.hits.get() + 1);
-            return *style;
+            return style.clone();
         }
         self.misses.set(self.misses.get() + 1);
         let style = self.compute(tokens, &query);
@@ -166,7 +166,7 @@ impl Styles {
         if cache.len() >= CACHE_LIMIT {
             cache.clear();
         }
-        cache.insert((key, query), style);
+        cache.insert((key, query), style.clone());
         style
     }
 

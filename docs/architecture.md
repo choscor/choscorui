@@ -95,7 +95,7 @@ Dependencies: `choscorui-core` and `choscorui-controls`.
 
 ### choscorui-render
 
-`choscorui-render` is a reference software renderer. `Raster::render` turns a `DisplayList` into RGBA8 pixels, and `compare` measures the difference between two pixel buffers. The facade test [render_parity.rs](../crates/choscorui/tests/render_parity.rs) compares it with the macOS painter. It does not draw text and returns `RenderError::UnsupportedText` for a text command. It paints `BackdropBlur` with the same `blur_pixels` as the macOS painter.
+`choscorui-render` is a reference software renderer. `Raster::render` turns a `DisplayList` into RGBA8 pixels, and `compare` measures the difference between two pixel buffers. The facade test [render_parity.rs](../crates/choscorui/tests/render_parity.rs) compares it with the macOS painter. It does not draw text and returns `RenderError::UnsupportedText` for a text command. It paints `BackdropBlur` and `BackdropBlurCorners` with the same `blur_pixels` as the macOS painter.
 
 Dependencies: `choscorui-core` only.
 

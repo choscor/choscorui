@@ -9,6 +9,7 @@ use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl,
 use crate::hosted::Reveal;
 use crate::menu::MenuResponse;
 use crate::overlay::menu_popup::{CommandResult, MenuPopup};
+use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
@@ -443,7 +444,7 @@ impl Toolbar {
                             rule.min_height,
                         )
                     };
-                    cx.list.fill_rect(line, rule.background);
+                    fill_area(cx.list, line, cx.rtl, &rule.background);
                 }
                 ToolbarItemKind::Control { .. } | ToolbarItemKind::FlexibleSpace => {}
             }
@@ -676,7 +677,7 @@ impl StatusBar {
                 rule.min_width,
                 (section.size.height - rule.padding.vertical()).max(0.0),
             );
-            cx.list.fill_rect(line, rule.background);
+            fill_area(cx.list, line, cx.rtl, &rule.background);
             cx.label(
                 inset(*section),
                 &self.sections[*index].text,

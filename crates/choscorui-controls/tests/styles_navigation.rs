@@ -11,6 +11,11 @@ use choscorui_core::{
     ShadowScale, TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -78,7 +83,7 @@ fn tabs_matches_its_reference_table() {
         ] {
             let list = get(&tokens, query(variant, Slot::Group, VisualState::NONE));
             assert_eq!(
-                (list.background, list.radius, list.gap),
+                (bg(&list), list.radius, list.gap),
                 (fill, corner, gap),
                 "{}",
                 variant.name()
@@ -131,7 +136,7 @@ fn tabs_matches_its_reference_table() {
             (c(ColorRole::Foreground), tokens.shadow(ShadowScale::Sm))
         );
         assert_eq!(
-            (selected.background, selected.border),
+            (bg(&selected), selected.border),
             pick(
                 &tokens,
                 (c(ColorRole::Background), Color::TRANSPARENT),
@@ -143,7 +148,7 @@ fn tabs_matches_its_reference_table() {
             query(TabsVariant::Line, Slot::Trigger, VisualState::SELECTED),
         );
         assert_eq!(
-            (selected.foreground, selected.background, selected.shadow),
+            (selected.foreground, bg(&selected), selected.shadow),
             (
                 c(ColorRole::Foreground),
                 Color::TRANSPARENT,
@@ -166,7 +171,7 @@ fn tabs_matches_its_reference_table() {
         ] {
             let line = get(&tokens, query(variant, Slot::Indicator, state));
             assert_eq!(
-                (line.background, line.min_height, line.padding),
+                (bg(&line), line.min_height, line.padding),
                 (fill, 2.0, Edges::axes(0.0, -5.0)),
                 "{} {state}",
                 variant.name()
@@ -237,12 +242,7 @@ fn pagination_matches_its_reference_table() {
 
         let page = get(&tokens, query(Slot::Link));
         assert_eq!(
-            (
-                page.min_width,
-                page.min_height,
-                page.background,
-                page.shadow
-            ),
+            (page.min_width, page.min_height, bg(&page), page.shadow),
             (36.0, 36.0, Color::TRANSPARENT, ShadowLayers::NONE)
         );
         // The current page is an outline button.
@@ -273,7 +273,7 @@ fn pagination_matches_its_reference_table() {
         ] {
             let button = get(&tokens, query(slot));
             assert_eq!(
-                (button.min_height, button.padding, button.background),
+                (button.min_height, button.padding, bg(&button)),
                 (36.0, padding, Color::TRANSPARENT),
                 "{}",
                 slot.name()
@@ -310,7 +310,7 @@ fn navigation_menu_matches_its_reference_table() {
                 slot.name()
             );
             assert_eq!(
-                (rest.min_height, rest.gap, rest.motion_ms, rest.background),
+                (rest.min_height, rest.gap, rest.motion_ms, bg(&rest)),
                 (36.0, 6.0, 150, Color::TRANSPARENT)
             );
             let muted = c(ColorRole::Muted);
@@ -319,7 +319,7 @@ fn navigation_menu_matches_its_reference_table() {
                 (VisualState::HOVERED, muted),
                 (VisualState::FOCUSED, muted),
             ] {
-                assert_eq!(look(state).background, fill, "{} {state}", slot.name());
+                assert_eq!(bg(&look(state)), fill, "{} {state}", slot.name());
             }
             assert_eq!(look(VisualState::FOCUS_VISIBLE).ring, focus_ring(&tokens));
             assert_eq!(look(VisualState::DISABLED).opacity, 0.5);
@@ -329,7 +329,7 @@ fn navigation_menu_matches_its_reference_table() {
 
         let panel = get(&tokens, query(Slot::Content));
         assert_eq!(
-            (panel.background, panel.radius, panel.shadow),
+            (bg(&panel), panel.radius, panel.shadow),
             (
                 c(ColorRole::Popover),
                 radius(&tokens, RadiusScale::Lg),
@@ -380,7 +380,7 @@ fn sidebar_matches_its_reference_table() {
             let panel = get(&tokens, query(Slot::Root).size(size));
             assert_eq!(
                 (
-                    panel.background,
+                    bg(&panel),
                     panel.foreground,
                     panel.min_width,
                     panel.motion_ms
@@ -472,15 +472,11 @@ fn sidebar_matches_its_reference_table() {
         );
         for state in [VisualState::HOVERED, VisualState::PRESSED] {
             let lit = item(state);
-            assert_eq!((lit.background, lit.foreground), accent, "{state}");
+            assert_eq!((bg(&lit), lit.foreground), accent, "{state}");
         }
         let selected = item(VisualState::SELECTED);
         assert_eq!(
-            (
-                selected.background,
-                selected.foreground,
-                selected.text.weight
-            ),
+            (bg(&selected), selected.foreground, selected.text.weight),
             (accent.0, accent.1, FontWeight::MEDIUM)
         );
         assert_eq!(item(VisualState::FOCUS_VISIBLE).ring, sidebar_ring);
@@ -491,13 +487,10 @@ fn sidebar_matches_its_reference_table() {
             get(&tokens, query.state(state))
         };
         let rest = outline(VisualState::NONE);
-        assert_eq!(
-            (rest.background, rest.ring),
-            (c(ColorRole::Background), border)
-        );
+        assert_eq!((bg(&rest), rest.ring), (c(ColorRole::Background), border));
         let lit = outline(VisualState::HOVERED);
         assert_eq!(
-            (lit.background, lit.ring),
+            (bg(&lit), lit.ring),
             (
                 accent.0,
                 Some(Ring {
@@ -561,24 +554,19 @@ fn sidebar_matches_its_reference_table() {
 fn assert_ghost_icon(tokens: &DesignTokens, query: StyleQuery) {
     let rest = get(tokens, query);
     assert_eq!(
-        (rest.min_width, rest.min_height, rest.background),
+        (rest.min_width, rest.min_height, bg(&rest)),
         (32.0, 32.0, Color::TRANSPARENT)
     );
     let hover = get(tokens, query.state(VisualState::HOVERED));
     let muted = tokens.color(ColorRole::Muted);
-    assert_eq!(hover.background, pick(tokens, muted, muted.with_alpha(0.5)));
+    assert_eq!(bg(&hover), pick(tokens, muted, muted.with_alpha(0.5)));
 }
 
 /// The 1 pt rule between the parts of a bar.
 fn assert_bar_rule(tokens: &DesignTokens, kind: ControlKind) {
     let rule = get(tokens, StyleQuery::new(kind, Slot::Separator));
     assert_eq!(
-        (
-            rule.background,
-            rule.min_width,
-            rule.min_height,
-            rule.padding
-        ),
+        (bg(&rule), rule.min_width, rule.min_height, rule.padding),
         (
             tokens.color(ColorRole::Border),
             1.0,
@@ -596,12 +584,7 @@ fn toolbar_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Toolbar, slot);
         let bar = get(&tokens, query(Slot::Root));
         assert_eq!(
-            (
-                bar.background,
-                bar.border,
-                bar.border_width,
-                bar.border_sides
-            ),
+            (bg(&bar), bar.border, bar.border_width, bar.border_sides),
             (
                 tokens.color(ColorRole::Background),
                 tokens.color(ColorRole::Border),
@@ -631,12 +614,7 @@ fn status_bar_matches_its_reference_table() {
             FontWeight::NORMAL,
         );
         assert_eq!(
-            (
-                bar.background,
-                bar.border,
-                bar.border_width,
-                bar.border_sides
-            ),
+            (bg(&bar), bar.border, bar.border_width, bar.border_sides),
             (
                 tokens.color(ColorRole::Background),
                 tokens.color(ColorRole::Border),
@@ -657,7 +635,7 @@ fn dock_matches_its_reference_table() {
     for tokens in schemes() {
         let frame = get(&tokens, StyleQuery::new(ControlKind::Dock, Slot::Root));
         assert_eq!(
-            (frame.background, frame.foreground),
+            (bg(&frame), frame.foreground),
             (
                 tokens.color(ColorRole::Card),
                 tokens.color(ColorRole::CardForeground)

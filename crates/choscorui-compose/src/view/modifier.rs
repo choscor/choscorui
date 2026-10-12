@@ -503,7 +503,7 @@ impl Patch {
         // Accessibility wins: high contrast keeps the recipe's colors.
         if tokens.contrast != Contrast::High {
             if let Some(fill) = self.background {
-                style.background = fill.resolve(tokens);
+                style.background = fill.resolve(tokens).into();
             }
             if let Some(fill) = self.foreground {
                 style.foreground = fill.resolve(tokens);

@@ -209,7 +209,7 @@ impl CustomControl for Empty {
         cx.slot(cx.bounds, &root, |cx, _| {
             match &self.media {
                 Some(Media::Icon(icon)) => {
-                    let mut boxed = media;
+                    let mut boxed = media.clone();
                     boxed.padding = Default::default();
                     cx.slot(self.parts[0], &boxed, |cx, inner| {
                         cx.icon(inner, *icon, &media);

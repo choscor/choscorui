@@ -17,6 +17,11 @@ use choscorui_core::{
 use hosted::Harness;
 use std::rc::Rc;
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 /// The default look with other geometry and colors: square corners, more
 /// padding and gap, taller boxes, and no shadows.
 struct Reshaped;
@@ -32,8 +37,8 @@ impl Recipe for Reshaped {
         style.padding.block_end += 2.0;
         style.gap += 4.0;
         style.min_height += 6.0;
-        if style.background.alpha > 0 {
-            style.background = Color::rgba8(40, 140, 230, 255);
+        if bg(&style).alpha > 0 {
+            style.background = Color::rgba8(40, 140, 230, 255).into();
         }
         Some(style)
     }

@@ -11,6 +11,11 @@ use choscorui_core::{
     ShadowScale, TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -83,7 +88,7 @@ fn table_matches_its_reference_table() {
             (VisualState::HIGHLIGHTED, Color::TRANSPARENT),
         ] {
             let lit = get(&tokens, query(Slot::Row, state));
-            assert_eq!(lit.background, fill, "{state}");
+            assert_eq!(bg(&lit), fill, "{state}");
         }
         let header_cell = get(&tokens, query(Slot::HeaderCell, VisualState::NONE));
         text(
@@ -98,7 +103,7 @@ fn table_matches_its_reference_table() {
             (40.0, Edges::axes(8.0, 0.0))
         );
         let hover = get(&tokens, query(Slot::HeaderCell, VisualState::HOVERED));
-        assert_eq!(hover.background, muted.with_alpha(0.5));
+        assert_eq!(bg(&hover), muted.with_alpha(0.5));
         let header = get(&tokens, query(Slot::Header, VisualState::NONE));
         assert_eq!(
             (header.border, header.border_sides),
@@ -122,7 +127,7 @@ fn table_matches_its_reference_table() {
             FontWeight::MEDIUM,
         );
         assert_eq!(
-            (footer.background, footer.border_sides),
+            (bg(&footer), footer.border_sides),
             (muted.with_alpha(0.5), Sides::TOP)
         );
         let caption = get(&tokens, query(Slot::Caption, VisualState::NONE));
@@ -173,7 +178,7 @@ fn list_view_matches_its_reference_table() {
             )
         );
         let selected = get(&tokens, query(Slot::Row, VisualState::SELECTED));
-        assert_eq!(selected.background, c(ColorRole::Muted));
+        assert_eq!(bg(&selected), c(ColorRole::Muted));
         // Selected in a focused view.
         let lit = get(
             &tokens,
@@ -183,7 +188,7 @@ fn list_view_matches_its_reference_table() {
             ),
         );
         assert_eq!(
-            (lit.background, lit.foreground),
+            (bg(&lit), lit.foreground),
             (c(ColorRole::Accent), c(ColorRole::AccentForeground))
         );
         let cell = get(&tokens, query(Slot::Cell, VisualState::NONE));
@@ -209,7 +214,7 @@ fn card_matches_its_reference_table() {
             let query = |slot| StyleQuery::new(ControlKind::Card, slot).size(size);
             let surface = get(&tokens, query(Slot::Root));
             assert_eq!(
-                (surface.background, surface.foreground),
+                (bg(&surface), surface.foreground),
                 (c(ColorRole::Card), c(ColorRole::CardForeground))
             );
             assert_eq!(
@@ -330,7 +335,7 @@ fn badge_matches_its_reference_table() {
             };
             let name = variant.name();
             let rest = look(VisualState::NONE);
-            assert_eq!((rest.background, rest.foreground), (fill, ink), "{name}");
+            assert_eq!((bg(&rest), rest.foreground), (fill, ink), "{name}");
             assert_eq!(
                 (
                     rest.min_height,
@@ -359,7 +364,7 @@ fn badge_matches_its_reference_table() {
             assert_eq!(rest.border, edge, "{name}");
             let hover = look(VisualState::HOVERED);
             assert_eq!(
-                (hover.background, hover.foreground),
+                (bg(&hover), hover.foreground),
                 (hover_fill, hover_ink),
                 "{name} hovered"
             );
@@ -421,7 +426,7 @@ fn avatar_matches_its_reference_table() {
                 );
                 assert_eq!(
                     (
-                        fallback.background,
+                        bg(&fallback),
                         fallback.min_width,
                         fallback.min_height,
                         fallback.icon_size,
@@ -434,7 +439,7 @@ fn avatar_matches_its_reference_table() {
             }
             let dot = get(&tokens, query(Slot::Badge));
             assert_eq!(
-                (dot.background, dot.foreground, dot.ring),
+                (bg(&dot), dot.foreground, dot.ring),
                 (c(ColorRole::Primary), c(ColorRole::PrimaryForeground), ring)
             );
             assert_eq!(
@@ -461,10 +466,7 @@ fn chart_matches_its_reference_table() {
         );
         assert_eq!(plot.min_height, 200.0);
         let grid = get(&tokens, query(Slot::Track));
-        assert_eq!(
-            (grid.background, grid.min_height),
-            (c(ColorRole::Border), 1.0)
-        );
+        assert_eq!((bg(&grid), grid.min_height), (c(ColorRole::Border), 1.0));
         let mark = get(&tokens, query(Slot::Item));
         assert_eq!(
             (mark.border_width, mark.radius, mark.opacity),
@@ -483,7 +485,7 @@ fn chart_matches_its_reference_table() {
         }
         let tooltip = get(&tokens, query(Slot::Content));
         assert_eq!(
-            (tooltip.background, tooltip.border, tooltip.border_width),
+            (bg(&tooltip), tooltip.border, tooltip.border_width),
             (
                 c(ColorRole::Background),
                 c(ColorRole::Border).with_alpha(0.5),
@@ -530,7 +532,7 @@ fn calendar_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Calendar, slot);
         let grid = get(&tokens, query(Slot::Root));
         assert_eq!(
-            (grid.background, grid.padding, grid.gap, grid.min_width),
+            (bg(&grid), grid.padding, grid.gap, grid.min_width),
             (
                 c(ColorRole::Background),
                 Edges::all(12.0),
@@ -550,15 +552,12 @@ fn calendar_matches_its_reference_table() {
             (32.0, 32.0, md, spec)
         );
         assert_eq!(
-            (rest.background, rest.foreground),
+            (bg(&rest), rest.foreground),
             (Color::TRANSPARENT, c(ColorRole::Foreground))
         );
         let muted = c(ColorRole::Muted);
         let hover = day(CalendarDay::Default, VisualState::HOVERED);
-        assert_eq!(
-            hover.background,
-            pick(&tokens, muted, muted.with_alpha(0.5))
-        );
+        assert_eq!(bg(&hover), pick(&tokens, muted, muted.with_alpha(0.5)));
         let pressed = day(CalendarDay::Default, VisualState::PRESSED);
         assert_eq!(pressed.offset_y, 0.0);
         let primary = (c(ColorRole::Primary), c(ColorRole::PrimaryForeground));
@@ -580,14 +579,14 @@ fn calendar_matches_its_reference_table() {
         ] {
             let style = day(variant, VisualState::NONE);
             assert_eq!(
-                ((style.background, style.foreground), style.radius),
+                ((bg(&style), style.foreground), style.radius),
                 (look, corner),
                 "{}",
                 variant.name()
             );
         }
         let selected = day(CalendarDay::Today, VisualState::SELECTED);
-        assert_eq!((selected.background, selected.foreground), primary);
+        assert_eq!((bg(&selected), selected.foreground), primary);
         let focused = day(CalendarDay::Default, VisualState::FOCUS_VISIBLE);
         assert_eq!(
             (focused.border, focused.ring),
@@ -600,7 +599,7 @@ fn calendar_matches_its_reference_table() {
         );
 
         let band = get(&tokens, query(Slot::Range));
-        assert_eq!((band.background, band.radius), (muted, md));
+        assert_eq!((bg(&band), band.radius), (muted, md));
         let weekday = get(&tokens, query(Slot::Weekday));
         assert_eq!(
             (weekday.foreground, weekday.text.size, weekday.min_height),
@@ -621,7 +620,7 @@ fn calendar_matches_its_reference_table() {
         // The month and year dropdowns of the caption.
         let dropdown = get(&tokens, query(Slot::Trigger));
         assert_eq!(
-            (dropdown.border, dropdown.background, dropdown.radius),
+            (dropdown.border, bg(&dropdown), dropdown.radius),
             (c(ColorRole::Input), Color::TRANSPARENT, md)
         );
         assert_eq!(
@@ -679,19 +678,16 @@ fn assert_gauge_parts(tokens: &DesignTokens, kind: ControlKind) {
     let query = |slot, state| StyleQuery::new(kind, slot).state(state);
     let track = get(tokens, query(Slot::Track, VisualState::NONE));
     assert_eq!(
-        (track.background, track.min_width),
+        (bg(&track), track.min_width),
         (c(ColorRole::Muted), 6.0),
         "{}",
         kind.name()
     );
     let range = get(tokens, query(Slot::Range, VisualState::NONE));
-    assert_eq!(
-        (range.background, range.min_width),
-        (c(ColorRole::Primary), 6.0)
-    );
+    assert_eq!((bg(&range), range.min_width), (c(ColorRole::Primary), 6.0));
     let thumb = get(tokens, query(Slot::Thumb, VisualState::NONE));
     assert_eq!(
-        (thumb.background, thumb.border, thumb.border_width),
+        (bg(&thumb), thumb.border, thumb.border_width),
         (Color::WHITE, c(ColorRole::Primary), 1.0)
     );
     assert_eq!(
@@ -752,7 +748,7 @@ fn dial_matches_its_reference_table() {
         let query = |state| StyleQuery::new(ControlKind::Dial, Slot::Root).state(state);
         let face = get(&tokens, query(VisualState::NONE));
         assert_eq!(
-            (face.background, face.border, face.shadow, face.radius),
+            (bg(&face), face.border, face.shadow, face.radius),
             (
                 Color::TRANSPARENT,
                 Color::TRANSPARENT,

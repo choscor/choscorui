@@ -4,6 +4,7 @@
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::feedback::loading::spin;
 use crate::hosted::{self, Press, PressOutcome};
+use crate::style::fill_area;
 use crate::style::{
     AttachmentState, ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery,
     TextAlign, VisualState,
@@ -371,9 +372,11 @@ impl CustomControl for Attachment {
             } else {
                 track.origin.x
             };
-            cx.list.fill_rect(
+            fill_area(
+                cx.list,
                 Rect::from_xywh(x, track.origin.y, filled, track.size.height),
-                bar.background,
+                cx.rtl,
+                &bar.background,
             );
         }
         if self.remove.is_some() {

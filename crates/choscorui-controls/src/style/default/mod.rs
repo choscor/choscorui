@@ -154,7 +154,9 @@ pub(super) fn field_box(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
     style.border = cx.c(ColorRole::Input);
     style.border_width = cx.t.border_width;
-    style.background = cx.pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3));
+    style.background = cx
+        .pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3))
+        .into();
     style.radius = Corners::all(cx.r(RadiusScale::Md));
     style.shadow = cx.shadow(ShadowScale::Xs);
     style.min_height = cx.sp(9.0);
@@ -166,7 +168,7 @@ pub(super) fn field_box(cx: &Cx) -> ResolvedStyle {
 /// a 1 pt hairline ring, and the medium shadow.
 pub(super) fn surface(cx: &Cx, radius: RadiusScale) -> ResolvedStyle {
     let mut style = cx.base();
-    style.background = cx.c(ColorRole::Popover);
+    style.background = cx.c(ColorRole::Popover).into();
     style.foreground = cx.c(ColorRole::PopoverForeground);
     style.ring = cx.ring(1.0, cx.a(ColorRole::Foreground, 0.1));
     style.radius = Corners::all(cx.r(radius));
@@ -190,10 +192,10 @@ pub(super) fn list_item(cx: &Cx, destructive: bool) -> ResolvedStyle {
     if destructive {
         style.foreground = cx.c(ColorRole::Destructive);
         if cx.s().highlighted() {
-            style.background = cx.a(ColorRole::Destructive, cx.pick(0.1, 0.2));
+            style.background = cx.a(ColorRole::Destructive, cx.pick(0.1, 0.2)).into();
         }
     } else if cx.s().highlighted() {
-        style.background = cx.c(ColorRole::Accent);
+        style.background = cx.c(ColorRole::Accent).into();
         style.foreground = cx.c(ColorRole::AccentForeground);
     }
     disabled(&mut style, cx);
@@ -212,7 +214,7 @@ pub(super) fn group_label(cx: &Cx) -> ResolvedStyle {
 /// A 1 pt rule in the border color with `margin` block insets.
 pub(super) fn rule(cx: &Cx, margin: f64) -> ResolvedStyle {
     let mut style = cx.base();
-    style.background = cx.c(ColorRole::Border);
+    style.background = cx.c(ColorRole::Border).into();
     style.min_height = 1.0;
     style.min_width = 1.0;
     style.padding = Edges::axes(-cx.sp(1.0), margin);

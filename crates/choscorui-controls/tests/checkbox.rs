@@ -191,7 +191,7 @@ fn recipe_swap_preserves_checked_value_and_keyboard_behavior() {
     impl Recipe for Red {
         fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
             (query.slot == Slot::Root).then(|| ResolvedStyle {
-                background: Color::rgba8(200, 30, 20, 255),
+                background: Color::rgba8(200, 30, 20, 255).into(),
                 min_width: 20.0,
                 min_height: 20.0,
                 ..ResolvedStyle::new(tokens)

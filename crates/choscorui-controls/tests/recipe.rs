@@ -30,12 +30,12 @@ struct Flat;
 impl Recipe for Flat {
     fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
         let mut style = ResolvedStyle::new(tokens);
-        style.background = Color::rgba8(40, 140, 230, 255);
+        style.background = Color::rgba8(40, 140, 230, 255).into();
         style.radius = Corners::ZERO;
         style.shadow = ShadowLayers::NONE;
         style.min_height = 44.0;
         if query.state.pressed() {
-            style.background = Color::rgba8(20, 95, 175, 255);
+            style.background = Color::rgba8(20, 95, 175, 255).into();
         }
         Some(style)
     }

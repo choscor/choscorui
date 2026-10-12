@@ -77,21 +77,29 @@ fn bubble(cx: &Cx) -> ResolvedStyle {
             let foreground = cx.c(ColorRole::Foreground);
             match variant {
                 BubbleVariant::Default => {
-                    style.background = cx.a(ColorRole::Primary, if hover { 0.8 } else { 1.0 });
+                    style.background = cx
+                        .a(ColorRole::Primary, if hover { 0.8 } else { 1.0 })
+                        .into();
                     style.foreground = cx.c(ColorRole::PrimaryForeground);
                 }
                 BubbleVariant::Secondary => {
-                    style.background = cx.c(ColorRole::Secondary);
-                    if hover {
-                        style.background = style.background.mix(foreground, 0.05);
+                    let secondary = cx.c(ColorRole::Secondary);
+                    style.background = if hover {
+                        secondary.mix(foreground, 0.05)
+                    } else {
+                        secondary
                     }
+                    .into();
                     style.foreground = cx.c(ColorRole::SecondaryForeground);
                 }
                 BubbleVariant::Muted => {
-                    style.background = cx.c(ColorRole::Muted);
-                    if hover {
-                        style.background = style.background.mix(foreground, 0.05);
+                    let muted = cx.c(ColorRole::Muted);
+                    style.background = if hover {
+                        muted.mix(foreground, 0.05)
+                    } else {
+                        muted
                     }
+                    .into();
                 }
                 BubbleVariant::Tinted => {
                     style.background = match (cx.dark(), hover) {
@@ -99,14 +107,16 @@ fn bubble(cx: &Cx) -> ResolvedStyle {
                         (false, true) => tint(primary, 0.88, 0.5),
                         (true, false) => tint(primary, 0.3, 0.4),
                         (true, true) => tint(primary, 0.35, 0.5),
-                    };
+                    }
+                    .into();
                 }
                 BubbleVariant::Outline => {
-                    style.background = cx.c(ColorRole::Background);
+                    style.background = cx.c(ColorRole::Background).into();
                     style.border = cx.c(ColorRole::Border);
                     if hover {
-                        style.background =
-                            cx.pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Input, 0.3));
+                        style.background = cx
+                            .pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Input, 0.3))
+                            .into();
                     }
                 }
                 BubbleVariant::Ghost => {
@@ -114,8 +124,9 @@ fn bubble(cx: &Cx) -> ResolvedStyle {
                     style.padding = Edges::ZERO;
                     style.border_width = 0.0;
                     if hover {
-                        style.background =
-                            cx.pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Muted, 0.5));
+                        style.background = cx
+                            .pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Muted, 0.5))
+                            .into();
                     }
                 }
                 BubbleVariant::Destructive => {
@@ -124,7 +135,7 @@ fn bubble(cx: &Cx) -> ResolvedStyle {
                         (true, true) => 0.3,
                         _ => 0.2,
                     };
-                    style.background = cx.a(ColorRole::Destructive, alpha);
+                    style.background = cx.a(ColorRole::Destructive, alpha).into();
                     style.foreground = cx.c(ColorRole::Destructive);
                 }
             }
@@ -134,7 +145,7 @@ fn bubble(cx: &Cx) -> ResolvedStyle {
         Slot::Badge => {
             // The reactions pill.
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL);
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.ring = cx.ring(3.0, cx.c(ColorRole::Card));
             style.gap = cx.sp(1.0);
@@ -166,7 +177,7 @@ fn attachment(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Media => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.foreground = cx.c(ColorRole::Foreground);
             let (width, radius, icon) = match size {
                 ControlSize::Sm => (8.0, RadiusScale::Lg, 16.0),
@@ -204,7 +215,7 @@ fn attachment(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Progress => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Primary);
+            style.background = cx.c(ColorRole::Primary).into();
             style.min_height = 2.0;
             style
         }
@@ -267,7 +278,7 @@ fn marker(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Separator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Border);
+            style.background = cx.c(ColorRole::Border).into();
             style.min_height = 1.0;
             style.padding = Edges::axes(cx.sp(1.0), 0.0);
             style
@@ -320,17 +331,19 @@ fn questionnaire(cx: &Cx) -> ResolvedStyle {
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL);
             style.border = cx.c(ColorRole::Input);
             style.border_width = cx.t.border_width;
-            style.background = cx.pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.2));
+            style.background = cx
+                .pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.2))
+                .into();
             style.radius = Corners::all(cx.r(RadiusScale::Md));
             style.gap = cx.sp(3.0);
             style.padding = Edges::axes(cx.sp(4.0), cx.sp(3.5));
             style.shadow = cx.shadow(ShadowScale::Xs);
             if s.interactive_hover() {
-                style.background = cx.a(ColorRole::Muted, 0.5);
+                style.background = cx.a(ColorRole::Muted, 0.5).into();
             }
             if s.checked() {
                 style.border = cx.a(ColorRole::Primary, 0.4);
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
             }
             if s.invalid() {
                 style.border = cx.c(ColorRole::Destructive);
@@ -343,14 +356,16 @@ fn questionnaire(cx: &Cx) -> ResolvedStyle {
             let mut style = cx.base();
             style.border = cx.c(ColorRole::Input);
             style.border_width = cx.t.border_width;
-            style.background = cx.pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3));
+            style.background = cx
+                .pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3))
+                .into();
             style.min_width = cx.sp(4.0);
             style.min_height = cx.sp(4.0);
             style.radius = Corners::all(4.0);
             style.icon_size = 14.0;
             style.foreground = cx.c(ColorRole::PrimaryForeground);
             if s.checked() {
-                style.background = cx.c(ColorRole::Primary);
+                style.background = cx.c(ColorRole::Primary).into();
                 style.border = cx.c(ColorRole::Primary);
             }
             style
@@ -359,7 +374,7 @@ fn questionnaire(cx: &Cx) -> ResolvedStyle {
             let mut style = cx.base();
             style.border = cx.c(ColorRole::Input);
             style.border_width = cx.t.border_width;
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.foreground = cx.c(ColorRole::MutedForeground);
             style.min_width = cx.sp(5.0);
             style.min_height = cx.sp(5.0);

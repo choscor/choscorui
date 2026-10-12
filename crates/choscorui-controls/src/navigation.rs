@@ -442,7 +442,7 @@ impl ScrollArea {
         .flatten()
         {
             let rect = content_rect(geometry.thumb, &bar, cx.rtl);
-            fill_shape(cx.list, rect, &thumb.radius, cx.rtl, thumb.background);
+            fill_shape(cx.list, rect, &thumb.radius, cx.rtl, &thumb.background);
         }
         let root = cx.style(query(Slot::Root));
         if root.ring.is_some() {

@@ -131,6 +131,12 @@ impl Shadow {
     /// out the casting shape (`rect` with `radius`); an inset shadow is
     /// clipped to it.
     pub fn mask(&self, rect: Rect, radius: f64, scale: f64) -> Option<crate::Image> {
+        self.mask_corners(rect, [radius; 4], scale)
+    }
+
+    /// [`Shadow::mask`] for a casting shape with its own radius per
+    /// corner, clockwise from the top left.
+    pub fn mask_corners(&self, rect: Rect, radii: [f64; 4], scale: f64) -> Option<crate::Image> {
         let bounds = self.bounds(rect);
         let width = (bounds.size.width * scale).ceil().max(1.0) as u32;
         let height = (bounds.size.height * scale).ceil().max(1.0) as u32;
@@ -144,11 +150,13 @@ impl Shadow {
             } else {
                 -self.spread
             });
-        let shape_radius = if self.inset {
-            (radius - self.spread).max(0.0)
-        } else {
-            (radius + self.spread).max(0.0)
-        };
+        let shape_radii = radii.map(|radius| {
+            if self.inset {
+                (radius - self.spread).max(0.0)
+            } else {
+                (radius + self.spread).max(0.0)
+            }
+        });
         let sigma = (self.blur / 2.0).max(1e-6) * std::f64::consts::SQRT_2;
         let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
         for y in 0..height {
@@ -157,8 +165,8 @@ impl Shadow {
                     bounds.min_x() + (f64::from(x) + 0.5) / scale,
                     bounds.min_y() + (f64::from(y) + 0.5) / scale,
                 );
-                let inside_caster = rounded_rect_distance(rect, radius, p) < 0.0;
-                let d = rounded_rect_distance(shape, shape_radius, p);
+                let inside_caster = rounded_rect_distance(rect, radii, p) < 0.0;
+                let d = rounded_rect_distance(shape, shape_radii, p);
                 let coverage = match (self.inset, inside_caster) {
                     (false, true) | (true, false) => 0.0,
                     (false, false) => 0.5 * (1.0 - erf(d / sigma)),
@@ -177,13 +185,21 @@ impl Shadow {
     }
 }
 
-/// Signed distance to a rounded rectangle (negative inside).
-fn rounded_rect_distance(rect: Rect, radius: f64, p: Point) -> f64 {
+/// Signed distance to a rounded rectangle (negative inside), with the
+/// radius of the corner in the quadrant of `p`. `radii` go clockwise from
+/// the top left.
+fn rounded_rect_distance(rect: Rect, radii: [f64; 4], p: Point) -> f64 {
+    let c = rect.center();
+    let radius = match (p.x >= c.x, p.y >= c.y) {
+        (false, false) => radii[0],
+        (true, false) => radii[1],
+        (true, true) => radii[2],
+        (false, true) => radii[3],
+    };
     let r = radius
         .min(rect.size.width / 2.0)
         .min(rect.size.height / 2.0)
         .max(0.0);
-    let c = rect.center();
     let qx = (p.x - c.x).abs() - (rect.size.width / 2.0 - r);
     let qy = (p.y - c.y).abs() - (rect.size.height / 2.0 - r);
     let outside = (qx.max(0.0).powi(2) + qy.max(0.0).powi(2)).sqrt();
@@ -247,6 +263,13 @@ pub enum DisplayCommand {
         radius: f64,
         shadow: Shadow,
     },
+    /// [`DisplayCommand::DrawShadow`] for a shape with its own radius per
+    /// corner, clockwise from the top left.
+    DrawShadowCorners {
+        rect: Rect,
+        radii: [f64; 4],
+        shadow: Shadow,
+    },
     DrawText {
         baseline: Point,
         text: String,
@@ -271,6 +294,13 @@ pub enum DisplayCommand {
     BackdropBlur {
         rect: Rect,
         radius: f64,
+        blur: f64,
+    },
+    /// [`DisplayCommand::BackdropBlur`] inside a rectangle with its own
+    /// radius per corner, clockwise from the top left.
+    BackdropBlurCorners {
+        rect: Rect,
+        radii: [f64; 4],
         blur: f64,
     },
     PushClip(Rect),
@@ -464,6 +494,44 @@ impl DisplayList {
             radius,
             shadow,
         });
+        Ok(())
+    }
+
+    /// A shadow of a rectangle with its own radius per corner, clockwise
+    /// from the top left; see [`DisplayCommand::DrawShadowCorners`].
+    pub fn draw_shadow_corners(
+        &mut self,
+        rect: Rect,
+        radii: [f64; 4],
+        shadow: Shadow,
+    ) -> Result<(), DisplayListError> {
+        validate_radii(radii)?;
+        if !rect.is_finite() || !shadow.is_valid() {
+            return Err(DisplayListError::InvalidGeometry);
+        }
+        self.commands.push(DisplayCommand::DrawShadowCorners {
+            rect,
+            radii,
+            shadow,
+        });
+        Ok(())
+    }
+
+    /// Blurs the painted surface inside `rect` with its own radius per
+    /// corner; see [`DisplayCommand::BackdropBlurCorners`].
+    pub fn backdrop_blur_corners(
+        &mut self,
+        rect: Rect,
+        radii: [f64; 4],
+        blur: f64,
+    ) -> Result<(), DisplayListError> {
+        validate_radii(radii)?;
+        validate_positive(blur)?;
+        if !rect.is_finite() {
+            return Err(DisplayListError::InvalidGeometry);
+        }
+        self.commands
+            .push(DisplayCommand::BackdropBlurCorners { rect, radii, blur });
         Ok(())
     }
 
@@ -808,9 +876,11 @@ fn draw_bounds(command: &DisplayCommand) -> Option<Rect> {
             inflate(path.bounds(), style.width * 2.0)
         }
         DisplayCommand::DrawImage { rect, .. } => *rect,
-        DisplayCommand::DrawShadow { rect, shadow, .. } => shadow.bounds(*rect),
+        DisplayCommand::DrawShadow { rect, shadow, .. }
+        | DisplayCommand::DrawShadowCorners { rect, shadow, .. } => shadow.bounds(*rect),
         // The blur reads up to three standard deviations outside `rect`.
-        DisplayCommand::BackdropBlur { rect, blur, .. } => inflate(*rect, blur * 3.0),
+        DisplayCommand::BackdropBlur { rect, blur, .. }
+        | DisplayCommand::BackdropBlurCorners { rect, blur, .. } => inflate(*rect, blur * 3.0),
         DisplayCommand::DrawText {
             baseline,
             text,
@@ -907,6 +977,14 @@ fn hash_paint(paint: &Paint, hasher: &mut impl Hasher) {
     }
 }
 
+fn hash_shadow(shadow: &Shadow, hasher: &mut impl Hasher) {
+    hash_point(shadow.offset, hasher);
+    hash_f64(shadow.blur, hasher);
+    hash_f64(shadow.spread, hasher);
+    shadow.inset.hash(hasher);
+    shadow.color.hash(hasher);
+}
+
 fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
     std::mem::discriminant(command).hash(hasher);
     match command {
@@ -970,11 +1048,16 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
         } => {
             hash_rect(*rect, hasher);
             hash_f64(*radius, hasher);
-            hash_point(shadow.offset, hasher);
-            hash_f64(shadow.blur, hasher);
-            hash_f64(shadow.spread, hasher);
-            shadow.inset.hash(hasher);
-            shadow.color.hash(hasher);
+            hash_shadow(shadow, hasher);
+        }
+        DisplayCommand::DrawShadowCorners {
+            rect,
+            radii,
+            shadow,
+        } => {
+            hash_rect(*rect, hasher);
+            radii.iter().for_each(|radius| hash_f64(*radius, hasher));
+            hash_shadow(shadow, hasher);
         }
         DisplayCommand::DrawText {
             baseline,
@@ -1008,6 +1091,11 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             hash_f64(*radius, hasher);
             hash_f64(*blur, hasher);
         }
+        DisplayCommand::BackdropBlurCorners { rect, radii, blur } => {
+            hash_rect(*rect, hasher);
+            radii.iter().for_each(|radius| hash_f64(*radius, hasher));
+            hash_f64(*blur, hasher);
+        }
         DisplayCommand::PushClip(rect) => hash_rect(*rect, hasher),
         DisplayCommand::PushClipPath(path) => hash_path(path, hasher),
         DisplayCommand::PushOpacity(opacity) => hash_f64(*opacity, hasher),
@@ -1034,4 +1122,8 @@ fn validate_radius(radius: f64) -> Result<(), DisplayListError> {
     } else {
         Err(DisplayListError::InvalidGeometry)
     }
+}
+
+fn validate_radii(radii: [f64; 4]) -> Result<(), DisplayListError> {
+    radii.into_iter().try_for_each(validate_radius)
 }

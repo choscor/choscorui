@@ -52,7 +52,7 @@ fn alert(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Card);
+            style.background = cx.c(ColorRole::Card).into();
             style.foreground = cx.c(tone);
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
@@ -98,7 +98,7 @@ fn toast(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Popover);
+            style.background = cx.c(ColorRole::Popover).into();
             style.foreground = cx.c(ColorRole::PopoverForeground);
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
@@ -118,7 +118,7 @@ fn progress(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Indicator | Slot::Range => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Primary);
+            style.background = cx.c(ColorRole::Primary).into();
             style.motion_ms = cx.motion(150);
             style
         }
@@ -131,7 +131,7 @@ fn progress(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.min_height = cx.sp(1.5);
             style
@@ -141,7 +141,7 @@ fn progress(cx: &Cx) -> ResolvedStyle {
 
 fn skeleton(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
-    style.background = cx.c(ColorRole::Muted);
+    style.background = cx.c(ColorRole::Muted).into();
     style.radius = Corners::all(cx.r(RadiusScale::Md));
     // The pulse: 2 s per cycle, still with reduced motion.
     style.motion_ms = cx.motion(2000);
@@ -168,7 +168,7 @@ fn empty(cx: &Cx) -> ResolvedStyle {
             let mut style = cx.base();
             style.padding.block_end = cx.sp(2.0);
             if EmptyMediaVariant::from_variant(cx.q.variant) == EmptyMediaVariant::Icon {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
                 style.foreground = cx.c(ColorRole::Foreground);
                 style.min_width = cx.sp(10.0);
                 style.min_height = cx.sp(10.0);

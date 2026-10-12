@@ -8,11 +8,16 @@ use choscorui_controls::{
     Switch, VisualState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, LayoutDirection, Point, RecipeSet,
-    ThemeResolver,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, GradientStop, LayoutDirection,
+    Paint, Point, RecipeSet, ThemeResolver,
 };
 use hosted::{Harness, rounded_fills};
 use std::rc::Rc;
+
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
 
 /// Half of the default 150 ms duration.
 const HALF: f64 = 0.075;
@@ -59,8 +64,8 @@ fn hovered() -> Harness {
 #[test]
 fn hover_blends_at_half_duration_and_completes_at_the_duration() {
     let mut h = hovered();
-    let rest = root_style(&h, VisualState::NONE).background;
-    let hover = root_style(&h, VisualState::HOVERED).background;
+    let rest = bg(&root_style(&h, VisualState::NONE));
+    let hover = bg(&root_style(&h, VisualState::HOVERED));
     assert_ne!(rest.alpha, hover.alpha, "the hover look changes the alpha");
     assert_eq!(background(&h.paint()), rest, "the blend starts at rest");
     assert!(h.host.animating(&h.tree, 0.0));
@@ -93,7 +98,7 @@ fn reduced_motion_changes_the_style_at_once() {
     h.paint();
     let center = h.bounds().center();
     h.hover(center);
-    let hover = root_style(&h, VisualState::HOVERED).background;
+    let hover = bg(&root_style(&h, VisualState::HOVERED));
     assert_eq!(background(&h.paint()), hover);
     assert!(!h.host.animating(&h.tree, 0.0));
     assert_eq!(h.host.transition_stats().running, 0);
@@ -119,7 +124,7 @@ fn no_record_stays_after_the_transition_of_a_cold_node() {
     assert!(h.host.advance(&mut h.tree, 2.0 * FULL), "the blend ended");
     assert_eq!(h.host.transition_stats().nodes, 0);
     h.set_time(2.0 * FULL);
-    let rest = root_style(&h, VisualState::NONE).background;
+    let rest = bg(&root_style(&h, VisualState::NONE));
     assert_eq!(background(&h.paint()), rest);
     assert_eq!(h.host.transition_stats().nodes, 0);
 }
@@ -142,7 +147,7 @@ impl Recipe for Flat {
     fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
         (query.slot == Slot::Root).then(|| {
             let mut style = ResolvedStyle::new(tokens);
-            style.background = self.0;
+            style.background = self.0.into();
             style.radius = choscorui_controls::Corners::all(4.0);
             style
         })
@@ -167,6 +172,62 @@ fn a_recipe_swap_during_a_transition_eases_to_the_new_style() {
     h.set_time(HALF + FULL);
     assert_eq!(background(&h.paint()), flat);
     assert_eq!(h.host.transition_stats().running, 0);
+}
+
+/// Paints every button background in a gradient from `0` to `1`.
+struct Gradient(Color, Color);
+
+impl Recipe for Gradient {
+    fn resolve(&self, query: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
+        (query.slot == Slot::Root).then(|| {
+            let mut style = ResolvedStyle::new(tokens);
+            style.background = Paint::LinearGradient {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(1.0, 0.0),
+                stops: vec![
+                    GradientStop {
+                        offset: 0.0,
+                        color: self.0,
+                    },
+                    GradientStop {
+                        offset: 1.0,
+                        color: self.1,
+                    },
+                ],
+            };
+            style.radius = choscorui_controls::Corners::all(4.0);
+            style
+        })
+    }
+}
+
+/// The paint of the first path fill.
+fn path_paint(list: &DisplayList) -> Option<Paint> {
+    list.commands().iter().find_map(|command| match command {
+        DisplayCommand::FillPath { paint, .. } => Some(paint.clone()),
+        _ => None,
+    })
+}
+
+#[test]
+fn a_change_to_a_gradient_shows_the_gradient_at_once() {
+    let mut h = hovered();
+    h.paint();
+    h.set_time(HALF);
+    let (from, to) = (Color::rgba8(0, 0, 200, 255), Color::rgba8(200, 0, 0, 255));
+    h.styles.set_recipe(
+        RecipeSet::DEFAULT,
+        ControlKind::Button,
+        Rc::new(Gradient(from, to)),
+    );
+    let bounds = h.bounds();
+    let Some(Paint::LinearGradient { start, end, stops }) = path_paint(&h.paint()) else {
+        panic!("the button fills its background with the gradient");
+    };
+    // The unit square of the box maps onto the button bounds.
+    assert_eq!(start, bounds.origin);
+    assert_eq!(end, Point::new(bounds.max_x(), bounds.origin.y));
+    assert_eq!((stops[0].color, stops[1].color), (from, to));
 }
 
 #[test]

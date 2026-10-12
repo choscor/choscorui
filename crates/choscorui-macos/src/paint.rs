@@ -205,9 +205,17 @@ pub(super) unsafe fn paint_commands(context: Id, dirty: NSRect, list: &DisplayLi
                     rect,
                     radius,
                     shadow,
-                } => draw_shadow(context, *rect, *radius, *shadow),
+                } => draw_shadow(context, *rect, [*radius; 4], *shadow),
+                DisplayCommand::DrawShadowCorners {
+                    rect,
+                    radii,
+                    shadow,
+                } => draw_shadow(context, *rect, *radii, *shadow),
                 DisplayCommand::BackdropBlur { rect, radius, blur } => {
-                    backdrop::backdrop_blur(context, *rect, *radius, *blur);
+                    backdrop::backdrop_blur(context, *rect, [*radius; 4], *blur);
+                }
+                DisplayCommand::BackdropBlurCorners { rect, radii, blur } => {
+                    backdrop::backdrop_blur(context, *rect, *radii, *blur);
                 }
                 DisplayCommand::DrawText {
                     baseline,
@@ -506,10 +514,10 @@ thread_local! {
     /// Blurred masks by everything but position: a mask is translation
     /// invariant, and recomputing it per pixel each frame dominated replay
     /// of shadowed controls.
-    static SHADOW_MASKS: RefCell<HashMap<[u64; 10], Image>> = RefCell::new(HashMap::new());
+    static SHADOW_MASKS: RefCell<HashMap<[u64; 13], Image>> = RefCell::new(HashMap::new());
 }
 
-unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
+unsafe fn draw_shadow(context: Id, rect: Rect, radii: [f64; 4], shadow: Shadow) {
     // The user-to-device transform includes the backing scale and every
     // pushed transform, so the mask stays sharp on 2x displays.
     let scale = unsafe { device_scale(context) }.max(1.0);
@@ -517,7 +525,10 @@ unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
     let key = [
         rect.size.width.to_bits(),
         rect.size.height.to_bits(),
-        radius.to_bits(),
+        radii[0].to_bits(),
+        radii[1].to_bits(),
+        radii[2].to_bits(),
+        radii[3].to_bits(),
         shadow.offset.x.to_bits(),
         shadow.offset.y.to_bits(),
         shadow.blur.to_bits(),
@@ -531,7 +542,7 @@ unsafe fn draw_shadow(context: Id, rect: Rect, radius: f64, shadow: Shadow) {
         if let Some(mask) = cache.get(&key) {
             return Some(mask.clone());
         }
-        let mask = shadow.mask(rect, radius, scale)?;
+        let mask = shadow.mask_corners(rect, radii, scale)?;
         if cache.len() >= SHADOW_CACHE_LIMIT {
             cache.clear();
         }

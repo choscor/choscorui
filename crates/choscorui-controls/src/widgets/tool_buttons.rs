@@ -5,6 +5,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::{self, Press, PressOutcome};
+use crate::style::fill_area;
 use crate::style::{
     ControlKind, ItemVariant, Orientation, PaintContext, Slot, StyleQuery, TextAlign,
     ToggleVariant, VisualState, content_rect, join_segment,
@@ -210,8 +211,8 @@ impl ToolButton {
                 rule.min_width,
                 (rect.size.height - 2.0 * inset).max(0.0),
             );
-            cx.list.fill_rect(line, rule.background);
-            let mut chevron = style;
+            fill_area(cx.list, line, cx.rtl, &rule.background);
+            let mut chevron = style.clone();
             chevron.icon_size = style.icon_size.min(arrow);
             cx.icon(rect, Icon::ChevronDown, &chevron);
         }

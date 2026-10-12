@@ -2,7 +2,7 @@
 
 use super::{Chart, ChartKind, chart_color};
 use crate::custom::MeasureContext;
-use crate::style::{PaintContext, ResolvedStyle, Slot, TextAlign};
+use crate::style::{PaintContext, ResolvedStyle, Slot, TextAlign, fill_area, paint_in};
 use choscorui_core::{Color, FillRule, LineJoin, Paint, Path, Point, Rect, Size, StrokeStyle};
 use std::f64::consts::TAU;
 
@@ -29,6 +29,18 @@ pub(super) struct Plot {
     /// The tooltip size for each category.
     tooltips: Vec<Size>,
     viewport: Rect,
+}
+
+impl Plot {
+    /// The square around the circle of a radial or radar chart.
+    fn disc(&self) -> Rect {
+        Rect::from_xywh(
+            self.center.x - self.radius,
+            self.center.y - self.radius,
+            self.radius * 2.0,
+            self.radius * 2.0,
+        )
+    }
 }
 
 /// The point at `radius` from `center` at `angle` radians clockwise from
@@ -376,7 +388,7 @@ impl Chart {
                 area.size.width,
                 thickness,
             );
-            cx.list.fill_rect(line, track.background);
+            fill_area(cx.list, line, cx.rtl, &track.background);
         }
     }
 
@@ -472,7 +484,7 @@ impl Chart {
                 thickness,
                 area.size.height,
             );
-            cx.list.fill_rect(cursor, track.background);
+            fill_area(cx.list, cursor, cx.rtl, &track.background);
             for index in 0..series {
                 let center = Point::new(x, self.y(self.value(index, active)));
                 self.dot(
@@ -539,7 +551,7 @@ impl Chart {
         if count < 3 {
             return;
         }
-        let grid = Paint::Solid(track.background);
+        let grid = paint_in(&track.background, plot.disc(), cx.rtl);
         for level in 1..=TICKS {
             let radius = plot.radius * level as f64 / TICKS as f64;
             let points: Vec<Point> = (0..count)
@@ -606,9 +618,8 @@ impl Chart {
         for category in 0..self.categories.len() {
             let (inner, outer) = self.ring(category);
             let ring = segment(plot.center, inner, outer, 0.0, TAU);
-            let _ = cx
-                .list
-                .fill_path(ring, Paint::Solid(track.background), FillRule::NonZero);
+            let paint = paint_in(&track.background, plot.disc(), cx.rtl);
+            let _ = cx.list.fill_path(ring, paint, FillRule::NonZero);
             let sweep = (self.value(0, category) / plot.top).clamp(0.0, 1.0) * TAU;
             if sweep <= 0.0 {
                 continue;
@@ -673,8 +684,8 @@ impl Chart {
     }
 
     fn swatch(&self, cx: &mut PaintContext<'_>, rect: Rect, style: &ResolvedStyle, color: Color) {
-        let mut style = *style;
-        style.background = color;
+        let mut style = style.clone();
+        style.background = color.into();
         cx.slot(rect, &style, |_, _| {});
     }
 

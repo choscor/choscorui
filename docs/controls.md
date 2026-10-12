@@ -228,7 +228,9 @@ Each section gives the behavior, then the semantics of the node that the
 control publishes. A dash means that the field is empty.
 
 The value tables give the default recipe of each `ControlKind`. Sizes are in
-points, and colors are theme roles. A `<kind>_matches_its_reference_table`
+points, and colors are theme roles. Each default fill is a solid `Paint`. A
+custom recipe can give a gradient fill, as
+[Theming](theming.md#style-recipes) tells. A `<kind>_matches_its_reference_table`
 test in a `styles_*.rs` file of
 [the controls tests](../crates/choscorui-controls/tests/) pins each table.
 The `painted_<group>.txt` golden files of the

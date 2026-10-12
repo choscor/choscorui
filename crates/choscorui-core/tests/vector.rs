@@ -1,6 +1,6 @@
 use choscorui_core::{
     Color, DisplayList, DisplayListError, FillRule, GradientStop, Image, ImageError, ImageSampling,
-    Paint, Path, Point, Rect, Shadow, StrokeStyle, SvgDocument, SvgError, Transform, damage,
+    Paint, Path, Point, Rect, Shadow, Size, StrokeStyle, SvgDocument, SvgError, Transform, damage,
     parse_path_data,
 };
 
@@ -269,4 +269,77 @@ fn svg_rejects_unsupported_and_malformed_input_explicitly() {
         "unsupported SVG feature `text`"
     );
     let _ = ImageSampling::Nearest;
+}
+
+#[test]
+fn a_shadow_follows_the_radius_of_each_corner() {
+    let rect = Rect::new(Point::new(10.0, 10.0), Size::new(40.0, 30.0));
+    let shadow = Shadow::drop(Point::new(0.0, 0.0), 4.0, Color::BLACK);
+    // Equal radii give the same mask as one radius.
+    let uniform = shadow.mask(rect, 6.0, 1.0).unwrap();
+    let corners = shadow.mask_corners(rect, [6.0; 4], 1.0).unwrap();
+    assert_eq!(uniform.pixels(), corners.pixels());
+    // A square top-left corner casts more shadow at that corner than a
+    // round one; the other corners stay the same.
+    let square = shadow
+        .mask_corners(rect, [0.0, 6.0, 6.0, 6.0], 1.0)
+        .unwrap();
+    let alpha =
+        |image: &Image, x: u32, y: u32| image.pixels()[((y * image.width() + x) * 4 + 3) as usize];
+    let bounds = shadow.bounds(rect);
+    let (x, y) = (
+        (10.0 - bounds.min_x()) as u32,
+        (10.0 - bounds.min_y()) as u32,
+    );
+    assert!(alpha(&square, x - 1, y - 1) > alpha(&uniform, x - 1, y - 1));
+    let right = (50.0 - bounds.min_x()) as u32;
+    assert_eq!(alpha(&square, right, y - 1), alpha(&uniform, right, y - 1));
+}
+
+#[test]
+fn per_corner_shadows_and_blurs_check_their_radii() {
+    let rect = Rect::new(Point::new(0.0, 0.0), Size::new(20.0, 20.0));
+    let shadow = Shadow::drop(Point::new(0.0, 1.0), 2.0, Color::BLACK);
+    let mut list = DisplayList::new();
+    assert_eq!(
+        list.draw_shadow_corners(rect, [1.0, -1.0, 0.0, 0.0], shadow),
+        Err(DisplayListError::InvalidGeometry)
+    );
+    assert_eq!(
+        list.backdrop_blur_corners(rect, [f64::NAN, 0.0, 0.0, 0.0], 2.0),
+        Err(DisplayListError::InvalidGeometry)
+    );
+    list.draw_shadow_corners(rect, [4.0, 0.0, 4.0, 0.0], shadow)
+        .unwrap();
+    list.backdrop_blur_corners(rect, [4.0, 0.0, 4.0, 0.0], 2.0)
+        .unwrap();
+    assert_eq!(list.len(), 2);
+    // The commands damage the area they paint.
+    let region = damage(&DisplayList::new(), &list).unwrap();
+    assert!(region.size.width > rect.size.width);
+}
+
+#[test]
+fn a_paint_converts_from_a_color_and_reports_its_visibility() {
+    let paint = Paint::from(Color::rgb8(1, 2, 3));
+    assert_eq!(paint.solid_color(), Some(Color::rgb8(1, 2, 3)));
+    assert!(!paint.is_transparent());
+    assert!(Paint::from(Color::TRANSPARENT).is_transparent());
+    let gradient = |alpha| Paint::LinearGradient {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(1.0, 0.0),
+        stops: vec![
+            GradientStop {
+                offset: 0.0,
+                color: Color::TRANSPARENT,
+            },
+            GradientStop {
+                offset: 1.0,
+                color: Color::rgba8(0, 0, 0, alpha),
+            },
+        ],
+    };
+    assert_eq!(gradient(255).solid_color(), None);
+    assert!(!gradient(255).is_transparent());
+    assert!(gradient(0).is_transparent());
 }

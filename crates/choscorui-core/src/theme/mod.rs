@@ -18,8 +18,8 @@ mod scale;
 
 pub use palette::{BaseColor, ColorRole, ColorScheme, Oklch, Palette, source as palette_source};
 pub use scale::{
-    FULL_RADIUS, FontFamily, RadiusScale, ShadowLayers, ShadowScale, Space, TextPreset, TextSize,
-    Tracking, TypeSpec,
+    FULL_RADIUS, FontFamily, RadiusScale, ShadowLayers, ShadowScale, ShadowTable, Space,
+    TextPreset, TextSize, Tracking, TypeScale, TypeSpec, Typeset,
 };
 
 use crate::{Color, CubicBezier, Dirty, FontSlant, FontWeight, NodeId, Rect, Tree};
@@ -85,6 +85,10 @@ pub struct DesignTokens {
     pub ring_alpha: f64,
     /// Multiplies every step of the type scale.
     pub text_scale: f64,
+    /// Font size and line height of each [`TextSize`] step.
+    pub type_scale: TypeScale,
+    /// The layers of each [`ShadowScale`] step.
+    pub shadows: ShadowTable,
     pub font_sans: FontFamily,
     pub font_mono: FontFamily,
     pub motion: MotionTokens,
@@ -116,6 +120,8 @@ impl DesignTokens {
             ring_width: 3.0,
             ring_alpha: 0.5,
             text_scale: 1.0,
+            type_scale: TypeScale::DEFAULT,
+            shadows: ShadowTable::standard(),
             font_sans: FontFamily::SYSTEM_UI,
             font_mono: FontFamily::SYSTEM_MONO,
             motion: MotionTokens::default(),
@@ -166,7 +172,7 @@ impl DesignTokens {
 
     /// The sans text spec of `size` at `weight`, scaled by the text scale.
     pub fn text(&self, size: TextSize, weight: FontWeight) -> TypeSpec {
-        let (font_size, line_height) = size.metrics();
+        let (font_size, line_height) = self.type_scale.metrics(size);
         TypeSpec {
             family: self.font_sans,
             size: font_size * self.text_scale,
@@ -201,8 +207,22 @@ impl DesignTokens {
         spec
     }
 
+    /// The layers of `step` in the theme's shadow table.
     pub fn shadow(&self, step: ShadowScale) -> ShadowLayers {
-        step.layers()
+        self.shadows.get(step)
+    }
+
+    /// The body text of `typeset`, scaled by the text scale: the sans face
+    /// at the typeset size and leading.
+    pub fn typeset(&self, typeset: Typeset) -> TypeSpec {
+        TypeSpec {
+            family: self.font_sans,
+            size: typeset.size * self.text_scale,
+            line_height: typeset.line_height() * self.text_scale,
+            weight: FontWeight::REGULAR,
+            slant: FontSlant::Upright,
+            tracking: 0.0,
+        }
     }
 
     /// The focus ring color: `color` at the ring alpha.
@@ -229,6 +249,10 @@ impl DesignTokens {
         ] {
             value.to_bits().hash(&mut hasher);
         }
+        for (size, line) in TextSize::ALL.map(|step| self.type_scale.metrics(step)) {
+            (size.to_bits(), line.to_bits()).hash(&mut hasher);
+        }
+        self.shadows.hash_into(&mut hasher);
         (self.font_sans, self.font_mono, self.recipes).hash(&mut hasher);
         (self.motion.duration_ms, self.motion.reduced).hash(&mut hasher);
         (self.contrast == Contrast::High).hash(&mut hasher);
@@ -255,6 +279,8 @@ pub struct ThemeOverride {
     pub ring_width: Option<f64>,
     pub ring_alpha: Option<f64>,
     pub text_scale: Option<f64>,
+    pub type_scale: Option<TypeScale>,
+    pub shadows: Option<ShadowTable>,
     pub font_sans: Option<FontFamily>,
     pub font_mono: Option<FontFamily>,
     pub motion: Option<MotionTokens>,
@@ -517,6 +543,12 @@ fn apply(mut tokens: DesignTokens, values: ThemeOverride) -> DesignTokens {
             *slot = value;
         }
     }
+    if let Some(value) = values.type_scale {
+        tokens.type_scale = value;
+    }
+    if let Some(value) = values.shadows {
+        tokens.shadows = value;
+    }
     if let Some(value) = values.font_sans {
         tokens.font_sans = value;
     }
@@ -569,6 +601,8 @@ fn validate(tokens: DesignTokens) -> Result<(), ThemeError> {
         || tokens.font_sans.name().is_empty()
         || tokens.font_mono.name().is_empty()
         || !easing.is_valid()
+        || !tokens.type_scale.is_valid()
+        || !tokens.shadows.is_valid()
         || values
             .into_iter()
             .any(|value| !value.is_finite() || value < 0.0)
@@ -583,6 +617,7 @@ fn classify(old: DesignTokens, new: DesignTokens) -> ThemeInvalidation {
     if old == new {
         ThemeInvalidation::None
     } else if old.text_scale != new.text_scale
+        || old.type_scale != new.type_scale
         || old.font_sans != new.font_sans
         || old.font_mono != new.font_mono
         || old.spacing != new.spacing

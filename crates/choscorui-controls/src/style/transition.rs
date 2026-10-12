@@ -8,7 +8,9 @@
 //! model.
 
 use super::{ControlKind, ResolvedStyle, Ring, Slot, StyleQuery, VisualState};
-use choscorui_core::{Color, CubicBezier, DesignTokens, NodeId, Point, Shadow, ShadowLayers};
+use choscorui_core::{
+    Color, CubicBezier, DesignTokens, NodeId, Paint, Point, Shadow, ShadowLayers,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -22,7 +24,7 @@ pub struct TransitionStats {
 }
 
 /// One running blend of a slot.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Run {
     from: ResolvedStyle,
     start: f64,
@@ -43,7 +45,7 @@ impl Run {
 }
 
 /// The last painted style of one slot call of a node, and its blend.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct SlotTrack {
     kind: ControlKind,
     slot: Slot,
@@ -131,7 +133,7 @@ impl Transitions {
         track.slots.retain(|slot| slot.seen);
         for slot in &mut track.slots {
             slot.seen = false;
-            if slot.run.is_some_and(|run| time >= run.end()) {
+            if slot.run.as_ref().is_some_and(|run| time >= run.end()) {
                 slot.run = None;
             }
         }
@@ -170,11 +172,11 @@ impl Transitions {
             slot.kind == query.kind && slot.slot == query.slot && slot.ordinal == ordinal
         });
         // The style before the change, if the slot changed.
-        let from = match index.map(|index| painting.track.slots[index]) {
+        let from = match index.map(|index| &painting.track.slots[index]) {
             Some(slot) if blended_eq(&slot.last, &target) => None,
-            Some(slot) => Some(match slot.run {
+            Some(slot) => Some(match &slot.run {
                 Some(run) => blend(&run.from, &slot.last, run.progress(time)),
-                None => slot.last,
+                None => slot.last.clone(),
             }),
             None => painting.track.pending.and_then(|before| {
                 let added = painting.host.without(before);
@@ -191,6 +193,7 @@ impl Transitions {
         } else {
             f64::from(target.motion_ms) / 1000.0
         };
+        let changed = from.is_some();
         let fresh = from.filter(|_| seconds > 0.0).map(|from| Run {
             from,
             start: time,
@@ -203,7 +206,7 @@ impl Transitions {
                 kind: query.kind,
                 slot: query.slot,
                 ordinal,
-                last: target,
+                last: target.clone(),
                 run: None,
                 seen: false,
             });
@@ -211,14 +214,15 @@ impl Transitions {
         });
         let slot = &mut slots[index];
         slot.seen = true;
-        if from.is_some() {
+        if changed {
             slot.run = fresh;
         }
-        slot.last = target;
-        match slot.run {
+        let painted = match &slot.run {
             Some(run) if time < run.end() => blend(&run.from, &target, run.progress(time)),
-            _ => target,
-        }
+            _ => target.clone(),
+        };
+        slot.last = target;
+        painted
     }
 
     /// True while a node for which `visible` holds runs a blend that is
@@ -229,7 +233,7 @@ impl Transitions {
             track
                 .slots
                 .iter()
-                .any(|slot| slot.run.is_some_and(|run| time < run.end()))
+                .any(|slot| slot.run.as_ref().is_some_and(|run| time < run.end()))
                 && visible(*node)
         })
     }
@@ -243,7 +247,7 @@ impl Transitions {
         for (node, track) in &mut state.tracks {
             let mut done = false;
             for slot in &mut track.slots {
-                if slot.run.is_some_and(|run| time >= run.end()) {
+                if slot.run.as_ref().is_some_and(|run| time >= run.end()) {
                     slot.run = None;
                     done = true;
                 }
@@ -318,12 +322,21 @@ fn blended_eq(a: &ResolvedStyle, b: &ResolvedStyle) -> bool {
 /// `to` with its colors, ring, and shadows `t` of the way from `from`.
 fn blend(from: &ResolvedStyle, to: &ResolvedStyle, t: f64) -> ResolvedStyle {
     ResolvedStyle {
-        background: mix(from.background, to.background, t),
+        background: blend_paint(&from.background, &to.background, t),
         foreground: mix(from.foreground, to.foreground, t),
         border: mix(from.border, to.border, t),
         ring: blend_ring(from.ring, to.ring, t),
         shadow: blend_shadows(&from.shadow, &to.shadow, t),
-        ..*to
+        ..to.clone()
+    }
+}
+
+/// Mixes two solid paints. A change from or to a gradient has no blend:
+/// it shows the target paint at once.
+fn blend_paint(from: &Paint, to: &Paint, t: f64) -> Paint {
+    match (from.solid_color(), to.solid_color()) {
+        (Some(a), Some(b)) => Paint::Solid(mix(a, b, t)),
+        _ => to.clone(),
     }
 }
 

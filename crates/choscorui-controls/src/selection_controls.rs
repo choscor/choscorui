@@ -1,3 +1,4 @@
+use crate::style::fill_area;
 use crate::style::{
     Content, ControlKind, Orientation, PaintContext, Slot, StyleQuery, Styles, TabsVariant,
     TextAlign, TextMeasure, VisualState, choice_size, fill_shape, paint_choice,
@@ -539,7 +540,7 @@ fn paint_radio(cx: &mut PaintContext<'_>, label: &str, state: VisualState) {
                 Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
                 size,
             );
-            fill_shape(cx.list, dot_rect, &dot.radius, cx.rtl, dot.background);
+            fill_shape(cx.list, dot_rect, &dot.radius, cx.rtl, &dot.background);
         }
     });
 }
@@ -565,7 +566,7 @@ fn paint_tab(
         cx.label(rect, label, &style, TextAlign::Center);
     });
     let indicator = cx.style(tabs_query(variant, Slot::Indicator, state));
-    if indicator.background.alpha == 0 {
+    if !indicator.has_background() {
         return;
     }
     // The indicator sits just outside the tab, over the list padding.
@@ -590,7 +591,7 @@ fn paint_tab(
             )
         }
     };
-    cx.list.fill_rect(line, indicator.background);
+    fill_area(cx.list, line, cx.rtl, &indicator.background);
 }
 
 fn selectable_semantics(

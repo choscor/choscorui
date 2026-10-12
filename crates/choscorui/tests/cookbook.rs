@@ -5,7 +5,7 @@ use choscorui::controls::{
     Button, ButtonInput, CommandId, CommandRegistry, CommandState, ControlKind, Corners, Edges,
     EstimatedText, ItemDelegate, ItemState, ItemView, PaintContext, Recipe, ResolvedStyle,
     Shortcut, ShortcutModifiers, ShortcutScope, Slot, StyleQuery, Styles, TextAlign, TextField,
-    TextFieldInput, ValidationKind, ValidationState, VisualState,
+    TextFieldInput, ValidationKind, ValidationState, VisualState, fill_shape,
 };
 use choscorui::core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, ItemModel, Key, Locale,
@@ -104,7 +104,7 @@ impl Recipe for OutlineRecipe {
         style.padding = Edges::axes(tokens.space(3.0), 0.0);
         style.min_height = tokens.space(9.0);
         if query.state.pressed() {
-            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15);
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15).into();
         }
         if query.state.disabled() {
             style.opacity = 0.5;
@@ -173,9 +173,8 @@ impl ItemDelegate for BadgeDelegate {
             let style = cx.style(StyleQuery::new(ControlKind::Badge, Slot::Root));
             let badge = rect.size.height - 8.0;
             let dot = Rect::from_xywh(rect.origin.x + 4.0, rect.origin.y + 4.0, badge, badge);
-            let _ = cx
-                .list
-                .fill_rounded_rect(dot, badge / 2.0, style.background);
+            let corners = Corners::all(badge / 2.0);
+            fill_shape(cx.list, dot, &corners, cx.rtl, &style.background);
             let label = Rect::from_xywh(
                 dot.max_x() + 4.0,
                 rect.origin.y,

@@ -224,7 +224,7 @@ fn recipes_are_swappable_without_changing_control_values() {
     impl Recipe for Flat {
         fn resolve(&self, _: &StyleQuery, tokens: &DesignTokens) -> Option<ResolvedStyle> {
             Some(ResolvedStyle {
-                background: Color::rgba8(30, 100, 220, 255),
+                background: Color::rgba8(30, 100, 220, 255).into(),
                 min_width: 12.0,
                 min_height: 4.0,
                 ..ResolvedStyle::new(tokens)

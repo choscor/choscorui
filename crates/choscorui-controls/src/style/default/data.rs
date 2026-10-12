@@ -36,13 +36,13 @@ fn table(cx: &Cx) -> ResolvedStyle {
                 style.min_height = cx.sp(8.0);
             }
             if s.interactive_hover() {
-                style.background = cx.a(ColorRole::Muted, 0.5);
+                style.background = cx.a(ColorRole::Muted, 0.5).into();
             }
             if s.selected() {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
             }
             if s.highlighted() && cx.q.kind == ControlKind::ListView {
-                style.background = cx.c(ColorRole::Accent);
+                style.background = cx.c(ColorRole::Accent).into();
                 style.foreground = cx.c(ColorRole::AccentForeground);
             }
             style.motion_ms = cx.motion(150);
@@ -53,7 +53,7 @@ fn table(cx: &Cx) -> ResolvedStyle {
             style.min_height = cx.sp(10.0);
             style.padding = Edges::axes(cx.sp(2.0), 0.0);
             if s.interactive_hover() {
-                style.background = cx.a(ColorRole::Muted, 0.5);
+                style.background = cx.a(ColorRole::Muted, 0.5).into();
             }
             style
         }
@@ -71,7 +71,7 @@ fn table(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Footer => {
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM);
-            style.background = cx.a(ColorRole::Muted, 0.5);
+            style.background = cx.a(ColorRole::Muted, 0.5).into();
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
             style.border_sides = Sides::TOP;
@@ -142,7 +142,7 @@ fn card(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Card);
+            style.background = cx.c(ColorRole::Card).into();
             style.foreground = cx.c(ColorRole::CardForeground);
             style.ring = cx.ring(1.0, cx.a(ColorRole::Foreground, 0.1));
             style.radius = Corners::all(cx.r(RadiusScale::Xl));
@@ -168,17 +168,21 @@ pub(crate) fn badge(cx: &Cx, variant: BadgeVariant) -> ResolvedStyle {
     style.icon_size = 12.0;
     match variant {
         BadgeVariant::Default => {
-            style.background = cx.a(ColorRole::Primary, if hover { 0.8 } else { 1.0 });
+            style.background = cx
+                .a(ColorRole::Primary, if hover { 0.8 } else { 1.0 })
+                .into();
             style.foreground = cx.c(ColorRole::PrimaryForeground);
         }
         BadgeVariant::Secondary => {
-            style.background = cx.a(ColorRole::Secondary, if hover { 0.8 } else { 1.0 });
+            style.background = cx
+                .a(ColorRole::Secondary, if hover { 0.8 } else { 1.0 })
+                .into();
             style.foreground = cx.c(ColorRole::SecondaryForeground);
         }
         BadgeVariant::Outline => {
             style.border = cx.c(ColorRole::Border);
             if hover {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
                 style.foreground = cx.c(ColorRole::MutedForeground);
             }
         }
@@ -188,12 +192,14 @@ pub(crate) fn badge(cx: &Cx, variant: BadgeVariant) -> ResolvedStyle {
                 (true, true) => 0.3,
                 _ => 0.2,
             };
-            style.background = cx.a(ColorRole::Destructive, alpha);
+            style.background = cx.a(ColorRole::Destructive, alpha).into();
             style.foreground = cx.c(ColorRole::Destructive);
         }
         BadgeVariant::Ghost => {
             if hover {
-                style.background = cx.pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Muted, 0.5));
+                style.background = cx
+                    .pick(cx.c(ColorRole::Muted), cx.a(ColorRole::Muted, 0.5))
+                    .into();
                 style.foreground = cx.c(ColorRole::MutedForeground);
             }
         }
@@ -223,7 +229,7 @@ fn avatar(cx: &Cx) -> ResolvedStyle {
     style.radius = Corners::all(cx.r(RadiusScale::Full));
     match cx.q.slot {
         Slot::Fallback | Slot::Group => {
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.foreground = cx.c(ColorRole::MutedForeground);
             style.min_width = cx.sp(size);
             style.min_height = cx.sp(size);
@@ -242,7 +248,7 @@ fn avatar(cx: &Cx) -> ResolvedStyle {
             };
         }
         Slot::Badge => {
-            style.background = cx.c(ColorRole::Primary);
+            style.background = cx.c(ColorRole::Primary).into();
             style.foreground = cx.c(ColorRole::PrimaryForeground);
             style.ring = cx.ring(2.0, cx.c(ColorRole::Background));
             let badge = match cx.q.size {
@@ -272,7 +278,7 @@ fn chart(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Content => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.border = cx.a(ColorRole::Border, 0.5);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Lg));
@@ -294,7 +300,7 @@ fn chart(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Track => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Border);
+            style.background = cx.c(ColorRole::Border).into();
             style.min_height = 1.0;
             style
         }
@@ -337,27 +343,27 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
             style.offset_y = 0.0;
             match CalendarDay::from_variant(cx.q.variant) {
                 CalendarDay::Today => {
-                    style.background = cx.c(ColorRole::Muted);
+                    style.background = cx.c(ColorRole::Muted).into();
                     style.foreground = cx.c(ColorRole::Foreground);
                 }
                 CalendarDay::Outside => style.foreground = cx.c(ColorRole::MutedForeground),
                 CalendarDay::RangeMiddle => {
-                    style.background = cx.c(ColorRole::Muted);
+                    style.background = cx.c(ColorRole::Muted).into();
                     style.foreground = cx.c(ColorRole::Foreground);
                     style.radius = Corners::ZERO;
                 }
                 CalendarDay::RangeStart => {
-                    style.background = cx.c(ColorRole::Primary);
+                    style.background = cx.c(ColorRole::Primary).into();
                     style.foreground = cx.c(ColorRole::PrimaryForeground);
                 }
                 CalendarDay::RangeEnd => {
-                    style.background = cx.c(ColorRole::Primary);
+                    style.background = cx.c(ColorRole::Primary).into();
                     style.foreground = cx.c(ColorRole::PrimaryForeground);
                 }
                 CalendarDay::Default => {}
             }
             if s.selected() {
-                style.background = cx.c(ColorRole::Primary);
+                style.background = cx.c(ColorRole::Primary).into();
                 style.foreground = cx.c(ColorRole::PrimaryForeground);
             }
             if s.focus_visible() {
@@ -373,7 +379,7 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
         Slot::Range => {
             // The muted band behind a range endpoint.
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cell_radius);
             style
         }
@@ -393,7 +399,7 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Trigger => {
             let mut style = super::field_box(cx);
-            style.background = choscorui_core::Color::TRANSPARENT;
+            style.background = choscorui_core::Color::TRANSPARENT.into();
             style.radius = Corners::all(cell_radius);
             style.min_height = cell;
             style.padding = Edges {
@@ -425,7 +431,7 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style.padding = Edges::all(cx.sp(3.0));
             style.gap = cx.sp(4.0);
             style.min_width = cell * 7.0 + cx.sp(6.0);
@@ -463,13 +469,13 @@ fn gauge(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Track => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.min_width = cx.sp(1.5);
             style
         }
         Slot::Range | Slot::Indicator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Primary);
+            style.background = cx.c(ColorRole::Primary).into();
             style.foreground = cx.c(ColorRole::Primary);
             style.min_width = cx.sp(1.5);
             disabled(&mut style, cx);
@@ -477,7 +483,7 @@ fn gauge(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Thumb => {
             let mut style = cx.base();
-            style.background = choscorui_core::Color::WHITE;
+            style.background = choscorui_core::Color::WHITE.into();
             style.border = cx.c(ColorRole::Primary);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Full));
@@ -499,7 +505,7 @@ fn gauge(cx: &Cx) -> ResolvedStyle {
         _ => {
             let mut style = super::field_box(cx);
             if cx.q.kind == ControlKind::Dial {
-                style.background = choscorui_core::Color::TRANSPARENT;
+                style.background = choscorui_core::Color::TRANSPARENT.into();
                 style.border = choscorui_core::Color::TRANSPARENT;
                 style.shadow = choscorui_core::ShadowLayers::NONE;
                 style.radius = Corners::all(cx.r(RadiusScale::Full));

@@ -1,7 +1,7 @@
 //! The output of a recipe: every visual value one slot needs.
 
 use choscorui_core::{
-    Color, CursorShape, DesignTokens, FontWeight, ShadowLayers, TextSize, TypeSpec,
+    Color, CursorShape, DesignTokens, FontWeight, Paint, ShadowLayers, TextSize, TypeSpec,
 };
 
 /// Insets in logical directions, so a right-to-left layout mirrors them.
@@ -212,9 +212,13 @@ impl Cursor {
 
 /// Every visual value of one slot in one state. Recipes fill it from the
 /// tokens; the slot painter and the control's layout read it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedStyle {
-    pub background: Color,
+    /// The fill of the slot box. A gradient's points are in the unit
+    /// square of the box: (0, 0) is the top start corner and (1, 1) the
+    /// bottom end corner. A radial radius is a fraction of the longer
+    /// side of the box.
+    pub background: Paint,
     pub foreground: Color,
     pub border: Color,
     pub border_width: f64,
@@ -249,7 +253,7 @@ impl ResolvedStyle {
     /// A transparent slot with foreground text at the small size.
     pub fn new(tokens: &DesignTokens) -> Self {
         Self {
-            background: Color::TRANSPARENT,
+            background: Paint::Solid(Color::TRANSPARENT),
             foreground: tokens.color(choscorui_core::ColorRole::Foreground),
             border: Color::TRANSPARENT,
             border_width: 0.0,
@@ -275,6 +279,11 @@ impl ResolvedStyle {
                 tokens.motion.duration_ms
             },
         }
+    }
+
+    /// True when the background paints something.
+    pub fn has_background(&self) -> bool {
+        !self.background.is_transparent()
     }
 
     pub fn has_border(&self) -> bool {

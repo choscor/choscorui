@@ -11,6 +11,11 @@ use choscorui_core::{
     TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -48,7 +53,7 @@ fn separator_matches_its_reference_table() {
     for tokens in schemes() {
         let line = get(&tokens, StyleQuery::new(ControlKind::Separator, Slot::Root));
         assert_eq!(
-            (line.background, line.min_width, line.min_height),
+            (bg(&line), line.min_width, line.min_height),
             (tokens.color(ColorRole::Border), 1.0, 1.0)
         );
     }
@@ -59,12 +64,7 @@ fn assert_grip(tokens: &DesignTokens, kind: ControlKind) {
     for slot in [Slot::Icon, Slot::Thumb] {
         let grip = get(tokens, StyleQuery::new(kind, slot));
         assert_eq!(
-            (
-                grip.background,
-                grip.radius,
-                grip.min_width,
-                grip.min_height
-            ),
+            (bg(&grip), grip.radius, grip.min_width, grip.min_height),
             (
                 tokens.color(ColorRole::Border),
                 radius(tokens, RadiusScale::Lg),
@@ -85,7 +85,7 @@ fn resizable_matches_its_reference_table() {
             let query = StyleQuery::new(ControlKind::Resizable, slot);
             let handle = get(&tokens, query);
             assert_eq!(
-                (handle.background, handle.min_width, handle.min_height),
+                (bg(&handle), handle.min_width, handle.min_height),
                 (tokens.color(ColorRole::Border), 1.0, 1.0),
                 "{}",
                 slot.name()
@@ -135,7 +135,7 @@ fn scroll_area_matches_its_reference_table() {
         );
         let thumb = get(&tokens, query(Slot::Thumb, VisualState::NONE));
         assert_eq!(
-            (thumb.background, thumb.radius),
+            (bg(&thumb), thumb.radius),
             (
                 tokens.color(ColorRole::Border),
                 radius(&tokens, RadiusScale::Full)
@@ -144,7 +144,7 @@ fn scroll_area_matches_its_reference_table() {
         let active = tokens.color(ColorRole::MutedForeground).with_alpha(0.5);
         for state in [VisualState::HOVERED, VisualState::PRESSED] {
             let thumb = get(&tokens, query(Slot::Thumb, state));
-            assert_eq!(thumb.background, active, "{state}");
+            assert_eq!(bg(&thumb), active, "{state}");
         }
     }
 }
@@ -157,7 +157,7 @@ fn aspect_ratio_matches_its_reference_table() {
             StyleQuery::new(ControlKind::AspectRatio, Slot::Root),
         );
         assert_eq!(
-            (frame.background, frame.radius),
+            (bg(&frame), frame.radius),
             (
                 tokens.color(ColorRole::Muted),
                 radius(&tokens, RadiusScale::Lg)
@@ -302,21 +302,16 @@ fn item_matches_its_reference_table() {
             ),
         ] {
             let row = get(&tokens, query(Slot::Root).variant(variant));
-            assert_eq!(
-                (row.background, row.border),
-                (fill, edge),
-                "{}",
-                variant.name()
-            );
+            assert_eq!((bg(&row), row.border), (fill, edge), "{}", variant.name());
         }
         // A link row (highlighted) fills `muted` on hover.
         let link = VisualState::HOVERED.with(VisualState::HIGHLIGHTED);
         assert_eq!(
-            get(&tokens, query(Slot::Root).state(link)).background,
+            bg(&get(&tokens, query(Slot::Root).state(link))),
             c(ColorRole::Muted)
         );
         let plain = get(&tokens, query(Slot::Root).state(VisualState::HOVERED));
-        assert_eq!(plain.background, Color::TRANSPARENT);
+        assert_eq!(bg(&plain), Color::TRANSPARENT);
         let focused = get(&tokens, query(Slot::Root).state(VisualState::FOCUS_VISIBLE));
         assert_eq!(focused.ring, focus_ring(&tokens));
 
@@ -328,11 +323,7 @@ fn item_matches_its_reference_table() {
         assert_eq!((title.text, title.gap), (spec, 8.0));
         let separator = get(&tokens, query(Slot::Separator));
         assert_eq!(
-            (
-                separator.background,
-                separator.min_height,
-                separator.padding
-            ),
+            (bg(&separator), separator.min_height, separator.padding),
             (c(ColorRole::Border), 1.0, Edges::axes(0.0, 8.0))
         );
     }
@@ -411,7 +402,7 @@ fn typography_matches_its_reference_table() {
                     style.border_width,
                     style.border_sides,
                     style.padding,
-                    style.background,
+                    bg(&style),
                     style.gap
                 ),
                 expected,
@@ -434,12 +425,12 @@ fn canvas_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Canvas, slot);
         let outline = get(&tokens, query(Slot::Indicator));
         assert_eq!(
-            (outline.border, outline.border_width, outline.background),
+            (outline.border, outline.border_width, bg(&outline)),
             (primary, 1.0, Color::TRANSPARENT)
         );
         let band = get(&tokens, query(Slot::Range));
         assert_eq!(
-            (band.background, band.border, band.border_width),
+            (bg(&band), band.border, band.border_width),
             (primary.with_alpha(0.15), primary, 1.0)
         );
     }
@@ -457,7 +448,7 @@ fn text_editor_matches_its_reference_table() {
             Color::TRANSPARENT
         };
         assert_eq!(
-            (field.border, field.border_width, field.background),
+            (field.border, field.border_width, bg(&field)),
             (c(ColorRole::Input), 1.0, fill)
         );
         assert_eq!(
@@ -487,11 +478,11 @@ fn text_editor_matches_its_reference_table() {
         );
         let caret = get(&tokens, query(Slot::Indicator, VisualState::NONE));
         assert_eq!(
-            (caret.background, caret.min_width),
+            (bg(&caret), caret.min_width),
             (c(ColorRole::Foreground), 1.0)
         );
         let selection = get(&tokens, query(Slot::Range, VisualState::NONE));
-        assert_eq!(selection.background, c(ColorRole::Primary).with_alpha(0.25));
+        assert_eq!(bg(&selection), c(ColorRole::Primary).with_alpha(0.25));
         let code = get(&tokens, query(Slot::Text, VisualState::NONE));
         assert_eq!(code.text, tokens.mono(TextSize::Sm, FontWeight::NORMAL));
     }

@@ -9,6 +9,11 @@ use choscorui_core::{
     Color, ColorRole, DesignTokens, FontWeight, RadiusScale, ShadowScale, TextSize, Tracking,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -55,7 +60,7 @@ fn alert_matches_its_reference_table() {
             let name = variant.name();
             let alert = get(&tokens, query(Slot::Root));
             assert_eq!(
-                (alert.background, alert.foreground, alert.border),
+                (bg(&alert), alert.foreground, alert.border),
                 (c(ColorRole::Card), c(tone), c(ColorRole::Border)),
                 "{name}"
             );
@@ -101,7 +106,7 @@ fn toast_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Toast, slot);
         let toast = get(&tokens, query(Slot::Root));
         assert_eq!(
-            (toast.background, toast.foreground, toast.border),
+            (bg(&toast), toast.foreground, toast.border),
             (
                 c(ColorRole::Popover),
                 c(ColorRole::PopoverForeground),
@@ -185,13 +190,13 @@ fn progress_matches_its_reference_table() {
         assert_eq!(get(&tokens, query(Slot::Root)).gap, 12.0);
         let track = get(&tokens, query(Slot::Track));
         assert_eq!(
-            (track.background, track.radius, track.min_height),
+            (bg(&track), track.radius, track.min_height),
             (c(ColorRole::Muted), radius(&tokens, RadiusScale::Full), 6.0)
         );
         for slot in [Slot::Indicator, Slot::Range] {
             let fill = get(&tokens, query(slot));
             assert_eq!(
-                (fill.background, fill.motion_ms),
+                (bg(&fill), fill.motion_ms),
                 (c(ColorRole::Primary), 150),
                 "{}",
                 slot.name()
@@ -221,7 +226,7 @@ fn skeleton_matches_its_reference_table() {
     for tokens in schemes() {
         let block = get(&tokens, StyleQuery::new(ControlKind::Skeleton, Slot::Root));
         assert_eq!(
-            (block.background, block.radius, block.motion_ms),
+            (bg(&block), block.radius, block.motion_ms),
             (
                 tokens.color(ColorRole::Muted),
                 radius(&tokens, RadiusScale::Md),
@@ -255,12 +260,12 @@ fn empty_matches_its_reference_table() {
 
         let media = get(&tokens, query(Slot::Media));
         assert_eq!(
-            (media.background, media.padding.block_end),
+            (bg(&media), media.padding.block_end),
             (Color::TRANSPARENT, 8.0)
         );
         let icon = get(&tokens, query(Slot::Media).variant(EmptyMediaVariant::Icon));
         assert_eq!(
-            (icon.background, icon.foreground, icon.radius),
+            (bg(&icon), icon.foreground, icon.radius),
             (c(ColorRole::Muted), c(ColorRole::Foreground), lg)
         );
         assert_eq!(

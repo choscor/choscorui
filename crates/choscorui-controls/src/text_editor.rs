@@ -9,6 +9,7 @@ use crate::custom::{
 };
 use crate::form::input::default_width;
 use crate::form::measured::measured_layout;
+use crate::style::fill_area;
 use crate::style::{
     ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
     VisualState, content_rect,
@@ -282,8 +283,8 @@ impl TextEditor {
         let origin = Self::content_origin(bounds, cx.styles, cx.tokens);
         cx.list.push_clip(bounds);
         for rect in self.selection_rects(layout) {
-            cx.list
-                .fill_rect(rect.translate(origin.x, origin.y), selection.background);
+            let rect = rect.translate(origin.x, origin.y);
+            fill_area(cx.list, rect, cx.rtl, &selection.background);
         }
         let _ = layout.draw(cx.list, origin, root.foreground);
         if host.focused()
@@ -291,7 +292,7 @@ impl TextEditor {
         {
             let mut rect = rect.translate(origin.x, origin.y);
             rect.size.width = caret.min_width;
-            cx.list.fill_rect(rect, caret.background);
+            fill_area(cx.list, rect, cx.rtl, &caret.background);
         }
         let _ = cx.list.pop_clip();
     }
@@ -780,7 +781,7 @@ impl CustomControl for TextEditor {
             cx.list.push_clip(inner);
             if state.focused() {
                 for rect in self.selection_rects(layout) {
-                    cx.list.fill_rect(place(rect), selection);
+                    fill_area(cx.list, place(rect), cx.rtl, &selection);
                 }
             }
             let source = layout.text();
@@ -800,7 +801,7 @@ impl CustomControl for TextEditor {
             {
                 let mut rect = place(rect);
                 rect.size.width = caret.min_width;
-                cx.list.fill_rect(rect, caret.background);
+                fill_area(cx.list, rect, cx.rtl, &caret.background);
             }
             let _ = cx.list.pop_clip();
         });

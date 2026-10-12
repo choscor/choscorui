@@ -3,6 +3,7 @@
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
+use crate::style::fill_area;
 use crate::style::{ControlKind, MarkerVariant, PaintContext, Slot, StyleQuery, TextAlign};
 use choscorui_core::{EventReply, Icon, Measured, Rect, SemanticNode, SemanticRole, Size};
 
@@ -102,14 +103,10 @@ impl CustomControl for Marker {
                 let left = (start - gap - inner.origin.x).max(0.0);
                 let right_x = start + content + gap;
                 let right = (inner.max_x() - right_x).max(0.0);
-                cx.list.fill_rect(
-                    Rect::from_xywh(inner.origin.x, y, left, line.min_height),
-                    line.background,
-                );
-                cx.list.fill_rect(
-                    Rect::from_xywh(right_x, y, right, line.min_height),
-                    line.background,
-                );
+                let left = Rect::from_xywh(inner.origin.x, y, left, line.min_height);
+                fill_area(cx.list, left, cx.rtl, &line.background);
+                let right = Rect::from_xywh(right_x, y, right, line.min_height);
+                fill_area(cx.list, right, cx.rtl, &line.background);
             }
         });
     }

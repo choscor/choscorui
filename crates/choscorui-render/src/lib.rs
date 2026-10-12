@@ -218,9 +218,17 @@ impl Renderer {
                 rect,
                 radius,
                 shadow,
-            } => self.shadow(*rect, *radius, *shadow),
+            } => self.shadow(*rect, [*radius; 4], *shadow),
+            DisplayCommand::DrawShadowCorners {
+                rect,
+                radii,
+                shadow,
+            } => self.shadow(*rect, *radii, *shadow),
             DisplayCommand::BackdropBlur { rect, radius, blur } => {
-                self.backdrop(*rect, *radius, *blur);
+                self.backdrop(*rect, &Path::rounded_rect(*rect, *radius), *blur);
+            }
+            DisplayCommand::BackdropBlurCorners { rect, radii, blur } => {
+                self.backdrop(*rect, &Path::rounded_rect_corners(*rect, *radii), *blur);
             }
             DisplayCommand::DrawText { .. } | DisplayCommand::DrawGlyphs { .. } => {
                 return Err(RenderError::UnsupportedText);
@@ -394,9 +402,10 @@ impl Renderer {
         });
     }
 
-    /// Blurs the base layer inside the rounded `rect` and paints the
-    /// result into the current layer, as the platform painters do.
-    fn backdrop(&mut self, rect: Rect, radius: f64, blur: f64) {
+    /// Blurs the base layer inside `shape`, whose bounds are `rect`, and
+    /// paints the result into the current layer, as the platform painters
+    /// do.
+    fn backdrop(&mut self, rect: Rect, shape: &Path, blur: f64) {
         let transform = self.state.transform;
         let Some(inverse) = transform.invert() else {
             return;
@@ -424,7 +433,7 @@ impl Renderer {
             }
         }
         choscorui_core::blur_pixels(&mut pixels, width, height, width * 4, sigma);
-        let polys = Path::rounded_rect(rect, radius).flatten(0.05 / scale);
+        let polys = shape.flatten(0.05 / scale);
         self.paint(device, |point| {
             if !winding_contains(&polys, inverse.apply(point), FillRule::NonZero) {
                 return None;
@@ -445,11 +454,11 @@ impl Renderer {
         });
     }
 
-    fn shadow(&mut self, rect: Rect, radius: f64, shadow: Shadow) {
+    fn shadow(&mut self, rect: Rect, radii: [f64; 4], shadow: Shadow) {
         // The mask is generated at the raster scale times the transform's
         // scale so it stays sharp, then drawn like an image.
         let scale = self.scale * self.state.transform.determinant().abs().sqrt().max(1e-6);
-        if let Some(mask) = shadow.mask(rect, radius, scale) {
+        if let Some(mask) = shadow.mask_corners(rect, radii, scale) {
             self.image(&mask, shadow.bounds(rect), ImageSampling::Linear);
         }
     }

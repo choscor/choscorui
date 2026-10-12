@@ -6,6 +6,7 @@ use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl,
 use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted;
 use crate::overlay::panel::{Buttons, PanelButton};
+use crate::style::fill_area;
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, ItemVariant, PaintContext, Slot, StyleQuery,
     TextAlign, Variant, VisualState,
@@ -556,7 +557,7 @@ impl CustomControl for ItemGroup {
                     row.size.width,
                     separator.min_height,
                 );
-                cx.list.fill_rect(line, separator.background);
+                fill_area(cx.list, line, cx.rtl, &separator.background);
             }
         }
     }

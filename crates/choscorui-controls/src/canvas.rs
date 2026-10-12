@@ -9,6 +9,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::Routed;
+use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
     DisplayList, DisplayListError, EventReply, Key, KeyEvent, Measured, Paint, Path, Point,
@@ -493,7 +494,7 @@ impl CanvasView {
             outline(list, self.transform().apply_rect(bounds).inset(-2.0), true)?;
         }
         if let Some(band) = self.rubber_band() {
-            list.fill_rect(band, band_style.background);
+            fill_area(list, band, false, &band_style.background);
             outline(list, band.inset(2.0), false)?;
         }
         list.pop_clip()?;

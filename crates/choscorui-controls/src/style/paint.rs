@@ -89,37 +89,92 @@ fn rounded_path(rect: Rect, corners: &Corners, rtl: bool) -> Path {
     Path::rounded_rect_corners(rect, corners.physical(rtl))
 }
 
-/// Fills `rect` with `color` and the corner radii.
-pub fn fill_shape(list: &mut DisplayList, rect: Rect, corners: &Corners, rtl: bool, color: Color) {
-    if color.alpha == 0 || rect.size.width <= 0.0 || rect.size.height <= 0.0 {
+/// `paint` placed on `rect`. A solid paint stays the same. A gradient's
+/// points go from the unit square of the box onto `rect`, with x from the
+/// start side, and a radial radius scales by the longer side.
+pub fn paint_in(paint: &Paint, rect: Rect, rtl: bool) -> Paint {
+    let place = |point: Point| {
+        let x = if rtl {
+            rect.max_x() - point.x * rect.size.width
+        } else {
+            rect.origin.x + point.x * rect.size.width
+        };
+        Point::new(x, rect.origin.y + point.y * rect.size.height)
+    };
+    match paint {
+        Paint::Solid(_) => paint.clone(),
+        Paint::LinearGradient { start, end, stops } => Paint::LinearGradient {
+            start: place(*start),
+            end: place(*end),
+            stops: stops.clone(),
+        },
+        Paint::RadialGradient {
+            center,
+            radius,
+            stops,
+        } => Paint::RadialGradient {
+            center: place(*center),
+            radius: radius * rect.size.width.max(rect.size.height),
+            stops: stops.clone(),
+        },
+    }
+}
+
+/// Fills `rect` with `paint` and the corner radii. A gradient is placed
+/// on `rect` as [`paint_in`] describes.
+pub fn fill_shape(list: &mut DisplayList, rect: Rect, corners: &Corners, rtl: bool, paint: &Paint) {
+    if paint.is_transparent() || rect.size.width <= 0.0 || rect.size.height <= 0.0 {
         return;
     }
-    if corners.is_uniform() && corners.top_start <= 0.0 {
-        list.fill_rect(rect, color);
-    } else if corners.is_uniform() {
-        let _ = list.fill_rounded_rect(rect, corners.top_start, color);
-    } else {
-        let _ = list.fill_path(
-            rounded_path(rect, corners, rtl),
-            Paint::Solid(color),
-            FillRule::NonZero,
-        );
+    let square = corners.is_uniform() && corners.top_start <= 0.0;
+    match paint.solid_color() {
+        Some(color) if square => list.fill_rect(rect, color),
+        Some(color) if corners.is_uniform() => {
+            let _ = list.fill_rounded_rect(rect, corners.top_start, color);
+        }
+        _ => {
+            let path = if square {
+                Path::rect(rect)
+            } else {
+                rounded_path(rect, corners, rtl)
+            };
+            let _ = list.fill_path(path, paint_in(paint, rect, rtl), FillRule::NonZero);
+        }
+    }
+}
+
+/// Fills the square `rect` with `paint`, for a line or a band of a slot.
+/// A solid paint always emits one rectangle fill, even when it is
+/// transparent.
+pub fn fill_area(list: &mut DisplayList, rect: Rect, rtl: bool, paint: &Paint) {
+    match paint.solid_color() {
+        Some(color) => list.fill_rect(rect, color),
+        None => fill_shape(list, rect, &Corners::ZERO, rtl, paint),
     }
 }
 
 /// Paints the box of a slot: drop shadows, ring, backdrop blur,
-/// background, inset shadows, then the border inside the box.
+/// background, inset shadows, then the border inside the box. Shadows,
+/// the ring, and the blur follow the radius of each corner.
 pub fn paint_box(list: &mut DisplayList, rect: Rect, style: &ResolvedStyle, rtl: bool) {
-    let radius = style.radius.top_start.max(0.0);
-    for shadow in style.shadow.iter().filter(|shadow| !shadow.inset) {
-        let _ = list.draw_shadow(rect, radius, *shadow);
+    let radii = clamp_corners(style.radius).physical(rtl);
+    let uniform = style.radius.is_uniform();
+    let shadow = |list: &mut DisplayList, shadow: &Shadow| {
+        let _ = if uniform {
+            list.draw_shadow(rect, radii[0], *shadow)
+        } else {
+            list.draw_shadow_corners(rect, radii, *shadow)
+        };
+    };
+    for layer in style.shadow.iter().filter(|layer| !layer.inset) {
+        shadow(list, layer);
     }
     if let Some(ring) = style.ring
         && ring.width > 0.0
         && ring.color.alpha > 0
     {
-        if style.radius.is_uniform() {
-            let _ = list.draw_ring(rect, radius, ring.width, ring.color);
+        if uniform {
+            let _ = list.draw_ring(rect, radii[0], ring.width, ring.color);
         } else {
             let half = ring.width / 2.0;
             let grown = grow(style.radius, half);
@@ -131,15 +186,28 @@ pub fn paint_box(list: &mut DisplayList, rect: Rect, style: &ResolvedStyle, rtl:
         }
     }
     if style.backdrop_blur > 0.0 {
-        let _ = list.backdrop_blur(rect, radius, style.backdrop_blur);
+        let _ = if uniform {
+            list.backdrop_blur(rect, radii[0], style.backdrop_blur)
+        } else {
+            list.backdrop_blur_corners(rect, radii, style.backdrop_blur)
+        };
     }
-    fill_shape(list, rect, &style.radius, rtl, style.background);
-    let insets: Vec<Shadow> = style.shadow.iter().filter(|s| s.inset).copied().collect();
-    for shadow in insets {
-        let _ = list.draw_shadow(rect, radius, shadow);
+    fill_shape(list, rect, &style.radius, rtl, &style.background);
+    for layer in style.shadow.iter().filter(|layer| layer.inset) {
+        shadow(list, layer);
     }
     if style.has_border() {
         paint_border(list, rect, style, rtl);
+    }
+}
+
+/// The corner radii with negative values raised to zero.
+fn clamp_corners(corners: Corners) -> Corners {
+    Corners {
+        top_start: corners.top_start.max(0.0),
+        top_end: corners.top_end.max(0.0),
+        bottom_end: corners.bottom_end.max(0.0),
+        bottom_start: corners.bottom_start.max(0.0),
     }
 }
 

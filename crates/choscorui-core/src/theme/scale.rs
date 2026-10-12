@@ -115,6 +115,100 @@ impl TextSize {
     }
 }
 
+/// The font size and line height of each [`TextSize`] step, in points
+/// before the text scale. A theme can replace the whole scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TypeScale([(f64, f64); 8]);
+
+impl TypeScale {
+    /// The reference scale that [`TextSize::metrics`] gives.
+    pub const DEFAULT: Self = {
+        let mut steps = [(0.0, 0.0); 8];
+        let mut index = 0;
+        while index < 8 {
+            steps[index] = TextSize::ALL[index].metrics();
+            index += 1;
+        }
+        Self(steps)
+    };
+
+    /// Font size and line height of `size`.
+    pub const fn metrics(&self, size: TextSize) -> (f64, f64) {
+        self.0[size as usize]
+    }
+
+    /// The same scale with `size` at `font_size` over `line_height`.
+    #[must_use]
+    pub const fn with(mut self, size: TextSize, font_size: f64, line_height: f64) -> Self {
+        self.0[size as usize] = (font_size, line_height);
+        self
+    }
+
+    /// True when every size and line height is positive and finite.
+    pub fn is_valid(&self) -> bool {
+        self.0
+            .iter()
+            .all(|(size, line)| size.is_finite() && line.is_finite() && *size > 0.0 && *line > 0.0)
+    }
+}
+
+impl Default for TypeScale {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// The body text of long-form content: a size, a leading, and a flow, as
+/// the reference typeset rules define them. Headings and other blocks
+/// take their spacing from the flow.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Typeset {
+    /// Body font size in points, before the text scale.
+    pub size: f64,
+    /// Line height as a multiple of the size.
+    pub leading: f64,
+    /// Space between blocks as a multiple of the size.
+    pub flow: f64,
+}
+
+impl Typeset {
+    /// Body size 16 pt (1 em), leading 1.75, and flow 1.25 em.
+    pub const DEFAULT: Self = Self {
+        size: 16.0,
+        leading: 1.75,
+        flow: 1.25,
+    };
+    /// A tighter flow and leading for chat messages: flow 1 em, leading
+    /// 1.6.
+    pub const CHAT: Self = Self {
+        size: 16.0,
+        leading: 1.6,
+        flow: 1.0,
+    };
+    /// Smaller text for dense panels: 14 pt, leading 1.6, flow 1 em.
+    pub const COMPACT: Self = Self {
+        size: 14.0,
+        leading: 1.6,
+        flow: 1.0,
+    };
+
+    /// The line height in points, before the text scale.
+    pub fn line_height(&self) -> f64 {
+        self.size * self.leading
+    }
+
+    /// The space between blocks in points, before the text scale.
+    pub fn block_gap(&self) -> f64 {
+        self.size * self.flow
+    }
+}
+
+impl Default for Typeset {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Letter spacing as a fraction of the font size.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Tracking {
@@ -253,6 +347,57 @@ impl ShadowScale {
             Self::InsetXs => ShadowLayers::new(&[inset(1.0, 1.0, 0.05)]),
             Self::InsetSm => ShadowLayers::new(&[inset(2.0, 4.0, 0.05)]),
         }
+    }
+}
+
+/// The layers of each [`ShadowScale`] step. A theme can replace the whole
+/// table.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShadowTable([ShadowLayers; 11]);
+
+impl ShadowTable {
+    /// The reference values that [`ShadowScale::layers`] gives.
+    pub fn standard() -> Self {
+        Self(ShadowScale::ALL.map(ShadowScale::layers))
+    }
+
+    pub fn get(&self, step: ShadowScale) -> ShadowLayers {
+        self.0[step as usize]
+    }
+
+    /// The same table with `step` drawn as `layers`.
+    #[must_use]
+    pub fn with(mut self, step: ShadowScale, layers: ShadowLayers) -> Self {
+        self.0[step as usize] = layers;
+        self
+    }
+
+    /// True when every layer has a finite offset, blur, and spread, and a
+    /// blur that is not negative.
+    pub fn is_valid(&self) -> bool {
+        self.0.iter().flat_map(ShadowLayers::iter).all(|shadow| {
+            shadow.offset.is_finite()
+                && shadow.blur.is_finite()
+                && shadow.blur >= 0.0
+                && shadow.spread.is_finite()
+        })
+    }
+
+    /// Every number of the table, for fingerprints.
+    pub(crate) fn hash_into(&self, hasher: &mut impl std::hash::Hasher) {
+        use std::hash::Hash;
+        for shadow in self.0.iter().flat_map(ShadowLayers::iter) {
+            for value in [shadow.offset.x, shadow.offset.y, shadow.blur, shadow.spread] {
+                value.to_bits().hash(hasher);
+            }
+            (shadow.color, shadow.inset).hash(hasher);
+        }
+    }
+}
+
+impl Default for ShadowTable {
+    fn default() -> Self {
+        Self::standard()
     }
 }
 

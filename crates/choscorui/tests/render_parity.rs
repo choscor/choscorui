@@ -4,9 +4,10 @@
 //! per-channel tolerance; interiors must match.
 #![cfg(target_os = "macos")]
 
+use choscorui::controls::{Corners, ResolvedStyle, Ring, paint_box};
 use choscorui_core::{
-    Color, DisplayList, FillRule, GradientStop, Image, ImageSampling, LineCap, Paint, Path, Point,
-    Rect, Shadow, ShadowScale, StrokeStyle, Transform,
+    Color, DesignTokens, DisplayList, FillRule, GradientStop, Image, ImageSampling, LineCap, Paint,
+    Path, Point, Rect, Shadow, ShadowScale, StrokeStyle, Transform,
 };
 use choscorui_macos::MacBitmap;
 use choscorui_render::{Raster, compare};
@@ -197,6 +198,75 @@ fn fixtures() -> Vec<(&'static str, DisplayList)> {
     list.pop_opacity().unwrap();
     out.push(("backdrop-blur-opacity", list));
 
+    out.extend(corner_fixtures(stripes()));
+    out
+}
+
+/// Shadows, blur, a ring, and a gradient on shapes with a radius per
+/// corner.
+fn corner_fixtures(stripes: DisplayList) -> Vec<(&'static str, DisplayList)> {
+    let mut out = Vec::new();
+    let card = Rect::from_xywh(14.0, 10.0, 36.0, 24.0);
+    let radii = [10.0, 0.0, 6.0, 2.0];
+    let shape = Path::rounded_rect_corners(card, radii);
+    let white = Paint::Solid(Color::WHITE);
+
+    let mut list = background();
+    let drop = Shadow {
+        spread: 1.0,
+        ..Shadow::drop(Point::new(0.0, 3.0), 4.0, Color::BLACK.with_alpha(0.4))
+    };
+    list.draw_shadow_corners(card, radii, drop).unwrap();
+    list.fill_path(shape.clone(), white.clone(), FillRule::NonZero)
+        .unwrap();
+    out.push(("shadow-corners", list));
+
+    let mut list = background();
+    list.fill_path(shape, white, FillRule::NonZero).unwrap();
+    let inset = Shadow {
+        offset: Point::new(0.0, 2.0),
+        blur: 4.0,
+        spread: 1.0,
+        color: Color::BLACK.with_alpha(0.6),
+        inset: true,
+    };
+    list.draw_shadow_corners(card, radii, inset).unwrap();
+    out.push(("shadow-corners-inset", list));
+
+    let mut list = stripes;
+    let panel = Rect::from_xywh(12.0, 8.0, 40.0, 32.0);
+    list.backdrop_blur_corners(panel, [12.0, 4.0, 0.0, 8.0], 4.0)
+        .unwrap();
+    out.push(("backdrop-blur-corners", list));
+
+    let mut list = background();
+    let mut style = ResolvedStyle::new(&DesignTokens::light());
+    style.radius = Corners {
+        top_start: 8.0,
+        top_end: 2.0,
+        bottom_end: 8.0,
+        bottom_start: 0.0,
+    };
+    style.background = Paint::LinearGradient {
+        start: Point::new(0.0, 0.0),
+        end: Point::new(1.0, 1.0),
+        stops: stops(
+            Color::rgba8(30, 90, 200, 255),
+            Color::rgba8(200, 60, 90, 255),
+        ),
+    };
+    style.shadow = ShadowScale::Md.layers();
+    style.ring = Some(Ring {
+        width: 3.0,
+        color: Color::rgba8(30, 90, 200, 128),
+    });
+    paint_box(
+        &mut list,
+        Rect::from_xywh(16.0, 12.0, 32.0, 20.0),
+        &style,
+        true,
+    );
+    out.push(("slot-corners-gradient", list));
     out
 }
 

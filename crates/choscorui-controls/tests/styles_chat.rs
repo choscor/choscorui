@@ -10,6 +10,11 @@ use choscorui_core::{
     Color, ColorRole, ColorScheme, DesignTokens, FontWeight, RadiusScale, ShadowScale, TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -174,13 +179,9 @@ fn bubble_matches_its_reference_table() {
             };
             let name = variant.name();
             let bubble = get(&tokens, query(Slot::Content, VisualState::NONE));
-            assert_eq!(
-                (bubble.background, bubble.foreground),
-                (fill, ink),
-                "{name}"
-            );
+            assert_eq!((bg(&bubble), bubble.foreground), (fill, ink), "{name}");
             let hover = get(&tokens, query(Slot::Content, VisualState::HOVERED));
-            assert_eq!(hover.background, hover_fill, "{name} hovered");
+            assert_eq!(bg(&hover), hover_fill, "{name} hovered");
             let focused = get(&tokens, query(Slot::Content, VisualState::FOCUS_VISIBLE));
             assert_eq!(focused.ring, focus_ring(&tokens), "{name} focused");
 
@@ -214,7 +215,7 @@ fn bubble_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Bubble, slot);
         let reactions = get(&tokens, query(Slot::Badge));
         assert_eq!(
-            (reactions.background, reactions.radius, reactions.padding),
+            (bg(&reactions), reactions.radius, reactions.padding),
             (
                 muted,
                 radius(&tokens, RadiusScale::Full),
@@ -304,7 +305,7 @@ fn attachment_matches_its_reference_table() {
                 "{label}"
             );
             assert_eq!(
-                (thumbnail.background, thumbnail.foreground),
+                (bg(&thumbnail), thumbnail.foreground),
                 (c(ColorRole::Muted), c(ColorRole::Foreground))
             );
             let vertical = get(&tokens, query(Slot::Media, VisualState::OPEN));
@@ -364,10 +365,7 @@ fn attachment_matches_its_reference_table() {
                 VisualState::NONE,
             ),
         );
-        assert_eq!(
-            (bar.background, bar.min_height),
-            (c(ColorRole::Primary), 2.0)
-        );
+        assert_eq!((bg(&bar), bar.min_height), (c(ColorRole::Primary), 2.0));
         let focused = get(
             &tokens,
             query(AttachmentState::Idle, Slot::Root, VisualState::FOCUSED),
@@ -435,7 +433,7 @@ fn marker_matches_its_reference_table() {
         );
         let line = get(&tokens, query(MarkerVariant::Separator, Slot::Separator));
         assert_eq!(
-            (line.background, line.min_height, line.padding),
+            (bg(&line), line.min_height, line.padding),
             (c(ColorRole::Border), 1.0, Edges::axes(4.0, 0.0))
         );
     }
@@ -489,7 +487,7 @@ fn questionnaire_matches_its_reference_table() {
             c(ColorRole::Input).with_alpha(0.2),
         );
         assert_eq!(
-            (choice.border, choice.border_width, choice.background),
+            (choice.border, choice.border_width, bg(&choice)),
             (c(ColorRole::Input), 1.0, fill)
         );
         assert_eq!(
@@ -503,12 +501,12 @@ fn questionnaire_matches_its_reference_table() {
         );
         let pick_state = |state| get(&tokens, query(Slot::Choice, state));
         assert_eq!(
-            pick_state(VisualState::HOVERED).background,
+            bg(&pick_state(VisualState::HOVERED)),
             c(ColorRole::Muted).with_alpha(0.5)
         );
         let checked = pick_state(VisualState::CHECKED);
         assert_eq!(
-            (checked.background, checked.border),
+            (bg(&checked), checked.border),
             (c(ColorRole::Muted), c(ColorRole::Primary).with_alpha(0.4))
         );
         assert_eq!(
@@ -535,7 +533,7 @@ fn questionnaire_matches_its_reference_table() {
         assert_eq!(check.border, c(ColorRole::Input));
         let on = get(&tokens, query(Slot::Indicator, VisualState::CHECKED));
         assert_eq!(
-            (on.background, on.border),
+            (bg(&on), on.border),
             (c(ColorRole::Primary), c(ColorRole::Primary))
         );
 
@@ -550,7 +548,7 @@ fn questionnaire_matches_its_reference_table() {
             (20.0, 20.0, 10.0, tokens.font_mono)
         );
         assert_eq!(
-            (key.border, key.background, key.foreground),
+            (key.border, bg(&key), key.foreground),
             (
                 c(ColorRole::Input),
                 c(ColorRole::Background),

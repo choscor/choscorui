@@ -416,14 +416,14 @@ impl CustomControl for DatePicker {
         let placeholder = cx.style(Self::query(Slot::Placeholder, state));
         let bounds = cx.bounds;
         cx.slot(bounds, &root, |cx, inner| {
-            let style = if text.is_some() { root } else { placeholder };
+            let style = if text.is_some() { &root } else { &placeholder };
             let label = text.as_deref().unwrap_or(&self.placeholder);
             let content = Content {
                 leading: Some(Icon::Calendar),
                 label,
                 trailing: None,
             };
-            let mut style = style;
+            let mut style = style.clone();
             style.gap = root.gap;
             style.icon_size = root.icon_size;
             content.draw(cx, inner, &style, TextAlign::Start);

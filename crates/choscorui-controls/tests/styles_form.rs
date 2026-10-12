@@ -10,6 +10,11 @@ use choscorui_core::{
     ShadowScale, TextSize,
 };
 
+/// The color of a solid background.
+fn bg(style: &ResolvedStyle) -> Color {
+    style.background.solid_color().expect("a solid background")
+}
+
 fn get(tokens: &DesignTokens, query: StyleQuery) -> ResolvedStyle {
     Styles::new().resolve(tokens, query)
 }
@@ -236,11 +241,11 @@ fn button_matches_its_reference_table() {
             let look = |state| get(&tokens, button(variant, ControlSize::Default, state));
             let name = variant.name();
             let rest = look(VisualState::NONE);
-            assert_eq!((rest.background, rest.foreground), (fill, text), "{name}");
+            assert_eq!((bg(&rest), rest.foreground), (fill, text), "{name}");
             assert_eq!((rest.ring, rest.opacity, rest.offset_y), (None, 1.0, 0.0));
             let hover = look(VisualState::HOVERED);
             assert_eq!(
-                (hover.background, hover.foreground),
+                (bg(&hover), hover.foreground),
                 (hover_fill, hover_text),
                 "{name} hovered"
             );
@@ -251,7 +256,7 @@ fn button_matches_its_reference_table() {
 
             // A disabled button ignores hover and fades to half.
             let disabled = look(VisualState::HOVERED.with(VisualState::DISABLED));
-            assert_eq!((disabled.background, disabled.opacity), (fill, 0.5));
+            assert_eq!((bg(&disabled), disabled.opacity), (fill, 0.5));
             assert_eq!(disabled.cursor, Cursor::Arrow);
 
             let focused = look(VisualState::FOCUS_VISIBLE);
@@ -287,7 +292,7 @@ fn button_matches_its_reference_table() {
                 &tokens,
                 button(variant, ControlSize::Default, VisualState::OPEN),
             );
-            assert_eq!(open.background, c(ColorRole::Muted), "{}", variant.name());
+            assert_eq!(bg(&open), c(ColorRole::Muted), "{}", variant.name());
             let pressed_open = get(
                 &tokens,
                 button(
@@ -313,7 +318,7 @@ fn button_group_matches_its_reference_table() {
 
         let text = get(&tokens, query(Slot::Text));
         assert_eq!(
-            (text.background, text.border, text.border_width),
+            (bg(&text), text.border, text.border_width),
             (
                 tokens.color(ColorRole::Muted),
                 tokens.color(ColorRole::Border),
@@ -340,11 +345,7 @@ fn button_group_matches_its_reference_table() {
 
         let separator = get(&tokens, query(Slot::Separator));
         assert_eq!(
-            (
-                separator.background,
-                separator.min_width,
-                separator.min_height
-            ),
+            (bg(&separator), separator.min_width, separator.min_height),
             (tokens.color(ColorRole::Input), 1.0, 1.0)
         );
     }
@@ -368,7 +369,7 @@ fn assert_choice_box(tokens: &DesignTokens, kind: ControlKind, corner: Corners) 
         kind.name()
     );
     assert_eq!(
-        (rest.border, rest.border_width, rest.background, rest.shadow),
+        (rest.border, rest.border_width, bg(&rest), rest.shadow),
         (
             c(ColorRole::Input),
             1.0,
@@ -380,7 +381,7 @@ fn assert_choice_box(tokens: &DesignTokens, kind: ControlKind, corner: Corners) 
     for on in [VisualState::CHECKED, VisualState::INDETERMINATE] {
         let checked = get(tokens, query(on));
         assert_eq!(
-            (checked.background, checked.border),
+            (bg(&checked), checked.border),
             (c(ColorRole::Primary), c(ColorRole::Primary))
         );
     }
@@ -440,7 +441,7 @@ fn radio_group_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::RadioGroup, slot);
         let dot = get(&tokens, query(Slot::Indicator));
         assert_eq!(
-            (dot.background, dot.min_width, dot.min_height, dot.radius),
+            (bg(&dot), dot.min_width, dot.min_height, dot.radius),
             (
                 tokens.color(ColorRole::PrimaryForeground),
                 8.0,
@@ -471,7 +472,7 @@ fn switch_matches_its_reference_table() {
             let off = get(&tokens, query(Slot::Root, VisualState::NONE));
             let off_fill = c(ColorRole::Input).with_alpha(if dark { 0.8 } else { 1.0 });
             assert_eq!(
-                (off.min_width, off.min_height, off.background),
+                (off.min_width, off.min_height, bg(&off)),
                 (width, height, off_fill),
                 "{}",
                 size.name()
@@ -485,7 +486,7 @@ fn switch_matches_its_reference_table() {
                 )
             );
             let on = get(&tokens, query(Slot::Root, VisualState::CHECKED));
-            assert_eq!(on.background, c(ColorRole::Primary));
+            assert_eq!(bg(&on), c(ColorRole::Primary));
             let focused = get(&tokens, query(Slot::Root, VisualState::FOCUS_VISIBLE));
             assert_eq!(focused.ring, focus_ring(&tokens));
             let disabled = get(&tokens, query(Slot::Root, VisualState::DISABLED));
@@ -511,12 +512,7 @@ fn switch_matches_its_reference_table() {
             ] {
                 let knob = get(&tokens, query(Slot::Thumb, state));
                 assert_eq!(
-                    (
-                        knob.min_width,
-                        knob.min_height,
-                        knob.background,
-                        knob.radius
-                    ),
+                    (knob.min_width, knob.min_height, bg(&knob), knob.radius),
                     (thumb, thumb, fill, radius(&tokens, RadiusScale::Full)),
                     "{} thumb {state}",
                     size.name()
@@ -576,17 +572,17 @@ fn assert_toggle(tokens: &DesignTokens, kind: ControlKind, slot: Slot) {
         let look = |state| get(tokens, query(variant, ControlSize::Default, state));
         let rest = look(VisualState::NONE);
         assert_eq!(
-            (rest.background, rest.border, rest.shadow),
+            (bg(&rest), rest.border, rest.shadow),
             (Color::TRANSPARENT, border, shadow),
             "{}",
             variant.name()
         );
         let hover = look(VisualState::HOVERED);
         assert_eq!(
-            (hover.background, hover.foreground),
+            (bg(&hover), hover.foreground),
             (c(ColorRole::Muted), c(ColorRole::Foreground))
         );
-        assert_eq!(look(VisualState::CHECKED).background, c(ColorRole::Muted));
+        assert_eq!(bg(&look(VisualState::CHECKED)), c(ColorRole::Muted));
         let focused = look(VisualState::FOCUS_VISIBLE);
         assert_eq!(
             (focused.border, focused.ring),
@@ -598,10 +594,7 @@ fn assert_toggle(tokens: &DesignTokens, kind: ControlKind, slot: Slot) {
             (c(ColorRole::Destructive), invalid_ring(tokens))
         );
         let disabled = look(VisualState::HOVERED.with(VisualState::DISABLED));
-        assert_eq!(
-            (disabled.background, disabled.opacity),
-            (Color::TRANSPARENT, 0.5)
-        );
+        assert_eq!((bg(&disabled), disabled.opacity), (Color::TRANSPARENT, 0.5));
     }
 }
 
@@ -645,28 +638,15 @@ fn slider_matches_its_reference_table() {
 
         let track = get(&tokens, query(Slot::Track, VisualState::NONE));
         assert_eq!(
-            (
-                track.background,
-                track.radius,
-                track.min_height,
-                track.min_width
-            ),
+            (bg(&track), track.radius, track.min_height, track.min_width),
             (c(ColorRole::Muted), full, 6.0, 6.0)
         );
         let range = get(&tokens, query(Slot::Range, VisualState::NONE));
-        assert_eq!(
-            (range.background, range.radius),
-            (c(ColorRole::Primary), full)
-        );
+        assert_eq!((bg(&range), range.radius), (c(ColorRole::Primary), full));
 
         let thumb = get(&tokens, query(Slot::Thumb, VisualState::NONE));
         assert_eq!(
-            (
-                thumb.background,
-                thumb.border,
-                thumb.border_width,
-                thumb.radius
-            ),
+            (bg(&thumb), thumb.border, thumb.border_width, thumb.radius),
             (Color::WHITE, c(ColorRole::Primary), 1.0, full)
         );
         assert_eq!(
@@ -722,7 +702,7 @@ fn kbd_matches_its_reference_table() {
                 StyleQuery::new(ControlKind::Kbd, Slot::Root).variant(variant),
             );
             assert_eq!(
-                (cap.background, cap.foreground),
+                (bg(&cap), cap.foreground),
                 (fill, text),
                 "{}",
                 variant.name()

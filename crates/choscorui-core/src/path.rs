@@ -458,7 +458,32 @@ pub enum Paint {
     },
 }
 
+impl From<Color> for Paint {
+    fn from(color: Color) -> Self {
+        Self::Solid(color)
+    }
+}
+
 impl Paint {
+    /// The color of a solid paint, or `None` for a gradient.
+    pub fn solid_color(&self) -> Option<Color> {
+        match self {
+            Self::Solid(color) => Some(*color),
+            _ => None,
+        }
+    }
+
+    /// True when no part of the paint is visible: every color has zero
+    /// alpha.
+    pub fn is_transparent(&self) -> bool {
+        match self {
+            Self::Solid(color) => color.alpha == 0,
+            Self::LinearGradient { stops, .. } | Self::RadialGradient { stops, .. } => {
+                stops.iter().all(|stop| stop.color.alpha == 0)
+            }
+        }
+    }
+
     pub fn is_valid(&self) -> bool {
         let stops_ok = |stops: &[GradientStop]| {
             stops.len() >= 2

@@ -6,6 +6,7 @@
 //! provided. Documents use tabs in the central area or separate native
 //! windows, which is what macOS users expect.
 
+use crate::style::fill_area;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
 };
@@ -565,12 +566,14 @@ impl DockLayout {
         for group in &arrangement.groups {
             cx.slot(group.rect, &frame, |_, _| {});
             let bar = group.tab_bar;
-            cx.list.fill_rect(
+            fill_area(
+                cx.list,
                 Rect::new(
                     Point::new(bar.origin.x, bar.max_y() - 1.0),
                     Size::new(bar.size.width, 1.0),
                 ),
-                border,
+                cx.rtl,
+                &border,
             );
             for (index, panel) in group.tabs.iter().enumerate() {
                 let rect = group.tab_rect(index, cx.rtl);
@@ -587,7 +590,7 @@ impl DockLayout {
                     Point::new(rect.origin.x, rect.max_y() - indicator.min_height),
                     Size::new(rect.size.width, indicator.min_height),
                 );
-                cx.list.fill_rect(line, indicator.background);
+                fill_area(cx.list, line, cx.rtl, &indicator.background);
             }
         }
         for (area, rect) in &arrangement.splitters {

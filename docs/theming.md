@@ -21,9 +21,9 @@ swatch for each base beside its theme buttons.
 | Color | `base`, `scheme`, `palette`, `color(role)` | paint |
 | Shape | `radius`, `radius(step)`, `radius_for(step, bounds)`, `border_width` | layout, paint, semantics |
 | Spacing | `spacing`, `space(units)` | layout, paint, semantics |
-| Typography | `text_scale`, `font_sans`, `font_mono`, `text(size, weight)`, `preset(preset)` | layout, paint, semantics |
+| Typography | `text_scale`, `type_scale`, `font_sans`, `font_mono`, `text(size, weight)`, `preset(preset)`, `typeset(typeset)` | layout, paint, semantics |
 | Focus ring | `ring_width`, `ring_alpha`, `ring_color(color)` | `ring_width`: layout; `ring_alpha`: paint |
-| Shadows | `shadow(step)` | paint |
+| Shadows | `shadows`, `shadow(step)` | paint |
 | Motion | `motion.duration_ms`, `motion.easing`, `motion.reduced` | paint |
 | Contrast | `contrast` (`Contrast::Normal` or `Contrast::High`) | paint |
 
@@ -53,11 +53,46 @@ is 16 points.
 | `Tracking` | `Tighter` −0.05 em, `Tight` −0.025 em, `Normal`, `Wide` 0.025 em, `Wider` 0.05 em, `Widest` 0.1 em. |
 | `ShadowScale` | `Xs2`, `Xs`, `Sm`, `Md`, `Lg`, `Xl`, `Xl2`, and the inset steps `InsetXs2`, `InsetXs`, `InsetSm`. |
 
+The `type_scale` token is a `TypeScale` that holds the size and line height
+of each `TextSize` step. `TypeScale::DEFAULT` holds the values above. The
+`shadows` token is a `ShadowTable` that holds the layers of each
+`ShadowScale` step. `ShadowTable::standard` holds the reference values.
+
 `text` and `preset` return a `TypeSpec`: family, size, line height, weight,
 slant, and tracking. `TypeSpec::text_style` makes a `TextStyle` for the
-shaper. The `TextPreset` values are the typography rules: `H1` to `H4`,
-`Paragraph`, `Lead`, `Large`, `Small`, `Muted`, `Blockquote`, `List`, and
-`InlineCode`.
+shaper. The `TextPreset` values are the typography rules of the reference:
+
+| Preset | Face | Size / line height | Weight | Tracking | Other | Color role |
+| --- | --- | --- | --- | --- | --- | --- |
+| `H1` | sans | 36/40 (`Xl4`) | extra bold | `Tight` | - | `Foreground` |
+| `H2` | sans | 30/36 (`Xl3`) | semibold | `Tight` | - | `Foreground` |
+| `H3` | sans | 24/32 (`Xl2`) | semibold | `Tight` | - | `Foreground` |
+| `H4` | sans | 20/28 (`Xl`) | semibold | `Tight` | - | `Foreground` |
+| `Paragraph` | sans | 16/28 (leading 7) | normal | `Normal` | - | `Foreground` |
+| `Lead` | sans | 20/28 (`Xl`) | normal | `Normal` | - | `MutedForeground` |
+| `Large` | sans | 18/28 (`Lg`) | semibold | `Normal` | - | `Foreground` |
+| `Small` | sans | 14/14 (leading none) | medium | `Normal` | - | `Foreground` |
+| `Muted` | sans | 14/20 (`Sm`) | normal | `Normal` | - | `MutedForeground` |
+| `Blockquote` | sans | 16/24 (`Base`) | normal | `Normal` | italic | `Foreground` |
+| `List` | sans | 16/28 (leading 7) | normal | `Normal` | - | `Foreground` |
+| `InlineCode` | mono | 14/20 (`Sm`) | semibold | `Normal` | - | `Foreground` |
+
+The type steps come from `type_scale`. A preset with a fixed leading keeps
+that line height, multiplied by `text_scale`. The test
+`every_text_preset_has_its_reference_size_leading_and_weight` in
+[theme.rs](../crates/choscorui-core/tests/theme.rs) pins the table.
+
+A `Typeset` gives the body text of long-form content. Its `size` is the body
+size in points. The `leading` and the `flow` are multiples of the size: the
+line height and the space between blocks. `DesignTokens::typeset`
+returns the body `TypeSpec`, and `Typeset::block_gap` returns the space
+between blocks.
+
+| Typeset | Size | Leading | Flow |
+| --- | --- | --- | --- |
+| `Typeset::DEFAULT` | 16 (1 em) | 1.75 | 1.25 em (20) |
+| `Typeset::CHAT` | 16 | 1.6 | 1 em (16) |
+| `Typeset::COMPACT` | 14 | 1.6 | 1 em (14) |
 
 `font_sans` and `font_mono` are `FontFamily` values. The defaults
 `FontFamily::SYSTEM_UI` and `FontFamily::SYSTEM_MONO` select the system faces.
@@ -66,12 +101,16 @@ The toolkit bundles no fonts.
 A `Shadow` has an offset, a blur radius, a spread, a color, and an `inset`
 flag, with the meaning of CSS `box-shadow`. `ShadowLayers` holds up to three
 shadows. `DisplayList::draw_shadows` draws them in order.
+`DisplayList::draw_shadow_corners` draws one shadow of a shape with a radius
+for each corner. `Shadow::mask_corners` makes the shared mask that each painter
+draws.
 
 `DisplayList::draw_ring` draws a focus ring. The ring is a stroke of
 `ring_width` just outside the shape, and it follows the corner radius.
 
 `DisplayList::backdrop_blur` blurs the painted content inside a rounded
-rectangle. The blur is a Gaussian with a standard deviation in points, as in
+rectangle. `DisplayList::backdrop_blur_corners` does the same inside a
+rectangle with a radius for each corner. The blur is a Gaussian with a standard deviation in points, as in
 CSS `backdrop-filter: blur()`. A style with a `backdrop_blur` above zero gets
 this blur under its background. The modal scrim uses it. Every painter blurs
 with `blur_pixels`, so the pixels match.
@@ -89,6 +128,11 @@ override in this order:
 2. A `palette` replaces the full palette.
 3. Each entry in `roles` replaces one color role.
 4. The other fields replace their tokens.
+
+The scales are overrides too. `radius` and `spacing` change every step of
+their scales. `type_scale` replaces the type scale, and `text_scale`
+multiplies it. `shadows` replaces the shadow table. A change of `type_scale`
+invalidates layout, and a change of `shadows` invalidates paint.
 
 `ThemeOverride::role(role, color)` and `ThemeOverride::theme(base, scheme)`
 make the usual overrides.
@@ -127,7 +171,8 @@ The accessibility preferences change the tokens as follows:
 A change that gives invalid tokens returns `ThemeError`, and the previous theme
 stays in effect. Invalid tokens include a negative or non-finite size, a
 `text_scale` of zero, an empty font family, and a `ring_alpha` outside
-`0..=1`. A `text_scale` that is not positive and finite returns
+`0..=1`. A type step that is not positive and a shadow with a negative or
+non-finite value are also invalid. A `text_scale` that is not positive and finite returns
 `ThemeError::InvalidPreferences`.
 
 ## Style views
@@ -214,6 +259,13 @@ A `ResolvedStyle` holds every visual value of one slot. These include the
 background, foreground, border, corner radii, shadows, ring, logical padding,
 minimum size, gap, text, icon size, opacity, cursor, and duration.
 
+The background is a `Paint`. The default recipe gives a solid color, and a
+recipe can give a linear or radial gradient. The points of a gradient are in
+the unit square of the slot box. The point (0, 0) is the top start corner,
+and (1, 1) is the bottom end corner, so the gradient mirrors in a
+right-to-left layout. A radial radius is a fraction of the longer side of
+the box. `fill_shape` places the paint on the box.
+
 `Styles` is the registry and the cache:
 
 - `Styles::resolve` returns the style of a query. It caches the result by the
@@ -235,8 +287,9 @@ invalid state uses a `destructive` ring at 20% (40% in dark) and a
 `motion.reduced`, every duration is zero.
 
 `paint_slot` is the general slot painter. It paints the drop shadows, the
-ring, the background, the inset shadows, and the border, in that order. Then
-it calls a closure with the box inside the padding. `draw_text` and
+ring, the backdrop blur, the background, the inset shadows, and the border,
+in that order. Then it calls a closure with the box inside the padding. The
+shadows, the ring, and the blur follow the radius of each corner. `draw_text` and
 `draw_icon` draw the content of a slot.
 
 ## State transitions
@@ -246,7 +299,8 @@ When the visual state of a control changes, its colors ease. A
 
 - **Values.** The background, foreground, border, ring color and width, and
   shadows blend. Colors mix with premultiplied alpha. A ring that appears
-  grows from zero width. The other values, such as the offset and the
+  grows from zero width. A solid background blends into a solid background.
+  A change from or to a gradient shows the new background at once. The other values, such as the offset and the
   padding, change at once.
 - **Timing.** A blend lasts the target style's `motion_ms`, by default the
   `motion.duration_ms` token of 150 ms. It follows the `motion.easing`
@@ -400,7 +454,7 @@ impl Recipe for OutlineRecipe {
         style.padding = Edges::axes(tokens.space(3.0), 0.0);
         style.min_height = tokens.space(9.0);
         if query.state.pressed() {
-            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15);
+            style.background = tokens.color(ColorRole::Primary).with_alpha(0.15).into();
         }
         if query.state.disabled() {
             style.opacity = 0.5;
@@ -449,7 +503,8 @@ impl ItemDelegate for BadgeDelegate {
             let style = cx.style(StyleQuery::new(ControlKind::Badge, Slot::Root));
             let badge = rect.size.height - 8.0;
             let dot = Rect::from_xywh(rect.origin.x + 4.0, rect.origin.y + 4.0, badge, badge);
-            let _ = cx.list.fill_rounded_rect(dot, badge / 2.0, style.background);
+            let corners = Corners::all(badge / 2.0);
+            fill_shape(cx.list, dot, &corners, cx.rtl, &style.background);
             let label = Rect::from_xywh(
                 dot.max_x() + 4.0,
                 rect.origin.y,

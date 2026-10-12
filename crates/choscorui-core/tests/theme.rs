@@ -1,8 +1,9 @@
 use choscorui_core::{
     AccessibilityPreferences, BaseColor, Color, ColorRole, ColorScheme, Contrast, CubicBezier,
-    DesignTokens, Dirty, FontFamily, FontWeight, MotionTokens, Palette, Point, RadiusScale, Rect,
-    ShadowScale, Size, TextPreset, TextSize, ThemeError, ThemeInvalidation, ThemeOverride,
-    ThemeResolver, Tracking, Tree, palette_source,
+    DesignTokens, Dirty, FontFamily, FontSlant, FontWeight, MotionTokens, Palette, Point,
+    RadiusScale, Rect, Shadow, ShadowLayers, ShadowScale, ShadowTable, Size, TextPreset, TextSize,
+    ThemeError, ThemeInvalidation, ThemeOverride, ThemeResolver, Tracking, Tree, TypeScale,
+    Typeset, palette_source,
 };
 
 fn rect() -> Rect {
@@ -438,4 +439,237 @@ fn type_specs_become_text_styles() {
     assert_eq!(style.weight, FontWeight::MEDIUM);
     assert!((style.tracking - 0.35).abs() < 1e-9);
     assert!(style.validate().is_ok());
+}
+
+#[test]
+fn every_text_preset_has_its_reference_size_leading_and_weight() {
+    let tokens = DesignTokens::light();
+    let (sans, mono) = (FontFamily::SYSTEM_UI, FontFamily::SYSTEM_MONO);
+    let upright = FontSlant::Upright;
+    // Preset, family, size, line height, weight, tracking in em, slant, role.
+    let table = [
+        (
+            TextPreset::H1,
+            sans,
+            36.0,
+            40.0,
+            FontWeight::EXTRABOLD,
+            -0.025,
+            upright,
+        ),
+        (
+            TextPreset::H2,
+            sans,
+            30.0,
+            36.0,
+            FontWeight::SEMIBOLD,
+            -0.025,
+            upright,
+        ),
+        (
+            TextPreset::H3,
+            sans,
+            24.0,
+            32.0,
+            FontWeight::SEMIBOLD,
+            -0.025,
+            upright,
+        ),
+        (
+            TextPreset::H4,
+            sans,
+            20.0,
+            28.0,
+            FontWeight::SEMIBOLD,
+            -0.025,
+            upright,
+        ),
+        (
+            TextPreset::Paragraph,
+            sans,
+            16.0,
+            28.0,
+            FontWeight::REGULAR,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::Lead,
+            sans,
+            20.0,
+            28.0,
+            FontWeight::REGULAR,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::Large,
+            sans,
+            18.0,
+            28.0,
+            FontWeight::SEMIBOLD,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::Small,
+            sans,
+            14.0,
+            14.0,
+            FontWeight::MEDIUM,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::Muted,
+            sans,
+            14.0,
+            20.0,
+            FontWeight::REGULAR,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::Blockquote,
+            sans,
+            16.0,
+            24.0,
+            FontWeight::REGULAR,
+            0.0,
+            FontSlant::Italic,
+        ),
+        (
+            TextPreset::List,
+            sans,
+            16.0,
+            28.0,
+            FontWeight::REGULAR,
+            0.0,
+            upright,
+        ),
+        (
+            TextPreset::InlineCode,
+            mono,
+            14.0,
+            20.0,
+            FontWeight::SEMIBOLD,
+            0.0,
+            upright,
+        ),
+    ];
+    assert_eq!(table.len(), TextPreset::ALL.len());
+    for (preset, family, size, line_height, weight, tracking, slant) in table {
+        let spec = tokens.preset(preset);
+        assert_eq!(spec.family, family, "{preset:?}");
+        assert_eq!(
+            (spec.size, spec.line_height),
+            (size, line_height),
+            "{preset:?}"
+        );
+        assert_eq!(spec.weight, weight, "{preset:?}");
+        assert_eq!(spec.tracking, tracking * size, "{preset:?}");
+        assert_eq!(spec.slant, slant, "{preset:?}");
+    }
+    for preset in TextPreset::ALL {
+        let muted = matches!(preset, TextPreset::Lead | TextPreset::Muted);
+        let role = if muted {
+            ColorRole::MutedForeground
+        } else {
+            ColorRole::Foreground
+        };
+        assert_eq!(preset.color(), role, "{preset:?}");
+    }
+}
+
+#[test]
+fn a_typeset_gives_body_text_and_the_space_between_blocks() {
+    let mut tokens = DesignTokens::light();
+    let body = tokens.typeset(Typeset::DEFAULT);
+    assert_eq!((body.size, body.line_height), (16.0, 28.0));
+    assert_eq!(body.family, FontFamily::SYSTEM_UI);
+    assert_eq!(Typeset::DEFAULT.block_gap(), 20.0);
+    assert_eq!(Typeset::default(), Typeset::DEFAULT);
+    assert_eq!(Typeset::CHAT.line_height(), 16.0 * 1.6);
+    assert_eq!(Typeset::CHAT.block_gap(), 16.0);
+    assert_eq!(Typeset::COMPACT.line_height(), 14.0 * 1.6);
+    tokens.text_scale = 1.5;
+    let scaled = tokens.typeset(Typeset::DEFAULT);
+    assert_eq!((scaled.size, scaled.line_height), (24.0, 42.0));
+}
+
+#[test]
+fn a_theme_can_replace_the_type_scale_and_the_shadow_table() {
+    let mut tree = Tree::new(rect());
+    let node = tree.attach(tree.root(), rect()).unwrap();
+    let mut themes = ThemeResolver::new(DesignTokens::light());
+    assert_eq!(DesignTokens::light().type_scale, TypeScale::DEFAULT);
+    for size in TextSize::ALL {
+        assert_eq!(TypeScale::DEFAULT.metrics(size), size.metrics());
+    }
+    let larger = TypeScale::DEFAULT.with(TextSize::Sm, 15.0, 22.0);
+    let change = themes
+        .set_scope(
+            &mut tree,
+            node,
+            ThemeOverride {
+                type_scale: Some(larger),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(change, ThemeInvalidation::Layout);
+    let tokens = themes.resolve(&tree, node).unwrap();
+    let small = tokens.text(TextSize::Sm, FontWeight::NORMAL);
+    assert_eq!((small.size, small.line_height), (15.0, 22.0));
+    assert_eq!(tokens.preset(TextPreset::Muted).size, 15.0);
+    assert_ne!(tokens.fingerprint(), DesignTokens::light().fingerprint());
+
+    let flat = ShadowTable::standard().with(ShadowScale::Sm, ShadowLayers::NONE);
+    let change = themes
+        .set_scope(
+            &mut tree,
+            node,
+            ThemeOverride {
+                type_scale: Some(larger),
+                shadows: Some(flat),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(change, ThemeInvalidation::Paint);
+    let tokens = themes.resolve(&tree, node).unwrap();
+    assert!(tokens.shadow(ShadowScale::Sm).is_empty());
+    assert_eq!(tokens.shadow(ShadowScale::Md), ShadowScale::Md.layers());
+    assert_eq!(
+        themes
+            .resolve(&tree, tree.root())
+            .unwrap()
+            .shadow(ShadowScale::Sm),
+        ShadowScale::Sm.layers()
+    );
+
+    let broken_shadow =
+        ShadowLayers::new(&[Shadow::drop(Point::new(0.0, 1.0), -1.0, Color::BLACK)]);
+    for invalid in [
+        ThemeOverride {
+            type_scale: Some(TypeScale::DEFAULT.with(TextSize::Xs, 0.0, 16.0)),
+            ..Default::default()
+        },
+        ThemeOverride {
+            shadows: Some(ShadowTable::standard().with(ShadowScale::Lg, broken_shadow)),
+            ..Default::default()
+        },
+    ] {
+        assert_eq!(
+            themes.set_scope(&mut tree, node, invalid),
+            Err(ThemeError::InvalidTokens)
+        );
+    }
+    assert!(
+        themes
+            .resolve(&tree, node)
+            .unwrap()
+            .shadow(ShadowScale::Sm)
+            .is_empty()
+    );
 }

@@ -90,14 +90,14 @@ fn region(
     }
 }
 
-/// Blurs the bitmap under the rounded `rect` with a Gaussian of standard
-/// deviation `blur` points. A context that is not a 32-bit bitmap context
+/// Blurs the bitmap under `rect`, rounded with `radii` clockwise from the
+/// top left, with a Gaussian of standard deviation `blur` points. A context that is not a 32-bit bitmap context
 /// paints nothing.
 ///
 /// # Safety
 ///
 /// `context` must be a valid `CGContext` for the duration of the call.
-pub(crate) unsafe fn backdrop_blur(context: Id, rect: Rect, radius: f64, blur: f64) {
+pub(crate) unsafe fn backdrop_blur(context: Id, rect: Rect, radii: [f64; 4], blur: f64) {
     // SAFETY: The caller passes a live context. The bitmap getters return
     // null or zero for other contexts, which return early. Row reads stay
     // inside `stride * height` bytes after the stride check. The blurred
@@ -157,7 +157,7 @@ pub(crate) unsafe fn backdrop_blur(context: Id, rect: Rect, radius: f64, blur: f
             return;
         };
         CGContextSaveGState(context);
-        paint::add_path(context, &Path::rounded_rect(rect, radius));
+        paint::add_path(context, &Path::rounded_rect_corners(rect, radii));
         CGContextClip(context);
         // Draw in device space so that each blurred pixel lands where it
         // was read.

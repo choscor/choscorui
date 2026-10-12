@@ -1348,7 +1348,7 @@ fn paint_divider(
         Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
         size,
     );
-    fill_shape(cx.list, rect, &grip.radius, cx.rtl, grip.background);
+    fill_shape(cx.list, rect, &grip.radius, cx.rtl, &grip.background);
 }
 
 fn primary_size(bounds: Rect, orientation: SplitOrientation) -> f64 {

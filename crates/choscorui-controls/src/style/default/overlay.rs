@@ -21,7 +21,7 @@ pub(super) fn resolve(cx: &Cx) -> ResolvedStyle {
 /// The dimmed, blurred layer behind a modal overlay.
 fn scrim(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
-    style.background = Color::BLACK.with_alpha(0.1);
+    style.background = Color::BLACK.with_alpha(0.1).into();
     style.backdrop_blur = 4.0;
     style.motion_ms = cx.motion(100);
     style
@@ -55,7 +55,7 @@ fn dialog(cx: &Cx) -> ResolvedStyle {
         Slot::Description => muted_text(cx, TextSize::Sm),
         Slot::Media => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Md));
             style.min_width = cx.sp(16.0);
             style.min_height = cx.sp(16.0);
@@ -116,7 +116,7 @@ fn sheet(cx: &Cx) -> ResolvedStyle {
         Slot::Description => muted_text(cx, TextSize::Sm),
         Slot::Handle => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.min_width = 100.0;
             style.min_height = cx.sp(1.5);
@@ -134,7 +134,7 @@ fn sheet(cx: &Cx) -> ResolvedStyle {
         }
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Popover);
+            style.background = cx.c(ColorRole::Popover).into();
             style.foreground = cx.c(ColorRole::PopoverForeground);
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
@@ -192,7 +192,7 @@ fn popover(cx: &Cx) -> ResolvedStyle {
 
 fn tooltip(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
-    style.background = cx.c(ColorRole::Foreground);
+    style.background = cx.c(ColorRole::Foreground).into();
     style.foreground = cx.c(ColorRole::Background);
     match cx.q.slot {
         Slot::Indicator => {
@@ -234,7 +234,7 @@ fn menu(cx: &Cx) -> ResolvedStyle {
             style.border_width = cx.t.border_width;
             style.padding = Edges::all(cx.sp(1.0));
             style.shadow = cx.shadow(ShadowScale::Xs);
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style
         }
         Slot::Trigger if bar => {
@@ -243,7 +243,7 @@ fn menu(cx: &Cx) -> ResolvedStyle {
             style.padding = Edges::axes(cx.sp(2.0), cx.sp(1.0));
             style.text = cx.text(TextSize::Sm, FontWeight::MEDIUM);
             if s.interactive_hover() || s.open() || s.highlighted() {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
             }
             super::focus(&mut style, cx);
             disabled(&mut style, cx);
@@ -254,7 +254,7 @@ fn menu(cx: &Cx) -> ResolvedStyle {
                 MenuItemVariant::from_variant(cx.q.variant) == MenuItemVariant::Destructive;
             let mut style = list_item(cx, destructive);
             if cx.q.slot == Slot::Trigger && s.open() {
-                style.background = cx.c(ColorRole::Accent);
+                style.background = cx.c(ColorRole::Accent).into();
                 style.foreground = cx.c(ColorRole::AccentForeground);
             }
             style
@@ -313,7 +313,7 @@ fn command(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Input => {
             let mut style = cx.base();
-            style.background = cx.a(ColorRole::Input, 0.3);
+            style.background = cx.a(ColorRole::Input, 0.3).into();
             style.border = cx.a(ColorRole::Input, 0.3);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Lg));
@@ -333,7 +333,7 @@ fn command(cx: &Cx) -> ResolvedStyle {
         Slot::Item => {
             let mut style = list_item(cx, false);
             if s.highlighted() || s.selected() {
-                style.background = cx.c(ColorRole::Muted);
+                style.background = cx.c(ColorRole::Muted).into();
                 style.foreground = cx.c(ColorRole::Foreground);
             }
             if cx.q.size == crate::style::ControlSize::Lg {
@@ -361,7 +361,7 @@ fn command(cx: &Cx) -> ResolvedStyle {
         Slot::Overlay => scrim(cx),
         _ => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Popover);
+            style.background = cx.c(ColorRole::Popover).into();
             style.foreground = cx.c(ColorRole::PopoverForeground);
             style.radius = Corners::all(cx.r(RadiusScale::Xl));
             style.padding = Edges::all(cx.sp(1.0));

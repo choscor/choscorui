@@ -1,3 +1,4 @@
+use crate::style::fill_area;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure, VisualState,
 };
@@ -122,7 +123,7 @@ impl Separator {
                 )
             }
         };
-        cx.list.fill_rect(line, style.background);
+        fill_area(cx.list, line, cx.rtl, &style.background);
     }
 }
 

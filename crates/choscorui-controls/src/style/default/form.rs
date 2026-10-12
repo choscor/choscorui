@@ -66,29 +66,35 @@ pub(crate) fn button(cx: &Cx, variant: ButtonVariant, size: ControlSize) -> Reso
     let open = s.open();
     match variant {
         ButtonVariant::Default => {
-            style.background = cx.a(ColorRole::Primary, if hover { 0.8 } else { 1.0 });
+            style.background = cx
+                .a(ColorRole::Primary, if hover { 0.8 } else { 1.0 })
+                .into();
             style.foreground = cx.c(ColorRole::PrimaryForeground);
         }
         ButtonVariant::Outline => {
             style.border = cx.pick(cx.c(ColorRole::Border), cx.c(ColorRole::Input));
-            style.background = cx.pick(cx.c(ColorRole::Background), cx.a(ColorRole::Input, 0.3));
+            style.background = cx
+                .pick(cx.c(ColorRole::Background), cx.a(ColorRole::Input, 0.3))
+                .into();
             style.shadow = cx.shadow(ShadowScale::Xs);
             if hover || open {
                 style.background = if hover && cx.dark() {
                     cx.a(ColorRole::Input, 0.5)
                 } else {
                     cx.c(ColorRole::Muted)
-                };
+                }
+                .into();
                 style.foreground = cx.c(ColorRole::Foreground);
             }
         }
         ButtonVariant::Secondary => {
-            style.background = cx.c(ColorRole::Secondary);
+            style.background = cx.c(ColorRole::Secondary).into();
             style.foreground = cx.c(ColorRole::SecondaryForeground);
             if hover && !open {
                 style.background = cx
                     .c(ColorRole::Secondary)
-                    .mix(cx.c(ColorRole::Foreground), 0.05);
+                    .mix(cx.c(ColorRole::Foreground), 0.05)
+                    .into();
             }
         }
         ButtonVariant::Ghost => {
@@ -97,7 +103,8 @@ pub(crate) fn button(cx: &Cx, variant: ButtonVariant, size: ControlSize) -> Reso
                     cx.a(ColorRole::Muted, 0.5)
                 } else {
                     cx.c(ColorRole::Muted)
-                };
+                }
+                .into();
                 style.foreground = cx.c(ColorRole::Foreground);
             }
         }
@@ -107,7 +114,7 @@ pub(crate) fn button(cx: &Cx, variant: ButtonVariant, size: ControlSize) -> Reso
                 (false, true) | (true, false) => 0.2,
                 (true, true) => 0.3,
             };
-            style.background = cx.a(ColorRole::Destructive, alpha);
+            style.background = cx.a(ColorRole::Destructive, alpha).into();
             style.foreground = cx.c(ColorRole::Destructive);
         }
         ButtonVariant::Link => {
@@ -135,7 +142,7 @@ fn button_group(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Text => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.border = cx.c(ColorRole::Border);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Md));
@@ -148,7 +155,7 @@ fn button_group(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Separator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Input);
+            style.background = cx.c(ColorRole::Input).into();
             style.min_width = 1.0;
             style.min_height = 1.0;
             style
@@ -170,12 +177,14 @@ fn choice_box(cx: &Cx) -> ResolvedStyle {
     style.min_height = cx.sp(4.0);
     style.border = cx.c(ColorRole::Input);
     style.border_width = cx.t.border_width;
-    style.background = cx.pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3));
+    style.background = cx
+        .pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3))
+        .into();
     style.shadow = cx.shadow(ShadowScale::Xs);
     style.foreground = cx.c(ColorRole::PrimaryForeground);
     let on = s.checked() || s.indeterminate();
     if on {
-        style.background = cx.c(ColorRole::Primary);
+        style.background = cx.c(ColorRole::Primary).into();
         style.border = cx.c(ColorRole::Primary);
     }
     focus(&mut style, cx);
@@ -201,7 +210,7 @@ fn radio(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Indicator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::PrimaryForeground);
+            style.background = cx.c(ColorRole::PrimaryForeground).into();
             style.min_width = cx.sp(2.0);
             style.min_height = cx.sp(2.0);
             style.radius = Corners::all(cx.r(RadiusScale::Full));
@@ -267,7 +276,7 @@ fn select(cx: &Cx) -> ResolvedStyle {
                 9.0
             });
             if cx.dark() && s.interactive_hover() {
-                style.background = cx.a(ColorRole::Input, 0.5);
+                style.background = cx.a(ColorRole::Input, 0.5).into();
             }
             states(&mut style, cx);
             style
@@ -303,7 +312,7 @@ fn select(cx: &Cx) -> ResolvedStyle {
         Slot::Separator => rule(cx, cx.sp(1.0)),
         Slot::Previous | Slot::Next => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Popover);
+            style.background = cx.c(ColorRole::Popover).into();
             style.padding = Edges::axes(0.0, cx.sp(1.0));
             style.min_height = cx.sp(6.0);
             style
@@ -315,7 +324,7 @@ fn select(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Input => {
             let mut style = field_box(cx);
-            style.background = cx.a(ColorRole::Input, 0.3);
+            style.background = cx.a(ColorRole::Input, 0.3).into();
             style.border = cx.a(ColorRole::Input, 0.3);
             style.shadow = ShadowLayers::NONE;
             style.min_height = cx.sp(8.0);
@@ -325,7 +334,7 @@ fn select(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Badge => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Sm));
             style.min_height = cx.sp(5.5);
             style.padding = Edges::axes(cx.sp(1.5), 0.0);
@@ -367,7 +376,7 @@ fn native_select(cx: &Cx) -> ResolvedStyle {
                 9.0
             });
             if cx.dark() && cx.s().interactive_hover() {
-                style.background = cx.a(ColorRole::Input, 0.5);
+                style.background = cx.a(ColorRole::Input, 0.5).into();
             }
             states(&mut style, cx);
             style
@@ -396,7 +405,7 @@ fn slider(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Track => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.min_height = cx.sp(1.5);
             style.min_width = cx.sp(1.5);
@@ -405,14 +414,14 @@ fn slider(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Range => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Primary);
+            style.background = cx.c(ColorRole::Primary).into();
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             disabled(&mut style, cx);
             style
         }
         Slot::Thumb => {
             let mut style = cx.base();
-            style.background = Color::WHITE;
+            style.background = Color::WHITE.into();
             style.border = cx.c(ColorRole::Primary);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Full));
@@ -444,7 +453,8 @@ fn switch(cx: &Cx) -> ResolvedStyle {
                 (false, _) => cx.c(ColorRole::Background),
                 (true, true) => cx.c(ColorRole::PrimaryForeground),
                 (true, false) => cx.c(ColorRole::Foreground),
-            };
+            }
+            .into();
             let size = if small { 12.0 } else { 16.0 };
             style.min_width = size;
             style.min_height = size;
@@ -458,7 +468,8 @@ fn switch(cx: &Cx) -> ResolvedStyle {
                 cx.c(ColorRole::Primary)
             } else {
                 cx.a(ColorRole::Input, cx.pick(1.0, 0.8))
-            };
+            }
+            .into();
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.shadow = cx.shadow(ShadowScale::Xs);
@@ -500,11 +511,11 @@ fn toggle(cx: &Cx) -> ResolvedStyle {
         style.shadow = cx.shadow(ShadowScale::Xs);
     }
     if s.interactive_hover() {
-        style.background = cx.c(ColorRole::Muted);
+        style.background = cx.c(ColorRole::Muted).into();
         style.foreground = cx.c(ColorRole::Foreground);
     }
     if s.checked() {
-        style.background = cx.c(ColorRole::Muted);
+        style.background = cx.c(ColorRole::Muted).into();
     }
     focus(&mut style, cx);
     if s.invalid() {
@@ -572,10 +583,10 @@ fn field(cx: &Cx) -> ResolvedStyle {
                 style.radius = Corners::all(cx.r(RadiusScale::Md));
                 style.padding = Edges::all(cx.sp(3.0));
                 if s.interactive_hover() {
-                    style.background = cx.a(ColorRole::Muted, 0.5);
+                    style.background = cx.a(ColorRole::Muted, 0.5).into();
                 }
                 if s.checked() {
-                    style.background = cx.a(ColorRole::Primary, cx.pick(0.05, 0.1));
+                    style.background = cx.a(ColorRole::Primary, cx.pick(0.05, 0.1)).into();
                     style.border = cx.a(ColorRole::Primary, cx.pick(0.3, 0.2));
                 }
                 focus(&mut style, cx);
@@ -599,7 +610,7 @@ fn field(cx: &Cx) -> ResolvedStyle {
         Slot::Text => {
             let mut style = muted_text(cx, TextSize::Sm);
             style.padding = Edges::axes(cx.sp(2.0), 0.0);
-            style.background = cx.c(ColorRole::Background);
+            style.background = cx.c(ColorRole::Background).into();
             style
         }
         Slot::Error => text(cx, ColorRole::Destructive, TextSize::Sm, FontWeight::NORMAL),
@@ -712,7 +723,7 @@ fn input_otp(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Indicator => {
             let mut style = cx.base();
-            style.background = cx.c(ColorRole::Foreground);
+            style.background = cx.c(ColorRole::Foreground).into();
             style.min_width = 1.0;
             style.min_height = cx.sp(4.0);
             style
@@ -752,11 +763,11 @@ fn kbd(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
     match KbdVariant::from_variant(cx.q.variant) {
         KbdVariant::Default => {
-            style.background = cx.c(ColorRole::Muted);
+            style.background = cx.c(ColorRole::Muted).into();
             style.foreground = cx.c(ColorRole::MutedForeground);
         }
         KbdVariant::Inverted => {
-            style.background = cx.a(ColorRole::Background, cx.pick(0.2, 0.1));
+            style.background = cx.a(ColorRole::Background, cx.pick(0.2, 0.1)).into();
             style.foreground = cx.c(ColorRole::Background);
         }
     }
