@@ -1,5 +1,5 @@
-//! Item rows: media, a title and a description, and actions, stacked in
-//! a group.
+//! Item rows: an optional header line, media, a title and a description,
+//! actions, and an optional footer line, stacked in a group.
 
 use crate::Avatar;
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
@@ -41,6 +41,8 @@ impl ItemMedia {
 pub struct Item {
     title: String,
     description: String,
+    header: String,
+    footer: String,
     media: Option<ItemMedia>,
     actions: Vec<PanelButton>,
     link: bool,
@@ -53,6 +55,8 @@ impl Item {
         Self {
             title: title.into(),
             description: String::new(),
+            header: String::new(),
+            footer: String::new(),
             media: None,
             actions: Vec::new(),
             link: false,
@@ -65,6 +69,43 @@ impl Item {
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
         self
+    }
+
+    /// Adds a line across the full width of the row, above the media and
+    /// the title.
+    #[must_use]
+    pub fn with_header(mut self, header: impl Into<String>) -> Self {
+        self.header = header.into();
+        self
+    }
+
+    /// Adds a line across the full width of the row, below the media and
+    /// the title.
+    #[must_use]
+    pub fn with_footer(mut self, footer: impl Into<String>) -> Self {
+        self.footer = footer.into();
+        self
+    }
+
+    /// The text of the row for assistive technology: the header, the
+    /// title, and the footer.
+    fn spoken(&self) -> String {
+        [&self.header, &self.title, &self.footer]
+            .into_iter()
+            .filter(|text| !text.is_empty())
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// The height of the header or footer `text` in `slot` at `width`, or
+    /// zero without text.
+    fn edge_height(&self, cx: &MeasureContext<'_>, slot: Slot, text: &str, width: f64) -> f64 {
+        if text.is_empty() {
+            return 0.0;
+        }
+        let style = cx.style(self.query(slot));
+        wrapped_height(text, &style.text, width, cx.text)
     }
 
     #[must_use]
@@ -188,12 +229,25 @@ impl Item {
             Buttons::button_height(cx)
         };
         let content = text_height.max(media.height).max(buttons);
-        let height = content + root.padding.vertical();
+        let header = self.edge_height(cx, Slot::Header, &self.header, inner_width);
+        let footer = self.edge_height(cx, Slot::Footer, &self.footer, inner_width);
+        // A header or footer sits one row gap away from the main row.
+        let header_used = if header > 0.0 { header + root.gap } else { 0.0 };
+        let footer_used = if footer > 0.0 { footer + root.gap } else { 0.0 };
+        let height = header_used + content + footer_used + root.padding.vertical();
+        let top = rect.origin.y + root.padding.block_start;
         let inner = Rect::from_xywh(
             rect.origin.x + root.padding.inline_start,
-            rect.origin.y + root.padding.block_start,
+            top + header_used,
             inner_width,
             content,
+        );
+        let header_rect = Rect::from_xywh(inner.origin.x, top, inner_width, header);
+        let footer_rect = Rect::from_xywh(
+            inner.origin.x,
+            inner.max_y() + footer_used - footer,
+            inner_width,
+            footer,
         );
         // Places a part of `width` at `offset` from the start of `inner`.
         let at = |offset: f64, width: f64, height: f64| {
@@ -219,6 +273,8 @@ impl Item {
         row.place_row(cx, end_rect, action.gap);
         RowLayout {
             rect: Rect::from_xywh(rect.origin.x, rect.origin.y, rect.size.width, height),
+            header: header_rect,
+            footer: footer_rect,
             media: media_rect,
             text,
             title,
@@ -233,6 +289,8 @@ impl Item {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct RowLayout {
     rect: Rect,
+    header: Rect,
+    footer: Rect,
     media: Rect,
     text: Rect,
     title: f64,
@@ -378,7 +436,13 @@ impl ItemGroup {
         let root = cx.style(item.query(Slot::Root).state(state));
         let title = cx.style(item.query(Slot::Title));
         let description = cx.style(item.query(Slot::Description));
+        let (header, footer) = (
+            cx.style(item.query(Slot::Header)),
+            cx.style(item.query(Slot::Footer)),
+        );
         cx.slot(row.rect, &root, |cx, _| {
+            paint_wrapped(cx, row.header, &item.header, &header, TextAlign::Start);
+            paint_wrapped(cx, row.footer, &item.footer, &footer, TextAlign::Start);
             if let (Some(media), Some(query)) = (&item.media, item.media_query()) {
                 let style = cx.style(query);
                 match media {
@@ -573,7 +637,7 @@ impl CustomControl for ItemGroup {
         node.value = Some(
             self.items
                 .iter()
-                .map(|item| item.title.as_str())
+                .map(Item::spoken)
                 .collect::<Vec<_>>()
                 .join(", "),
         );

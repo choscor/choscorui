@@ -119,7 +119,9 @@ pub fn item(_: &PageCx) -> AnyView {
                             .with_description(text("item.default_text"))
                             .with_action(text("item.open"), ButtonVariant::Outline),
                         Item::new(text("item.outline"))
+                            .with_header(text("item.header"))
                             .with_description(text("item.outline_text"))
+                            .with_footer(text("item.footer"))
                             .with_variant(ItemVariant::Outline)
                             .with_action(text("item.open"), ButtonVariant::Outline),
                         Item::new(text("item.muted"))

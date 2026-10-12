@@ -3208,6 +3208,9 @@ behavior.
 
 - An `Item` row shows media, a title, a description, and actions at the
   end. Mount rows through an `ItemGroup`.
+- `with_header` and `with_footer` add a line across the full width of the
+  row, above and below the main row. One row gap separates each line
+  from the main row.
 - `ItemMedia` is an icon, an image in a rounded square, or an avatar.
 - `as_link()` makes the whole row a link with a chevron at the end. A link
   row shows the hover look.
@@ -3227,6 +3230,8 @@ behavior.
 | Link hover | `Root`, hovered and highlighted | `muted` fill |
 | Image media | `Media`, image | 40 pt square, radius sm; `Sm` 32, `Xs` 24 |
 | Icon media | `Media`, icon | 16 pt icon |
+| Header line | `Header` | sm text, 8 pt gap |
+| Footer line | `Footer` | sm text, 8 pt gap |
 | Title | `Title` | sm medium text |
 | Description | `Description` | sm `muted-foreground` text; `Xs` uses xs text |
 | Group | `Group` | 16 pt gap; `Sm` 10, `Xs` 8 |
@@ -3235,7 +3240,7 @@ behavior.
 | Field | `ItemGroup::semantics` |
 | --- | --- |
 | Role | `List` (AXList) |
-| Name / value | name / row titles |
+| Name / value | name / the header, title, and footer of each row |
 | Description | the label of the focused stop |
 | State | disabled |
 | Actions | `Activate` and `Focus` with stops while enabled |

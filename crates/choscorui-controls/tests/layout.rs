@@ -243,3 +243,46 @@ fn item_link_rows_click_and_mirror() {
     let plain = Harness::new(ItemGroup::new("Plain", vec![Item::new("Static")]));
     assert!(!plain.host.get(plain.node).unwrap().focusable());
 }
+
+/// The baseline of each text run of `list`, by text.
+fn baselines(list: &DisplayList) -> Vec<(String, Point)> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, baseline, .. } => Some((text.clone(), *baseline)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn item_header_and_footer_lines_frame_the_row() {
+    let row = |item: Item| Harness::new(ItemGroup::new("Plans", vec![item]));
+    let plain = row(Item::new("Pro plan").with_variant(ItemVariant::Outline));
+    let framed = row(Item::new("Pro plan")
+        .with_header("Most popular")
+        .with_footer("Billed yearly")
+        .with_variant(ItemVariant::Outline));
+    // Each line adds its text height and one 14 pt row gap.
+    let (short, tall) = (plain.bounds().size.height, framed.bounds().size.height);
+    assert!(tall > short + 2.0 * 14.0, "{short} {tall}");
+    let lines = baselines(&framed.paint());
+    let names: Vec<&str> = lines.iter().map(|(text, _)| text.as_str()).collect();
+    assert_eq!(names, ["Most popular", "Billed yearly", "Pro plan"]);
+    let (header, footer, title) = (lines[0].1.y, lines[1].1.y, lines[2].1.y);
+    assert!(header < title && title < footer);
+    // Assistive technology reads the header and the footer with the title.
+    assert_eq!(
+        framed.semantics().value.as_deref(),
+        Some("Most popular, Pro plan, Billed yearly")
+    );
+    let rtl = Harness::with_direction(
+        ItemGroup::new("Plans", vec![Item::new("Pro").with_header("New")]),
+        LayoutDirection::Rtl,
+    );
+    let header = baselines(&rtl.paint())
+        .into_iter()
+        .find(|(text, _)| text == "New")
+        .unwrap();
+    assert!(header.1.x > rtl.bounds().center().x, "the header mirrors");
+}
