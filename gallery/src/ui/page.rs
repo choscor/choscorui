@@ -13,6 +13,7 @@ use choscorui::compose::view::{
     AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::compose::{Property, Runtime};
+use choscorui::controls::ControlSize;
 use choscorui::core::{ColorRole, Image, Space, TextPreset};
 use std::rc::Rc;
 
@@ -81,6 +82,21 @@ pub fn caption(text: impl Into<TextContent>) -> impl View {
 /// Samples side by side with the gap between controls.
 pub fn row(controls: impl View) -> impl View {
     HStack::new(controls).spacing(Space::S2)
+}
+
+/// The catalog key of the name of `size`, shared by the pages that show
+/// a control in each of its sizes.
+pub fn size_key(size: ControlSize) -> &'static str {
+    match size {
+        ControlSize::Xs => "button.size_xs",
+        ControlSize::Sm => "button.size_sm",
+        ControlSize::Default => "button.size_default",
+        ControlSize::Lg => "button.size_lg",
+        ControlSize::Icon => "button.size_icon",
+        ControlSize::IconXs => "button.size_icon_xs",
+        ControlSize::IconSm => "button.size_icon_sm",
+        ControlSize::IconLg => "button.size_icon_lg",
+    }
 }
 
 /// A view whose body `build` makes from the mount context.

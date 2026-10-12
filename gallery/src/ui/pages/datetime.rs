@@ -1,13 +1,14 @@
 //! Dates and times: the month calendar and sectioned date/time editors.
 
-use crate::ui::page::{Build, PageCx, caption, column};
+use crate::ui::page::{Build, PageCx, caption, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Calendar, Configured, Cx, Dynamic, FieldText, Frame, HorizontalAlignment, Text,
     VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    ControlKind, ControlMessage, ControlValue, DateTimeEdit, DateTimeKind, FieldPart,
+    self, CalendarMode, ControlKind, ControlMessage, ControlValue, DateTimeEdit, DateTimeKind,
+    FieldPart,
 };
 use choscorui::core::{CivilDate, CivilDateTime, CivilTime, Space, TextPreset};
 
@@ -28,7 +29,9 @@ pub(crate) fn today() -> CivilDate {
 }
 
 /// A month calendar limited to 2026, with previous and next month
-/// buttons. A click, or Return on the selected day, chooses a day.
+/// buttons. A click, or Return on the selected day, chooses a day. Below
+/// it, calendars choose several days, choose a range, and pick the month
+/// and year from dropdowns.
 struct CalendarPage;
 
 impl View for CalendarPage {
@@ -55,8 +58,40 @@ impl View for CalendarPage {
                         .text_style(TextPreset::Small)
                 })
             }),
+            section(
+                t!("calendar.multiple"),
+                chooser("calendar.meetings", CalendarMode::Multiple, &[8, 15, 22]),
+            ),
+            section(
+                t!("calendar.range"),
+                chooser("calendar.trip", CalendarMode::Range, &[6, 10]),
+            ),
+            section(
+                t!("calendar.dropdown"),
+                Configured::custom(ControlKind::Calendar, |env| {
+                    controls::Calendar::new(env.locale(), today())
+                        .with_name(env.text("calendar.birthday", &[]))
+                        .with_today(today())
+                        .with_dropdown_caption(1926, 2026)
+                }),
+            ),
         ))
     }
+}
+
+/// A calendar named by the catalog string `name` that chooses days as
+/// `mode` says, with the October 2026 `days` already chosen.
+fn chooser(name: &'static str, mode: CalendarMode, days: &'static [u8]) -> impl View {
+    Configured::custom(ControlKind::Calendar, move |env| {
+        let mut calendar = controls::Calendar::new(env.locale(), today())
+            .with_name(env.text(name, &[]))
+            .with_today(today())
+            .with_mode(mode);
+        for day in days {
+            calendar.activate(date(2026, 10, *day));
+        }
+        calendar
+    })
 }
 
 pub fn calendar(_: &PageCx) -> AnyView {

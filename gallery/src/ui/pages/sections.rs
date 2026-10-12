@@ -1,15 +1,15 @@
 //! Layout components: aspect-ratio boxes, collapsible sections,
 //! accordions, and item rows.
 
-use crate::ui::page::{Build, PageCx, column, portrait, section};
+use crate::ui::page::{Build, PageCx, column, portrait, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Accordion, AnyView, AspectRatio, Collapsible, Configured, Cx, Env, Frame, View, ViewExt,
+    Accordion, AnyView, AspectRatio, Collapsible, Configured, Cx, Env, Frame, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, ButtonVariant, ControlKind, ControlSize, Item, ItemGroup, ItemMedia, ItemVariant,
 };
-use choscorui::core::Icon;
+use choscorui::core::{Icon, Space};
 
 pub fn aspect_ratio(_: &PageCx) -> AnyView {
     column((
@@ -155,8 +155,40 @@ pub fn item(_: &PageCx) -> AnyView {
                 .with_separators()
             }),
         ),
+        section(
+            t!("item.sizes"),
+            VStack::new(
+                [ControlSize::Default, ControlSize::Sm, ControlSize::Xs]
+                    .into_iter()
+                    .map(|size| {
+                        Configured::custom(ControlKind::Item, move |env| {
+                            let text = |key| env.text(key, &[]);
+                            let items = ITEM_VARIANTS
+                                .into_iter()
+                                .map(|(variant, key)| {
+                                    Item::new(text(key))
+                                        .with_media(ItemMedia::Icon(Icon::Inbox))
+                                        .with_variant(variant)
+                                        .with_size(size)
+                                })
+                                .collect();
+                            ItemGroup::new(text(size_key(size)), items)
+                        })
+                        .frame(Frame::new().width(420.0))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .spacing(Space::S4),
+        ),
     ))
 }
+
+/// The item variants with the catalog keys of their names.
+const ITEM_VARIANTS: [(ItemVariant, &str); 3] = [
+    (ItemVariant::Default, "item.default"),
+    (ItemVariant::Outline, "item.outline"),
+    (ItemVariant::Muted, "item.muted"),
+];
 
 /// The view of page `id`, when this module has it.
 pub fn page(id: &str) -> Option<Build> {

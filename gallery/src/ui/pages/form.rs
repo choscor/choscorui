@@ -1,7 +1,7 @@
 //! Form components: switches, toggles, selects, text inputs, code inputs,
 //! fields, date pickers, range sliders, and keyboard keys.
 
-use crate::ui::page::{Build, PageCx, column, row, section, stateful};
+use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Configured, Cx, DatePicker, Env, FieldText, Frame, HStack, HorizontalAlignment, Input,
@@ -45,10 +45,19 @@ pub fn switch_page(_: &PageCx) -> AnyView {
     })
 }
 
+/// The toggle variants with the catalog keys of their names.
+const TOGGLE_VARIANTS: [(ToggleVariant, &str); 2] = [
+    (ToggleVariant::Default, "toggle.default"),
+    (ToggleVariant::Outline, "toggle.outline"),
+];
+
+/// The sizes of a toggle and of a toggle group.
+const TOGGLE_SIZES: [ControlSize; 3] = [ControlSize::Sm, ControlSize::Default, ControlSize::Lg];
+
 pub fn toggle(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let line = |cx: &mut Cx<'_>, variant: ToggleVariant| {
-            let toggles: Vec<_> = [ControlSize::Sm, ControlSize::Default, ControlSize::Lg]
+            let toggles: Vec<_> = TOGGLE_SIZES
                 .into_iter()
                 .zip([
                     ("toggle.bold", Icon::Bold),
@@ -64,10 +73,11 @@ pub fn toggle(_: &PageCx) -> AnyView {
                 .collect();
             row(toggles)
         };
-        column((
-            section(t!("toggle.default"), line(cx, ToggleVariant::Default)),
-            section(t!("toggle.outline"), line(cx, ToggleVariant::Outline)),
-        ))
+        let lines = TOGGLE_VARIANTS
+            .into_iter()
+            .map(|(variant, key)| section(t!(key), line(cx, variant)))
+            .collect::<Vec<_>>();
+        column(lines)
     })
 }
 
@@ -116,10 +126,32 @@ pub fn toggle_group(_: &PageCx) -> AnyView {
                 .with_variant(ToggleVariant::Outline)
                 .with_orientation(Orientation::Vertical)
         });
+        let grid = TOGGLE_VARIANTS
+            .into_iter()
+            .map(|(variant, key)| {
+                let groups = TOGGLE_SIZES
+                    .into_iter()
+                    .map(|size| {
+                        ToggleGroup::single(t!(size_key(size)), alignment, cx.state(None).binding())
+                            .with(move |group| group.with_variant(variant).with_size(size))
+                    })
+                    .collect::<Vec<_>>();
+                // One group per line: three side by side overflow with long labels.
+                section(
+                    t!(key),
+                    VStack::new(groups)
+                        .alignment(HorizontalAlignment::Leading)
+                        .spacing(Space::S2),
+                )
+            })
+            .collect::<Vec<_>>();
         column((
             section(t!("toggle-group.single"), single),
             section(t!("toggle-group.multiple"), multiple),
             section(t!("toggle-group.small_vertical"), row((small, vertical))),
+            VStack::new(grid)
+                .alignment(HorizontalAlignment::Leading)
+                .spacing(Space::S4),
         ))
     })
 }
@@ -162,17 +194,28 @@ pub fn select(_: &PageCx) -> AnyView {
             Select::new(t!(key), fruits, cx.state(selected).binding())
                 .with(move |select| select.with_placeholder(placeholder.clone()))
         };
-        let native = Configured::custom(ControlKind::NativeSelect, |env| {
-            controls::Select::native(
-                text(env, "select.status"),
-                vec![
-                    ListEntry::option(text(env, "select.todo")),
-                    ListEntry::option(text(env, "select.in_progress")),
-                    ListEntry::option(text(env, "select.done")),
-                ],
-            )
-            .with_placeholder(text(env, "select.status_placeholder"))
-        });
+        // Default and small, then invalid.
+        let native = |key: &'static str, size: ControlSize, invalid: bool| {
+            Configured::custom(ControlKind::NativeSelect, move |env| {
+                let mut select = controls::Select::native(
+                    text(env, key),
+                    vec![
+                        ListEntry::option(text(env, "select.todo")),
+                        ListEntry::option(text(env, "select.in_progress")),
+                        ListEntry::option(text(env, "select.done")),
+                    ],
+                )
+                .with_placeholder(text(env, "select.status_placeholder"))
+                .with_size(size);
+                select.set_invalid(invalid);
+                select
+            })
+        };
+        let native = row((
+            native("select.status", ControlSize::Default, false),
+            native("select.small_status", ControlSize::Sm, false),
+            native("select.required_status", ControlSize::Default, true),
+        ));
         let zone_placeholder = text(cx.env(), "select.zone_placeholder");
         let zones = Select::new(
             t!("select.zone"),
@@ -325,6 +368,24 @@ pub fn input_group_page(_: &PageCx) -> AnyView {
                     ]
                 },
             ),
+        ),
+        section(
+            t!("select.invalid"),
+            Configured::custom(ControlKind::InputGroup, |env| {
+                let field = TextField::new(text(env, "input.email"), "ana@");
+                let clear = InputGroupAddon::button(
+                    AddonAlign::InlineEnd,
+                    text(env, "input-group.clear"),
+                    Some(Icon::X),
+                    ControlSize::IconSm,
+                );
+                let mut group = InputGroup::new(field, vec![clear]);
+                group.set_validation(ValidationState::Invalid(text(
+                    env,
+                    "input-group.email_error",
+                )));
+                group
+            }),
         ),
     ))
 }

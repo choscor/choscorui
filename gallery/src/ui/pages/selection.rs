@@ -4,12 +4,12 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Canvas, Configured, Cx, Dynamic, Frame, HorizontalAlignment, IntoLive,
-    Text, TextContent, VStack, View, ViewExt,
+    Alignment, AnyView, Canvas, Configured, Cx, Dynamic, Frame, HStack, HorizontalAlignment,
+    IntoLive, Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, ComboItem, CompletionMode, ControlKind, ControlMessage, ControlValue, FontChooser,
-    TabsVariant, text_key,
+    Orientation, TabsVariant, text_key,
 };
 use choscorui::core::{ColorRole, Point, RadiusScale, Space, TextPreset};
 
@@ -88,14 +88,15 @@ const TAB_CONTENT: [(&str, &str); 3] = [
     ("tabs.advanced", "tabs.advanced_panel"),
 ];
 
-/// A tab list in `variant` over the panel of the selected tab; the last
-/// tab is disabled.
-fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant) -> impl View {
+/// A tab list in `variant` over the panel of the selected tab, or beside
+/// it for vertical tabs; the last tab is disabled.
+fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant, orientation: Orientation) -> AnyView {
     let selected = cx.state(0usize);
     let tabs = Configured::try_custom(ControlKind::Tabs, move |env| {
         let labels = TAB_CONTENT.map(|(label, _)| env.text(label, &[]));
         controls::Tabs::hosted(env.text("tabs.settings", &[]), labels, 0)?
             .with_variant(variant)
+            .with_orientation(orientation)
             .with_disabled(2)
     })
     .value(move || ControlValue::Index(Some(selected.get())))
@@ -115,21 +116,30 @@ fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant) -> impl View {
         .background(ColorRole::Card)
         .border(ColorRole::Border, 1.0)
         .corner_radius(RadiusScale::Lg);
-    VStack::new((tabs, panel))
-        .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S2)
+    match orientation {
+        Orientation::Horizontal => VStack::new((tabs, panel))
+            .alignment(HorizontalAlignment::Leading)
+            .spacing(Space::S2)
+            .into_any(),
+        Orientation::Vertical => HStack::new((tabs, panel.layout_priority(1.0)))
+            .spacing(Space::S2)
+            .into_any(),
+    }
 }
 
-/// Tabs in the default and line looks, with three panels each; the last
-/// tab is disabled.
+/// Tabs in the default and line looks, each horizontal and vertical, with
+/// three panels each; the last tab is disabled.
 struct TabsPage;
 
 impl View for TabsPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
-        column((
-            tab_set(cx, TabsVariant::Default),
-            tab_set(cx, TabsVariant::Line),
-        ))
+        let mut sets = Vec::new();
+        for orientation in [Orientation::Horizontal, Orientation::Vertical] {
+            for variant in TabsVariant::ALL {
+                sets.push(tab_set(cx, *variant, orientation));
+            }
+        }
+        column(sets)
     }
 }
 

@@ -1,14 +1,15 @@
 //! Buttons and other momentary or toggled inputs.
 
-use crate::ui::page::{Build, PageCx, caption, column};
+use crate::ui::page::{Build, PageCx, caption, column, row, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Button, Checkbox, Configured, Cx, Frame, HStack, HorizontalAlignment, Localized,
     State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonGroup, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlValue,
-    KeySequenceEdit, Shortcut, ShortcutModifiers, ToolButton, ToolButtonMenu, shortcut_text,
+    self, ButtonGroup, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlSize,
+    ControlValue, KeySequenceEdit, Orientation, Shortcut, ShortcutModifiers, ToolButton,
+    ToolButtonMenu, shortcut_text,
 };
 use choscorui::core::{ColorRole, Icon, Key, Space, TextPreset};
 
@@ -19,8 +20,8 @@ fn readout(text: Localized) -> impl View {
         .foreground(ColorRole::MutedForeground)
 }
 
-/// Buttons in several variants, one that a checkbox enables, and a
-/// window shortcut.
+/// Buttons in several variants, one that a checkbox enables, a window
+/// shortcut, an invalid button, and each variant in each size.
 struct ButtonPage;
 
 impl View for ButtonPage {
@@ -46,9 +47,56 @@ impl View for ButtonPage {
             Checkbox::new(t!("button.enable_archive"), archive.binding())
                 .frame(Frame::new().width(320.0)),
             readout(t!("button.activations", count = activations)),
+            section(t!("button.invalid"), invalid_button()),
+            VStack::new(
+                VARIANTS
+                    .into_iter()
+                    .map(|(variant, key)| section(t!(key), sizes(variant, count)))
+                    .collect::<Vec<_>>(),
+            )
+            .alignment(HorizontalAlignment::Leading)
+            .spacing(Space::S4),
         ))
         .keyboard_shortcut(Key::Enter, command, count)
     }
+}
+
+/// Each button variant with the catalog key of its name.
+const VARIANTS: [(ButtonVariant, &str); 6] = [
+    (ButtonVariant::Default, "badge.default"),
+    (ButtonVariant::Destructive, "badge.destructive"),
+    (ButtonVariant::Outline, "badge.outline"),
+    (ButtonVariant::Secondary, "badge.secondary"),
+    (ButtonVariant::Ghost, "badge.ghost"),
+    (ButtonVariant::Link, "badge.link"),
+];
+
+/// A button of `variant` in each size, labelled with the size; the icon
+/// sizes show only an icon.
+fn sizes(variant: ButtonVariant, action: impl Fn() + Copy + 'static) -> impl View {
+    row(ControlSize::ALL
+        .into_iter()
+        .map(|size| {
+            let button = Button::new(t!(size_key(size)), action)
+                .variant(variant)
+                .size(size);
+            if size.is_icon() {
+                button.icon(Icon::Send)
+            } else {
+                button
+            }
+        })
+        .collect::<Vec<_>>())
+}
+
+/// An outline button in its invalid look, as in a form with an error.
+fn invalid_button() -> impl View {
+    Configured::custom(ControlKind::Button, |env| {
+        let mut button = controls::Button::new(env.text("button.required", &[]), CommandId(0))
+            .with_variant(ButtonVariant::Outline);
+        button.set_invalid(true);
+        button
+    })
 }
 
 pub fn button(_: &PageCx) -> AnyView {
@@ -143,17 +191,27 @@ pub fn tool_button(_: &PageCx) -> AnyView {
 }
 
 /// A joined group of members named by the catalog strings `labels`, with
-/// the members in `checked` on; members in `disabled` take no input.
+/// the members in `checked` on; members in `disabled` take no input. The
+/// members join along `orientation`.
 fn group(
     labels: &'static [&'static str],
     exclusive: bool,
     disabled: Option<usize>,
     checked: State<Vec<usize>>,
+    orientation: Orientation,
 ) -> impl View {
+    // Each member is 92 × 36 pt.
+    let count = labels.len() as f64;
+    let frame = match orientation {
+        Orientation::Horizontal => Frame::new().width(92.0 * count),
+        Orientation::Vertical => Frame::new().width(92.0).height(36.0 * count),
+    };
     Configured::custom(ControlKind::ToggleGroup, move |env| {
         let members = (1..=labels.len() as u64).map(CommandId).collect();
         let names = labels.iter().map(|key| env.text(key, &[])).collect();
-        let group = ButtonGroup::new(members, exclusive).hosted(names);
+        let group = ButtonGroup::new(members, exclusive)
+            .with_orientation(orientation)
+            .hosted(names);
         match disabled {
             Some(index) => group.with_enabled(index, false),
             None => group,
@@ -165,8 +223,7 @@ fn group(
             checked.set(indices.clone());
         }
     })
-    // Each member is 92 pt wide.
-    .frame(Frame::new().width(92.0 * labels.len() as f64))
+    .frame(frame)
 }
 
 /// A group under its caption; assistive technology reads the caption as
@@ -177,16 +234,21 @@ fn titled(title: &'static str, name: String, content: impl View) -> impl View {
         .spacing(Space::S2)
 }
 
-/// An exclusive alignment group and a non-exclusive style group.
+/// An exclusive alignment group, a non-exclusive style group, and a
+/// vertical group.
 struct ButtonGroupPage;
 
 impl View for ButtonGroupPage {
     fn body(&self, cx: &mut Cx<'_>) -> impl View {
         let alignment = cx.state(vec![0]);
         let style = cx.state(vec![0]);
+        let vertical = cx.state(vec![1]);
         let text = |key: &str| cx.env().text(key, &[]);
-        let (alignment_name, style_name) =
-            (text("button-group.alignment"), text("button-group.style"));
+        let (alignment_name, style_name, vertical_name) = (
+            text("button-group.alignment"),
+            text("button-group.style"),
+            text("button-group.vertical_name"),
+        );
         column((
             titled(
                 "button-group.exclusive",
@@ -201,6 +263,7 @@ impl View for ButtonGroupPage {
                     true,
                     Some(3),
                     alignment,
+                    Orientation::Horizontal,
                 ),
             ),
             titled(
@@ -215,6 +278,22 @@ impl View for ButtonGroupPage {
                     false,
                     None,
                     style,
+                    Orientation::Horizontal,
+                ),
+            ),
+            titled(
+                "button-group.vertical",
+                vertical_name,
+                group(
+                    &[
+                        "button-group.top",
+                        "button-group.middle",
+                        "button-group.bottom",
+                    ],
+                    true,
+                    None,
+                    vertical,
+                    Orientation::Vertical,
                 ),
             ),
         ))

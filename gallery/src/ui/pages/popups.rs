@@ -23,6 +23,10 @@ const COPY: CommandId = CommandId(2);
 const PASTE: CommandId = CommandId(3);
 const WRAP: CommandId = CommandId(4);
 const EMAIL: CommandId = CommandId(5);
+const MESSAGES: CommandId = CommandId(6);
+const BY_NAME: CommandId = CommandId(7);
+const BY_DATE: CommandId = CommandId(8);
+const DELETE: CommandId = CommandId(9);
 
 /// The translation of `key`, for strings that controls keep.
 fn text(env: &Env, key: &str) -> String {
@@ -43,9 +47,14 @@ fn menu_items(env: &Env) -> Vec<MenuItem> {
             text(env, "dropdown-menu.share"),
             vec![
                 MenuItem::action(text(env, "dropdown-menu.email"), EMAIL),
-                MenuItem::action(text(env, "dropdown-menu.messages"), CommandId(6)),
+                MenuItem::action(text(env, "dropdown-menu.messages"), MESSAGES),
             ],
         ),
+        MenuItem::Separator,
+        MenuItem::action(text(env, "dropdown-menu.by_name"), BY_NAME).with_check(MenuCheck::Radio),
+        MenuItem::action(text(env, "dropdown-menu.by_date"), BY_DATE).with_check(MenuCheck::Radio),
+        MenuItem::Separator,
+        MenuItem::action(text(env, "dropdown-menu.delete"), DELETE).destructive(),
     ]
 }
 
@@ -57,15 +66,24 @@ fn chose(env: &Env, command: CommandId) -> String {
         PASTE => "dropdown-menu.paste",
         WRAP => "dropdown-menu.wrap",
         EMAIL => "dropdown-menu.share_email",
+        BY_NAME => "dropdown-menu.by_name",
+        BY_DATE => "dropdown-menu.by_date",
+        DELETE => "dropdown-menu.delete",
         _ => "dropdown-menu.share_messages",
     };
     env.text("dropdown-menu.chose", &[("name", &text(env, key))])
 }
 
-/// The Edit menu: Paste is disabled and Wrap shows `wrap`. A choice
-/// updates `last` with a readout in `env` and closes the menu, as Escape
-/// does.
-fn edit_menu(env: Env, wrap: State<bool>, last: State<String>, open: State<bool>) -> impl View {
+/// The Edit menu: Paste is disabled, Wrap shows `wrap`, and the sort
+/// order radio items show `by_date`. A choice updates `last` with a readout
+/// in `env` and closes the menu, as Escape does.
+fn edit_menu(
+    env: Env,
+    wrap: State<bool>,
+    by_date: State<bool>,
+    last: State<String>,
+    open: State<bool>,
+) -> impl View {
     Configured::custom(ControlKind::Menu, move |env| {
         let mut menu = DropdownMenu::new(menu_items(env)).hosted(text(env, "dropdown-menu.edit"));
         let disabled = CommandState {
@@ -78,11 +96,21 @@ fn edit_menu(env: Env, wrap: State<bool>, last: State<String>, open: State<bool>
         };
         let _ = menu.set_command(PASTE, disabled);
         let _ = menu.set_command(WRAP, wrapped);
+        for order in [BY_NAME, BY_DATE] {
+            let state = CommandState {
+                enabled: true,
+                checked: by_date.get() == (order == BY_DATE),
+            };
+            let _ = menu.set_command(order, state);
+        }
         menu
     })
     .on_command(move |command| {
         if command == WRAP {
             wrap.update(|on| *on = !*on);
+        }
+        if command == BY_NAME || command == BY_DATE {
+            by_date.set(command == BY_DATE);
         }
         last.set(chose(&env, command));
         open.set(false);
@@ -90,19 +118,21 @@ fn edit_menu(env: Env, wrap: State<bool>, last: State<String>, open: State<bool>
     .on_dismiss(move || open.set(false))
 }
 
-/// A button that opens a popup menu; Paste is disabled and Wrap toggles
-/// a check mark. Arrow keys, Return, and Escape work inside the menu.
+/// A button that opens a popup menu; Paste is disabled, Wrap toggles a
+/// check mark, two radio items choose a sort order, and Delete has the
+/// destructive look. Arrow keys, Return, and Escape work inside the menu.
 pub fn dropdown_menu(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
         let wrap = cx.state(true);
+        let by_date = cx.state(false);
         let env = cx.env().clone();
         let last = cx.state(text(&env, "dropdown-menu.prompt"));
         column((
             Button::new(t!("dropdown-menu.trigger"), move || open.set(true))
                 .variant(ButtonVariant::Outline)
                 .popover(open.binding(), move || {
-                    edit_menu(env.clone(), wrap, last, open)
+                    edit_menu(env.clone(), wrap, by_date, last, open)
                 }),
             Text::new(move || last.get())
                 .text_style(TextPreset::Small)

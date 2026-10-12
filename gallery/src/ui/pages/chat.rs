@@ -151,21 +151,42 @@ pub fn attachment(_: &PageCx) -> AnyView {
         ),
         section(
             t!("attachment.sizes"),
-            HStack::new(
-                [ControlSize::Default, ControlSize::Sm, ControlSize::Xs]
+            VStack::new(
+                [(false, false), (true, false), (false, true), (true, true)]
                     .into_iter()
-                    .map(|size| {
-                        attachment_view("notes.txt", move |_, attachment| {
-                            attachment
-                                .with_media(AttachmentMedia::Icon(Icon::File))
-                                .with_size(size)
-                        })
-                    })
+                    .map(|(image, vertical)| attachment_sizes(image, vertical))
                     .collect::<Vec<_>>(),
             )
+            .alignment(HorizontalAlignment::Leading)
             .spacing(Space::S3),
         ),
     ))
+}
+
+/// An attachment in each size, with an image or an icon as its media,
+/// in a row or in a column for `vertical`.
+fn attachment_sizes(image: bool, vertical: bool) -> impl View {
+    HStack::new(
+        [ControlSize::Default, ControlSize::Sm, ControlSize::Xs]
+            .into_iter()
+            .map(|size| {
+                attachment_view("notes.txt", move |_, attachment| {
+                    let media = if image {
+                        AttachmentMedia::Image(portrait())
+                    } else {
+                        AttachmentMedia::Icon(Icon::File)
+                    };
+                    let attachment = attachment.with_media(media).with_size(size);
+                    if vertical {
+                        attachment.vertical()
+                    } else {
+                        attachment
+                    }
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .spacing(Space::S3)
 }
 
 pub fn marker(_: &PageCx) -> AnyView {

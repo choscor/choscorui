@@ -93,9 +93,10 @@ The gallery shows each public name of `choscorui-controls`. A test fails when a 
 1. Add a view function to the category file in `gallery/src/ui/pages/`. Return it from the `page` function of that file.
 2. Add the page to `PAGES` in `gallery/src/catalog.rs`.
 3. Add each new export name to `SHOWN`, or to `EXEMPT` with a reason.
-4. Run `cargo test -p choscorui-gallery`.
+4. Show each variant and size of the control on its page. Also show its invalid, checked, and open states when it has them. Add the control to `expectations` in `gallery/src/ui/pages/variants.rs`.
+5. Run `cargo test -p choscorui-gallery`.
 
-The coverage test names each export that is missing or stale. The headless page test builds each page with and without the enabled state.
+The coverage test names each export that is missing or stale. The headless page test builds each page with and without the enabled state. The variant test names each variant, size, or state that a page does not paint.
 
 ## Source file size
 

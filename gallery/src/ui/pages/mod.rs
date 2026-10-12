@@ -23,6 +23,8 @@ pub mod shell;
 pub mod statics;
 pub mod system;
 pub mod text;
+#[cfg(test)]
+mod variants;
 
 /// The view of catalog page `id`, when it has one.
 pub fn find(id: &str) -> Option<Build> {
