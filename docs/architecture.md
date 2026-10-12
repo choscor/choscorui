@@ -29,7 +29,7 @@ Dependencies: `choscorui-core`, `choscorui-controls`, `choscorui-compose`, and, 
 
 - **Retained tree:** `Tree`, `NodeId`, `Dirty`, `EventPhase`, and `EventReply`.
 - **Geometry and input:** `Point`, `Size`, `Rect`, `Transform`, `PointerEvent`, `KeyEvent`, and `DragEvent`.
-- **Painting:** `DisplayList`, `DisplayCommand`, `Path`, `Image`, and the `damage` function.
+- **Painting:** `DisplayList`, `DisplayCommand`, `Path`, `Image`, `blur_pixels`, and the `damage` function.
 - **Layout:** `LinearLayout`, `GridLayout`, `FormLayout`, `ScrollViewport`, `LayoutEngine`, `Constraints`, and `LeafMeasure`.
 - **Text:** `TextBuffer`, `TextLayoutCache`, the `TextShaper` trait, `RichDocument`, and `RichLayout`.
 - **Models:** `ItemModel`, `ListStore`, `TreeStore`, `Selection`, `SortFilterProxy`, and `FileSystemModel`.
@@ -43,6 +43,20 @@ Dependencies: `unicode-segmentation` only. See [Dependency rule](#dependency-rul
 
 `choscorui-controls` contains the behavior of each control: input, focus, value, validation, and semantics. Painting is separate. The `style` module resolves a `ResolvedStyle` for each control kind, slot, variant, size, and visual state through a cached `Recipe`, and `paint_slot` paints it. The crate also has `CommandRegistry` with shortcut scopes, the item views, dialogs, popups, the toolbar and status bar, `DockLayout`, `CanvasView`, and the `CustomControl` extension point. The [controls reference](controls.md) lists each control.
 
+Many controls are `CustomControl` types that mount through `ControlHost`. They are in these modules:
+
+| Module | Controls |
+| --- | --- |
+| `form` | `Switch`, `Toggle`, `ToggleGroup`, `Kbd`, `Select`, `Input`, `InputGroup`, `Textarea`, `InputOtp`, `Field`, `DatePicker`, `RangeSlider` |
+| `overlay` | `ContextMenu`, `Menubar`, `Popover`, `Dialog`, `Command` |
+| `nav` | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Sidebar` |
+| `data` | `Card`, `Badge`, `Avatar`, `Carousel`, `DataTable`, `Chart` |
+| `feedback` | `Alert`, `Spinner`, `Skeleton`, `Empty`, `Toaster` |
+| `layout` | `AspectRatio`, `Collapsible`, `Accordion`, `ItemGroup` |
+| `chat` | `Message`, `Attachment`, `Marker`, `MessageScroller`, `Questionnaire` |
+
+The `hosted` module has the shared press, roving focus, tab stop, and reveal helpers of these controls.
+
 Dependencies: `choscorui-core` only.
 
 ### choscorui-compose
@@ -53,7 +67,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-render
 
-`choscorui-render` is a reference software renderer. `Raster::render` turns a `DisplayList` into RGBA8 pixels, and `compare` measures the difference between two pixel buffers. The facade test [render_parity.rs](../crates/choscorui/tests/render_parity.rs) compares it with the macOS painter. It does not draw text and returns `RenderError::UnsupportedText` for a text command.
+`choscorui-render` is a reference software renderer. `Raster::render` turns a `DisplayList` into RGBA8 pixels, and `compare` measures the difference between two pixel buffers. The facade test [render_parity.rs](../crates/choscorui/tests/render_parity.rs) compares it with the macOS painter. It does not draw text and returns `RenderError::UnsupportedText` for a text command. It paints `BackdropBlur` with the same `blur_pixels` as the macOS painter.
 
 Dependencies: `choscorui-core` only.
 
