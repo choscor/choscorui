@@ -220,6 +220,11 @@ uses it to build a control again, for example after a locale change.
 Each section gives the behavior, then the semantics of the node that the
 control publishes. A dash means that the field is empty.
 
+The value tables give the default recipe of each `ControlKind`. Sizes are in
+points, and colors are theme roles. A `<kind>_matches_its_reference_table`
+test in a `styles_*.rs` file of
+[the controls tests](../crates/choscorui-controls/tests/) pins each table.
+
 ### Button
 
 | Input | Behavior |
@@ -266,8 +271,16 @@ control publishes. A dash means that the field is empty.
 | `Destructive` | `destructive` at 10% (dark 20%), `destructive` text | 20% (dark 30%) |
 | `Link` | `primary` text | underline |
 
-All variants use the small medium text. A pressed button moves down 1 pt.
-A disabled button has 50% opacity.
+All variants use medium text: extra-small at size `Xs`, small at the
+other sizes.
+
+| State | Value |
+| --- | --- |
+| Pressed | 1 pt down, except while open |
+| Open | `Outline` and `Ghost` keep the `muted` fill |
+| Focus visible | `ring` edge and 3 pt ring at 50%; `Destructive`: `destructive` edge at 40% and the invalid ring |
+| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
+| Disabled | 50% opacity and no hover look |
 
 | Field | `semantics(tree, id).shared()` |
 | --- | --- |
@@ -304,7 +317,7 @@ A disabled button has 50% opacity.
 | Checked or mixed | `primary` fill and edge, `primary-foreground` check or minus icon at 14 |
 | Label | small medium text, 8 after the box |
 | Focus ring | `ring` edge and 3 pt ring at 50% |
-| Invalid | `destructive` edge and ring at 20% (dark 40%) |
+| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%); a checked box keeps the `primary` edge |
 | Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
@@ -348,6 +361,14 @@ behavior.
 - **Tabs look.** `with_variant` takes a `TabsVariant`: `Default` or
   `Line`. `with_orientation` takes an `Orientation`. Paint the list with
   `paint_list`, then each tab with `paint_tab`.
+
+| Radio part | Slot | Value |
+| --- | --- | --- |
+| Circle | `RadioGroup` `Root` | 16 pt, radius full; edge, fill, focus, invalid, and disabled as `Checkbox` |
+| Selected | `RadioGroup` `Root`, checked | `primary` fill and edge |
+| Dot | `RadioGroup` `Indicator` | 8 pt `primary-foreground` circle |
+| Options | `RadioGroup` `Group` | 12 pt gap |
+| Label | `RadioGroup` `Label` | small medium text, 8 pt after the circle |
 
 | Tabs part | `Default` | `Line` |
 | --- | --- | --- |
@@ -397,6 +418,13 @@ pins this behavior.
   command's checked and disabled state to the host's flags.
 - Inner corners are square. Each member after the first overlaps the border
   before it. `with_orientation` joins the members in a row or a column.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Group | `ButtonGroup` `Root` | radius md, 8 pt gap |
+| Text | `ButtonGroup` `Text` | 36 pt high, `muted` fill, 1 pt `border`, radius md, 10 pt sides, sm medium text, shadow xs |
+| Divider | `ButtonGroup` `Separator` | 1 pt `input` line |
+| Member | `ToggleGroup` `Item`, `Outline` | the toggle look |
 
 | Field | `ToolButton::semantics` |
 | --- | --- |
@@ -479,6 +507,16 @@ behavior.
 - `Label::paint` draws the small medium text at the start of the bounds.
   A `DISABLED` state in the context gives 50% opacity.
 
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Label | `Label` `Root` | sm medium `foreground` text, line height equal to the size, 8 pt gap; 50% opacity while disabled |
+| Separator | `Separator` `Root` | 1 pt `border` line |
+| Text preset | `Typography` `Root` | the text and the color of a `TextPreset`; the variant is the index in `TextPreset::ALL` |
+| `H2` | `Typography` `Root` | 1 pt `border` line below, 8 pt under the text |
+| `Blockquote` | `Typography` `Root` | 2 pt `border` line at the start, 24 pt start padding |
+| `InlineCode` | `Typography` `Root` | `muted` fill, radius sm, padding 4.8 by 3.2 pt |
+| `List` | `Typography` `Root` | 24 pt start padding, 8 pt between items |
+
 | Field | `Label::semantics` |
 | --- | --- |
 | Role | `StaticText` (AXStaticText) |
@@ -504,6 +542,14 @@ this behavior.
   `INDETERMINATE_PERIOD` seconds at the context time. With reduced
   motion, the segment stays in the middle.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Track | `Track` | 6 pt `muted` bar, radius full |
+| Indicator | `Indicator` | `primary` fill, 150 ms motion |
+| Label | `Label` | sm medium `foreground` text |
+| Value | `Value` | sm `muted-foreground` text |
+| Stack | `Root` | 12 pt gap |
+
 | Field | `Progress::semantics` |
 | --- | --- |
 | Role | `ProgressIndicator` (AXProgressIndicator) |
@@ -526,6 +572,12 @@ this behavior.
   focus ring.
 - In a control host, `NumericDisplay::hosted` adds the name. The hosted
   node does not take focus.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | input box: `input` border, shadow xs, radius lg, 12 pt padding; focus ring while focus is visible |
+| Lit segment | `Value` | `foreground`, xl2 medium mono text |
+| Unlit segment | `Track` | `muted` |
 
 | Field | `NumericDisplay::semantics` |
 | --- | --- |
@@ -663,7 +715,7 @@ behavior.
 | Box | height 36, radius md, `input` edge, extra-small shadow, padding 10 by 4; dark: `input` at 30% fill |
 | Text | small text in `foreground`; placeholder in `muted-foreground` |
 | Focus | `ring` edge and 3 pt ring at 50% |
-| Invalid | `destructive` edge and ring at 20% (dark 40%) |
+| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
 | Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
@@ -704,6 +756,15 @@ behavior.
   lines. Tab moves the focus, unless `set_tab_inserts(true)` is set.
 - In a host, Command+A selects all text. Command+Z undoes, Shift+Command+Z
   redoes, and Command+X cuts.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Box | `Root` | `input` border, shadow xs, radius md, padding 10 by 8 pt; dark: `input` at 30% fill |
+| States | `Root` | focus, invalid, and disabled as `TextField` |
+| Placeholder | `Placeholder` | sm `muted-foreground` text |
+| Caret | `Indicator` | 1 pt `foreground` line |
+| Selection | `Range` | `primary` at 25% |
+| Code text | `Text` | sm mono text |
 
 | Field | `TextEditor::semantics` |
 | --- | --- |
@@ -764,6 +825,10 @@ behavior.
 | Popup | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, padding 4 pt, 4 pt below the anchor |
 | Suggestion | `Item` | 32 pt high, radius sm; `accent` fill while highlighted |
 | Selected mark | `ItemIndicator` | a 16 pt check in the end padding of the selected item |
+| Search field | `Input` | 32 pt high, `input` fill and border at 30%, no shadow, 10 pt sides |
+| Chip | `Badge` | 22 pt `muted` chip, radius sm, 6 pt sides, 4 pt gap, xs medium text |
+| Chip remove | `Close` | 12 pt icon at 50% opacity; full opacity while hovered |
+| Empty text | `Description` | sm `muted-foreground` text, 8 pt above and below |
 
 | Field | `Combobox::semantics` | Suggestion |
 | --- | --- | --- |
@@ -802,6 +867,15 @@ the description "Not installed; using" with the fallback name.
   drag, or keyboard focus, the thumb has a 4 pt ring in `ring` at 50%. The
   thumb stays inside the bounds at both ends. A disabled slider has 50%
   opacity.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Area | `Root` | 16 pt high, at least 160 pt wide |
+| Track | `Track` | 6 pt `muted` bar, radius full |
+| Range | `Range` | `primary` fill, radius full |
+| Thumb | `Thumb` | 16 pt white circle, 1 pt `primary` edge, shadow sm |
+| Thumb ring | `Thumb`, hovered or focus visible | 4 pt `ring` ring at 50% |
+| Disabled | `Track`, `Range`, `Thumb` | 50% opacity and no ring |
 
 | Field | `Slider::semantics` |
 | --- | --- |
@@ -915,6 +989,14 @@ this behavior.
   with a `primary` border sits at the value. Hover or keyboard focus rings
   the thumb.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Face | `Root` | no fill, no border, radius full; focus ring while focus is visible |
+| Track | `Track` | 6 pt `muted` arc |
+| Value arc | `Range` | 6 pt `primary` arc |
+| Thumb | `Thumb` | the `Slider` thumb and ring |
+| Value text | `Value` | xl2 medium mono `foreground` text |
+
 | Field | `Dial::semantics` |
 | --- | --- |
 | Role | `Slider` (AXSlider) |
@@ -972,6 +1054,13 @@ this behavior.
   `muted-foreground` at 50% alpha. Keyboard focus adds the focus ring
   around the area. Paint it after the content.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Area | `Root` | focus ring while focus is visible |
+| Bar | `Scrollbar` | 10 pt wide, 1 pt inset, 150 ms motion |
+| Thumb | `Thumb` | `border` fill, radius full |
+| Active thumb | `Thumb`, hovered or pressed | `muted-foreground` at 50% |
+
 | Field | `ScrollArea::semantics` |
 | --- | --- |
 | Role | `ScrollArea` (AXScrollArea) |
@@ -1006,6 +1095,12 @@ behavior.
 - **Look.** `paint_handle` draws a 1 pt `border` line across the split,
   centered in the handle node. Keyboard focus adds a 1 pt `ring` ring.
   `with_grip(true)` adds a 4 by 24 pt `border` grip with radius lg.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, resize cursor |
+| Focus | `Handle`, focus visible | 1 pt `ring` ring |
+| Grip | `Icon` | 4 by 24 pt `border` grip, radius lg |
 
 | Field | `Resizable::semantics` |
 | --- | --- |
@@ -1073,6 +1168,22 @@ behavior.
   square corners, and a muted band joins its two ends. The ring follows the
   cursor.
 
+| Calendar part | Slot | Value |
+| --- | --- | --- |
+| Grid | `Root` | `background` fill, 12 pt padding, 16 pt gap, at least 248 pt wide |
+| Day | `Day` | 32 pt ghost icon button, radius md, sm text; no press offset |
+| Today | `Day`, `Today` | `muted` fill, `foreground` text |
+| Outside the month | `Day`, `Outside` | `muted-foreground` text |
+| Chosen day, range ends | `Day`, selected, `RangeStart`, `RangeEnd` | `primary` fill, `primary-foreground` text |
+| Range middle | `Day`, `RangeMiddle` | `muted` fill, square corners |
+| Range band | `Range` | `muted` fill, radius md |
+| Focus | `Day`, focus visible | `ring` edge and the focus ring |
+| Disabled day | `Day`, disabled | `muted-foreground` text at 50% opacity |
+| Weekday | `Weekday` | 12.8 pt `muted-foreground` text, 32 pt high |
+| Caption | `Caption` | sm medium text, 32 pt high, 32 pt sides, 6 pt gap |
+| Caption dropdown | `Trigger` | 32 pt input box with no fill, radius md, sm medium text; the focus ring while focused |
+| Month buttons | `Previous`, `Next` | 32 pt ghost icon buttons |
+
 | Field | `DateTimeEdit::semantics` | `Calendar::semantics` | `Calendar::cell_semantics` |
 | --- | --- | --- | --- |
 | Role | `SpinButton` (AXIncrementor) | `Table` (AXTable) | `Cell` (AXCell) |
@@ -1139,7 +1250,7 @@ pin this behavior.
 
 | Part | Slot | List value | Table value |
 | --- | --- | --- | --- |
-| Row | `Row` | radius sm; `muted` fill when selected, `accent` fill and `accent-foreground` text when selected in a focused view | 1 pt `border` bottom line; `muted` fill when selected |
+| Row | `Row` | 32 pt high, 8 pt sides, radius sm; `muted` fill when selected, `accent` fill and `accent-foreground` text when selected in a focused view | 1 pt `border` bottom line; `muted` fill when selected |
 | Text | `Cell` | sm `foreground` text, 8 pt padding | as list |
 | Disclosure | `Indicator` | 16 pt `muted-foreground` chevron, one indent per depth | as list |
 | Focus | `Root` | the focus ring on the current item while focus is visible | as list |
@@ -1338,6 +1449,11 @@ the actions are `Activate` and `Focus`.
   has radius md and 12 by 6 pt padding, and is at most 320 pt wide. A 10 pt
   wide arrow points to the anchor.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bubble | `Root` | `foreground` fill, xs `background` text, radius md, padding 12 by 6 pt, at most 320 pt wide, 100 ms motion |
+| Arrow | `Indicator` | 10 pt `foreground` square, radius 2 pt |
+
 | Field | `TooltipController::semantics`, while visible |
 | --- | --- |
 | Role | `Tooltip` (AXHelpTag) |
@@ -1406,6 +1522,7 @@ behavior.
 | Title | `Title` | lg medium `foreground` text |
 | Message and detail | `Description` | sm `muted-foreground` text, 6 pt apart |
 | Buttons | `Footer` | 8 pt apart, 24 pt below the text, at the end of the row |
+| Media | `Media` | 64 pt `muted` box, radius md, 32 pt icon, 8 pt below |
 - **`InputDialog`.** Enter returns the value only when it is valid. Escape
   returns `Err(())`. `can_accept` is true only for a valid value.
 - For the text, integer, and decimal kinds, empty text is `Intermediate`.
@@ -1468,6 +1585,13 @@ locale of the environment.
 - `FontDialog` uses a `FontChooser`. A missing family resolves to
   Helvetica.
 
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Strip and swatch frame | `Input` `Root` | the input box |
+| Channel thumb | `Slider` `Thumb` | the slider thumb |
+| Picker box | `ColorPicker` `Root` | input box, radius lg, 12 pt padding; focus ring while focus is visible |
+| Picker parts | `ColorPicker` `Track`, `Thumb`, `Label` | `muted` track, the slider thumb, xs `muted-foreground` labels |
+
 | Field | `ColorPicker::semantics` |
 | --- | --- |
 | Role | `Group` (AXGroup) |
@@ -1525,6 +1649,12 @@ It edits a `Binding<TextStyle>`.
   reports `OpenChanged`. The view layer places the embedded controls in
   the `layout()` rectangles.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bar | `Root` | 40 pt high, `background` fill, 1 pt `border` toward the content, padding 8 by 4 pt, 4 pt gap |
+| Command, overflow | `Item`, `Action` | ghost icon-sm button |
+| Separator | `Separator` | 1 pt `border` line, 4 pt sides, 6 pt above and below |
+
 | Field | `Toolbar::semantics` |
 | --- | --- |
 | Role | `Toolbar` (AXToolbar) |
@@ -1552,6 +1682,11 @@ The items publish their own semantics.
   deadline is the end of a timed message, so give `show_message` the
   host time as `now`.
 
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bar | `Root` | 24 pt high, `background` fill, 1 pt `border` above, 12 pt sides and gap, xs `muted-foreground` text |
+| Section rule | `Separator` | as the `Toolbar` separator |
+
 | Field | `StatusBar::semantics` |
 | --- | --- |
 | Role | `StatusBar` (AXGroup) |
@@ -1577,6 +1712,12 @@ The items publish their own semantics.
   and a `border` outline, and a line-variant `Tabs` bar. The active tab is underlined. Splitters use
   the `Resizable` handle. `DockFocus` names the part that rings.
 - `GroupFrame::tab_rect` shares the tab bar equally, in reading order.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Frame | `Dock` `Root` | `card` fill, `card-foreground` text, 1 pt `border` outline |
+| Tab bar | `Tabs` `Trigger`, `Indicator`, `Line` | line-variant tabs |
+| Splitter | `Resizable` `Handle` | the resizable handle |
 
 | Field | `DockLayout::panel_semantics` | `DockLayout::splitter_semantics` |
 | --- | --- | --- |
@@ -1623,6 +1764,10 @@ splitter.
   the ring. The layout mirrors the focused node in right-to-left layouts,
   and the ring follows it.
 
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Grip | `SizeGrip` `Root` | 16 by 16 pt, lines in `muted-foreground` |
+
 These types have no semantic node.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
@@ -1656,6 +1801,11 @@ These types have no semantic node.
   `Indicator` border, 1 pt `primary`, 2 pt outside the item. The focused
   item gets a dashed outline. The rubber band fills with the `Range`
   background, `primary` at 15%.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Selection outline | `Indicator` | 1 pt `primary` border |
+| Rubber band | `Range` | `primary` fill at 15%, 1 pt `primary` border |
 
 | Field | `CanvasView::semantics` | `CanvasView::item_semantics` |
 | --- | --- | --- |
@@ -1727,6 +1877,11 @@ behavior.
 | On | `primary` |
 | Disabled | 50% opacity on the track and the thumb |
 
+| Part | Value |
+| --- | --- |
+| Track | radius full, extra-small shadow; focus ring while focus is visible |
+| Thumb | `background` circle; dark: `foreground` while off, `primary-foreground` while on |
+
 | Field | `Switch::semantics` |
 | --- | --- |
 | Role | `Checkbox` (AXCheckBox), description "switch" |
@@ -1761,6 +1916,16 @@ From the application, `set_value` takes `Bool`. `set_open` returns false.
 | --- | --- |
 | `Default` | Transparent; `muted` on hover and while on |
 | `Outline` | `input` border and an extra-small shadow; `muted` on hover and while on |
+
+Each toggle has radius md, 10 pt side padding, a 4 pt gap, and small medium
+text.
+
+| State | Value |
+| --- | --- |
+| Focus visible | `ring` edge and the focus ring |
+| Invalid | `destructive` edge and ring at 20% (dark 40%) |
+| Disabled | 50% opacity and no hover look |
+| Group | radius md; extra-small shadow for `Outline` |
 
 | Field | `Toggle::semantics` | `ToggleGroup::semantics` |
 | --- | --- | --- |
@@ -1832,6 +1997,9 @@ extra-small medium text.
 | List | `popover` fill, 1 pt `foreground` ring at 10%, medium shadow, 4 pt padding, at least 144 pt wide |
 | Option | 32 pt high; `accent` fill while highlighted; check mark at the end when chosen |
 | Group caption | extra-small `muted-foreground` text |
+| Dark hover | `input` at 50% fill on the trigger |
+| Scroll buttons | 24 pt `popover` bars at the ends of the list |
+| Native trigger | 36 pt (`Sm`: 32 pt), 10 pt start and 32 pt end padding, chevron 10 pt from the end |
 
 | Field | `Select::semantics` |
 | --- | --- |
@@ -1885,7 +2053,8 @@ and closes the list, but not while the select is disabled.
 | Box | 36 pt high, `input` border, extra-small shadow, `md` radius |
 | Text padding | 10 pt sides, 4 pt top and bottom |
 | Addon | small medium `muted-foreground` text; 8 pt padding at the outer edge |
-| Button addon | `Xs` 24 pt, `IconXs` 24 × 24 pt, `Sm` 32 pt, `IconSm` 32 × 32 pt |
+| Button addon | ghost button: `Xs` 24 pt with a 14 pt icon, `IconXs` 24 × 24 pt, `Sm` 32 pt, `IconSm` 32 × 32 pt |
+| Small addon radius | `Xs` and `IconXs`: `radius` minus 5 pt |
 
 | Field | `Input::semantics` | `InputGroup::semantics` |
 | --- | --- | --- |
@@ -1944,7 +2113,9 @@ returns false.
 | --- | --- |
 | Slot | 36 × 36 pt, `input` border; the first and last slot of a group round to `md` |
 | Separator | 16 pt minus icon, 8 pt from each group |
-| Invalid | `destructive` border; the group gets the destructive ring |
+| Active slot | `ring` border and the focus ring |
+| Caret | 1 × 16 pt `foreground` line |
+| Invalid | `destructive` border; the group and the active slot get the destructive ring |
 
 | Field | `InputOtp::semantics` |
 | --- | --- |
@@ -1985,6 +2156,10 @@ character that the code does not accept. `set_open` returns false.
 | `Description` | small `muted-foreground` text |
 | `Error` | small `destructive` text |
 | `Separator` | 20 pt high; 1 pt `border` rule; small muted text on a `background` chip with 8 pt sides |
+| Gaps | set (`Root`) 24 pt, `Group` 28 pt, field (`Item`) 12 pt, `Content` 4 pt |
+| Invalid or disabled field | `Item`: `destructive` text, or 50% opacity |
+| Choice card | `Label` with variant 1: 1 pt `border`, radius md, 12 pt padding; `muted` at 50% while hovered |
+| Checked choice card | `primary` at 5% (dark 10%) fill, `primary` at 30% (dark 20%) border |
 
 | Field | `FieldText::semantics` |
 | --- | --- |
@@ -2141,8 +2316,8 @@ is disabled. `set_value` returns false.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
-| Dialog panel | `Dialog` `Root` | `popover` fill, 1 pt ring at 10% `foreground`, radius xl, 24 pt padding and gap |
-| Sheet panel | `Sheet` `Root` | `popover` fill, 1 pt `border` on the inner side, shadow lg, 200 ms |
+| Dialog panel | `Dialog` `Root` | `popover` fill, 1 pt ring at 10% `foreground`, radius xl, 24 pt padding and gap, at most 448 pt wide |
+| Sheet panel | `Sheet` `Root` | `popover` fill, 1 pt `border` on the inner side, shadow lg, 200 ms; at most 384 pt wide at the left or the right |
 | Drawer panel | `Drawer` `Root` | as the sheet panel, radius xl on the inner corners, no shadow, 450 ms |
 | Header | `Header` | 16 pt padding in a sheet or drawer |
 | Footer | `Footer` | 8 pt gap; 16 pt padding in a sheet or drawer |
@@ -2191,7 +2366,7 @@ is disabled. `set_value` returns false.
 | Search icon | `Icon` | 16 pt at 50% opacity |
 | Group | `Group` | 4 pt padding |
 | Group label | `GroupLabel` | xs medium `muted-foreground` text |
-| Command | `Item` | 32 pt high, radius sm; `muted` fill while highlighted |
+| Command | `Item` | 32 pt high, radius sm (lg in the dialog form); `muted` fill while highlighted or selected |
 | Shortcut | `Shortcut` | xs `muted-foreground` text with widest tracking |
 | Separator | `Separator` | 1 pt `border` line |
 | Empty text | `Description` | sm text, 24 pt above and below, centered |
@@ -2349,7 +2524,10 @@ false.
 | Header | `Header` | 8 pt padding |
 | Group | `Group` | 8 pt padding, 4 pt gap |
 | Group label | `GroupLabel` | 32 pt high, xs medium text at 70% `sidebar-foreground` |
-| Item | `Item` | 32 pt high, 8 pt padding, radius md; `sidebar-accent` fill while hovered or selected |
+| Item | `Item` | 32 pt high, 8 pt padding, radius md; `sidebar-accent` fill while hovered, pressed, or selected; medium text while selected |
+| Item sizes | `Item` | `Sm` 28 pt with xs text, `Lg` 48 pt, `Icon` 32 pt square |
+| Focus | `Item`, `GroupLabel` | 2 pt `sidebar-ring` ring |
+| Inset panel | `Root`, `Inset` | 8 pt padding, no edge |
 | Badge | `Badge` | xs medium text at the end |
 
 | Field | `Sidebar::semantics` |
@@ -2437,7 +2615,7 @@ With `SidebarCollapse::None` in a wide window, `set_open` returns false.
 | --- | --- | --- |
 | Avatar | `Root` | 32 pt circle (24 pt `Sm`, 40 pt `Lg`); in a group, 2 pt `background` ring and -8 pt gap |
 | Fallback | `Fallback` | `muted` fill, sm `muted-foreground` text (xs for `Sm`) |
-| Badge | `Badge` | 10 pt `primary` circle (8 pt `Sm`, 12 pt `Lg`), 2 pt `background` ring, 8 pt icon |
+| Badge | `Badge` | 10 pt `primary` circle (8 pt `Sm`, 12 pt `Lg`), 2 pt `background` ring, 8 pt icon (none at `Sm`) |
 | Count | `Group` | as the fallback |
 
 | Field | `Avatar::semantics` | `AvatarGroup::semantics` |
@@ -2810,7 +2988,7 @@ behavior.
 | Row | `Root` | sm text, radius md, 16 by 14 pt padding, 14 pt gap; `Sm` 12 by 10, `Xs` 10 by 8 |
 | Outline | `Root`, `Outline` | 1 pt `border` |
 | Muted | `Root`, `Muted` | `muted` fill at 50% |
-| Link hover | `Root`, hovered | `muted` fill |
+| Link hover | `Root`, hovered and highlighted | `muted` fill |
 | Image media | `Media`, image | 40 pt square, radius sm; `Sm` 32, `Xs` 24 |
 | Icon media | `Media`, icon | 16 pt icon |
 | Title | `Title` | sm medium text |
@@ -2852,7 +3030,7 @@ behavior.
 | Header and footer | `Message` `Header`, `Footer` | xs medium `muted-foreground` text, 12 pt inline padding |
 | Bubble | `Bubble` `Content` | sm text, 1.625 line height, radius xl, 12 by 8 pt padding |
 | Default | `Bubble` `Content`, `Default` | `primary` fill, `primary-foreground` text; 80% fill on hover |
-| Tinted | `Bubble` `Content`, `Tinted` | `primary` hue at OKLCH lightness 0.93, 40% chroma |
+| Tinted | `Bubble` `Content`, `Tinted` | `primary` hue at OKLCH lightness 0.93 (dark 0.3), 40% chroma; on hover 0.88 (dark 0.35), 50% chroma |
 | Ghost | `Bubble` `Content`, `Ghost` | no box; full width |
 | Destructive | `Bubble` `Content`, `Destructive` | `destructive` text on a 10% `destructive` fill |
 | Reactions | `Bubble` `Badge` | `muted` pill, 3 pt `card` ring, 6 by 2 pt padding |
@@ -2885,7 +3063,8 @@ behavior.
 | --- | --- | --- |
 | Box | `Root` | 1 pt `border`, radius xl, 10 by 8 pt padding, 8 pt gap; at least 160 pt wide, or 96 pt vertical |
 | Error | `Root`, `Error` | `destructive` border |
-| Media | `Media` | 40 pt `muted` box, radius lg, 16 pt icon; `Sm` 32, `Xs` 28; 60% while busy |
+| Media | `Media` | 40 pt `muted` box, radius lg, 16 pt icon; `Sm` 32; `Xs` 28 with radius md and a 14 pt icon; 24 pt icon when vertical |
+| Busy image | `Media`, selected | 60% opacity while uploading, processing, or failed |
 | Name | `Title` | sm medium text; xs for `Sm` and `Xs` |
 | Detail | `Description` | xs `muted-foreground` text, 2 pt above; `destructive` for an error |
 | Progress | `Progress` | 2 pt `primary` line |
