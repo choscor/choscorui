@@ -65,7 +65,7 @@ impl View for Counter {
     }
 }
 
-fn main() -> Result<(), choscorui::AppError> {
+fn main() -> Result<(), AppError> {
     App::new()
         .window(WindowOptions::new("Counter", 400.0, 300.0), || Counter)
         .run()
@@ -77,28 +77,41 @@ fn main() -> Result<(), choscorui::AppError> {
 #### `App::commands`
 
 ```rust
-pub fn commands(self, menu: impl Fn() -> Result<MenuBarModel, MenuError> + 'static, handler: impl Fn(&mut AppContext, MenuCommandId) + 'static) -> Self
+pub fn commands(self, menus: impl IntoIterator<Item = CommandMenu>) -> Self
 ```
 
-Installs the menu bar that `menu` makes, and calls `handler` with
-each command that the user chooses. When state that `menu` read
-changes, the menu bar is made again, for example for check marks
-or another language.
+Adds `menus` to the menu bar. Each row runs its own action when
+the user chooses it, and its keyboard shortcut chooses it from any
+window. When state that a label, a check mark, or a disabled state
+reads changes, the menu bar is made again.
 
 ##### Examples
 
 ```rust
-const QUIT: MenuCommandId = MenuCommandId(1);
-let app = App::new().commands(
-    || MenuBarModel::new(vec![MenuSpec::new("File", vec![
-        MenuEntry::command(QUIT, MenuItemState::new("Quit")),
-    ])]),
-    |cx, command| {
-        if command == QUIT {
-            cx.quit();
-        }
-    },
+use choscorui::prelude::*;
+
+let app = App::new();
+let dark = app.runtime().property(false);
+let (read, write) = (dark.clone(), dark.clone());
+let command = ShortcutModifiers {
+    command: true,
+    ..ShortcutModifiers::default()
+};
+let view = CommandMenu::new(
+    "View",
+    vec![
+        MenuChoice::checkbox(
+            "Dark Mode",
+            Binding::new(move || read.get(), move |on| write.set(on)),
+        )
+        .keyboard_shortcut('d', command),
+        MenuChoice::separator(),
+        MenuChoice::action("Reload", || println!("reload")),
+    ],
 );
+app.commands([view])
+    .tokens(move || if dark.get() { DesignTokens::dark() } else { DesignTokens::light() })
+    .run()?;
 ```
 
 #### `App::env`
@@ -115,6 +128,26 @@ and environment values.
 ```rust
 let env = Env::new(Rc::new(Catalog::new()), Locale::root());
 let app = App::new().env(env);
+```
+
+#### `App::id`
+
+```rust
+pub fn id(self, id: &str) -> Self
+```
+
+The reverse-DNS identifier of the application, such as
+`"com.example.notes"`. Stored state and window restore keep their
+values in the per-user settings file of this identifier. Without
+an identifier or a settings path, they last until the application
+quits.
+
+##### Examples
+
+```rust
+use choscorui::prelude::*;
+
+App::new().id("com.example.notes").run()?;
 ```
 
 #### `App::new`
@@ -139,10 +172,11 @@ fn main() -> Result<(), choscorui::AppError> {
 #### `App::on_error`
 
 ```rust
-pub fn on_error(self, handler: impl Fn(WindowId, &ViewError) + 'static) -> Self
+pub fn on_error(self, handler: impl Fn(Option<WindowId>, &ViewError) + 'static) -> Self
 ```
 
-Calls `handler` with each error that a window's views report. By
+Calls `handler` with each error that a window's views report, with
+the window, and with each settings error, without a window. By
 default the errors go to standard error.
 
 ##### Examples
@@ -179,7 +213,7 @@ pub fn run(self) -> Result<(), AppError>
 ```
 
 Runs the application until the user quits or closes the last
-window.
+window, then saves the settings.
 
 ##### Examples
 
@@ -227,6 +261,48 @@ let scene = Scene::new(WindowOptions::new("Main", 800.0, 600.0), || Text::new("M
 let app = App::new().scene(scene);
 ```
 
+#### `App::settings_path`
+
+```rust
+pub fn settings_path(self, path: impl Into<PathBuf>) -> Self
+```
+
+Keeps the settings in the file at `path` instead of the per-user
+location of [`App::id`](#appid).
+
+##### Examples
+
+```rust
+use choscorui::prelude::*;
+
+App::new().settings_path("/tmp/notes-settings.txt").run()?;
+```
+
+#### `App::settings_schema`
+
+```rust
+pub fn settings_schema(self, schema: SettingsSchema) -> Self
+```
+
+The version, defaults, and migrations of the settings file.
+Without a schema, the file has version 1 and no defaults.
+
+##### Examples
+
+```rust
+use choscorui::prelude::*;
+use choscorui::core::{SettingValue, SettingsSchema};
+
+let schema = SettingsSchema::new(2)
+    .with_default("editor.wrap", SettingValue::Bool(true))
+    .with_migration(1, |values| {
+        if let Some(wrap) = values.remove("wrap") {
+            values.insert("editor.wrap".into(), wrap);
+        }
+    });
+App::new().id("com.example.notes").settings_schema(schema).run()?;
+```
+
 #### `App::start`
 
 ```rust
@@ -234,18 +310,18 @@ pub fn start(self) -> Result<AppContext, AppError>
 ```
 
 Starts the platform, opens the windows, and installs the menu bar.
-Drive the result with [`AppContext::pump`](#appcontextpump).
+Drive the result with [`AppContext::pump`](#appcontextpump). Returns
+`AppError::Unsupported` on a target without a backend.
 
 ##### Examples
 
 ```rust
-fn main() -> Result<(), choscorui::AppError> {
-    let mut cx = App::new()
-        .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
-        .start()?;
-    while cx.pump() {}
-    Ok(())
-}
+use choscorui::prelude::*;
+
+let mut cx = App::new()
+    .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    .start()?;
+while cx.pump() {}
 ```
 
 #### `App::tokens`
@@ -290,10 +366,26 @@ struct in `choscorui::prelude::AppContext`
 pub struct AppContext { /* private fields */ }
 ```
 
-A running application. Command handlers and the tick hook get it to
-open and close windows or to quit.
+A running application. Hooks and actions get it to open and close
+windows, to quit, and to reach the services and the settings.
 
 ### Methods
+
+#### `AppContext::activate`
+
+```rust
+pub fn activate(&self)
+```
+
+Brings the application to the front.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    cx.activate();
+});
+```
 
 #### `AppContext::active`
 
@@ -311,19 +403,23 @@ let app = App::new().on_tick(|cx| {
 });
 ```
 
-#### `AppContext::application`
+#### `AppContext::choose`
 
 ```rust
-pub fn application(&self) -> &Application
+pub fn choose(&mut self, command: MenuCommandId) -> bool
 ```
 
-The platform application, for dialogs, the clipboard, and timers.
+Chooses the menu bar item `command` through the native path, as
+the user does, and runs its action. Returns false when the item
+is disabled or not in the menu bar.
 
 ##### Examples
 
 ```rust
 let app = App::new().on_tick(|cx| {
-    let _platform = cx.application();
+    if let Some(quit) = cx.menu_bar().and_then(|menu| menu.find("Quit")) {
+        cx.choose(quit);
+    }
 });
 ```
 
@@ -333,7 +429,8 @@ let app = App::new().on_tick(|cx| {
 pub fn close(&mut self, id: WindowId)
 ```
 
-Closes window `id`.
+Closes window `id`. A window with `restore_geometry` saves its
+frame first.
 
 ##### Examples
 
@@ -342,25 +439,6 @@ let app = App::new().on_tick(|cx| {
     if let Some(id) = cx.active() {
         cx.close(id);
     }
-});
-```
-
-#### `AppContext::command`
-
-```rust
-pub fn command(&mut self, command: MenuCommandId)
-```
-
-Runs the `commands` handler for `command`, as if the user chose
-it in the menu bar.
-
-##### Examples
-
-```rust
-const QUIT: MenuCommandId = MenuCommandId(1);
-let app = App::new().on_tick(|cx| {
-    // Runs the menu handler as if the user chose Quit.
-    cx.command(QUIT);
 });
 ```
 
@@ -400,29 +478,49 @@ let app = App::new().on_tick(|cx| {
 });
 ```
 
-#### `AppContext::menu`
+#### `AppContext::menu_bar`
 
 ```rust
-pub fn menu(&self) -> Option<&MainMenu>
+pub fn menu_bar(&self) -> Option<&MenuBarModel>
 ```
 
-The installed menu bar, for its item states.
+The installed menu bar, for its item states. Each command menu
+row has a generated id.
 
 ##### Examples
 
 ```rust
 let app = App::new().on_tick(|cx| {
-    let _installed = cx.menu().is_some();
+    let quit = cx.menu_bar().and_then(|menu| menu.find("Quit"));
+    let _ = quit;
+});
+```
+
+#### `AppContext::menu_panic_count`
+
+```rust
+pub fn menu_panic_count(&self) -> usize
+```
+
+The menu actions that panicked. A panic stops at the menu
+boundary, and the item stays usable.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    let _panics = cx.menu_panic_count();
 });
 ```
 
 #### `AppContext::open`
 
 ```rust
-pub fn open(&mut self, scene: Scene) -> Result<WindowId, PlatformError>
+pub fn open(&mut self, scene: Scene) -> Result<WindowId, AppError>
 ```
 
-Opens the window that `scene` describes and makes it active.
+Opens the window that `scene` describes and makes it active. A
+scene with `restore_geometry` opens where it closed last time.
 
 ##### Examples
 
@@ -443,18 +541,15 @@ pub fn pump(&mut self) -> bool
 
 Waits for native events up to the next due frame or timer, handles
 them, and draws what changed. Returns false when the application
-should stop.
+should stop; the settings are then saved.
 
 ##### Examples
 
 ```rust
-fn main() -> Result<(), choscorui::AppError> {
-    let mut cx = App::new()
-        .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
-        .start()?;
-    while cx.pump() {}
-    Ok(())
-}
+let mut cx = App::new()
+    .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    .start()?;
+while cx.pump() {}
 ```
 
 #### `AppContext::quit`
@@ -463,7 +558,7 @@ fn main() -> Result<(), choscorui::AppError> {
 pub fn quit(&mut self)
 ```
 
-Ends the event loop after this turn.
+Ends the event loop after this turn. The settings are saved then.
 
 ##### Examples
 
@@ -491,6 +586,75 @@ let app = App::new().on_tick(|cx| {
 });
 ```
 
+#### `AppContext::save`
+
+```rust
+pub fn save(&mut self)
+```
+
+Stores the frame of each open window that has a restore key, and
+writes the settings when a value changed. [`AppContext::pump`](#appcontextpump)
+saves after each turn and when the application stops.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    cx.save();
+});
+```
+
+#### `AppContext::services`
+
+```rust
+pub fn services(&self) -> &Services
+```
+
+The desktop services of the backend: the clipboard,
+notifications, the status item, URL handlers, and file dialogs.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    let _copied = cx.services().set_clipboard_text("Hello");
+});
+```
+
+#### `AppContext::storage`
+
+```rust
+pub fn storage(&self) -> &Storage
+```
+
+The settings that stored state and window restore use.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    let _path = cx.storage().path();
+});
+```
+
+#### `AppContext::title`
+
+```rust
+pub fn title(&self, id: WindowId) -> Option<String>
+```
+
+The title of window `id`.
+
+##### Examples
+
+```rust
+let app = App::new().on_tick(|cx| {
+    if let Some(id) = cx.active() {
+        let _title = cx.title(id);
+    }
+});
+```
+
 #### `AppContext::tokens`
 
 ```rust
@@ -504,26 +668,6 @@ The tokens that the windows have now.
 ```rust
 let app = App::new().on_tick(|cx| {
     let _tokens = cx.tokens();
-});
-```
-
-#### `AppContext::window`
-
-```rust
-pub fn window(&mut self, id: WindowId) -> Option<&mut Window>
-```
-
-The native window `id`, for its geometry or paint timing.
-
-##### Examples
-
-```rust
-let app = App::new().on_tick(|cx| {
-    if let Some(id) = cx.active()
-        && let Some(window) = cx.window(id)
-    {
-        let _size = window.content_size();
-    }
 });
 ```
 
@@ -544,6 +688,31 @@ let app = App::new().on_tick(|cx| {
     }
 });
 ```
+
+## `AppError`
+
+enum in `choscorui::prelude::AppError`
+
+```rust
+#[non_exhaustive]
+pub enum AppError {
+    Unsupported,
+    WrongThread,
+    InvalidWindowOptions,
+    Unavailable,
+    Menu(MenuError),
+}
+```
+
+What can stop an application from starting.
+
+### Variants
+
+- `Unsupported`: No backend exists for the target operating system.
+- `WrongThread`: The application must start on the main thread.
+- `InvalidWindowOptions`: The window options have an invalid size or title.
+- `Unavailable`: The native platform could not start or open a window.
+- `Menu(MenuError)`: The menu bar model is not valid or could not be installed.
 
 ## `BackendCapabilities`
 
@@ -603,6 +772,29 @@ pub fn none(backend: &'static str) -> Self
 
 A backend that supports nothing; backends enable what they provide.
 
+## `CommandMenu`
+
+struct in `choscorui::prelude::CommandMenu`
+
+```rust
+pub struct CommandMenu { /* private fields */ }
+```
+
+One menu of the menu bar, with `MenuChoice` rows: actions, check and
+radio rows, submenus, and separators. A row's
+[`MenuChoice::keyboard_shortcut`](presentation.md#menuchoicekeyboard_shortcut) chooses it from the keyboard.
+
+### Methods
+
+#### `CommandMenu::new`
+
+```rust
+pub fn new<M>(title: impl IntoLive<TextContent, M>, items: impl Items<MenuChoice>) -> Self
+```
+
+A menu titled `title` with the rows that `items` gives. The first
+menu is the application menu on macOS.
+
 ## `Either`
 
 enum in `choscorui::prelude::Either`
@@ -650,139 +842,106 @@ fn badge(count: u32) -> AnyView {
 
 Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
-## `MenuBarModel`
+## `FileDialogKind`
 
-struct in `choscorui::prelude::MenuBarModel`
-
-```rust
-pub struct MenuBarModel { /* private fields */ }
-```
-
-The menus of the menu bar, with each command at one known place.
-
-### Methods
-
-#### `MenuBarModel::menus`
+enum in `choscorui::prelude::FileDialogKind`
 
 ```rust
-pub fn menus(&self) -> &[MenuSpec]
-```
-
-The menus, in order.
-
-#### `MenuBarModel::new`
-
-```rust
-pub fn new(menus: Vec<MenuSpec>) -> Result<Self, MenuError>
-```
-
-A menu bar with `menus`. Returns an error when a command
-appears twice or a text contains a NUL character.
-
-#### `MenuBarModel::set_state`
-
-```rust
-pub fn set_state(&mut self, command: MenuCommandId, state: MenuItemState) -> Result<(), MenuError>
-```
-
-Replaces the state of the item for `command`.
-
-#### `MenuBarModel::state`
-
-```rust
-pub fn state(&self, command: MenuCommandId) -> Result<&MenuItemState, MenuError>
-```
-
-The state of the item for `command`.
-
-## `MenuCommandId`
-
-struct in `choscorui::prelude::MenuCommandId`
-
-```rust
-pub struct MenuCommandId(pub u64);
-```
-
-The number that identifies one menu command.
-
-## `MenuEntry`
-
-enum in `choscorui::prelude::MenuEntry`
-
-```rust
-pub enum MenuEntry {
-    Command { command: MenuCommandId, state: MenuItemState },
-    Separator,
+pub enum FileDialogKind {
+    Open,
+    OpenMany,
+    Directory,
+    Save,
 }
 ```
 
-One entry of a menu: a command or a separator.
+What a file dialog chooses.
 
-### Methods
+### Variants
 
-#### `MenuEntry::command`
+- `Open`: One existing file.
+- `OpenMany`: One or more existing files.
+- `Directory`: One directory.
+- `Save`: A path to save to.
 
-```rust
-pub fn command(command: MenuCommandId, state: MenuItemState) -> Self
-```
+## `FileDialogRequest`
 
-A command item with its state.
-
-#### `MenuEntry::separator`
-
-```rust
-pub const fn separator() -> Self
-```
-
-A separator line between items.
-
-## `MenuItemState`
-
-struct in `choscorui::prelude::MenuItemState`
+struct in `choscorui::prelude::FileDialogRequest`
 
 ```rust
-pub struct MenuItemState {
-    pub title: String,
-    pub enabled: bool,
-    pub checked: bool,
-    pub shortcut: Option<MenuShortcut>,
+pub struct FileDialogRequest {
+    pub kind: FileDialogKind,
+    pub title: Option<String>,
+    pub allowed_types: Vec<String>,
+    pub suggested_name: Option<String>,
 }
 ```
 
-The title, enabled and checked state, and shortcut of a menu item.
+A file dialog to show.
+
+### Fields
+
+- `kind`
+- `title`
+- `allowed_types`: File name extensions without the dot, such as `"txt"`. Empty
+  allows every file.
+- `suggested_name`: The file name that a save dialog starts with.
 
 ### Methods
 
-#### `MenuItemState::new`
+#### `FileDialogRequest::allowed_types`
 
 ```rust
-pub fn new(title: impl Into<String>) -> Self
+pub fn allowed_types(self, types: impl IntoIterator<Item = impl Into<String>>) -> Self
 ```
 
-An enabled item with `title`, no check mark, and no shortcut.
+Allows only files with the extensions `types`.
 
-## `MenuSpec`
-
-struct in `choscorui::prelude::MenuSpec`
+#### `FileDialogRequest::new`
 
 ```rust
-pub struct MenuSpec {
-    pub title: String,
-    pub entries: Vec<MenuEntry>,
+pub fn new(kind: FileDialogKind) -> Self
+```
+
+A dialog of `kind` that allows every file.
+
+#### `FileDialogRequest::suggested_name`
+
+```rust
+pub fn suggested_name(self, name: impl Into<String>) -> Self
+```
+
+The name that a save dialog starts with.
+
+#### `FileDialogRequest::title`
+
+```rust
+pub fn title(self, title: impl Into<String>) -> Self
+```
+
+The dialog's title.
+
+## `NotificationPermission`
+
+enum in `choscorui::prelude::NotificationPermission`
+
+```rust
+pub enum NotificationPermission {
+    NotRequested,
+    Pending,
+    Granted,
+    Denied,
 }
 ```
 
-One menu of the menu bar: its title and its entries.
+Whether the user lets the application post notifications.
 
-### Methods
+### Variants
 
-#### `MenuSpec::new`
-
-```rust
-pub fn new(title: impl Into<String>, entries: Vec<MenuEntry>) -> Self
-```
-
-A menu with `title` and `entries`.
+- `NotRequested`
+- `Pending`: The application asked, and the answer has not arrived.
+- `Granted`
+- `Denied`
 
 ## `Scene`
 
@@ -792,8 +951,9 @@ struct in `choscorui::prelude::Scene`
 pub struct Scene { /* private fields */ }
 ```
 
-A window to open: its options, its root view, and an optional title
-that follows state.
+A window to open: its options, its root view, an optional title that
+follows state, and an optional key that keeps its place between
+launches.
 
 ### Methods
 
@@ -812,6 +972,30 @@ let scene = Scene::new(WindowOptions::new("Notes", 640.0, 480.0), || Text::new("
 let app = App::new().scene(scene);
 ```
 
+#### `Scene::restore_geometry`
+
+```rust
+pub fn restore_geometry(self, key: &str) -> Self
+```
+
+Saves the window's frame under `key` in the settings when the
+window closes or the application quits, and puts the window there
+when it opens. A frame that no longer fits the screens moves onto
+them. When two windows use the same key, the last one to close
+wins.
+
+##### Examples
+
+```rust
+use choscorui::prelude::*;
+
+let scene = Scene::new(WindowOptions::new("Notes", 640.0, 480.0), || {
+    Text::new("Hello")
+})
+.restore_geometry("window.main");
+App::new().id("com.example.notes").scene(scene).run()?;
+```
+
 #### `Scene::title`
 
 ```rust
@@ -828,6 +1012,355 @@ let count = app.runtime().property(0);
 let scene = Scene::new(WindowOptions::new("Inbox", 640.0, 480.0), || Text::new("Inbox"))
     .title(move || format!("Inbox ({})", count.get()));
 ```
+
+## `ServiceError`
+
+enum in `choscorui::prelude::ServiceError`
+
+```rust
+pub enum ServiceError {
+    Unsupported(Service),
+    Unavailable { service: Service, condition: &'static str },
+    PermissionDenied,
+    InvalidText,
+    InvalidUrl,
+    Failed(Service),
+}
+```
+
+Why a service call failed.
+
+### Variants
+
+- `Unsupported(Service)`: The backend does not provide the service.
+- `Unavailable { service: Service, condition: &'static str }`: The backend provides the service only when `condition` holds.
+- `PermissionDenied`: The user has not granted permission.
+- `InvalidText`: The text contains an interior NUL character.
+- `InvalidUrl`: The URL is not valid.
+- `Failed(Service)`: The native call failed.
+
+## `Services`
+
+struct in `choscorui::prelude::Services`
+
+```rust
+pub struct Services { /* private fields */ }
+```
+
+The desktop services of the running backend. Each call checks the
+capability of its service first: `Unsupported` returns
+`ServiceError::Unsupported`, and `Conditional` returns
+`ServiceError::Unavailable` with the condition.
+
+### Methods
+
+#### `Services::capabilities`
+
+```rust
+pub fn capabilities(&self) -> BackendCapabilities
+```
+
+What the backend provides.
+
+#### `Services::choose_files`
+
+```rust
+pub fn choose_files(&self, request: &FileDialogRequest) -> Result<Vec<PathBuf>, ServiceError>
+```
+
+Shows the file dialog of `request` and returns the chosen paths,
+empty when the user cancels.
+
+#### `Services::clipboard_text`
+
+```rust
+pub fn clipboard_text(&self) -> Result<Option<String>, ServiceError>
+```
+
+The text on the clipboard, if any.
+
+#### `Services::new`
+
+```rust
+pub fn new(backend: Rc<dyn ServiceBackend>) -> Self
+```
+
+The services of `backend`, with the capabilities that it reports
+now.
+
+#### `Services::none`
+
+```rust
+pub fn none() -> Self
+```
+
+Services that a headless backend has: none.
+
+#### `Services::notification_permission`
+
+```rust
+pub fn notification_permission(&self) -> Result<NotificationPermission, ServiceError>
+```
+
+Whether the user lets the application post notifications.
+
+#### `Services::post_notification`
+
+```rust
+pub fn post_notification(&self, notification: &SystemNotification) -> Result<(), ServiceError>
+```
+
+Posts `notification`. When permission was never requested, asks
+for it first.
+
+#### `Services::request_notification_permission`
+
+```rust
+pub fn request_notification_permission(&self) -> Result<(), ServiceError>
+```
+
+Asks the user for notification permission. Poll
+[`Services::notification_permission`](#servicesnotification_permission) for the answer.
+
+#### `Services::set_clipboard_text`
+
+```rust
+pub fn set_clipboard_text(&self, text: &str) -> Result<(), ServiceError>
+```
+
+Replaces the clipboard contents with `text`.
+
+#### `Services::set_status_item`
+
+```rust
+pub fn set_status_item(&self, item: Option<StatusItemSpec>) -> Result<(), ServiceError>
+```
+
+Shows `item` in the status area, or removes the item for `None`.
+
+#### `Services::status_item`
+
+```rust
+pub fn status_item(&self) -> Option<StatusItemSpec>
+```
+
+The status item that shows now, if any.
+
+#### `Services::url_handler`
+
+```rust
+pub fn url_handler(&self, url: &str) -> Result<Option<String>, ServiceError>
+```
+
+The name of the application that opens `url`, if any.
+
+## `ShortcutModifiers`
+
+struct in `choscorui::prelude::ShortcutModifiers`
+
+```rust
+pub struct ShortcutModifiers {
+    pub shift: bool,
+    pub control: bool,
+    pub option: bool,
+    pub command: bool,
+}
+```
+
+The modifier keys that are held with a key or a pointer event, or
+that a keyboard shortcut needs.
+
+## `StatusItemSpec`
+
+struct in `choscorui::prelude::StatusItemSpec`
+
+```rust
+pub struct StatusItemSpec {
+    pub title: String,
+    pub tooltip: Option<String>,
+}
+```
+
+The item that an application shows in the system status area.
+
+### Methods
+
+#### `StatusItemSpec::new`
+
+```rust
+pub fn new(title: impl Into<String>) -> Self
+```
+
+An item that shows `title`, without a tooltip.
+
+#### `StatusItemSpec::tooltip`
+
+```rust
+pub fn tooltip(self, tooltip: impl Into<String>) -> Self
+```
+
+The text that shows when the pointer rests on the item.
+
+## `Storage`
+
+struct in `choscorui::prelude::Storage`
+
+```rust
+pub struct Storage { /* private fields */ }
+```
+
+The settings of an application, shared by its windows. Writes change
+the settings in memory; [`Storage::save`](#storagesave) writes the file when a value
+changed. The file write is atomic: a temporary file, a sync, and a
+rename.
+
+### Methods
+
+#### `Storage::get`
+
+```rust
+pub fn get(&self, key: &str) -> Option<SettingValue>
+```
+
+The stored value of `key`, else the schema default.
+
+#### `Storage::in_memory`
+
+```rust
+pub fn in_memory(schema: SettingsSchema) -> Self
+```
+
+Settings in memory only, with the defaults of `schema`.
+
+#### `Storage::open`
+
+```rust
+pub fn open(schema: SettingsSchema, path: PathBuf) -> Self
+```
+
+Loads the settings file at `path` with the rules of
+`Settings::load_or_recover`. A corrupt file moves aside. A file
+that does not load leaves the defaults in effect without a save
+path, so that it is not overwritten. Each problem waits in
+[`Storage::take_errors`](#storagetake_errors).
+
+#### `Storage::path`
+
+```rust
+pub fn path(&self) -> Option<PathBuf>
+```
+
+The file that [`Storage::save`](#storagesave) writes, if any.
+
+#### `Storage::report`
+
+```rust
+pub fn report(&self, error: StorageError)
+```
+
+Records a problem for [`Storage::take_errors`](#storagetake_errors).
+
+#### `Storage::save`
+
+```rust
+pub fn save(&self) -> Result<bool, StorageError>
+```
+
+Writes the file when a value changed since the last save and the
+settings have a path. Returns whether it wrote.
+
+#### `Storage::set`
+
+```rust
+pub fn set(&self, key: &str, value: SettingValue) -> Result<(), StorageError>
+```
+
+Stores `value` under `key` in memory.
+
+#### `Storage::take_errors`
+
+```rust
+pub fn take_errors(&self) -> Vec<StorageError>
+```
+
+The problems found since the last call.
+
+#### `Storage::update`
+
+```rust
+pub fn update<R>(&self, change: impl FnOnce(&mut Settings) -> R) -> R
+```
+
+Runs `change` with the settings, which record what it changes.
+
+#### `Storage::with_settings`
+
+```rust
+pub fn with_settings<R>(&self, read: impl FnOnce(&Settings) -> R) -> R
+```
+
+Runs `read` with the settings, for types that store several
+values, such as `WindowGeometry`.
+
+## `StorageError`
+
+enum in `choscorui::prelude::StorageError`
+
+```rust
+pub enum StorageError {
+    Load { path: PathBuf, message: String },
+    Recovered { moved_to: PathBuf },
+    Save { message: String },
+    TypeMismatch { key: String },
+    InvalidKey(String),
+}
+```
+
+A problem with the settings that back stored state. The state then
+uses its default, and the application keeps running.
+
+### Variants
+
+- `Load { path: PathBuf, message: String }`: The settings file could not load, for example because a newer
+  application version wrote it. The defaults stay in effect, and the
+  file is not overwritten.
+- `Recovered { moved_to: PathBuf }`: The settings file was corrupt. It moved to `moved_to`, and the
+  defaults are in effect.
+- `Save { message: String }`: The settings could not be written.
+- `TypeMismatch { key: String }`: The stored value of `key` has another type than the state.
+- `InvalidKey(String)`: `key` is not a valid settings key.
+
+## `StoredValue`
+
+trait in `choscorui::prelude::StoredValue`
+
+```rust
+pub trait StoredValue: Clone + PartialEq + 'static { /* items below */ }
+```
+
+A value that stored state can hold: one of the `SettingValue` kinds.
+
+### Items
+
+#### `StoredValue::from_setting`
+
+```rust
+fn from_setting(setting: &SettingValue) -> Option<Self>
+```
+
+The value of `setting`, or `None` when it has another kind.
+
+#### `StoredValue::to_setting`
+
+```rust
+fn to_setting(&self) -> SettingValue
+```
+
+The value as a setting.
+
+### Implementors
+
+- [`Rect`](layout.md#rect)
 
 ## `Support`
 
@@ -858,6 +1391,32 @@ pub fn is_supported(self) -> bool
 ```
 
 True only for `Supported`. A `Conditional` value is false.
+
+## `SystemNotification`
+
+struct in `choscorui::prelude::SystemNotification`
+
+```rust
+pub struct SystemNotification {
+    pub identifier: String,
+    pub title: String,
+    pub body: String,
+}
+```
+
+A notification to post. A new notification with the same identifier
+replaces the old one.
+
+### Methods
+
+#### `SystemNotification::new`
+
+```rust
+pub fn new(identifier: impl Into<String>, title: impl Into<String>, body: impl Into<String>) -> Self
+```
+
+A notification with `title` and `body`. A new notification with
+the same `identifier` replaces the old one.
 
 ## `View`
 
@@ -946,6 +1505,7 @@ pub enum ViewError {
     Control(String),
     NoToaster,
     Clamped(String),
+    Storage(StorageError),
 }
 ```
 
@@ -964,6 +1524,7 @@ What can go wrong while the runtime updates a view tree.
 - `NoToaster`: A `.toast` modifier has no `.toaster` above it.
 - `Clamped(String)`: A view option or value was invalid, and the view used the nearest
   valid value instead, with the reason.
+- `Storage(StorageError)`: Stored state or the settings behind it had a problem.
 
 ## `ViewHost`
 
@@ -1266,9 +1827,34 @@ struct in `choscorui::prelude::WindowOptions`
 pub struct WindowOptions { /* private fields */ }
 ```
 
-The title and the content size of a new window.
+The title and the content size of a window to open.
 
 ### Methods
+
+#### `WindowOptions::height`
+
+```rust
+pub fn height(&self) -> f64
+```
+
+The content height in points.
+
+#### `WindowOptions::minimum`
+
+```rust
+pub fn minimum(&self) -> Size
+```
+
+The smallest size of a restored frame.
+
+#### `WindowOptions::minimum_size`
+
+```rust
+pub fn minimum_size(self, minimum: Size) -> Self
+```
+
+The smallest size that a restored frame can shrink to when it
+does not fit on the screens.
 
 #### `WindowOptions::new`
 
@@ -1276,8 +1862,24 @@ The title and the content size of a new window.
 pub fn new(title: impl Into<String>, width: f64, height: f64) -> Self
 ```
 
-A window with `title` and a content area of `width` by `height`
+A window titled `title` with a content area of `width` by `height`
 points.
+
+#### `WindowOptions::title`
+
+```rust
+pub fn title(&self) -> &str
+```
+
+The title.
+
+#### `WindowOptions::width`
+
+```rust
+pub fn width(&self) -> f64
+```
+
+The content width in points.
 
 ## `capabilities`
 

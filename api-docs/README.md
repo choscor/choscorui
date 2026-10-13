@@ -23,21 +23,29 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`AnyView`](app.md#anyview) struct: A view of any type.
 - [`App`](app.md#app) struct: A view-based application.
 - [`AppContext`](app.md#appcontext) struct: A running application.
+- [`AppError`](app.md#apperror) enum: What can stop an application from starting.
 - [`BackendCapabilities`](app.md#backendcapabilities) struct: What the running backend can do.
+- [`CommandMenu`](app.md#commandmenu) struct: One menu of the menu bar, with `MenuChoice` rows: actions, check and radio rows, submenus, and separators.
 - [`Either`](app.md#either) enum: One of two views, for a branch whose sides have different types.
 - [`Empty`](app.md#empty) struct: A view that shows nothing.
-- [`MenuBarModel`](app.md#menubarmodel) struct: The menus of the menu bar, with each command at one known place.
-- [`MenuCommandId`](app.md#menucommandid) struct: The number that identifies one menu command.
-- [`MenuEntry`](app.md#menuentry) enum: One entry of a menu: a command or a separator.
-- [`MenuItemState`](app.md#menuitemstate) struct: The title, enabled and checked state, and shortcut of a menu item.
-- [`MenuSpec`](app.md#menuspec) struct: One menu of the menu bar: its title and its entries.
-- [`Scene`](app.md#scene) struct: A window to open: its options, its root view, and an optional title that follows state.
+- [`FileDialogKind`](app.md#filedialogkind) enum: What a file dialog chooses.
+- [`FileDialogRequest`](app.md#filedialogrequest) struct: A file dialog to show.
+- [`NotificationPermission`](app.md#notificationpermission) enum: Whether the user lets the application post notifications.
+- [`Scene`](app.md#scene) struct: A window to open: its options, its root view, an optional title that follows state, and an optional key that keeps its place between launches.
+- [`ServiceError`](app.md#serviceerror) enum: Why a service call failed.
+- [`Services`](app.md#services) struct: The desktop services of the running backend.
+- [`ShortcutModifiers`](app.md#shortcutmodifiers) struct: The modifier keys that are held with a key or a pointer event, or that a keyboard shortcut needs.
+- [`StatusItemSpec`](app.md#statusitemspec) struct: The item that an application shows in the system status area.
+- [`Storage`](app.md#storage) struct: The settings of an application, shared by its windows.
+- [`StorageError`](app.md#storageerror) enum: A problem with the settings that back stored state.
+- [`StoredValue`](app.md#storedvalue) trait: A value that stored state can hold: one of the `SettingValue` kinds.
 - [`Support`](app.md#support) enum: Whether a backend provides a feature.
+- [`SystemNotification`](app.md#systemnotification) struct: A notification to post.
 - [`View`](app.md#view) trait: A piece of user interface.
 - [`ViewError`](app.md#viewerror) enum: What can go wrong while the runtime updates a view tree.
 - [`ViewHost`](app.md#viewhost) struct: Mounts views on a retained tree and runs them: live properties, layout, paint, semantics, and input.
 - [`WindowId`](app.md#windowid) struct: Identifies an open window for the life of the application.
-- [`WindowOptions`](app.md#windowoptions) struct: The title and the content size of a new window.
+- [`WindowOptions`](app.md#windowoptions) struct: The title and the content size of a window to open.
 - [`capabilities`](app.md#capabilities) function: What the current backend provides.
 
 ## State
@@ -227,6 +235,8 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`dialog`](modifiers.md#dialog) modifier: Shows `content` in a dialog while `presented` is true.
 - [`drawer`](modifiers.md#drawer) modifier: Shows `content` in a drawer along the `side` edge.
 - [`dropdown_menu`](modifiers.md#dropdown_menu) modifier: Shows a menu of `items` below the view while `presented` is true.
+- [`file_exporter`](modifiers.md#file_exporter) modifier: Shows the backend's save dialog, which starts with the file name `name`, while `presented` is true.
+- [`file_importer`](modifiers.md#file_importer) modifier: Shows the backend's open dialog for one file with an extension in `types` (all files when empty) while `presented` is true.
 - [`hover_card`](modifiers.md#hover_card) modifier: Shows `content` in a hover card next to the view after the pointer rests on the view, or after keyboard focus moves into it.
 - [`popover`](modifiers.md#popover) modifier: Shows `content` in a popover next to the view.
 - [`sheet`](modifiers.md#sheet) modifier: Shows `content` in a sheet along the `side` edge.

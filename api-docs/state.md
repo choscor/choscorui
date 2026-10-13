@@ -181,6 +181,19 @@ pub fn state<T: Clone + PartialEq + 'static>(&mut self, initial: T) -> State<T>
 
 State that the component owns, starting at `initial`.
 
+#### `Cx::stored`
+
+```rust
+pub fn stored<T: StoredValue>(&mut self, key: &str, default: T) -> State<T>
+```
+
+State that the environment's [`Storage`](app.md#storage) keeps under `key`, like
+state that the user's settings hold. It starts at the stored value,
+or at `default` when no value is stored, and each change writes it
+back. A stored value of another type gives `default` and reports
+`StorageError::TypeMismatch`. Without a storage, it is plain
+state.
+
 ## `Dynamic`
 
 struct in `choscorui::prelude::Dynamic`
@@ -294,6 +307,33 @@ pub fn plural(&self, id: &str, count: u64, args: &[(&str, &str)]) -> String
 
 The plural translation of `id` for `count`, or `id` itself.
 
+#### `Env::services`
+
+```rust
+pub fn services(&self) -> &Services
+```
+
+The desktop services of the backend: the clipboard,
+notifications, the status item, URL handlers, and file dialogs.
+Without a backend, each service reports that it is unsupported.
+
+#### `Env::set_services`
+
+```rust
+pub fn set_services(&mut self, services: Services)
+```
+
+Sets the desktop services. The application sets the backend's
+services in the root environment.
+
+#### `Env::set_storage`
+
+```rust
+pub fn set_storage(&mut self, storage: Storage)
+```
+
+Sets the storage that `Cx::stored` loads from and writes to.
+
 #### `Env::set_value`
 
 ```rust
@@ -301,6 +341,14 @@ pub fn set_value<T: Any>(&mut self, value: T)
 ```
 
 Sets a custom value for descendants, inside `.environment(...)`.
+
+#### `Env::storage`
+
+```rust
+pub fn storage(&self) -> Option<&Storage>
+```
+
+The storage of stored state, if the application has one.
 
 #### `Env::text`
 

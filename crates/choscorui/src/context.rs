@@ -123,28 +123,76 @@ impl AppContext {
     }
 
     /// The reactive runtime that every window's state uses.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _count = cx.runtime().property(0);
+    /// });
+    /// ```
     pub fn runtime(&self) -> &Runtime {
         &self.runtime
     }
 
     /// The desktop services of the backend: the clipboard,
     /// notifications, the status item, URL handlers, and file dialogs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _copied = cx.services().set_clipboard_text("Hello");
+    /// });
+    /// ```
     pub fn services(&self) -> &Services {
         self.env.services()
     }
 
     /// The settings that stored state and window restore use.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _path = cx.storage().path();
+    /// });
+    /// ```
     pub fn storage(&self) -> &Storage {
         &self.storage
     }
 
     /// Brings the application to the front.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     cx.activate();
+    /// });
+    /// ```
     pub fn activate(&self) {
         self.platform.activate();
     }
 
     /// Opens the window that `scene` describes and makes it active. A
     /// scene with `restore_geometry` opens where it closed last time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if cx.windows().is_empty() {
+    ///         let scene = Scene::new(WindowOptions::new("New", 400.0, 300.0), || Text::new("New"));
+    ///         let _ = cx.open(scene);
+    ///     }
+    /// });
+    /// ```
     pub fn open(&mut self, scene: Scene) -> Result<WindowId, AppError> {
         let Scene {
             options,
@@ -193,6 +241,17 @@ impl AppContext {
 
     /// Closes window `id`. A window with `restore_geometry` saves its
     /// frame first.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active() {
+    ///         cx.close(id);
+    ///     }
+    /// });
+    /// ```
     pub fn close(&mut self, id: WindowId) {
         let Some(index) = self.index(id) else {
             return;
@@ -225,39 +284,113 @@ impl AppContext {
     }
 
     /// Ends the event loop after this turn. The settings are saved then.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if cx.elapsed().as_secs() > 60 {
+    ///         cx.quit();
+    ///     }
+    /// });
+    /// ```
     pub fn quit(&mut self) {
         self.quit = true;
     }
 
     /// The window that last had focus.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _front = cx.active();
+    /// });
+    /// ```
     pub fn active(&self) -> Option<WindowId> {
         self.active
     }
 
     /// The open windows, oldest first.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     for id in cx.windows() {
+    ///         let _ = id;
+    ///     }
+    /// });
+    /// ```
     pub fn windows(&self) -> Vec<WindowId> {
         self.windows.iter().map(|entry| entry.id).collect()
     }
 
     /// The title of window `id`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active() {
+    ///         let _title = cx.title(id);
+    ///     }
+    /// });
+    /// ```
     pub fn title(&self, id: WindowId) -> Option<String> {
         let index = self.index(id)?;
         Some(self.windows[index].native.title())
     }
 
     /// The view runtime of window `id`, for scripted checks.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active()
+    ///         && let Some(host) = cx.host(id)
+    ///     {
+    ///         let _errors = host.take_errors();
+    ///     }
+    /// });
+    /// ```
     pub fn host(&mut self, id: WindowId) -> Option<&mut ViewHost> {
         let index = self.index(id)?;
         Some(&mut self.windows[index].host)
     }
 
     /// The tokens that the windows have now.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _tokens = cx.tokens();
+    /// });
+    /// ```
     pub fn tokens(&self) -> DesignTokens {
         self.current
     }
 
     /// The installed menu bar, for its item states. Each command menu
     /// row has a generated id.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let quit = cx.menu_bar().and_then(|menu| menu.find("Quit"));
+    ///     let _ = quit;
+    /// });
+    /// ```
     pub fn menu_bar(&self) -> Option<&MenuBarModel> {
         let commands = self.commands.as_ref()?;
         commands.native.as_ref()?;
@@ -267,6 +400,17 @@ impl AppContext {
     /// Chooses the menu bar item `command` through the native path, as
     /// the user does, and runs its action. Returns false when the item
     /// is disabled or not in the menu bar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(quit) = cx.menu_bar().and_then(|menu| menu.find("Quit")) {
+    ///         cx.choose(quit);
+    ///     }
+    /// });
+    /// ```
     pub fn choose(&mut self, command: MenuCommandId) -> bool {
         let chosen = self
             .commands
@@ -279,11 +423,29 @@ impl AppContext {
 
     /// The menu actions that panicked. A panic stops at the menu
     /// boundary, and the item stays usable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _panics = cx.menu_panic_count();
+    /// });
+    /// ```
     pub fn menu_panic_count(&self) -> usize {
         self.commands.as_ref().map_or(0, |commands| commands.panics)
     }
 
     /// The time since the application started.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _seconds = cx.elapsed().as_secs_f64();
+    /// });
+    /// ```
     pub fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }
@@ -291,6 +453,15 @@ impl AppContext {
     /// Stores the frame of each open window that has a restore key, and
     /// writes the settings when a value changed. [`AppContext::pump`]
     /// saves after each turn and when the application stops.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     cx.save();
+    /// });
+    /// ```
     pub fn save(&mut self) {
         for index in 0..self.windows.len() {
             self.remember(index);
@@ -354,6 +525,17 @@ impl AppContext {
     /// Waits for native events up to the next due frame or timer, handles
     /// them, and draws what changed. Returns false when the application
     /// should stop; the settings are then saved.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// let mut cx = App::new()
+    ///     .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///     .start()?;
+    /// while cx.pump() {}
+    /// # Ok::<(), AppError>(())
+    /// ```
     pub fn pump(&mut self) -> bool {
         let wait = self.wait();
         self.platform.wait(wait);

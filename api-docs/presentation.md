@@ -314,6 +314,17 @@ pub fn disabled<M>(self, disabled: impl IntoLive<bool, M>) -> Self
 Disables an action while `disabled` is true when the menu opens.
 The keys skip a disabled action, and it does not run.
 
+#### `MenuChoice::keyboard_shortcut`
+
+```rust
+pub fn keyboard_shortcut(self, key: char, modifiers: ShortcutModifiers) -> Self
+```
+
+The key and modifiers that choose the item of a command menu, such
+as `'n'` with Command. The menu bar shows them, and the keys run
+the item from any window. A menu that a view presents ignores them;
+use [`MenuChoice::shortcut`](#menuchoiceshortcut) there.
+
 #### `MenuChoice::radio`
 
 ```rust

@@ -493,6 +493,72 @@ Changes the environment of the view's descendants.
 let page = Text::new("Hello").environment(|env| env.set_value(42_u32));
 ```
 
+#### `Styled::file_exporter`
+
+```rust
+pub fn file_exporter(self, presented: Binding<bool>, name: &str, on_result: impl Fn(Result<Option<PathBuf>, ServiceError>) + 'static) -> Self
+```
+
+Shows the backend's save dialog, which starts with the file name
+`name`, while `presented` is true. It sets `presented` back to
+false and calls `on_result` with the chosen path, `None` when the
+user cancels. The application writes the file. Without file
+dialogs, `on_result` gets the service error.
+
+##### Examples
+
+```rust
+struct Example;
+
+impl View for Example {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let save = cx.state(false);
+        Button::new("Export…", move || save.set(true)).file_exporter(
+            save.binding(),
+            "notes.txt",
+            |result| {
+                if let Ok(Some(path)) = result {
+                    let _ = std::fs::write(path, "notes");
+                }
+            },
+        )
+    }
+}
+```
+
+#### `Styled::file_importer`
+
+```rust
+pub fn file_importer(self, presented: Binding<bool>, types: &[&str], on_result: impl Fn(Result<Vec<PathBuf>, ServiceError>) + 'static) -> Self
+```
+
+Shows the backend's open dialog for one file with an extension
+in `types` (all files when empty) while `presented` is true. It
+sets `presented` back to false and calls `on_result` with the
+chosen paths, empty when the user cancels. Without file dialogs,
+`on_result` gets the service error.
+
+##### Examples
+
+```rust
+struct Example;
+
+impl View for Example {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let open = cx.state(false);
+        Button::new("Open…", move || open.set(true)).file_importer(
+            open.binding(),
+            &["txt", "md"],
+            |result| {
+                if let Ok(paths) = result {
+                    println!("{paths:?}");
+                }
+            },
+        )
+    }
+}
+```
+
 #### `Styled::fixed_size`
 
 ```rust
@@ -1423,6 +1489,72 @@ impl View for Example {
         Button::new("Options", move || open.set(true)).dropdown_menu(
             open.binding(),
             vec![MenuChoice::action("Copy", || {}), MenuChoice::action("Paste", || {})],
+        )
+    }
+}
+```
+
+### `file_exporter`
+
+```rust
+fn file_exporter(self, presented: Binding<bool>, name: &str, on_result: impl Fn(Result<Option<PathBuf>, ServiceError>) + 'static) -> Styled<Self>
+```
+
+Shows the backend's save dialog, which starts with the file name
+`name`, while `presented` is true. It sets `presented` back to
+false and calls `on_result` with the chosen path, `None` when the
+user cancels. The application writes the file. Without file
+dialogs, `on_result` gets the service error.
+
+#### Examples
+
+```rust
+struct Example;
+
+impl View for Example {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let save = cx.state(false);
+        Button::new("Export…", move || save.set(true)).file_exporter(
+            save.binding(),
+            "notes.txt",
+            |result| {
+                if let Ok(Some(path)) = result {
+                    let _ = std::fs::write(path, "notes");
+                }
+            },
+        )
+    }
+}
+```
+
+### `file_importer`
+
+```rust
+fn file_importer(self, presented: Binding<bool>, types: &[&str], on_result: impl Fn(Result<Vec<PathBuf>, ServiceError>) + 'static) -> Styled<Self>
+```
+
+Shows the backend's open dialog for one file with an extension
+in `types` (all files when empty) while `presented` is true. It
+sets `presented` back to false and calls `on_result` with the
+chosen paths, empty when the user cancels. Without file dialogs,
+`on_result` gets the service error.
+
+#### Examples
+
+```rust
+struct Example;
+
+impl View for Example {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let open = cx.state(false);
+        Button::new("Open…", move || open.set(true)).file_importer(
+            open.binding(),
+            &["txt", "md"],
+            |result| {
+                if let Ok(paths) = result {
+                    println!("{paths:?}");
+                }
+            },
         )
     }
 }

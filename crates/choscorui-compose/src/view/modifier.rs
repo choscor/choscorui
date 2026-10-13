@@ -879,12 +879,56 @@ modifiers! {
     /// sets `presented` back to false and calls `on_result` with the
     /// chosen paths, empty when the user cancels. Without file dialogs,
     /// `on_result` gets the service error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let open = cx.state(false);
+    ///         Button::new("Open…", move || open.set(true)).file_importer(
+    ///             open.binding(),
+    ///             &["txt", "md"],
+    ///             |result| {
+    ///                 if let Ok(paths) = result {
+    ///                     println!("{paths:?}");
+    ///                 }
+    ///             },
+    ///         )
+    ///     }
+    /// }
+    /// ```
     fn file_importer(presented: Binding<bool>, types: &[&str], on_result: impl Fn(Result<Vec<PathBuf>, ServiceError>) + 'static) => file_dialog::modifier(presented, FileDialogRequest::new(FileDialogKind::Open).allowed_types(types.iter().copied()), Rc::new(on_result));
     /// Shows the backend's save dialog, which starts with the file name
     /// `name`, while `presented` is true. It sets `presented` back to
     /// false and calls `on_result` with the chosen path, `None` when the
     /// user cancels. The application writes the file. Without file
     /// dialogs, `on_result` gets the service error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let save = cx.state(false);
+    ///         Button::new("Export…", move || save.set(true)).file_exporter(
+    ///             save.binding(),
+    ///             "notes.txt",
+    ///             |result| {
+    ///                 if let Ok(Some(path)) = result {
+    ///                     let _ = std::fs::write(path, "notes");
+    ///                 }
+    ///             },
+    ///         )
+    ///     }
+    /// }
+    /// ```
     fn file_exporter(presented: Binding<bool>, name: &str, on_result: impl Fn(Result<Option<PathBuf>, ServiceError>) + 'static) => file_dialog::modifier(presented, FileDialogRequest::new(FileDialogKind::Save).suggested_name(name), Rc::new(move |result: Result<Vec<PathBuf>, ServiceError>| on_result(result.map(|paths| paths.into_iter().next()))));
 
     present {

@@ -103,6 +103,8 @@ pub struct SystemNotification {
 }
 
 impl SystemNotification {
+    /// A notification with `title` and `body`. A new notification with
+    /// the same `identifier` replaces the old one.
     pub fn new(
         identifier: impl Into<String>,
         title: impl Into<String>,
@@ -124,6 +126,7 @@ pub struct StatusItemSpec {
 }
 
 impl StatusItemSpec {
+    /// An item that shows `title`, without a tooltip.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),

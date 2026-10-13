@@ -8,17 +8,26 @@
 #
 # Regenerate after a change: cargo run -p choscorui-api-docs --locked
 
-# The application, its windows, and its menus.
+# The application, its windows, its menus, its services, and its
+# stored state.
 app choscorui::prelude::App
 app choscorui::prelude::AppContext
+app choscorui::prelude::AppError
 app choscorui::prelude::Scene
 app choscorui::prelude::WindowId
 app choscorui::prelude::WindowOptions
-app choscorui::prelude::MenuBarModel
-app choscorui::prelude::MenuCommandId
-app choscorui::prelude::MenuEntry
-app choscorui::prelude::MenuItemState
-app choscorui::prelude::MenuSpec
+app choscorui::prelude::CommandMenu
+app choscorui::prelude::ShortcutModifiers
+app choscorui::prelude::Services
+app choscorui::prelude::ServiceError
+app choscorui::prelude::SystemNotification
+app choscorui::prelude::NotificationPermission
+app choscorui::prelude::StatusItemSpec
+app choscorui::prelude::FileDialogKind
+app choscorui::prelude::FileDialogRequest
+app choscorui::prelude::Storage
+app choscorui::prelude::StorageError
+app choscorui::prelude::StoredValue
 app choscorui::prelude::View
 app choscorui::prelude::AnyView
 app choscorui::prelude::Empty
@@ -259,6 +268,8 @@ presentation choscorui::prelude::ViewExt::sheet
 presentation choscorui::prelude::ViewExt::toast
 presentation choscorui::prelude::ViewExt::toaster
 presentation choscorui::prelude::ViewExt::tooltip
+presentation choscorui::prelude::ViewExt::file_importer
+presentation choscorui::prelude::ViewExt::file_exporter
 controls choscorui::prelude::ViewExt::accessibility_hidden
 controls choscorui::prelude::ViewExt::accessibility_hint
 controls choscorui::prelude::ViewExt::accessibility_label

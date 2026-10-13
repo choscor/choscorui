@@ -224,6 +224,8 @@ impl std::fmt::Display for CommandError {
 
 impl std::error::Error for CommandError {}
 
+/// The modifier keys that are held with a key or a pointer event, or
+/// that a keyboard shortcut needs.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ShortcutModifiers {
     pub shift: bool,
