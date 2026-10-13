@@ -231,7 +231,14 @@ the old resolved style to the new one. The blend uses the slot's
 part from pointer moves and the pressed part during a press. The pressed
 look shows only while the pointer is on the pressed part, and a release
 away from it does nothing. Each part also gets the disabled state of the
-control. One shared helper does this for every such control.
+control. One shared helper does this for every such control. Some of
+the parts that use it:
+
+- the `AlertDialog` buttons and the `Attachment` remove button
+- the `Carousel` previous and next buttons
+- the `Calendar` and `DatePicker` month buttons and enabled days
+- the `InputGroup` button addons and the `ButtonGroup` members
+- the `Toolbar` commands, the `Menubar` titles, and the `ToolBox` headers
 
 **Disabled look.** In a `ControlHost`, a disabled control paints under one
 group opacity, the opacity of a disabled `Button` `Root`. Its disabled
@@ -2163,7 +2170,8 @@ through the `Text` value in both directions. Accept runs `on_activate`.
   content area.
 - **Look.** `paint` uses the `Toolbar` recipe: the bar has a border on
   the edge that faces the content. Commands are ghost buttons, and
-  separators are 1 pt `border` lines.
+  separators are 1 pt `border` lines. A checked command has the `muted`
+  fill.
 - The overflow chevron is a ghost button. The host paints the embedded
   controls.
 - **In a control host.** `hosted` makes a `HostedToolbar` with its own
@@ -2172,6 +2180,8 @@ through the `Text` value in both directions. Accept runs `on_activate`.
 - A click on the chevron opens the overflowed commands in a menu and
   reports `OpenChanged`. The menu opens away from the window edge of the
   bar: below a top bar, above a bottom bar, and beside a side bar.
+- The enabled commands show hover and press. While the menu is open, the
+  bar shows no hover.
 - A press on the bar outside the open menu only closes the menu. Each
   close without a choice emits `Dismissed`. The view layer places the embedded controls in
   the `layout()` rectangles.
@@ -2179,7 +2189,7 @@ through the `Text` value in both directions. Accept runs `on_activate`.
 | Part | Slot | Value |
 | --- | --- | --- |
 | Bar | `Root` | 40 pt high, `background` fill, 1 pt `border` toward the content, padding 8 by 4 pt, 4 pt gap |
-| Command, overflow | `Item`, `Action` | ghost icon-sm button |
+| Command, overflow | `Item`, `Action` | ghost icon-sm button; `muted` fill when checked |
 | Separator | `Separator` | 1 pt `border` line, 4 pt sides, 6 pt above and below |
 
 | Field | `Toolbar::semantics` |

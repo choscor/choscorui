@@ -4,14 +4,15 @@ use super::input::default_width;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::hosted::Parts;
 use crate::style::{
     AddonAlign, Content, ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot, StyleQuery,
     TextAlign, VisualState, content_rect,
 };
 use crate::text_field::{TextField, ValidationState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Measured, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, Size, TextInputInfo,
+    EventPhase, EventReply, Icon, Measured, PointerEvent, Rect, SemanticAction, SemanticNode, Size,
+    TextInputInfo,
 };
 
 /// What an addon shows.
@@ -80,8 +81,8 @@ pub struct InputGroup {
     /// Each addon's slot rectangle, from the last arrange.
     rects: Vec<Rect>,
     text: Rect,
-    pressed: Option<usize>,
-    hovered: Option<usize>,
+    /// The hovered and pressed addon buttons.
+    parts: Parts,
 }
 
 impl InputGroup {
@@ -91,8 +92,7 @@ impl InputGroup {
             addons,
             rects: Vec::new(),
             text: Rect::default(),
-            pressed: None,
-            hovered: None,
+            parts: Parts::default(),
         }
     }
 
@@ -293,35 +293,19 @@ impl CustomControl for InputGroup {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| self.hit(point));
+        self.parts = parts;
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if self.hit(*position).is_some() => {
-                self.pressed = self.hit(*position);
-                cx.capture_pointer(true);
-                cx.request_paint();
+            ControlEvent::Pointer(PointerEvent::Down { .. }) if self.parts.pressed.is_some() => {
                 return EventReply::Stop;
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                let pressed = self.pressed.take();
-                cx.capture_pointer(false);
-                if pressed.is_some() && self.hit(*position) == pressed {
-                    cx.emit(ControlMessage::ItemActivated(pressed.unwrap_or_default()));
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if let Some(index) = pressed.filter(|index| self.parts.hovered == Some(*index)) {
+                    cx.emit(ControlMessage::ItemActivated(index));
                 }
-                cx.request_paint();
                 return EventReply::Stop;
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hovered = self.hit(*position);
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
             }
             _ => {}
         }
@@ -346,9 +330,7 @@ impl CustomControl for InputGroup {
             };
             match &addon.content {
                 AddonContent::Button { size, .. } => {
-                    let button_state = disabled
-                        .set(VisualState::HOVERED, self.hovered == Some(index))
-                        .set(VisualState::PRESSED, self.pressed == Some(index));
+                    let button_state = self.parts.state(index, disabled);
                     let style = cx.style(Self::button_query(*size, button_state));
                     let natural = content.size(&style, cx.text);
                     let x = match (addon.is_inline(), cx.rtl) {

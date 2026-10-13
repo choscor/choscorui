@@ -3,15 +3,15 @@
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::feedback::loading::spin;
-use crate::hosted::{self, Press, PressOutcome};
+use crate::hosted;
 use crate::style::fill_area;
 use crate::style::{
     AttachmentState, ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery,
     TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventReply, Icon, Image, ImageSampling, Measured, Path, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, Transform,
+    EventPhase, EventReply, Icon, Image, ImageSampling, Key, KeyEvent, Measured, Path,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
 };
 
 /// What an attachment shows in its media box.
@@ -37,7 +37,8 @@ pub struct Attachment {
     progress: f64,
     size: ControlSize,
     remove: Option<String>,
-    press: Press,
+    /// The hover and press of the remove button.
+    button: hosted::Parts<()>,
     parts: Parts,
     turn_ms: u32,
     enabled: bool,
@@ -64,7 +65,7 @@ impl Attachment {
             progress: 0.0,
             size: ControlSize::Default,
             remove: None,
-            press: Press::default(),
+            button: hosted::Parts::default(),
             parts: Parts::default(),
             turn_ms: 0,
             enabled: true,
@@ -336,21 +337,27 @@ impl CustomControl for Attachment {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        if self.remove.is_none() {
+        if self.remove.is_none() || cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        if let ControlEvent::Pointer(PointerEvent::Down { position, .. }) = event
-            && !self.parts.remove.contains(*position)
-        {
-            return EventReply::Continue;
+        let pressed = self.button.pressed;
+        let remove = self.parts.remove;
+        self.button
+            .track(cx, event, |point| remove.contains(point).then_some(()));
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down { .. }) if self.button.pressed.is_some() => {}
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if self.button.hovered.is_some() {
+                    self.remove(cx);
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Space | Key::Enter,
+                repeat: false,
+            }) => self.remove(cx),
+            _ => return EventReply::Continue,
         }
-        let outcome = self.press.event(cx, event);
-        if let PressOutcome::Activated(point) = outcome
-            && point.is_none_or(|point| self.parts.remove.contains(point))
-        {
-            self.remove(cx);
-        }
-        hosted::reply(outcome)
+        EventReply::Stop
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
@@ -380,10 +387,10 @@ impl CustomControl for Attachment {
             );
         }
         if self.remove.is_some() {
-            let state = VisualState::NONE
-                .set(VisualState::PRESSED, self.press.pressed)
-                .set(VisualState::FOCUS_VISIBLE, host.focus_visible())
-                .set(VisualState::DISABLED, host.disabled());
+            let state = self
+                .button
+                .state((), host)
+                .set(VisualState::FOCUS_VISIBLE, host.focus_visible());
             let style = cx.style(Self::remove_query(state));
             cx.slot(self.parts.remove, &style, |cx, inner| {
                 cx.icon(inner, Icon::X, &style);

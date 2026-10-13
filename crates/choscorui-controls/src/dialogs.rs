@@ -10,7 +10,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::{self, Reveal};
+use crate::hosted::{self, Parts, Reveal};
 use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
     TextMeasure, VisualState,
@@ -1139,7 +1139,7 @@ impl AlertDialog {
             panel: Rect::default(),
             buttons: Vec::new(),
             focus: 0,
-            pressed: None,
+            parts: Parts::default(),
             motion_ms: 0,
         }
     }
@@ -1181,7 +1181,8 @@ pub struct HostedAlertDialog {
     buttons: Vec<(usize, Rect)>,
     /// The focused button, by index into `buttons`.
     focus: usize,
-    pressed: Option<usize>,
+    /// The hovered and pressed buttons.
+    parts: Parts,
     motion_ms: u32,
 }
 
@@ -1213,7 +1214,7 @@ impl HostedAlertDialog {
     }
 
     fn open(&mut self, open: bool, time: f64) {
-        self.pressed = None;
+        self.parts.clear();
         if open && !self.reveal.open {
             self.focus = self.default_focus();
         }
@@ -1221,7 +1222,7 @@ impl HostedAlertDialog {
     }
 
     fn close(&mut self, cx: &mut ControlContext<'_>) {
-        if self.pressed.take().is_some() {
+        if self.parts.pressed.is_some() {
             cx.capture_pointer(false);
         }
         self.open(false, cx.time());
@@ -1279,26 +1280,20 @@ impl HostedAlertDialog {
         }
     }
 
-    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: PointerEvent) {
+    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) {
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| self.button_at(point));
+        self.parts = parts;
         match event {
-            PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            } => {
-                if let Some(index) = self.button_at(position) {
-                    self.pressed = Some(index);
+            ControlEvent::Pointer(PointerEvent::Down { .. }) => {
+                if let Some(index) = self.parts.pressed {
                     self.focus = index;
-                    cx.capture_pointer(true);
-                    cx.request_paint();
                 }
             }
-            PointerEvent::Up { position, .. } => {
-                if let Some(index) = self.pressed.take() {
-                    cx.capture_pointer(false);
-                    cx.request_paint();
-                    if self.button_at(position) == Some(index) {
-                        self.activate(cx, index);
-                    }
+            ControlEvent::Pointer(PointerEvent::Up { .. }) => {
+                if let Some(index) = pressed.filter(|index| self.parts.hovered == Some(*index)) {
+                    self.activate(cx, index);
                 }
             }
             _ => {}
@@ -1311,10 +1306,11 @@ impl HostedAlertDialog {
         for (index, rect) in &self.buttons {
             let button = &self.alert.buttons[*index];
             let focused = self.focus == *index;
-            let state = VisualState::NONE
+            let state = self
+                .parts
+                .state(*index, host)
                 .set(VisualState::FOCUSED, focused && host.focused())
-                .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
-                .set(VisualState::PRESSED, self.pressed == Some(*index));
+                .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible());
             let style = cx.style(
                 StyleQuery::new(ControlKind::Button, Slot::Root)
                     .variant(AlertDialog::button_variant(button.role))
@@ -1361,7 +1357,11 @@ impl CustomControl for HostedAlertDialog {
             return EventReply::Continue;
         }
         match event {
-            ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer),
+            ControlEvent::Pointer(_) => self.pointer(cx, event),
+            ControlEvent::Hover(false) => {
+                self.pointer(cx, event);
+                return EventReply::Continue;
+            }
             ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => self.key(cx, *key),
             ControlEvent::Key(_) => {}
             // The host sends `Dismiss` to an open alert that it disables.
@@ -1431,7 +1431,7 @@ impl CustomControl for HostedAlertDialog {
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
             self.reveal = Reveal::default();
-            self.pressed = None;
+            self.parts.clear();
         }
     }
 

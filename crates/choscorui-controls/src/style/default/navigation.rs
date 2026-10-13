@@ -410,7 +410,13 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
 fn chrome(cx: &Cx) -> ResolvedStyle {
     match (cx.q.kind, cx.q.slot) {
         (_, Slot::Item | Slot::Action) => {
-            super::form::button(cx, ButtonVariant::Ghost, ControlSize::IconSm)
+            let mut style = super::form::button(cx, ButtonVariant::Ghost, ControlSize::IconSm);
+            // A checked item takes the on fill of a toggle.
+            if cx.s().checked() {
+                style.background = cx.c(ColorRole::Muted).into();
+                style.foreground = cx.c(ColorRole::Foreground);
+            }
+            style
         }
         (_, Slot::Separator) => {
             let mut style = cx.base();

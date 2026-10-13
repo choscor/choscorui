@@ -8,7 +8,7 @@ use crate::custom::{
     MeasureContext,
 };
 use crate::form::step_text::{StepText, text_rect};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
     fill_shape, paint_in,
@@ -1163,11 +1163,11 @@ pub struct ToolBox {
     titles: Vec<String>,
     current: usize,
     focused: usize,
-    /// In a control host: the header height, the bounds, and the header
-    /// under a held press.
+    /// In a control host: the header height, the bounds, and the hovered
+    /// and pressed headers.
     header: f64,
     bounds: Rect,
-    pressed: Option<usize>,
+    parts: Parts,
 }
 
 impl ToolBox {
@@ -1178,7 +1178,7 @@ impl ToolBox {
             focused: 0,
             header: 0.0,
             bounds: Rect::default(),
-            pressed: None,
+            parts: Parts::default(),
         }
     }
     pub fn current(&self) -> usize {
@@ -1267,6 +1267,7 @@ impl ToolBox {
         let query = |slot| StyleQuery::new(ControlKind::Accordion, slot);
         let item = cx.style(query(Slot::Item));
         let icon = cx.style(query(Slot::Icon));
+        let host = cx.state;
         for (index, (header, title)) in headers.into_iter().zip(&self.titles).enumerate() {
             let open = index == self.current;
             let mut extent = header;
@@ -1274,10 +1275,14 @@ impl ToolBox {
                 extent.size.height += page.size.height;
             }
             cx.slot(extent, &item, |_, _| {});
-            let state = VisualState::NONE.set(VisualState::OPEN, open).set(
-                VisualState::FOCUS_VISIBLE,
-                focus_visible && index == self.focused,
-            );
+            let state = self
+                .parts
+                .state(index, host)
+                .set(VisualState::OPEN, open)
+                .set(
+                    VisualState::FOCUS_VISIBLE,
+                    focus_visible && index == self.focused,
+                );
             let trigger = cx.style(query(Slot::Trigger).state(state));
             cx.slot(header, &trigger, |cx, inner| {
                 let width = icon.icon_size.min(inner.size.width);
@@ -1350,25 +1355,21 @@ impl CustomControl for ToolBox {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| self.header_at(point));
+        self.parts = parts;
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) => {
-                let Some(index) = self.header_at(*position) else {
+            ControlEvent::Pointer(PointerEvent::Down { .. }) => {
+                let Some(index) = self.parts.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(index);
                 self.focused = index;
-                cx.capture_pointer(true);
-                cx.request_paint();
                 cx.request_semantics();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = self.header_at(*position);
-                if let Some(index) = self.pressed.take().filter(|index| hit == Some(*index)) {
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if let Some(index) = pressed.filter(|index| self.parts.hovered == Some(*index)) {
                     self.open_page(cx, index);
                 }
                 EventReply::Stop
@@ -1387,13 +1388,6 @@ impl CustomControl for ToolBox {
                 cx.request_paint();
                 cx.request_semantics();
                 EventReply::Stop
-            }
-            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
-                if self.pressed.take().is_some() {
-                    cx.capture_pointer(false);
-                }
-                cx.request_paint();
-                EventReply::Continue
             }
             _ => EventReply::Continue,
         }
@@ -1431,7 +1425,7 @@ impl CustomControl for ToolBox {
 
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
-            self.pressed = None;
+            self.parts.clear();
         }
     }
 

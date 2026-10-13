@@ -2185,11 +2185,15 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
+# checked
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused invalid checked indeterminate selected highlighted
+= rest: focused invalid indeterminate selected highlighted
 ### toolbar default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
@@ -2235,11 +2239,15 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
+# checked
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused invalid checked indeterminate selected highlighted
+= rest: focused invalid indeterminate selected highlighted
 ### status-bar default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
@@ -2285,11 +2293,15 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
+# checked
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused invalid checked indeterminate selected highlighted
+= rest: focused invalid indeterminate selected highlighted
 ### dock default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff

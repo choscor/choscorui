@@ -4,9 +4,10 @@ mod hosted;
 
 use choscorui_controls::{Carousel, ControlMessage, ControlValue, Orientation, ShortcutModifiers};
 use choscorui_core::{
-    Key, KeyEvent, LayoutDirection, Point, PointerButton, PointerEvent, SemanticAction, WheelUnit,
+    ColorRole, DesignTokens, Key, KeyEvent, LayoutDirection, Point, PointerButton, PointerEvent,
+    SemanticAction, WheelUnit,
 };
-use hosted::{Harness, texts};
+use hosted::{Harness, rounded_fills, texts};
 
 fn slides() -> Carousel {
     Carousel::new(
@@ -172,4 +173,54 @@ fn vertical_and_right_to_left_carousels_follow_their_axis() {
     let bounds = rtl.bounds();
     rtl.click(Point::new(bounds.max_x() - 16.0, bounds.center().y));
     assert_eq!(rtl.messages(), [changed(0)], "Previous is at the right end");
+}
+
+#[test]
+fn a_button_shows_hover_and_press_only_while_the_pointer_is_inside() {
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    let mut h = Harness::new(slides());
+    let bounds = h.bounds();
+    let previous = Point::new(bounds.origin.x + 16.0, bounds.center().y);
+    let next = Point::new(bounds.max_x() - 16.0, bounds.center().y);
+    let settled = |h: &mut Harness| {
+        let time = h.time + 1.0;
+        h.paint();
+        h.set_time(time);
+        rounded_fills(&h.paint(), muted)
+    };
+    h.hover(previous);
+    assert!(
+        settled(&mut h).is_empty(),
+        "a disabled button shows no hover"
+    );
+    h.hover(next);
+    let hovered = settled(&mut h);
+    assert_eq!(hovered.len(), 1, "a Move over Next shows hover");
+    let primary = PointerButton::Primary;
+    pointer(
+        &mut h,
+        PointerEvent::Down {
+            position: next,
+            button: primary,
+        },
+    );
+    let down = settled(&mut h);
+    assert_eq!(
+        down[0].min_y(),
+        hovered[0].min_y() + 1.0,
+        "the pressed offset"
+    );
+    h.hover(bounds.center());
+    assert!(
+        settled(&mut h).is_empty(),
+        "dragged off, Next shows no press"
+    );
+    pointer(
+        &mut h,
+        PointerEvent::Up {
+            position: bounds.center(),
+            button: primary,
+        },
+    );
+    assert!(h.messages().is_empty(), "a release outside does nothing");
 }

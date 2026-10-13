@@ -13,10 +13,10 @@ use choscorui_controls::{
     StackedContainer, StatusBar, Styles, TextItemDelegate, Toolbar, ToolbarItem,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, Color, Constraints, DesignTokens, DisplayCommand,
-    DisplayList, ItemShape, ItemStyle, Key, LayoutDirection, Locale, Point, PointerButton,
-    PointerEvent, Rect, Scene, SceneItem, ScrollViewport, SemanticAction, SemanticRole, Size,
-    StringListModel, TreeStore, WheelUnit,
+    CivilDate, CivilDateTime, CivilTime, Color, ColorRole, Constraints, DesignTokens,
+    DisplayCommand, DisplayList, ItemShape, ItemStyle, Key, LayoutDirection, Locale, Point,
+    PointerButton, PointerEvent, Rect, Scene, SceneItem, ScrollViewport, SemanticAction,
+    SemanticRole, Size, StringListModel, TreeStore, WheelUnit,
 };
 use hosted::{Harness, rect, texts};
 use std::time::Duration;
@@ -843,6 +843,41 @@ fn a_hosted_toolbar_skips_disabled_commands_and_mirrors_keys() {
     h.key(Key::ArrowLeft);
     h.key(Key::Enter);
     assert_eq!(h.messages(), vec![ControlMessage::Command(SHARE)]);
+}
+
+#[test]
+fn a_hosted_toolbar_shows_checked_hovered_and_pressed_commands() {
+    let mut toolbar = edit_toolbar().hosted();
+    let checked = CommandState {
+        enabled: true,
+        checked: true,
+    };
+    toolbar.set_command(COPY, checked).unwrap();
+    let mut h = Harness::new(toolbar);
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    let layout = edit_toolbar().layout(h.bounds(), LayoutDirection::Ltr);
+    let (copy, paste) = (layout.items[0].1, layout.items[2].1);
+    let settled = |h: &mut Harness| {
+        let time = h.time + 1.0;
+        h.paint();
+        h.set_time(time);
+        hosted::rounded_fills(&h.paint(), muted)
+    };
+    assert_eq!(settled(&mut h), [copy], "the checked command fills");
+    h.hover(paste.center());
+    assert_eq!(settled(&mut h), [copy, paste], "a Move shows hover");
+    press(
+        &mut h,
+        PointerEvent::Down {
+            position: paste.center(),
+            button: PointerButton::Primary,
+        },
+    );
+    let mut down = paste;
+    down.origin.y += 1.0;
+    assert_eq!(settled(&mut h), [copy, down], "the pressed offset");
+    h.hover(layout.items[1].1.center());
+    assert_eq!(settled(&mut h), [copy], "dragged off, no press shows");
 }
 
 #[test]

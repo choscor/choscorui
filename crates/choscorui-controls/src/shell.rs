@@ -6,7 +6,7 @@
 //! takes no space in the window.
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted::{self, Reveal};
+use crate::hosted::{self, Parts, Reveal};
 use crate::menu::MenuResponse;
 use crate::overlay::menu_popup::{CommandResult, MenuPopup};
 use crate::popup::Placement;
@@ -141,6 +141,8 @@ pub struct Toolbar {
     pub button_length: f64,
     pub spacing: f64,
     focused: Option<usize>,
+    /// The hovered and pressed command items of a hosted toolbar.
+    parts: Parts,
 }
 
 impl Toolbar {
@@ -153,6 +155,7 @@ impl Toolbar {
             button_length: 32.0,
             spacing: 4.0,
             focused: None,
+            parts: Parts::default(),
         }
     }
     pub fn items(&self) -> &[ToolbarItem] {
@@ -414,14 +417,23 @@ impl Toolbar {
         };
         cx.slot(layout.rect, &bar, |_, _| {});
         let horizontal = self.area.horizontal();
+        let host = cx.state;
         for (index, rect) in &layout.items {
             match &self.items[*index].kind {
                 ToolbarItemKind::Command { command, label } => {
-                    let enabled = commands.state(*command).is_ok_and(|state| state.enabled);
-                    let state = VisualState::NONE.set(VisualState::DISABLED, !enabled).set(
-                        VisualState::FOCUS_VISIBLE,
-                        focus_visible && self.focused == Some(*index),
-                    );
+                    let own = commands.state(*command).unwrap_or(CommandState {
+                        enabled: false,
+                        checked: false,
+                    });
+                    let state = self
+                        .parts
+                        .state(*index, host)
+                        .set(VisualState::DISABLED, host.disabled() || !own.enabled)
+                        .set(VisualState::CHECKED, own.checked)
+                        .set(
+                            VisualState::FOCUS_VISIBLE,
+                            focus_visible && self.focused == Some(*index),
+                        );
                     let style = cx.style(query(Slot::Item).state(state));
                     cx.slot(*rect, &style, |cx, inner| {
                         cx.label(inner, label, &style, TextAlign::Center);
@@ -804,7 +816,6 @@ impl Toolbar {
                 overflow_button: None,
             },
             direction: LayoutDirection::Ltr,
-            pressed: None,
             menu: MenuPopup::new(Vec::new()),
             menu_items: Vec::new(),
         }
@@ -826,8 +837,6 @@ pub struct HostedToolbar {
     commands: CommandRegistry,
     layout: ToolbarLayout,
     direction: LayoutDirection,
-    /// The command item under a pointer press.
-    pressed: Option<usize>,
     menu: MenuPopup,
     /// The commands in the overflow menu.
     menu_items: Vec<CommandId>,
@@ -869,6 +878,20 @@ impl HostedToolbar {
             .iter()
             .find(|(_, rect)| rect.contains(point))
             .map(|(index, _)| *index)
+    }
+
+    /// The enabled command item at `point`. The bar has no hover or press
+    /// while the overflow menu is open.
+    fn command_at(&self, point: Point) -> Option<usize> {
+        let index = self.item_at(point).filter(|_| !self.menu.is_open())?;
+        match self.toolbar.items[index].kind {
+            ToolbarItemKind::Command { command, .. } => self
+                .commands
+                .state(command)
+                .is_ok_and(|state| state.enabled)
+                .then_some(index),
+            _ => None,
+        }
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, index: usize) {
@@ -921,7 +944,13 @@ impl HostedToolbar {
         cx.request_paint();
     }
 
-    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: PointerEvent) -> EventReply {
+    /// `pressed` is the command item pressed before `event`.
+    fn pointer(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: PointerEvent,
+        pressed: Option<usize>,
+    ) -> EventReply {
         if self.menu.is_open() {
             let released = matches!(event, PointerEvent::Up { .. });
             if let Some(response) = self.menu.pointer(event.position(), released) {
@@ -961,25 +990,16 @@ impl HostedToolbar {
                 if self.toolbar.items[index].focusable(&self.commands) {
                     self.toolbar.focused = Some(index);
                 }
-                if matches!(
-                    self.toolbar.items[index].kind,
-                    ToolbarItemKind::Command { .. }
-                ) {
-                    self.pressed = Some(index);
-                    cx.capture_pointer(true);
-                }
                 cx.request_paint();
                 EventReply::Stop
             }
-            PointerEvent::Up { position, .. } => {
-                let Some(index) = self.pressed.take() else {
+            PointerEvent::Up { .. } => {
+                let Some(index) = pressed else {
                     return EventReply::Continue;
                 };
-                cx.capture_pointer(false);
-                if self.item_at(position) == Some(index) {
+                if self.toolbar.parts.hovered == Some(index) {
                     self.activate(cx, index);
                 }
-                cx.request_paint();
                 EventReply::Stop
             }
             _ => EventReply::Continue,
@@ -1061,8 +1081,12 @@ impl CustomControl for HostedToolbar {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.toolbar.parts.pressed;
+        let mut parts = self.toolbar.parts;
+        parts.track(cx, event, |point| self.command_at(point));
+        self.toolbar.parts = parts;
         match event {
-            ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer),
+            ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::FocusChanged(true) => {
                 // Focus entering the toolbar goes to the first item.
@@ -1078,9 +1102,6 @@ impl CustomControl for HostedToolbar {
                 EventReply::Continue
             }
             ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
-                if self.pressed.take().is_some() {
-                    cx.capture_pointer(false);
-                }
                 cx.request_paint();
                 self.dismiss_menu(cx)
             }
@@ -1116,7 +1137,7 @@ impl CustomControl for HostedToolbar {
 
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
-            self.pressed = None;
+            self.toolbar.parts.clear();
             self.menu.reveal = Reveal::default();
         }
     }

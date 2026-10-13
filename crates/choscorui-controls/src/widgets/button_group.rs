@@ -4,15 +4,15 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::style::{
     ButtonVariant, Content, ControlKind, Orientation, PaintContext, ResolvedStyle, Slot,
     StyleQuery, TextAlign, ToggleVariant, VisualState, join_segment,
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Measured, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, Size,
 };
 
 /// One member of a [`ButtonGroup`].
@@ -264,8 +264,7 @@ impl ButtonGroup {
             labels,
             commands,
             focus,
-            pressed: None,
-            hovered: None,
+            parts: Parts::default(),
             rects: Vec::new(),
             rtl: false,
         }
@@ -284,8 +283,8 @@ pub struct HostedButtonGroup {
     /// The focused member: always a toggle or button member when the
     /// group has one.
     focus: usize,
-    pressed: Option<usize>,
-    hovered: Option<usize>,
+    /// The hovered and pressed members.
+    parts: Parts,
     /// Each member's rectangle, in member order.
     rects: Vec<Rect>,
     rtl: bool,
@@ -518,45 +517,26 @@ impl CustomControl for HostedButtonGroup {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| {
+            hosted::hit(&self.rects, point).filter(|index| self.command(*index).is_some())
+        });
+        self.parts = parts;
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) => {
-                let Some(index) = hosted::hit(&self.rects, *position)
-                    .filter(|index| self.command(*index).is_some())
-                else {
+            ControlEvent::Pointer(PointerEvent::Down { .. }) => {
+                let Some(index) = self.parts.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(index);
                 self.focus = index;
-                cx.capture_pointer(true);
-                cx.request_paint();
                 cx.request_semantics();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = hosted::hit(&self.rects, *position);
-                if let Some(index) = self.pressed.take().filter(|index| hit == Some(*index)) {
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if let Some(index) = pressed.filter(|index| self.parts.hovered == Some(*index)) {
                     self.activate(cx, index);
                 }
-                cx.request_paint();
                 EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hovered = hosted::hit(&self.rects, *position)
-                    .filter(|index| self.command(*index).is_some());
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
-                EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down {
                 key: Key::Space | Key::Enter,
@@ -569,7 +549,7 @@ impl CustomControl for HostedButtonGroup {
             ControlEvent::FocusChanged(focused) => {
                 // Tab into a group with tab stops starts at its first
                 // member, and Shift+Tab at its last.
-                if *focused && !self.group.exclusive && self.pressed.is_none() {
+                if *focused && !self.group.exclusive && self.parts.pressed.is_none() {
                     let stops = self.focusable_members();
                     let edge = if cx.modifiers().shift {
                         stops.last()
@@ -578,18 +558,8 @@ impl CustomControl for HostedButtonGroup {
                     };
                     self.focus = edge.copied().unwrap_or(0);
                 }
-                if !focused && self.pressed.take().is_some() {
-                    cx.capture_pointer(false);
-                }
                 cx.request_paint();
                 cx.request_semantics();
-                EventReply::Continue
-            }
-            ControlEvent::Dismiss => {
-                if self.pressed.take().is_some() {
-                    cx.capture_pointer(false);
-                }
-                cx.request_paint();
                 EventReply::Continue
             }
             _ => EventReply::Continue,
@@ -603,14 +573,10 @@ impl CustomControl for HostedButtonGroup {
         let root = cx.style(StyleQuery::new(ControlKind::ButtonGroup, Slot::Root).state(host));
         cx.slot(bounds, &root, |_, _| {});
         for (index, rect) in self.rects.iter().enumerate() {
-            let own = VisualState::NONE
-                .set(VisualState::HOVERED, self.hovered == Some(index))
-                .set(VisualState::PRESSED, self.pressed == Some(index))
-                .set(
-                    VisualState::FOCUS_VISIBLE,
-                    host.focus_visible() && self.focus == index,
-                )
-                .set(VisualState::DISABLED, host.disabled());
+            let own = self.parts.state(index, host).set(
+                VisualState::FOCUS_VISIBLE,
+                host.focus_visible() && self.focus == index,
+            );
             let state = match self.group.members[index] {
                 ButtonGroupMember::Toggle(member) => {
                     self.group.member_state(&self.commands, member, own)
@@ -681,8 +647,7 @@ impl CustomControl for HostedButtonGroup {
 
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
-            self.pressed = None;
-            self.hovered = None;
+            self.parts.clear();
         }
     }
 

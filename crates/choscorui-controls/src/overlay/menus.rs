@@ -2,7 +2,7 @@
 
 use super::menu_popup::{CommandResult, MenuPopup};
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::menu::{MenuItem, MenuResponse};
 use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
@@ -252,6 +252,8 @@ pub struct Menubar {
     /// The title that keys move between.
     current: usize,
     open: Option<usize>,
+    /// The hovered and pressed titles.
+    parts: Parts,
     enabled: bool,
     rtl: bool,
     /// The gap between a title and its menu.
@@ -273,6 +275,7 @@ impl Menubar {
             triggers: Vec::new(),
             current: 0,
             open: None,
+            parts: Parts::default(),
             enabled: true,
             rtl: false,
             offset: 0.0,
@@ -527,6 +530,9 @@ impl CustomControl for Menubar {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let triggers = &self.triggers;
+        self.parts
+            .track(cx, event, |point| hosted::hit(triggers, point));
         match event {
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
@@ -544,14 +550,15 @@ impl CustomControl for Menubar {
         cx.slot(cx.bounds, &root, |_, _| {});
         for (index, (menu, rect)) in self.menus.iter().zip(&self.triggers).enumerate() {
             let current = index == self.current;
-            let state = VisualState::NONE
+            let state = self
+                .parts
+                .state(index, host)
                 .set(VisualState::OPEN, self.open == Some(index))
                 .set(
                     VisualState::HIGHLIGHTED,
                     current && host.focused() && self.open.is_none(),
                 )
-                .set(VisualState::FOCUS_VISIBLE, current && host.focus_visible())
-                .set(VisualState::DISABLED, host.disabled());
+                .set(VisualState::FOCUS_VISIBLE, current && host.focus_visible());
             let style = cx.style(Self::query(Slot::Trigger, state));
             cx.slot(*rect, &style, |cx, inner| {
                 cx.label(inner, &menu.title, &style, TextAlign::Center);
@@ -630,6 +637,7 @@ impl CustomControl for Menubar {
         self.enabled = enabled;
         if !enabled {
             self.open = None;
+            self.parts.clear();
             for menu in &mut self.menus {
                 menu.popup.reveal = Default::default();
             }

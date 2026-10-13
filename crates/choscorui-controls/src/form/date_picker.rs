@@ -154,6 +154,9 @@ impl DatePicker {
         }
         self.reveal.set(open, time);
         self.calendar.close_caption();
+        if open {
+            self.calendar.parts.clear();
+        }
         self.focus = if open {
             CalendarFocus::Grid
         } else {
@@ -390,6 +393,8 @@ impl CustomControl for DatePicker {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let layout = self.layout.as_ref().filter(|_| self.reveal.open);
+        self.calendar.track_parts(cx, event, layout);
         if let ControlEvent::Pointer(pointer) = event
             && let Some(reply) = self.caption_pointer(cx, pointer)
         {

@@ -3,7 +3,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::style::{
     ControlKind, ControlSize, Orientation, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
@@ -44,9 +44,9 @@ pub struct Carousel {
     /// The pointer position and the scroll position where a drag started.
     drag: Option<(Point, f64)>,
     snap_at: Option<f64>,
-    /// The focused button, and the pressed one.
+    /// The focused button, and the hovered and pressed one.
     focus: Button,
-    pressed: Option<Button>,
+    parts: Parts<Button>,
     viewport: Rect,
     buttons: [Rect; 2],
     /// One slide and its gap along the orientation.
@@ -79,7 +79,7 @@ impl Carousel {
             drag: None,
             snap_at: None,
             focus: Button::Next,
-            pressed: None,
+            parts: Parts::default(),
             viewport: Rect::default(),
             buttons: [Rect::default(); 2],
             step: 0.0,
@@ -243,18 +243,21 @@ impl Carousel {
     }
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, &ControlEvent::Pointer(*event), |point| {
+            self.button_at(point).filter(|button| self.can(*button))
+        });
+        self.parts = parts;
         match event {
             PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
             } => {
-                if let Some(button) = self.button_at(*position) {
-                    if self.can(button) {
-                        self.pressed = Some(button);
+                if self.button_at(*position).is_some() {
+                    if let Some(button) = self.parts.pressed {
                         self.focus = button;
                         cx.request_focus();
-                        cx.capture_pointer(true);
-                        cx.request_paint();
                     }
                     return EventReply::Stop;
                 }
@@ -277,15 +280,14 @@ impl Carousel {
                 cx.request_paint();
                 EventReply::Stop
             }
-            PointerEvent::Up { position, .. } => {
-                cx.capture_pointer(false);
-                if let Some(button) = self.pressed.take() {
-                    if self.button_at(*position) == Some(button) {
+            PointerEvent::Up { .. } => {
+                if let Some(button) = pressed {
+                    if self.parts.hovered == Some(button) {
                         self.step_by(cx, button == Button::Next);
                     }
-                    cx.request_paint();
                     return EventReply::Stop;
                 }
+                cx.capture_pointer(false);
                 if self.drag.take().is_some() {
                     self.snap(cx);
                     return EventReply::Stop;
@@ -491,8 +493,13 @@ impl CustomControl for Carousel {
                 cx.request_semantics();
                 EventReply::Continue
             }
+            ControlEvent::Hover(false) => {
+                self.parts.track(cx, event, |_| None);
+                EventReply::Continue
+            }
             ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
-                if self.pressed.take().is_some() || self.drag.take().is_some() {
+                self.parts.track(cx, event, |_| None);
+                if self.drag.take().is_some() {
                     cx.capture_pointer(false);
                     if self.free.is_some() {
                         self.snap(cx);
@@ -518,9 +525,10 @@ impl CustomControl for Carousel {
                 Button::Previous => Slot::Previous,
                 Button::Next => Slot::Next,
             };
-            let state = VisualState::NONE
+            let state = self
+                .parts
+                .state(button, host)
                 .set(VisualState::DISABLED, host.disabled() || !self.can(button))
-                .set(VisualState::PRESSED, self.pressed == Some(button))
                 .set(
                     VisualState::FOCUS_VISIBLE,
                     host.focus_visible() && self.focus == button,

@@ -11,6 +11,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::editing::{ValueEdit, value_edit};
+use crate::hosted::Parts;
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
     CalendarDay, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
@@ -426,6 +427,16 @@ pub struct Calendar {
     caption: Option<CaptionDropdowns>,
     /// The part of a hosted calendar that has keyboard focus.
     focus: CalendarFocus,
+    /// The hovered and pressed month buttons and days.
+    pub(crate) parts: Parts<CalendarPart>,
+}
+
+/// A month button, or a day cell by index, of a calendar.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CalendarPart {
+    Previous,
+    Next,
+    Day(usize),
 }
 
 /// How a calendar chooses days.
@@ -504,6 +515,7 @@ impl Calendar {
             name: String::new(),
             today: None,
             layout: None,
+            parts: Parts::default(),
             caption: None,
             focus: CalendarFocus::None,
         }
@@ -776,16 +788,27 @@ impl Calendar {
         } else {
             (Icon::ChevronLeft, Icon::ChevronRight)
         };
-        for (rect, slot, icon, part) in [
+        let host = cx.state;
+        for (rect, slot, icon, part, hit) in [
             (
                 layout.previous,
                 Slot::Previous,
                 back,
                 CalendarFocus::Previous,
+                CalendarPart::Previous,
             ),
-            (layout.next, Slot::Next, forward, CalendarFocus::Next),
+            (
+                layout.next,
+                Slot::Next,
+                forward,
+                CalendarFocus::Next,
+                CalendarPart::Next,
+            ),
         ] {
-            let state = VisualState::NONE.set(VisualState::FOCUS_VISIBLE, focus == part);
+            let state = self
+                .parts
+                .state(hit, host)
+                .set(VisualState::FOCUS_VISIBLE, focus == part);
             let style = cx.style(query(slot).state(state));
             cx.slot(rect, &style, |cx, inner| cx.icon(inner, icon, &style));
         }
@@ -795,7 +818,7 @@ impl Calendar {
         }
         let band = cx.style(query(Slot::Range));
         let ranged = matches!(self.chosen.as_slice(), [_, _]);
-        for (cell, rect) in self.cells().iter().zip(&layout.days) {
+        for (index, (cell, rect)) in self.cells().iter().zip(&layout.days).enumerate() {
             let range = self.range_day(cell.date);
             let variant = if let Some(range) = range {
                 range
@@ -824,12 +847,14 @@ impl Calendar {
                 );
             }
             let cursor = cell.date == self.selected;
-            let state = VisualState::NONE
+            let state = self
+                .parts
+                .state(CalendarPart::Day(index), host)
                 .set(
                     VisualState::SELECTED,
                     cell.selected && range != Some(CalendarDay::RangeMiddle),
                 )
-                .set(VisualState::DISABLED, !cell.enabled)
+                .set(VisualState::DISABLED, host.disabled() || !cell.enabled)
                 .set(
                     VisualState::FOCUS_VISIBLE,
                     cursor && focus == CalendarFocus::Grid,
@@ -1209,6 +1234,33 @@ impl Calendar {
             .unwrap_or_default()
     }
 
+    /// Follows hover and press of the month buttons and the enabled days
+    /// in `layout`. An open dropdown list covers the parts below it.
+    pub(crate) fn track_parts(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+        layout: Option<&CalendarLayout>,
+    ) {
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| {
+            let covered = self
+                .caption_frame()
+                .is_some_and(|list| list.contains(point));
+            let layout = layout.filter(|_| !covered)?;
+            if layout.previous.contains(point) {
+                return Some(CalendarPart::Previous);
+            }
+            if layout.next.contains(point) {
+                return Some(CalendarPart::Next);
+            }
+            let index = layout.days.iter().position(|day| day.contains(point))?;
+            let enabled = self.cells().get(index).is_some_and(|cell| cell.enabled);
+            enabled.then_some(CalendarPart::Day(index))
+        });
+        self.parts = parts;
+    }
+
     /// Paints the open dropdown list.
     pub(crate) fn paint_caption_list(&self, cx: &mut PaintContext<'_>) {
         if let Some(caption) = &self.caption {
@@ -1385,6 +1437,9 @@ impl CustomControl for Calendar {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let layout = self.layout.take();
+        self.track_parts(cx, event, layout.as_ref());
+        self.layout = layout;
         match event {
             ControlEvent::Pointer(pointer) => self.hosted_pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.hosted_key(cx, *key),
