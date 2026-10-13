@@ -13,8 +13,11 @@ unsafe extern "C-unwind" {
     fn objc_getProtocol(name: *const c_char) -> Option<&'static AnyProtocol>;
     fn sel_registerName(name: *const c_char) -> Sel;
     pub(crate) fn objc_msgSend();
+    fn objc_msgSendSuper();
     #[cfg(target_arch = "x86_64")]
     fn objc_msgSend_stret();
+    #[cfg(target_arch = "x86_64")]
+    fn objc_msgSendSuper_stret();
 }
 
 /// The runtime class with `name`.
@@ -37,15 +40,24 @@ pub(super) fn register_selector(name: &CStr) -> Sel {
     unsafe { sel_registerName(name.as_ptr()) }
 }
 
-/// The address of `objc_msgSend`. On x86-64 a struct return larger than
-/// 16 bytes uses `objc_msgSend_stret`; arm64 has no such variant.
-pub(super) fn msg_send(struct_return: bool) -> *const () {
+/// The address of `objc_msgSend`, or of `objc_msgSendSuper` for a send to
+/// the superclass implementation. On x86-64 a struct return larger than 16
+/// bytes uses the `_stret` variant; arm64 has no such variant.
+pub(super) fn msg_send(to_super: bool, struct_return: bool) -> *const () {
     #[cfg(target_arch = "x86_64")]
     if struct_return {
-        return objc_msgSend_stret as *const ();
+        return if to_super {
+            objc_msgSendSuper_stret as *const ()
+        } else {
+            objc_msgSend_stret as *const ()
+        };
     }
     let _ = struct_return;
-    objc_msgSend as *const ()
+    if to_super {
+        objc_msgSendSuper as *const ()
+    } else {
+        objc_msgSend as *const ()
+    }
 }
 
 /// An opaque `Method` of the runtime.

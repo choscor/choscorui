@@ -18,6 +18,7 @@ use super::runtime;
 use crate::Error;
 use std::ffi::{CStr, c_char};
 use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 /// In tests every argument type also implements [`Encode`]; in other
 /// builds the encodings are not compiled.
@@ -113,6 +114,41 @@ impl<C: ClassType, A: Args, R: ClassRet> Msg<C, A, R> {
             Sel::register(self.selector),
             args,
         )))
+    }
+}
+
+impl<C: ClassType, A: Args, R: Ret> Msg<C, A, R> {
+    /// Sends the message to the implementation in class `C`, skipping the
+    /// override in the receiver's class, a crate subclass of `C`. This is
+    /// `[super ...]` in an override.
+    pub(crate) fn send_super<'a>(
+        &self,
+        receiver: &'a Obj<C>,
+        args: A::In<'a>,
+    ) -> Result<R::Out<'a>, Error> {
+        debug_assert_eq!(self.kind, Kind::Instance, "{:?}", self.selector);
+        let target = ObjcSuper {
+            receiver: receiver.cast(),
+            superclass: C::class()?,
+        };
+        Ok(R::out(A::invoke::<_, R>(
+            &target,
+            Sel::register(self.selector),
+            args,
+        )))
+    }
+}
+
+impl<C: ClassType, A: Args> Msg<C, A, Autoreleased<C>> {
+    /// Sends a class message that returns `instancetype` to the subclass
+    /// `S` of `C`, so the result is an `S`.
+    pub(crate) fn send_subclass<'a, S: ClassType + IsA<C>>(
+        &self,
+        args: A::In<'a>,
+    ) -> Result<Option<Retained<S>>, Error> {
+        Ok(self
+            .send_to_class(S::class()?, args)?
+            .map(Retained::cast_owned))
     }
 }
 
@@ -472,11 +508,42 @@ pub(crate) trait Args: 'static {
     #[cfg(test)]
     fn encode(out: &mut String);
     /// Calls the message function with the ABI types of the descriptor.
-    fn invoke<'a, Recv: Copy, R: Ret>(
+    fn invoke<'a, Recv: Target, R: Ret>(
         receiver: Recv,
         selector: Sel,
         args: Self::In<'a>,
     ) -> R::Raw<'a>;
+}
+
+/// The first argument of a message function: an object, a class, or the
+/// `objc_super` of a send to a superclass implementation.
+pub(crate) trait Target: Copy {
+    /// True for `objc_super`, which `objc_msgSendSuper` takes.
+    const SUPER: bool;
+}
+
+impl<C> Target for &Obj<C> {
+    const SUPER: bool = false;
+}
+
+impl<C> Target for NonNull<Obj<C>> {
+    const SUPER: bool = false;
+}
+
+impl Target for &AnyClass {
+    const SUPER: bool = false;
+}
+
+/// `struct objc_super`: the receiver and the class where the method
+/// lookup starts.
+#[repr(C)]
+pub(crate) struct ObjcSuper<'a> {
+    receiver: &'a Obj<super::foundation::NSObject>,
+    superclass: &'static AnyClass,
+}
+
+impl Target for &ObjcSuper<'_> {
+    const SUPER: bool = true;
 }
 
 /// True when a return value of type `T` needs the hidden struct-return
@@ -498,7 +565,7 @@ macro_rules! args_tuple {
             }
 
 
-            fn invoke<'a, Recv: Copy, R: Ret>(
+            fn invoke<'a, Recv: Target, R: Ret>(
                 receiver: Recv,
                 selector: Sel,
                 _args: Self::In<'a>,
@@ -515,7 +582,7 @@ macro_rules! args_tuple {
                         // pointer, the receiver, the selector, and the
                         // arguments with the ABI types of the descriptor,
                         // which the runtime check compares with the SDK.
-                        unsafe { std::mem::transmute(runtime::msg_send(true)) };
+                        unsafe { std::mem::transmute(runtime::msg_send(Recv::SUPER, true)) };
                     send(result.as_mut_ptr(), receiver, selector $(, $arg::raw(_args.$index))*);
                     // SAFETY: the dispatcher wrote the whole struct.
                     return unsafe { result.assume_init() };
@@ -525,7 +592,7 @@ macro_rules! args_tuple {
                     // selector, and the arguments with the ABI types of the
                     // descriptor, which the runtime check compares with the
                     // SDK.
-                    unsafe { std::mem::transmute(runtime::msg_send(false)) };
+                    unsafe { std::mem::transmute(runtime::msg_send(Recv::SUPER, false)) };
                 send(receiver, selector $(, $arg::raw(_args.$index))*)
             }
         }

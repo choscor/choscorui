@@ -23,6 +23,7 @@ objc_class!(NSBundle: NSObject);
 messages! {
     pub(crate) RETAIN: instance NSObject, c"retain", () -> Option<&Obj<NSObject>>;
     pub(crate) RELEASE: instance NSObject, c"release", () -> ();
+    pub(crate) AUTORELEASE: instance NSObject, c"autorelease", () -> Option<&Obj<NSObject>>;
     pub(crate) ALLOC: class NSObject, c"alloc", () -> Option<Retained<NSObject>>;
     pub(crate) INIT: instance NSObject, c"init", () -> Init<NSObject>;
     IS_KIND_OF_CLASS: instance NSObject, c"isKindOfClass:", (&AnyClass) -> bool;
@@ -33,6 +34,9 @@ messages! {
     UTF8_STRING: instance NSString, c"UTF8String", () -> Utf8;
     pub(crate) PRECOMPOSED: instance NSString, c"precomposedStringWithCanonicalMapping",
         () -> Autoreleased<NSString>;
+    pub(crate) DESCRIPTION: instance NSObject, c"description", () -> Autoreleased<NSString>;
+    pub(crate) NUMBER_WITH_BOOL: class NSNumber, c"numberWithBool:",
+        (bool) -> Autoreleased<NSNumber>;
     pub(crate) NUMBER_WITH_INTEGER: class NSNumber, c"numberWithInteger:",
         (isize) -> Autoreleased<NSNumber>;
     DICTIONARY_WITH_OBJECTS: class NSDictionary, c"dictionaryWithObjects:forKeys:count:",

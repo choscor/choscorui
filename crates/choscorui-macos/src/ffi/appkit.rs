@@ -3,7 +3,7 @@
 use super::class::{Obj, Sel, objc_class, objc_protocol};
 use super::foundation::{NSArray, NSData, NSDictionary, NSObject, NSString, NsUrl};
 use super::geometry::CGImage;
-use super::geometry::{NSPoint, NSRect};
+use super::geometry::{NSPoint, NSRange, NSRect};
 use super::msg::{Autoreleased, Init, Shared, messages};
 
 objc_class!(NSResponder: NSObject);
@@ -36,6 +36,17 @@ objc_class!(NSDraggingSession: NSObject);
 objc_protocol!(NSDraggingInfo);
 objc_protocol!(NSDraggingDestination);
 objc_protocol!(NSApplicationDelegate);
+objc_protocol!(
+    /// The accessibility attributes of views and accessibility elements.
+    NSAccessibility
+);
+objc_class!(NSAccessibilityElement: NSObject);
+objc_class!(
+    /// The accessibility element of one semantic node, registered by
+    /// `accessibility_bridge`.
+    ChoscoruiV2AccessibilityElement: NSAccessibilityElement: NSObject
+);
+objc_class!(NSAttributedString: NSObject);
 objc_class!(
     /// A uniform type identifier, from the UniformTypeIdentifiers framework
     /// that AppKit loads.
@@ -143,6 +154,58 @@ messages! {
     pub(crate) MODIFIER_FLAGS: class NSEvent, c"modifierFlags", () -> usize;
     pub(crate) EVENT_TYPE: instance NSEvent, c"type", () -> usize;
     pub(crate) EVENT_WINDOW: instance NSEvent, c"window", () -> Option<&Obj<NSWindow>>;
+
+    pub(crate) CONVERT_RECT_TO_VIEW: instance NSView, c"convertRect:toView:",
+        (NSRect, Option<&Obj<NSView>>) -> NSRect;
+    pub(crate) CONVERT_RECT_TO_SCREEN: instance NSWindow, c"convertRectToScreen:",
+        (NSRect) -> NSRect;
+
+    pub(crate) ELEMENT_WITH_ROLE: class NSAccessibilityElement,
+        c"accessibilityElementWithRole:frame:label:parent:",
+        (&Obj<NSString>, NSRect, Option<&Obj<NSString>>, Option<&Obj<NSObject>>)
+            -> Autoreleased<NSAccessibilityElement>;
+    pub(crate) ELEMENT_SET_EXPANDED: instance NSAccessibilityElement,
+        c"setAccessibilityExpanded:", (bool) -> ();
+    pub(crate) ELEMENT_SET_FOCUSED: instance NSAccessibilityElement,
+        c"setAccessibilityFocused:", (bool) -> ();
+    pub(crate) ELEMENT_SET_VALUE: instance NSAccessibilityElement, c"setAccessibilityValue:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_ROLE: instance NSAccessibility, c"setAccessibilityRole:",
+        (Option<&Obj<NSString>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_SUBROLE: instance NSAccessibility, c"setAccessibilitySubrole:",
+        (Option<&Obj<NSString>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_FRAME: instance NSAccessibility, c"setAccessibilityFrame:",
+        (NSRect) -> ();
+    pub(crate) SET_ACCESSIBILITY_ENABLED: instance NSAccessibility, c"setAccessibilityEnabled:",
+        (bool) -> ();
+    pub(crate) SET_ACCESSIBILITY_FOCUSED: instance NSAccessibility, c"setAccessibilityFocused:",
+        (bool) -> ();
+    pub(crate) SET_ACCESSIBILITY_EXPANDED: instance NSAccessibility,
+        c"setAccessibilityExpanded:", (bool) -> ();
+    pub(crate) SET_ACCESSIBILITY_SELECTED: instance NSAccessibility,
+        c"setAccessibilitySelected:", (bool) -> ();
+    pub(crate) SET_ACCESSIBILITY_LABEL: instance NSAccessibility, c"setAccessibilityLabel:",
+        (Option<&Obj<NSString>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_HELP: instance NSAccessibility, c"setAccessibilityHelp:",
+        (Option<&Obj<NSString>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_VALUE: instance NSAccessibility, c"setAccessibilityValue:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_SELECTED_TEXT_RANGE: instance NSAccessibility,
+        c"setAccessibilitySelectedTextRange:", (NSRange) -> ();
+    pub(crate) SET_ACCESSIBILITY_ROW_COUNT: instance NSAccessibility,
+        c"setAccessibilityRowCount:", (isize) -> ();
+    pub(crate) SET_ACCESSIBILITY_COLUMN_COUNT: instance NSAccessibility,
+        c"setAccessibilityColumnCount:", (isize) -> ();
+    pub(crate) SET_ACCESSIBILITY_INDEX: instance NSAccessibility, c"setAccessibilityIndex:",
+        (isize) -> ();
+    pub(crate) SET_ACCESSIBILITY_TITLE_UI_ELEMENT: instance NSAccessibility,
+        c"setAccessibilityTitleUIElement:", (Option<&Obj<NSObject>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_LINKED_UI_ELEMENTS: instance NSAccessibility,
+        c"setAccessibilityLinkedUIElements:", (Option<&Obj<NSArray>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_CHILDREN: instance NSAccessibility,
+        c"setAccessibilityChildren:", (Option<&Obj<NSArray>>) -> ();
+    pub(crate) ATTRIBUTED_STRING_STRING: instance NSAttributedString, c"string",
+        () -> Autoreleased<NSString>;
 
     pub(crate) INIT_WITH_IMAGE_HOT_SPOT: instance NSCursor, c"initWithImage:hotSpot:",
         (&Obj<NSImage>, NSPoint) -> Init<NSCursor>;
@@ -270,6 +333,38 @@ unsafe extern "C" {
     pub(crate) safe static NSAccessibilityAnnouncementKey: &'static Obj<NSString>;
     pub(crate) safe static NSAccessibilityPriorityKey: &'static Obj<NSString>;
     pub(crate) safe static NSPasteboardTypeString: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityButtonRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityCheckBoxRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityGroupRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityListRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityIncrementorRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityProgressIndicatorRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityRadioButtonRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityScrollAreaRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilitySliderRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityStaticTextRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityTextFieldRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityTextAreaRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilitySelectedTextChangedNotification: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilitySecureTextFieldSubrole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityWindowRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityTableRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityRowRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityCellRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityOutlineRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityMenuRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityMenuItemRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityComboBoxRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityHelpTagRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityToolbarRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityImageRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityLinkRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityScrollBarRole: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityLayoutChangedNotification: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityTitleChangedNotification: &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityFocusedUIElementChangedNotification:
+        &'static Obj<NSString>;
+    pub(crate) safe static NSAccessibilityValueChangedNotification: &'static Obj<NSString>;
 }
 
 #[link(name = "AppKit", kind = "framework")]
@@ -278,5 +373,9 @@ unsafe extern "C-unwind" {
         element: &Obj<NSObject>,
         notification: &Obj<NSString>,
         user_info: &Obj<NSDictionary>,
+    );
+    pub(crate) safe fn NSAccessibilityPostNotification(
+        element: &Obj<NSObject>,
+        notification: &Obj<NSString>,
     );
 }

@@ -1,4 +1,10 @@
 use super::*;
+use crate::accessibility_bridge::accessibility_screen_rect;
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    ATTRIBUTED_STRING_STRING, NSAttributedString, NSView, NSWindow, VIEW_WINDOW,
+};
+use crate::ffi::foundation::{NSObject, NSString, string};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ImeEvent {
@@ -28,32 +34,45 @@ pub(super) fn ime_states() -> &'static Mutex<HashMap<usize, ImeHandle>> {
     IME_STATES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn view_window_state(view: Id) -> Option<(usize, WindowQueue, ImeHandle)> {
-    let window = unsafe { send_id(view, c"window") } as usize;
-    if window == 0 {
-        return None;
-    }
-    let queue = window_queues().lock().unwrap().get(&window).cloned()?;
-    let ime = ime_states().lock().unwrap().get(&window).cloned()?;
+/// The window, event queue, and text input state of `view`.
+fn view_window_state(view: &Obj<NSView>) -> Option<(&Obj<NSWindow>, WindowQueue, ImeHandle)> {
+    let window = VIEW_WINDOW.send(view, ())?;
+    let queue = window_queues()
+        .lock()
+        .unwrap()
+        .get(&window.addr())
+        .cloned()?;
+    let ime = ime_states().lock().unwrap().get(&window.addr()).cloned()?;
     Some((window, queue, ime))
 }
 
-unsafe fn input_string(value: Id) -> Option<String> {
-    if value.is_null() {
-        return None;
+/// The view of a text input callback.
+///
+/// # Safety
+///
+/// `view` is nil or the live content view.
+unsafe fn callback_view<'a>(view: Id) -> Option<&'a Obj<NSView>> {
+    // SAFETY: the caller guarantees the class and the lifetime.
+    unsafe { ffi::legacy::borrow(view) }
+}
+
+/// The text of an `NSString` or `NSAttributedString` argument.
+fn input_string(value: &Obj<NSObject>) -> Option<String> {
+    if let Some(text) = value.downcast::<NSString>() {
+        return string(text);
     }
-    let string = if unsafe { send_bool_id(value, c"isKindOfClass:", class(c"NSString").ok()?) } != 0
-    {
-        value
-    } else {
-        unsafe { send_id(value, c"string") }
-    };
-    let bytes = unsafe { send_cstr(string, c"UTF8String") };
-    (!bytes.is_null()).then(|| {
-        unsafe { CStr::from_ptr(bytes) }
-            .to_string_lossy()
-            .into_owned()
-    })
+    let text = ATTRIBUTED_STRING_STRING.send(value.downcast::<NSAttributedString>()?, ())?;
+    string(&text)
+}
+
+/// The window state of `view` for a callback.
+///
+/// # Safety
+///
+/// `view` is nil or the live content view.
+unsafe fn callback_state<'a>(view: Id) -> Option<(&'a Obj<NSWindow>, WindowQueue, ImeHandle)> {
+    // SAFETY: the caller guarantees the view.
+    view_window_state(unsafe { callback_view(view) }?)
 }
 
 fn optional_range(range: NSRange) -> Option<Range<usize>> {
@@ -63,7 +82,8 @@ fn optional_range(range: NSRange) -> Option<Range<usize>> {
 
 pub(super) unsafe extern "C" fn view_has_marked_text(view: Id, _: Sel) -> i8 {
     catch_unwind(AssertUnwindSafe(|| {
-        view_window_state(view)
+        // SAFETY: AppKit passes the live content view.
+        unsafe { callback_state(view) }
             .is_some_and(|(_, _, state)| state.lock().unwrap().marked_utf16.is_some())
             .into()
     }))
@@ -72,7 +92,8 @@ pub(super) unsafe extern "C" fn view_has_marked_text(view: Id, _: Sel) -> i8 {
 
 pub(super) unsafe extern "C" fn view_selected_range(view: Id, _: Sel) -> NSRange {
     catch_unwind(AssertUnwindSafe(|| {
-        view_window_state(view).map_or(
+        // SAFETY: AppKit passes the live content view.
+        unsafe { callback_state(view) }.map_or(
             NSRange {
                 location: usize::MAX,
                 length: 0,
@@ -97,7 +118,8 @@ pub(super) unsafe extern "C" fn view_selected_range(view: Id, _: Sel) -> NSRange
 
 pub(super) unsafe extern "C" fn view_marked_range(view: Id, _: Sel) -> NSRange {
     catch_unwind(AssertUnwindSafe(|| {
-        view_window_state(view)
+        // SAFETY: AppKit passes the live content view.
+        unsafe { callback_state(view) }
             .and_then(|(_, _, state)| state.lock().unwrap().marked_utf16.clone())
             .map_or(
                 NSRange {
@@ -124,10 +146,13 @@ pub(super) unsafe extern "C" fn view_set_marked_text(
     replacement: NSRange,
 ) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        let Some(text) = (unsafe { input_string(value) }) else {
+        // SAFETY: AppKit passes a live string for the call.
+        let Some(text) = unsafe { ffi::legacy::borrow::<NSObject>(value) }.and_then(input_string)
+        else {
             return;
         };
-        let Some((_, queue, state)) = view_window_state(view) else {
+        // SAFETY: AppKit passes the live content view.
+        let Some((_, queue, state)) = (unsafe { callback_state(view) }) else {
             return;
         };
         let selected_utf16 = selected.location..selected.location.saturating_add(selected.length);
@@ -155,10 +180,13 @@ pub(super) unsafe extern "C" fn view_insert_text(
     replacement: NSRange,
 ) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        let Some(text) = (unsafe { input_string(value) }) else {
+        // SAFETY: AppKit passes a live string for the call.
+        let Some(text) = unsafe { ffi::legacy::borrow::<NSObject>(value) }.and_then(input_string)
+        else {
             return;
         };
-        let Some((_, queue, state)) = view_window_state(view) else {
+        // SAFETY: AppKit passes the live content view.
+        let Some((_, queue, state)) = (unsafe { callback_state(view) }) else {
             return;
         };
         state.lock().unwrap().marked_utf16 = None;
@@ -174,7 +202,8 @@ pub(super) unsafe extern "C" fn view_insert_text(
 
 pub(super) unsafe extern "C" fn view_unmark_text(view: Id, _: Sel) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        let Some((_, queue, state)) = view_window_state(view) else {
+        // SAFETY: AppKit passes the live content view.
+        let Some((_, queue, state)) = (unsafe { callback_state(view) }) else {
             return;
         };
         state.lock().unwrap().marked_utf16 = None;
@@ -187,7 +216,7 @@ pub(super) unsafe extern "C" fn view_unmark_text(view: Id, _: Sel) {
 
 pub(super) unsafe extern "C" fn view_valid_marked_attributes(_: Id, _: Sel) -> Id {
     catch_unwind(AssertUnwindSafe(|| {
-        ns_array(&[]).unwrap_or(std::ptr::null_mut())
+        ffi::foundation::ns_array(&[]).map_or(std::ptr::null_mut(), ffi::legacy::autoreleased)
     }))
     .unwrap_or(std::ptr::null_mut())
 }
@@ -202,24 +231,16 @@ pub(super) unsafe extern "C" fn view_first_rect_for_range(
         if !actual.is_null() {
             unsafe { *actual = range };
         }
-        let Some((window, _, state)) = view_window_state(view) else {
-            return NSRect {
-                origin: NSPoint { x: 0.0, y: 0.0 },
-                size: NSSize {
-                    width: 0.0,
-                    height: 0.0,
-                },
-            };
+        // SAFETY: AppKit passes the live content view.
+        let Some(view) = (unsafe { callback_view(view) }) else {
+            return NSRect::default();
         };
-        unsafe { accessibility_screen_rect(view, window as Id, state.lock().unwrap().caret) }
+        let Some((window, _, state)) = view_window_state(view) else {
+            return NSRect::default();
+        };
+        accessibility_screen_rect(view, window, state.lock().unwrap().caret)
     }))
-    .unwrap_or(NSRect {
-        origin: NSPoint { x: 0.0, y: 0.0 },
-        size: NSSize {
-            width: 0.0,
-            height: 0.0,
-        },
-    })
+    .unwrap_or_default()
 }
 
 pub(super) unsafe extern "C" fn view_character_index_for_point(
@@ -227,7 +248,8 @@ pub(super) unsafe extern "C" fn view_character_index_for_point(
     _: Sel,
     _: NSPoint,
 ) -> usize {
-    view_window_state(view).map_or(usize::MAX, |(_, _, state)| {
+    // SAFETY: AppKit passes the live content view.
+    unsafe { callback_state(view) }.map_or(usize::MAX, |(_, _, state)| {
         state.lock().unwrap().selected_utf16.start
     })
 }

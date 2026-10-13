@@ -38,6 +38,8 @@ pub use desktop::{
 mod window_state;
 pub use window_state::screen_visible_frames;
 mod accessibility;
+mod accessibility_bridge;
+use accessibility_bridge::{AccessibilityActionQueue, NativeAccessibilityState};
 mod clipboard;
 pub use clipboard::Clipboard;
 mod runloop;
@@ -82,41 +84,6 @@ type Sel = *mut c_void;
 
 use ffi::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 
-#[link(name = "AppKit", kind = "framework")]
-unsafe extern "C" {
-    static NSAccessibilityButtonRole: Id;
-    static NSAccessibilityCheckBoxRole: Id;
-    static NSAccessibilityGroupRole: Id;
-    static NSAccessibilityListRole: Id;
-    static NSAccessibilityIncrementorRole: Id;
-    static NSAccessibilityProgressIndicatorRole: Id;
-    static NSAccessibilityRadioButtonRole: Id;
-    static NSAccessibilityScrollAreaRole: Id;
-    static NSAccessibilitySliderRole: Id;
-    static NSAccessibilityStaticTextRole: Id;
-    static NSAccessibilityTextFieldRole: Id;
-    static NSAccessibilityTextAreaRole: Id;
-    static NSAccessibilitySelectedTextChangedNotification: Id;
-    static NSAccessibilitySecureTextFieldSubrole: Id;
-    static NSAccessibilityWindowRole: Id;
-    static NSAccessibilityTableRole: Id;
-    static NSAccessibilityRowRole: Id;
-    static NSAccessibilityCellRole: Id;
-    static NSAccessibilityOutlineRole: Id;
-    static NSAccessibilityMenuRole: Id;
-    static NSAccessibilityMenuItemRole: Id;
-    static NSAccessibilityComboBoxRole: Id;
-    static NSAccessibilityHelpTagRole: Id;
-    static NSAccessibilityToolbarRole: Id;
-    static NSAccessibilityImageRole: Id;
-    static NSAccessibilityLinkRole: Id;
-    static NSAccessibilityScrollBarRole: Id;
-    static NSAccessibilityLayoutChangedNotification: Id;
-    static NSAccessibilityTitleChangedNotification: Id;
-    static NSAccessibilityFocusedUIElementChangedNotification: Id;
-    static NSAccessibilityValueChangedNotification: Id;
-    fn NSAccessibilityPostNotification(element: Id, notification: Id);
-}
 #[link(name = "Foundation", kind = "framework")]
 unsafe extern "C" {
     static NSDefaultRunLoopMode: Id;
@@ -160,16 +127,8 @@ unsafe extern "C" {
     fn objc_registerClassPair(class: Id);
     fn class_addMethod(class: Id, name: Sel, imp: *const c_void, types: *const i8) -> i8;
     fn class_addProtocol(class: Id, protocol: Id) -> i8;
-    fn object_getClass(object: Id) -> Id;
-    fn class_getSuperclass(class: Id) -> Id;
-    fn objc_msgSendSuper();
 }
 
-#[repr(C)]
-struct ObjcSuper {
-    receiver: Id,
-    superclass: Id,
-}
 #[repr(C)]
 struct CFRunLoopSourceContext {
     version: isize,
@@ -392,295 +351,8 @@ struct PaintState {
     drag_inside: bool,
     source_operations: choscorui_core::DragOperations,
 }
-struct NativeAccessibilityState {
-    projection: AccessibilityProjection,
-    elements: HashMap<AccessibilityIdentity, NonNull<c_void>>,
-    last_announcement: Option<(String, choscorui_core::AnnouncementPriority)>,
-}
-
-impl NativeAccessibilityState {
-    fn new() -> Self {
-        Self {
-            projection: AccessibilityProjection::new(),
-            elements: HashMap::new(),
-            last_announcement: None,
-        }
-    }
-}
 type PaintHandle = Arc<Mutex<PaintState>>;
 static PAINT_STATES: OnceLock<Mutex<HashMap<usize, PaintHandle>>> = OnceLock::new();
-type AccessibilityActionQueue = Arc<Mutex<VecDeque<AccessibilityActionRequest>>>;
-#[derive(Clone)]
-struct NativeAccessibilityBinding {
-    node: choscorui_core::NodeId,
-    actions: Vec<SemanticAction>,
-    queue: AccessibilityActionQueue,
-    updating: bool,
-    text: Option<SemanticText>,
-}
-static ACCESSIBILITY_BINDINGS: OnceLock<Mutex<HashMap<usize, NativeAccessibilityBinding>>> =
-    OnceLock::new();
-
-fn accessibility_bindings() -> &'static Mutex<HashMap<usize, NativeAccessibilityBinding>> {
-    ACCESSIBILITY_BINDINGS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-unsafe extern "C" fn accessibility_perform_press(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Activate)
-    }))
-    .unwrap_or(0)
-}
-
-fn queue_accessibility_action(element: Id, action: SemanticAction) -> i8 {
-    let binding = accessibility_bindings()
-        .lock()
-        .unwrap()
-        .get(&(element as usize))
-        .cloned();
-    let Some(binding) = binding else { return 0 };
-    if !binding.actions.contains(&action) {
-        return 0;
-    }
-    binding
-        .queue
-        .lock()
-        .unwrap()
-        .push_back(AccessibilityActionRequest {
-            node: binding.node,
-            action,
-            value: None,
-        });
-    1
-}
-
-unsafe extern "C" fn accessibility_perform_increment(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Increment)
-    }))
-    .unwrap_or(0)
-}
-
-unsafe extern "C" fn accessibility_perform_decrement(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Decrement)
-    }))
-    .unwrap_or(0)
-}
-
-unsafe extern "C" fn accessibility_perform_show_menu(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::ShowMenu)
-    }))
-    .unwrap_or(0)
-}
-
-unsafe extern "C" fn accessibility_perform_cancel(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Dismiss)
-    }))
-    .unwrap_or(0)
-}
-
-unsafe extern "C" fn accessibility_set_expanded(element: Id, _: Sel, expanded: i8) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let updating = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .is_some_and(|binding| binding.updating);
-        if updating {
-            unsafe { send_super_void_bool(element, c"setAccessibilityExpanded:", expanded) };
-        } else {
-            queue_accessibility_action(
-                element,
-                if expanded != 0 {
-                    SemanticAction::Expand
-                } else {
-                    SemanticAction::Collapse
-                },
-            );
-        }
-    }));
-}
-
-unsafe extern "C" fn accessibility_set_value(element: Id, _: Sel, value: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let binding = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .cloned();
-        let Some(binding) = binding else { return };
-        if binding.updating {
-            unsafe { send_super_void_id(element, c"setAccessibilityValue:", value) };
-            return;
-        }
-        if !binding.actions.contains(&SemanticAction::SetValue) || value.is_null() {
-            return;
-        }
-        let printable = unsafe { send_id(value, c"description") };
-        let bytes = unsafe { send_cstr(printable, c"UTF8String") };
-        if bytes.is_null() {
-            return;
-        }
-        let Ok(value) = (unsafe { CStr::from_ptr(bytes) }).to_str() else {
-            return;
-        };
-        binding
-            .queue
-            .lock()
-            .unwrap()
-            .push_back(AccessibilityActionRequest {
-                node: binding.node,
-                action: SemanticAction::SetValue,
-                value: Some(value.to_owned()),
-            });
-    }));
-}
-
-unsafe extern "C" fn accessibility_set_focused(element: Id, _: Sel, focused: i8) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let binding = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .cloned();
-        let Some(binding) = binding else { return };
-        if binding.updating {
-            unsafe { send_super_void_bool(element, c"setAccessibilityFocused:", focused) };
-            return;
-        }
-        if focused == 0 || !binding.actions.contains(&SemanticAction::Focus) {
-            return;
-        }
-        binding
-            .queue
-            .lock()
-            .unwrap()
-            .push_back(AccessibilityActionRequest {
-                node: binding.node,
-                action: SemanticAction::Focus,
-                value: None,
-            });
-    }));
-}
-
-unsafe extern "C" fn accessibility_is_editable(element: Id, _: Sel) -> i8 {
-    accessibility_bindings()
-        .lock()
-        .unwrap()
-        .get(&(element as usize))
-        .is_some_and(|binding| {
-            binding.text.is_some() && binding.actions.contains(&SemanticAction::SetValue)
-        })
-        .into()
-}
-
-unsafe extern "C" fn accessibility_character_count(element: Id, _: Sel) -> usize {
-    accessibility_bindings()
-        .lock()
-        .unwrap()
-        .get(&(element as usize))
-        .and_then(|binding| binding.text.as_ref())
-        .map_or(0, |text| text.character_count_utf16)
-}
-
-unsafe fn accessibility_element_class() -> Result<Id, Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = CLASS.get_or_init(|| unsafe {
-        let superclass = class(c"NSAccessibilityElement")?;
-        let cls =
-            objc_allocateClassPair(superclass, c"ChoscoruiV2AccessibilityElement".as_ptr(), 0);
-        if cls.is_null() {
-            return Err(Error::AppKitUnavailable);
-        }
-        if class_addMethod(
-            cls,
-            selector(c"accessibilityPerformPress"),
-            accessibility_perform_press as *const c_void,
-            c"c@:".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        for (name, imp) in [
-            (
-                c"accessibilityPerformIncrement",
-                accessibility_perform_increment as *const c_void,
-            ),
-            (
-                c"accessibilityPerformDecrement",
-                accessibility_perform_decrement as *const c_void,
-            ),
-            (
-                c"accessibilityPerformShowMenu",
-                accessibility_perform_show_menu as *const c_void,
-            ),
-            (
-                c"accessibilityPerformCancel",
-                accessibility_perform_cancel as *const c_void,
-            ),
-        ] {
-            if class_addMethod(cls, selector(name), imp, c"c@:".as_ptr()) == 0 {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            }
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityExpanded:"),
-            accessibility_set_expanded as *const c_void,
-            c"v@:c".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityFocused:"),
-            accessibility_set_focused as *const c_void,
-            c"v@:c".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        for (name, imp, types) in [
-            (
-                c"isAccessibilityEditable",
-                accessibility_is_editable as *const c_void,
-                c"c@:",
-            ),
-            (
-                c"accessibilityNumberOfCharacters",
-                accessibility_character_count as *const c_void,
-                c"Q@:",
-            ),
-        ] {
-            if class_addMethod(cls, selector(name), imp, types.as_ptr()) == 0 {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            }
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityValue:"),
-            accessibility_set_value as *const c_void,
-            c"v@:@".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        objc_registerClassPair(cls);
-        Ok(cls as usize)
-    });
-    result.map(|value| value as Id)
-}
-
 fn window_queues() -> &'static Mutex<HashMap<usize, WindowQueue>> {
     WINDOW_QUEUES.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -1649,288 +1321,6 @@ impl Window {
         *self.ime.lock().unwrap() = state;
     }
 
-    /// Reconciles the retained semantic snapshot into stable AppKit
-    /// accessibility elements and posts the corresponding OS notifications.
-    pub fn set_accessibility(
-        &self,
-        snapshot: &[SemanticEntry],
-        changes: &[SemanticChange],
-    ) -> Result<(), Error> {
-        let _pool = Pool::new()?;
-        let view = unsafe { send_id(self.raw.as_ptr(), c"contentView") };
-        let mut state = self.accessibility.borrow_mut();
-        let update = state.projection.reconcile(snapshot, changes);
-        for identity in &update.retired {
-            if let Some(element) = state.elements.remove(identity) {
-                accessibility_bindings()
-                    .lock()
-                    .unwrap()
-                    .remove(&(element.as_ptr() as usize));
-                unsafe { send_void(element.as_ptr(), c"release") };
-            }
-        }
-        for element in &update.elements {
-            if state.elements.contains_key(&element.identity) {
-                continue;
-            }
-            let role = unsafe { native_accessibility_role(element.semantic.role) };
-            let label = ns_string(&element.semantic.name)?;
-            let parent = element
-                .parent
-                .and_then(|identity| state.elements.get(&identity).copied())
-                .map_or(view, NonNull::as_ptr);
-            let frame =
-                unsafe { accessibility_screen_rect(view, self.raw.as_ptr(), element.bounds) };
-            let raw = unsafe {
-                send_accessibility_element(
-                    accessibility_element_class()?,
-                    c"accessibilityElementWithRole:frame:label:parent:",
-                    role,
-                    frame,
-                    label,
-                    parent,
-                )
-            };
-            let raw = NonNull::new(raw).ok_or(Error::AppKitUnavailable)?;
-            unsafe { send_id(raw.as_ptr(), c"retain") };
-            accessibility_bindings().lock().unwrap().insert(
-                raw.as_ptr() as usize,
-                NativeAccessibilityBinding {
-                    node: element.node,
-                    actions: element.semantic.actions.clone(),
-                    queue: Arc::clone(&self.accessibility_actions),
-                    updating: true,
-                    text: element.semantic.text.clone(),
-                },
-            );
-            state.elements.insert(element.identity, raw);
-        }
-        for element in &update.elements {
-            let raw = state.elements[&element.identity].as_ptr();
-            if let Some(binding) = accessibility_bindings()
-                .lock()
-                .unwrap()
-                .get_mut(&(raw as usize))
-            {
-                binding.actions.clone_from(&element.semantic.actions);
-                binding.updating = true;
-                binding.text.clone_from(&element.semantic.text);
-            }
-            let frame =
-                unsafe { accessibility_screen_rect(view, self.raw.as_ptr(), element.bounds) };
-            unsafe {
-                let multiline = element
-                    .semantic
-                    .text
-                    .as_ref()
-                    .is_some_and(|text| text.multiline);
-                send_void_id(
-                    raw,
-                    c"setAccessibilityRole:",
-                    if multiline && element.semantic.role == SemanticRole::TextField {
-                        NSAccessibilityTextAreaRole
-                    } else {
-                        native_accessibility_role(element.semantic.role)
-                    },
-                );
-                send_void_id(
-                    raw,
-                    c"setAccessibilitySubrole:",
-                    if element.semantic.role == SemanticRole::PasswordField {
-                        NSAccessibilitySecureTextFieldSubrole
-                    } else {
-                        std::ptr::null_mut()
-                    },
-                );
-                send_void_rect(raw, c"setAccessibilityFrame:", frame);
-                send_void_bool(
-                    raw,
-                    c"setAccessibilityEnabled:",
-                    i8::from(!element.semantic.state.disabled),
-                );
-                send_void_bool(raw, c"setAccessibilityFocused:", i8::from(element.focused));
-                if let Some(expanded) = element.semantic.state.expanded {
-                    send_void_bool(raw, c"setAccessibilityExpanded:", i8::from(expanded));
-                }
-                if let Some(selected) = element.semantic.state.selected {
-                    send_void_bool(raw, c"setAccessibilitySelected:", i8::from(selected));
-                }
-                send_void_id(
-                    raw,
-                    c"setAccessibilityLabel:",
-                    ns_string(&element.semantic.name)?,
-                );
-                send_void_id(
-                    raw,
-                    c"setAccessibilityHelp:",
-                    ns_string(&element.semantic.description)?,
-                );
-                let value = if let Some(checked) = element.semantic.state.checked {
-                    send_id_bool(class(c"NSNumber")?, c"numberWithBool:", i8::from(checked))
-                } else if let Some(value) = &element.semantic.value {
-                    ns_string(value)?
-                } else {
-                    std::ptr::null_mut()
-                };
-                send_void_id(raw, c"setAccessibilityValue:", value);
-                if let Some(text) = &element.semantic.text {
-                    send_void_range(
-                        raw,
-                        c"setAccessibilitySelectedTextRange:",
-                        NSRange {
-                            location: text.selection_utf16.start,
-                            length: text.selection_utf16.end - text.selection_utf16.start,
-                        },
-                    );
-                }
-                // Virtualized collections report their full size; realized
-                // items report their absolute index.
-                if let Some(collection) = element.collection {
-                    send_void_isize(
-                        raw,
-                        c"setAccessibilityRowCount:",
-                        isize::try_from(collection.item_count).unwrap_or(isize::MAX),
-                    );
-                    if let Some(columns) = collection.column_count {
-                        send_void_isize(
-                            raw,
-                            c"setAccessibilityColumnCount:",
-                            isize::try_from(columns).unwrap_or(isize::MAX),
-                        );
-                    }
-                }
-                if let Some(index) = element.item_index {
-                    send_void_isize(
-                        raw,
-                        c"setAccessibilityIndex:",
-                        isize::try_from(index).unwrap_or(isize::MAX),
-                    );
-                }
-            }
-            if let Some(binding) = accessibility_bindings()
-                .lock()
-                .unwrap()
-                .get_mut(&(raw as usize))
-            {
-                binding.updating = false;
-            }
-        }
-        let mut children: HashMap<Option<AccessibilityIdentity>, Vec<Id>> = HashMap::new();
-        let by_node: HashMap<_, _> = update
-            .elements
-            .iter()
-            .map(|element| (element.node, state.elements[&element.identity].as_ptr()))
-            .collect();
-        for element in &update.elements {
-            let raw = state.elements[&element.identity].as_ptr();
-            let mut linked = Vec::new();
-            for relation in &element.semantic.relations {
-                match *relation {
-                    SemanticRelation::LabelledBy(target) => {
-                        if let Some(target) = by_node.get(&target) {
-                            unsafe {
-                                send_void_id(raw, c"setAccessibilityTitleUIElement:", *target)
-                            };
-                        }
-                    }
-                    SemanticRelation::DescribedBy(target) | SemanticRelation::Controls(target) => {
-                        if let Some(target) = by_node.get(&target) {
-                            linked.push(*target);
-                        }
-                    }
-                }
-            }
-            if !linked.is_empty() {
-                unsafe {
-                    send_void_id(
-                        raw,
-                        c"setAccessibilityLinkedUIElements:",
-                        ns_array(&linked)?,
-                    )
-                };
-            }
-        }
-        for element in &update.elements {
-            children
-                .entry(element.parent)
-                .or_default()
-                .push(state.elements[&element.identity].as_ptr());
-        }
-        for element in &update.elements {
-            let raw = state.elements[&element.identity].as_ptr();
-            let values = children
-                .get(&Some(element.identity))
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            unsafe { send_void_id(raw, c"setAccessibilityChildren:", ns_array(values)?) };
-        }
-        let roots = children.get(&None).map(Vec::as_slice).unwrap_or(&[]);
-        unsafe { send_void_id(view, c"setAccessibilityChildren:", ns_array(roots)?) };
-        let text_elements: HashSet<_> = update
-            .elements
-            .iter()
-            .filter(|element| element.semantic.text.is_some())
-            .map(|element| element.identity)
-            .collect();
-        for notification in update.notifications {
-            unsafe {
-                match notification {
-                    AccessibilityNotification::LayoutChanged => NSAccessibilityPostNotification(
-                        view,
-                        NSAccessibilityLayoutChangedNotification,
-                    ),
-                    AccessibilityNotification::ValueChanged(identity)
-                    | AccessibilityNotification::StateChanged(identity) => {
-                        if let Some(element) = state.elements.get(&identity) {
-                            NSAccessibilityPostNotification(
-                                element.as_ptr(),
-                                NSAccessibilityValueChangedNotification,
-                            );
-                            if text_elements.contains(&identity) {
-                                NSAccessibilityPostNotification(
-                                    element.as_ptr(),
-                                    NSAccessibilitySelectedTextChangedNotification,
-                                );
-                            }
-                        }
-                    }
-                    AccessibilityNotification::LabelChanged(identity) => {
-                        if let Some(element) = state.elements.get(&identity) {
-                            NSAccessibilityPostNotification(
-                                element.as_ptr(),
-                                NSAccessibilityTitleChangedNotification,
-                            );
-                        }
-                    }
-                    AccessibilityNotification::FocusChanged(identity) => {
-                        if let Some(element) = state.elements.get(&identity) {
-                            NSAccessibilityPostNotification(
-                                element.as_ptr(),
-                                NSAccessibilityFocusedUIElementChangedNotification,
-                            );
-                        }
-                    }
-                    AccessibilityNotification::FocusCleared => NSAccessibilityPostNotification(
-                        view,
-                        NSAccessibilityFocusedUIElementChangedNotification,
-                    ),
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn take_accessibility_actions(&self) -> Vec<AccessibilityActionRequest> {
-        let mut actions: Vec<_> = self
-            .accessibility_actions
-            .lock()
-            .unwrap()
-            .drain(..)
-            .collect();
-        actions.extend(self.accessibility.borrow_mut().projection.take_actions());
-        actions
-    }
-
     pub fn paint_count(&self) -> usize {
         self.paint.lock().unwrap().count
     }
@@ -2036,16 +1426,12 @@ impl Drop for Window {
         // caller without its own pool does not keep the window alive.
         let _pool = Pool::new();
         self.close();
+        for (_, element) in self.accessibility.get_mut().elements.drain() {
+            accessibility_bridge::unbind(&element);
+        }
         // SAFETY: NSWindow.delegate is weak. Detach it before releasing the
         // +1 delegate, then unregister its event queue and release the window.
         unsafe {
-            for (_, element) in self.accessibility.get_mut().elements.drain() {
-                accessibility_bindings()
-                    .lock()
-                    .unwrap()
-                    .remove(&(element.as_ptr() as usize));
-                send_void(element.as_ptr(), c"release");
-            }
             send_void_id(self.raw.as_ptr(), c"setDelegate:", std::ptr::null_mut());
             window_queues()
                 .lock()
@@ -2094,20 +1480,6 @@ unsafe fn set_title(window: Id, title: &CString) -> Result<(), Error> {
     Ok(())
 }
 
-fn ns_string(value: &str) -> Result<Id, Error> {
-    let value = CString::new(value).map_err(|_| Error::InvalidTitle)?;
-    unsafe {
-        let result = send_id_cstr(
-            class(c"NSString")?,
-            c"stringWithUTF8String:",
-            value.as_ptr(),
-        );
-        NonNull::new(result)
-            .map(NonNull::as_ptr)
-            .ok_or(Error::AppKitUnavailable)
-    }
-}
-
 fn ns_array(values: &[Id]) -> Result<Id, Error> {
     unsafe {
         let result = send_id_ptr_usize(
@@ -2122,53 +1494,6 @@ fn ns_array(values: &[Id]) -> Result<Id, Error> {
     }
 }
 
-unsafe fn native_accessibility_role(role: SemanticRole) -> Id {
-    unsafe {
-        match role {
-            SemanticRole::Window => NSAccessibilityWindowRole,
-            SemanticRole::Button => NSAccessibilityButtonRole,
-            SemanticRole::Checkbox => NSAccessibilityCheckBoxRole,
-            SemanticRole::RadioButton | SemanticRole::Tab => NSAccessibilityRadioButtonRole,
-            SemanticRole::RadioGroup | SemanticRole::TabList | SemanticRole::TabPanel => {
-                NSAccessibilityGroupRole
-            }
-            SemanticRole::TextField | SemanticRole::PasswordField => NSAccessibilityTextFieldRole,
-            SemanticRole::StaticText => NSAccessibilityStaticTextRole,
-            SemanticRole::List => NSAccessibilityListRole,
-            SemanticRole::ScrollArea => NSAccessibilityScrollAreaRole,
-            SemanticRole::Slider => NSAccessibilitySliderRole,
-            SemanticRole::SpinButton => NSAccessibilityIncrementorRole,
-            SemanticRole::ProgressIndicator => NSAccessibilityProgressIndicatorRole,
-            SemanticRole::Table => NSAccessibilityTableRole,
-            SemanticRole::Row | SemanticRole::TreeItem => NSAccessibilityRowRole,
-            SemanticRole::Cell => NSAccessibilityCellRole,
-            SemanticRole::ColumnHeader => NSAccessibilityButtonRole,
-            SemanticRole::Tree => NSAccessibilityOutlineRole,
-            SemanticRole::Menu => NSAccessibilityMenuRole,
-            SemanticRole::MenuItem => NSAccessibilityMenuItemRole,
-            SemanticRole::ComboBox => NSAccessibilityComboBoxRole,
-            SemanticRole::Tooltip => NSAccessibilityHelpTagRole,
-            SemanticRole::Toolbar => NSAccessibilityToolbarRole,
-            SemanticRole::Image => NSAccessibilityImageRole,
-            SemanticRole::Link => NSAccessibilityLinkRole,
-            SemanticRole::ScrollBar => NSAccessibilityScrollBarRole,
-            SemanticRole::Application
-            | SemanticRole::Group
-            | SemanticRole::ListItem
-            | SemanticRole::Dialog
-            | SemanticRole::StatusBar => NSAccessibilityGroupRole,
-        }
-    }
-}
-
-unsafe fn accessibility_screen_rect(view: Id, window: Id, bounds: choscorui_core::Rect) -> NSRect {
-    let local = native_rect(bounds);
-    unsafe {
-        let window_rect =
-            send_rect_rect_id(view, c"convertRect:toView:", local, std::ptr::null_mut());
-        send_rect_rect(window, c"convertRectToScreen:", window_rect)
-    }
-}
 unsafe fn class(name: &CStr) -> Result<Id, Error> {
     ffi::class::lookup_class(name)
         .map(|class| std::ptr::from_ref(class).cast_mut().cast())
@@ -2260,27 +1585,10 @@ unsafe fn send_id_f64(receiver: Id, name: &CStr, value: f64) -> Id {
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), value) }
 }
-unsafe fn send_id_bool(receiver: Id, name: &CStr, value: i8) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, i8) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
 unsafe fn send_id_ptr_usize(receiver: Id, name: &CStr, values: *const Id, count: usize) -> Id {
     let f: unsafe extern "C" fn(Id, Sel, *const Id, usize) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), values, count) }
-}
-unsafe fn send_accessibility_element(
-    receiver: Id,
-    name: &CStr,
-    role: Id,
-    frame: NSRect,
-    label: Id,
-    parent: Id,
-) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, Id, NSRect, Id, Id) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), role, frame, label, parent) }
 }
 unsafe fn send_next_event(
     receiver: Id,
@@ -2303,11 +1611,6 @@ unsafe fn send_bool(receiver: Id, name: &CStr) -> i8 {
     let f: unsafe extern "C" fn(Id, Sel) -> i8 =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_bool_id(receiver: Id, name: &CStr, value: Id) -> i8 {
-    let f: unsafe extern "C" fn(Id, Sel, Id) -> i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
 }
 unsafe fn send_cstr(receiver: Id, name: &CStr) -> *const i8 {
     let f: unsafe extern "C" fn(Id, Sel) -> *const i8 =
@@ -2349,25 +1652,9 @@ unsafe fn send_void_size(receiver: Id, name: &CStr, size: NSSize) {
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), size) }
 }
-unsafe fn send_void_range(receiver: Id, name: &CStr, value: NSRange) {
-    let f: unsafe extern "C" fn(Id, Sel, NSRange) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_void_rect(receiver: Id, name: &CStr, rect: NSRect) {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect) }
-}
 
 // A 32-byte NSRect is returned in registers on arm64 but through a hidden
 // result pointer on x86-64, which needs objc_msgSend_stret.
-#[cfg(target_arch = "aarch64")]
-unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) -> NSRect {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect, Id) -> NSRect =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect, value) }
-}
 #[cfg(target_arch = "x86_64")]
 unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) -> NSRect {
     unsafe extern "C" {
@@ -2382,12 +1669,6 @@ unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) 
     }
 }
 
-#[cfg(target_arch = "aarch64")]
-unsafe fn send_rect_rect(receiver: Id, name: &CStr, rect: NSRect) -> NSRect {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect) -> NSRect =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect) }
-}
 #[cfg(target_arch = "x86_64")]
 unsafe fn send_rect_rect(receiver: Id, name: &CStr, rect: NSRect) -> NSRect {
     unsafe extern "C" {
@@ -2423,29 +1704,6 @@ unsafe fn send_rect(receiver: Id, name: &CStr) -> NSRect {
 }
 unsafe fn send_void_id(receiver: Id, name: &CStr, value: Id) {
     let f: unsafe extern "C" fn(Id, Sel, Id) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_super_void_id(receiver: Id, name: &CStr, value: Id) {
-    let mut target = ObjcSuper {
-        receiver,
-        superclass: unsafe { class_getSuperclass(object_getClass(receiver)) },
-    };
-    let f: unsafe extern "C" fn(*mut ObjcSuper, Sel, Id) =
-        unsafe { std::mem::transmute(objc_msgSendSuper as *const ()) };
-    unsafe { f(&mut target, selector(name), value) }
-}
-unsafe fn send_super_void_bool(receiver: Id, name: &CStr, value: i8) {
-    let mut target = ObjcSuper {
-        receiver,
-        superclass: unsafe { class_getSuperclass(object_getClass(receiver)) },
-    };
-    let f: unsafe extern "C" fn(*mut ObjcSuper, Sel, i8) =
-        unsafe { std::mem::transmute(objc_msgSendSuper as *const ()) };
-    unsafe { f(&mut target, selector(name), value) }
-}
-unsafe fn send_void_isize(receiver: Id, name: &CStr, value: isize) {
-    let f: unsafe extern "C" fn(Id, Sel, isize) =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name), value) }
 }

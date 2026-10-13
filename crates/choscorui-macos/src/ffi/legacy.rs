@@ -40,3 +40,12 @@ pub(crate) unsafe fn block<'a, A>(raw: *mut c_void) -> Option<&'a super::block::
     // SAFETY: the caller guarantees the signature and the lifetime.
     unsafe { raw.cast::<super::block::Block<A>>().as_ref() }
 }
+
+/// Gives a +1 object to the current autorelease pool and returns it as the
+/// +0 raw result of a callback.
+pub(crate) fn autoreleased<C>(object: super::retained::Retained<C>) -> *mut c_void {
+    let raw = id(&object);
+    super::foundation::AUTORELEASE.send(object.cast(), ());
+    std::mem::forget(object);
+    raw
+}

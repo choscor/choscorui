@@ -21,6 +21,14 @@ impl<C> Retained<C> {
         pointer
     }
 
+    /// The same reference as an instance of the superclass `S`.
+    pub(crate) fn into_super<S: ClassType>(self) -> Retained<S>
+    where
+        C: IsA<S>,
+    {
+        self.cast_owned()
+    }
+
     /// Reinterprets the reference as another class. The caller in `ffi`
     /// knows that the object has that type.
     pub(in crate::ffi) fn cast_owned<D>(self) -> Retained<D> {
