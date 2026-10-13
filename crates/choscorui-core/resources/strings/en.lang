@@ -1,0 +1,51 @@
+# The built-in messages of ChoscorUI in English. English is also the
+# fallback of every locale. An application catalog overrides any id.
+
+# Validation messages.
+choscorui.validation.number = Enter a number
+choscorui.validation.whole_number = Enter a whole number
+choscorui.validation.decimals[one] = Use at most {count} decimal place
+choscorui.validation.decimals[other] = Use at most {count} decimal places
+choscorui.validation.minimum = Must be at least {min}
+choscorui.validation.maximum = Must be at most {max}
+choscorui.validation.range = Enter a number from {min} to {max}
+choscorui.validation.date = Enter a valid date
+choscorui.validation.date_range = Date is outside the allowed range
+choscorui.validation.format = Contains characters this format does not allow
+choscorui.validation.choice = Choose one of the options
+choscorui.validation.color = Enter a hex color such as {example}
+choscorui.validation.yes_no = Enter yes or no
+choscorui.validation.email = Enter an email address such as {example}
+choscorui.validation.url = Enter a web address such as {example}
+choscorui.validation.tel = Enter a phone number
+choscorui.validation.read_only = This cell is read-only
+choscorui.validation.missing_row = The row no longer exists
+choscorui.validation.rejected = The value was rejected
+
+# Accessibility names and descriptions.
+choscorui.switch = switch
+choscorui.toggle = toggle
+choscorui.dial = Dial
+choscorui.modal = Modal
+choscorui.status = Status
+choscorui.font = Font
+choscorui.font.fallback = Not installed; using {font}
+choscorui.color.channels = Red {red}, Green {green}, Blue {blue}, Opacity {opacity}%
+choscorui.range = Range {min} to {max}
+choscorui.zoom = Zoom {percent}%
+choscorui.overflow = Value too large to display
+choscorui.shortcut.recording = Recording shortcut; press Escape to cancel
+choscorui.column.ascending = ascending
+choscorui.column.descending = descending
+choscorui.column.width = {width} points wide
+choscorui.dock.left = Left panel size
+choscorui.dock.right = Right panel size
+choscorui.dock.top = Top panel size
+choscorui.dock.bottom = Bottom panel size
+choscorui.dock.floating = Floating
+choscorui.field.day = Day field
+choscorui.field.month = Month field
+choscorui.field.year = Year field
+choscorui.field.hour = Hour field
+choscorui.field.minute = Minute field
+choscorui.field.second = Second field

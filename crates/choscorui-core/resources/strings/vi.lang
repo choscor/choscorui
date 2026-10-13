@@ -1,0 +1,50 @@
+# Các thông điệp có sẵn của ChoscorUI bằng tiếng Việt. Tiếng Việt chỉ
+# có một dạng số nhiều (`other`).
+
+# Thông báo kiểm tra.
+choscorui.validation.number = Nhập một số
+choscorui.validation.whole_number = Nhập một số nguyên
+choscorui.validation.decimals[other] = Dùng tối đa {count} chữ số thập phân
+choscorui.validation.minimum = Phải từ {min} trở lên
+choscorui.validation.maximum = Phải từ {max} trở xuống
+choscorui.validation.range = Nhập một số từ {min} đến {max}
+choscorui.validation.date = Nhập một ngày hợp lệ
+choscorui.validation.date_range = Ngày nằm ngoài khoảng cho phép
+choscorui.validation.format = Có ký tự mà định dạng này không cho phép
+choscorui.validation.choice = Chọn một trong các tùy chọn
+choscorui.validation.color = Nhập mã màu hex, ví dụ {example}
+choscorui.validation.yes_no = Nhập có hoặc không
+choscorui.validation.email = Nhập địa chỉ email, ví dụ {example}
+choscorui.validation.url = Nhập địa chỉ web, ví dụ {example}
+choscorui.validation.tel = Nhập số điện thoại
+choscorui.validation.read_only = Ô này chỉ đọc
+choscorui.validation.missing_row = Hàng này không còn nữa
+choscorui.validation.rejected = Giá trị bị từ chối
+
+# Tên và mô tả cho trợ năng.
+choscorui.switch = công tắc
+choscorui.toggle = nút bật tắt
+choscorui.dial = Núm xoay
+choscorui.modal = Hộp thoại chặn
+choscorui.status = Trạng thái
+choscorui.font = Phông chữ
+choscorui.font.fallback = Chưa cài đặt; đang dùng {font}
+choscorui.color.channels = Đỏ {red}, Lục {green}, Lam {blue}, Độ mờ đục {opacity}%
+choscorui.range = Khoảng từ {min} đến {max}
+choscorui.zoom = Thu phóng {percent}%
+choscorui.overflow = Giá trị quá lớn để hiển thị
+choscorui.shortcut.recording = Đang ghi phím tắt; nhấn Escape để hủy
+choscorui.column.ascending = tăng dần
+choscorui.column.descending = giảm dần
+choscorui.column.width = rộng {width} điểm
+choscorui.dock.left = Cỡ bảng bên trái
+choscorui.dock.right = Cỡ bảng bên phải
+choscorui.dock.top = Cỡ bảng phía trên
+choscorui.dock.bottom = Cỡ bảng phía dưới
+choscorui.dock.floating = Nổi
+choscorui.field.day = Ô ngày
+choscorui.field.month = Ô tháng
+choscorui.field.year = Ô năm
+choscorui.field.hour = Ô giờ
+choscorui.field.minute = Ô phút
+choscorui.field.second = Ô giây

@@ -353,3 +353,65 @@ fn localizer_switches_language_and_reports_direction_flip() {
     assert!(!localizer.set_locale(locale("ar-EG")));
     assert_eq!(localizer.revision(), 1);
 }
+
+#[test]
+fn builtin_catalog_covers_english_and_vietnamese() {
+    let builtin = Catalog::builtin();
+    let issues = builtin.validate(&locale("en"));
+    assert!(issues.is_empty(), "{issues:?}");
+    let mut tags: Vec<&str> = builtin.locales().collect();
+    tags.sort_unstable();
+    assert_eq!(tags, ["en", "und", "vi"]);
+}
+
+#[test]
+fn localizer_falls_back_to_the_builtin_messages() {
+    let english = Localizer::new(locale("en-US"), Catalog::new());
+    assert_eq!(
+        english.text("choscorui.validation.number", &[]).unwrap(),
+        "Enter a number"
+    );
+    let vietnamese = Localizer::new(locale("vi-VN"), Catalog::new());
+    assert_eq!(
+        vietnamese.text("choscorui.validation.number", &[]).unwrap(),
+        "Nhập một số"
+    );
+    assert_eq!(
+        vietnamese
+            .plural("choscorui.validation.decimals", 2, &[])
+            .unwrap(),
+        "Dùng tối đa 2 chữ số thập phân"
+    );
+    // A locale without built-in messages gets the English ones.
+    let french = Localizer::new(locale("fr"), Catalog::new());
+    assert_eq!(french.text("choscorui.modal", &[]).unwrap(), "Modal");
+    assert_eq!(
+        Localizer::builtin()
+            .plural("choscorui.validation.decimals", 1, &[])
+            .unwrap(),
+        "Use at most 1 decimal place"
+    );
+}
+
+#[test]
+fn application_messages_override_builtin_ones() {
+    let mut catalog = Catalog::new();
+    catalog.insert(&locale("vi"), "choscorui.validation.number", "Hãy nhập số");
+    let localizer = Localizer::new(locale("vi"), catalog);
+    assert_eq!(
+        localizer.text("choscorui.validation.number", &[]).unwrap(),
+        "Hãy nhập số"
+    );
+    assert_eq!(
+        localizer.text("choscorui.validation.date", &[]).unwrap(),
+        "Nhập một ngày hợp lệ"
+    );
+    assert_eq!(
+        localizer.text("no.such.message", &[]),
+        Err(LocaleError::MissingMessage {
+            locale: "vi".into(),
+            id: "no.such.message".into(),
+        })
+    );
+    assert_eq!(localizer.message("no.such.message", &[]), "no.such.message");
+}

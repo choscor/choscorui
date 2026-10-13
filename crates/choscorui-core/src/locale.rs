@@ -7,6 +7,7 @@
 use crate::LayoutDirection;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
+use std::sync::{Arc, OnceLock};
 
 /// A parsed BCP 47 language tag, reduced to language and optional region.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -466,9 +467,10 @@ pub enum CatalogIssue {
 /// Messages use `{name}` placeholders. `{{` and `}}` are literal braces.
 /// Plural messages select a variant with [`Catalog::plural`] and receive the
 /// formatted count as `{count}`.
+/// A clone shares the messages until one of the catalogs changes.
 #[derive(Clone, Debug, Default)]
 pub struct Catalog {
-    messages: HashMap<String, BTreeMap<String, Message>>,
+    messages: Arc<HashMap<String, BTreeMap<String, Message>>>,
 }
 
 impl Catalog {
@@ -477,9 +479,31 @@ impl Catalog {
         Self::default()
     }
 
+    /// The built-in messages of the toolkit, with `choscorui.*` ids, in
+    /// English and Vietnamese. The English messages are also the messages
+    /// of the root locale, so every other locale falls back to them.
+    /// [`Localizer`] uses them for each id that the application catalog
+    /// does not define.
+    pub fn builtin() -> &'static Catalog {
+        static BUILTIN: OnceLock<Catalog> = OnceLock::new();
+        BUILTIN.get_or_init(|| {
+            const ENGLISH: &str = include_str!("../resources/strings/en.lang");
+            const VIETNAMESE: &str = include_str!("../resources/strings/vi.lang");
+            let mut catalog = Catalog::new();
+            for (tag, source) in [("und", ENGLISH), ("en", ENGLISH), ("vi", VIETNAMESE)] {
+                if let Ok(locale) = Locale::parse(tag) {
+                    // The files are part of the crate, and a test loads
+                    // each one without an error.
+                    let _ = catalog.load_str(&locale, source);
+                }
+            }
+            catalog
+        })
+    }
+
     /// Adds the text of message `id` in `locale`.
     pub fn insert(&mut self, locale: &Locale, id: impl Into<String>, text: impl Into<String>) {
-        self.messages
+        Arc::make_mut(&mut self.messages)
             .entry(locale.tag())
             .or_default()
             .insert(id.into(), Message::Text(text.into()));
@@ -496,7 +520,7 @@ impl Catalog {
             .into_iter()
             .map(|(category, text)| (category, text.into()))
             .collect();
-        self.messages
+        Arc::make_mut(&mut self.messages)
             .entry(locale.tag())
             .or_default()
             .insert(id.into(), Message::Plural(variants));
@@ -526,8 +550,7 @@ impl Catalog {
                     "other" => PluralCategory::Other,
                     other => return Err((index + 1, format!("unknown plural category `{other}`"))),
                 };
-                let entry = self
-                    .messages
+                let entry = Arc::make_mut(&mut self.messages)
                     .entry(locale.tag())
                     .or_default()
                     .entry(id.to_owned())
@@ -823,16 +846,44 @@ impl Localizer {
         flipped
     }
 
-    pub fn text(&self, id: &str, args: &[(&str, &str)]) -> Result<String, LocaleError> {
-        self.catalog.text(&self.locale, id, args)
+    /// A localizer of the root locale with no application messages: it
+    /// gives the built-in English messages.
+    pub fn builtin() -> &'static Localizer {
+        static BUILTIN: OnceLock<Localizer> = OnceLock::new();
+        BUILTIN.get_or_init(|| Localizer::new(Locale::root(), Catalog::new()))
     }
 
+    /// The message `id` of the application catalog, or else of
+    /// [`Catalog::builtin`]. A message that neither catalog has is
+    /// [`LocaleError::MissingMessage`].
+    pub fn text(&self, id: &str, args: &[(&str, &str)]) -> Result<String, LocaleError> {
+        match self.catalog.text(&self.locale, id, args) {
+            Err(LocaleError::MissingMessage { .. }) => {
+                Catalog::builtin().text(&self.locale, id, args)
+            }
+            result => result,
+        }
+    }
+
+    /// The plural message `id` for `count`, from the application catalog
+    /// or else from [`Catalog::builtin`], as [`text`](Self::text) does.
     pub fn plural(
         &self,
         id: &str,
         count: u64,
         args: &[(&str, &str)],
     ) -> Result<String, LocaleError> {
-        self.catalog.plural(&self.locale, id, count, args)
+        match self.catalog.plural(&self.locale, id, count, args) {
+            Err(LocaleError::MissingMessage { .. }) => {
+                Catalog::builtin().plural(&self.locale, id, count, args)
+            }
+            result => result,
+        }
+    }
+
+    /// The message `id`, or `id` itself when no catalog has it. Controls
+    /// show their built-in messages with it.
+    pub fn message(&self, id: &str, args: &[(&str, &str)]) -> String {
+        self.text(id, args).unwrap_or_else(|_| id.to_owned())
     }
 }
