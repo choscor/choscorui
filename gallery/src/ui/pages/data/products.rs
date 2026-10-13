@@ -6,8 +6,8 @@ use super::{fill, first_selected, item_view, rows};
 use crate::ui::page::PageCx;
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Dynamic, Either, Env, Frame, HStack,
-    HorizontalAlignment, Spacer, State, Text, VStack, VerticalAlignment, View, ViewExt,
+    Alignment, AnyView, Binding, Button, Configured, Cx, Dynamic, Either, Env, Frame, HStack,
+    HorizontalAlignment, Input, Spacer, State, Text, VStack, VerticalAlignment, View, ViewExt,
 };
 use choscorui::controls::{
     self, CellEdit, ControlKind, ControlMessage, ControlValue, DataMapper, DefaultEditorFactory,
@@ -528,7 +528,8 @@ impl Form {
 
     /// The caption, field, and message of mapped column `column`.
     fn field(self, column: usize) -> impl View {
-        let (titled, built, shown, edited, submitted, checked) = (
+        let (titled, named, built, shown, edited, submitted, checked) = (
+            self.clone(),
             self.clone(),
             self.clone(),
             self.clone(),
@@ -547,18 +548,18 @@ impl Form {
             })
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground),
-            Configured::custom(ControlKind::Input, move |env| {
-                let mut input = controls::Input::new(column_title(env, column), "");
+            Input::new(
+                move || column_title(&named.env, column),
+                Binding::new(
+                    move || shown.value(column),
+                    move |text: String| edited.edit(column, &text),
+                ),
+            )
+            .with(move |mut input| {
                 if let Some(message) = built.error(column) {
                     input.set_validation(ValidationState::Invalid(message));
                 }
                 input
-            })
-            .value(move || ControlValue::Text(shown.value(column)))
-            .on_message(move |message| {
-                if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                    edited.edit(column, text);
-                }
             })
             .on_activate(move || submitted.submit())
             .frame(Frame::new().width(260.0)),

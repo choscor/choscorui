@@ -4,12 +4,12 @@
 use crate::ui::page::{Build, PageCx, column, portrait, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Env, Frame, HStack, HorizontalAlignment, Marker, MessageScroller, VStack,
+    self, AnyView, Cx, Env, Frame, HStack, HorizontalAlignment, Marker, MessageScroller, VStack,
     View, ViewExt,
 };
 use choscorui::controls::{
-    self, AttachmentMedia, AttachmentState, Avatar, Bubble, BubbleVariant, ControlKind,
-    ControlSize, Message, Question, Questionnaire, QuestionnaireLabels,
+    self, AttachmentMedia, AttachmentState, Avatar, Bubble, BubbleVariant, ControlSize, Message,
+    Question, QuestionnaireLabels,
 };
 use choscorui::core::{Icon, Space};
 
@@ -18,9 +18,9 @@ fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-/// A message as a view.
-fn message_view(build: impl Fn(&Env) -> Message + 'static) -> impl View {
-    Configured::custom(ControlKind::Message, build).frame(Frame::new().width(480.0))
+/// The width of a message.
+fn wide() -> Frame {
+    Frame::new().width(480.0)
 }
 
 /// The avatar of the reader's own messages.
@@ -40,31 +40,33 @@ pub fn message(_: &PageCx) -> AnyView {
     column((
         section(
             t!("message.start"),
-            message_view(|env| {
-                Message::new(
-                    "Ana Lee",
-                    vec![
-                        Bubble::new(text(env, "message.lunch")).with_variant(BubbleVariant::Muted),
-                        Bubble::new(text(env, "message.new_place"))
-                            .with_variant(BubbleVariant::Muted)
-                            .with_reactions("👍 2"),
-                    ],
-                )
-                .with_avatar(Avatar::new("Ana Lee", "AL").with_image(portrait()))
-                .with_header("Ana Lee · 12:01")
-            }),
+            view::Message::new("Ana Lee", |env: &Env| {
+                vec![
+                    Bubble::new(text(env, "message.lunch")).with_variant(BubbleVariant::Muted),
+                    Bubble::new(text(env, "message.new_place"))
+                        .with_variant(BubbleVariant::Muted)
+                        .with_reactions("👍 2"),
+                ]
+            })
+            .with(|message| {
+                message
+                    .with_avatar(Avatar::new("Ana Lee", "AL").with_image(portrait()))
+                    .with_header("Ana Lee · 12:01")
+            })
+            .frame(wide()),
         ),
         section(
             t!("message.end"),
-            message_view(|env| {
-                Message::new(
-                    text(env, "message.you"),
-                    vec![Bubble::new(text(env, "message.see_you"))],
-                )
-                .with_avatar(own_avatar(env))
-                .with_footer(text(env, "message.read"))
-                .align_end()
-            }),
+            view::Message::new(t!("message.you"), |env: &Env| {
+                vec![Bubble::new(text(env, "message.see_you"))]
+            })
+            .with_env(|message, env| {
+                message
+                    .with_avatar(own_avatar(env))
+                    .with_footer(text(env, "message.read"))
+                    .align_end()
+            })
+            .frame(wide()),
         ),
         section(
             t!("message.variants"),
@@ -72,12 +74,10 @@ pub fn message(_: &PageCx) -> AnyView {
                 variants
                     .into_iter()
                     .map(|(variant, key)| {
-                        message_view(move |env| {
-                            Message::new(
-                                text(env, "message.sample"),
-                                vec![Bubble::new(text(env, key)).with_variant(variant)],
-                            )
+                        view::Message::new(t!("message.sample"), move |env: &Env| {
+                            vec![Bubble::new(text(env, key)).with_variant(variant)]
                         })
+                        .frame(wide())
                     })
                     .collect::<Vec<_>>(),
             )
@@ -91,9 +91,7 @@ fn attachment_view(
     name: &'static str,
     change: impl Fn(&Env, controls::Attachment) -> controls::Attachment + 'static,
 ) -> impl View {
-    Configured::custom(ControlKind::Attachment, move |env| {
-        change(env, controls::Attachment::new(name))
-    })
+    view::Attachment::new(name).with_env(move |attachment, env| change(env, attachment))
 }
 
 /// The label of the button that removes the attachment `name`.
@@ -190,7 +188,6 @@ fn attachment_sizes(image: bool, vertical: bool) -> impl View {
 }
 
 pub fn marker(_: &PageCx) -> AnyView {
-    let wide = || Frame::new().width(480.0);
     column((
         section(
             t!("marker.default"),
@@ -250,58 +247,74 @@ pub fn message_scroller(_: &PageCx) -> AnyView {
     ))
 }
 
-pub fn questionnaire(_: &PageCx) -> AnyView {
-    column(section(
-        t!("questionnaire.caption"),
-        Configured::custom(ControlKind::Questionnaire, |env| {
-            let text = |key: &str| text(env, key);
-            let options =
-                |keys: &[&str]| -> Vec<String> { keys.iter().copied().map(text).collect() };
-            let labels = QuestionnaireLabels {
-                previous: text("questionnaire.previous"),
-                skip: text("questionnaire.skip"),
-                next: text("questionnaire.next"),
-                submit: text("questionnaire.submit"),
-                required: text("questionnaire.required"),
-            };
-            let progress = env.clone();
-            Questionnaire::new(
-                text("questionnaire.name"),
-                vec![
-                    Question::choice(
-                        text("questionnaire.heard"),
-                        options(&[
-                            "questionnaire.search_engine",
-                            "questionnaire.friend",
-                            "questionnaire.social",
-                        ]),
-                    )
-                    .required(),
-                    Question::multiple(
-                        text("questionnaire.features"),
-                        options(&[
-                            "questionnaire.charts",
-                            "questionnaire.tables",
-                            "questionnaire.forms",
-                        ]),
-                    ),
-                    Question::freeform(
-                        text("questionnaire.anything"),
-                        text("questionnaire.answer"),
-                    ),
-                ],
-                labels,
+/// The labels of the questionnaire buttons in `env`.
+fn questionnaire_labels(env: &Env) -> QuestionnaireLabels {
+    QuestionnaireLabels {
+        previous: text(env, "questionnaire.previous"),
+        skip: text(env, "questionnaire.skip"),
+        next: text(env, "questionnaire.next"),
+        submit: text(env, "questionnaire.submit"),
+        required: text(env, "questionnaire.required"),
+    }
+}
+
+/// The questions of the questionnaire in `env`.
+fn questions(env: &Env) -> Vec<Question> {
+    let text = |key: &str| text(env, key);
+    let options = |keys: &[&str]| -> Vec<String> { keys.iter().copied().map(text).collect() };
+    vec![
+        Question::choice(
+            text("questionnaire.heard"),
+            options(&[
+                "questionnaire.search_engine",
+                "questionnaire.friend",
+                "questionnaire.social",
+            ]),
+        )
+        .required(),
+        Question::multiple(
+            text("questionnaire.features"),
+            options(&[
+                "questionnaire.charts",
+                "questionnaire.tables",
+                "questionnaire.forms",
+            ]),
+        ),
+        Question::freeform(text("questionnaire.anything"), text("questionnaire.answer")),
+    ]
+}
+
+/// A questionnaire of three questions.
+struct QuestionnairePage;
+
+impl View for QuestionnairePage {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let current = cx.state(0_usize);
+        column(section(
+            t!("questionnaire.caption"),
+            view::Questionnaire::new(
+                t!("questionnaire.name"),
+                questions,
+                questionnaire_labels,
+                current.binding(),
             )
-            .with_progress(move |current, total| {
-                let (current, total) = (current.to_string(), total.to_string());
-                progress.text(
-                    "questionnaire.progress",
-                    &[("current", &current), ("total", &total)],
-                )
+            .with_env(|questionnaire, env| {
+                let progress = env.clone();
+                questionnaire.with_progress(move |current, total| {
+                    let (current, total) = (current.to_string(), total.to_string());
+                    progress.text(
+                        "questionnaire.progress",
+                        &[("current", &current), ("total", &total)],
+                    )
+                })
             })
-        })
-        .frame(Frame::new().width(480.0)),
-    ))
+            .frame(wide()),
+        ))
+    }
+}
+
+pub fn questionnaire(_: &PageCx) -> AnyView {
+    QuestionnairePage.into_any()
 }
 
 /// The view of page `id`, when this module has it.

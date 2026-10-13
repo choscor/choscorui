@@ -10,12 +10,12 @@ mod products;
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Env, ForEach, Frame, HStack, HorizontalAlignment,
-    State, Text, VStack, VerticalAlignment, View, ViewExt,
+    Alignment, AnyView, Button, ColumnBrowser, Configured, Cx, Env, ForEach, Frame, HStack,
+    HorizontalAlignment, State, Text, VStack, VerticalAlignment, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonVariant, ColumnBrowser, ControlKind, ControlMessage, ControlSize, ControlValue,
-    ItemView, ShortcutModifiers, TextItemDelegate, ViewLayout, undo_history, undo_steps_to,
+    self, ButtonVariant, ControlKind, ControlMessage, ControlSize, ControlValue, ItemView,
+    ShortcutModifiers, TextItemDelegate, ViewLayout, undo_history, undo_steps_to,
 };
 use choscorui::core::{
     ColorRole, ItemKey, ItemModel, Key, SemanticRole, Space, StringListModel, TextFilter,
@@ -284,19 +284,11 @@ impl View for ColumnBrowserPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let path = cx.state(vec![0_usize]);
         let env = cx.env().clone();
-        let browser = Configured::custom(ControlKind::ListView, |env| {
-            let model = places(env);
-            let mut browser = ColumnBrowser::new();
-            if let Some(first) = model.key(None, 0) {
-                browser.select(0, first);
-            }
-            browser.hosted(env.text("column-browser.places", &[]), Box::new(model))
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Indices(rows)) = message {
-                path.set(rows.clone());
-            }
-        });
+        let browser = ColumnBrowser::new(
+            t!("column-browser.places"),
+            |env: &Env| Box::new(places(env)) as Box<dyn ItemModel>,
+            path.binding(),
+        );
         column(
             VStack::new((
                 browser.frame(

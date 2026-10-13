@@ -3,13 +3,10 @@
 use crate::ui::page::{Build, PageCx, caption, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Calendar, Configured, Cx, Dynamic, FieldText, Frame, HorizontalAlignment, Text,
-    VStack, View, ViewExt,
+    AnyView, Binding, Calendar, Cx, DateTimeEdit, Dynamic, FieldText, Frame, HorizontalAlignment,
+    Text, VStack, View, ViewExt,
 };
-use choscorui::controls::{
-    self, CalendarMode, ControlKind, ControlMessage, ControlValue, DateTimeEdit, DateTimeKind,
-    FieldPart,
-};
+use choscorui::controls::{CalendarMode, ControlMessage, ControlValue, DateTimeKind, FieldPart};
 use choscorui::core::{CivilDate, CivilDateTime, CivilTime, Space, TextPreset};
 
 fn date(year: i32, month: u8, day: u8) -> CivilDate {
@@ -40,6 +37,9 @@ impl View for CalendarPage {
         let chosen = cx.state(None::<CivilDate>);
         let locale = cx.env().locale();
         let name = cx.env().text("calendar.name", &[]);
+        let meetings = cx.state(days(&[8, 15, 22]));
+        let trip = cx.state(days(&[6, 10]));
+        let birthday = cx.state(today());
         let calendar = Calendar::new(selected.binding())
             .with(move |mut calendar| {
                 calendar.set_range(Some(date(2026, 1, 1)), Some(date(2026, 12, 31)));
@@ -60,16 +60,20 @@ impl View for CalendarPage {
             }),
             section(
                 t!("calendar.multiple"),
-                chooser("calendar.meetings", CalendarMode::Multiple, &[8, 15, 22]),
+                chooser(
+                    "calendar.meetings",
+                    CalendarMode::Multiple,
+                    meetings.binding(),
+                ),
             ),
             section(
                 t!("calendar.range"),
-                chooser("calendar.trip", CalendarMode::Range, &[6, 10]),
+                chooser("calendar.trip", CalendarMode::Range, trip.binding()),
             ),
             section(
                 t!("calendar.dropdown"),
-                Configured::custom(ControlKind::Calendar, |env| {
-                    controls::Calendar::new(env.locale(), today())
+                Calendar::new(birthday.binding()).with_env(|calendar, env| {
+                    calendar
                         .with_name(env.text("calendar.birthday", &[]))
                         .with_today(today())
                         .with_dropdown_caption(1926, 2026)
@@ -79,19 +83,16 @@ impl View for CalendarPage {
     }
 }
 
-/// A calendar named by the catalog string `name` that chooses days as
-/// `mode` says, with the October 2026 `days` already chosen.
-fn chooser(name: &'static str, mode: CalendarMode, days: &'static [u8]) -> impl View {
-    Configured::custom(ControlKind::Calendar, move |env| {
-        let mut calendar = controls::Calendar::new(env.locale(), today())
-            .with_name(env.text(name, &[]))
-            .with_today(today())
-            .with_mode(mode);
-        for day in days {
-            calendar.activate(date(2026, 10, *day));
-        }
-        calendar
-    })
+/// The October 2026 `days`.
+fn days(days: &[u8]) -> Vec<CivilDate> {
+    days.iter().map(|day| date(2026, 10, *day)).collect()
+}
+
+/// A calendar named by the catalog string `name` that chooses `chosen`
+/// days as `mode` says.
+fn chooser(name: &'static str, mode: CalendarMode, chosen: Binding<Vec<CivilDate>>) -> impl View {
+    Calendar::dates(today(), mode, chosen)
+        .with_env(move |calendar, env| calendar.with_name(env.text(name, &[])).with_today(today()))
 }
 
 pub fn calendar(_: &PageCx) -> AnyView {
@@ -117,12 +118,10 @@ fn parse_iso(text: &str) -> Option<CivilDateTime> {
     })
 }
 
-/// One editor of `kind`, named by the catalog string `key`, that starts at
-/// 09:30 on the demo day.
-fn editor(key: &'static str, kind: DateTimeKind) -> Configured<DateTimeEdit> {
-    Configured::custom(ControlKind::Input, move |env| {
-        let label = env.text(key, &[]);
-        let mut edit = DateTimeEdit::new(label, env.locale(), kind, date_time(today(), 9, 30));
+/// One editor of `kind`, named by the catalog string `key`, that edits
+/// `value`.
+fn editor(key: &'static str, kind: DateTimeKind, value: Binding<CivilDateTime>) -> DateTimeEdit {
+    DateTimeEdit::new(t!(key), kind, value).with(move |mut edit| {
         if kind == DateTimeKind::DateTime {
             let (minimum, maximum) = limits();
             edit.set_range(Some(minimum), Some(maximum));
@@ -147,24 +146,28 @@ struct DateTimeEditPage;
 impl View for DateTimeEditPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let outside = cx.state(false);
+        // Each editor starts at 09:30 on the demo day.
+        let mut start = || cx.state(date_time(today(), 9, 30)).binding();
+        let (day, time, meeting) = (start(), start(), start());
         let width = || Frame::new().width(260.0);
-        let limited =
-            editor("date-time-edit.limited", DateTimeKind::DateTime).on_message(move |message| {
+        let limited = editor("date-time-edit.limited", DateTimeKind::DateTime, meeting).on_message(
+            move |message| {
                 if let ControlMessage::Changed(ControlValue::Text(text)) = message
                     && let Some(value) = parse_iso(text)
                 {
                     let (minimum, maximum) = limits();
                     outside.set(value < minimum || value > maximum);
                 }
-            });
+            },
+        );
         column((
             labeled(
                 "date-time-edit.date",
-                editor("date-time-edit.date", DateTimeKind::Date).frame(width()),
+                editor("date-time-edit.date", DateTimeKind::Date, day).frame(width()),
             ),
             labeled(
                 "date-time-edit.time",
-                editor("date-time-edit.time", DateTimeKind::Time).frame(width()),
+                editor("date-time-edit.time", DateTimeKind::Time, time).frame(width()),
             ),
             labeled(
                 "date-time-edit.limited",
