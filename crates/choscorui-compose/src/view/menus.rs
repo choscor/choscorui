@@ -16,7 +16,7 @@ use super::widgets::Items;
 use choscorui_controls::{
     CommandId, CommandState, ControlContext, ControlEvent, ControlKind, ControlMessage,
     CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext, Shortcut,
-    Variant,
+    ShortcutModifiers, Variant,
 };
 use choscorui_core::{
     EventPhase, EventReply, KeyEvent, Measured, NodeId, Point, PointerButton, PointerEvent,
@@ -30,7 +30,7 @@ type Checked = Rc<dyn Fn() -> bool>;
 
 /// What a menu row is.
 #[derive(Clone)]
-enum Row {
+pub(crate) enum Row {
     Action(Live<TextContent>, Rc<dyn Fn()>),
     /// A row with a check mark or a radio dot while `Checked` is true.
     Check(Live<TextContent>, MenuCheck, Checked, Rc<dyn Fn()>),
@@ -43,10 +43,12 @@ enum Row {
 /// follow the locale.
 #[derive(Clone)]
 pub struct MenuChoice {
-    row: Row,
+    pub(crate) row: Row,
     shortcut: Option<String>,
+    /// The key and modifiers of a command menu item.
+    pub(crate) keys: Option<(char, ShortcutModifiers)>,
     destructive: bool,
-    disabled: Live<bool>,
+    pub(crate) disabled: Live<bool>,
 }
 
 impl MenuChoice {
@@ -54,6 +56,7 @@ impl MenuChoice {
         Self {
             row,
             shortcut: None,
+            keys: None,
             destructive: false,
             disabled: Live::Value(false),
         }
@@ -110,6 +113,16 @@ impl MenuChoice {
     #[must_use]
     pub fn shortcut(mut self, text: impl Into<String>) -> Self {
         self.shortcut = Some(text.into());
+        self
+    }
+
+    /// The key and modifiers that choose the item of a command menu, such
+    /// as `'n'` with Command. The menu bar shows them, and the keys run
+    /// the item from any window. A menu that a view presents ignores them;
+    /// use [`MenuChoice::shortcut`] there.
+    #[must_use]
+    pub fn keyboard_shortcut(mut self, key: char, modifiers: ShortcutModifiers) -> Self {
+        self.keys = Some((key, modifiers));
         self
     }
 

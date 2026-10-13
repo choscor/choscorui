@@ -5,6 +5,7 @@ mod reconcile;
 mod states;
 pub mod view;
 
+pub use view::commands::LoweredMenus;
 pub use reactive::{Property, PropertyBinding, ReactiveError, Runtime, Subscription};
 pub use reconcile::{
     ComposeError, Element, Key, KeyedChild, KeyedPlan, Properties, ReconcileReport, Reconciler,

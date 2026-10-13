@@ -13,6 +13,7 @@ use super::menus::{self, MenuChoice};
 use super::present::{Placement, Presentation, present};
 use super::state::{Binding, IntoLive, Live};
 use super::text::TextContent;
+use super::file_dialog::{self, DialogResult};
 use super::toast::{self, MakeToast, ToasterSpec};
 use super::widgets::Items;
 use super::{hover_card, tooltip};
@@ -22,10 +23,12 @@ use choscorui_controls::{
     Variant,
 };
 use choscorui_core::{
-    Axis, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens, Dirty, FontWeight, Insets,
-    ItemAlign, Key, LayoutDirection, LayoutKind, LayoutStyle, Length, Locale, NodeId, Point,
-    RecipeSet, Size, TextPreset, Tracking,
+    Axis, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens, Dirty, FileDialogKind,
+    FileDialogRequest, FontWeight, Insets, ItemAlign, Key, LayoutDirection, LayoutKind,
+    LayoutStyle, Length, Locale, NodeId, Point, RecipeSet, ServiceError, Size, TextPreset,
+    Tracking,
 };
+use std::path::PathBuf;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -246,6 +249,7 @@ pub(crate) enum Modifier {
     Trigger(Trigger),
     Toaster(ToasterSpec),
     Toast(Binding<bool>, MakeToast),
+    FileDialog(Binding<bool>, FileDialogRequest, DialogResult),
 }
 
 impl Modifier {
@@ -870,6 +874,18 @@ modifiers! {
     /// }
     /// ```
     fn toast(presented: Binding<bool>, toast: impl Fn(&Env) -> Toast + 'static) => Modifier::Toast(presented, Rc::new(toast));
+    /// Shows the backend's open dialog for one file with an extension
+    /// in `types` (all files when empty) while `presented` is true. It
+    /// sets `presented` back to false and calls `on_result` with the
+    /// chosen paths, empty when the user cancels. Without file dialogs,
+    /// `on_result` gets the service error.
+    fn file_importer(presented: Binding<bool>, types: &[&str], on_result: impl Fn(Result<Vec<PathBuf>, ServiceError>) + 'static) => file_dialog::modifier(presented, FileDialogRequest::new(FileDialogKind::Open).allowed_types(types.iter().copied()), Rc::new(on_result));
+    /// Shows the backend's save dialog, which starts with the file name
+    /// `name`, while `presented` is true. It sets `presented` back to
+    /// false and calls `on_result` with the chosen path, `None` when the
+    /// user cancels. The application writes the file. Without file
+    /// dialogs, `on_result` gets the service error.
+    fn file_exporter(presented: Binding<bool>, name: &str, on_result: impl Fn(Result<Option<PathBuf>, ServiceError>) + 'static) => file_dialog::modifier(presented, FileDialogRequest::new(FileDialogKind::Save).suggested_name(name), Rc::new(move |result: Result<Vec<PathBuf>, ServiceError>| on_result(result.map(|paths| paths.into_iter().next()))));
 
     present {
         /// Shows `content` in a dialog while `presented` is true. Escape
@@ -1659,6 +1675,9 @@ fn apply(
         }
         Modifier::Toaster(spec) => toast::mount_toaster(cx, env, spec),
         Modifier::Toast(presented, make) => toast::post(cx, env, presented, make),
+        Modifier::FileDialog(presented, request, done) => {
+            file_dialog::mount(cx, env, presented, request, done);
+        }
         // Environment modifiers already reached the content, and theme
         // modifiers apply after the list.
         _ => {}

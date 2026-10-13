@@ -10,6 +10,7 @@ use super::lazy::LazyHook;
 use super::present::Anchor;
 use super::scope::{self, Owned};
 use super::state::{Binding, Live, Memo, State};
+use super::storage::StorageError;
 use crate::reactive::{ReactiveError, Runtime, Subscription};
 use choscorui_controls::{
     ControlHost, ControlKind, ControlMessage, CustomControl, HostEnv, ShortcutModifiers, Styles,
@@ -44,6 +45,8 @@ pub enum ViewError {
     /// A view option or value was invalid, and the view used the nearest
     /// valid value instead, with the reason.
     Clamped(String),
+    /// Stored state or the settings behind it had a problem.
+    Storage(StorageError),
 }
 
 impl std::fmt::Display for ViewError {
@@ -58,6 +61,7 @@ impl std::fmt::Display for ViewError {
             Self::Control(reason) => write!(f, "control build failed: {reason}"),
             Self::NoToaster => write!(f, "a toast has no toaster above it"),
             Self::Clamped(reason) => write!(f, "invalid view option clamped: {reason}"),
+            Self::Storage(error) => write!(f, "storage: {error}"),
         }
     }
 }

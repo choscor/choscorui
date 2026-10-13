@@ -4,12 +4,14 @@
 
 mod builtins;
 mod canvas;
+pub(crate) mod commands;
 mod configured;
 mod control;
 mod dialogs;
 mod dynamic;
 mod env;
 mod field;
+mod file_dialog;
 mod focus;
 mod form;
 mod fragment;
@@ -26,6 +28,7 @@ mod present;
 mod resizable;
 mod scope;
 mod state;
+mod storage;
 mod text;
 mod toast;
 mod tooltip;
@@ -40,6 +43,7 @@ pub use builtins::{
     Calendar, Combobox, Progress, RadioGroup, Slider, SpinBox, Tabs, TextEditor, TextField,
 };
 pub use canvas::{Canvas, CanvasContext};
+pub use commands::CommandMenu;
 pub use configured::Configured;
 pub use control::{ControlView, CustomView};
 pub use dialogs::{FontDialog, InputDialog};
@@ -57,6 +61,7 @@ pub use lazy::{LazyHStack, LazyVStack};
 pub use menus::MenuChoice;
 pub use modifier::{Edges, Frame, Styled, ViewExt};
 pub use resizable::Resizable;
+pub use storage::{Storage, StorageError, StoredValue};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
 pub use text::{IntoTextArg, Localized, Text, TextContent};
 pub use widgets::{

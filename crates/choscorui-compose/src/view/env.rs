@@ -2,10 +2,11 @@
 //! token-aware value types that modifiers take.
 
 use super::state::{IntoLive, Live};
+use super::storage::Storage;
 use choscorui_controls::{ButtonVariant, ControlSize};
 use choscorui_core::{
     Catalog, Color, ColorRole, DesignTokens, FontWeight, LayoutDirection, Locale, RadiusScale,
-    Rect, ShadowLayers, ShadowScale, Space, TextPreset, Tracking,
+    Rect, Services, ShadowLayers, ShadowScale, Space, TextPreset, Tracking,
 };
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -153,6 +154,8 @@ pub struct Env {
     pub(crate) button_variant: Option<Live<ButtonVariant>>,
     pub(crate) control_size: Option<Live<ControlSize>>,
     pub(crate) text: TextEnv,
+    services: Services,
+    storage: Option<Storage>,
     values: HashMap<TypeId, Rc<dyn Any>>,
 }
 
@@ -166,6 +169,8 @@ impl Default for Env {
             button_variant: None,
             control_size: None,
             text: TextEnv::default(),
+            services: Services::none(),
+            storage: None,
             values: HashMap::new(),
         }
     }
@@ -230,6 +235,29 @@ impl Env {
         self.catalog
             .plural(&locale, id, count, args)
             .unwrap_or_else(|_| id.to_owned())
+    }
+
+    /// The desktop services of the backend: the clipboard,
+    /// notifications, the status item, URL handlers, and file dialogs.
+    /// Without a backend, each service reports that it is unsupported.
+    pub fn services(&self) -> &Services {
+        &self.services
+    }
+
+    /// Sets the desktop services. The application sets the backend's
+    /// services in the root environment.
+    pub fn set_services(&mut self, services: Services) {
+        self.services = services;
+    }
+
+    /// The storage of stored state, if the application has one.
+    pub fn storage(&self) -> Option<&Storage> {
+        self.storage.as_ref()
+    }
+
+    /// Sets the storage that `Cx::stored` loads from and writes to.
+    pub fn set_storage(&mut self, storage: Storage) {
+        self.storage = Some(storage);
     }
 
     /// A custom environment value set with `.environment(value)`.
