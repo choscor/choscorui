@@ -98,7 +98,15 @@ A tuple of views is one view, so a stack takes a tuple of its children. To keep 
 
 Some views have more than one constructor. `Select::native` gives the native-select look, `Input::masked` fits the text into an `InputMask`, and `List::table` shows the rows as a table. A bubble is content of a `Message`, and an item is content of an `ItemGroup`.
 
-A control view changes its control with `.with(change)` after each build. For example, `.with(move |switch| switch.with_invalid(invalid.get()))` marks a `Switch` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `RadioGroup`, `Combobox`, and `DatePicker` take `with_invalid`.
+A control view changes its control with `.with(change)` after each build. For example, `.with(move |switch| switch.with_invalid(invalid.get()))` marks a `Switch` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `RadioGroup`, `Combobox`, and `DatePicker` take `with_invalid`. Use `.with_env(change)` when the change needs the environment, for example a placeholder from the catalog.
+
+The range views set their limits with builders, so they need no `IntegerRange`:
+
+- `Slider`, `SpinBox`, and `Dial` take `.range(0..=100)`, `.step(1)`, and `.page(10)`. These are also the defaults. `Dial` also takes `.wrapping(true)`.
+- `RangeSlider` takes `.range(0.0..=100.0)` and `.step(1.0)`.
+- `Progress` takes `.maximum(100)`.
+
+A builder never panics. An invalid option, such as a reversed range or a zero step, becomes the nearest valid value. A bound value outside the range shows the nearest bound. The view reports each of these as `ViewError::Clamped`, through `ViewHost::take_errors` and `App::on_error`. The fallible constructors, such as `IntegerRange::new`, stay for code that wants the `Result`.
 
 ## State and bindings
 
@@ -121,10 +129,9 @@ impl View for Settings {
     fn body(&self, cx: &mut Cx) -> impl View {
         let wifi = cx.state(true);
         let volume = cx.state(40);
-        let range = IntegerRange::new(0, 100, 40, 1, 10).expect("a valid range");
         VStack::new((
             Switch::new("Wi-Fi", wifi.binding()),
-            Slider::new("Volume", range, volume.binding()),
+            Slider::new("Volume", volume.binding()).range(0..=100).step(1).page(10),
             Text::new(move || format!("Volume {}", volume.get())).hidden(move || !wifi.get()),
         ))
         .alignment(HorizontalAlignment::Leading)

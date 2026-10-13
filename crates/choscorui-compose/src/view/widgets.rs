@@ -11,6 +11,7 @@ use super::configured::Configured;
 use super::control::ControlView;
 use super::env::Env;
 use super::host::Cx;
+use super::limits::Limits;
 use super::state::{Binding, IntoLive, Live};
 use super::text::TextContent;
 use choscorui_controls as controls;
@@ -402,22 +403,58 @@ impl Configured<controls::InputOtp> {
     }
 }
 
-/// Low and high values along one track; `values` edits both.
+/// Low and high values along one track; `values` edits both. It covers
+/// `0.0..=100.0` with a step of 1 until `.range` and `.step` change them.
+/// Values outside the bounds show the nearest bound and report a
+/// [`ViewError::Clamped`](super::ViewError::Clamped).
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_compose::view::{Cx, RangeSlider, View};
+///
+/// struct Price;
+///
+/// impl View for Price {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let price = cx.state((20.0, 80.0));
+///         RangeSlider::new("Price", price.binding()).range(0.0..=200.0).step(5.0)
+///     }
+/// }
+/// ```
 pub type RangeSlider = Configured<controls::RangeSlider>;
 
 impl Configured<controls::RangeSlider> {
-    pub fn new<M>(
-        name: impl IntoLive<TextContent, M>,
-        bounds: std::ops::RangeInclusive<f64>,
-        step: f64,
-        values: Binding<(f64, f64)>,
-    ) -> Self {
+    pub fn new<M>(name: impl IntoLive<TextContent, M>, values: Binding<(f64, f64)>) -> Self {
         let name = label(name);
-        let (minimum, maximum) = (*bounds.start(), *bounds.end());
+        let limits = super::builtins::percent();
+        let read = limits.clone();
         Configured::custom(ControlKind::Slider, move |env| {
+            let Limits {
+                minimum,
+                maximum,
+                step,
+                ..
+            } = read.get();
             controls::RangeSlider::new(text(&name, env), minimum, maximum, step, minimum, maximum)
         })
+        .limited(limits)
         .bind(values, to_range, as_range)
+    }
+
+    /// The bounds of both values. Reversed bounds become `start..=start`,
+    /// and bounds that are not finite stay as they are. Both report a
+    /// [`ViewError::Clamped`](super::ViewError::Clamped).
+    #[must_use]
+    pub fn range(self, bounds: std::ops::RangeInclusive<f64>) -> Self {
+        self.set_bounds(*bounds.start(), *bounds.end())
+    }
+
+    /// The snap step of the values. A step that is not positive becomes
+    /// 1 and reports a [`ViewError::Clamped`](super::ViewError::Clamped).
+    #[must_use]
+    pub fn step(self, step: f64) -> Self {
+        self.set_step(step)
     }
 }
 

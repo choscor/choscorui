@@ -1034,6 +1034,19 @@ impl crate::CustomControl for Progress {
         false
     }
 
+    /// Takes a whole `Number` from 0 to the maximum of a determinate bar.
+    fn set_value(&mut self, value: &crate::ControlValue) -> bool {
+        match (value, self.value) {
+            (crate::ControlValue::Number(number), Some((_, maximum)))
+                if number.fract() == 0.0 && (0.0..=f64::from(maximum)).contains(number) =>
+            {
+                self.value = Some((*number as u32, maximum));
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// An indeterminate bar sweeps while it is mounted and visible.
     fn animating(&self, _time: f64) -> bool {
         self.needs_frame(true)

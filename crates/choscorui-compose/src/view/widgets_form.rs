@@ -5,7 +5,7 @@
 //! `Binding` where the control edits a value, and an action where it
 //! fires one.
 
-use super::builtins::{as_whole, to_number};
+use super::builtins::{as_whole, percent, to_number};
 use super::configured::Configured;
 use super::state::{Binding, IntoLive};
 use super::text::TextContent;
@@ -14,7 +14,7 @@ use crate::reactive::Runtime;
 use choscorui_controls as controls;
 use choscorui_controls::{
     ControlKind, ControlMessage, ControlValue, DateTimeKind, InputGroupAddon, InputMask,
-    IntegerRange, NumberBase,
+    NumberBase, RangeError,
 };
 use choscorui_core::{CivilDate, CivilDateTime, CivilTime, Color};
 
@@ -245,22 +245,47 @@ impl Configured<controls::ColorPicker> {
     }
 }
 
-/// A rotary control over `range` that edits `value`. A wrapping dial,
-/// such as a compass, turns past its maximum to its minimum.
+/// A rotary control that edits `value`. Like a slider, it covers
+/// `0..=100` with a step of 1 and a page of 10 until `.range`, `.step`,
+/// and `.page` change them. A `.wrapping(true)` dial, such as a compass,
+/// turns past its maximum to its minimum.
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_compose::view::{Cx, Dial, View};
+///
+/// struct Heading;
+///
+/// impl View for Heading {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let degrees = cx.state(90);
+///         Dial::new("Heading", degrees.binding()).range(0..=359).wrapping(true)
+///     }
+/// }
+/// ```
 pub type Dial = Configured<controls::HostedDial>;
 
 impl Configured<controls::HostedDial> {
-    pub fn new<M>(
-        name: impl IntoLive<TextContent, M>,
-        range: IntegerRange,
-        wrapping: bool,
-        value: Binding<i32>,
-    ) -> Self {
+    pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
         let name = label(name);
-        Configured::custom(ControlKind::Dial, move |env| {
-            controls::Dial::new(range, wrapping).hosted(text(&name, env))
+        let limits = percent();
+        let read = limits.clone();
+        Configured::try_custom(ControlKind::Dial, move |env| {
+            let limits = read.get();
+            let range = limits.integers(0)?;
+            Ok::<_, RangeError>(
+                controls::Dial::new(range, limits.wrapping).hosted(text(&name, env)),
+            )
         })
+        .limited(limits)
         .bind(value, to_number, as_whole)
+    }
+
+    /// Turns past the maximum to the minimum, and back.
+    #[must_use]
+    pub fn wrapping(self, wrapping: bool) -> Self {
+        self.set_wrapping(wrapping)
     }
 }
 

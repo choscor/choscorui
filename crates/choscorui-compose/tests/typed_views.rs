@@ -11,9 +11,9 @@ use choscorui_compose::view::{
 };
 use choscorui_controls::{
     AddonAlign, Bubble, CommandId, ControlKind, DateTimeKind, DockLayout, DockPanel, DockTarget,
-    EstimatedText, HeaderColumn, InputGroupAddon, InputMask, IntegerRange, Item, ListEntry,
-    NumberBase, PanelId, Question, QuestionnaireLabels, ShortcutModifiers, StatusSection, Toggle,
-    ToolbarArea, ToolbarItem,
+    EstimatedText, HeaderColumn, InputGroupAddon, InputMask, Item, ListEntry, NumberBase, PanelId,
+    Question, QuestionnaireLabels, ShortcutModifiers, StatusSection, Toggle, ToolbarArea,
+    ToolbarItem,
 };
 use choscorui_core::{
     Catalog, CivilDate, CivilDateTime, CivilTime, DesignTokens, ItemModel, Key, KeyEvent, Locale,
@@ -264,8 +264,7 @@ fn a_dial_binds_both_ways() {
     let mut host = host(move |cx| {
         let value = cx.state(30);
         shared.set(Some(value));
-        let range = IntegerRange::new(0, 100, 30, 1, 10).unwrap();
-        Dial::new("Gain", range, false, value.binding()).into_any()
+        Dial::new("Gain", value.binding()).range(0..=100).into_any()
     });
     let node = host.find("Gain").unwrap();
     assert_eq!(value(&mut host, node).as_deref(), Some("30"));

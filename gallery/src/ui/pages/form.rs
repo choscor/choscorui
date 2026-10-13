@@ -606,21 +606,18 @@ pub fn range_slider(_: &PageCx) -> AnyView {
         column((
             section(
                 t!("range-slider.horizontal"),
-                RangeSlider::new(
-                    t!("range-slider.price"),
-                    0.0..=100.0,
-                    5.0,
-                    cx.state((25.0, 75.0)).binding(),
-                ),
+                RangeSlider::new(t!("range-slider.price"), cx.state((25.0, 75.0)).binding())
+                    .range(0.0..=100.0)
+                    .step(5.0),
             ),
             section(
                 t!("toggle-group.vertical"),
                 RangeSlider::new(
                     t!("range-slider.temperature"),
-                    0.0..=40.0,
-                    1.0,
                     cx.state((18.0, 24.0)).binding(),
                 )
+                .range(0.0..=40.0)
+                .step(1.0)
                 .with(|slider| slider.with_orientation(Orientation::Vertical)),
             ),
         ))

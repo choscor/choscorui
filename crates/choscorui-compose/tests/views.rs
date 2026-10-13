@@ -845,16 +845,14 @@ fn control_labels_follow_the_locale_on_the_same_node() {
 #[test]
 fn range_and_selection_views_bind_both_ways() {
     use choscorui_compose::view::{RadioGroup, Slider, Tabs};
-    use choscorui_controls::IntegerRange;
     struct Screen;
     impl View for Screen {
         fn body(&self, cx: &mut Cx) -> impl View {
             let level = cx.state(50);
             let size = cx.state(0_usize);
             let tab = cx.state(0_usize);
-            let range = IntegerRange::new(0, 100, 0, 1, 10).unwrap();
             VStack::new((
-                Slider::new("level", range, level.binding()),
+                Slider::new("level", level.binding()).range(0..=100),
                 RadioGroup::new(
                     "size",
                     vec!["small".to_owned(), "large".to_owned()],
@@ -898,7 +896,8 @@ fn range_and_selection_views_bind_both_ways() {
 
 #[test]
 fn a_control_that_cannot_build_reports_an_error() {
-    use choscorui_compose::view::{Progress, ViewError};
+    use choscorui_compose::view::{Configured, ViewError};
+    use choscorui_controls::{ControlKind, Progress};
     let mut host = ViewHost::new(
         Size::new(400.0, 300.0),
         DesignTokens::light(),
@@ -907,7 +906,7 @@ fn a_control_that_cannot_build_reports_an_error() {
         Rc::new(EstimatedText),
     );
     host.mount(VStack::new((
-        Progress::new("upload", 3_u32, 0),
+        Configured::try_custom(ControlKind::Progress, |_| Progress::new("upload", 3, 0)),
         Text::new("after"),
     )));
     host.layout();

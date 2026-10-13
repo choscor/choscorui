@@ -5,6 +5,7 @@
 use super::View;
 use super::env::Env;
 use super::host::{Cx, Handler, Inner, ViewError};
+use super::limits::SharedLimits;
 use super::state::{IntoLive, Live};
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
@@ -41,6 +42,10 @@ pub struct ControlView {
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
     handlers: Vec<Handler>,
+    /// The bounds that clamp the value of a range view.
+    pub(super) limits: Option<SharedLimits>,
+    /// Invalid options that the view clamped, reported at mount.
+    pub(super) notes: Vec<String>,
 }
 
 impl ControlView {
@@ -86,6 +91,8 @@ impl ControlView {
             value,
             open,
             handlers,
+            limits: None,
+            notes: Vec::new(),
         }
     }
 
@@ -96,6 +103,8 @@ impl ControlView {
             value: None,
             open: None,
             handlers: Vec::new(),
+            limits: None,
+            notes: Vec::new(),
         }
     }
 
@@ -153,6 +162,9 @@ impl View for ControlView {
     // Out of line, so that each `Configured<C>` adds only its build.
     #[inline(never)]
     fn mount(self, cx: &mut Cx) {
+        for note in self.notes {
+            cx.inner.report(ViewError::Clamped(note));
+        }
         let current: Rc<Current> = Rc::default();
         let node = match self.source {
             Source::Fixed(control) => cx.control(control),
@@ -180,7 +192,9 @@ impl View for ControlView {
         });
         if let Some(value) = self.value {
             let current = current.clone();
+            let limits = self.limits;
             cx.bind(value, move |inner, value| {
+                let value = clamped(inner, limits.as_ref(), value);
                 if current.value.borrow().as_ref() == Some(&value) {
                     return;
                 }
@@ -272,6 +286,18 @@ impl CustomControl for Placeholder {
     fn focusable(&self) -> bool {
         false
     }
+}
+
+/// `value` inside `limits`. A value outside them reports
+/// [`ViewError::Clamped`].
+fn clamped(inner: &mut Inner, limits: Option<&SharedLimits>, value: ControlValue) -> ControlValue {
+    let Some(inside) = limits.and_then(|limits| limits.get().clamp(&value)) else {
+        return value;
+    };
+    inner.report(ViewError::Clamped(format!(
+        "the value {value:?} is outside the bounds; the view uses {inside:?}"
+    )));
+    inside
 }
 
 fn set_enabled(inner: &mut Inner, node: NodeId, enabled: bool) {

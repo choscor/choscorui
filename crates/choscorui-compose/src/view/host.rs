@@ -41,6 +41,9 @@ pub enum ViewError {
     Control(String),
     /// A `.toast` modifier has no `.toaster` above it.
     NoToaster,
+    /// A view option or value was invalid, and the view used the nearest
+    /// valid value instead, with the reason.
+    Clamped(String),
 }
 
 impl std::fmt::Display for ViewError {
@@ -54,6 +57,7 @@ impl std::fmt::Display for ViewError {
             Self::DuplicateKey(key) => write!(f, "duplicate key {key} in a list"),
             Self::Control(reason) => write!(f, "control build failed: {reason}"),
             Self::NoToaster => write!(f, "a toast has no toaster above it"),
+            Self::Clamped(reason) => write!(f, "invalid view option clamped: {reason}"),
         }
     }
 }

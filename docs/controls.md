@@ -632,6 +632,15 @@ recipe gives its thickness and color, so
 | State | - |
 | Actions | - |
 
+In a control host, `set_value` takes a whole `Number` from 0 to the maximum
+of a determinate bar.
+
+**As a view.** `Progress::new(name, value).maximum(10)` shows a live `u32`
+value. The maximum is 100 by default. A maximum of zero becomes 1, and a
+value above the maximum shows a full bar. Each reports a
+`ViewError::Clamped`. `Progress::indeterminate(name)` shows work of unknown
+length.
+
 [range_controls.rs](../crates/choscorui-controls/tests/range_controls.rs) and
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pin this behavior.
 
@@ -973,6 +982,14 @@ the description "Not installed; using" with the fallback name.
 | State | disabled; the description is "Range min to max" |
 | Actions | `SetValue`, `Increment`, `Decrement`, `Focus` while enabled |
 
+**As a view.** `Slider::new(name, value).range(0..=100).step(1).page(10)`
+edits a `Binding<i32>` through the `Number` value in both directions.
+`Slider::vertical` moves the thumb up and down. The builders are optional,
+and these values are the defaults. A reversed range becomes
+`start..=start`, and a zero step or page becomes 1. A bound value outside
+the range shows the nearest bound. Each of these reports a
+`ViewError::Clamped`, and the view never panics.
+
 [range_controls.rs](../crates/choscorui-controls/tests/range_controls.rs) pins
 this behavior.
 
@@ -1002,6 +1019,11 @@ this behavior.
 value that is not finite, and a low value above the high value. `set_open`
 returns false.
 
+**As a view.** `RangeSlider::new(name, values).range(0.0..=100.0).step(1.0)`
+edits a `Binding<(f64, f64)>` through the `Range` value in both directions.
+These limits are the defaults. Invalid limits and values clamp and report a
+`ViewError::Clamped`, as for `Slider`.
+
 [range_slider.rs](../crates/choscorui-controls/tests/range_slider.rs) pins this behavior.
 
 ### SpinBox
@@ -1028,6 +1050,10 @@ returns false.
 | Name / value | label / the integer value |
 | State | disabled; the description is "Range min to max" |
 | Actions | `SetValue`, `Increment`, `Decrement`, `Focus` while enabled |
+
+**As a view.** `SpinBox::new(name, value).range(1..=99).step(1).page(10)`
+edits a `Binding<i32>`. It has the defaults and the clamp rules of the
+`Slider` view.
 
 [range_controls.rs](../crates/choscorui-controls/tests/range_controls.rs) pins
 this behavior.
@@ -1100,9 +1126,10 @@ directions. It formats numbers in the locale of the environment.
 `Dial` has no handler for these actions. The host maps them to
 `handle_key` and `point_to`.
 
-**As a view.** `Dial::new(name, range, wrapping, value)` mounts a
-`HostedDial`. It edits a `Binding<i32>` through the `Number` value in both
-directions.
+**As a view.** `Dial::new(name, value).range(0..=359).wrapping(true)` mounts
+a `HostedDial`. It edits a `Binding<i32>` through the `Number` value in both
+directions. It takes `.step` and `.page` too, with the defaults and the
+clamp rules of the `Slider` view.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 

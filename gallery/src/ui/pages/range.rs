@@ -9,16 +9,31 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::{
     ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
-    CustomControl, HostedNumericDisplay, IntegerRange, MeasureContext, NumberBase, NumericDisplay,
-    PaintContext, ScrollBar, ScrollOrientation, TextAlign,
+    CustomControl, HostedNumericDisplay, MeasureContext, NumberBase, NumericDisplay, PaintContext,
+    ScrollBar, ScrollOrientation, TextAlign,
 };
 use choscorui::core::{
     ColorRole, EventPhase, EventReply, FontWeight, Key, KeyEvent, Measured, Point, RadiusScale,
     SemanticNode, Space, TextPreset, TextSize,
 };
 
-fn range(minimum: i32, maximum: i32, value: i32, step: u32, page: u32) -> IntegerRange {
-    IntegerRange::new(minimum, maximum, value, step, page).expect("demo ranges are valid")
+/// A demo integer range: the bounds, the start value, the step, and the
+/// page.
+#[derive(Clone, Copy)]
+struct Demo {
+    bounds: (i32, i32),
+    value: i32,
+    step: u32,
+    page: u32,
+}
+
+fn range(minimum: i32, maximum: i32, value: i32, step: u32, page: u32) -> Demo {
+    Demo {
+        bounds: (minimum, maximum),
+        value,
+        step,
+        page,
+    }
 }
 
 /// A control under its caption, in the page's caption style.
@@ -52,13 +67,21 @@ struct SliderPage;
 
 impl View for SliderPage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let mut row = |key: &'static str, range: IntegerRange, vertical: bool, enabled: bool| {
-            let value = cx.state(range.value());
+        let mut row = |key: &'static str, demo: Demo, vertical: bool, enabled: bool| {
+            let value = cx.state(demo.value);
+            let (minimum, maximum) = demo.bounds;
             let slider = if vertical {
-                Slider::vertical(t!(key), range, value.binding())
-                    .frame(Frame::new().width(16.0).height(140.0))
+                Slider::vertical(t!(key), value.binding())
             } else {
-                Slider::new(t!(key), range, value.binding()).frame(Frame::new().width(320.0))
+                Slider::new(t!(key), value.binding())
+            }
+            .range(minimum..=maximum)
+            .step(demo.step)
+            .page(demo.page);
+            let slider = if vertical {
+                slider.frame(Frame::new().width(16.0).height(140.0))
+            } else {
+                slider.frame(Frame::new().width(320.0))
             };
             let readout = readout(named_value(cx.env(), key, value));
             captioned(readout, slider.disabled(!enabled))
@@ -81,11 +104,15 @@ struct SpinBoxPage;
 
 impl View for SpinBoxPage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let mut row = |key: &'static str, range: IntegerRange, enabled: bool| {
-            let value = cx.state(range.value());
+        let mut row = |key: &'static str, demo: Demo, enabled: bool| {
+            let value = cx.state(demo.value);
+            let (minimum, maximum) = demo.bounds;
             captioned(
                 label(key),
-                SpinBox::new(t!(key), range, value.binding())
+                SpinBox::new(t!(key), value.binding())
+                    .range(minimum..=maximum)
+                    .step(demo.step)
+                    .page(demo.page)
                     .frame(Frame::new().width(140.0))
                     .disabled(!enabled),
             )
@@ -112,15 +139,11 @@ impl View for ProgressPage {
         column((
             captioned(
                 readout(t!("progress.of", value = value, total = 100)),
-                bar(Progress::new(
-                    t!("progress.download"),
-                    move || value.get(),
-                    100,
-                )),
+                bar(Progress::new(t!("progress.download"), move || value.get()).maximum(100)),
             ),
             captioned(
                 caption(t!("progress.of", value = 100, total = 100)),
-                bar(Progress::new(t!("progress.download"), 100_u32, 100)),
+                bar(Progress::new(t!("progress.download"), 100_u32).maximum(100)),
             ),
             captioned(
                 caption(t!("progress.indeterminate")),
@@ -262,11 +285,16 @@ struct DialPage;
 
 impl View for DialPage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let mut dial = |key: &'static str, range: IntegerRange, wrapping: bool| {
-            let value = cx.state(range.value());
+        let mut dial = |key: &'static str, demo: Demo, wrapping: bool| {
+            let value = cx.state(demo.value);
             let readout = named_value(cx.env(), key, value);
+            let (minimum, maximum) = demo.bounds;
             VStack::new((
-                Dial::new(t!(key), range, wrapping, value.binding())
+                Dial::new(t!(key), value.binding())
+                    .range(minimum..=maximum)
+                    .step(demo.step)
+                    .page(demo.page)
+                    .wrapping(wrapping)
                     .frame(Frame::new().width(140.0).height(140.0)),
                 Text::new(readout)
                     .align(TextAlign::Center)

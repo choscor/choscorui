@@ -3,15 +3,18 @@
 //! control edits a value, and an action where it fires one.
 
 use super::configured::Configured;
+use super::limits::{Limits, SharedLimits};
 use super::state::{Binding, IntoLive};
 use super::text::TextContent;
 use super::widgets::{Items, as_index, as_position, as_text, label, text, to_position};
 use crate::reactive::Runtime;
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ComboItem, ControlKind, ControlMessage, ControlValue, IntegerRange, SliderOrientation,
+    ComboItem, ControlKind, ControlMessage, ControlValue, RangeError, SliderOrientation,
 };
 use choscorui_core::{CivilDate, ItemKey};
+use std::cell::Cell;
+use std::rc::Rc;
 
 pub(super) fn as_whole(value: &ControlValue) -> Option<i32> {
     match value {
@@ -28,72 +31,132 @@ pub(super) fn to_number(value: i32) -> ControlValue {
     ControlValue::Number(f64::from(value))
 }
 
-/// A slider over `range` that edits `value`.
+/// The limits of a new integer range view: `0..=100`, step 1, page 10.
+pub(super) fn percent() -> SharedLimits {
+    Rc::new(Cell::new(Limits::new(0.0, 100.0)))
+}
+
+/// A slider that edits `value`. It covers `0..=100` with a step of 1 and
+/// a page of 10 until `.range`, `.step`, and `.page` change them. A value
+/// outside the bounds shows the nearest bound and reports a
+/// [`ViewError::Clamped`](super::ViewError::Clamped).
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_compose::view::{Cx, Slider, View};
+///
+/// struct Volume;
+///
+/// impl View for Volume {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let level = cx.state(40);
+///         Slider::new("Volume", level.binding()).range(0..=100).step(1).page(10)
+///     }
+/// }
+/// ```
 pub type Slider = Configured<controls::Slider>;
 
 impl Configured<controls::Slider> {
-    pub fn new<M>(
-        name: impl IntoLive<TextContent, M>,
-        range: IntegerRange,
-        value: Binding<i32>,
-    ) -> Self {
-        Self::oriented(name, range, value, SliderOrientation::Horizontal)
+    pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
+        Self::oriented(name, value, SliderOrientation::Horizontal)
     }
 
     /// A slider whose thumb moves up and down.
-    pub fn vertical<M>(
-        name: impl IntoLive<TextContent, M>,
-        range: IntegerRange,
-        value: Binding<i32>,
-    ) -> Self {
-        Self::oriented(name, range, value, SliderOrientation::Vertical)
+    pub fn vertical<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
+        Self::oriented(name, value, SliderOrientation::Vertical)
     }
 
     fn oriented<M>(
         name: impl IntoLive<TextContent, M>,
-        range: IntegerRange,
         value: Binding<i32>,
         orientation: SliderOrientation,
     ) -> Self {
         let name = label(name);
-        Configured::custom(ControlKind::Slider, move |env| {
-            controls::Slider::new(text(&name, env), range, orientation)
+        let limits = percent();
+        let read = limits.clone();
+        Configured::try_custom(ControlKind::Slider, move |env| {
+            let range = read.get().integers(0)?;
+            Ok::<_, RangeError>(controls::Slider::new(text(&name, env), range, orientation))
         })
+        .limited(limits)
         .bind(value, to_number, as_whole)
     }
 }
 
-/// An integer field with steppers that edits `value` inside `range`.
+/// An integer field with steppers that edits `value`. Like [`Slider`], it
+/// covers `0..=100` with a step of 1 and a page of 10 until `.range`,
+/// `.step`, and `.page` change them.
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_compose::view::{Cx, SpinBox, View};
+///
+/// struct Copies;
+///
+/// impl View for Copies {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let copies = cx.state(1);
+///         SpinBox::new("Copies", copies.binding()).range(1..=99)
+///     }
+/// }
+/// ```
 pub type SpinBox = Configured<controls::SpinBox>;
 
 impl Configured<controls::SpinBox> {
-    pub fn new<M>(
-        name: impl IntoLive<TextContent, M>,
-        range: IntegerRange,
-        value: Binding<i32>,
-    ) -> Self {
+    pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
         let name = label(name);
-        Configured::custom(ControlKind::Input, move |env| {
-            controls::SpinBox::new(text(&name, env), range)
+        let limits = percent();
+        let read = limits.clone();
+        Configured::try_custom(ControlKind::Input, move |env| {
+            let range = read.get().integers(0)?;
+            Ok::<_, RangeError>(controls::SpinBox::new(text(&name, env), range))
         })
+        .limited(limits)
         .bind(value, to_number, as_whole)
     }
 }
 
-/// A progress bar that shows `value` of `maximum`. A `maximum` of zero
-/// reports a build error.
+/// A progress bar that shows `value` of a maximum, 100 until `.maximum`
+/// changes it. A value above the maximum shows a full bar and reports a
+/// [`ViewError::Clamped`](super::ViewError::Clamped).
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_compose::view::{Progress, View};
+///
+/// fn upload(sent: u32) -> impl View {
+///     Progress::new("Upload", sent).maximum(10)
+/// }
+/// ```
 pub type Progress = Configured<controls::Progress>;
 
 impl Configured<controls::Progress> {
-    pub fn new<M, N>(
-        name: impl IntoLive<TextContent, M>,
-        value: impl IntoLive<u32, N>,
-        maximum: u32,
-    ) -> Self {
+    pub fn new<M, N>(name: impl IntoLive<TextContent, M>, value: impl IntoLive<u32, N>) -> Self {
         let name = label(name);
-        let value = value.into_live();
+        let limits = percent();
+        let read = limits.clone();
         Configured::try_custom(ControlKind::Progress, move |env| {
-            controls::Progress::new(text(&name, env), value.get(), maximum)
+            let maximum = read.get().maximum as u32;
+            controls::Progress::new(text(&name, env), 0, maximum)
+        })
+        .limited(limits)
+        .value(
+            value
+                .into_live()
+                .map(|value| ControlValue::Number(f64::from(value))),
+        )
+    }
+
+    /// The value of a full bar. A maximum of zero becomes 1 and reports a
+    /// [`ViewError::Clamped`](super::ViewError::Clamped).
+    #[must_use]
+    pub fn maximum(self, maximum: u32) -> Self {
+        self.change_limits(|limits| {
+            limits.maximum = f64::from(maximum.max(1));
+            (maximum == 0).then(|| "the maximum 0 is not positive; the view uses 1".to_owned())
         })
     }
 

@@ -6,17 +6,19 @@ use super::View;
 use super::control::ControlView;
 use super::env::Env;
 use super::host::Cx;
+use super::limits::{Limits, SharedLimits};
 use super::state::{Binding, IntoLive, Live};
 use choscorui_controls::{CommandId, ControlKind, ControlMessage, ControlValue, CustomControl};
 use std::rc::Rc;
 
 type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
-type Change<C> = Rc<dyn Fn(C) -> C>;
+type Change<C> = Rc<dyn Fn(C, &Env) -> C>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
 
 /// A control of type `C` as a view. The view builds the control from the
 /// environment, so catalog strings follow the locale; options from
-/// [`Configured::with`] apply after each build.
+/// [`Configured::with`] and [`Configured::with_env`] apply after each
+/// build.
 pub struct Configured<C> {
     kind: ControlKind,
     build: Build<C>,
@@ -24,6 +26,10 @@ pub struct Configured<C> {
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
     handlers: Vec<Handler>,
+    /// The bounds of a range view, which clamp the value.
+    limits: Option<SharedLimits>,
+    /// Invalid options that the view clamped, reported at mount.
+    notes: Vec<String>,
 }
 
 impl<C: CustomControl + 'static> Configured<C> {
@@ -51,14 +57,49 @@ impl<C: CustomControl + 'static> Configured<C> {
             value: None,
             open: None,
             handlers: Vec::new(),
+            limits: None,
+            notes: Vec::new(),
         }
     }
 
     /// Changes the control after each build, for options such as
     /// `.with(|switch| switch.with_size(ControlSize::Sm))`.
     #[must_use]
-    pub fn with(mut self, change: impl Fn(C) -> C + 'static) -> Self {
+    pub fn with(self, change: impl Fn(C) -> C + 'static) -> Self {
+        self.with_env(move |control, _| change(control))
+    }
+
+    /// Changes the control after each build with the environment, for
+    /// options whose text comes from the catalog, such as
+    /// `.with_env(|select, env| select.with_placeholder(env.text("pick", &[])))`.
+    /// A state that `change` reads builds the control again when it
+    /// changes.
+    #[must_use]
+    pub fn with_env(mut self, change: impl Fn(C, &Env) -> C + 'static) -> Self {
         self.changes.push(Rc::new(change));
+        self
+    }
+
+    /// Gives the view `limits`, which its build reads and which clamp its
+    /// value.
+    pub(super) fn limited(mut self, limits: SharedLimits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
+
+    /// Changes the limits of a range view. `change` returns a note when
+    /// it clamped an invalid option.
+    pub(super) fn change_limits(
+        mut self,
+        change: impl FnOnce(&mut Limits) -> Option<String>,
+    ) -> Self {
+        if let Some(limits) = &self.limits {
+            let mut next = limits.get();
+            if let Some(note) = change(&mut next) {
+                self.notes.push(note);
+            }
+            limits.set(next);
+        }
         self
     }
 
@@ -179,14 +220,19 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             value,
             open,
             handlers,
+            limits,
+            notes,
         } = self;
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
             let control = changes
                 .iter()
-                .fold(control, |control, change| change(control));
+                .fold(control, |control, change| change(control, env));
             Ok(Box::new(control))
         });
-        ControlView::configured(build, kind, value, open, handlers).mount(cx);
+        let mut view = ControlView::configured(build, kind, value, open, handlers);
+        view.limits = limits;
+        view.notes = notes;
+        view.mount(cx);
     }
 }

@@ -17,6 +17,7 @@ mod host;
 mod hover_card;
 mod layout;
 mod lazy;
+mod limits;
 mod menus;
 mod modifier;
 mod motion;
