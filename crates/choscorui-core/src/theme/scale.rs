@@ -461,6 +461,7 @@ pub enum TextPreset {
 }
 
 impl TextPreset {
+    /// Every preset, in declaration order.
     pub const ALL: [TextPreset; 12] = [
         Self::H1,
         Self::H2,

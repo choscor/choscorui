@@ -39,6 +39,8 @@ pub struct IntegerRange {
 }
 
 impl IntegerRange {
+    /// A range from `minimum` to `maximum`, with `value` clamped into it.
+    /// It fails when the bounds are reversed or a step is zero.
     pub fn new(
         minimum: i32,
         maximum: i32,
@@ -61,36 +63,46 @@ impl IntegerRange {
         })
     }
 
+    /// The lowest value.
     pub const fn minimum(&self) -> i32 {
         self.minimum
     }
+    /// The highest value.
     pub const fn maximum(&self) -> i32 {
         self.maximum
     }
+    /// The current value.
     pub const fn value(&self) -> i32 {
         self.value
     }
+    /// The change of one small step, for example an arrow key.
     pub const fn step(&self) -> u32 {
         self.step
     }
+    /// The change of one page step, for example the Page Up key.
     pub const fn page_step(&self) -> u32 {
         self.page_step
     }
 
+    /// Sets the value, clamped to the range, and returns the result.
     pub fn set_value(&mut self, value: i32) -> i32 {
         self.value = value.clamp(self.minimum, self.maximum);
         self.value
     }
 
+    /// Adds one step, clamped to the range, and returns the value.
     pub fn increment(&mut self) -> i32 {
         self.add(self.step as i64)
     }
+    /// Removes one step, clamped to the range, and returns the value.
     pub fn decrement(&mut self) -> i32 {
         self.add(-(self.step as i64))
     }
+    /// Adds one page step, clamped to the range, and returns the value.
     pub fn page_increment(&mut self) -> i32 {
         self.add(self.page_step as i64)
     }
+    /// Removes one page step, clamped to the range, and returns the value.
     pub fn page_decrement(&mut self) -> i32 {
         self.add(-(self.page_step as i64))
     }

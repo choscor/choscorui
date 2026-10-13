@@ -7,6 +7,7 @@ pub enum Axis {
     Vertical,
 }
 
+/// The reading direction: left-to-right or right-to-left.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LayoutDirection {
     Ltr,

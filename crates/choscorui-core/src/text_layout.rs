@@ -15,13 +15,19 @@ use unicode_segmentation::UnicodeSegmentation;
 pub struct FontWeight(pub u16);
 
 impl FontWeight {
+    /// Weight 300.
     pub const LIGHT: Self = Self(300);
+    /// Weight 400, the default.
     pub const REGULAR: Self = Self(400);
     /// The CSS name of [`FontWeight::REGULAR`].
     pub const NORMAL: Self = Self(400);
+    /// Weight 500.
     pub const MEDIUM: Self = Self(500);
+    /// Weight 600.
     pub const SEMIBOLD: Self = Self(600);
+    /// Weight 700.
     pub const BOLD: Self = Self(700);
+    /// Weight 800.
     pub const EXTRABOLD: Self = Self(800);
 }
 

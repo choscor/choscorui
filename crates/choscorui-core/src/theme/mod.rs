@@ -140,6 +140,7 @@ impl DesignTokens {
         Self::new(BaseColor::Neutral, ColorScheme::Light)
     }
 
+    /// The color of `role` in these tokens.
     pub const fn color(&self, role: ColorRole) -> Color {
         self.palette.get(role)
     }

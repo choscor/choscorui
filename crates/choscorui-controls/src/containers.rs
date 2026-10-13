@@ -55,6 +55,7 @@ impl From<TreeError> for ContainerError {
     }
 }
 
+/// The axis along which a split view places its panes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SplitOrientation {
     Horizontal,

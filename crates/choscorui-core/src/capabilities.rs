@@ -12,6 +12,7 @@ pub enum Support {
 }
 
 impl Support {
+    /// True only for `Supported`. A `Conditional` value is false.
     pub fn is_supported(self) -> bool {
         self == Self::Supported
     }

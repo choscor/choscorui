@@ -10,6 +10,7 @@ macro_rules! named_enum {
         }
 
         impl $name {
+            /// Every value, in declaration order.
             pub const ALL: &'static [$name] = &[$(Self::$variant,)*];
 
             /// Stable kebab-case name, used by golden files and docs.
@@ -171,6 +172,7 @@ pub enum ControlSize {
 }
 
 impl ControlSize {
+    /// Every size, the default first.
     pub const ALL: [ControlSize; 8] = [
         Self::Default,
         Self::Xs,
@@ -182,6 +184,7 @@ impl ControlSize {
         Self::IconLg,
     ];
 
+    /// Stable kebab-case name, used by golden files and docs.
     pub const fn name(self) -> &'static str {
         match self {
             Self::Xs => "xs",
@@ -221,8 +224,10 @@ macro_rules! variant_enum {
         }
 
         impl $name {
+            /// Every variant, the default first.
             pub const ALL: &'static [$name] = &[$(Self::$default,)? $(Self::$variant,)*];
 
+            /// Stable kebab-case name, used by golden files and docs.
             pub const fn name(self) -> &'static str {
                 match self {
                     $(Self::$default => $default_text,)?

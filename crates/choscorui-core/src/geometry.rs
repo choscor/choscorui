@@ -3,22 +3,27 @@
 use crate::{Point, Rect, Size};
 
 impl Point {
+    /// The point moved by `dx` and `dy`.
     pub fn offset(self, dx: f64, dy: f64) -> Self {
         Self::new(self.x + dx, self.y + dy)
     }
 
+    /// The straight-line distance to `other`.
     pub fn distance(self, other: Self) -> f64 {
         (self.x - other.x).hypot(self.y - other.y)
     }
 
+    /// True when both coordinates are finite.
     pub fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite()
     }
 }
 
 impl Size {
+    /// A size with no width and no height.
     pub const ZERO: Self = Self::new(0.0, 0.0);
 
+    /// True when the width or the height is not positive.
     pub fn is_empty(self) -> bool {
         !(self.width > 0.0 && self.height > 0.0)
     }
@@ -33,22 +38,28 @@ impl Size {
 }
 
 impl Rect {
+    /// A rectangle from its left edge, top edge, width, and height.
     pub const fn from_xywh(x: f64, y: f64, width: f64, height: f64) -> Self {
         Self::new(Point::new(x, y), Size::new(width, height))
     }
 
+    /// The left edge.
     pub fn min_x(self) -> f64 {
         self.origin.x
     }
+    /// The top edge.
     pub fn min_y(self) -> f64 {
         self.origin.y
     }
+    /// The right edge.
     pub fn max_x(self) -> f64 {
         self.origin.x + self.size.width
     }
+    /// The bottom edge.
     pub fn max_y(self) -> f64 {
         self.origin.y + self.size.height
     }
+    /// The center point.
     pub fn center(self) -> Point {
         Point::new(
             self.origin.x + self.size.width / 2.0,
@@ -56,10 +67,12 @@ impl Rect {
         )
     }
 
+    /// True when the size is empty.
     pub fn is_empty(self) -> bool {
         self.size.is_empty()
     }
 
+    /// The rectangle moved by `dx` and `dy`.
     pub fn translate(self, dx: f64, dy: f64) -> Self {
         Self::new(self.origin.offset(dx, dy), self.size)
     }
@@ -83,6 +96,7 @@ impl Rect {
         (x1 > x0 && y1 > y0).then(|| Self::from_xywh(x0, y0, x1 - x0, y1 - y0))
     }
 
+    /// True when the two rectangles overlap.
     pub fn intersects(self, other: Self) -> bool {
         self.intersection(other).is_some()
     }
@@ -102,6 +116,7 @@ impl Rect {
         Self::from_xywh(x0, y0, x1 - x0, y1 - y0)
     }
 
+    /// True when `other` is fully inside this rectangle.
     pub fn contains_rect(self, other: Self) -> bool {
         other.min_x() >= self.min_x()
             && other.min_y() >= self.min_y()
@@ -109,6 +124,7 @@ impl Rect {
             && other.max_y() <= self.max_y()
     }
 
+    /// True when the origin and the size are finite.
     pub fn is_finite(self) -> bool {
         self.origin.is_finite() && self.size.width.is_finite() && self.size.height.is_finite()
     }

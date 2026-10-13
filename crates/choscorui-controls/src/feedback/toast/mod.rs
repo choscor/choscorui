@@ -41,6 +41,7 @@ impl Toast {
         }
     }
 
+    /// Adds a second line of text below the title.
     #[must_use]
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
@@ -94,6 +95,7 @@ struct Queue {
 pub struct Toasts(Rc<RefCell<Queue>>);
 
 impl Toasts {
+    /// An empty toast queue.
     pub fn new() -> Self {
         Self::default()
     }

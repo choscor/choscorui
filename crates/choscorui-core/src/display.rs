@@ -13,10 +13,14 @@ pub struct Color {
 }
 
 impl Color {
+    /// A fully transparent color.
     pub const TRANSPARENT: Self = Self::rgba8(0, 0, 0, 0);
+    /// Opaque black.
     pub const BLACK: Self = Self::rgba8(0, 0, 0, 255);
+    /// Opaque white.
     pub const WHITE: Self = Self::rgba8(255, 255, 255, 255);
 
+    /// A color from eight-bit red, green, blue, and alpha channels.
     pub const fn rgba8(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
         Self {
             red,
@@ -26,6 +30,7 @@ impl Color {
         }
     }
 
+    /// An opaque color from eight-bit red, green, and blue channels.
     pub const fn rgb8(red: u8, green: u8, blue: u8) -> Self {
         Self::rgba8(red, green, blue, 255)
     }

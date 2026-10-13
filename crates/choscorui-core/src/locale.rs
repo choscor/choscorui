@@ -105,6 +105,7 @@ impl Locale {
         })
     }
 
+    /// The root locale, `und`, with no language data.
     pub fn root() -> Self {
         Self {
             language: "und".into(),
@@ -112,14 +113,17 @@ impl Locale {
         }
     }
 
+    /// The lowercase language code, for example `en`.
     pub fn language(&self) -> &str {
         &self.language
     }
 
+    /// The uppercase region code, for example `US`, when the locale has one.
     pub fn region(&self) -> Option<&str> {
         self.region.as_deref()
     }
 
+    /// The BCP 47 tag, for example `en-US`.
     pub fn tag(&self) -> String {
         match &self.region {
             Some(region) => format!("{}-{region}", self.language),
@@ -142,10 +146,12 @@ impl Locale {
         chain
     }
 
+    /// The layout direction of the language.
     pub fn direction(&self) -> LayoutDirection {
         self.data().direction
     }
 
+    /// The number, date, and calendar conventions of the locale.
     pub fn data(&self) -> LocaleData {
         let region = self.region.as_deref();
         let dmy = |decimal, group, separator| LocaleData {
@@ -202,6 +208,7 @@ impl Locale {
         }
     }
 
+    /// The plural category of `count` in the language.
     pub fn plural(&self, count: u64) -> PluralCategory {
         plural_category(&self.language, count)
     }
@@ -465,10 +472,12 @@ pub struct Catalog {
 }
 
 impl Catalog {
+    /// An empty catalog.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds the text of message `id` in `locale`.
     pub fn insert(&mut self, locale: &Locale, id: impl Into<String>, text: impl Into<String>) {
         self.messages
             .entry(locale.tag())
@@ -476,6 +485,7 @@ impl Catalog {
             .insert(id.into(), Message::Text(text.into()));
     }
 
+    /// Adds the plural variants of message `id` in `locale`.
     pub fn insert_plural(
         &mut self,
         locale: &Locale,
@@ -597,6 +607,7 @@ impl Catalog {
         substitute(id, template, &all)
     }
 
+    /// The tags of the locales that have messages.
     pub fn locales(&self) -> impl Iterator<Item = &str> {
         self.messages.keys().map(String::as_str)
     }

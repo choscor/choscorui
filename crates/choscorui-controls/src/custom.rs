@@ -127,6 +127,7 @@ pub struct MeasureContext<'a> {
 }
 
 impl MeasureContext<'_> {
+    /// True when the layout direction is right-to-left.
     pub fn rtl(&self) -> bool {
         self.direction == LayoutDirection::Rtl
     }
@@ -148,6 +149,7 @@ pub struct ControlContext<'a> {
 }
 
 impl ControlContext<'_> {
+    /// The node of the control that gets the event.
     pub fn node(&self) -> NodeId {
         self.node
     }
@@ -155,9 +157,11 @@ impl ControlContext<'_> {
     pub fn phase(&self) -> EventPhase {
         self.phase
     }
+    /// The bounds of the control's node, or an empty rectangle.
     pub fn bounds(&self) -> Rect {
         self.tree.bounds(self.node).unwrap_or_default()
     }
+    /// True when the control's node has the keyboard focus.
     pub fn is_focused(&self) -> bool {
         self.tree.focus() == Some(self.node)
     }
@@ -178,15 +182,19 @@ impl ControlContext<'_> {
     pub(crate) fn tree_mut(&mut self) -> &mut Tree {
         self.tree
     }
+    /// Marks the control to paint again in the next frame.
     pub fn request_paint(&mut self) {
         let _ = self.tree.invalidate(self.node, Dirty::PAINT);
     }
+    /// Marks the control to measure and lay out again.
     pub fn request_layout(&mut self) {
         let _ = self.tree.invalidate(self.node, Dirty::LAYOUT);
     }
+    /// Marks the control to publish its semantics again.
     pub fn request_semantics(&mut self) {
         let _ = self.tree.invalidate(self.node, Dirty::SEMANTICS);
     }
+    /// Moves the keyboard focus to the control.
     pub fn request_focus(&mut self) {
         let _ = self.tree.set_focus(Some(self.node));
     }
@@ -252,6 +260,7 @@ pub trait CustomControl {
         false
     }
 
+    /// True when the control can take the keyboard focus. The default is true.
     fn focusable(&self) -> bool {
         true
     }

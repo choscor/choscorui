@@ -125,6 +125,7 @@ pub struct Point {
 }
 
 impl Point {
+    /// A point at `x` and `y`.
     pub const fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
@@ -138,6 +139,7 @@ pub struct Size {
 }
 
 impl Size {
+    /// A size of `width` by `height`.
     pub const fn new(width: f64, height: f64) -> Self {
         Self { width, height }
     }
@@ -151,6 +153,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    /// A rectangle at `origin` with `size`.
     pub const fn new(origin: Point, size: Size) -> Self {
         Self { origin, size }
     }

@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 const MAGIC: &str = "choscorui-settings";
 
+/// One stored setting value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SettingValue {
     Bool(bool),
@@ -110,12 +111,14 @@ pub struct SettingsSchema {
 }
 
 impl SettingsSchema {
+    /// A schema at `version`, with no defaults and no migrations.
     pub fn new(version: u32) -> Self {
         Self {
             version,
             ..Self::default()
         }
     }
+    /// Adds the default value of `key`.
     pub fn with_default(mut self, key: &str, value: SettingValue) -> Self {
         debug_assert!(is_valid_setting_key(key));
         self.defaults.insert(key.to_owned(), value);
@@ -126,6 +129,7 @@ impl SettingsSchema {
         self.migrations.insert(from, migration);
         self
     }
+    /// The default value of `key`, when the schema has one.
     pub fn default_value(&self, key: &str) -> Option<&SettingValue> {
         self.defaults.get(key)
     }
@@ -161,6 +165,8 @@ impl Settings {
         }
     }
 
+    /// Reads the settings file at `path`, and migrates it to the schema version.
+    /// A file that does not exist gives the defaults.
     pub fn load(
         schema: SettingsSchema,
         path: impl Into<PathBuf>,
@@ -304,6 +310,7 @@ impl Settings {
         Ok(())
     }
 
+    /// Writes the settings to `path` atomically: a temporary file, a sync, and a rename.
     pub fn save_to(&self, path: &Path) -> Result<(), SettingsError> {
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(parent).map_err(|error| io_error(parent, error))?;
@@ -323,15 +330,19 @@ impl Settings {
         })
     }
 
+    /// The file that `save` writes.
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
     }
+    /// Sets the file that `save` writes.
     pub fn set_path(&mut self, path: impl Into<PathBuf>) {
         self.path = Some(path.into());
     }
+    /// True when a value changed after the last load or save.
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
+    /// The schema version of the settings.
     pub fn version(&self) -> u32 {
         self.schema.version
     }
@@ -342,6 +353,7 @@ impl Settings {
             .get(key)
             .or_else(|| self.schema.defaults.get(key))
     }
+    /// Stores `value` under `key`. A key that is not valid gives an error.
     pub fn set(&mut self, key: &str, value: SettingValue) -> Result<(), SettingsError> {
         if !is_valid_setting_key(key) {
             return Err(SettingsError::InvalidKey(key.to_owned()));
@@ -366,18 +378,21 @@ impl Settings {
             .map(String::as_str)
     }
 
+    /// The value of `key` as a boolean, when it is one.
     pub fn bool(&self, key: &str) -> Option<bool> {
         match self.get(key)? {
             SettingValue::Bool(value) => Some(*value),
             _ => None,
         }
     }
+    /// The value of `key` as an integer, when it is one.
     pub fn integer(&self, key: &str) -> Option<i64> {
         match self.get(key)? {
             SettingValue::Integer(value) => Some(*value),
             _ => None,
         }
     }
+    /// The value of `key` as a float. An integer value converts.
     pub fn float(&self, key: &str) -> Option<f64> {
         match self.get(key)? {
             SettingValue::Float(value) => Some(*value),
@@ -385,18 +400,21 @@ impl Settings {
             _ => None,
         }
     }
+    /// The value of `key` as text, when it is text.
     pub fn text(&self, key: &str) -> Option<&str> {
         match self.get(key)? {
             SettingValue::Text(value) => Some(value),
             _ => None,
         }
     }
+    /// The value of `key` as a list of strings, when it is one.
     pub fn list(&self, key: &str) -> Option<&[String]> {
         match self.get(key)? {
             SettingValue::List(value) => Some(value),
             _ => None,
         }
     }
+    /// The value of `key` as a rectangle, when it is one.
     pub fn rect(&self, key: &str) -> Option<Rect> {
         match self.get(key)? {
             SettingValue::Rect(value) => Some(*value),

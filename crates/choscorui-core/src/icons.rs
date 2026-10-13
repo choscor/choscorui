@@ -68,6 +68,7 @@ pub enum Icon {
 }
 
 impl Icon {
+    /// Every icon, in declaration order.
     pub const ALL: [Icon; 57] = [
         Self::ArrowDown,
         Self::ArrowLeft,

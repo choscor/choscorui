@@ -417,6 +417,8 @@ pub struct PaintContext<'a> {
 }
 
 impl<'a> PaintContext<'a> {
+    /// A context that paints into `list` inside `bounds`, left-to-right,
+    /// with no visual state, at time zero.
     pub fn new(
         list: &'a mut DisplayList,
         bounds: Rect,
@@ -438,18 +440,21 @@ impl<'a> PaintContext<'a> {
         }
     }
 
+    /// Sets the right-to-left layout direction.
     #[must_use]
     pub fn rtl(mut self, rtl: bool) -> Self {
         self.rtl = rtl;
         self
     }
 
+    /// Sets the hover, focus, and disabled flags of the node.
     #[must_use]
     pub fn state(mut self, state: VisualState) -> Self {
         self.state = state;
         self
     }
 
+    /// Sets the time in seconds for running animations.
     #[must_use]
     pub fn time(mut self, time: f64) -> Self {
         self.time = time;

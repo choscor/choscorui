@@ -41,8 +41,10 @@ pub enum ColorRole {
 }
 
 impl ColorRole {
+    /// The number of roles.
     pub const COUNT: usize = 31;
 
+    /// Every role, in declaration order.
     pub const ALL: [ColorRole; Self::COUNT] = [
         Self::Background,
         Self::Foreground,
@@ -129,6 +131,7 @@ pub enum BaseColor {
 }
 
 impl BaseColor {
+    /// Every base color, the default first.
     pub const ALL: [BaseColor; 7] = [
         Self::Neutral,
         Self::Stone,
@@ -152,11 +155,13 @@ impl BaseColor {
         }
     }
 
+    /// The base color with this id, or `None`.
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|base| base.id() == id)
     }
 }
 
+/// Light or dark appearance.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum ColorScheme {
     #[default]
