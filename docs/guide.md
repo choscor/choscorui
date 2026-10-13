@@ -475,7 +475,7 @@ Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disable
 `App::commands(menus)` installs the menu bar. Each menu is a `CommandMenu` with the `MenuChoice` rows that menus in views use: actions, checkbox and radio rows, submenus, and separators.
 
 - Each row runs its own action when the user chooses it. You do not give command ids. The toolkit makes an id for each row.
-- `MenuChoice::keyboard_shortcut(key, modifiers)` chooses the row from any window. Views do not get Command-key chords.
+- `MenuChoice::keyboard_shortcut(key, modifiers)` chooses the row from any window. A Command-key chord that no menu item takes goes to the focused view.
 - Labels, check marks, and disabled states can read state. When that state changes, the toolkit makes the menu bar again. Use this for check marks and for a new language.
 - A panic in an action stops at the menu boundary. The toolkit counts it in `AppContext::menu_panic_count`, and the row stays usable.
 

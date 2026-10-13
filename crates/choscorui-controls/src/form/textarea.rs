@@ -8,11 +8,12 @@ use crate::custom::{
 use crate::style::{
     ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, TextAlign, TextMeasure, VisualState,
 };
-use crate::text_editor::{TextEditor, TextEditorChange, TextEditorInput};
+use crate::text_editor::{
+    TextEditor, TextEditorChange, TextEditorInput, layout_point, window_rect,
+};
 use choscorui_core::{
-    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Key, KeyEvent, Measured, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, Size, TextLayout, TextSize,
-    Tree, TypeSpec,
+    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Measured, Rect, SemanticAction,
+    SemanticNode, Size, TextInputInfo, TextLayout, TextSize, Tree, TypeSpec,
 };
 use std::cell::{Cell, RefCell};
 
@@ -25,11 +26,11 @@ pub struct Textarea {
     /// The text width and type from the last measure or arrange.
     width: f64,
     spec: Option<TypeSpec>,
-    /// The layout and text origin of the last paint, for pointer hits and
-    /// line motion.
+    /// The layout and text rectangle of the last paint, for pointer hits
+    /// and line motion.
     layout: RefCell<Option<TextLayout>>,
-    origin: Cell<Point>,
-    dragging: bool,
+    inner: Cell<Rect>,
+    rtl: bool,
 }
 
 impl Textarea {
@@ -41,8 +42,8 @@ impl Textarea {
             width: 0.0,
             spec: None,
             layout: RefCell::new(None),
-            origin: Cell::new(Point::new(0.0, 0.0)),
-            dragging: false,
+            inner: Cell::new(Rect::default()),
+            rtl: false,
         }
     }
 
@@ -101,11 +102,15 @@ impl Textarea {
         *self.layout.borrow_mut() = None;
     }
 
-    fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
+    /// The layout of the last paint, or an estimate before the first
+    /// paint.
+    fn current_layout(&self) -> Option<TextLayout> {
         let cached = self.layout.borrow().clone();
-        let Some(layout) =
-            cached.or_else(|| self.spec.map(|spec| self.layout_for(&spec, &EstimatedText)))
-        else {
+        cached.or_else(|| self.spec.map(|spec| self.layout_for(&spec, &EstimatedText)))
+    }
+
+    fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
+        let Some(layout) = self.current_layout() else {
             return;
         };
         let node = cx.node();
@@ -127,11 +132,6 @@ impl Textarea {
     }
 }
 
-/// `point` relative to `origin`.
-fn local(origin: Point, point: Point) -> Point {
-    Point::new(point.x - origin.x, point.y - origin.y)
-}
-
 impl CustomControl for Textarea {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let style = cx.style(Self::query(Slot::Root, VisualState::NONE));
@@ -150,73 +150,25 @@ impl CustomControl for Textarea {
         let style = cx.style(Self::query(Slot::Root, VisualState::NONE));
         self.width = (bounds.size.width - style.padding.horizontal()).max(1.0);
         self.spec = Some(style.text);
+        self.rtl = cx.rtl();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        let modifiers = cx.modifiers();
-        let origin = self.origin.get();
-        match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if cx.bounds().contains(*position) => {
-                cx.request_focus();
-                let position = local(origin, *position);
-                self.apply(
-                    cx,
-                    TextEditorInput::PointerDown {
-                        position,
-                        extend: modifiers.shift,
-                        clicks: 1,
-                    },
-                );
-                self.dragging = true;
-                cx.capture_pointer(true);
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) if self.dragging => {
-                let position = local(origin, *position);
-                self.apply(cx, TextEditorInput::PointerDrag { position });
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.dragging => {
-                self.dragging = false;
-                cx.capture_pointer(false);
-                self.apply(cx, TextEditorInput::PointerUp);
-                EventReply::Stop
-            }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) if cx.is_focused() => {
-                let input = match (*key, modifiers.command) {
-                    (Key::Character('a'), true) => TextEditorInput::SelectAll,
-                    (Key::Character('z'), true) if modifiers.shift => TextEditorInput::Redo,
-                    (Key::Character('z'), true) => TextEditorInput::Undo,
-                    (Key::Character('x'), true) => TextEditorInput::Cut,
-                    (Key::Tab | Key::Escape, _) | (_, true) => return EventReply::Continue,
-                    (_, false) => TextEditorInput::Key {
-                        event: KeyEvent::Down {
-                            key: *key,
-                            repeat: false,
-                        },
-                        extend: modifiers.shift,
-                        word: modifiers.option,
-                    },
-                };
-                self.apply(cx, input);
-                EventReply::Stop
-            }
-            ControlEvent::Text(text) if cx.is_focused() => {
-                self.apply(cx, TextEditorInput::Text(text.clone()));
-                EventReply::Stop
-            }
-            ControlEvent::FocusChanged(_) => {
-                cx.request_paint();
-                EventReply::Continue
-            }
-            _ => EventReply::Continue,
+        let Some(layout) = self.current_layout() else {
+            return EventReply::Continue;
+        };
+        let (inner, rtl) = (self.inner.get(), self.rtl);
+        let reply = self
+            .editor
+            .hosted_event(cx, event, &layout, |point| layout_point(inner, rtl, point));
+        if reply == EventReply::Stop {
+            // The textarea grows or shrinks with its lines.
+            cx.request_layout();
         }
+        reply
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
@@ -226,7 +178,7 @@ impl CustomControl for Textarea {
         let layout = self.layout_for(&root.text, cx.text);
         let focused = state.focused();
         cx.slot(bounds, &root, |cx, inner| {
-            self.origin.set(inner.origin);
+            self.inner.set(inner);
             cx.list.push_clip(inner);
             if self.editor.value().is_empty() {
                 let placeholder = cx.style(Self::query(Slot::Placeholder, state));
@@ -287,6 +239,13 @@ impl CustomControl for Textarea {
         let mut node = self.editor.semantics();
         node.state.invalid = self.invalid;
         node
+    }
+
+    fn text_input(&self) -> Option<TextInputInfo> {
+        let layout = self.layout.borrow();
+        let (inner, rtl) = (self.inner.get(), self.rtl);
+        self.editor
+            .hosted_text_input(layout.as_ref()?, |rect| window_rect(inner, rtl, rect))
     }
 
     fn perform(

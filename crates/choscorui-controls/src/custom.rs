@@ -9,12 +9,13 @@ use crate::style::{
     PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, TransitionStats, Transitions,
     VisualState,
 };
-use crate::{Shortcut, ShortcutModifiers};
+use crate::{EditCommand, Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
-    Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured,
-    NoFeedback, NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError,
-    SemanticNode, SemanticTree, ThemeResolver, Tree, TreeError,
+    CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList, EngineError,
+    EventPhase, EventReply, Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure,
+    Localizer, Measured, NoFeedback, NodeId, Point, PointerDetails, PointerEvent, Rect,
+    SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree, Services,
+    TextInputInfo, ThemeResolver, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -26,6 +27,12 @@ pub enum ControlEvent {
     Key(KeyEvent),
     /// Committed text (typing or IME) while focused.
     Text(String),
+    /// Input method composition while focused. A control that does not
+    /// use it gets the committed text as [`ControlEvent::Text`].
+    Compose(CompositionEvent),
+    /// An Edit menu command, or its Command-key chord that no control
+    /// used as a key, while focused.
+    Edit(EditCommand),
     FocusChanged(bool),
     /// The pointer entered (`true`) or left (`false`) the node, one of its
     /// descendants, or its overlay.
@@ -154,6 +161,8 @@ pub struct ControlContext<'a> {
     phase: EventPhase,
     time: f64,
     modifiers: ShortcutModifiers,
+    pointer: PointerDetails,
+    services: &'a Services,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
     feedback: &'a dyn Feedback,
     strings: &'a Localizer,
@@ -188,6 +197,26 @@ impl ControlContext<'_> {
     /// The modifier keys held during the event.
     pub fn modifiers(&self) -> ShortcutModifiers {
         self.modifiers
+    }
+    /// The click count of the pointer event: 2 for a double click and 3
+    /// for a triple click, within the system double-click interval.
+    pub fn click_count(&self) -> u32 {
+        self.pointer.click_count
+    }
+    /// The desktop services of the backend, which check its
+    /// capabilities.
+    pub fn services(&self) -> &Services {
+        self.services
+    }
+    /// The text on the clipboard, or `None` when the backend has no
+    /// clipboard, the clipboard has no text, or the read fails.
+    pub fn clipboard_text(&self) -> Option<String> {
+        self.services.clipboard_text().ok().flatten()
+    }
+    /// Puts `text` on the clipboard. Returns false when the backend has no
+    /// clipboard or the write fails.
+    pub fn write_clipboard(&mut self, text: &str) -> bool {
+        self.services.set_clipboard_text(text).is_ok()
     }
     /// The tree, for built-in controls that wrap a tree-based model.
     pub(crate) fn tree_mut(&mut self) -> &mut Tree {
@@ -280,6 +309,13 @@ pub trait CustomControl {
         self.semantics()
     }
 
+    /// The selection, the marked text, and the caret rectangle of an
+    /// editable text control, for the input method. Other controls return
+    /// `None`.
+    fn text_input(&self) -> Option<TextInputInfo> {
+        None
+    }
+
     /// Performs an assistive action listed in `semantics().actions`.
     fn perform(
         &mut self,
@@ -350,6 +386,10 @@ pub struct ControlHost {
     messages: Vec<(NodeId, ControlMessage)>,
     time: f64,
     modifiers: ShortcutModifiers,
+    /// The details of the pointer event in dispatch.
+    pointer: PointerDetails,
+    /// The desktop services, for the clipboard of text controls.
+    services: Services,
     /// The viewport of the last layout.
     viewport: Option<Rect>,
     /// Controls that are new or changed since the last layout, which
@@ -699,6 +739,8 @@ impl ControlHost {
                     phase,
                     time: self.time,
                     modifiers: self.modifiers,
+                    pointer: self.pointer,
+                    services: &self.services,
                     messages: &mut self.messages,
                     feedback: &*self.feedback.0,
                     strings: &self.strings.0,
@@ -828,6 +870,19 @@ impl ControlHost {
     /// press: no control gets it, and focus stays. Else pressing a
     /// focusable control focuses it.
     pub fn dispatch_pointer(&mut self, tree: &mut Tree, event: PointerEvent) {
+        self.dispatch_pointer_with(tree, event, PointerDetails::default());
+    }
+
+    /// Routes a pointer event as [`dispatch_pointer`](Self::dispatch_pointer)
+    /// does, with the device details of the event, such as its click
+    /// count.
+    pub fn dispatch_pointer_with(
+        &mut self,
+        tree: &mut Tree,
+        event: PointerEvent,
+        details: PointerDetails,
+    ) {
+        self.pointer = details;
         let target = self.route(tree, event.position());
         if matches!(event, PointerEvent::Move { .. } | PointerEvent::Down { .. }) {
             self.update_hover(tree, target);
@@ -907,9 +962,61 @@ impl ControlHost {
         if let KeyEvent::Down { key, .. } = event
             && !stopped
         {
-            stopped = self.dispatch_shortcut(tree, key);
+            stopped = EditCommand::from_shortcut(key, self.modifiers)
+                .is_some_and(|command| self.dispatch_edit(tree, command))
+                || self.dispatch_shortcut(tree, key);
         }
         stopped
+    }
+
+    /// Sends an Edit menu command to the focused control. Returns true
+    /// when the control used it.
+    pub fn dispatch_edit(&mut self, tree: &mut Tree, command: EditCommand) -> bool {
+        let Some(focus) = tree.focus() else {
+            return false;
+        };
+        self.deliver(
+            tree,
+            focus,
+            EventPhase::Target,
+            &ControlEvent::Edit(command),
+        ) == EventReply::Stop
+    }
+
+    /// Sends input method composition to the focused control. A control
+    /// that does not use composition gets a commit as committed text.
+    /// Returns true when the control used it.
+    pub fn dispatch_composition(&mut self, tree: &mut Tree, event: CompositionEvent) -> bool {
+        let Some(focus) = tree.focus() else {
+            return false;
+        };
+        let reply = self.deliver(
+            tree,
+            focus,
+            EventPhase::Target,
+            &ControlEvent::Compose(event.clone()),
+        );
+        match event {
+            _ if reply == EventReply::Stop => true,
+            CompositionEvent::Commit { text, .. } => self.dispatch_text(tree, &text),
+            _ => false,
+        }
+    }
+
+    /// The input method state of the focused control, when it edits text.
+    pub fn text_input(&self, tree: &Tree) -> Option<TextInputInfo> {
+        let focus = tree.focus()?;
+        if self.disabled.contains(&focus) {
+            return None;
+        }
+        self.controls.get(&focus)?.text_input()
+    }
+
+    /// Gives the controls the desktop services of the backend. Text
+    /// controls copy, cut, and paste through its clipboard. Without
+    /// clipboard support, Copy, Cut, and Paste do nothing.
+    pub fn set_services(&mut self, services: Services) {
+        self.services = services;
     }
 
     /// Sends a key that no focused control used to the first visible,
@@ -1263,6 +1370,8 @@ impl ControlHost {
             phase: EventPhase::Target,
             time: self.time,
             modifiers: self.modifiers,
+            pointer: self.pointer,
+            services: &self.services,
             messages: &mut self.messages,
             feedback: &*self.feedback.0,
             strings: &self.strings.0,

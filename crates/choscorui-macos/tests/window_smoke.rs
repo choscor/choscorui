@@ -134,13 +134,20 @@ fn main() {
     window.take_events();
     send_native_mouse_event(window.content_size().height, 1, c"mouseDown:", 0);
     assert!(window.take_events().iter().any(|event| matches!(event,
-        WindowEvent::Pointer { event: PointerEvent::Down { position, button: PointerButton::Primary }, modifiers }
-            if *position == Point::new(40.0, 30.0) && !modifiers.shift
+        WindowEvent::Pointer { event: PointerEvent::Down { position, button: PointerButton::Primary }, modifiers, details }
+            if *position == Point::new(40.0, 30.0) && !modifiers.shift && details.click_count == 1
     )));
     send_native_mouse_event(window.content_size().height, 2, c"mouseUp:", 1 << 17);
     assert!(window.take_events().iter().any(|event| matches!(event,
-        WindowEvent::Pointer { event: PointerEvent::Up { position, button: PointerButton::Primary }, modifiers }
+        WindowEvent::Pointer { event: PointerEvent::Up { position, button: PointerButton::Primary }, modifiers, .. }
             if *position == Point::new(40.0, 30.0) && modifiers.shift
+    )));
+    // The second press of a double click carries its click count.
+    let double = native_mouse_event(window.content_size().height, 1, 0, 2, 2);
+    native::send::<_, ()>(native::content_view(), c"mouseDown:", (double,));
+    assert!(window.take_events().iter().any(|event| matches!(event,
+        WindowEvent::Pointer { event: PointerEvent::Down { .. }, details, .. }
+            if details.click_count == 2
     )));
     send_native_mouse_event(window.content_size().height, 3, c"rightMouseDown:", 0);
     assert!(window.take_events().iter().any(|event| matches!(
@@ -212,6 +219,16 @@ fn main() {
             }))
     );
     // Vietnamese Telex composes "ệ" from marked "ê" in the same way.
+    // While the text is marked, the keys go to the input method only.
+    send_native_marked_text("ê", 1..1);
+    window.take_events();
+    send_native_key_event_text(10, c"keyDown:", 0x26, 0, false, false, "j");
+    assert!(
+        !window
+            .take_events()
+            .iter()
+            .any(|event| matches!(event, WindowEvent::Key { .. }))
+    );
     send_native_marked_text("ê", 1..1);
     send_native_ime_commit("ệ");
     let telex = window.take_events();
@@ -1046,6 +1063,7 @@ fn native_mouse_event(
     kind: usize,
     flags: usize,
     event_number: isize,
+    click_count: isize,
 ) -> native::Id {
     use native::{Id, NativePoint};
     let window = native::first_window();
@@ -1064,7 +1082,7 @@ fn native_mouse_event(
             number,
             std::ptr::null_mut::<std::ffi::c_void>(),
             event_number,
-            1isize,
+            click_count,
             1.0f32,
         ),
     );
@@ -1085,13 +1103,13 @@ fn send_native_mouse_event(
         native::send::<_, native::Id>(window, c"firstResponder", ()),
         view
     );
-    let event = native_mouse_event(content_height, kind, flags, 1);
+    let event = native_mouse_event(content_height, kind, flags, 1, 1);
     native::send::<_, ()>(view, method, (event,));
 }
 
 #[cfg(target_os = "macos")]
 fn send_native_mouse_through_window(content_height: f64) {
-    let event = native_mouse_event(content_height, 1, 0, 99);
+    let event = native_mouse_event(content_height, 1, 0, 99, 1);
     native::send::<_, ()>(native::first_window(), c"sendEvent:", (event,));
 }
 

@@ -275,13 +275,13 @@ impl DataTable {
         let g = &self.geometry;
         if let Some((editor, _)) = &self.filter {
             let focused = host.focused() && self.focus == Stop::Filter;
-            let state = editor.state(
+            let state = editor.hosted_state(
                 host.set(VisualState::FOCUSED, focused)
                     .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible()),
             );
             let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
             cx.slot(g.filter, &style, |_, _| {});
-            editor.paint_text(cx, g.filter_text, state);
+            editor.paint_hosted_text(cx, g.filter_text, state);
         }
         if let Some(label) = &self.columns_label {
             let state = self

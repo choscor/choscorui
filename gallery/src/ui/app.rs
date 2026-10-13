@@ -9,7 +9,7 @@ use crate::ui::page::PageStore;
 use crate::ui::shell::{GalleryRoot, Request, Shared, Theme, WindowState, binding, matching_pages};
 use choscorui::compose::Runtime;
 use choscorui::compose::view::{CommandMenu, Env, Localized, MenuChoice};
-use choscorui::controls::ShortcutModifiers;
+use choscorui::controls::{EditCommand, ShortcutModifiers};
 use choscorui::core::{Settings, Size};
 use choscorui::{App, AppContext, AppError, Scene, WindowId, WindowOptions};
 use std::cell::RefCell;
@@ -21,7 +21,7 @@ pub const DEFAULT_SIZE: Size = Size::new(1100.0, 720.0);
 const MINIMUM_SIZE: Size = Size::new(720.0, 480.0);
 
 /// The command menus in the current language: the application menu, File,
-/// View, and Go. The actions ask the application through the request
+/// Edit, View, and Go. The actions ask the application through the request
 /// queue, which it reads each turn.
 fn commands(shared: &Shared) -> Vec<CommandMenu> {
     let command = ShortcutModifiers {
@@ -58,6 +58,31 @@ fn commands(shared: &Shared) -> Vec<CommandMenu> {
             vec![
                 item("menu.new_window", Request::NewActiveWindow, 'n'),
                 item("menu.close_window", Request::CloseWindow, 'w'),
+            ],
+        ),
+        CommandMenu::new(
+            Localized::new("menu.edit"),
+            vec![
+                item("menu.undo", Request::Edit(EditCommand::Undo), 'z'),
+                MenuChoice::action(
+                    Localized::new("menu.redo"),
+                    ask(Request::Edit(EditCommand::Redo)),
+                )
+                .keyboard_shortcut(
+                    'z',
+                    ShortcutModifiers {
+                        shift: true,
+                        ..command
+                    },
+                ),
+                item("menu.cut", Request::Edit(EditCommand::Cut), 'x'),
+                item("menu.copy", Request::Edit(EditCommand::Copy), 'c'),
+                item("menu.paste", Request::Edit(EditCommand::Paste), 'v'),
+                item(
+                    "menu.select_all",
+                    Request::Edit(EditCommand::SelectAll),
+                    'a',
+                ),
             ],
         ),
         CommandMenu::new(
@@ -262,6 +287,11 @@ impl Gallery {
                     }
                 }
                 Request::StepPage(forward) => self.step_page(cx, forward),
+                Request::Edit(command) => {
+                    if let Some(host) = cx.active().and_then(|id| cx.host(id)) {
+                        host.edit(command);
+                    }
+                }
                 Request::Quit => cx.quit(),
             }
         }

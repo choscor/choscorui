@@ -236,7 +236,10 @@ a field that edits `text`, an accept button, and the validation
 message. The button is enabled only while the value is valid, and
 Return in the field accepts only a valid value. Both run `on_accept`
 with the value. `controls::InputDialog` validates the text for `kind`
-in the locale of the environment.
+in the locale of the environment. An Integer or Decimal field rejects
+keys that cannot make a number. A number below the minimum is
+incomplete while the user types, and invalid when the user accepts
+it. An accepted number gets the locale format.
 
 #### Examples
 

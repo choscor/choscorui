@@ -1089,18 +1089,60 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `Input::email`
+
+```rust
+pub fn email<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
+```
+
+An input for an email address. Return and blur mark text that is
+no email address invalid.
+
+#### `Input::filter`
+
+```rust
+pub fn filter(self, class: CharClass) -> Self
+```
+
+Allows only the characters of `class`. A key or a paste with
+another character changes nothing and beeps.
+
 #### `Input::masked`
 
 ```rust
-pub fn masked<M>(name: impl IntoLive<TextContent, M>, mask: InputMask, raw: Binding<String>) -> Self
+pub fn masked<M>(name: impl IntoLive<TextContent, M>, mask: InputMask, value: Binding<String>) -> Self
 ```
 
 An input that fits what the user types into `mask` and shows its
-literals. `raw` edits the characters that the user typed, without
-the literals. A deletion at the end removes typed characters until
-the shown text is no longer than what is left, so a mask does not
-put a deleted literal back. Check the value with
+literals. `value` edits the text with the literals, for example
+`(090) 512-3456`. A key that fits no slot changes nothing and
+beeps. A paste keeps the characters that fit. The caret keeps its
+place among the typed characters, and a deletion of a literal
+deletes the typed character before it. Check the value with
 `InputMask::validate`.
+
+##### Examples
+
+```rust
+struct Phone;
+
+impl View for Phone {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let phone = cx.state(String::new());
+        let mask = InputMask::parse("(000) 000-0000").expect("a valid mask");
+        Input::masked("Phone", mask, phone.binding())
+    }
+}
+```
+
+#### `Input::max_length`
+
+```rust
+pub fn max_length(self, length: usize) -> Self
+```
+
+Allows at most `length` grapheme clusters. A paste longer than the
+room left is cut to the room, and a key with no room beeps.
 
 #### `Input::new`
 
@@ -1110,13 +1152,49 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Se
 
 An input named `name` that edits `value`.
 
+#### `Input::number`
+
+```rust
+pub fn number<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
+```
+
+An input for a number. It takes digits, one leading minus, and one
+`.` only.
+
 #### `Input::password`
 
 ```rust
 pub fn password<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
 ```
 
-An input that hides what the user types.
+An input that hides what the user types. Cut and copy do nothing
+in it.
+
+#### `Input::search`
+
+```rust
+pub fn search<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
+```
+
+An input for a search query.
+
+#### `Input::tel`
+
+```rust
+pub fn tel<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
+```
+
+An input for a phone number. It takes digits, spaces, and
+`+ - ( ) .` only.
+
+#### `Input::url`
+
+```rust
+pub fn url<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self
+```
+
+An input for a web address, such as `https://example.com`. Return
+and blur mark other text invalid.
 
 ## `InputGroup`
 
@@ -1901,101 +1979,3 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry
 ```
 
 A select named `name` with `entries`; `selected` edits the chosen entry.
-
-## `Sidebar`
-
-type alias in `choscorui::prelude::Sidebar`
-
-```rust
-pub type Sidebar = Configured<Sidebar>;
-```
-
-Grouped navigation items; `selected` edits the chosen item.
-
-#### Examples
-
-```rust
-struct Navigation;
-
-impl View for Navigation {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let selected = cx.state(Some(0));
-        let items = vec![SidebarItem::new("Files", Icon::File), SidebarItem::new("Mail", Icon::Mail)];
-        Sidebar::new("Navigation", "Toggle sidebar", vec![("Main".to_owned(), items)], selected.binding())
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `Sidebar::new`
-
-```rust
-pub fn new<M, N>(name: impl IntoLive<TextContent, M>, toggle: impl IntoLive<TextContent, N>, groups: impl Items<(String, Vec<SidebarItem>)>, selected: Binding<Option<usize>>) -> Self
-```
-
-A sidebar named `name` with a `toggle` button and `groups` of items.
-
-## `SizeGrip`
-
-type alias in `choscorui::prelude::SizeGrip`
-
-```rust
-pub type SizeGrip = Configured<SizeGrip>;
-```
-
-A grip in the bottom trailing corner that resizes its window. A drag
-runs `on_resize` with the new content size, inside `minimum` and
-`maximum`. In right-to-left layouts the grip sits at the bottom left.
-
-#### Examples
-
-```rust
-let grip = SizeGrip::new(
-    Size::new(320.0, 240.0),
-    Size::new(1600.0, 1200.0),
-    |size| println!("{size:?}"),
-);
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `SizeGrip::new`
-
-```rust
-pub fn new(minimum: Size, maximum: Size, on_resize: impl Fn(Size) + 'static) -> Self
-```
-
-A size grip that keeps the size between `minimum` and `maximum`.
-
-## `Skeleton`
-
-type alias in `choscorui::prelude::Skeleton`
-
-```rust
-pub type Skeleton = Configured<Skeleton>;
-```
-
-A pulsing placeholder block of `width` by `height` points.
-
-#### Examples
-
-```rust
-let placeholder = Skeleton::new("Loading the title", 200.0, 16.0);
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `Skeleton::new`
-
-```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, width: f64, height: f64) -> Self
-```
-
-A skeleton block named `name` of `width` by `height` points.

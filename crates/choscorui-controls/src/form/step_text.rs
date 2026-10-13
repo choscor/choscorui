@@ -1,7 +1,6 @@
 //! The editable text of a spin box: one line of text with a caret and a
 //! selection, as in an input, next to the stepper column.
 
-use super::input::Editor;
 use crate::InputFilter;
 use crate::custom::{ControlContext, ControlEvent};
 use crate::range_controls::paint_stepper_box;
@@ -12,7 +11,7 @@ use choscorui_core::{EventReply, Localizer, Rect, SemanticNode};
 /// The text of a spin box. Its edits report no message: the spin box
 /// reports its value when the user commits the text.
 pub(crate) struct StepText {
-    editor: Editor,
+    editor: TextField,
 }
 
 impl StepText {
@@ -20,36 +19,36 @@ impl StepText {
     /// `filter` accepts.
     pub fn new(name: &str, text: &str, filter: InputFilter) -> Self {
         Self {
-            editor: Editor::quiet(TextField::new(name, text).with_filter(filter)),
+            editor: TextField::new(name, text).with_filter(filter).quiet(),
         }
     }
 
     pub fn text(&self) -> &str {
-        self.editor.field.value()
+        self.editor.value()
     }
 
     /// Replaces the text from outside the filter, and selects it all, so
     /// that typed text replaces it.
     pub fn set(&mut self, text: &str) {
-        self.editor.replace(text);
-        self.editor.field.select_all_text();
+        self.editor.replace_value(text);
+        self.editor.select_all_text();
     }
 
     /// Selects the whole text.
     pub fn select_all(&mut self) {
-        self.editor.field.select_all_text();
+        self.editor.select_all_text();
     }
 
     pub fn set_filter(&mut self, filter: InputFilter) {
-        self.editor.field.set_filter(filter);
+        self.editor.set_filter(filter);
     }
 
     pub fn set_validation(&mut self, validation: ValidationState) {
-        self.editor.field.set_validation_state(validation);
+        self.editor.set_validation_state(validation);
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
-        self.editor.field.set_enabled_state(enabled);
+        self.editor.set_enabled_state(enabled);
     }
 
     /// Handles an editing event for the text in `text`: a press places
@@ -62,26 +61,26 @@ impl StepText {
         text: Rect,
     ) -> (EventReply, bool) {
         let before = self.text().to_owned();
-        let reply = self.editor.event(cx, event, text);
+        let reply = self.editor.hosted_event(cx, event, text);
         (reply, self.text() != before)
     }
 
     /// The text part of the spin box's semantics.
     pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
-        self.editor.semantics(strings)
+        self.editor.hosted_semantics(strings)
     }
 
     /// The recipe flags: `host` with the text's focus, invalid, and
     /// disabled flags.
     pub fn state(&self, host: VisualState) -> VisualState {
-        self.editor.state(host)
+        self.editor.hosted_state(host)
     }
 
     /// Paints the input box, the text with its caret and selection, and
     /// the steppers at `steppers`.
     pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState, steppers: Rect) {
         paint_stepper_box(cx, state, steppers, |cx, rect| {
-            self.editor.paint_text(cx, rect, state);
+            self.editor.paint_hosted_text(cx, rect, state);
         });
     }
 }

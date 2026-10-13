@@ -1,7 +1,8 @@
 //! Hover tracking, input-device capabilities, and drag-and-drop contracts.
 
-use crate::{NodeId, Point, Tree};
+use crate::{NodeId, Point, Rect, Tree};
 use std::collections::BTreeSet;
+use std::ops::Range;
 
 /// Enter/leave notifications produced by [`HoverTracker::update`]. `left` is
 /// ordered deepest first and `entered` outermost first, matching the order
@@ -100,6 +101,39 @@ impl Default for PointerDetails {
             click_count: 1,
         }
     }
+}
+
+/// Input method composition for the focused text control. The ranges
+/// count UTF-16 code units of the control's text, as
+/// [`TextInputInfo`] reports it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CompositionEvent {
+    /// Shows `text` as marked text in place of `replacement_utf16`, or
+    /// of the current marked text or selection when it is `None`.
+    /// `selected_utf16` is the selection inside `text`.
+    Mark {
+        text: String,
+        selected_utf16: Range<usize>,
+        replacement_utf16: Option<Range<usize>>,
+    },
+    /// Inserts `text` in place of `replacement_utf16`, or of the marked
+    /// text or selection when it is `None`, and ends the composition.
+    Commit {
+        text: String,
+        replacement_utf16: Option<Range<usize>>,
+    },
+    /// Keeps the marked text as typed text and ends the composition.
+    Unmark,
+}
+
+/// What an input method reads from the focused text control: the
+/// selection and the marked text in UTF-16 code units, and the caret
+/// rectangle in window coordinates, where the candidate window opens.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextInputInfo {
+    pub selected_utf16: Range<usize>,
+    pub marked_utf16: Option<Range<usize>>,
+    pub caret: Rect,
 }
 
 /// Trackpad gestures. Controls without gesture support may ignore them;

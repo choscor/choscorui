@@ -11,7 +11,7 @@ use choscorui::compose::view::{
     HStack, HorizontalAlignment, Input, Localized, ScrollView, Spacer, Text, VStack,
     VerticalAlignment, View, ViewExt,
 };
-use choscorui::controls::{ButtonVariant, ControlSize};
+use choscorui::controls::{ButtonVariant, ControlSize, EditCommand};
 use choscorui::core::{
     BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, Locale, Space, TextPreset,
     fold_for_search,
@@ -77,6 +77,9 @@ pub enum Request {
     /// Show the next page (`true`) or the previous page of the active
     /// window, in sidebar order.
     StepPage(bool),
+    /// Perform an Edit menu command on the focused control of the active
+    /// window.
+    Edit(EditCommand),
     /// Quit the application.
     Quit,
 }

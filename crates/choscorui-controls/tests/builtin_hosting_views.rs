@@ -66,8 +66,7 @@ fn a_hosted_item_view_selects_activates_and_scrolls() {
     let mut h = Harness::new(rows(50));
     assert_eq!(h.semantics().role, SemanticRole::List);
     assert_eq!(h.semantics().name, "Rows");
-    h.click(row_point(3));
-    h.click(row_point(3));
+    h.double_click(row_point(3));
     h.key(Key::ArrowDown);
     h.key(Key::Enter);
     assert_eq!(
@@ -1255,4 +1254,54 @@ fn a_hosted_canvas_selects_activates_deletes_and_zooms() {
     h.click(Point::new(235.0, 35.0));
     h.key(Key::Escape);
     assert!(h.messages().is_empty());
+}
+
+#[test]
+fn a_double_click_on_a_resizable_handle_collapses_and_restores_the_pane() {
+    let resizable = Resizable::hosted(
+        "Sidebar",
+        SplitOrientation::Horizontal,
+        50.0,
+        50.0,
+        4.0,
+        100.0,
+    )
+    .unwrap();
+    let mut h = Harness::new(resizable);
+    h.place(rect(0.0, 0.0, 300.0, 100.0));
+    let handle = Point::new(102.0, 50.0);
+    h.double_click(handle);
+    assert_eq!(h.semantics().value.as_deref(), Some("50"), "collapsed");
+    let handle = Point::new(52.0, 50.0);
+    h.double_click(handle);
+    assert_eq!(h.semantics().value.as_deref(), Some("100"), "restored");
+    assert_eq!(
+        h.messages(),
+        [50.0, 100.0].map(|value| ControlMessage::Changed(ControlValue::Number(value)))
+    );
+}
+
+#[test]
+fn a_double_click_on_a_dock_splitter_collapses_and_restores_the_area() {
+    let bounds = rect(0.0, 0.0, 800.0, 600.0);
+    let splitter = |dock: &DockLayout| {
+        dock.arrange(bounds)
+            .splitters
+            .iter()
+            .find(|(area, _)| *area == DockArea::Left)
+            .unwrap()
+            .1
+            .center()
+    };
+    let mut h = Harness::new(dock());
+    h.place(bounds);
+    let open = splitter(&dock());
+    h.double_click(open);
+    let mut collapsed = dock();
+    collapsed.set_extent(DockArea::Left, 80.0);
+    h.double_click(splitter(&collapsed));
+    assert_eq!(
+        h.messages(),
+        [80.0, 240.0].map(|value| ControlMessage::Changed(ControlValue::Number(value)))
+    );
 }

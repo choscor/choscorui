@@ -13,15 +13,16 @@ use super::state::{Binding, Live, Memo, State};
 use super::storage::StorageError;
 use crate::reactive::{ReactiveError, Runtime, Subscription};
 use choscorui_controls::{
-    ControlHost, ControlKind, ControlMessage, CustomControl, HostEnv, ShortcutModifiers, Styles,
-    TextMeasure,
+    ControlHost, ControlKind, ControlMessage, CustomControl, EditCommand, HostEnv,
+    ShortcutModifiers, Styles, TextMeasure,
 };
 use choscorui_core::{
-    Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, Feedback, GridPlacement,
-    InputModality, ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine, LayoutKind,
-    LayoutStyle, Length, Measured, NodeId, Point, PointerEvent, RecipeSet, Rect, SemanticAction,
-    SemanticChange, SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size,
-    ThemeError, ThemeOverride, ThemeResolver, Track, Tree, TreeError,
+    Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList, EngineError, Feedback,
+    GridPlacement, InputModality, ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine,
+    LayoutKind, LayoutStyle, Length, Measured, NodeId, Point, PointerDetails, PointerEvent,
+    RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticError, SemanticNode,
+    SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError, ThemeOverride, ThemeResolver,
+    Track, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1039,6 +1040,8 @@ impl ViewHost {
             tooltip_node: None,
             menu_press: Rc::default(),
         };
+        let mut inner = inner;
+        inner.controls.set_services(env.services().clone());
         let mut host = Self {
             inner,
             root_scope: None,
@@ -1380,13 +1383,24 @@ impl ViewHost {
         self.flush();
     }
 
-    /// Routes a pointer event to the controls.
+    /// Routes a pointer event to the controls, as a single click.
     pub fn pointer(&mut self, event: PointerEvent, modifiers: ShortcutModifiers) {
+        self.pointer_with(event, modifiers, PointerDetails::default());
+    }
+
+    /// Routes a pointer event with its `details`, such as the click
+    /// count, to the controls.
+    pub fn pointer_with(
+        &mut self,
+        event: PointerEvent,
+        modifiers: ShortcutModifiers,
+        details: PointerDetails,
+    ) {
         self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
         self.inner
             .controls
-            .dispatch_pointer(&mut self.inner.tree, event);
+            .dispatch_pointer_with(&mut self.inner.tree, event, details);
         self.inner.needs_paint = true;
         self.after_input();
     }
@@ -1463,6 +1477,36 @@ impl ViewHost {
         self.inner.needs_paint = true;
         self.after_input();
         handled
+    }
+
+    /// Performs the edit `command`, such as Copy from the Edit menu, on
+    /// the focused control. Returns true when the control used it.
+    pub fn edit(&mut self, command: EditCommand) -> bool {
+        let handled = self
+            .inner
+            .controls
+            .dispatch_edit(&mut self.inner.tree, command);
+        self.inner.needs_paint = true;
+        self.after_input();
+        handled
+    }
+
+    /// Delivers an input method composition `event` to the focused
+    /// control. Returns true when the control used it.
+    pub fn composition(&mut self, event: CompositionEvent) -> bool {
+        let handled = self
+            .inner
+            .controls
+            .dispatch_composition(&mut self.inner.tree, event);
+        self.inner.needs_paint = true;
+        self.after_input();
+        handled
+    }
+
+    /// The selection, the marked text, and the caret of the focused text
+    /// control, for the input method of the window.
+    pub fn text_input(&self) -> Option<TextInputInfo> {
+        self.inner.controls.text_input(&self.inner.tree)
     }
 
     /// Performs an assistive action on `node`.

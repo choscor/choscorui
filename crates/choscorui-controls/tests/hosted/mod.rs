@@ -10,10 +10,14 @@ use choscorui_controls::{
     ControlHost, ControlMessage, CustomControl, EstimatedText, HostEnv, ShortcutModifiers, Styles,
 };
 use choscorui_core::{
-    Constraints, DesignTokens, DisplayCommand, DisplayList, InputModality, Key, KeyEvent,
-    LayoutDirection, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, Size, ThemeResolver, Tree,
+    BackendCapabilities, Constraints, DesignTokens, DisplayCommand, DisplayList, InputModality,
+    Key, KeyEvent, LayoutDirection, NodeId, Point, PointerButton, PointerDetails, PointerEvent,
+    Rect, SemanticAction, SemanticNode, ServiceBackend, ServiceError, Services, Size, Support,
+    ThemeResolver, Tree,
 };
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Harness {
     pub tree: Tree,
@@ -124,20 +128,44 @@ impl Harness {
     }
 
     pub fn click(&mut self, at: Point) {
-        self.host.dispatch_pointer(
+        self.press_count(at, 1);
+    }
+
+    /// A press and a release at `at` that count as click `count` of a
+    /// multiple click.
+    pub fn press_count(&mut self, at: Point, count: u32) {
+        let details = PointerDetails {
+            click_count: count,
+            ..PointerDetails::default()
+        };
+        self.host.dispatch_pointer_with(
             &mut self.tree,
             PointerEvent::Down {
                 position: at,
                 button: PointerButton::Primary,
             },
+            details,
         );
-        self.host.dispatch_pointer(
+        self.host.dispatch_pointer_with(
             &mut self.tree,
             PointerEvent::Up {
                 position: at,
                 button: PointerButton::Primary,
             },
+            details,
         );
+    }
+
+    /// The presses of a double click at `at`.
+    pub fn double_click(&mut self, at: Point) {
+        self.press_count(at, 1);
+        self.press_count(at, 2);
+    }
+
+    /// The presses of a triple click at `at`.
+    pub fn triple_click(&mut self, at: Point) {
+        self.double_click(at);
+        self.press_count(at, 3);
     }
 
     pub fn hover(&mut self, at: Point) {
@@ -159,6 +187,20 @@ impl Harness {
 
     pub fn text(&mut self, text: &str) -> bool {
         self.host.dispatch_text(&mut self.tree, text)
+    }
+
+    /// Presses `key` with `modifiers`, then releases the modifiers.
+    pub fn chord(&mut self, modifiers: ShortcutModifiers, key: Key) {
+        self.host.set_modifiers(modifiers);
+        self.key(key);
+        self.host.set_modifiers(ShortcutModifiers::default());
+    }
+
+    /// Gives the host `clipboard`, as a backend with clipboard support
+    /// does.
+    pub fn clipboard(&mut self, clipboard: &Rc<FakeClipboard>) {
+        let backend: Rc<dyn ServiceBackend> = clipboard.clone();
+        self.host.set_services(Services::new(backend));
     }
 
     pub fn perform(&mut self, action: SemanticAction, value: Option<&str>) -> bool {
@@ -187,6 +229,41 @@ impl Harness {
         self.host
             .set_enabled(&mut self.tree, self.node, enabled)
             .unwrap();
+    }
+}
+
+/// A clipboard in memory, as the system clipboard of a backend.
+#[derive(Default)]
+pub struct FakeClipboard {
+    pub text: RefCell<Option<String>>,
+}
+
+impl FakeClipboard {
+    pub fn with(text: &str) -> Rc<Self> {
+        Rc::new(Self {
+            text: RefCell::new(Some(text.to_owned())),
+        })
+    }
+
+    pub fn get(&self) -> Option<String> {
+        self.text.borrow().clone()
+    }
+}
+
+impl ServiceBackend for FakeClipboard {
+    fn capabilities(&self) -> BackendCapabilities {
+        let mut capabilities = BackendCapabilities::none("test");
+        capabilities.clipboard = Support::Supported;
+        capabilities
+    }
+
+    fn clipboard_text(&self) -> Result<Option<String>, ServiceError> {
+        Ok(self.get())
+    }
+
+    fn set_clipboard_text(&self, text: &str) -> Result<(), ServiceError> {
+        *self.text.borrow_mut() = Some(text.to_owned());
+        Ok(())
     }
 }
 

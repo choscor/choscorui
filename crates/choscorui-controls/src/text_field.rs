@@ -1,10 +1,11 @@
+use crate::editing::{CaretMotion, EditingKey, TextEdit, editing_key, is_typing_key, text_edit};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
-use crate::{Accepted, InputFilter, InputText, ValidationError};
+use crate::{Accepted, InputFilter, InputText, ShortcutModifiers, ValidationError};
 use choscorui_core::Localizer;
 use choscorui_core::{
-    Dirty, Key, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
+    CompositionEvent, Dirty, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, SemanticText,
-    Size, TextBuffer, TextMotion, Tree, TreeError,
+    Size, TextBuffer, TextInputInfo, TextMotion, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -12,6 +13,8 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextFieldInput {
     Text(String),
+    /// Text from the clipboard in place of the selection.
+    Paste(String),
     SetMarkedText {
         text: String,
         selected_utf16: Range<usize>,
@@ -23,16 +26,23 @@ pub enum TextFieldInput {
     },
     UnmarkMarkedText,
     CancelMarkedText,
+    /// A key with the held modifiers, through the shared editing key
+    /// map: Option moves and deletes by word, Command to the start or
+    /// end, and Shift extends the selection.
     Key {
         event: KeyEvent,
-        extend: bool,
-        word: bool,
+        modifiers: ShortcutModifiers,
     },
     SetValue(String),
     SetValidation(ValidationState),
     SetCaret {
         caret: usize,
         extend: bool,
+    },
+    /// Selects from `anchor` to `caret`, in grapheme indices.
+    SetSelection {
+        anchor: usize,
+        caret: usize,
     },
     Undo,
     Redo,
@@ -150,6 +160,9 @@ pub struct TextField {
     filter: InputFilter,
     /// Caret placement by pointer in a control host.
     pointer: HostedPointer,
+    /// True when a hosted edit reports no message, for a control that
+    /// reports its own value, such as a spin box.
+    quiet: bool,
 }
 
 impl TextField {
@@ -169,6 +182,7 @@ impl TextField {
             placeholder: String::new(),
             filter: InputFilter::new(),
             pointer: HostedPointer::default(),
+            quiet: false,
         }
     }
 
@@ -315,10 +329,6 @@ impl TextField {
         self.validation = validation;
     }
 
-    pub(crate) fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
     /// Enables or disables without a tree, for hosted inputs.
     pub(crate) fn set_enabled_state(&mut self, enabled: bool) {
         self.enabled = enabled;
@@ -356,9 +366,13 @@ impl TextField {
         if !tree.contains(id) {
             return Err(TreeError::MissingNode);
         }
+        // A blur ends a composition after the focus moved.
         let external = matches!(
             input,
-            TextFieldInput::SetValue(_) | TextFieldInput::SetValidation(_)
+            TextFieldInput::SetValue(_)
+                | TextFieldInput::SetValidation(_)
+                | TextFieldInput::UnmarkMarkedText
+                | TextFieldInput::CancelMarkedText
         );
         if (!self.enabled && !matches!(input, TextFieldInput::SetValidation(_)))
             || (!external && tree.focus() != Some(id))
@@ -373,7 +387,7 @@ impl TextField {
         let mut commit_rejected = false;
         let mut rejected = false;
         match input {
-            TextFieldInput::Text(text) => {
+            TextFieldInput::Text(text) | TextFieldInput::Paste(text) => {
                 self.composition = None;
                 let range = self.buffer.selection();
                 rejected = !self.edit(range, &text.replace(['\n', '\r'], ""));
@@ -442,57 +456,40 @@ impl TextField {
             TextFieldInput::SetCaret { caret, extend } => {
                 let _ = self.buffer.set_caret(caret, extend);
             }
+            TextFieldInput::SetSelection { anchor, caret } => {
+                let _ = self.buffer.set_selection(anchor, caret);
+            }
             TextFieldInput::SetValidation(validation) => {
                 self.validation = validation;
             }
+            // The input method owns the keys while it composes.
             TextFieldInput::Key {
                 event: KeyEvent::Down { key, repeat },
-                extend,
-                word,
-            } => match key {
-                Key::Backspace | Key::Delete if self.filter.mask().is_some() => {
+                modifiers,
+            } if self.composition.is_none() => match editing_key(key, modifiers) {
+                Some(EditingKey::Move { motion, extend }) => {
+                    self.buffer.move_caret(line_motion(motion), extend);
+                }
+                // A mask keeps its literals, so a delete goes through
+                // the filter.
+                Some(EditingKey::Delete(motion)) if self.filter.mask().is_some() => {
                     let selection = self.buffer.selection();
-                    let (caret, count) = (self.buffer.caret(), self.buffer.grapheme_count());
-                    let range = if !selection.is_empty() {
-                        selection
-                    } else if key == Key::Backspace {
-                        caret.saturating_sub(1)..caret
+                    let range = if selection.is_empty() {
+                        let caret = self.buffer.caret();
+                        let target = self.buffer.motion_target(line_motion(motion));
+                        caret.min(target)..caret.max(target)
                     } else {
-                        caret..(caret + 1).min(count)
+                        selection
                     };
                     if !range.is_empty() {
                         self.edit(range, "");
                     }
                 }
-                Key::Backspace => self.buffer.delete_backward(),
-                Key::Delete => self.buffer.delete_forward(),
-                Key::ArrowLeft => {
-                    self.buffer.move_caret(
-                        if word {
-                            TextMotion::WordLeft
-                        } else {
-                            TextMotion::Left
-                        },
-                        extend,
-                    );
+                Some(EditingKey::Delete(motion)) => {
+                    let target = self.buffer.motion_target(line_motion(motion));
+                    let _ = self.buffer.delete_to(target);
                 }
-                Key::ArrowRight => {
-                    self.buffer.move_caret(
-                        if word {
-                            TextMotion::WordRight
-                        } else {
-                            TextMotion::Right
-                        },
-                        extend,
-                    );
-                }
-                Key::Home => {
-                    self.buffer.move_caret(TextMotion::Start, extend);
-                }
-                Key::End => {
-                    self.buffer.move_caret(TextMotion::End, extend);
-                }
-                Key::Enter if !repeat => {
+                Some(EditingKey::Enter) if !repeat => {
                     if self.validation == ValidationState::Valid {
                         committed = true;
                     } else {
@@ -648,6 +645,24 @@ impl TextField {
     }
 }
 
+/// The single-line motion of a caret motion: a line is the whole text.
+fn line_motion(motion: CaretMotion) -> TextMotion {
+    match motion {
+        CaretMotion::Left => TextMotion::Left,
+        CaretMotion::Right => TextMotion::Right,
+        CaretMotion::WordLeft => TextMotion::WordLeft,
+        CaretMotion::WordRight => TextMotion::WordRight,
+        CaretMotion::LineStart
+        | CaretMotion::Up
+        | CaretMotion::PageUp
+        | CaretMotion::DocumentStart => TextMotion::Start,
+        CaretMotion::LineEnd
+        | CaretMotion::Down
+        | CaretMotion::PageDown
+        | CaretMotion::DocumentEnd => TextMotion::End,
+    }
+}
+
 /// Where each caret stop of the painted text is, so a press in a control
 /// host can place the caret. Paint records it; events read it.
 #[derive(Default)]
@@ -672,6 +687,27 @@ impl CaretStops {
             .min_by(|(_, a), (_, b)| (*a - offset).abs().total_cmp(&(*b - offset).abs()))
             .map_or(0, |(index, _)| index)
     }
+
+    /// The caret rectangle at caret stop `index`, in window coordinates.
+    fn caret_rect(&self, index: usize) -> Rect {
+        let offset = self.offsets.get(index).copied().unwrap_or(0.0) - self.scroll;
+        let x = if self.rtl {
+            self.rect.max_x() - offset
+        } else {
+            self.rect.origin.x + offset
+        };
+        Rect::from_xywh(x, self.rect.origin.y, 1.0, self.rect.size.height)
+    }
+}
+
+/// The unit that a held press selects by: characters after one click,
+/// words after a double click, and the whole text after a triple click.
+#[derive(Clone, Debug, PartialEq)]
+enum DragUnit {
+    Character,
+    /// The word of the double click.
+    Word(Range<usize>),
+    All,
 }
 
 /// The pointer state of a hosted field: the caret stops of the last paint
@@ -679,9 +715,13 @@ impl CaretStops {
 #[derive(Default)]
 struct HostedPointer {
     stops: RefCell<CaretStops>,
-    dragging: bool,
+    drag: Option<DragUnit>,
 }
 
+/// The hosted behavior of a field: pointer selection with the click
+/// count, the shared editing keys, Edit commands with the clipboard, and
+/// input method composition. Input, InputGroup, Command, and the other
+/// controls with an editable line use it.
 impl TextField {
     /// Runs `input` through `handle` and reports an edit as
     /// `Changed(Text)` and a commit as `Activated`.
@@ -696,30 +736,290 @@ impl TextField {
                 cx.beep();
                 return;
             }
-            TextFieldChange::Edited => cx.emit(crate::ControlMessage::Changed(
+            TextFieldChange::Edited if !self.quiet => cx.emit(crate::ControlMessage::Changed(
                 crate::ControlValue::Text(self.value().to_owned()),
             )),
-            TextFieldChange::Committed => cx.emit(crate::ControlMessage::Activated),
+            TextFieldChange::Committed if !self.quiet => cx.emit(crate::ControlMessage::Activated),
             _ => {}
         }
         cx.request_paint();
         cx.request_semantics();
     }
 
-    /// The field input for a key-down event with the held modifiers, or
-    /// `None` for a key that the field leaves to its ancestors.
-    fn key_input(key: Key, modifiers: crate::ShortcutModifiers) -> Option<TextFieldInput> {
-        Some(match (key, modifiers.command) {
-            (Key::Character('a'), true) => TextFieldInput::SelectAll,
-            (Key::Character('z'), true) if modifiers.shift => TextFieldInput::Redo,
-            (Key::Character('z'), true) => TextFieldInput::Undo,
-            (Key::Character('x'), true) => TextFieldInput::Cut,
-            (Key::Tab | Key::Escape, _) | (_, true) => return None,
-            (_, false) => TextFieldInput::Key {
-                event: KeyEvent::Down { key, repeat: false },
-                extend: modifiers.shift,
-                word: modifiers.option,
+    /// A press at `position` with the click count of the event: one click
+    /// places the caret, two select a word, and three select the text.
+    fn press(&mut self, cx: &mut crate::ControlContext<'_>, x: f64) {
+        cx.request_focus();
+        // A press commits marked text, as AppKit does.
+        if self.composition.is_some() {
+            self.apply(cx, TextFieldInput::UnmarkMarkedText);
+        }
+        let caret = self.pointer.stops.borrow().caret_at(x);
+        let (input, unit) = match cx.click_count() {
+            0 | 1 => (
+                TextFieldInput::SetCaret {
+                    caret,
+                    extend: cx.modifiers().shift,
+                },
+                DragUnit::Character,
+            ),
+            2 => {
+                let word = self.buffer.word_range(caret);
+                let input = TextFieldInput::SetSelection {
+                    anchor: word.start,
+                    caret: word.end,
+                };
+                (input, DragUnit::Word(word))
+            }
+            _ => (TextFieldInput::SelectAll, DragUnit::All),
+        };
+        self.apply(cx, input);
+        self.pointer.drag = Some(unit);
+        cx.capture_pointer(true);
+        cx.request_paint();
+    }
+
+    /// A drag of a held press to `x`, by the unit of the press.
+    fn drag(&mut self, cx: &mut crate::ControlContext<'_>, x: f64) {
+        let caret = self.pointer.stops.borrow().caret_at(x);
+        let input = match self.pointer.drag.clone() {
+            Some(DragUnit::Character) => TextFieldInput::SetCaret {
+                caret,
+                extend: true,
             },
+            Some(DragUnit::Word(word)) => {
+                let over = self.buffer.word_range(caret);
+                if caret < word.start {
+                    TextFieldInput::SetSelection {
+                        anchor: word.end,
+                        caret: over.start,
+                    }
+                } else {
+                    TextFieldInput::SetSelection {
+                        anchor: word.start,
+                        caret: over.end.max(word.end),
+                    }
+                }
+            }
+            Some(DragUnit::All) | None => return,
+        };
+        self.apply(cx, input);
+    }
+
+    /// Ends a held press.
+    fn release(&mut self, cx: &mut crate::ControlContext<'_>) {
+        if self.pointer.drag.take().is_some() {
+            cx.capture_pointer(false);
+        }
+    }
+
+    /// Runs an Edit command: Copy and Cut through the clipboard, except in
+    /// a password field, Paste from it, and the other commands on the
+    /// text.
+    fn edit_command(&mut self, cx: &mut crate::ControlContext<'_>, command: crate::EditCommand) {
+        let selected = (!self.secure).then(|| self.buffer.selected_text().to_owned());
+        let input = match text_edit(cx, command, selected.as_deref()) {
+            Some(TextEdit::Cut) => TextFieldInput::Cut,
+            Some(TextEdit::Paste(text)) => TextFieldInput::Paste(text),
+            Some(TextEdit::SelectAll) => TextFieldInput::SelectAll,
+            Some(TextEdit::Undo) => TextFieldInput::Undo,
+            Some(TextEdit::Redo) => TextFieldInput::Redo,
+            None => return,
+        };
+        self.apply(cx, input);
+    }
+
+    /// The field input for an input method event.
+    fn composition_input(event: &CompositionEvent) -> TextFieldInput {
+        match event.clone() {
+            CompositionEvent::Mark {
+                text,
+                selected_utf16,
+                replacement_utf16,
+            } => TextFieldInput::SetMarkedText {
+                text,
+                selected_utf16,
+                replacement_utf16,
+            },
+            CompositionEvent::Commit {
+                text,
+                replacement_utf16,
+            } => TextFieldInput::CommitMarkedText {
+                text,
+                replacement_utf16,
+            },
+            CompositionEvent::Unmark => TextFieldInput::UnmarkMarkedText,
+        }
+    }
+
+    /// Handles `event` in a control host for text that paints in `text`.
+    /// A press in `text` or in the node's bounds edits. Returns
+    /// `Continue` for events that the field does not use.
+    pub(crate) fn hosted_event(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
+        text: Rect,
+    ) -> choscorui_core::EventReply {
+        use crate::ControlEvent;
+        use choscorui_core::EventReply;
+        let modifiers = cx.modifiers();
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if text.contains(*position) || cx.bounds().contains(*position) => {
+                self.press(cx, position.x);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position })
+                if self.pointer.drag.is_some() =>
+            {
+                self.drag(cx, position.x);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.pointer.drag.is_some() => {
+                self.release(cx);
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, repeat }) if cx.is_focused() => {
+                // One line of text keeps no Tab: Tab moves the focus.
+                if !matches!(editing_key(*key, modifiers), None | Some(EditingKey::Tab)) {
+                    let event = KeyEvent::Down {
+                        key: *key,
+                        repeat: *repeat,
+                    };
+                    self.apply(cx, TextFieldInput::Key { event, modifiers });
+                    EventReply::Stop
+                } else if is_typing_key(*key, modifiers) {
+                    // The typed text arrives as `Text`.
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
+                }
+            }
+            ControlEvent::Text(text) if cx.is_focused() => {
+                self.apply(cx, TextFieldInput::Text(text.clone()));
+                EventReply::Stop
+            }
+            ControlEvent::Compose(composition) if cx.is_focused() => {
+                self.apply(cx, Self::composition_input(composition));
+                EventReply::Stop
+            }
+            ControlEvent::Edit(command) if cx.is_focused() => {
+                self.edit_command(cx, *command);
+                EventReply::Stop
+            }
+            ControlEvent::FocusChanged(focused) => {
+                if !focused && self.composition.is_some() {
+                    self.apply(cx, TextFieldInput::UnmarkMarkedText);
+                }
+                self.release(cx);
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::Dismiss => {
+                self.release(cx);
+                cx.request_paint();
+                EventReply::Continue
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    /// Paints the text, selection, marks, and caret inside `rect`, and
+    /// records the caret stops for pointer input.
+    pub(crate) fn paint_hosted_text(
+        &self,
+        cx: &mut PaintContext<'_>,
+        rect: Rect,
+        state: VisualState,
+    ) {
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
+        let display = self.display_value();
+        let offsets: Vec<f64> = choscorui_core::grapheme_boundaries(&display)
+            .iter()
+            .map(|end| cx.measure(&display[..*end], &style))
+            .collect();
+        let caret_x = offsets.get(self.caret()).copied().unwrap_or(0.0);
+        let scroll = if state.focused() {
+            (caret_x - rect.size.width + 1.0).max(0.0)
+        } else {
+            0.0
+        };
+        *self.pointer.stops.borrow_mut() = CaretStops {
+            rect,
+            scroll,
+            rtl: cx.rtl,
+            offsets,
+        };
+        self.paint_text(cx, rect, state);
+    }
+
+    /// The recipe flags: `host` with focus, invalid, and disabled from
+    /// the model.
+    pub(crate) fn hosted_state(&self, host: VisualState) -> VisualState {
+        self.state_for(host.focused()).with(host)
+    }
+
+    /// The semantic node of the field in a host, which reports focus,
+    /// with the validation message in the locale of `strings`.
+    pub(crate) fn hosted_semantics(&self, strings: &Localizer) -> SemanticNode {
+        self.semantics_for(false, strings).shared()
+    }
+
+    /// A field whose hosted edits report no `Changed` or `Activated`
+    /// message.
+    pub(crate) fn quiet(mut self) -> Self {
+        self.quiet = true;
+        self
+    }
+
+    /// Replaces the value for an assistive `SetValue`. Returns false while
+    /// disabled.
+    pub(crate) fn hosted_set_value(
+        &mut self,
+        cx: &mut crate::ControlContext<'_>,
+        value: &str,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        self.apply(cx, TextFieldInput::SetValue(value.to_owned()));
+        true
+    }
+
+    /// Takes `Text` from the application without a `Changed` message,
+    /// also while disabled, as [`CustomControl::set_value`] describes.
+    ///
+    /// [`CustomControl::set_value`]: crate::CustomControl::set_value
+    pub(crate) fn take_text(&mut self, value: &crate::ControlValue) -> bool {
+        let crate::ControlValue::Text(text) = value else {
+            return false;
+        };
+        self.replace_value(text);
+        true
+    }
+
+    /// The input method state from the caret stops of the last paint.
+    pub(crate) fn hosted_text_input(&self) -> Option<TextInputInfo> {
+        if !self.enabled {
+            return None;
+        }
+        let caret = match &self.composition {
+            Some(composition) => {
+                composition.replacement.start
+                    + choscorui_core::grapheme_boundaries(&composition.text).len()
+                    - 1
+            }
+            None => self.caret(),
+        };
+        Some(TextInputInfo {
+            selected_utf16: self
+                .semantics_for(false, Localizer::builtin())
+                .selection_utf16,
+            marked_utf16: self.marked_range_utf16(),
+            caret: self.pointer.stops.borrow().caret_rect(caret),
         })
     }
 }
@@ -738,93 +1038,26 @@ impl crate::CustomControl for TextField {
         cx: &mut crate::ControlContext<'_>,
         event: &crate::ControlEvent,
     ) -> choscorui_core::EventReply {
-        use crate::ControlEvent;
-        use choscorui_core::EventReply;
         if cx.phase() != choscorui_core::EventPhase::Target {
-            return EventReply::Continue;
+            return choscorui_core::EventReply::Continue;
         }
-        let modifiers = cx.modifiers();
-        match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if cx.bounds().contains(*position) => {
-                cx.request_focus();
-                let caret = self.pointer.stops.borrow().caret_at(position.x);
-                let extend = modifiers.shift;
-                self.apply(cx, TextFieldInput::SetCaret { caret, extend });
-                self.pointer.dragging = true;
-                cx.capture_pointer(true);
-                cx.request_paint();
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) if self.pointer.dragging => {
-                let caret = self.pointer.stops.borrow().caret_at(position.x);
-                self.apply(
-                    cx,
-                    TextFieldInput::SetCaret {
-                        caret,
-                        extend: true,
-                    },
-                );
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.pointer.dragging => {
-                self.pointer.dragging = false;
-                cx.capture_pointer(false);
-                EventReply::Stop
-            }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) if cx.is_focused() => {
-                match Self::key_input(*key, modifiers) {
-                    Some(input) => {
-                        self.apply(cx, input);
-                        EventReply::Stop
-                    }
-                    None => EventReply::Continue,
-                }
-            }
-            ControlEvent::Text(text) if cx.is_focused() => {
-                self.apply(cx, TextFieldInput::Text(text.clone()));
-                EventReply::Stop
-            }
-            ControlEvent::FocusChanged(_) | ControlEvent::Dismiss => {
-                if self.pointer.dragging {
-                    self.pointer.dragging = false;
-                    cx.capture_pointer(false);
-                }
-                cx.request_paint();
-                EventReply::Continue
-            }
-            _ => EventReply::Continue,
-        }
+        let bounds = cx.bounds();
+        self.hosted_event(cx, event, bounds)
     }
 
     /// Paints like [`TextField::paint`] with the host's focus, and records
     /// the caret stops for pointer input.
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = self.state_for(cx.state.focused()).with(cx.state);
+        let state = self.hosted_state(cx.state);
         let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
         let bounds = cx.bounds;
         cx.slot(bounds, &style, |cx, rect| {
-            let display = self.display_value();
-            let offsets: Vec<f64> = choscorui_core::grapheme_boundaries(&display)
-                .iter()
-                .map(|end| cx.measure(&display[..*end], &style))
-                .collect();
-            let caret_x = offsets.get(self.caret()).copied().unwrap_or(0.0);
-            let scroll = if state.focused() {
-                (caret_x - rect.size.width + 1.0).max(0.0)
-            } else {
-                0.0
-            };
-            *self.pointer.stops.borrow_mut() = CaretStops {
-                rect,
-                scroll,
-                rtl: cx.rtl,
-                offsets,
-            };
-            self.paint_text(cx, rect, state);
+            self.paint_hosted_text(cx, rect, state)
         });
+    }
+
+    fn text_input(&self) -> Option<TextInputInfo> {
+        self.hosted_text_input()
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -842,11 +1075,7 @@ impl crate::CustomControl for TextField {
         value: Option<&str>,
     ) -> bool {
         match action {
-            CoreSemanticAction::SetValue if self.enabled => {
-                let text = value.unwrap_or_default().to_owned();
-                self.apply(cx, TextFieldInput::SetValue(text));
-                true
-            }
+            CoreSemanticAction::SetValue => self.hosted_set_value(cx, value.unwrap_or_default()),
             CoreSemanticAction::Focus => {
                 cx.request_focus();
                 true
@@ -858,17 +1087,11 @@ impl crate::CustomControl for TextField {
     fn set_enabled(&mut self, enabled: bool) {
         self.set_enabled_state(enabled);
         if !enabled {
-            self.pointer.dragging = false;
+            self.pointer.drag = None;
         }
     }
 
     fn set_value(&mut self, value: &crate::ControlValue) -> bool {
-        match value {
-            crate::ControlValue::Text(text) => {
-                self.replace_value(text);
-                true
-            }
-            _ => false,
-        }
+        self.take_text(value)
     }
 }

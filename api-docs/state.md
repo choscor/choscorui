@@ -291,6 +291,16 @@ pub fn locale(&self) -> Locale
 
 The locale. Inside a live property, the read is recorded.
 
+#### `Env::localizer`
+
+```rust
+pub fn localizer(&self) -> Localizer
+```
+
+The catalog and the locale as a `Localizer`. Controls take it
+for their built-in messages. Inside a live property, the locale
+read is recorded.
+
 #### `Env::new`
 
 ```rust
@@ -356,8 +366,9 @@ The storage of stored state, if the application has one.
 pub fn text(&self, id: &str, args: &[(&str, &str)]) -> String
 ```
 
-The translation of `id` with `args`, or `id` itself when the
-catalog has no entry. Inside a live property, the locale read is
+The translation of `id` with `args`, or `id` itself when no catalog
+has it. An id that the catalog does not define comes from the
+built-in catalog. Inside a live property, the locale read is
 recorded.
 
 #### `Env::text_env`

@@ -4,8 +4,9 @@ mod geometry;
 pub use geometry::{PixelRect, ScaleFactor, Transform};
 mod input;
 pub use input::{
-    DragEvent, DragFormat, DragItem, DragOperation, DragOperations, DropRouter, GestureEvent,
-    HoverChange, HoverTracker, InputCapabilities, PointerDetails, PointerKind, negotiate_drag,
+    CompositionEvent, DragEvent, DragFormat, DragItem, DragOperation, DragOperations, DropRouter,
+    GestureEvent, HoverChange, HoverTracker, InputCapabilities, PointerDetails, PointerKind,
+    TextInputInfo, negotiate_drag,
 };
 mod path;
 pub use path::{

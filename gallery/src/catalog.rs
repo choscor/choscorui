@@ -249,6 +249,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("TextField", "text-field"),
     ("ValidationState", "text-field"),
     ("InputText", "text-field"),
+    ("EditCommand", "text-field"),
     ("TextEditor", "text-editor"),
     ("NumberInput", "number-input"),
     ("InputMask", "input-mask"),

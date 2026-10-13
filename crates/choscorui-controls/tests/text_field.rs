@@ -1,6 +1,7 @@
 use choscorui_controls::{
-    ControlKind, EstimatedText, PaintContext, Recipe, ResolvedStyle, StyleQuery, Styles, TextField,
-    TextFieldChange, TextFieldInput, TextFieldSemanticAction, ValidationKind, ValidationState,
+    ControlKind, EstimatedText, PaintContext, Recipe, ResolvedStyle, ShortcutModifiers, StyleQuery,
+    Styles, TextField, TextFieldChange, TextFieldInput, TextFieldSemanticAction, ValidationKind,
+    ValidationState,
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent, Point,
@@ -44,8 +45,7 @@ fn inserted_text_and_backspace_edit_whole_graphemes_and_invalidate() {
                         key: Key::Backspace,
                         repeat: false
                     },
-                    extend: false,
-                    word: false
+                    modifiers: ShortcutModifiers::default()
                 }
             )
             .unwrap(),
@@ -74,8 +74,7 @@ fn keyboard_navigation_commit_and_undo_are_separate_events() {
                     key: Key::Home,
                     repeat: false,
                 },
-                extend: false,
-                word: false,
+                modifiers: ShortcutModifiers::default(),
             },
         )
         .unwrap();
@@ -88,8 +87,10 @@ fn keyboard_navigation_commit_and_undo_are_separate_events() {
                     key: Key::ArrowRight,
                     repeat: false,
                 },
-                extend: true,
-                word: false,
+                modifiers: ShortcutModifiers {
+                    shift: true,
+                    ..ShortcutModifiers::default()
+                },
             },
         )
         .unwrap();
@@ -116,8 +117,7 @@ fn keyboard_navigation_commit_and_undo_are_separate_events() {
                         key: Key::Enter,
                         repeat: false
                     },
-                    extend: false,
-                    word: false
+                    modifiers: ShortcutModifiers::default()
                 }
             )
             .unwrap(),
@@ -175,8 +175,7 @@ fn single_line_text_normalizes_line_breaks_and_delete_is_grapheme_safe() {
                     key: Key::Home,
                     repeat: false,
                 },
-                extend: false,
-                word: false,
+                modifiers: ShortcutModifiers::default(),
             },
         )
         .unwrap();
@@ -189,8 +188,7 @@ fn single_line_text_normalizes_line_breaks_and_delete_is_grapheme_safe() {
                     key: Key::ArrowRight,
                     repeat: false,
                 },
-                extend: false,
-                word: false,
+                modifiers: ShortcutModifiers::default(),
             },
         )
         .unwrap();
@@ -204,8 +202,7 @@ fn single_line_text_normalizes_line_breaks_and_delete_is_grapheme_safe() {
                         key: Key::Delete,
                         repeat: false
                     },
-                    extend: false,
-                    word: false
+                    modifiers: ShortcutModifiers::default()
                 }
             )
             .unwrap(),
@@ -571,8 +568,7 @@ fn validation_state_is_separate_and_only_valid_value_commits() {
                         key: Key::Enter,
                         repeat: false
                     },
-                    extend: false,
-                    word: false
+                    modifiers: ShortcutModifiers::default()
                 }
             )
             .unwrap(),
@@ -612,8 +608,7 @@ fn validation_state_is_separate_and_only_valid_value_commits() {
                         key: Key::Enter,
                         repeat: false
                     },
-                    extend: false,
-                    word: false
+                    modifiers: ShortcutModifiers::default()
                 }
             )
             .unwrap(),
@@ -649,4 +644,149 @@ fn select_all_and_cut_expose_clipboard_command_seams() {
         TextFieldChange::Edited
     );
     assert_eq!(field.value(), "Xin chào 👩‍💻");
+}
+
+/// Sends `key` with `modifiers` to a focused field.
+fn edit_key(
+    tree: &mut Tree,
+    id: choscorui_core::NodeId,
+    field: &mut TextField,
+    key: Key,
+    modifiers: ShortcutModifiers,
+) {
+    let event = KeyEvent::Down { key, repeat: false };
+    field
+        .handle(tree, id, TextFieldInput::Key { event, modifiers })
+        .unwrap();
+}
+
+const COMMAND: ShortcutModifiers = ShortcutModifiers {
+    shift: false,
+    control: false,
+    option: false,
+    command: true,
+};
+const OPTION: ShortcutModifiers = ShortcutModifiers {
+    shift: false,
+    control: false,
+    option: true,
+    command: false,
+};
+
+fn shifted(modifiers: ShortcutModifiers) -> ShortcutModifiers {
+    ShortcutModifiers {
+        shift: true,
+        ..modifiers
+    }
+}
+
+#[test]
+fn command_arrows_go_to_the_line_ends_and_shift_extends() {
+    let (mut tree, id, mut field) = setup();
+    tree.set_focus(Some(id)).unwrap();
+    field
+        .handle(&mut tree, id, TextFieldInput::SetValue("one two".into()))
+        .unwrap();
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, COMMAND);
+    assert_eq!(field.selection(), 0..0);
+    edit_key(&mut tree, id, &mut field, Key::ArrowRight, COMMAND);
+    assert_eq!(field.selection(), 7..7);
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, shifted(COMMAND));
+    assert_eq!(
+        field.selection(),
+        0..7,
+        "Shift+Command+Left selects to the start"
+    );
+    edit_key(&mut tree, id, &mut field, Key::ArrowUp, COMMAND);
+    assert_eq!(field.selection(), 0..0, "Command+Up goes to the start");
+    edit_key(&mut tree, id, &mut field, Key::ArrowDown, shifted(COMMAND));
+    assert_eq!(
+        field.selection(),
+        0..7,
+        "Shift+Command+Down selects to the end"
+    );
+}
+
+#[test]
+fn option_arrows_move_by_word_and_shift_extends() {
+    let (mut tree, id, mut field) = setup();
+    tree.set_focus(Some(id)).unwrap();
+    field
+        .handle(
+            &mut tree,
+            id,
+            TextFieldInput::SetValue("one two three".into()),
+        )
+        .unwrap();
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, OPTION);
+    assert_eq!(field.selection(), 8..8);
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, shifted(OPTION));
+    assert_eq!(field.selection(), 4..8);
+    edit_key(&mut tree, id, &mut field, Key::ArrowRight, OPTION);
+    assert_eq!(
+        field.selection(),
+        8..8,
+        "a move collapses to the selection end"
+    );
+    edit_key(&mut tree, id, &mut field, Key::ArrowRight, shifted(OPTION));
+    assert_eq!(field.selection(), 8..13);
+}
+
+#[test]
+fn command_and_option_backspace_delete_to_the_line_start_and_by_word() {
+    let (mut tree, id, mut field) = setup();
+    tree.set_focus(Some(id)).unwrap();
+    field
+        .handle(
+            &mut tree,
+            id,
+            TextFieldInput::SetValue("one two three".into()),
+        )
+        .unwrap();
+    edit_key(&mut tree, id, &mut field, Key::Backspace, OPTION);
+    assert_eq!(field.value(), "one two ");
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, COMMAND);
+    edit_key(&mut tree, id, &mut field, Key::Delete, OPTION);
+    assert_eq!(
+        field.value(),
+        " two ",
+        "Option+Delete deletes the next word"
+    );
+    edit_key(&mut tree, id, &mut field, Key::ArrowRight, OPTION);
+    edit_key(&mut tree, id, &mut field, Key::Backspace, COMMAND);
+    assert_eq!(field.value(), " ", "Command+Backspace deletes to the start");
+    field.handle(&mut tree, id, TextFieldInput::Undo).unwrap();
+    assert_eq!(field.value(), " two ", "each deletion is one undo step");
+    edit_key(&mut tree, id, &mut field, Key::ArrowLeft, COMMAND);
+    edit_key(&mut tree, id, &mut field, Key::Delete, COMMAND);
+    assert_eq!(field.value(), "", "Command+Delete deletes to the end");
+}
+
+#[test]
+fn keys_wait_while_an_input_method_composes() {
+    let (mut tree, id, mut field) = setup();
+    tree.set_focus(Some(id)).unwrap();
+    field
+        .handle(&mut tree, id, TextFieldInput::SetValue("ab".into()))
+        .unwrap();
+    field
+        .handle(
+            &mut tree,
+            id,
+            TextFieldInput::SetMarkedText {
+                text: "か".into(),
+                selected_utf16: 1..1,
+                replacement_utf16: None,
+            },
+        )
+        .unwrap();
+    edit_key(
+        &mut tree,
+        id,
+        &mut field,
+        Key::Backspace,
+        ShortcutModifiers::default(),
+    );
+    assert_eq!(field.value(), "ab", "the input method owns Backspace");
+    assert_eq!(field.display_value(), "abか");
 }

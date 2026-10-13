@@ -66,8 +66,8 @@ A panic in a native callback does not unwind into AppKit. The backend catches it
 | `ScaleChanged { scale }` | The backing scale changed, for example after a move to a different display. |
 | `Focused(bool)` | The window became key or stopped being key. |
 | `Closing` | The window is about to close. |
-| `Pointer { event, modifiers }` | Pointer, button, and wheel input in logical points. |
-| `Key { event, modifiers }` | Key down and key up. |
+| `Pointer { event, modifiers, details }` | Pointer, button, and wheel input in logical points. `details.click_count` is the AppKit click count of a button press or release, and 1 for other events. |
+| `Key { event, modifiers }` | Key down and key up. A key-down while text is marked goes only to the input method, so it sends no `Key` event. |
 | `Text { text }` | Committed text from an ordinary key press. |
 | `Ime(ImeEvent)` | Input method composition. See [Input methods](#input-methods). |
 | `Occluded(bool)` | The window became fully hidden, or partly visible again. |

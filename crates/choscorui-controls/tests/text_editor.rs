@@ -1,5 +1,6 @@
 use choscorui_controls::{
-    EstimatedText, PaintContext, Styles, TextEditor, TextEditorChange, TextEditorInput, VisualState,
+    EstimatedText, PaintContext, ShortcutModifiers, Styles, TextEditor, TextEditorChange,
+    TextEditorInput, VisualState,
 };
 use choscorui_core::{
     CaretStop, KeyEvent, LayoutLine, NodeId, Point, Rect, SemanticAction, Size, TextLayout,
@@ -102,8 +103,10 @@ fn key(tree: &mut Tree, id: NodeId, editor: &mut TextEditor, key: Key, extend: b
         editor,
         TextEditorInput::Key {
             event: KeyEvent::Down { key, repeat: false },
-            extend,
-            word: false,
+            modifiers: ShortcutModifiers {
+                shift: extend,
+                ..ShortcutModifiers::default()
+            },
         },
     );
 }

@@ -3,6 +3,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::editing::{ValueEdit, value_edit};
 use crate::hosted;
 use crate::style::{
     ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
@@ -132,6 +133,15 @@ impl InputOtp {
         Some(value)
     }
 
+    /// The accepted characters of pasted `text` from the first slot, cut
+    /// to the length.
+    fn pasted(&self, text: &str) -> Vec<char> {
+        text.chars()
+            .filter(|c| self.accepts(*c))
+            .take(self.length())
+            .collect()
+    }
+
     /// The slot that shows the caret: the first empty one, or the last.
     fn active(&self) -> usize {
         self.value.len().min(self.length() - 1)
@@ -200,6 +210,20 @@ impl CustomControl for InputOtp {
                         self.replace(cx, value);
                     }
                     None => cx.beep(),
+                }
+                EventReply::Stop
+            }
+            ControlEvent::Edit(command) => {
+                let value = self.value();
+                match value_edit(cx, *command, &value, true) {
+                    Some(ValueEdit::Cut) => {
+                        self.replace(cx, Vec::new());
+                    }
+                    Some(ValueEdit::Paste(text)) => {
+                        let value = self.pasted(&text);
+                        self.replace(cx, value);
+                    }
+                    None => {}
                 }
                 EventReply::Stop
             }

@@ -813,17 +813,74 @@ to it in a `ZStack`. No pages report a build error.
 through the `Index` value in both directions. The application paints the
 open page in the area under the headers.
 
+### Text editing
+
+The hosted text controls share one key map, one set of Edit commands, and
+one click rule. `Input`, `InputGroup`, `Textarea`, `TextEditor`, the
+editable `Combobox`, and the filter of `Command` and `DataTable` use all of
+them. The value fields use the Edit commands as this section tells.
+
+| Keys | Action |
+| --- | --- |
+| ArrowLeft, ArrowRight | One grapheme |
+| Option+ArrowLeft, Option+ArrowRight | One word |
+| Command+ArrowLeft, Command+ArrowRight | Start or end of the line |
+| Command+ArrowUp, Command+ArrowDown | Start or end of the text |
+| Home, End | Start or end of the line; with Option, of the text |
+| Backspace, Delete | Delete one grapheme |
+| Option+Backspace, Option+Delete | Delete to the word edge |
+| Command+Backspace, Command+Delete | Delete to the line edge |
+
+- Shift with a move key extends the selection. A key with Control goes to
+  the ancestors and the shortcuts. In one line of text, the line edge is
+  the text edge.
+- **Clicks.** The host sends the click count of each press. One click
+  places the caret, and Shift extends the selection. Two clicks select a
+  word, and three clicks select the line (`TextEditor`: the paragraph). A
+  drag after the press extends the selection by that unit.
+- **Edit commands.** `ControlHost::dispatch_edit` sends an `EditCommand`
+  to the focused control as `ControlEvent::Edit`. A Command-key chord that
+  no control stops gives the same command: Command with X, C, V, A, or Z,
+  and Shift+Command+Z for `Redo`.
+- Copy, Cut, and Paste use the clipboard of `ControlHost::set_services`.
+  When the backend has no clipboard support, they do nothing, and Cut does
+  not delete.
+- Cut is one undo step. Paste replaces the selection through the same
+  path as typed text, so a single line drops its line breaks.
+- A password field does not copy or cut. A read-only `TextEditor` copies
+  and selects all, and does nothing for the other commands.
+- **Value fields.** The text of `SpinBox` and `DecimalSpinBox` takes the
+  Edit commands as an input does, through its filter. The editable
+  `Combobox` cuts all of its text and pastes into it.
+- `InputOtp` copies the code, cuts it, and pastes the accepted characters
+  from the first slot. `DateTimeEdit` copies its text and types the pasted
+  text into its sections.
+- **Composition.** `ControlHost::dispatch_composition` sends a
+  `CompositionEvent` to the focused control as `ControlEvent::Compose`.
+  `Mark` shows the marked text underlined at the caret, and the value does
+  not change.
+- `Commit` replaces the marked text as one undoable edit. `Unmark` keeps
+  the marked text. A press or a focus loss commits the marked text. Keys
+  do nothing while text is marked.
+- A control that does not use a `Commit` gets its text as typed text.
+- `ControlHost::text_input` gives the selection, the marked range, and the
+  caret rectangle of the focused text control. The window gives them to
+  the input method, which places its candidate window at the caret.
+
+[text_editing.rs](../crates/choscorui-controls/tests/text_editing.rs) pins
+this behavior.
+
 ### TextField
 
 - **Focus.** Editing needs focus. `SetValue` and `SetValidation` do not.
 - **Disabled.** All input except `SetValidation` does nothing.
 - **Pointer.** The field has no pointer input. The host hit-tests the
   layout and sends `SetCaret`.
-- **Keys (key-down).** Backspace and Delete remove one grapheme cluster.
-  ArrowLeft and ArrowRight move one grapheme, or one word with
-  `word: true`.
-- `extend: true` extends the selection. Home and End go to the start and
-  the end of the text. The arrow keys are logical, not mirrored.
+- **Keys (key-down).** `Key { event, modifiers }` edits through the key map
+  of [Text editing](#text-editing). The line edge is the text edge. The
+  arrow keys are logical, not mirrored.
+- `Paste` replaces the selection with text. `SetSelection` selects from an
+  anchor to a caret.
 - **Line breaks.** The field removes `\n` and `\r` from all incoming text.
 - **Commit.** The application sets the validation. Enter (not a repeat) returns
   `Committed` only when the state is `Valid`, else `CommitRejected`.
@@ -835,7 +892,8 @@ open page in the area under the headers.
   nothing, and `selected_text` is empty.
 - The field has no `Cancel` input and no Escape behavior.
 - In a control host, a primary press puts the caret at the nearest
-  grapheme boundary, and a drag extends the selection.
+  grapheme boundary, and a drag extends the selection. More clicks select
+  a word or all text.
 - **Look.** `paint` uses the `Input` recipe. `with_placeholder` sets the
   muted text that shows while the value is empty. A focused field always
   shows the focus ring and the caret. The text scrolls so the caret stays
@@ -876,8 +934,8 @@ behavior.
   inserts a tab only after `set_tab_inserts(true)`.
 - ArrowUp and ArrowDown move by visual line and keep the column. PageUp
   and PageDown move by `page_height`.
-- Home and End go to the ends of the visual line. With `word: true`, they
-  go to the ends of the text.
+- Home and End go to the ends of the visual line. The other keys follow the
+  key map of [Text editing](#text-editing).
 - **Read-only.** Typing, marked text, Enter, Tab, Backspace, Delete, `Cut`,
   `Undo`, `Redo`, and semantic `SetValue` do nothing. Navigation works.
 - Undo and redo skip marked text. Typed `\r\n` becomes `\n`.
@@ -887,8 +945,9 @@ behavior.
 - **In a control host.** The editor lays out its text with the host text
   measurement and paints each line. Right-to-left layouts mirror the
   lines. Tab moves the focus, unless `set_tab_inserts(true)` is set.
-- In a host, Command+A selects all text. Command+Z undoes, Shift+Command+Z
-  redoes, and Command+X cuts.
+- In a host, the Edit commands and the composition events work as in
+  [Text editing](#text-editing). The host sends the click count with each
+  press.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -1375,6 +1434,10 @@ layout, a horizontal split puts the first pane on the right. It also
 mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
 `Controls` relations.
 
+- **Double click.** A double click on a handle collapses the pane before
+  it to its minimum size. The next double click
+  restores the position.
+
 - **Hit area.** A press hits a handle in its rectangle, widened to the
   recipe hit area and to the grip width.
 - **Panel group.** `Resizable::hosted_group` takes one minimum for each
@@ -1612,7 +1675,7 @@ declares the full item count and the index of each realized item (see
 **In a control host.** `with_model` gives the view its own model and
 delegate. A hosted view is one node: it realizes no child nodes and paints
 only the rows in the viewport, plus the overscan. It takes the offered size.
-Two presses on one row within 0.5 seconds activate it. Typed text arrives as
+A press with a click count of two or more activates the row. Typed text arrives as
 text for type-ahead. A secondary press selects the row, but no message
 reports the context menu. Rows that the model must fetch are not reported.
 `with_styled_rows` makes a hosted view take its row height from the
@@ -2164,8 +2227,9 @@ bounds. Each group and each splitter is a tab stop, and Tab moves between
 them. A press or the arrow keys select a tab and send
 `ItemActivated(panel)`, with the `PanelId` number. A splitter drag, the
 splitter keys, and `Increment` or `Decrement` send
-`Changed(Number(extent))`. `Dismiss` closes the focused panel and sends
-`Dismissed`. The node's semantics are those of the focused tab's panel or
+`Changed(Number(extent))`. A double click on a splitter collapses the
+area to its 80 pt minimum, and the next double click restores the extent.
+`Dismiss` closes the focused panel and sends `Dismissed`. The node's semantics are those of the focused tab's panel or
 splitter.
 
 **As a view.** `Dock::new(layout)` mounts the `DockLayout` that `layout`
@@ -2515,13 +2579,9 @@ and closes the list, but not while the select is disabled.
 - `Input` mounts a `TextField` model through the control host. A press
   focuses it and puts the caret at the nearest caret stop. A drag extends
   the selection.
-- **Keys.** The arrow keys, Home, End, Backspace, and Delete edit as in
-  `TextField`. Shift extends the selection and Option moves by word.
-  Command+A selects all, Command+Z undoes, Shift+Command+Z redoes, and
-  Command+X cuts.
-- Committed text from `ControlHost::dispatch_text` is typed in. The host
-  does not route IME marked text. Use `TextField` directly for IME
-  composition.
+- **Keys.** The keys, the clicks, the Edit commands, and the composition
+  events work as in [Text editing](#text-editing).
+- Committed text from `ControlHost::dispatch_text` is typed in.
 - Each edit emits `Changed(Text)`. Enter on a valid value emits
   `Activated`.
 - `set_validation` marks the input invalid. The border and ring become
@@ -2568,7 +2628,8 @@ sets the text that shows while the field is empty.
 ### Textarea
 
 - `Textarea` mounts a `TextEditor` model through the control host. Keys,
-  modifiers, and pointer presses and drags edit as in `Input`.
+  modifiers, and pointer presses and drags edit as in `Input`. Right-to-left
+  layouts mirror the hit test of a press.
 - Lines break after spaces and at line breaks. The textarea grows with its
   lines from a 64 pt minimum, and requests layout after each edit.
 - Each edit emits `Changed(Text)`. `set_invalid` gives it the invalid
@@ -2595,7 +2656,8 @@ returns false.
 - `InputOtp::new` makes a code of a given length in one group.
   `with_groups` splits the slots into groups with a minus separator
   between them.
-- Typed or pasted text fills the empty slots in order. Characters that are
+- Typed text fills the empty slots in order. Paste replaces the code from
+  the first slot. Characters that are
   not digits are ignored, or not letters or digits after `alphanumeric`.
 - Backspace or Delete clears the last character. The caret is always after
   the last character.

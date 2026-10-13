@@ -7,6 +7,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::editing::{ValueEdit, value_edit};
 use crate::hosted::Reveal;
 use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
@@ -892,6 +893,14 @@ impl CustomControl for Combobox {
             }
             ControlEvent::Text(text) if self.editable => {
                 (Some(ComboInput::Text(text.clone())), EventReply::Stop)
+            }
+            ControlEvent::Edit(command) if self.editable => {
+                let input = match value_edit(cx, *command, &self.text, true) {
+                    Some(ValueEdit::Cut) => Some(ComboInput::SetText(String::new())),
+                    Some(ValueEdit::Paste(text)) => Some(ComboInput::Text(text)),
+                    None => None,
+                };
+                (input, EventReply::Stop)
             }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
                 (Some(ComboInput::Dismiss), EventReply::Continue)

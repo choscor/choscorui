@@ -7,7 +7,6 @@ use crate::CommandId;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::form::input::Editor;
 use crate::hosted;
 use crate::menu::{MenuCheck, MenuItem, MenuResponse};
 use crate::overlay::menu_popup::MenuPopup;
@@ -17,7 +16,7 @@ use crate::{CommandState, TextField};
 use choscorui_core::{
     EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Measured, PointerButton,
     PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode, SemanticAction,
-    SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter,
+    SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter, TextInputInfo,
 };
 use layout::Geometry;
 
@@ -81,7 +80,7 @@ pub struct DataTable {
     order: Vec<ItemKey>,
     selection: Selection,
     hidden: Vec<bool>,
-    filter: Option<(Editor, Option<usize>)>,
+    filter: Option<(TextField, Option<usize>)>,
     columns_label: Option<String>,
     menu: MenuPopup,
     labels: [String; 2],
@@ -139,7 +138,7 @@ impl DataTable {
     #[must_use]
     pub fn with_filter(mut self, placeholder: impl Into<String>, column: Option<usize>) -> Self {
         let field = TextField::new(self.name.clone(), "").with_placeholder(placeholder);
-        self.filter = Some((Editor::new(field), column));
+        self.filter = Some((field, column));
         self
     }
 
@@ -497,14 +496,17 @@ impl DataTable {
         let (editor, _) = self.filter.as_mut()?;
         let forward = match event {
             ControlEvent::Pointer(PointerEvent::Down { position, .. }) => field.contains(*position),
-            ControlEvent::Pointer(_) | ControlEvent::Text(_) => focused,
+            ControlEvent::Pointer(_)
+            | ControlEvent::Text(_)
+            | ControlEvent::Compose(_)
+            | ControlEvent::Edit(_) => focused,
             ControlEvent::Key(KeyEvent::Down { key, .. }) => focused && *key != Key::Tab,
             _ => false,
         };
         if !forward {
             return None;
         }
-        let reply = editor.event(cx, event, rect);
+        let reply = editor.hosted_event(cx, event, rect);
         if matches!(event, ControlEvent::Pointer(PointerEvent::Down { .. })) {
             self.focus = Stop::Filter;
         }
@@ -518,7 +520,7 @@ impl DataTable {
         let Some((editor, column)) = &self.filter else {
             return false;
         };
-        let value = editor.field.value().to_string();
+        let value = editor.value().to_string();
         let current = self
             .proxy
             .filter()
@@ -691,7 +693,7 @@ impl DataTable {
             Stop::Filter => self
                 .filter
                 .as_ref()
-                .map(|(editor, _)| editor.field.placeholder().to_string())
+                .map(|(editor, _)| editor.placeholder().to_string())
                 .unwrap_or_default(),
             Stop::Columns => self.columns_label.clone().unwrap_or_default(),
             Stop::Previous => self.labels[0].clone(),
@@ -791,6 +793,13 @@ impl CustomControl for DataTable {
         self.menu.animating(time)
     }
 
+    fn text_input(&self) -> Option<TextInputInfo> {
+        if self.focus != Stop::Filter {
+            return None;
+        }
+        self.filter.as_ref()?.0.hosted_text_input()
+    }
+
     fn semantics(&self) -> SemanticNode {
         let mut actions = Vec::new();
         if self.enabled {
@@ -839,7 +848,7 @@ impl CustomControl for DataTable {
                 let Some((editor, _)) = self.filter.as_mut() else {
                     return false;
                 };
-                let changed = editor.set_value(cx, value.unwrap_or_default());
+                let changed = editor.hosted_set_value(cx, value.unwrap_or_default());
                 self.refilter(cx);
                 changed
             }
@@ -854,7 +863,7 @@ impl CustomControl for DataTable {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if let Some((editor, _)) = self.filter.as_mut() {
-            editor.field.set_enabled_state(enabled);
+            editor.set_enabled_state(enabled);
         }
         if !enabled {
             self.menu.reveal = Default::default();
@@ -879,7 +888,7 @@ impl CustomControl for DataTable {
                 let Some((editor, _)) = self.filter.as_mut() else {
                     return false;
                 };
-                editor.set_text(value);
+                editor.take_text(value);
                 self.apply_filter();
                 true
             }

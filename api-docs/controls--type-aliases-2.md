@@ -3,6 +3,104 @@
 
 > Generated from the source doc comments. Do not edit by hand. Regenerate with `cargo run -p choscorui-api-docs --locked`. The [index](README.md) lists every item. Every example assumes `use choscorui::prelude::*;`.
 
+## `Sidebar`
+
+type alias in `choscorui::prelude::Sidebar`
+
+```rust
+pub type Sidebar = Configured<Sidebar>;
+```
+
+Grouped navigation items; `selected` edits the chosen item.
+
+#### Examples
+
+```rust
+struct Navigation;
+
+impl View for Navigation {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selected = cx.state(Some(0));
+        let items = vec![SidebarItem::new("Files", Icon::File), SidebarItem::new("Mail", Icon::Mail)];
+        Sidebar::new("Navigation", "Toggle sidebar", vec![("Main".to_owned(), items)], selected.binding())
+    }
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `Sidebar::new`
+
+```rust
+pub fn new<M, N>(name: impl IntoLive<TextContent, M>, toggle: impl IntoLive<TextContent, N>, groups: impl Items<(String, Vec<SidebarItem>)>, selected: Binding<Option<usize>>) -> Self
+```
+
+A sidebar named `name` with a `toggle` button and `groups` of items.
+
+## `SizeGrip`
+
+type alias in `choscorui::prelude::SizeGrip`
+
+```rust
+pub type SizeGrip = Configured<SizeGrip>;
+```
+
+A grip in the bottom trailing corner that resizes its window. A drag
+runs `on_resize` with the new content size, inside `minimum` and
+`maximum`. In right-to-left layouts the grip sits at the bottom left.
+
+#### Examples
+
+```rust
+let grip = SizeGrip::new(
+    Size::new(320.0, 240.0),
+    Size::new(1600.0, 1200.0),
+    |size| println!("{size:?}"),
+);
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `SizeGrip::new`
+
+```rust
+pub fn new(minimum: Size, maximum: Size, on_resize: impl Fn(Size) + 'static) -> Self
+```
+
+A size grip that keeps the size between `minimum` and `maximum`.
+
+## `Skeleton`
+
+type alias in `choscorui::prelude::Skeleton`
+
+```rust
+pub type Skeleton = Configured<Skeleton>;
+```
+
+A pulsing placeholder block of `width` by `height` points.
+
+#### Examples
+
+```rust
+let placeholder = Skeleton::new("Loading the title", 200.0, 16.0);
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `Skeleton::new`
+
+```rust
+pub fn new<M>(name: impl IntoLive<TextContent, M>, width: f64, height: f64) -> Self
+```
+
+A skeleton block named `name` of `width` by `height` points.
+
 ## `Slider`
 
 type alias in `choscorui::prelude::Slider`

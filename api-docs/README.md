@@ -160,9 +160,9 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`RangeSlider`](controls--type-aliases-1.md#rangeslider) type alias: Low and high values along one track; `values` edits both.
 - [`ScrollBar`](controls--type-aliases-1.md#scrollbar) type alias: A standalone scroll bar named `name` over `content` points, of which `viewport` show; `offset` edits the scroll position.
 - [`Select`](controls--type-aliases-1.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
-- [`Sidebar`](controls--type-aliases-1.md#sidebar) type alias: Grouped navigation items; `selected` edits the chosen item.
-- [`SizeGrip`](controls--type-aliases-1.md#sizegrip) type alias: A grip in the bottom trailing corner that resizes its window.
-- [`Skeleton`](controls--type-aliases-1.md#skeleton) type alias: A pulsing placeholder block of `width` by `height` points.
+- [`Sidebar`](controls--type-aliases-2.md#sidebar) type alias: Grouped navigation items; `selected` edits the chosen item.
+- [`SizeGrip`](controls--type-aliases-2.md#sizegrip) type alias: A grip in the bottom trailing corner that resizes its window.
+- [`Skeleton`](controls--type-aliases-2.md#skeleton) type alias: A pulsing placeholder block of `width` by `height` points.
 - [`Slider`](controls--type-aliases-2.md#slider) type alias: A slider that edits `value`.
 - [`SpinBox`](controls--type-aliases-2.md#spinbox) type alias: An integer field with steppers that edits `value`.
 - [`Spinner`](controls--type-aliases-2.md#spinner) type alias: A spinning loader.
@@ -310,4 +310,4 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`CustomControl`](custom.md#customcontrol) trait: A control mounted in a `ControlHost`.
 - [`CustomView`](custom.md#customview) trait: The low-level extension point for new controls: a type that measures, paints, reports semantics, and handles events through the control protocol.
 - [`MeasureContext`](custom.md#measurecontext) struct: What a control reads while it measures or arranges.
-- [`PaintContext`](custom.md#paintcontext) struct: Everything a control needs to paint one node: the display list, the node's bounds, the tokens, the style cache, text measurement, the layout direction, and the host's view of the node's state.
+- [`PaintContext`](custom.md#paintcontext) struct: Everything a control needs to paint one node: the display list, the node's bounds, the tokens, the style cache, text measurement, the layout direction, the messages, and the host's view of the node's state.

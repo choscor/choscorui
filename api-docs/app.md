@@ -1557,6 +1557,15 @@ pub fn cancel_interaction(&mut self)
 Ends pointer capture and hover, for example when the window loses
 focus.
 
+#### `ViewHost::composition`
+
+```rust
+pub fn composition(&mut self, event: CompositionEvent) -> bool
+```
+
+Delivers an input method composition `event` to the focused
+control. Returns true when the control used it.
+
 #### `ViewHost::controls`
 
 ```rust
@@ -1564,6 +1573,15 @@ pub fn controls(&self) -> &ControlHost
 ```
 
 The host of the mounted controls.
+
+#### `ViewHost::edit`
+
+```rust
+pub fn edit(&mut self, command: EditCommand) -> bool
+```
+
+Performs the edit `command`, such as Copy from the Edit menu, on
+the focused control. Returns true when the control used it.
 
 #### `ViewHost::env`
 
@@ -1690,7 +1708,16 @@ Performs an assistive action on `node`.
 pub fn pointer(&mut self, event: PointerEvent, modifiers: ShortcutModifiers)
 ```
 
-Routes a pointer event to the controls.
+Routes a pointer event to the controls, as a single click.
+
+#### `ViewHost::pointer_with`
+
+```rust
+pub fn pointer_with(&mut self, event: PointerEvent, modifiers: ShortcutModifiers, details: PointerDetails)
+```
+
+Routes a pointer event with its `details`, such as the click
+count, to the controls.
 
 #### `ViewHost::resize`
 
@@ -1725,6 +1752,16 @@ pub fn set_accessibility(&mut self, preferences: AccessibilityPreferences)
 
 Applies accessibility preferences, which win over every theme
 layer.
+
+#### `ViewHost::set_feedback`
+
+```rust
+pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>)
+```
+
+Sends the platform signals of the controls, such as the beep when
+a field refuses a key, through `feedback`. Until then the host
+sends none.
 
 #### `ViewHost::set_tokens`
 
@@ -1784,6 +1821,15 @@ pub fn text(&mut self, text: &str) -> bool
 ```
 
 Delivers committed text to the focused control.
+
+#### `ViewHost::text_input`
+
+```rust
+pub fn text_input(&self) -> Option<TextInputInfo>
+```
+
+The selection, the marked text, and the caret of the focused text
+control, for the input method of the window.
 
 #### `ViewHost::themes`
 

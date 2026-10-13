@@ -908,6 +908,9 @@ struct HostState {
     /// The bounds and the direction from the last arrange.
     bounds: Rect,
     rtl: bool,
+    /// The extent of each area before a double click on its splitter
+    /// collapsed it, by area index.
+    collapsed: [Option<f64>; 4],
 }
 
 impl DockLayout {
@@ -955,6 +958,22 @@ impl DockLayout {
     }
 
     /// Sets the extent of `area` and reports a change.
+    /// Collapses `area` to the minimum extent, or restores the extent that
+    /// it had before a collapse.
+    fn toggle_collapse(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea) {
+        let current = self.extent(area);
+        let saved = &mut self.hosted.collapsed[area.index()];
+        let target = match saved.take() {
+            Some(extent) if current <= MIN_EXTENT => extent,
+            _ if current > MIN_EXTENT => {
+                *saved = Some(current);
+                MIN_EXTENT
+            }
+            _ => return,
+        };
+        self.host_resize(cx, area, target);
+    }
+
     fn host_resize(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea, extent: f64) {
         let before = self.extent(area);
         self.set_extent(area, extent);
@@ -1049,6 +1068,13 @@ impl DockLayout {
                     .splitters
                     .iter()
                     .find(|(_, rect)| rect.contains(position));
+                if let Some((area, _)) = splitter
+                    && cx.click_count() >= 2
+                {
+                    self.hosted.focus = DockFocus::Splitter(*area);
+                    self.toggle_collapse(cx, *area);
+                    return EventReply::Stop;
+                }
                 if let Some((area, _)) = splitter {
                     self.hosted.focus = DockFocus::Splitter(*area);
                     self.hosted.drag = Some((*area, along(*area, position), self.extent(*area)));

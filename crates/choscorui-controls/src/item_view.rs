@@ -143,9 +143,6 @@ pub struct ItemView {
     type_ahead_at: Option<Duration>,
     /// The model, delegate, and column widths of a hosted view.
     source: Option<ItemSource>,
-    /// The index and host time of the last hosted press, for double
-    /// clicks.
-    last_press: Option<(usize, f64)>,
     /// Whether a hosted view takes its row height from the `ListView` row
     /// recipe in each arrange.
     styled_rows: bool,
@@ -194,7 +191,6 @@ impl ItemView {
             type_ahead: String::new(),
             type_ahead_at: None,
             source: None,
-            last_press: None,
             styled_rows: false,
             caption: String::new(),
             footer: Vec::new(),
@@ -1046,9 +1042,6 @@ impl ItemDelegate for TextItemDelegate {
     }
 }
 
-/// Two presses on the same item within this many seconds activate it.
-const DOUBLE_PRESS_SECONDS: f64 = 0.5;
-
 /// The keys a focused hosted view consumes.
 fn view_key(key: Key, modifiers: ItemModifiers) -> bool {
     match key {
@@ -1112,21 +1105,6 @@ impl ItemView {
             .collect();
         indices.sort_unstable();
         indices
-    }
-
-    /// The click count of a primary press at `position`, at host `time`.
-    fn press_clicks(&mut self, position: Point, time: f64) -> u32 {
-        let index = self.index_at(position);
-        let double = matches!(
-            (self.last_press, index),
-            (Some((last, at)), Some(index)) if last == index && time - at <= DOUBLE_PRESS_SECONDS
-        );
-        self.last_press = if double {
-            None
-        } else {
-            index.map(|index| (index, time))
-        };
-        if double { 2 } else { 1 }
     }
 }
 
@@ -1245,7 +1223,7 @@ impl CustomControl for ItemView {
                     PointerButton::Primary => ItemViewInput::Press {
                         position: *position,
                         modifiers,
-                        clicks: self.press_clicks(*position, cx.time()),
+                        clicks: cx.click_count(),
                     },
                     _ => ItemViewInput::ContextMenu {
                         position: *position,

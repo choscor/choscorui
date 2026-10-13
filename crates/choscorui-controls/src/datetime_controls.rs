@@ -10,6 +10,7 @@ use crate::calendar_caption::{CaptionContext, CaptionDropdowns, CaptionPart, Cap
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::editing::{ValueEdit, value_edit};
 use crate::range_controls::paint_stepper_field;
 use crate::style::{
     CalendarDay, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
@@ -985,6 +986,14 @@ impl CustomControl for DateTimeEdit {
             }
             ControlEvent::Text(text) => {
                 self.hosted_keys(cx, text.chars().map(Key::Character));
+                EventReply::Stop
+            }
+            // The value cannot be empty, so Cut copies only.
+            ControlEvent::Edit(command) => {
+                let value = self.text();
+                if let Some(ValueEdit::Paste(text)) = value_edit(cx, *command, &value, false) {
+                    self.hosted_keys(cx, text.chars().map(Key::Character));
+                }
                 EventReply::Stop
             }
             ControlEvent::FocusChanged(_) => {

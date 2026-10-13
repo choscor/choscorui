@@ -5,7 +5,6 @@ use crate::TextField;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::form::input::Editor;
 use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted;
 use crate::overlay::panel::{Buttons, PanelButton};
@@ -14,7 +13,7 @@ use crate::style::{
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo,
 };
 
 /// The answer that a question takes.
@@ -149,7 +148,7 @@ pub struct Questionnaire {
     progress: Option<ProgressText>,
     current: usize,
     picked: Vec<Vec<usize>>,
-    editors: Vec<Option<Editor>>,
+    editors: Vec<Option<TextField>>,
     focus: Stop,
     choice: usize,
     invalid: bool,
@@ -169,9 +168,9 @@ impl Questionnaire {
         let editors = questions
             .iter()
             .map(|question| match &question.answer {
-                Answer::Freeform { placeholder } => Some(Editor::new(
-                    TextField::new(question.title.clone(), "").with_placeholder(placeholder),
-                )),
+                Answer::Freeform { placeholder } => {
+                    Some(TextField::new(question.title.clone(), "").with_placeholder(placeholder))
+                }
                 Answer::Choices { .. } => None,
             })
             .collect();
@@ -276,7 +275,7 @@ impl Questionnaire {
 
     fn answered(&self) -> bool {
         match self.editors.get(self.current) {
-            Some(Some(editor)) => !editor.field.value().trim().is_empty(),
+            Some(Some(editor)) => !editor.value().trim().is_empty(),
             _ => !self.picked[self.current].is_empty(),
         }
     }
@@ -491,7 +490,7 @@ impl Questionnaire {
         let rect = self.geometry.input_text;
         match self.editors.get_mut(self.current) {
             Some(Some(editor)) => {
-                let reply = editor.event(cx, event, rect);
+                let reply = editor.hosted_event(cx, event, rect);
                 if reply == EventReply::Stop {
                     self.invalid = false;
                 }
@@ -710,7 +709,11 @@ impl CustomControl for Questionnaire {
                 EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => self.key(cx, event, *key, *repeat),
-            ControlEvent::Text(_) if self.focus == Stop::Answer => self.editor_event(cx, event),
+            ControlEvent::Text(_) | ControlEvent::Compose(_) | ControlEvent::Edit(_)
+                if self.focus == Stop::Answer =>
+            {
+                self.editor_event(cx, event)
+            }
             ControlEvent::FocusChanged(focused) => {
                 if *focused && self.pressed.is_none() {
                     let stops = self.stops();
@@ -755,14 +758,14 @@ impl CustomControl for Questionnaire {
             Answer::Freeform { .. } => {
                 if let Some(Some(editor)) = self.editors.get(self.current) {
                     let focused = host.focused() && self.focus == Stop::Answer;
-                    let state = editor.state(
+                    let state = editor.hosted_state(
                         host.set(VisualState::FOCUSED, focused)
                             .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
                             .set(VisualState::INVALID, host.invalid() || self.invalid),
                     );
                     let style = cx.style(Self::query(Slot::Input).state(state));
                     cx.slot(self.geometry.input, &style, |_, _| {});
-                    editor.paint_text(cx, self.geometry.input_text, state);
+                    editor.paint_hosted_text(cx, self.geometry.input_text, state);
                 }
             }
         }
@@ -787,6 +790,16 @@ impl CustomControl for Questionnaire {
             .paint(cx, focused, pressed, host.focus_visible());
     }
 
+    fn text_input(&self) -> Option<TextInputInfo> {
+        if self.focus != Stop::Answer {
+            return None;
+        }
+        self.editors
+            .get(self.current)?
+            .as_ref()?
+            .hosted_text_input()
+    }
+
     fn semantics(&self) -> SemanticNode {
         let freeform = self.editors.get(self.current).is_some_and(Option::is_some);
         let mut actions = Vec::new();
@@ -806,7 +819,7 @@ impl CustomControl for Questionnaire {
                 .map(|button| button.label.clone())
                 .unwrap_or_default(),
             Stop::Answer => match (self.question(), self.editors.get(self.current)) {
-                (_, Some(Some(editor))) => editor.field.value().to_string(),
+                (_, Some(Some(editor))) => editor.value().to_string(),
                 (Some(question), _) => question
                     .options()
                     .get(self.choice)
@@ -835,7 +848,9 @@ impl CustomControl for Questionnaire {
                 Stop::Answer => self.pick(cx, self.choice),
             },
             SemanticAction::SetValue => match self.editors.get_mut(self.current) {
-                Some(Some(editor)) => return editor.set_value(cx, value.unwrap_or_default()),
+                Some(Some(editor)) => {
+                    return editor.hosted_set_value(cx, value.unwrap_or_default());
+                }
                 _ => return false,
             },
             SemanticAction::Focus => cx.request_focus(),
@@ -851,7 +866,7 @@ impl CustomControl for Questionnaire {
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         for editor in self.editors.iter_mut().flatten() {
-            editor.field.set_enabled_state(enabled);
+            editor.set_enabled_state(enabled);
         }
     }
 
@@ -867,7 +882,7 @@ impl CustomControl for Questionnaire {
             ControlValue::Text(_) => match self.editors.get_mut(self.current) {
                 Some(Some(editor)) => {
                     self.invalid = false;
-                    editor.set_text(value)
+                    editor.take_text(value)
                 }
                 _ => false,
             },

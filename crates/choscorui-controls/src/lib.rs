@@ -120,6 +120,8 @@ pub use shell::HostedToolbar;
 mod calendar_caption;
 mod custom;
 mod data;
+mod editing;
+pub use editing::EditCommand;
 pub(crate) mod feedback;
 mod form;
 mod hosted;

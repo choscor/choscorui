@@ -1,6 +1,6 @@
 //! A text input with addons: text, icons, and buttons around the text.
 
-use super::input::{Editor, default_width};
+use super::input::default_width;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
@@ -11,7 +11,7 @@ use crate::style::{
 use crate::text_field::{TextField, ValidationState};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Measured, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, Size,
+    SemanticNode, Size, TextInputInfo,
 };
 
 /// What an addon shows.
@@ -75,7 +75,7 @@ impl InputGroupAddon {
 /// A text input in one box with addons at its edges. Inline addons sit
 /// before or after the text; block addons sit above or below it.
 pub struct InputGroup {
-    editor: Editor,
+    editor: TextField,
     addons: Vec<InputGroupAddon>,
     /// Each addon's slot rectangle, from the last arrange.
     rects: Vec<Rect>,
@@ -87,7 +87,7 @@ pub struct InputGroup {
 impl InputGroup {
     pub fn new(field: TextField, addons: Vec<InputGroupAddon>) -> Self {
         Self {
-            editor: Editor::new(field),
+            editor: field,
             addons,
             rects: Vec::new(),
             text: Rect::default(),
@@ -97,13 +97,13 @@ impl InputGroup {
     }
 
     pub fn value(&self) -> &str {
-        self.editor.field.value()
+        self.editor.value()
     }
 
     /// Text shown in muted color while the field is empty.
     #[must_use]
     pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
-        self.editor.field = self.editor.field.with_placeholder(placeholder);
+        self.editor = self.editor.with_placeholder(placeholder);
         self
     }
 
@@ -112,7 +112,7 @@ impl InputGroup {
     }
 
     pub fn set_validation(&mut self, validation: ValidationState) {
-        self.editor.field.set_validation_state(validation);
+        self.editor.set_validation_state(validation);
     }
 
     fn query(slot: Slot) -> StyleQuery {
@@ -326,11 +326,11 @@ impl CustomControl for InputGroup {
             _ => {}
         }
         let text = self.text;
-        self.editor.event(cx, event, text)
+        self.editor.hosted_event(cx, event, text)
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = self.editor.state(cx.state);
+        let state = self.editor.hosted_state(cx.state);
         let root = cx.style(Self::query(Slot::Root).state(state));
         let bounds = cx.bounds;
         cx.slot(bounds, &root, |_, _| {});
@@ -369,7 +369,11 @@ impl CustomControl for InputGroup {
                 _ => content.draw(cx, inner, &slot, align),
             }
         }
-        self.editor.paint_text(cx, self.text, state);
+        self.editor.paint_hosted_text(cx, self.text, state);
+    }
+
+    fn text_input(&self) -> Option<TextInputInfo> {
+        self.editor.hosted_text_input()
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -377,7 +381,7 @@ impl CustomControl for InputGroup {
     }
 
     fn semantics_in(&self, strings: &choscorui_core::Localizer) -> SemanticNode {
-        let mut node = self.editor.semantics(strings);
+        let mut node = self.editor.hosted_semantics(strings);
         // Addon text describes the value, for example a unit or a domain.
         node.description = self
             .addons
@@ -398,7 +402,7 @@ impl CustomControl for InputGroup {
         value: Option<&str>,
     ) -> bool {
         match action {
-            SemanticAction::SetValue => self.editor.set_value(cx, value.unwrap_or_default()),
+            SemanticAction::SetValue => self.editor.hosted_set_value(cx, value.unwrap_or_default()),
             SemanticAction::Focus => {
                 cx.request_focus();
                 true
@@ -408,11 +412,11 @@ impl CustomControl for InputGroup {
     }
 
     fn set_enabled(&mut self, enabled: bool) {
-        self.editor.field.set_enabled_state(enabled);
+        self.editor.set_enabled_state(enabled);
     }
 
     /// Takes `Text`.
     fn set_value(&mut self, value: &ControlValue) -> bool {
-        self.editor.set_text(value)
+        self.editor.take_text(value)
     }
 }

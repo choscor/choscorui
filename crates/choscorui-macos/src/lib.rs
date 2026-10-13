@@ -4,9 +4,9 @@
 #![deny(unsafe_code)]
 
 use choscorui_core::{
-    Color, DisplayCommand, DisplayList, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticChange, SemanticEntry, SemanticRelation, SemanticRole, SemanticText,
-    Size, TextBuffer, WheelUnit,
+    Color, DisplayCommand, DisplayList, Key, KeyEvent, Point, PointerButton, PointerDetails,
+    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticRelation,
+    SemanticRole, SemanticText, Size, TextBuffer, WheelUnit,
 };
 mod ime;
 pub use choscorui_core::{
@@ -57,7 +57,7 @@ use ffi::Pool;
 use ffi::appkit::{
     ACTIVATE, ACTIVATION_POLICY, ACTIVATION_POLICY_REGULAR, APPLICATION_WINDOWS,
     BACKING_SCALE_FACTOR, BACKING_STORE_BUFFERED, BUTTON_NUMBER, CHARACTERS,
-    CHARACTERS_IGNORING_MODIFIERS, CLOSE, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW,
+    CHARACTERS_IGNORING_MODIFIERS, CLICK_COUNT, CLOSE, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW,
     CURRENT_GRAPHICS_CONTEXT, ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, EVENT_KEY_DOWN,
     EVENT_KEY_UP, EVENT_LEFT_MOUSE_DOWN, EVENT_LEFT_MOUSE_DRAGGED, EVENT_LEFT_MOUSE_UP,
     EVENT_MODIFIER_FLAGS, EVENT_MOUSE_MOVED, EVENT_OTHER_MOUSE_DOWN, EVENT_OTHER_MOUSE_DRAGGED,
@@ -161,6 +161,9 @@ pub enum WindowEvent {
     Pointer {
         event: PointerEvent,
         modifiers: Modifiers,
+        /// The click count of a button press or release. Other pointer
+        /// events have the default details.
+        details: PointerDetails,
     },
     Key {
         event: KeyEvent,
@@ -405,12 +408,18 @@ fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&
         _ => return,
     };
     let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+    let mut details = PointerDetails::default();
+    // AppKit reports a click count only for button presses and releases.
+    if matches!(event, PointerEvent::Down { .. } | PointerEvent::Up { .. }) {
+        details.click_count = u32::try_from(CLICK_COUNT.send(native_event, ())).unwrap_or(1);
+    }
     let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
     if let Some(queue) = queue {
-        queue
-            .lock()
-            .unwrap()
-            .push_back(WindowEvent::Pointer { event, modifiers });
+        queue.lock().unwrap().push_back(WindowEvent::Pointer {
+            event,
+            modifiers,
+            details,
+        });
     }
 }
 
@@ -492,6 +501,16 @@ fn view_key_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<
         EVENT_KEY_UP => KeyEvent::Up { key },
         _ => return,
     };
+    // While the input method composes, it owns the keys: they reach the
+    // application only as composition events.
+    if ime::view_has_marked_text(view) {
+        if matches!(event, KeyEvent::Down { .. })
+            && let Ok(events) = ns_array(&[native_event.upcast()])
+        {
+            INTERPRET_KEY_EVENTS.send(view, (&events,));
+        }
+        return;
+    }
     let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
     let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
     if let Some(queue) = queue {

@@ -4,12 +4,12 @@ use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, Rect,
-    SemanticChange, SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
+    BackendCapabilities, CompositionEvent, DisplayList, Feedback, MenuBarModel, MenuCommandId,
+    MenuError, Rect, SemanticChange, SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
 };
 use choscorui_macos::{
-    Application, CoreTextShaper, Error, MainMenu, Modifiers, NativeServices, SystemFeedback,
-    Window, WindowEvent,
+    Application, CoreTextShaper, Error, ImeEvent, MainMenu, Modifiers, NativeServices,
+    SystemFeedback, TextInputState, Window, WindowEvent,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -132,6 +132,28 @@ fn shortcut_modifiers(modifiers: Modifiers) -> ShortcutModifiers {
     }
 }
 
+fn composition(event: ImeEvent) -> CompositionEvent {
+    match event {
+        ImeEvent::SetMarkedText {
+            text,
+            selected_utf16,
+            replacement_utf16,
+        } => CompositionEvent::Mark {
+            text,
+            selected_utf16,
+            replacement_utf16,
+        },
+        ImeEvent::CommitText {
+            text,
+            replacement_utf16,
+        } => CompositionEvent::Commit {
+            text,
+            replacement_utf16,
+        },
+        ImeEvent::Unmark => CompositionEvent::Unmark,
+    }
+}
+
 /// An AppKit window.
 pub(crate) struct NativeWindow {
     window: Window,
@@ -161,15 +183,23 @@ impl NativeWindow {
                     focus = Some(focused);
                 }
                 WindowEvent::Resized { size, .. } => host.resize(size),
-                WindowEvent::Pointer { event, modifiers } => {
-                    host.pointer(event, shortcut_modifiers(modifiers));
+                WindowEvent::Pointer {
+                    event,
+                    modifiers,
+                    details,
+                } => {
+                    host.pointer_with(event, shortcut_modifiers(modifiers), details);
                 }
-                // Command-key combinations belong to the menu bar.
-                WindowEvent::Key { event, modifiers } if !modifiers.command => {
+                // A Command-key combination arrives here only when no menu
+                // item took it.
+                WindowEvent::Key { event, modifiers } => {
                     host.key(event, shortcut_modifiers(modifiers));
                 }
                 WindowEvent::Text { text } => {
                     host.text(&text);
+                }
+                WindowEvent::Ime(event) => {
+                    host.composition(composition(event));
                 }
                 _ => {}
             }
@@ -177,6 +207,12 @@ impl NativeWindow {
         for request in self.window.take_accessibility_actions() {
             host.perform(request.node, request.action, request.value.as_deref());
         }
+        let input = host.text_input().unwrap_or_default();
+        self.window.set_text_input_state(TextInputState {
+            selected_utf16: input.selected_utf16,
+            marked_utf16: input.marked_utf16,
+            caret: input.caret,
+        });
         (closing, focus)
     }
 

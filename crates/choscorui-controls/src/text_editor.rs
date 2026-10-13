@@ -4,9 +4,11 @@
 //! [`TextEditor::caret_rect`] in its scroll area after each change.
 
 use super::text_field::TextComposition;
+use crate::ShortcutModifiers;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::editing::{CaretMotion, EditingKey, TextEdit, editing_key, is_typing_key, text_edit};
 use crate::form::input::default_width;
 use crate::form::measured::measured_layout;
 use crate::style::fill_area;
@@ -15,9 +17,10 @@ use crate::style::{
     VisualState, content_rect,
 };
 use choscorui_core::{
-    DesignTokens, Dirty, EventPhase, EventReply, Key, KeyEvent, Measured, NodeId, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    SemanticText, Size, TextBuffer, TextLayout, TextMotion, Tree, TreeError, TypeSpec,
+    CompositionEvent, DesignTokens, Dirty, EventPhase, EventReply, KeyEvent, Measured, NodeId,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, SemanticText, Size, TextBuffer, TextInputInfo, TextLayout, TextMotion, Tree,
+    TreeError, TypeSpec,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -25,6 +28,8 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextEditorInput {
     Text(String),
+    /// Text from the clipboard in place of the selection.
+    Paste(String),
     SetMarkedText {
         text: String,
         selected_utf16: Range<usize>,
@@ -36,10 +41,13 @@ pub enum TextEditorInput {
     },
     UnmarkMarkedText,
     CancelMarkedText,
+    /// A key with the held modifiers, through the shared editing key
+    /// map: Option moves and deletes by word, Command to the line start
+    /// or end (Left, Right, Backspace, Delete) or to the document start or
+    /// end (Up, Down), and Shift extends the selection.
     Key {
         event: KeyEvent,
-        extend: bool,
-        word: bool,
+        modifiers: ShortcutModifiers,
     },
     /// Pointer press in layout coordinates. `clicks` 2 selects a word,
     /// 3 selects a paragraph.
@@ -86,19 +94,20 @@ pub struct TextEditor {
     dragging: Option<Range<usize>>,
     page_height: f64,
     tab_inserts: bool,
+    /// True while a hosted press is held.
+    pressed: bool,
     host: HostedText,
 }
 
 /// What the editor keeps in a control host, where it lays out its own
 /// text: the text width and type, the content rectangle, the direction,
-/// a held press, and the layout of the last paint.
+/// and the layout of the last paint.
 #[derive(Default)]
 struct HostedText {
     width: f64,
     spec: Option<TypeSpec>,
     inner: Rect,
     rtl: bool,
-    pressed: bool,
     layout: RefCell<Option<TextLayout>>,
 }
 
@@ -114,6 +123,7 @@ impl TextEditor {
             dragging: None,
             page_height: 400.0,
             tab_inserts: false,
+            pressed: false,
             host: HostedText::default(),
         }
     }
@@ -190,6 +200,7 @@ impl TextEditor {
         if !enabled {
             self.composition = None;
             self.dragging = None;
+            self.pressed = false;
         }
     }
 
@@ -328,12 +339,97 @@ impl TextEditor {
                 .unwrap_or(self.buffer.grapheme_count())
     }
 
-    fn word_bounds(&mut self, caret: usize) -> Range<usize> {
-        let mut probe = self.buffer.clone();
-        let _ = probe.set_caret((caret + 1).min(probe.grapheme_count()), false);
-        let start = probe.move_caret(TextMotion::WordLeft, false);
-        let end = probe.move_caret(TextMotion::WordRight, false);
-        start.min(caret)..end.max(caret)
+    /// The caret position that `motion` reaches in `layout`, for the
+    /// motions that do not move by grapheme or word.
+    fn line_target(&self, layout: &TextLayout, motion: CaretMotion) -> usize {
+        let caret = self.buffer.caret();
+        match motion {
+            CaretMotion::DocumentStart => 0,
+            CaretMotion::DocumentEnd => self.buffer.grapheme_count(),
+            CaretMotion::LineStart => self.line_bounds(layout, caret).map_or(0, |line| line.start),
+            CaretMotion::LineEnd => self
+                .line_bounds(layout, caret)
+                .map_or(self.buffer.grapheme_count(), |line| line.end),
+            _ => caret,
+        }
+    }
+
+    /// Moves the caret up or down by lines or pages in `layout`, and keeps
+    /// the preferred x for the next vertical move.
+    fn move_vertical(&mut self, layout: &TextLayout, motion: CaretMotion, extend: bool) {
+        let caret = self.buffer.caret();
+        let line_height = layout
+            .lines()
+            .first()
+            .map_or(16.0, |line| line.height().max(1.0));
+        let page = (self.page_height / line_height).max(1.0) as usize;
+        let (direction, steps) = match motion {
+            CaretMotion::Up => (-1, 1),
+            CaretMotion::Down => (1, 1),
+            CaretMotion::PageUp => (-1, page),
+            _ => (1, page),
+        };
+        let mut target = caret;
+        let mut preferred = self.preferred_x;
+        for _ in 0..steps {
+            let Some((next, x)) = layout.move_vertical(target, direction, preferred) else {
+                break;
+            };
+            preferred = Some(x);
+            if next == target {
+                break;
+            }
+            target = next;
+        }
+        let _ = self.buffer.set_caret(target, extend);
+        self.preferred_x = preferred;
+    }
+
+    /// Applies an editing key in `layout`. Returns true when the move
+    /// keeps the preferred x of vertical motion.
+    fn editing(&mut self, layout: &TextLayout, key: EditingKey, editable: bool) -> bool {
+        let word = |motion| match motion {
+            CaretMotion::Left => Some(TextMotion::Left),
+            CaretMotion::Right => Some(TextMotion::Right),
+            CaretMotion::WordLeft => Some(TextMotion::WordLeft),
+            CaretMotion::WordRight => Some(TextMotion::WordRight),
+            _ => None,
+        };
+        match key {
+            EditingKey::Enter if editable => self.buffer.replace_selection("\n"),
+            EditingKey::Tab if editable && self.tab_inserts => {
+                self.buffer.replace_selection("\t");
+            }
+            EditingKey::Delete(motion) if editable => {
+                let target = match word(motion) {
+                    Some(motion) => self.buffer.motion_target(motion),
+                    None => self.line_target(layout, motion),
+                };
+                let _ = self.buffer.delete_to(target);
+            }
+            EditingKey::Move {
+                motion:
+                    motion @ (CaretMotion::Up
+                    | CaretMotion::Down
+                    | CaretMotion::PageUp
+                    | CaretMotion::PageDown),
+                extend,
+            } => {
+                self.move_vertical(layout, motion, extend);
+                return true;
+            }
+            EditingKey::Move { motion, extend } => match word(motion) {
+                Some(motion) => {
+                    self.buffer.move_caret(motion, extend);
+                }
+                None => {
+                    let target = self.line_target(layout, motion);
+                    let _ = self.buffer.set_caret(target, extend);
+                }
+            },
+            _ => {}
+        }
+        false
     }
 
     /// Applies one input. `layout` must be the current layout of
@@ -351,7 +447,13 @@ impl TextEditor {
             self.dragging = None;
             return Err(TreeError::MissingNode);
         }
-        let external = matches!(input, TextEditorInput::SetValue(_));
+        // A blur ends a composition after the focus moved.
+        let external = matches!(
+            input,
+            TextEditorInput::SetValue(_)
+                | TextEditorInput::UnmarkMarkedText
+                | TextEditorInput::CancelMarkedText
+        );
         if !self.enabled || (!external && tree.focus() != Some(id)) {
             return Ok(TextEditorChange::None);
         }
@@ -361,7 +463,7 @@ impl TextEditor {
         let editable = !self.read_only;
         let mut keep_preferred_x = false;
         match input {
-            TextEditorInput::Text(text) if editable => {
+            TextEditorInput::Text(text) | TextEditorInput::Paste(text) if editable => {
                 self.composition = None;
                 self.buffer.replace_selection(&text.replace("\r\n", "\n"));
             }
@@ -447,7 +549,7 @@ impl TextEditor {
                 }
                 let caret = layout.hit_test(position).min(self.buffer.grapheme_count());
                 let unit = match clicks {
-                    2 => self.word_bounds(caret),
+                    2 => self.buffer.word_range(caret),
                     n if n >= 3 => self.paragraph_bounds(caret),
                     _ => caret..caret,
                 };
@@ -475,84 +577,15 @@ impl TextEditor {
                 }
             }
             TextEditorInput::PointerUp => self.dragging = None,
+            // The input method owns the keys while it composes.
             TextEditorInput::Key {
                 event: KeyEvent::Down { key, .. },
-                extend,
-                word,
-            } => match key {
-                Key::Enter if editable => self.buffer.replace_selection("\n"),
-                Key::Tab if editable && self.tab_inserts => self.buffer.replace_selection("\t"),
-                Key::Backspace if editable => self.buffer.delete_backward(),
-                Key::Delete if editable => self.buffer.delete_forward(),
-                Key::ArrowLeft => {
-                    self.buffer.move_caret(
-                        if word {
-                            TextMotion::WordLeft
-                        } else {
-                            TextMotion::Left
-                        },
-                        extend,
-                    );
+                modifiers,
+            } if self.composition.is_none() => {
+                if let Some(key) = editing_key(key, modifiers) {
+                    keep_preferred_x = self.editing(layout, key, editable);
                 }
-                Key::ArrowRight => {
-                    self.buffer.move_caret(
-                        if word {
-                            TextMotion::WordRight
-                        } else {
-                            TextMotion::Right
-                        },
-                        extend,
-                    );
-                }
-                Key::ArrowUp | Key::ArrowDown | Key::PageUp | Key::PageDown => {
-                    let caret = self.buffer.caret();
-                    let line_height = layout
-                        .lines()
-                        .first()
-                        .map_or(16.0, |line| line.height().max(1.0));
-                    let (direction, steps) = match key {
-                        Key::ArrowUp => (-1, 1),
-                        Key::ArrowDown => (1, 1),
-                        Key::PageUp => (-1, (self.page_height / line_height).max(1.0) as usize),
-                        _ => (1, (self.page_height / line_height).max(1.0) as usize),
-                    };
-                    let mut target = caret;
-                    let mut preferred = self.preferred_x;
-                    for _ in 0..steps {
-                        let Some((next, x)) = layout.move_vertical(target, direction, preferred)
-                        else {
-                            break;
-                        };
-                        preferred = Some(x);
-                        if next == target {
-                            break;
-                        }
-                        target = next;
-                    }
-                    let _ = self.buffer.set_caret(target, extend);
-                    self.preferred_x = preferred;
-                    keep_preferred_x = true;
-                }
-                Key::Home | Key::End => {
-                    let caret = self.buffer.caret();
-                    let target = if word {
-                        if key == Key::Home {
-                            0
-                        } else {
-                            self.buffer.grapheme_count()
-                        }
-                    } else {
-                        let line = self.line_bounds(layout, caret).unwrap_or(0..0);
-                        if key == Key::Home {
-                            line.start
-                        } else {
-                            line.end
-                        }
-                    };
-                    let _ = self.buffer.set_caret(target, extend);
-                }
-                _ => {}
-            },
+            }
             _ => {}
         }
         if !keep_preferred_x {
@@ -631,24 +664,24 @@ impl TextEditor {
             .or_else(|| self.hosted_layout(&EstimatedText))
     }
 
-    /// `point` in layout coordinates. Right-to-left layouts mirror.
-    fn layout_point(&self, point: Point) -> Point {
-        let inner = self.host.inner;
-        let x = if self.host.rtl {
-            inner.max_x() - point.x
-        } else {
-            point.x - inner.origin.x
-        };
-        Point::new(x, point.y - inner.origin.y)
-    }
-
     /// Applies `input` in a host and reports an edit.
     fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
         let Some(layout) = self.current_layout() else {
             return;
         };
+        self.apply_in(cx, &layout, input);
+    }
+
+    /// Applies `input` with `layout` and reports an edit as
+    /// `Changed(Text)`.
+    fn apply_in(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        layout: &TextLayout,
+        input: TextEditorInput,
+    ) {
         let node = cx.node();
-        let change = self.handle(cx.tree_mut(), node, &layout, input);
+        let change = self.handle(cx.tree_mut(), node, layout, input);
         if change == Ok(TextEditorChange::Edited) {
             cx.emit(ControlMessage::Changed(ControlValue::Text(
                 self.value().to_string(),
@@ -656,26 +689,142 @@ impl TextEditor {
         }
     }
 
-    /// The input for a key-down in a host, or `None` for a key that the
-    /// editor leaves to the host, such as Tab for focus traversal.
-    fn key_input(&self, event: KeyEvent, cx: &ControlContext<'_>) -> Option<TextEditorInput> {
-        let KeyEvent::Down { key, .. } = event else {
+    /// The input of an Edit command, after its clipboard part ran. A
+    /// read-only editor copies and selects only.
+    fn edit_input(
+        &self,
+        cx: &mut ControlContext<'_>,
+        command: crate::EditCommand,
+    ) -> Option<TextEditorInput> {
+        use crate::EditCommand;
+        if self.read_only && !matches!(command, EditCommand::Copy | EditCommand::SelectAll) {
             return None;
-        };
-        let modifiers = cx.modifiers();
-        match (key, modifiers.command) {
-            (Key::Character('a'), true) => Some(TextEditorInput::SelectAll),
-            (Key::Character('z'), true) if modifiers.shift => Some(TextEditorInput::Redo),
-            (Key::Character('z'), true) => Some(TextEditorInput::Undo),
-            (Key::Character('x'), true) => Some(TextEditorInput::Cut),
-            (Key::Escape, _) | (_, true) => None,
-            (Key::Tab, _) if !self.tab_inserts => None,
-            _ => Some(TextEditorInput::Key {
-                event,
-                extend: modifiers.shift,
-                word: modifiers.option,
-            }),
         }
+        Some(
+            match text_edit(cx, command, Some(self.buffer.selected_text()))? {
+                TextEdit::Cut => TextEditorInput::Cut,
+                TextEdit::Paste(text) => TextEditorInput::Paste(text),
+                TextEdit::SelectAll => TextEditorInput::SelectAll,
+                TextEdit::Undo => TextEditorInput::Undo,
+                TextEdit::Redo => TextEditorInput::Redo,
+            },
+        )
+    }
+
+    /// The editor input for an input method event.
+    fn composition_input(event: &CompositionEvent) -> TextEditorInput {
+        match event.clone() {
+            CompositionEvent::Mark {
+                text,
+                selected_utf16,
+                replacement_utf16,
+            } => TextEditorInput::SetMarkedText {
+                text,
+                selected_utf16,
+                replacement_utf16,
+            },
+            CompositionEvent::Commit {
+                text,
+                replacement_utf16,
+            } => TextEditorInput::CommitMarkedText {
+                text,
+                replacement_utf16,
+            },
+            CompositionEvent::Unmark => TextEditorInput::UnmarkMarkedText,
+        }
+    }
+
+    /// Handles `event` in a control host for text laid out as `layout`.
+    /// `to_layout` maps a window point to layout coordinates. Presses use
+    /// the click count: two select a word and three a paragraph. Keys go
+    /// through the shared editing key map, and Edit commands through the
+    /// clipboard. The textarea uses it too.
+    pub(crate) fn hosted_event(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+        layout: &TextLayout,
+        to_layout: impl Fn(Point) -> Point,
+    ) -> EventReply {
+        let modifiers = cx.modifiers();
+        let input = match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                cx.request_focus();
+                self.pressed = true;
+                cx.capture_pointer(true);
+                TextEditorInput::PointerDown {
+                    position: to_layout(*position),
+                    extend: modifiers.shift,
+                    clicks: u8::try_from(cx.click_count()).unwrap_or(u8::MAX),
+                }
+            }
+            ControlEvent::Pointer(PointerEvent::Move { position }) if self.pressed => {
+                TextEditorInput::PointerDrag {
+                    position: to_layout(*position),
+                }
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                TextEditorInput::PointerUp
+            }
+            ControlEvent::Key(event @ KeyEvent::Down { key, .. }) if cx.is_focused() => {
+                match editing_key(*key, modifiers) {
+                    Some(EditingKey::Tab) if !self.tab_inserts => return EventReply::Continue,
+                    Some(_) => TextEditorInput::Key {
+                        event: *event,
+                        modifiers,
+                    },
+                    // The typed text arrives as `Text`.
+                    None if is_typing_key(*key, modifiers) => return EventReply::Stop,
+                    None => return EventReply::Continue,
+                }
+            }
+            ControlEvent::Text(text) if cx.is_focused() => TextEditorInput::Text(text.clone()),
+            ControlEvent::Compose(composition) if cx.is_focused() => {
+                Self::composition_input(composition)
+            }
+            ControlEvent::Edit(command) if cx.is_focused() => match self.edit_input(cx, *command) {
+                Some(input) => input,
+                None => return EventReply::Stop,
+            },
+            ControlEvent::FocusChanged(focused) => {
+                if !focused && self.composition.is_some() {
+                    self.apply_in(cx, layout, TextEditorInput::UnmarkMarkedText);
+                }
+                if self.pressed {
+                    self.pressed = false;
+                    cx.capture_pointer(false);
+                }
+                cx.request_paint();
+                return EventReply::Continue;
+            }
+            _ => return EventReply::Continue,
+        };
+        self.apply_in(cx, layout, input);
+        cx.request_paint();
+        cx.request_semantics();
+        EventReply::Stop
+    }
+
+    /// The input method state for `layout` placed by `to_window`, which
+    /// maps a layout rectangle to window coordinates.
+    pub(crate) fn hosted_text_input(
+        &self,
+        layout: &TextLayout,
+        to_window: impl Fn(Rect) -> Rect,
+    ) -> Option<TextInputInfo> {
+        if !self.enabled || self.read_only {
+            return None;
+        }
+        Some(TextInputInfo {
+            selected_utf16: self.selection_utf16(),
+            marked_utf16: self.marked_range_utf16(),
+            caret: to_window(self.caret_rect(layout)?),
+        })
     }
 }
 
@@ -708,50 +857,11 @@ impl CustomControl for TextEditor {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if cx.bounds().contains(*position) => {
-                cx.request_focus();
-                let input = TextEditorInput::PointerDown {
-                    position: self.layout_point(*position),
-                    extend: cx.modifiers().shift,
-                    clicks: 1,
-                };
-                self.apply(cx, input);
-                self.host.pressed = true;
-                cx.capture_pointer(true);
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) if self.host.pressed => {
-                let position = self.layout_point(*position);
-                self.apply(cx, TextEditorInput::PointerDrag { position });
-                EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Up { .. }) if self.host.pressed => {
-                self.host.pressed = false;
-                cx.capture_pointer(false);
-                self.apply(cx, TextEditorInput::PointerUp);
-                EventReply::Stop
-            }
-            ControlEvent::Key(key) if cx.is_focused() => match self.key_input(*key, cx) {
-                Some(input) => {
-                    self.apply(cx, input);
-                    EventReply::Stop
-                }
-                None => EventReply::Continue,
-            },
-            ControlEvent::Text(text) if cx.is_focused() => {
-                self.apply(cx, TextEditorInput::Text(text.clone()));
-                EventReply::Stop
-            }
-            ControlEvent::FocusChanged(_) => {
-                cx.request_paint();
-                EventReply::Continue
-            }
-            _ => EventReply::Continue,
-        }
+        let Some(layout) = self.current_layout() else {
+            return EventReply::Continue;
+        };
+        let (inner, rtl) = (self.host.inner, self.host.rtl);
+        self.hosted_event(cx, event, &layout, |point| layout_point(inner, rtl, point))
     }
 
     /// Paints the box, then the selection, the lines, and the caret while
@@ -812,6 +922,12 @@ impl CustomControl for TextEditor {
         TextEditor::semantics(self)
     }
 
+    fn text_input(&self) -> Option<TextInputInfo> {
+        let layout = self.host.layout.borrow();
+        let (inner, rtl) = (self.host.inner, self.host.rtl);
+        self.hosted_text_input(layout.as_ref()?, |rect| window_rect(inner, rtl, rect))
+    }
+
     fn perform(
         &mut self,
         cx: &mut ControlContext<'_>,
@@ -834,9 +950,6 @@ impl CustomControl for TextEditor {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.set_enabled_state(enabled);
-        if !enabled {
-            self.host.pressed = false;
-        }
     }
 
     fn set_value(&mut self, value: &ControlValue) -> bool {
@@ -845,5 +958,28 @@ impl CustomControl for TextEditor {
         };
         self.replace_value(text);
         true
+    }
+}
+
+/// `point` in the layout coordinates of text in `inner`. Right-to-left
+/// layouts mirror.
+pub(crate) fn layout_point(inner: Rect, rtl: bool, point: Point) -> Point {
+    let x = if rtl {
+        inner.max_x() - point.x
+    } else {
+        point.x - inner.origin.x
+    };
+    Point::new(x, point.y - inner.origin.y)
+}
+
+/// The window rectangle of `rect` in the layout coordinates of text in
+/// `inner`. Right-to-left layouts mirror.
+pub(crate) fn window_rect(inner: Rect, rtl: bool, rect: Rect) -> Rect {
+    let rect = rect.translate(inner.origin.x, inner.origin.y);
+    if rtl {
+        let x = inner.origin.x + inner.max_x() - rect.max_x();
+        Rect::from_xywh(x, rect.origin.y, rect.size.width, rect.size.height)
+    } else {
+        rect
     }
 }

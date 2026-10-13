@@ -87,6 +87,40 @@ fn grapheme_and_word_motion_extend_and_collapse_selection() {
 }
 
 #[test]
+fn word_range_finds_the_word_space_or_mark_at_an_index() {
+    let text = TextBuffer::new("Xin chào, thế giới!");
+    assert_eq!(text.word_range(0), 0..3, "Xin");
+    assert_eq!(text.word_range(5), 4..8, "chào");
+    assert_eq!(text.word_range(8), 8..9, "the comma");
+    assert_eq!(text.word_range(9), 9..10, "the space");
+    assert_eq!(text.word_range(19), 18..19, "the end gives the last mark");
+    assert_eq!(TextBuffer::new("").word_range(0), 0..0);
+}
+
+#[test]
+fn delete_to_removes_a_span_or_the_selection_as_one_undo_step() {
+    let mut text = TextBuffer::new("one two three");
+    text.set_caret(7, false).unwrap();
+    let target = text.motion_target(TextMotion::WordLeft);
+    assert_eq!(target, 4);
+    text.delete_to(target).unwrap();
+    assert_eq!(text.as_str(), "one  three");
+    assert_eq!(text.selection(), 4..4);
+    text.delete_to(0).unwrap();
+    assert_eq!(text.as_str(), " three");
+    assert!(text.undo());
+    assert_eq!(text.as_str(), "one  three");
+    assert!(text.undo());
+    assert_eq!(text.as_str(), "one two three");
+    assert_eq!(text.selection(), 7..7);
+
+    text.set_selection(0, 3).unwrap();
+    text.delete_to(13).unwrap();
+    assert_eq!(text.as_str(), " two three", "a selection deletes first");
+    assert_eq!(text.delete_to(99), Err(TextError::InvalidSelection));
+}
+
+#[test]
 fn undo_backspace_restores_original_collapsed_caret() {
     let mut text = TextBuffer::new("A👩‍💻B");
     text.set_selection(2, 2).unwrap();

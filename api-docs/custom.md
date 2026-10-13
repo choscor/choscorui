@@ -269,6 +269,15 @@ What a control may do while handling an event.
 
 ### Methods
 
+#### `ControlContext::beep`
+
+```rust
+pub fn beep(&self)
+```
+
+Plays the system alert sound through the host's `Feedback`, for
+example when the control refuses a key or a paste.
+
 #### `ControlContext::bounds`
 
 ```rust
@@ -284,6 +293,24 @@ pub fn capture_pointer(&mut self, capture: bool)
 ```
 
 Routes later pointer events here until released (drags).
+
+#### `ControlContext::click_count`
+
+```rust
+pub fn click_count(&self) -> u32
+```
+
+The click count of the pointer event: 2 for a double click and 3
+for a triple click, within the system double-click interval.
+
+#### `ControlContext::clipboard_text`
+
+```rust
+pub fn clipboard_text(&self) -> Option<String>
+```
+
+The text on the clipboard, or `None` when the backend has no
+clipboard, the clipboard has no text, or the read fails.
 
 #### `ControlContext::emit`
 
@@ -366,6 +393,24 @@ pub fn request_semantics(&mut self)
 
 Marks the control to publish its semantics again.
 
+#### `ControlContext::services`
+
+```rust
+pub fn services(&self) -> &Services
+```
+
+The desktop services of the backend, which check its
+capabilities.
+
+#### `ControlContext::strings`
+
+```rust
+pub fn strings(&self) -> &Localizer
+```
+
+The messages of the window locale, for the built-in text of a
+message or a description.
+
 #### `ControlContext::time`
 
 ```rust
@@ -373,6 +418,15 @@ pub fn time(&self) -> f64
 ```
 
 The host time in seconds, for delays such as a tooltip's.
+
+#### `ControlContext::write_clipboard`
+
+```rust
+pub fn write_clipboard(&mut self, text: &str) -> bool
+```
+
+Puts `text` on the clipboard. Returns false when the backend has no
+clipboard or the write fails.
 
 ## `ControlEvent`
 
@@ -383,6 +437,8 @@ pub enum ControlEvent {
     Pointer(PointerEvent),
     Key(KeyEvent),
     Text(String),
+    Compose(CompositionEvent),
+    Edit(EditCommand),
     FocusChanged(bool),
     Hover(bool),
     Dismiss,
@@ -398,6 +454,10 @@ Input delivered to a control.
 - `Pointer(PointerEvent)`
 - `Key(KeyEvent)`
 - `Text(String)`: Committed text (typing or IME) while focused.
+- `Compose(CompositionEvent)`: Input method composition while focused. A control that does not
+  use it gets the committed text as `ControlEvent::Text`.
+- `Edit(EditCommand)`: An Edit menu command, or its Command-key chord that no control
+  used as a key, while focused.
 - `FocusChanged(bool)`
 - `Hover(bool)`: The pointer entered (`true`) or left (`false`) the node, one of its
   descendants, or its overlay.
@@ -647,7 +707,19 @@ Performs an assistive action listed in `semantics().actions`.
 fn semantics(&self) -> SemanticNode
 ```
 
-Accessible role, name, value, state, and supported actions.
+Accessible role, name, value, state, and supported actions, with
+the built-in English messages.
+
+#### `CustomControl::semantics_in`
+
+```rust
+fn semantics_in(&self, strings: &Localizer) -> SemanticNode
+```
+
+The semantics with the messages of the window locale. The host
+publishes this. A control with built-in text in its name or
+description overrides it; the default returns
+[`semantics`](#customcontrolsemantics).
 
 #### `CustomControl::set_enabled`
 
@@ -678,6 +750,16 @@ Takes a value from the application, of the kind that the control
 reports in `ControlMessage::Changed`. Returns false when the
 control has no such value or the value does not fit. The control
 emits no message for it.
+
+#### `CustomControl::text_input`
+
+```rust
+fn text_input(&self) -> Option<TextInputInfo>
+```
+
+The selection, the marked text, and the caret rectangle of an
+editable text control, for the input method. Other controls return
+`None`.
 
 #### `CustomControl::window_shortcuts`
 
@@ -777,13 +859,15 @@ pub struct PaintContext<'a> {
     pub rtl: bool,
     pub state: VisualState,
     pub time: f64,
+    pub strings: &'a Localizer,
     /* private fields */
 }
 ```
 
 Everything a control needs to paint one node: the display list, the
 node's bounds, the tokens, the style cache, text measurement, the
-layout direction, and the host's view of the node's state.
+layout direction, the messages, and the host's view of the node's
+state.
 
 ### Fields
 
@@ -795,6 +879,8 @@ layout direction, and the host's view of the node's state.
 - `rtl`
 - `state`: Hover, focus, and focus-visible as the host tracks them.
 - `time`: Monotonic time in seconds, for running animations.
+- `strings`: The messages of the window locale, for the built-in text that a
+  control paints.
 
 ### Methods
 
@@ -837,7 +923,8 @@ pub fn new(list: &'a mut DisplayList, bounds: Rect, tokens: &'a DesignTokens, st
 ```
 
 A context that paints into `list` inside `bounds`, left-to-right,
-with no visual state, at time zero.
+with no visual state, at time zero, with the built-in English
+messages.
 
 #### `PaintContext::rtl`
 
@@ -863,6 +950,14 @@ pub fn state(self, state: VisualState) -> Self
 ```
 
 Sets the hover, focus, and disabled flags of the node.
+
+#### `PaintContext::strings`
+
+```rust
+pub fn strings(self, strings: &'a Localizer) -> Self
+```
+
+Sets the messages of the window locale.
 
 #### `PaintContext::style`
 

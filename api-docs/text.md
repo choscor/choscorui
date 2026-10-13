@@ -16,8 +16,21 @@ Translations keyed by locale tag and message id.
 Messages use `{name}` placeholders. `{{` and `}}` are literal braces.
 Plural messages select a variant with [`Catalog::plural`](#catalogplural) and receive the
 formatted count as `{count}`.
+A clone shares the messages until one of the catalogs changes.
 
 ### Methods
+
+#### `Catalog::builtin`
+
+```rust
+pub fn builtin() -> &'static Catalog
+```
+
+The built-in messages of the toolkit, with `choscorui.*` ids, in
+English and Vietnamese. The English messages are also the messages
+of the root locale, so every other locale falls back to them.
+`Localizer` uses them for each id that the application catalog
+does not define.
 
 #### `Catalog::insert`
 

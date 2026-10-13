@@ -174,45 +174,92 @@ impl TextBuffer {
     /// horizontal move first collapses an existing selection to that edge.
     pub fn move_caret(&mut self, motion: TextMotion, extend: bool) -> usize {
         let selected = self.selection();
-        let len = self.grapheme_count();
         let next = if !extend && !selected.is_empty() {
             match motion {
                 TextMotion::Left | TextMotion::WordLeft => selected.start,
                 TextMotion::Right | TextMotion::WordRight => selected.end,
                 TextMotion::Start => 0,
-                TextMotion::End => len,
+                TextMotion::End => self.grapheme_count(),
             }
         } else {
-            match motion {
-                TextMotion::Left => self.caret.saturating_sub(1),
-                TextMotion::Right => (self.caret + 1).min(len),
-                TextMotion::Start => 0,
-                TextMotion::End => len,
-                TextMotion::WordLeft => {
-                    let byte = self.grapheme_to_byte(self.caret).expect("caret in bounds");
-                    self.text
-                        .unicode_word_indices()
-                        .take_while(|(start, _)| *start < byte)
-                        .last()
-                        .and_then(|(start, _)| self.byte_to_grapheme(start))
-                        .unwrap_or(0)
-                }
-                TextMotion::WordRight => {
-                    let byte = self.grapheme_to_byte(self.caret).expect("caret in bounds");
-                    self.text
-                        .unicode_word_indices()
-                        .map(|(start, word)| start + word.len())
-                        .find(|end| *end > byte)
-                        .and_then(|end| self.byte_to_grapheme(end))
-                        .unwrap_or(len)
-                }
-            }
+            self.motion_target(motion)
         };
         self.caret = next;
         if !extend {
             self.anchor = next;
         }
         next
+    }
+
+    /// The grapheme index that `motion` reaches from the caret. The
+    /// selection does not change.
+    pub fn motion_target(&self, motion: TextMotion) -> usize {
+        let len = self.grapheme_count();
+        match motion {
+            TextMotion::Left => self.caret.saturating_sub(1),
+            TextMotion::Right => (self.caret + 1).min(len),
+            TextMotion::Start => 0,
+            TextMotion::End => len,
+            TextMotion::WordLeft => {
+                let byte = self.grapheme_to_byte(self.caret).expect("caret in bounds");
+                self.text
+                    .unicode_word_indices()
+                    .take_while(|(start, _)| *start < byte)
+                    .last()
+                    .and_then(|(start, _)| self.byte_to_grapheme(start))
+                    .unwrap_or(0)
+            }
+            TextMotion::WordRight => {
+                let byte = self.grapheme_to_byte(self.caret).expect("caret in bounds");
+                self.text
+                    .unicode_word_indices()
+                    .map(|(start, word)| start + word.len())
+                    .find(|end| *end > byte)
+                    .and_then(|end| self.byte_to_grapheme(end))
+                    .unwrap_or(len)
+            }
+        }
+    }
+
+    /// The word-boundary segment at grapheme `index`, as a grapheme
+    /// range: a word, a run of spaces, or one punctuation mark. At the end
+    /// of the text it is the last segment. A double click selects it.
+    pub fn word_range(&self, index: usize) -> Range<usize> {
+        let byte = self.grapheme_to_byte(index).unwrap_or(self.text.len());
+        let segment = self
+            .text
+            .split_word_bound_indices()
+            .map(|(start, part)| start..start + part.len())
+            .find(|range| range.contains(&byte))
+            .or_else(|| {
+                self.text
+                    .split_word_bound_indices()
+                    .next_back()
+                    .map(|(start, part)| start..start + part.len())
+            })
+            .unwrap_or(0..0);
+        let start = self.byte_to_grapheme(segment.start).unwrap_or(0);
+        let end = self
+            .byte_to_grapheme(segment.end)
+            .unwrap_or_else(|| self.grapheme_count());
+        start..end
+    }
+
+    /// Deletes the selection. Without a selection, deletes the text
+    /// between the caret and grapheme `target`. The deletion is one undo
+    /// step.
+    pub fn delete_to(&mut self, target: usize) -> Result<(), TextError> {
+        if target > self.grapheme_count() {
+            return Err(TextError::InvalidSelection);
+        }
+        if !self.selection().is_empty() {
+            self.replace_selection("");
+        } else if target != self.caret {
+            let before = (self.anchor, self.caret);
+            self.anchor = target;
+            self.replace_selection_from("", before);
+        }
+        Ok(())
     }
 
     pub fn replace_selection(&mut self, replacement: &str) {

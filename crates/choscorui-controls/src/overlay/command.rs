@@ -4,7 +4,6 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::form::input::Editor;
 use crate::hosted::{self, Press, PressOutcome, Reveal};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, Edges, PaintContext, ResolvedStyle, Slot, StyleQuery,
@@ -13,7 +12,7 @@ use crate::style::{
 use crate::text_field::TextField;
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit, fold_for_search,
+    SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo, WheelUnit, fold_for_search,
 };
 
 /// The tallest the list grows before it scrolls, in points.
@@ -99,7 +98,7 @@ struct DialogForm {
 pub struct Command {
     name: String,
     groups: Vec<(String, Vec<CommandItem>)>,
-    editor: Editor,
+    editor: TextField,
     empty: String,
     rows: Vec<Row>,
     /// The highlighted item, by its index across all groups.
@@ -129,7 +128,7 @@ impl Command {
         let mut command = Self {
             name,
             groups,
-            editor: Editor::new(field),
+            editor: field,
             empty: String::new(),
             rows: Vec::new(),
             highlighted: None,
@@ -175,7 +174,7 @@ impl Command {
 
     /// The search text.
     pub fn query(&self) -> &str {
-        self.editor.field.value()
+        self.editor.value()
     }
 
     pub fn is_open(&self) -> bool {
@@ -376,7 +375,7 @@ impl Command {
         }
         dialog.reveal.set(open, time);
         if open {
-            self.editor.replace("");
+            self.editor.replace_value("");
             self.filter();
         }
         true
@@ -505,7 +504,7 @@ impl Command {
         cx.slot(self.panel, &root, |_, _| {});
         let state = self
             .editor
-            .state(VisualState::NONE.set(VisualState::FOCUSED, focused));
+            .hosted_state(VisualState::NONE.set(VisualState::FOCUSED, focused));
         let input = cx.style(self.style_query(Slot::Input, state));
         let icon = cx.style(self.style_query(Slot::Icon, VisualState::NONE));
         let flat = ResolvedStyle {
@@ -525,7 +524,7 @@ impl Command {
             self.input.size.height,
         );
         cx.icon(mark, Icon::Search, &icon);
-        self.editor.paint_text(cx, self.text, state);
+        self.editor.paint_hosted_text(cx, self.text, state);
         self.paint_list(cx);
     }
 
@@ -679,7 +678,7 @@ impl CustomControl for Command {
         }
         let before = self.query().to_string();
         let text = self.text;
-        let reply = self.editor.event(cx, event, text);
+        let reply = self.editor.hosted_event(cx, event, text);
         if self.query() != before {
             self.filter();
             cx.request_layout();
@@ -747,6 +746,10 @@ impl CustomControl for Command {
             .is_some_and(|dialog| dialog.reveal.animating(self.motion_ms, time))
     }
 
+    fn text_input(&self) -> Option<TextInputInfo> {
+        self.editor.hosted_text_input()
+    }
+
     fn semantics(&self) -> SemanticNode {
         if let Some(dialog) = self.dialog.as_ref().filter(|dialog| !dialog.reveal.open) {
             let actions = if self.enabled {
@@ -806,7 +809,7 @@ impl CustomControl for Command {
                 None => false,
             },
             SemanticAction::SetValue => {
-                let changed = self.editor.set_value(cx, value.unwrap_or_default());
+                let changed = self.editor.hosted_set_value(cx, value.unwrap_or_default());
                 self.filter();
                 cx.request_layout();
                 changed
@@ -826,7 +829,7 @@ impl CustomControl for Command {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
-        self.editor.field.set_enabled_state(enabled);
+        self.editor.set_enabled_state(enabled);
         if !enabled && let Some(dialog) = &mut self.dialog {
             dialog.reveal = Reveal::default();
         }
@@ -834,7 +837,7 @@ impl CustomControl for Command {
 
     /// Takes `Text` as the search, and filters the commands.
     fn set_value(&mut self, value: &ControlValue) -> bool {
-        let taken = self.editor.set_text(value);
+        let taken = self.editor.take_text(value);
         if taken {
             self.filter();
         }

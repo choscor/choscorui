@@ -581,6 +581,7 @@ impl Resizable {
             rtl: false,
             active: 0,
             drag: None,
+            collapsed: None,
             handle_nodes: false,
         })
     }
@@ -617,6 +618,9 @@ pub struct HostedResizable {
     active: usize,
     /// The dragged handle and the pointer's offset from its start.
     drag: Option<(usize, f64)>,
+    /// The handle whose pane a double click collapsed, and the pane's
+    /// size before the collapse.
+    collapsed: Option<(usize, f64)>,
     /// Each handle is its own node, driven through the `handle_*`
     /// methods; the group node is a plain group.
     handle_nodes: bool,
@@ -855,6 +859,24 @@ impl HostedResizable {
         }
     }
 
+    /// Collapses the pane before handle `index` to its minimum, or
+    /// restores the size that it had before a collapse.
+    fn toggle_collapse(&mut self, cx: &mut crate::ControlContext<'_>, index: usize) {
+        let current = self.layout()[index];
+        let minimum = self.minimums[index];
+        self.active = index;
+        match self.collapsed.take() {
+            Some((handle, size)) if handle == index && current <= minimum => {
+                self.move_to(cx, index, size);
+            }
+            _ if current > minimum => {
+                self.collapsed = Some((index, current));
+                self.move_to(cx, index, minimum);
+            }
+            _ => {}
+        }
+    }
+
     fn pointer(
         &mut self,
         cx: &mut crate::ControlContext<'_>,
@@ -882,6 +904,10 @@ impl HostedResizable {
         index: usize,
         position: Point,
     ) -> choscorui_core::EventReply {
+        if cx.click_count() >= 2 {
+            self.toggle_collapse(cx, index);
+            return choscorui_core::EventReply::Stop;
+        }
         let start = self.pane_start(&self.layout(), index + 1) - self.handle_extent;
         self.active = index;
         self.drag = Some((index, self.along(bounds, position) - start));

@@ -199,6 +199,15 @@ To connect a text control to the IME, do these steps:
 
 AppKit reads `caret` to put the IME candidate window next to the text.
 
+An application of the `choscorui` facade does not do these steps. The
+facade sends each `ImeEvent` to `ViewHost::composition` as a
+`CompositionEvent`. After the events of a turn, it sets the text input state
+from `ViewHost::text_input`. The hosted text controls show the marked text
+underlined at the caret.
+
+While text is marked, the content view gives each key-down only to the
+input method. The window then sends no `Key` event for it.
+
 The backend also commits ordinary typed text as `ImeEvent::CommitText`. It
 calls `interpretKeyEvents:` for each key press without Command or Control.
 When that call gives no text, the backend uses the characters of the key
