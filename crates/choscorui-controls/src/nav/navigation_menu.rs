@@ -322,6 +322,14 @@ impl NavigationMenu {
                 }
             }
             (Key::ArrowUp, Focus::Link(link)) => self.set_focus(cx, Focus::Link(link - 1)),
+            // The links sit in reading order, so the arrows follow it.
+            (Key::ArrowLeft | Key::ArrowRight, Focus::Link(link)) => {
+                let next = match key.in_reading_order(self.rtl) {
+                    Key::ArrowRight => (link + 1).min(links.saturating_sub(1)),
+                    _ => link.saturating_sub(1),
+                };
+                self.set_focus(cx, Focus::Link(next));
+            }
             (Key::ArrowLeft | Key::ArrowRight | Key::Home | Key::End, Focus::Trigger(item)) => {
                 let Some(next) = hosted::rove(key, item, count, true, self.rtl) else {
                     return EventReply::Continue;

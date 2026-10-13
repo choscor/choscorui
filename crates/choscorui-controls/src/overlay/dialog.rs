@@ -399,7 +399,9 @@ impl Dialog {
     }
 
     fn paint_panel(&self, cx: &mut PaintContext<'_>, panel: &ResolvedStyle, focus_visible: bool) {
-        cx.slot(self.panel, panel, |_, _| {});
+        // The recipe puts the border of a sheet on the side that faces
+        // the window, by the physical edge.
+        cx.edge_panel(self.panel, panel, false);
         if let Some(handle) = self.handle {
             let style = cx.style(self.query(Slot::Handle));
             let bar = ResolvedStyle {

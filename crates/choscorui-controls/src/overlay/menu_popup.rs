@@ -76,6 +76,7 @@ impl MenuPopup {
         let rows = widest(self.menu.items(), cx);
         self.width = (rows + root.padding.horizontal()).max(min_width);
         self.direction = cx.direction;
+        self.menu.set_direction(cx.direction);
         self.bounds = cx.popup_bounds();
         self.motion_ms = root.motion_ms;
     }

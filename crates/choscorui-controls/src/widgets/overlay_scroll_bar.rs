@@ -34,7 +34,6 @@ pub struct OverlayScrollBar {
     bar: ScrollBar,
     viewport: Rect,
     thickness: f64,
-    rtl: bool,
     hovered: bool,
 }
 
@@ -44,7 +43,6 @@ impl OverlayScrollBar {
             bar: ScrollBar::new("", orientation),
             viewport: Rect::default(),
             thickness: 0.0,
-            rtl: false,
             hovered: false,
         }
     }
@@ -62,7 +60,7 @@ impl OverlayScrollBar {
             ScrollOrientation::Horizontal => bar.min_height,
         };
         self.viewport = viewport;
-        self.rtl = cx.rtl();
+        self.bar.set_direction(cx.direction);
         let (content, offset) = (self.bar.content, self.bar.value());
         self.set_scroll(content, offset);
     }
@@ -111,7 +109,7 @@ impl OverlayScrollBar {
         let (view, t) = (self.viewport, self.thickness);
         Some(match self.orientation() {
             ScrollOrientation::Vertical => {
-                let x = if self.rtl {
+                let x = if self.bar.rtl {
                     view.min_x()
                 } else {
                     view.max_x() - t
@@ -128,14 +126,6 @@ impl OverlayScrollBar {
     /// not needed. The painted thumb is inset by the bar padding.
     pub fn thumb(&self) -> Option<Rect> {
         self.track().map(|track| self.bar.thumb_rect(track))
-    }
-
-    /// The offset of `point` along the bar from the track start.
-    fn along(&self, track: Rect, point: Point) -> f64 {
-        match self.orientation() {
-            ScrollOrientation::Vertical => point.y - track.min_y(),
-            ScrollOrientation::Horizontal => point.x - track.min_x(),
-        }
     }
 
     /// Handles one pointer event in the viewport's coordinates. A primary
@@ -156,7 +146,7 @@ impl OverlayScrollBar {
             } if track.contains(position) => {
                 let before = self.dragging();
                 reply.scrolled = self.bar.handle(ScrollBarInput::Press {
-                    at: self.along(track, position),
+                    at: self.bar.along(track, position),
                 });
                 reply.consumed = true;
                 reply.repaint = reply.scrolled || before != self.dragging();
@@ -167,7 +157,7 @@ impl OverlayScrollBar {
                 self.hovered = hovered;
                 if self.dragging() {
                     reply.scrolled = self.bar.handle(ScrollBarInput::Drag {
-                        at: self.along(track, position),
+                        at: self.bar.along(track, position),
                     });
                     reply.consumed = true;
                 }

@@ -771,12 +771,9 @@ impl Sidebar {
     /// Paints the sidebar box with its border on the inner edge.
     fn paint_root(&self, cx: &mut PaintContext<'_>, rect: Rect, compact: bool) {
         let style = cx.style(self.query(Slot::Root, self.size(compact), VisualState::NONE));
-        // The recipe puts the border at the inline end. A right sidebar
-        // needs it on the left, which is the inline end right to left.
-        let rtl = cx.rtl;
-        cx.rtl = self.side == SheetSide::Right;
-        cx.slot(rect, &style, |_, _| {});
-        cx.rtl = rtl;
+        // The recipe puts the border at the inline end, which is the
+        // inner edge of a left sidebar. A right sidebar mirrors it.
+        cx.edge_panel(rect, &style, self.side == SheetSide::Right);
     }
 }
 

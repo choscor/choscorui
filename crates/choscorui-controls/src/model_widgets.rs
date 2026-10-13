@@ -11,8 +11,8 @@ use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, Visua
 use crate::validation::{DateError, NumberError, ValidationError};
 use crate::{DateInput, InputFilter, NumberInput, ValidationState};
 use choscorui_core::{
-    CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Locale,
-    Localizer, Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role,
+    CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection,
+    Locale, Localizer, Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role,
     SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
 };
 use std::collections::HashMap;
@@ -46,8 +46,11 @@ pub struct HeaderView {
     columns: Vec<HeaderColumn>,
     sort: Option<(usize, SortOrder)>,
     focused: usize,
+    /// The column, the pointer offset, and the width at a resize press.
     resizing: Option<(usize, f64, f64)>,
+    /// The start edge of the first column in reading order.
     origin_x: f64,
+    rtl: bool,
 }
 
 /// Distance from a column edge that starts a resize.
@@ -62,6 +65,7 @@ impl HeaderView {
             focused: 0,
             resizing: None,
             origin_x: 0.0,
+            rtl: false,
         }
     }
     pub fn columns(&self) -> &[HeaderColumn] {
@@ -76,8 +80,16 @@ impl HeaderView {
     pub fn focused_column(&self) -> usize {
         self.focused
     }
+    /// Places the start edge of the first column at `x`: its left edge,
+    /// or its right edge in a right-to-left layout.
     pub fn set_origin_x(&mut self, x: f64) {
         self.origin_x = x;
+    }
+    /// Runs the columns from the right in a right-to-left layout, for
+    /// pointer input and the arrow keys. Paint reads the direction from
+    /// its context.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
     /// Restores saved widths (extra or missing entries are ignored).
     pub fn restore_widths(&mut self, widths: &[f64]) {
@@ -92,24 +104,33 @@ impl HeaderView {
         self.sort = sort.filter(|(column, _)| *column < self.columns.len());
     }
 
-    fn edge_at(&self, x: f64) -> Option<usize> {
-        let mut right = self.origin_x;
+    /// The distance of `x` from the start edge, in reading order.
+    fn offset(&self, x: f64) -> f64 {
+        if self.rtl {
+            self.origin_x - x
+        } else {
+            x - self.origin_x
+        }
+    }
+
+    fn edge_at(&self, offset: f64) -> Option<usize> {
+        let mut end = 0.0;
         for (index, column) in self.columns.iter().enumerate() {
-            right += column.width;
-            if (x - right).abs() <= RESIZE_SLOP {
+            end += column.width;
+            if (offset - end).abs() <= RESIZE_SLOP {
                 return Some(index);
             }
         }
         None
     }
 
-    fn column_at(&self, x: f64) -> Option<usize> {
-        let mut left = self.origin_x;
+    fn column_at(&self, offset: f64) -> Option<usize> {
+        let mut start = 0.0;
         for (index, column) in self.columns.iter().enumerate() {
-            if x >= left && x < left + column.width {
+            if offset >= start && offset < start + column.width {
                 return Some(index);
             }
-            left += column.width;
+            start += column.width;
         }
         None
     }
@@ -137,9 +158,10 @@ impl HeaderView {
         let mut response = HeaderResponse::default();
         match input {
             HeaderInput::Press { x } => {
-                if let Some(edge) = self.edge_at(x) {
-                    self.resizing = Some((edge, x, self.columns[edge].width));
-                } else if let Some(column) = self.column_at(x) {
+                let offset = self.offset(x);
+                if let Some(edge) = self.edge_at(offset) {
+                    self.resizing = Some((edge, offset, self.columns[edge].width));
+                } else if let Some(column) = self.column_at(offset) {
                     self.focused = column;
                     self.toggle_sort(column);
                     response.sort_changed = true;
@@ -147,13 +169,13 @@ impl HeaderView {
             }
             HeaderInput::Drag { x } => {
                 if let Some((column, start, width)) = self.resizing
-                    && self.resize(column, width + x - start)
+                    && self.resize(column, width + self.offset(x) - start)
                 {
                     response.resized = Some(column);
                 }
             }
             HeaderInput::Release => self.resizing = None,
-            HeaderInput::Key(key) => match key {
+            HeaderInput::Key(key) => match key.in_reading_order(self.rtl) {
                 Key::ArrowLeft => self.focused = self.focused.saturating_sub(1),
                 Key::ArrowRight => {
                     self.focused = (self.focused + 1).min(self.columns.len().saturating_sub(1))
@@ -222,8 +244,13 @@ impl HeaderView {
         cx.slot(bounds, &header, |_, _| {});
         let indicator = cx.style(query(Slot::Indicator));
         let handle = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle));
-        let mut x = bounds.origin.x;
+        let mut offset = 0.0;
         for (index, column) in self.columns.iter().enumerate() {
+            let x = if cx.rtl {
+                bounds.max_x() - offset - column.width
+            } else {
+                bounds.origin.x + offset
+            };
             let rect = Rect::new(
                 Point::new(x, bounds.origin.y),
                 Size::new(column.width, bounds.size.height),
@@ -264,8 +291,13 @@ impl HeaderView {
             });
             let _ = cx.list.pop_clip();
             // The resize divider at the column's end.
+            let end = if cx.rtl { x } else { x + column.width };
             let divider = Rect::from_xywh(
-                x + column.width - header.border_width,
+                if cx.rtl {
+                    end
+                } else {
+                    end - header.border_width
+                },
                 bounds.origin.y + cell.padding.block_start,
                 header.border_width,
                 (bounds.size.height - cell.padding.vertical()).max(0.0),
@@ -273,7 +305,7 @@ impl HeaderView {
             cx.list.fill_rect(divider, header.border);
             // The edge that starts a resize shows the cursor of a handle.
             let edge = Rect::from_xywh(
-                x + column.width - RESIZE_SLOP,
+                end - RESIZE_SLOP,
                 bounds.origin.y,
                 RESIZE_SLOP * 2.0,
                 bounds.size.height,
@@ -283,7 +315,7 @@ impl HeaderView {
                 let ring = cx.style(query(Slot::Root).state(state));
                 cx.slot(rect, &ring, |_, _| {});
             }
-            x += column.width;
+            offset += column.width;
         }
     }
 }
@@ -751,8 +783,13 @@ impl CustomControl for HeaderView {
         Measured::new(cx.constraints.constrain(Size::new(width, height)))
     }
 
-    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
-        self.origin_x = bounds.origin.x;
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.rtl = cx.rtl();
+        self.origin_x = if self.rtl {
+            bounds.max_x()
+        } else {
+            bounds.origin.x
+        };
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -992,11 +1029,7 @@ impl CustomControl for HostedColumnBrowser {
             }) => self.press(cx, position),
             Routed::Key(KeyEvent::Down { key, .. }) => {
                 // Columns follow reading order, so the keys mirror too.
-                let key = match (key, self.rtl) {
-                    (Key::ArrowLeft, true) => Key::ArrowRight,
-                    (Key::ArrowRight, true) => Key::ArrowLeft,
-                    (key, _) => key,
-                };
+                let key = key.in_reading_order(self.rtl);
                 if !matches!(
                     key,
                     Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown

@@ -205,14 +205,10 @@ impl CustomControl for RangeSlider {
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                 let shift = cx.modifiers().shift;
-                let (forward, back) = match (self.orientation, self.rtl) {
-                    (Orientation::Horizontal, false) => (Key::ArrowRight, Key::ArrowLeft),
-                    (Orientation::Horizontal, true) => (Key::ArrowLeft, Key::ArrowRight),
-                    (Orientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
-                };
+                let horizontal = self.orientation == Orientation::Horizontal;
                 let current = self.values[self.active];
                 let big = self.step * 10.0;
-                let target = match *key {
+                let target = match key.in_reading_order(self.rtl) {
                     Key::Tab if !shift && self.active == 0 => {
                         self.active = 1;
                         cx.request_paint();
@@ -225,12 +221,10 @@ impl CustomControl for RangeSlider {
                         cx.request_semantics();
                         return EventReply::Stop;
                     }
-                    key if key == forward || key == Key::ArrowUp && forward != Key::ArrowUp => {
-                        current + self.step
-                    }
-                    key if key == back || key == Key::ArrowDown && back != Key::ArrowDown => {
-                        current - self.step
-                    }
+                    Key::ArrowUp => current + self.step,
+                    Key::ArrowDown => current - self.step,
+                    Key::ArrowRight if horizontal => current + self.step,
+                    Key::ArrowLeft if horizontal => current - self.step,
                     Key::PageUp => current + big,
                     Key::PageDown => current - big,
                     Key::Home => self.minimum,

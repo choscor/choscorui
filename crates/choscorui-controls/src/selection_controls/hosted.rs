@@ -37,6 +37,8 @@ struct Choices {
     pressed: Option<usize>,
     /// The part rectangles from the last arrange, in item order.
     rects: Vec<Rect>,
+    /// Whether the last arrange was right to left.
+    rtl: bool,
 }
 
 impl Choices {
@@ -66,6 +68,7 @@ impl Choices {
             hovered: None,
             pressed: None,
             rects: Vec::new(),
+            rtl: false,
         })
     }
 
@@ -158,7 +161,11 @@ impl Choices {
                 ..
             }) => EventReply::Stop,
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
-                match navigation_target(&self.items, self.selected, *key, |item| item.enabled) {
+                let target =
+                    navigation_target(&self.items, self.selected, *key, self.rtl, |item| {
+                        item.enabled
+                    });
+                match target {
                     Some(target) => {
                         self.select(cx, target);
                         EventReply::Stop
@@ -208,7 +215,7 @@ impl Choices {
             _ => return false,
         };
         if let Some(target) =
-            navigation_target(&self.items, self.selected, key, |item| item.enabled)
+            navigation_target(&self.items, self.selected, key, false, |item| item.enabled)
         {
             self.select(cx, target);
         }
@@ -359,6 +366,7 @@ impl CustomControl for HostedRadioGroup {
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.choices.rtl = cx.rtl();
         let gap = Self::gap(cx);
         let mut y = bounds.origin.y;
         self.choices.rects = self
@@ -509,6 +517,7 @@ impl CustomControl for HostedTabs {
     /// when vertical.
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let rtl = cx.rtl();
+        self.choices.rtl = rtl;
         let list = cx.style(tabs_query(self.variant, Slot::Group, VisualState::NONE));
         let inner = content_rect(bounds, &list, rtl);
         let mut offset = 0.0;

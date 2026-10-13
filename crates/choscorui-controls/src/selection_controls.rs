@@ -4,8 +4,8 @@ use crate::style::{
     TextAlign, TextMeasure, VisualState, choice_size, fill_shape, paint_choice,
 };
 use choscorui_core::{
-    DesignTokens, Dirty, Key, KeyEvent, NodeId, Point, Rect, SemanticAction, SemanticNode,
-    SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
+    DesignTokens, Dirty, Key, KeyEvent, LayoutDirection, NodeId, Point, Rect, SemanticAction,
+    SemanticNode, SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
 };
 use std::collections::HashSet;
 
@@ -84,6 +84,7 @@ pub struct RadioGroup {
     label: String,
     options: Vec<RadioOption>,
     selected: NodeId,
+    rtl: bool,
 }
 
 impl RadioGroup {
@@ -104,7 +105,13 @@ impl RadioGroup {
             label: label.into(),
             options,
             selected,
+            rtl: false,
         })
+    }
+
+    /// Swaps ArrowLeft and ArrowRight in a right-to-left layout.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
 
     pub const fn selected(&self) -> NodeId {
@@ -137,7 +144,9 @@ impl RadioGroup {
             }
             RadioInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(id) => match key {
                 Key::Space | Key::Enter => Some(index),
-                _ => navigation_target(&self.options, index, key, |option| option.enabled),
+                _ => {
+                    navigation_target(&self.options, index, key, self.rtl, |option| option.enabled)
+                }
             },
             _ => None,
         };
@@ -293,6 +302,7 @@ pub struct Tabs {
     selected: NodeId,
     variant: TabsVariant,
     orientation: Orientation,
+    rtl: bool,
 }
 
 impl Tabs {
@@ -315,7 +325,13 @@ impl Tabs {
             selected,
             variant: TabsVariant::Default,
             orientation: Orientation::Horizontal,
+            rtl: false,
         })
+    }
+
+    /// Swaps ArrowLeft and ArrowRight in a right-to-left layout.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
 
     #[must_use]
@@ -378,7 +394,7 @@ impl Tabs {
             }
             TabInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(id) => match key {
                 Key::Space | Key::Enter => Some(index),
-                _ => navigation_target(&self.tabs, index, key, |tab| tab.enabled),
+                _ => navigation_target(&self.tabs, index, key, self.rtl, |tab| tab.enabled),
             },
             _ => None,
         };
@@ -653,13 +669,16 @@ fn validate_attached(tree: &Tree, ids: impl Iterator<Item = NodeId>) -> Result<(
     Ok(())
 }
 
+/// The enabled item that `key` moves to from `current`. In a
+/// right-to-left layout ArrowLeft moves forward.
 fn navigation_target<T>(
     items: &[T],
     current: usize,
     key: Key,
+    rtl: bool,
     enabled: impl Fn(&T) -> bool,
 ) -> Option<usize> {
-    match key {
+    match key.in_reading_order(rtl) {
         Key::Home => (0..items.len()).find(|index| enabled(&items[*index])),
         Key::End => (0..items.len()).rev().find(|index| enabled(&items[*index])),
         Key::ArrowRight | Key::ArrowDown => (1..=items.len())

@@ -213,12 +213,12 @@ pub(crate) fn rove(
     if count == 0 {
         return None;
     }
-    let (next, previous) = match (horizontal, rtl) {
-        (true, false) => (Key::ArrowRight, Key::ArrowLeft),
-        (true, true) => (Key::ArrowLeft, Key::ArrowRight),
-        (false, _) => (Key::ArrowDown, Key::ArrowUp),
+    let (next, previous) = if horizontal {
+        (Key::ArrowRight, Key::ArrowLeft)
+    } else {
+        (Key::ArrowDown, Key::ArrowUp)
     };
-    match key {
+    match key.in_reading_order(rtl) {
         Key::Home => Some(0),
         Key::End => Some(count - 1),
         key if key == next => Some((current + 1) % count),

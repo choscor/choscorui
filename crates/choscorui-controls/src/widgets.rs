@@ -19,8 +19,8 @@ use crate::{
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, FillRule, Icon, Key, KeyEvent,
-    Locale, Localizer, Measured, Paint, Path, Point, PointerButton, PointerEvent, RadiusScale,
-    Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    LayoutDirection, Locale, Localizer, Measured, Paint, Path, Point, PointerButton, PointerEvent,
+    RadiusScale, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -72,6 +72,8 @@ pub struct ScrollBar {
     line_step: f64,
     track_length: f64,
     drag: Option<(f64, f64)>,
+    /// Whether a horizontal bar starts at the right.
+    rtl: bool,
 }
 
 impl ScrollBar {
@@ -85,10 +87,17 @@ impl ScrollBar {
             line_step: 16.0,
             track_length: 0.0,
             drag: None,
+            rtl: false,
         }
     }
     pub fn orientation(&self) -> ScrollOrientation {
         self.orientation
+    }
+    /// Starts a horizontal bar at the right in a right-to-left layout:
+    /// the thumb, the track presses, and ArrowLeft and ArrowRight mirror.
+    /// A hosted bar takes the direction from `arrange`.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
     pub fn value(&self) -> f64 {
         self.value
@@ -169,7 +178,7 @@ impl ScrollBar {
                     ScrollOrientation::Vertical => (Key::ArrowUp, Key::ArrowDown),
                     ScrollOrientation::Horizontal => (Key::ArrowLeft, Key::ArrowRight),
                 };
-                match key {
+                match key.in_reading_order(self.rtl) {
                     key if key == back => self.set_value(self.value - self.line_step),
                     key if key == forward => self.set_value(self.value + self.line_step),
                     Key::PageUp => self.set_value(self.value - self.viewport),
@@ -242,7 +251,7 @@ impl ScrollBar {
     }
 
     /// The thumb in `track`, across the full thickness of the bar.
-    fn thumb_rect(&self, track: Rect) -> Rect {
+    pub(crate) fn thumb_rect(&self, track: Rect) -> Rect {
         let (start, length) = self.thumb();
         match self.orientation {
             ScrollOrientation::Vertical => Rect::from_xywh(
@@ -250,6 +259,12 @@ impl ScrollBar {
                 track.origin.y + start,
                 track.size.width,
                 length,
+            ),
+            ScrollOrientation::Horizontal if self.rtl => Rect::from_xywh(
+                track.max_x() - start - length,
+                track.origin.y,
+                length,
+                track.size.height,
             ),
             ScrollOrientation::Horizontal => Rect::from_xywh(
                 track.origin.x + start,
@@ -260,10 +275,12 @@ impl ScrollBar {
         }
     }
 
-    /// The offset of `point` along the bar from the start of `bounds`.
-    fn along(&self, bounds: Rect, point: Point) -> f64 {
+    /// The offset of `point` along the bar from the start of `bounds`,
+    /// in reading order.
+    pub(crate) fn along(&self, bounds: Rect, point: Point) -> f64 {
         match self.orientation {
             ScrollOrientation::Vertical => point.y - bounds.origin.y,
+            ScrollOrientation::Horizontal if self.rtl => bounds.max_x() - point.x,
             ScrollOrientation::Horizontal => point.x - bounds.origin.x,
         }
     }
@@ -297,7 +314,8 @@ impl CustomControl for ScrollBar {
         })
     }
 
-    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.rtl = cx.rtl();
         let length = match self.orientation {
             ScrollOrientation::Vertical => bounds.size.height,
             ScrollOrientation::Horizontal => bounds.size.width,

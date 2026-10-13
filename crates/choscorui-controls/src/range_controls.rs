@@ -184,7 +184,8 @@ impl Slider {
     }
 
     /// Runs a horizontal slider from the right in a right-to-left layout,
-    /// for pointer input. Paint reads the direction from its context.
+    /// for pointer input and the arrow keys. Paint reads the direction
+    /// from its context.
     pub fn set_direction(&mut self, direction: LayoutDirection) {
         self.direction = direction;
     }
@@ -294,7 +295,9 @@ impl Slider {
     }
 
     fn handle_key(&mut self, key: Key) {
-        match key {
+        let rtl = self.direction == LayoutDirection::Rtl
+            && self.orientation == SliderOrientation::Horizontal;
+        match key.in_reading_order(rtl) {
             Key::ArrowRight | Key::ArrowUp => {
                 self.range.increment();
             }

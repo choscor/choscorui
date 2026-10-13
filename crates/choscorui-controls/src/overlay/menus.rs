@@ -396,7 +396,8 @@ impl Menubar {
             )
         });
         let nested = popup.menu.depth() > 1;
-        match key {
+        // The menu maps the arrows itself, so it gets the key as pressed.
+        match key.in_reading_order(self.rtl) {
             Key::Tab => {
                 self.dismiss(cx);
                 EventReply::Continue

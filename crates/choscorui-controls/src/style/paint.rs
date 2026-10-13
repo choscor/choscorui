@@ -554,6 +554,17 @@ impl<'a> PaintContext<'a> {
         style
     }
 
+    /// Paints the box of a panel at a window edge. A window edge does not
+    /// mirror, so the inline sides of `style` resolve left to right in
+    /// both layout directions: its border stays on the inner edge. With
+    /// `mirror`, they resolve right to left, so a recipe for a left panel
+    /// also serves a right panel.
+    pub fn edge_panel(&mut self, rect: Rect, style: &ResolvedStyle, mirror: bool) {
+        let rtl = std::mem::replace(&mut self.rtl, mirror);
+        self.slot(rect, style, |_, _| {});
+        self.rtl = rtl;
+    }
+
     /// Paints a slot box like [`paint_slot`], then calls `content` with
     /// a context for the box inside the padding.
     pub fn slot(

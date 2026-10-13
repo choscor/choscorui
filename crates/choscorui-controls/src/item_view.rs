@@ -14,10 +14,11 @@ use crate::style::{
     draw_text, paint_box,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Measured, NodeId, Point,
-    PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode,
-    SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode, SemanticRole,
-    SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, fold_for_search, visible_keys,
+    EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection, Measured,
+    NodeId, Point, PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand,
+    SelectionMode, SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode,
+    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, fold_for_search,
+    visible_keys,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -30,8 +31,8 @@ pub const TYPE_AHEAD_TIMEOUT: Duration = Duration::from_millis(1000);
 pub enum ViewLayout {
     /// One item per row (list, tree, or table).
     List,
-    /// Icon view: items flow left to right in cells of `item_width` by the
-    /// row height.
+    /// Icon view: items flow in reading order in cells of `item_width` by
+    /// the row height.
     Grid { item_width: f64 },
 }
 
@@ -152,6 +153,8 @@ pub struct ItemView {
     footer: Vec<Vec<String>>,
     /// The overlay scroll bar of a hosted view.
     bar: crate::OverlayScrollBar,
+    /// Whether rows and grid cells start at the right.
+    rtl: bool,
 }
 
 /// The height of a `ListView` row: the minimum height of the row recipe,
@@ -197,6 +200,23 @@ impl ItemView {
             caption: String::new(),
             footer: Vec::new(),
             bar: crate::OverlayScrollBar::new(crate::ScrollOrientation::Vertical),
+            rtl: false,
+        }
+    }
+
+    /// Runs grid cells and tree indents from the right in a right-to-left
+    /// layout, and swaps ArrowLeft and ArrowRight. A hosted view takes the
+    /// direction from `arrange`.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
+    }
+
+    /// The distance of `x` from the start edge of the viewport.
+    fn inset(&self, x: f64) -> f64 {
+        if self.rtl {
+            self.viewport.max_x() - x
+        } else {
+            x - self.viewport.origin.x
         }
     }
 
@@ -375,9 +395,15 @@ impl ItemView {
             ViewLayout::List => self.viewport.size.width,
             ViewLayout::Grid { item_width } => item_width,
         };
+        let start = column as f64 * width;
+        let x = if self.rtl {
+            self.viewport.max_x() - start - width
+        } else {
+            self.viewport.origin.x + start
+        };
         Rect::new(
             Point::new(
-                self.viewport.origin.x + column as f64 * width,
+                x,
                 self.viewport.origin.y + line as f64 * self.row_height - self.offset,
             ),
             Size::new(width, self.row_height),
@@ -392,7 +418,7 @@ impl ItemView {
         let column = match self.layout {
             ViewLayout::List => 0,
             ViewLayout::Grid { item_width } => {
-                let column = ((point.x - self.viewport.origin.x) / item_width) as usize;
+                let column = (self.inset(point.x) / item_width) as usize;
                 if column >= self.columns_per_row() {
                     return None;
                 }
@@ -556,10 +582,8 @@ impl ItemView {
                     let key = self.order[index];
                     let disclosure = self.layout == ViewLayout::List
                         && model.has_children(key)
-                        && position.x
-                            < self.viewport.origin.x
-                                + (self.depth.get(&key).copied().unwrap_or(0) + 1) as f64
-                                    * self.indent;
+                        && self.inset(position.x)
+                            < (self.depth.get(&key).copied().unwrap_or(0) + 1) as f64 * self.indent;
                     if disclosure && clicks == 1 {
                         let expand = !self.expanded.contains(&key);
                         self.toggle_expansion(model, key, expand, &mut response);
@@ -664,6 +688,7 @@ impl ItemView {
             self.request_tail_fetch(model, response);
             return;
         }
+        let key = key.in_reading_order(self.rtl);
         let last = self.order.len() - 1;
         let current = self.selection.current().and_then(|key| self.index_of(key));
         let columns = self.columns_per_row();
@@ -1202,6 +1227,7 @@ impl CustomControl for ItemView {
             self.row_height = list_row_height(cx);
         }
         self.sync_source();
+        self.rtl = cx.rtl();
         let below = self.footer_height() + self.caption_height(cx);
         let mut viewport = bounds;
         viewport.size.height = (bounds.size.height - below).max(0.0);

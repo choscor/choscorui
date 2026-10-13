@@ -293,6 +293,20 @@ pub enum Key {
     Other(u32),
 }
 
+impl Key {
+    /// The key in reading order: in a right-to-left layout, ArrowLeft and
+    /// ArrowRight swap, so ArrowRight always moves toward the end of the
+    /// reading order. Other keys do not change.
+    #[must_use]
+    pub const fn in_reading_order(self, rtl: bool) -> Self {
+        match self {
+            Self::ArrowLeft if rtl => Self::ArrowRight,
+            Self::ArrowRight if rtl => Self::ArrowLeft,
+            key => key,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KeyEvent {
     Down { key: Key, repeat: bool },

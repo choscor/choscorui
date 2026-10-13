@@ -303,7 +303,12 @@ impl Carousel {
                     WheelUnit::Points => 1.0,
                     WheelUnit::Lines => self.line,
                 };
-                let along = if self.horizontal() { delta.x } else { delta.y };
+                // A right-to-left carousel runs its slides toward the left.
+                let along = match (self.horizontal(), self.rtl) {
+                    (true, false) => delta.x,
+                    (true, true) => -delta.x,
+                    (false, _) => delta.y,
+                };
                 if along == 0.0 || self.step <= 0.0 {
                     return EventReply::Continue;
                 }

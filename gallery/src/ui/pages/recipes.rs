@@ -111,6 +111,8 @@ struct StarRating {
     hover: Option<u8>,
     /// Translates the description and the spoken value.
     env: Env,
+    /// Whether the stars run from the right, from the last arrange.
+    rtl: bool,
 }
 
 impl StarRating {
@@ -120,12 +122,18 @@ impl StarRating {
             value: value.min(5),
             hover: None,
             env,
+            rtl: false,
         }
     }
 
-    fn star_at(bounds: Rect, x: f64) -> u8 {
+    fn star_at(&self, bounds: Rect, x: f64) -> u8 {
         let width = bounds.size.width / 5.0;
-        (((x - bounds.origin.x) / width).floor() as i64 + 1).clamp(1, 5) as u8
+        let inset = if self.rtl {
+            bounds.max_x() - x
+        } else {
+            x - bounds.origin.x
+        };
+        ((inset / width).floor() as i64 + 1).clamp(1, 5) as u8
     }
 
     fn set(&mut self, context: &mut ControlContext<'_>, value: u8) -> bool {
@@ -151,6 +159,10 @@ impl CustomControl for StarRating {
         }
     }
 
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _: Rect) {
+        self.rtl = cx.rtl();
+    }
+
     fn event(&mut self, context: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if context.phase() != EventPhase::Target {
             return EventReply::Continue;
@@ -162,7 +174,7 @@ impl CustomControl for StarRating {
                 button: PointerButton::Primary,
             }) => {
                 context.request_focus();
-                let star = Self::star_at(bounds, position.x);
+                let star = self.star_at(bounds, position.x);
                 // Clicking the current rating clears it.
                 let value = if star == self.value { 0 } else { star };
                 self.set(context, value);
@@ -171,12 +183,12 @@ impl CustomControl for StarRating {
             ControlEvent::Pointer(PointerEvent::Move { position }) => {
                 self.hover = bounds
                     .contains(*position)
-                    .then(|| Self::star_at(bounds, position.x));
+                    .then(|| self.star_at(bounds, position.x));
                 context.request_paint();
                 EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
-                let value = match key {
+                let value = match key.in_reading_order(self.rtl) {
                     Key::ArrowRight | Key::ArrowUp => self.value.saturating_add(1),
                     Key::ArrowLeft | Key::ArrowDown => self.value.saturating_sub(1),
                     Key::Home => 0,
@@ -205,11 +217,14 @@ impl CustomControl for StarRating {
         let width = bounds.size.width / 5.0;
         let shown = self.hover.unwrap_or(self.value);
         for star in 1..=5u8 {
+            let start = f64::from(star - 1) * width;
+            let x = if cx.rtl {
+                bounds.max_x() - start - width
+            } else {
+                bounds.origin.x + start
+            };
             let cell = Rect::new(
-                Point::new(
-                    bounds.origin.x + f64::from(star - 1) * width,
-                    bounds.origin.y,
-                ),
+                Point::new(x, bounds.origin.y),
                 Size::new(width, bounds.size.height),
             );
             let color = if star <= shown {

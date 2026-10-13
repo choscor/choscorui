@@ -417,7 +417,9 @@ the `Mixed` value, where `None` is the mixed state. A press sets
 - Input on a disabled option does nothing.
 - A selection of the current option reports nothing and does not move
   focus.
-- Right-to-left layouts do not mirror the arrow keys.
+- Right-to-left layouts swap ArrowLeft and ArrowRight, so ArrowLeft goes
+  to the next option. `set_direction(Rtl)` sets this, and a hosted control
+  takes the host direction.
 - `new` rejects an empty list, a duplicate node, an unknown selection, and
   a disabled selection.
 - `TabSet` is a deprecated alias of `Tabs`.
@@ -1108,11 +1110,11 @@ not in the list sets it to `None`.
 | `Semantic(SetValue(v))`, `Increment`, `Decrement` | Sets or steps the value. |
 | `Cancel` | Ends the drag and releases capture. The value stays. |
 
-- PageUp and PageDown do nothing. Right-to-left layouts do not mirror
-  the arrow keys.
+- PageUp and PageDown do nothing.
 - A vertical slider has its minimum at the bottom.
 - `set_direction(Rtl)` puts the minimum of a horizontal slider at the
-  right for pointer input. `paint` mirrors from the context direction.
+  right for pointer input, and swaps ArrowLeft and ArrowRight: ArrowLeft
+  steps up. `paint` mirrors from the context direction.
   In a control host, the host direction replaces `set_direction`.
 - A pointer press focuses without the focus ring.
 - **Look.** `paint` draws a 6 pt `muted` track, a `primary` range, and a
@@ -1309,6 +1311,9 @@ clamp rules of the `Slider` view.
   has no capture and no cancel.
 - The arrow keys on the bar's axis step `line_step` (default 16 points).
   PageUp and PageDown page one viewport. Home and End go to the ends.
+- `set_direction(Rtl)` starts a horizontal bar at the right. The thumb at
+  value 0 is at the right edge, and presses measure from the right.
+  ArrowLeft steps forward. A hosted bar takes the host direction.
 - Semantic `Increment` and `Decrement` page one viewport.
 - The value stays in `0..=content - viewport`. The scroll bar has no focus
   and no disabled state.
@@ -1577,8 +1582,10 @@ behavior.
   week. PageUp and PageDown move one month.
 - Home and End go to the start and the end of the week. The locale sets
   the first weekday.
-- A move to a date outside the range does nothing. The arrow keys are not
-  mirrored in right-to-left layouts.
+- A move to a date outside the range does nothing.
+- Right-to-left layouts swap ArrowLeft and ArrowRight, so the arrow keys
+  follow the mirrored columns. `set_direction(Rtl)` sets this, and a hosted
+  calendar or date picker takes the host direction.
 - The host chooses the date, for example on Enter. `show_month` changes the
   shown month and keeps the selection.
 - **Look.** `layout` places a caption row, a weekday row, and six weeks of
@@ -1699,7 +1706,10 @@ pin this behavior.
 - **Tree keys (list layout).** ArrowRight expands the item, or moves to the
   first child if expanded. ArrowLeft collapses the item, or moves to the
   parent.
-- Right-to-left layouts do not mirror the tree keys.
+- **Right to left.** `set_direction(Rtl)` swaps ArrowLeft and ArrowRight
+  for the grid and tree keys. Grid cells then flow from the right, and the
+  disclosure area of a tree row is at the right. A hosted view takes the
+  host direction.
 - **Type-ahead.** Characters build a prefix that resets after
   `TYPE_AHEAD_TIMEOUT` (1 second). Matches ignore case and diacritics, and
   the search wraps.
@@ -1779,6 +1789,10 @@ pin this behavior.
   resize.
 - **Keys.** ArrowLeft and ArrowRight move the focused column and stop at
   the ends. Space or Enter toggles the sort of the focused column.
+- **Right to left.** `set_direction(Rtl)` runs the columns from the right
+  edge for presses and drags. `set_origin_x` then sets the right edge of
+  the first column. ArrowLeft moves to the next column. `paint` mirrors
+  from the context direction. A hosted header takes the host direction.
 - `+` or `=` widens the focused column by 10 points, and `-` narrows it.
 - `restore_sort` sets a saved sort. A column past the last column clears the
   sort.
@@ -1881,16 +1895,18 @@ pin this behavior.
   action activates it.
 - ArrowLeft or Escape closes one submenu level. At the root, they return
   `Closed`.
+- `set_direction(Rtl)` swaps ArrowLeft and ArrowRight: the arrow toward
+  the submenu side opens a submenu, and the other arrow closes one. A
+  hosted menu takes the host direction.
 - A character highlights the next enabled item that starts with it.
 - The menu skips disabled or unknown commands, separators, and empty
   submenus. These items never activate.
-- Right-to-left layouts do not mirror ArrowLeft and ArrowRight.
 - `PopupMenu` is a deprecated alias of `DropdownMenu`.
 - **In a control host.** `hosted(name)` makes a `HostedDropdownMenu` with
   its own command states. The root level fills the node, and open
   submenus float beside it.
 - An activated action reports `Command`. Escape or ArrowLeft at the root
-  reports `Dismissed`. The menu then closes its submenus and stays in
+  (ArrowRight in right-to-left layouts) reports `Dismissed`. The menu then closes its submenus and stays in
   place.
 - **In a view.** The `context_menu` and `dropdown_menu` view modifiers
   show a `HostedDropdownMenu` in an anchored layer. `Command` runs the
@@ -2967,6 +2983,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   it. A press on the open title closes it.
 - While a menu is open, ArrowLeft and ArrowRight at the root open the next
   title in reading order. Hover on another title opens its menu.
+- In both controls, the arrow toward the end of the line opens a highlighted
+  submenu, and the other arrow closes an open submenu. In right-to-left
+  layouts, ArrowLeft opens a submenu and ArrowRight closes one.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
@@ -3047,6 +3066,8 @@ is disabled. `set_value` returns false.
 - **`Dialog::sheet(side, …)`.** The panel fills the window along `side`.
   A left or right sheet is 75% of the window width, at most 384 pt. The
   footer buttons stack at the bottom. The panel slides in from its edge.
+  `side` is a window edge, so a right-to-left layout does not move the
+  panel. Its border stays on the inner edge in both directions.
 - **`Dialog::drawer(side, …)`.** As a sheet, but a top or bottom drawer is
   only as tall as its content, at most 80% of the window. A bottom drawer
   has a handle. A drag toward the edge moves the panel. A release after
@@ -3219,7 +3240,9 @@ last page. `set_open` returns false.
 - **Keys.** ArrowLeft and ArrowRight move between the triggers in reading
   order and close the panel. ArrowDown opens the panel and focuses its
   first link. ArrowDown and ArrowUp move between the links; ArrowUp from
-  the first link goes back to the trigger.
+  the first link goes back to the trigger. On a link, ArrowRight moves to
+  the next link and ArrowLeft to the previous link. Right-to-left layouts
+  swap the two keys.
 - Tab stops are each trigger, then the links of its open panel. Tab past
   the panel closes it.
 - Enter or Space on a link, or on a trigger without links, emits
@@ -3276,7 +3299,8 @@ false.
   at its side. Tab cycles inside the sheet. Choosing an item, Escape, or a
   press outside closes it; the last two emit `Dismissed`.
 - `with_side(SheetSide::Right)` puts the border on the left edge and the
-  sheet at the right edge of the window.
+  sheet at the right edge of the window. The side is a window edge, so a
+  right-to-left layout does not move the sidebar or its border.
 - **Rows.** `with_menu_size` sets the item rows to `Sm`, `Default`, or
   `Lg`. Other sizes give `Default`. `SidebarItem::with_variant` gives an
   item the `SidebarItemVariant::Outline` look. The item rows take the item
@@ -3424,7 +3448,8 @@ and the size with `.with(|group| group.with_count(count))` and
   reading order. Each move emits `Changed(Index(slide))` and animates.
 - The enabled buttons are tab stops inside the carousel. Enter or Space
   activates the focused button.
-- A drag moves the slides with the pointer. A wheel scrolls them. When
+- A drag moves the slides with the pointer. A wheel scrolls them. A
+  right-to-left carousel mirrors the horizontal drag and wheel. When
   the drag ends, or 0.15 s after the last wheel event, the carousel snaps
   to the nearest slide. At the first or the last slide, the carousel does
   not use the wheel, so an outer scroll view scrolls.

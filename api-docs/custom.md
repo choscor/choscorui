@@ -912,6 +912,18 @@ Shows `cursor` while the pointer is over `rect`, for a part that a
 control paints without [`PaintContext::slot`](#paintcontextslot). A later part over
 the same point wins. `Cursor::Auto` changes nothing.
 
+#### `PaintContext::edge_panel`
+
+```rust
+pub fn edge_panel(&mut self, rect: Rect, style: &ResolvedStyle, mirror: bool)
+```
+
+Paints the box of a panel at a window edge. A window edge does not
+mirror, so the inline sides of `style` resolve left to right in
+both layout directions: its border stays on the inner edge. With
+`mirror`, they resolve right to left, so a recipe for a left panel
+also serves a right panel.
+
 #### `PaintContext::icon`
 
 ```rust

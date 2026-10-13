@@ -20,9 +20,9 @@ use crate::style::{
 use crate::{STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, EventPhase, EventReply, Icon,
-    Key, KeyEvent, Locale, Localizer, Measured, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid,
-    month_name, weekday_short_name,
+    Key, KeyEvent, LayoutDirection, Locale, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    days_in_month, month_grid, month_name, weekday_short_name,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -429,6 +429,8 @@ pub struct Calendar {
     focus: CalendarFocus,
     /// The hovered and pressed month buttons and days.
     pub(crate) parts: Parts<CalendarPart>,
+    /// Whether the day grid runs right to left.
+    rtl: bool,
 }
 
 /// A month button, or a day cell by index, of a calendar.
@@ -518,7 +520,14 @@ impl Calendar {
             parts: Parts::default(),
             caption: None,
             focus: CalendarFocus::None,
+            rtl: false,
         }
+    }
+
+    /// Swaps ArrowLeft and ArrowRight for a right-to-left day grid. A
+    /// hosted calendar takes the direction from `arrange`.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
 
     /// Shows the month and the year as dropdowns in the caption, in
@@ -693,7 +702,7 @@ impl Calendar {
 
     /// Returns true when the selection changed.
     pub fn handle_key(&mut self, key: Key) -> bool {
-        let target = match key {
+        let target = match key.in_reading_order(self.rtl) {
             Key::ArrowLeft => self.selected.add_days(-1),
             Key::ArrowRight => self.selected.add_days(1),
             Key::ArrowUp => self.selected.add_days(-7),
@@ -1113,6 +1122,7 @@ impl CustomControl for DateTimeEdit {
 impl Calendar {
     /// Places the caption dropdowns in the caption row of `layout`.
     pub(crate) fn arrange_caption(&mut self, cx: &MeasureContext<'_>, layout: &CalendarLayout) {
+        self.rtl = cx.rtl();
         if let Some(caption) = &mut self.caption {
             caption.arrange(cx, layout.caption);
         }

@@ -9,8 +9,9 @@ use crate::style::{
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, fold_for_search,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, Point,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    fold_for_search,
 };
 
 /// How an action shows its command's checked state.
@@ -140,6 +141,8 @@ pub struct DropdownMenu {
     /// Highlighted index per open level, root first.
     path: Vec<Option<usize>>,
     metrics: MenuMetrics,
+    /// Whether submenus open toward the left.
+    rtl: bool,
 }
 
 /// Deprecated name of [`DropdownMenu`].
@@ -154,7 +157,14 @@ impl DropdownMenu {
             items,
             path: vec![None],
             metrics: MenuMetrics::resolve(&Styles::new(), &DesignTokens::light()),
+            rtl: false,
         }
+    }
+
+    /// Opens submenus toward the reading end: in a right-to-left layout,
+    /// ArrowLeft opens a submenu and ArrowRight closes one.
+    pub fn set_direction(&mut self, direction: LayoutDirection) {
+        self.rtl = direction == LayoutDirection::Rtl;
     }
 
     /// Reads the row heights and the panel inset from `styles`.
@@ -242,7 +252,7 @@ impl DropdownMenu {
 
     pub fn handle_key(&mut self, key: Key, commands: &CommandRegistry) -> MenuResponse {
         let level = self.path.len() - 1;
-        match key {
+        match key.in_reading_order(self.rtl) {
             Key::ArrowDown => self.step(commands, true),
             Key::ArrowUp => self.step(commands, false),
             Key::Home => {
