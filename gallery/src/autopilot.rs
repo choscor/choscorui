@@ -229,6 +229,19 @@ fn enter(host: &mut ViewHost, field: &str, text: &str) -> Option<(bool, bool)> {
     ))
 }
 
+/// Sets `text` as the value of `field` and reports whether the field's
+/// filter refused it: the value stays as it was.
+fn refused(host: &mut ViewHost, field: &str, text: &str) -> bool {
+    let before = semantic(host, field).and_then(|node| node.value);
+    act(host, field, SemanticAction::SetValue, Some(text));
+    before.is_some() && semantic(host, field).and_then(|node| node.value) == before
+}
+
+/// The value of `field`.
+fn value_of(host: &mut ViewHost, field: &str) -> Option<String> {
+    semantic(host, field).and_then(|node| node.value)
+}
+
 /// The state of window `id`.
 fn state(gallery: &Gallery, id: WindowId) -> WindowState {
     gallery.windows.borrow()[&id].clone()
@@ -509,15 +522,17 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         disabled && window.enabled.get(),
     );
 
-    // Structured inputs reject invalid values.
+    // Structured inputs refuse text that cannot become valid, and mark
+    // invalid values.
     show(cx, gallery, main, "number-input");
     let amount = "Amount (0 – 1,000,000,000; 2 decimals, locale en)";
     let quantity = "Quantity (1 – 10,000; whole numbers)";
     let numbers = {
         let host = host(cx, main);
         (
-            enter(host, amount, "12abc"),
+            refused(host, amount, "12abc"),
             enter(host, quantity, "0"),
+            enter(host, quantity, "20000"),
             enter(host, quantity, "12"),
         )
     };
@@ -525,34 +540,51 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         "number input rejects letters and out-of-range values",
         matches!(
             numbers,
-            (Some((false, _)), Some((false, _)), Some((true, false)))
+            (
+                true,
+                Some((false, false)),
+                Some((false, true)),
+                Some((true, false))
+            )
         ),
     );
-    // The plate mask `>AA-99999` needs two letters first.
+    // The plate mask `>AA-99999` needs two letters first and uppercases
+    // them.
     show(cx, gallery, main, "input-mask");
     let plate = "Licence plate, mask >AA-99999 (uppercased)";
     let mask = {
         let host = host(cx, main);
-        let digits = enter(host, plate, "12");
+        let digits = refused(host, plate, "12");
         let partial = enter(host, plate, "a");
         let incomplete = semantic(host, plate).map(|node| node.description);
-        (digits, partial, incomplete, enter(host, plate, "ab12345"))
+        let upper = value_of(host, plate);
+        let full = enter(host, plate, "ab12345");
+        (
+            digits,
+            partial,
+            incomplete,
+            upper,
+            full,
+            value_of(host, plate),
+        )
     };
     check(
         "input mask rejects characters its format forbids",
-        matches!(mask, (Some((false, true)), Some((false, false)), Some(ref text), Some((true, false))) if text == "Incomplete"),
+        matches!(mask, (true, Some((false, false)), Some(ref text), Some(ref upper), Some((true, false)), Some(ref value))
+            if text == "Incomplete" && upper == "A" && value == "AB-12345"),
     );
     show(cx, gallery, main, "date-input");
     let dates = {
         let host = host(cx, main);
         (
-            enter(host, "Any date (mm/dd/yyyy)", "not a date"),
+            refused(host, "Any date (mm/dd/yyyy)", "not a date"),
+            enter(host, "Any date (mm/dd/yyyy)", "2/30/2026"),
             enter(host, "A date in 2026", "1/1/2025"),
         )
     };
     check(
         "date input rejects text and dates outside 2026",
-        matches!(dates, (Some((false, true)), Some((false, _)))),
+        matches!(dates, (true, Some((false, true)), Some((false, true)))),
     );
     show(cx, gallery, main, "date-time-edit");
     let limited = clamp_hours(host(cx, main));
