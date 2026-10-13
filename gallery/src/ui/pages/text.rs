@@ -4,13 +4,10 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Cx, Dynamic, Env, Frame, HorizontalAlignment, Text, TextEditor, VStack,
-    View, ViewExt,
+    AnyView, Binding, Cx, Dynamic, Env, Frame, HorizontalAlignment, Input, Text, TextEditor,
+    VStack, View, ViewExt,
 };
-use choscorui::controls::{
-    self, ControlKind, ControlMessage, ControlValue, DateInput, InputMask, NumberInput,
-    ValidationState,
-};
+use choscorui::controls::{self, DateInput, InputMask, NumberInput, ValidationState};
 use choscorui::core::{CivilDate, ColorRole, Space, TextPreset};
 use std::rc::Rc;
 
@@ -106,31 +103,32 @@ fn sample_field(cx: &mut Cx, sample: Sample) -> AnyView {
     let value = cx.state(value);
     // The message of a failed check; `None` while the value may be valid.
     let error = cx.state(None::<String>);
+    let typed = Binding::new(
+        move || value.get(),
+        move |text: String| {
+            value.set(text);
+            if required {
+                error.set(None);
+            }
+        },
+    );
     let name = label.clone();
-    let input = Configured::custom(ControlKind::Input, move |_| {
-        let mut input = if password {
-            controls::Input::password(name.clone(), "")
-        } else {
-            controls::Input::new(name.clone(), "")
-        };
+    let input = if password {
+        Input::password(name, typed)
+    } else {
+        Input::new(name, typed)
+    }
+    .with(move |mut input| {
         input.set_validation(match error.get() {
             Some(message) => ValidationState::Invalid(message),
             None => ValidationState::Valid,
         });
         input
     })
-    .value(move || ControlValue::Text(value.get()))
-    .on_message(move |message| match message {
-        ControlMessage::Changed(ControlValue::Text(text)) => {
-            value.set(text.clone());
-            if required {
-                error.set(None);
-            }
-        }
-        ControlMessage::Activated if required => {
+    .on_activate(move || {
+        if required {
             error.set(validate_required(&env, &value.get()));
         }
-        _ => {}
     })
     .frame(Frame::new().width(340.0))
     .disabled(!enabled);
@@ -225,21 +223,17 @@ fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
         let checked = checked.clone();
         move || checked().0
     };
-    let name = label.clone();
-    let build = {
+    let validated = {
         let checked = checked.clone();
-        move |_: &_| {
-            let mut input = controls::Input::new(name.clone(), "").with_placeholder(&placeholder);
+        move |input: controls::Input| {
+            let mut input = input.with_placeholder(&placeholder);
             input.set_validation(checked().1);
             input
         }
     };
     let typed = {
         let shown = shown.clone();
-        move |message: &ControlMessage| {
-            let ControlMessage::Changed(ControlValue::Text(text)) = message else {
-                return;
-            };
+        move |text: String| {
             let before = shown();
             if text.len() < before.len() && before.starts_with(text.as_str()) {
                 // A deletion at the end removes raw characters until the
@@ -251,13 +245,12 @@ fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
                     },
                 );
             } else {
-                raw.set(text.clone());
+                raw.set(text);
             }
         }
     };
-    let input = Configured::custom(ControlKind::Input, build)
-        .value(move || ControlValue::Text(shown()))
-        .on_message(typed)
+    let input = Input::new(label.clone(), Binding::new(shown, typed))
+        .with(validated)
         .accessibility_hint({
             let (checked, env) = (checked.clone(), env.clone());
             move || verdict(&env, &checked().1)

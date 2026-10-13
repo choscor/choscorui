@@ -4,12 +4,12 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, Frame, HStack, IntoLive,
-    Spacer, State, Text, TextContent, Toggle, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, Frame, HStack, Input,
+    IntoLive, Spacer, State, Text, TextContent, Toggle, Toolbar, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
-    ControlMessage, CustomControl, MeasureContext, PaintContext, StatusBar, Toolbar, ToolbarArea,
+    ControlMessage, CustomControl, MeasureContext, PaintContext, StatusBar, ToolbarArea,
     ToolbarItem,
 };
 use choscorui::core::{
@@ -32,32 +32,34 @@ const SEARCH_LENGTH: f64 = 150.0;
 /// item: Share and the spacing around it.
 const SEARCH_END: f64 = 42.0;
 
-fn editor_toolbar(env: &Env) -> Toolbar {
+/// The items of the editor toolbar.
+fn editor_items(env: &Env) -> Vec<ToolbarItem> {
     // The search field is a view laid over its item: the toolbar only
     // keeps its length, so the item names no live node.
     let search = Tree::new(Rect::default()).root();
     let command = |key: &str, command: CommandId| {
         ToolbarItem::command(key, env.text(command_key(command), &[]), command)
     };
-    Toolbar::new(
-        env.text("toolbar.editor", &[]),
-        vec![
-            command("new", NEW),
-            command("open", OPEN),
-            command("save", SAVE),
-            ToolbarItem::separator("sep"),
-            command("undo", UNDO),
-            command("redo", REDO),
-            ToolbarItem::flexible_space("space"),
-            ToolbarItem::control(
-                "search",
-                env.text("toolbar.search", &[]),
-                search,
-                SEARCH_LENGTH,
-            ),
-            command("share", SHARE),
-        ],
-    )
+    vec![
+        command("new", NEW),
+        command("open", OPEN),
+        command("save", SAVE),
+        ToolbarItem::separator("sep"),
+        command("undo", UNDO),
+        command("redo", REDO),
+        ToolbarItem::flexible_space("space"),
+        ToolbarItem::control(
+            "search",
+            env.text("toolbar.search", &[]),
+            search,
+            SEARCH_LENGTH,
+        ),
+        command("share", SHARE),
+    ]
+}
+
+fn editor_toolbar(env: &Env) -> controls::Toolbar {
+    controls::Toolbar::new(env.text("toolbar.editor", &[]), editor_items(env))
 }
 
 /// The catalog key of a command's label.
@@ -115,6 +117,8 @@ struct ToolbarState {
     /// Redo is enabled once something was undone.
     redo: State<bool>,
     last: State<String>,
+    /// The text of the search field.
+    search: State<String>,
 }
 
 /// The editor toolbar on its edge of a miniature window.
@@ -122,26 +126,24 @@ fn toolbar_window(env: &Env, state: ToolbarState) -> impl View + use<> {
     let area = AREAS[state.area.get()].1;
     let narrow = state.narrow.get();
     let ran = env.clone();
-    let bar = Configured::custom(ControlKind::Toolbar, move |env| {
-        let mut toolbar = editor_toolbar(env);
-        toolbar.move_to(area);
-        let mut toolbar = toolbar.hosted();
-        let redo = CommandState {
-            enabled: state.redo.get(),
-            ..CommandState::default()
-        };
-        let _ = toolbar.set_command(REDO, redo);
-        toolbar
-    })
-    .on_command(move |command| {
-        if command == UNDO {
-            state.redo.set(true);
-        }
-        let name = ran.text(command_key(command), &[]);
-        state
-            .last
-            .set(ran.text("toolbar.ran", &[("command", &name)]));
-    });
+    let bar = Toolbar::new(t!("toolbar.editor"), area, editor_items)
+        .with(move |mut toolbar| {
+            let redo = CommandState {
+                enabled: state.redo.get(),
+                ..CommandState::default()
+            };
+            let _ = toolbar.set_command(REDO, redo);
+            toolbar
+        })
+        .on_command(move |command| {
+            if command == UNDO {
+                state.redo.set(true);
+            }
+            let name = ran.text(command_key(command), &[]);
+            state
+                .last
+                .set(ran.text("toolbar.ran", &[("command", &name)]));
+        });
     let mut saved = editor_toolbar(env);
     saved.move_to(area);
     let thickness = saved.thickness;
@@ -160,15 +162,15 @@ fn toolbar_window(env: &Env, state: ToolbarState) -> impl View + use<> {
             // The search field sits over its item, just before Share,
             // while the window is wide enough to place it.
             let search = (!narrow).then(|| {
-                Configured::custom(ControlKind::Input, |env| {
-                    controls::Input::new(env.text("toolbar.search", &[]), "")
-                        .with_placeholder(env.text("toolbar.search_placeholder", &[]))
-                })
-                .padding(Edges::new(0.0, 0.0, 0.0, SEARCH_END))
-                .frame(Frame::size(
-                    SEARCH_LENGTH - 4.0 + SEARCH_END,
-                    thickness - 4.0,
-                ))
+                Input::new(t!("toolbar.search"), state.search.binding())
+                    .with_env(|input, env| {
+                        input.with_placeholder(env.text("toolbar.search_placeholder", &[]))
+                    })
+                    .padding(Edges::new(0.0, 0.0, 0.0, SEARCH_END))
+                    .frame(Frame::size(
+                        SEARCH_LENGTH - 4.0 + SEARCH_END,
+                        thickness - 4.0,
+                    ))
             });
             let bar = ZStack::new((bar.frame(fill().height(thickness)), search))
                 .alignment(Alignment::TRAILING);
@@ -202,6 +204,7 @@ impl View for ToolbarPage {
             narrow: cx.state(false),
             redo: cx.state(false),
             last: cx.state(cx.env().text("toolbar.start", &[])),
+            search: cx.state(String::new()),
         };
         let env = cx.env().clone();
         let edges = AREAS
@@ -369,13 +372,11 @@ const STATUS_BAR: f64 = 22.0;
 /// `area`. A side toolbar sits on the start edge, so it moves to the
 /// right in right-to-left layouts.
 fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
-    let bar = Configured::custom(ControlKind::Toolbar, move |env| {
-        let mut toolbar = Toolbar::new(env.text(label, &[]), vec![]);
-        toolbar.move_to(match area {
-            ToolbarArea::Left if env.direction() == LayoutDirection::Rtl => ToolbarArea::Right,
-            area => area,
-        });
-        toolbar.hosted()
+    let bar = Toolbar::new(t!(label), area, Vec::new()).with_env(move |mut toolbar, env| {
+        if area == ToolbarArea::Left && env.direction() == LayoutDirection::Rtl {
+            toolbar.move_to(ToolbarArea::Right);
+        }
+        toolbar
     });
     ZStack::new((
         bar.frame(fill()),

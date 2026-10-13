@@ -14,6 +14,8 @@ pub mod inputs;
 pub mod nav;
 pub mod navigation;
 pub mod overlay;
+#[cfg(test)]
+mod own_controls;
 pub mod popups;
 pub mod range;
 pub mod recipes;
