@@ -17,12 +17,12 @@ use choscorui_controls::{
     ShortcutModifiers, Styles, TextMeasure,
 };
 use choscorui_core::{
-    Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList, EngineError, Feedback,
-    GridPlacement, InputModality, ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine,
-    LayoutKind, LayoutStyle, Length, Measured, NodeId, Point, PointerDetails, PointerEvent,
-    RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticError, SemanticNode,
-    SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError, ThemeOverride, ThemeResolver,
-    Track, Tree, TreeError,
+    AnnouncementPriority, Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList,
+    EngineError, Feedback, GridPlacement, InputModality, ItemAlign, Key, KeyEvent, LayoutDirection,
+    LayoutEngine, LayoutKind, LayoutStyle, Length, Measured, NodeId, Point, PointerDetails,
+    PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticError,
+    SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError, ThemeOverride,
+    ThemeResolver, Track, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1073,6 +1073,15 @@ impl ViewHost {
     /// sends none.
     pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>) {
         self.inner.controls.set_feedback(feedback);
+    }
+
+    /// Returns the announcements of the controls and the views since the
+    /// last call, controls first. The window speaks each one, for example
+    /// with `Window::announce` on macOS.
+    pub fn take_announcements(&mut self) -> Vec<(String, AnnouncementPriority)> {
+        let mut all = self.inner.controls.take_announcements();
+        all.extend(self.env.announcer().take());
+        all
     }
 
     /// Replaces the mounted view with `view`.

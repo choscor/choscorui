@@ -7,9 +7,9 @@ use crate::AppError;
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel, MenuCommandId,
-    MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services, Size, Support,
-    WindowGeometry, WindowOptions,
+    AnnouncementPriority, BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel,
+    MenuCommandId, MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services,
+    Size, Support, WindowGeometry, WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -110,6 +110,9 @@ impl NativeWindow {
     pub(crate) fn set_cursor(&mut self, shape: CursorShape) {
         self.cursor = shape;
     }
+
+    /// Without a backend, nothing speaks.
+    pub(crate) fn announce(&self, _text: &str, _priority: AnnouncementPriority) {}
 
     pub(crate) fn publish(
         &self,

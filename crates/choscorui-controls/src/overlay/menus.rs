@@ -138,7 +138,8 @@ impl CustomControl for ContextMenu {
                     None => EventReply::Continue,
                 }
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+            // Command and Control chords go on to the shortcuts.
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
                 if !self.popup.is_open() {
                     let shortcut = Shortcut {
                         key: *key,
@@ -378,6 +379,10 @@ impl Menubar {
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        // Command and Control chords go on to the shortcuts.
+        if cx.modifiers().is_chord() {
+            return EventReply::Continue;
+        }
         let count = self.menus.len();
         let Some(index) = self.open else {
             if let Some(next) = hosted::rove(key, self.current, count, true, self.rtl) {

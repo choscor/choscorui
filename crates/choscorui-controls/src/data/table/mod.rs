@@ -479,7 +479,7 @@ impl DataTable {
                 self.dismiss_menu(cx);
                 None
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
                 let response = self.menu.key(*key);
                 self.menu_response(cx, response);
                 Some(EventReply::Stop)

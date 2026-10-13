@@ -241,6 +241,14 @@ pub struct ShortcutModifiers {
     pub command: bool,
 }
 
+impl ShortcutModifiers {
+    /// Whether Command or Control is held. A control that does not use
+    /// such a chord lets the key go on to the shortcuts.
+    pub fn is_chord(self) -> bool {
+        self.command || self.control
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Shortcut {
     pub key: Key,

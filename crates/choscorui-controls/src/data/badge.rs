@@ -7,7 +7,7 @@ use crate::style::{
     VisualState,
 };
 use choscorui_core::{
-    EventReply, Icon, Measured, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Icon, Key, Measured, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// A badge: a short label with an optional leading icon. A plain badge
@@ -95,7 +95,8 @@ impl CustomControl for Badge {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        if !self.link {
+        // A link takes Enter only; Space is for buttons.
+        if !self.link || hosted::key_down(event) == Some(Key::Space) {
             return EventReply::Continue;
         }
         let outcome = self.press.event(cx, event);

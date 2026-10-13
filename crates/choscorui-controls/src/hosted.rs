@@ -23,11 +23,14 @@ pub(crate) enum PressOutcome {
 }
 
 /// Press tracking for a button-like control. A primary press inside the
-/// bounds captures the pointer, and a release inside activates. Space and
-/// Enter activate on key-down without repeat.
+/// bounds captures the pointer, and a release inside activates. Enter
+/// activates on key-down, and Space presses on key-down and activates on
+/// key-up. Repeats and Command or Control chords do not activate.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct Press {
     pub pressed: bool,
+    /// Whether Space, not the pointer, holds the press.
+    key: bool,
 }
 
 impl Press {
@@ -45,7 +48,9 @@ impl Press {
                 cx.request_paint();
                 PressOutcome::Handled
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed => {
+            ControlEvent::Pointer(PointerEvent::Up { position, .. })
+                if self.pressed && !self.key =>
+            {
                 self.pressed = false;
                 cx.capture_pointer(false);
                 cx.request_paint();
@@ -55,12 +60,30 @@ impl Press {
                     PressOutcome::Handled
                 }
             }
+            ControlEvent::Key(_) if cx.modifiers().is_chord() => PressOutcome::Ignored,
             ControlEvent::Key(KeyEvent::Down {
-                key: Key::Space | Key::Enter,
+                key: Key::Enter,
                 repeat: false,
             }) => PressOutcome::Activated(None),
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Space,
+                repeat: false,
+            }) => {
+                (self.pressed, self.key) = (true, true);
+                cx.request_paint();
+                PressOutcome::Handled
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Space | Key::Enter,
+                repeat: true,
+            }) => PressOutcome::Handled,
+            ControlEvent::Key(KeyEvent::Up { key: Key::Space }) if self.key => {
+                (self.pressed, self.key) = (false, false);
+                cx.request_paint();
+                PressOutcome::Activated(None)
+            }
             ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.pressed => {
-                self.pressed = false;
+                (self.pressed, self.key) = (false, false);
                 cx.capture_pointer(false);
                 cx.request_paint();
                 PressOutcome::Handled
@@ -190,6 +213,14 @@ pub(crate) fn reply(outcome: PressOutcome) -> EventReply {
         PressOutcome::Ignored => EventReply::Continue,
         PressOutcome::Handled | PressOutcome::Activated(_) => EventReply::Stop,
     }
+}
+
+/// Whether `event` is a key-down repeat.
+pub(crate) fn is_repeat(event: &ControlEvent) -> bool {
+    matches!(
+        event,
+        ControlEvent::Key(KeyEvent::Down { repeat: true, .. })
+    )
 }
 
 /// The key-down key of `event`, repeats included.

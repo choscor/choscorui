@@ -9,7 +9,8 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::ButtonVariant;
 use choscorui::core::{
-    BackendCapabilities, Services, Space, StatusItemSpec, Support, SystemNotification, TextPreset,
+    AnnouncementPriority, BackendCapabilities, Services, Space, StatusItemSpec, Support,
+    SystemNotification, TextPreset,
 };
 
 /// Every capability the backend reports, by the catalog key of its
@@ -98,16 +99,22 @@ impl View for DesktopPage {
         let button = |label: &'static str, action: Action, support: Support| {
             let services = services.clone();
             let (ran, hinted) = (env.clone(), env.clone());
-            Button::new(t!(label), move || last.set(run(&ran, &services, action)))
-                .variant(ButtonVariant::Outline)
-                .disabled(!support.is_supported())
-                .accessibility_hint(move || {
-                    if support.is_supported() {
-                        String::new()
-                    } else {
-                        support_text(support).resolve(&hinted)
-                    }
-                })
+            // The result line is also spoken.
+            Button::new(t!(label), move || {
+                let result = run(&ran, &services, action);
+                ran.announcer()
+                    .announce(result.clone(), AnnouncementPriority::Medium);
+                last.set(result);
+            })
+            .variant(ButtonVariant::Outline)
+            .disabled(!support.is_supported())
+            .accessibility_hint(move || {
+                if support.is_supported() {
+                    String::new()
+                } else {
+                    support_text(support).resolve(&hinted)
+                }
+            })
         };
         column((
             HStack::new((

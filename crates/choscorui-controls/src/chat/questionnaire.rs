@@ -535,9 +535,12 @@ impl Questionnaire {
             };
         }
         match self.focus {
+            // A held key does not run or pick again.
             Stop::Button(index) => match key {
-                Key::Enter | Key::Space if !repeat => {
-                    self.run_button(cx, index);
+                Key::Enter | Key::Space => {
+                    if !repeat {
+                        self.run_button(cx, index);
+                    }
                     EventReply::Stop
                 }
                 _ => EventReply::Continue,
@@ -548,14 +551,18 @@ impl Questionnaire {
                     .map_or(0, |question| question.options().len());
                 if self.editors.get(self.current).is_some_and(Option::is_some) {
                     if key == Key::Enter {
-                        self.forward(cx);
+                        if !repeat {
+                            self.forward(cx);
+                        }
                         return EventReply::Stop;
                     }
                     return self.editor_event(cx, event);
                 }
                 match key {
-                    Key::Enter | Key::Space if !repeat => {
-                        self.pick(cx, self.choice);
+                    Key::Enter | Key::Space => {
+                        if !repeat {
+                            self.pick(cx, self.choice);
+                        }
                         EventReply::Stop
                     }
                     Key::Character(digit @ '1'..='9') => {

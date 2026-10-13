@@ -154,6 +154,8 @@ impl Choices {
                 cx.request_paint();
                 EventReply::Continue
             }
+            // Command and Control chords go on to the shortcuts.
+            ControlEvent::Key(_) if cx.modifiers().is_chord() => EventReply::Continue,
             // Selection follows focus, so Space and Enter select the
             // current option again, which reports nothing.
             ControlEvent::Key(KeyEvent::Down {

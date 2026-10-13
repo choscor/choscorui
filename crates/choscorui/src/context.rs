@@ -625,6 +625,9 @@ impl AppContext {
                 eprintln!("choscorui: accessibility update failed: {error}");
             }
         }
+        for (text, priority) in entry.host.take_announcements() {
+            entry.native.announce(&text, priority);
+        }
         for error in entry.host.take_errors() {
             (self.on_error)(Some(id), &error);
         }

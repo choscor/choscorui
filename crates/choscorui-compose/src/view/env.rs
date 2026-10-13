@@ -5,12 +5,35 @@ use super::state::{IntoLive, Live};
 use super::storage::Storage;
 use choscorui_controls::{ButtonVariant, ControlSize};
 use choscorui_core::{
-    Catalog, Color, ColorRole, DesignTokens, FontWeight, LayoutDirection, Locale, Localizer,
-    RadiusScale, Rect, Services, ShadowLayers, ShadowScale, Space, TextPreset, Tracking,
+    AnnouncementPriority, Catalog, Color, ColorRole, DesignTokens, FontWeight, LayoutDirection,
+    Locale, Localizer, RadiusScale, Rect, Services, ShadowLayers, ShadowScale, Space, TextPreset,
+    Tracking,
 };
 use std::any::{Any, TypeId};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+/// The queue of spoken announcements of a view host. Views take it from
+/// [`Env::announcer`], and the window speaks each one, for example a
+/// status line that changes after an action.
+#[derive(Clone, Debug, Default)]
+pub struct Announcer(Rc<RefCell<Vec<(String, AnnouncementPriority)>>>);
+
+impl Announcer {
+    /// Asks the screen reader to speak `text`. `High` interrupts the
+    /// current speech. Empty text does nothing.
+    pub fn announce(&self, text: impl Into<String>, priority: AnnouncementPriority) {
+        let text = text.into();
+        if !text.trim().is_empty() {
+            self.0.borrow_mut().push((text, priority));
+        }
+    }
+
+    pub(crate) fn take(&self) -> Vec<(String, AnnouncementPriority)> {
+        std::mem::take(&mut self.0.borrow_mut())
+    }
+}
 
 /// A color: a theme role, which follows the scheme and base color, or a
 /// fixed color.
@@ -156,6 +179,7 @@ pub struct Env {
     pub(crate) text: TextEnv,
     services: Services,
     storage: Option<Storage>,
+    announcer: Announcer,
     values: HashMap<TypeId, Rc<dyn Any>>,
 }
 
@@ -171,6 +195,7 @@ impl Default for Env {
             text: TextEnv::default(),
             services: Services::none(),
             storage: None,
+            announcer: Announcer::default(),
             values: HashMap::new(),
         }
     }
@@ -252,6 +277,11 @@ impl Env {
     /// services in the root environment.
     pub fn set_services(&mut self, services: Services) {
         self.services = services;
+    }
+
+    /// The announcements of the view host, which the window speaks.
+    pub fn announcer(&self) -> &Announcer {
+        &self.announcer
     }
 
     /// The storage of stored state, if the application has one.

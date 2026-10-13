@@ -476,12 +476,16 @@ impl CustomControl for ToggleGroup {
                 EventReply::Continue
             }
             _ => {
-                let Some(key) = hosted::key_down(event) else {
+                let Some(key) = hosted::key_down(event).filter(|_| !cx.modifiers().is_chord())
+                else {
                     return EventReply::Continue;
                 };
                 if matches!(key, choscorui_core::Key::Space | choscorui_core::Key::Enter) {
-                    let focused = self.focused;
-                    self.flip(cx, focused);
+                    // A held key does not toggle again.
+                    if !hosted::is_repeat(event) {
+                        let focused = self.focused;
+                        self.flip(cx, focused);
+                    }
                     return EventReply::Stop;
                 }
                 match self.rove(key) {

@@ -243,7 +243,8 @@ impl CustomControl for RangeSlider {
                 cx.capture_pointer(false);
                 EventReply::Stop
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+            // Command and Control chords go on to the shortcuts.
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
                 let shift = cx.modifiers().shift;
                 let horizontal = self.orientation == Orientation::Horizontal;
                 let current = self.values[self.active];

@@ -1170,6 +1170,17 @@ pub struct ShortcutModifiers {
 The modifier keys that are held with a key or a pointer event, or
 that a keyboard shortcut needs.
 
+### Methods
+
+#### `ShortcutModifiers::is_chord`
+
+```rust
+pub fn is_chord(self) -> bool
+```
+
+Whether Command or Control is held. A control that does not use
+such a chord lets the key go on to the shortcuts.
+
 ## `StatusItemSpec`
 
 struct in `choscorui::prelude::StatusItemSpec`
@@ -1814,6 +1825,16 @@ pub fn styles_mut(&mut self) -> &mut Styles
 ```
 
 The recipe registry, for application-wide recipes.
+
+#### `ViewHost::take_announcements`
+
+```rust
+pub fn take_announcements(&mut self) -> Vec<(String, AnnouncementPriority)>
+```
+
+Returns the announcements of the controls and the views since the
+last call, controls first. The window speaks each one, for example
+with `Window::announce` on macOS.
 
 #### `ViewHost::take_dirty_count`
 

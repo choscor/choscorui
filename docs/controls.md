@@ -211,6 +211,19 @@ Other controls take a plain `Key` with no key-up event. The host delivers
 the key-down event and checks focus. `Label`, `Separator`, and
 `Progress` take no input.
 
+**Keys in a control host.** These rules apply to the hosted controls:
+
+- A button-like control activates on Enter key-down and on Space key-up.
+  Space key-down shows the pressed look.
+- A held key does not activate or toggle again. The control consumes
+  the repeats.
+- A control lets a key with Command or Control go on to the shortcuts,
+  unless the control uses that chord, such as Command+A in text. Menus,
+  tab lists, toggle groups, the range slider, and the canvas use no
+  chords.
+- A link, such as a link badge, activates on Enter only. Space is for
+  buttons.
+
 ```mermaid
 flowchart LR
     Input["Pointer, key, or semantic action"] --> Handle["Control handle"]
@@ -806,9 +819,10 @@ divides by 10. Each change saturates at the `i64` bounds and emits
   chord shows the `choscorui.shortcut.prompt` message ("Type a shortcut").
   An empty sequence shows the placeholder in the `Input` placeholder style.
 - **In a control host.** A click, Space, Enter, or `Activate` starts the
-  recording. While it records, the control takes every key except a Tab
-  that finishes. A pause of 1 s after a chord commits the chords so far.
-  A loss of focus calls `finish`. A rejected key beeps.
+  recording. While it records, the control takes every key, repeats and
+  key-up events included, except a Tab that finishes. A pause of 1 s
+  after a chord commits the chords so far. A loss of focus calls
+  `finish`. A rejected key beeps.
 - While it records, `captures_keys` is true. The window then gives it the
   key equivalents of the menus, so a shortcut such as ⌘S does not run a
   menu command.
@@ -2457,7 +2471,8 @@ right-to-left layout.
 ### StatusBar
 
 - `show_message` shows a message and queues one announcement.
-  `take_announcement` returns that announcement once.
+  `take_announcement` returns that announcement once. `announce(cx)` sends
+  it to the screen reader at `Low` priority.
 - A timed message expires on `poll`. `poll` returns the time that remains,
   not an absolute time.
 - A message with no timeout stays until a new message replaces it or
@@ -2468,7 +2483,8 @@ right-to-left layout.
   text, and a 1 pt rule before each section.
 - **In a control host.** `StatusBar` takes no keyboard focus. Its
   deadline is the end of a timed message, so give `show_message` the
-  host time as `now`.
+  host time as `now`. A queued announcement makes the deadline due at
+  once, and the next timer sends it.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -3621,7 +3637,8 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
   `Default`, `Secondary`, `Destructive`, `Outline`, `Ghost`, or `Link`.
 - A plain badge is static text. It takes no focus and shows no hover look.
 - `as_link()` makes the badge a link. It takes focus and shows the hover
-  look. Enter, Space, a click, or `Activate` emits `ItemActivated(0)`.
+  look. Enter, a click, or `Activate` emits `ItemActivated(0)`. A link
+  ignores Space.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -3918,6 +3935,9 @@ behavior.
 - Toasts slide in from the window edge and fade. With reduced motion,
   they show and close at once.
 - The toaster takes focus only while it shows toasts.
+- **Announcements.** A new or updated toast sends its title and
+  description to the screen reader. An `Error` toast has `High` priority
+  and interrupts the speech. Other toasts have `Medium` priority.
 - **In a view.** The `toaster` view modifier mounts a `Toaster` above the
   window content. It puts the `Toasts` handle in the environment of its
   view, where `Env::toasts` and the `toast` modifier find it.
@@ -4327,6 +4347,9 @@ behavior.
   `semantics()` lists that action.
 - `set_modifiers` sets the modifier keys that `ControlContext::modifiers`
   reports with later events.
+- `ControlContext::announce` queues a spoken announcement, and
+  `take_announcements` returns the queue. See
+  [Notifications](#notifications).
 - `set_feedback` sets the `Feedback` of the platform. `ControlContext::beep`
   plays the system alert sound through it. The default `NoFeedback` plays
   no sound. `ViewHost::set_feedback` sets it for the controls of a view
@@ -4392,6 +4415,17 @@ notification (see [platform-macos.md](platform-macos.md)).
 
 For a live message with no focused element, the application uses an announcement.
 `AnnouncementPriority::High` interrupts current speech.
+
+- A control calls `ControlContext::announce(text, priority)`.
+  `ControlHost::take_announcements` returns the queued announcements.
+- A view calls `announce` on `Env::announcer`.
+  `ViewHost::take_announcements` returns the announcements of the controls,
+  then those of the views.
+- The `App` of the facade gives each announcement to the window after each
+  frame. On macOS, this is `Window::announce`. Without a backend, nothing
+  speaks.
+- A person must check the speech with VoiceOver. Automation cannot check
+  it.
 
 ### Assistive actions
 

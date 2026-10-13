@@ -231,7 +231,7 @@ The services of `Services` follow these values. On macOS, `post_notification` fr
 
 `Window::set_accessibility(snapshot, changes)` turns a `SemanticTree` snapshot into native `NSAccessibilityElement` objects. A node keeps its native element while it stays in the snapshot, and the window releases the elements of removed nodes. The window maps each semantic role to an AppKit role and posts the AppKit notifications for each change.
 
-- `Window::announce(message, priority)` asks VoiceOver to speak a message that has no focused element.
+- `Window::announce(message, priority)` asks VoiceOver to speak a message that has no focused element. The `App` of the facade calls it for each announcement of the view host after a frame.
 - `Window::take_accessibility_actions` returns the actions that an assistive technology asked for. The bridge queues an action only when the node declares it.
 
 The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes the role mapping, the notifications, the action callbacks, and the collection attributes. [controls.md](controls.md) describes the semantics of each control.

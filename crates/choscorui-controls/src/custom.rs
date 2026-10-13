@@ -11,11 +11,11 @@ use crate::style::{
 };
 use crate::{DialogId, DialogStack, EditCommand, Modality, Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList, EngineError,
-    EventPhase, EventReply, Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure,
-    Localizer, Measured, NoFeedback, NodeId, Point, PointerDetails, PointerEvent, Rect,
-    SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree, Services,
-    TextInputInfo, ThemeResolver, Tree, TreeError,
+    AnnouncementPriority, CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty,
+    DisplayList, EngineError, EventPhase, EventReply, Feedback, Key, KeyEvent, LayoutDirection,
+    LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId, Point, PointerDetails,
+    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree,
+    Services, TextInputInfo, ThemeResolver, Tree, TreeError,
 };
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -165,6 +165,7 @@ pub struct ControlContext<'a> {
     pointer: PointerDetails,
     services: &'a Services,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
+    announcements: &'a mut Vec<(String, AnnouncementPriority)>,
     feedback: &'a dyn Feedback,
     strings: &'a Localizer,
 }
@@ -256,6 +257,15 @@ impl ControlContext<'_> {
     /// example when the control refuses a key or a paste.
     pub fn beep(&self) {
         self.feedback.beep();
+    }
+    /// Asks the screen reader to speak `text`, for a live update that no
+    /// focused node carries, such as a status message or a new toast.
+    /// `High` interrupts the current speech. Empty text does nothing.
+    pub fn announce(&mut self, text: impl Into<String>, priority: AnnouncementPriority) {
+        let text = text.into();
+        if !text.trim().is_empty() {
+            self.announcements.push((text, priority));
+        }
     }
 }
 
@@ -399,6 +409,8 @@ pub struct ControlHost {
     invalid: HashSet<NodeId>,
     hovered: Vec<NodeId>,
     messages: Vec<(NodeId, ControlMessage)>,
+    /// The announcements that controls asked for, oldest first.
+    announcements: Vec<(String, AnnouncementPriority)>,
     time: f64,
     modifiers: ShortcutModifiers,
     /// The details of the pointer event in dispatch.
@@ -768,6 +780,7 @@ impl ControlHost {
                     pointer: self.pointer,
                     services: &self.services,
                     messages: &mut self.messages,
+                    announcements: &mut self.announcements,
                     feedback: &*self.feedback.0,
                     strings: &self.strings.0,
                 };
@@ -1451,6 +1464,13 @@ impl ControlHost {
         std::mem::take(&mut self.messages)
     }
 
+    /// Returns the announcements that controls asked for with
+    /// [`ControlContext::announce`], oldest first. The window speaks each
+    /// one, for example with `Window::announce` on macOS.
+    pub fn take_announcements(&mut self) -> Vec<(String, AnnouncementPriority)> {
+        std::mem::take(&mut self.announcements)
+    }
+
     /// Publishes semantics for controls marked dirty (or all, with
     /// `force`). Returns the resulting changes for platform notification.
     pub fn sync_semantics(
@@ -1512,6 +1532,7 @@ impl ControlHost {
             pointer: self.pointer,
             services: &self.services,
             messages: &mut self.messages,
+            announcements: &mut self.announcements,
             feedback: &*self.feedback.0,
             strings: &self.strings.0,
         };

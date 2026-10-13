@@ -83,11 +83,13 @@ fn take<T>(slot: &Slot<T>) -> State<T> {
     slot.get().expect("the screen mounted")
 }
 
+/// Presses and releases `key`. Space activates on the release.
 fn press(host: &mut ViewHost, key: Key) {
     host.key(
         KeyEvent::Down { key, repeat: false },
         ShortcutModifiers::default(),
     );
+    host.key(KeyEvent::Up { key }, ShortcutModifiers::default());
     host.flush();
 }
 

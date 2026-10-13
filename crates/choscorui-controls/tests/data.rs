@@ -121,14 +121,11 @@ fn a_plain_badge_is_text_and_a_link_badge_activates() {
     assert!(fills(&link.paint(), hovered_secondary));
     link.click(center);
     link.focus();
+    // A link takes Enter only; Space is for buttons.
     link.key(Key::Space);
-    assert_eq!(
-        link.messages(),
-        [
-            ControlMessage::ItemActivated(0),
-            ControlMessage::ItemActivated(0),
-        ]
-    );
+    assert_eq!(link.messages(), [ControlMessage::ItemActivated(0)]);
+    link.key(Key::Enter);
+    assert_eq!(link.messages(), [ControlMessage::ItemActivated(0)]);
 }
 
 #[test]

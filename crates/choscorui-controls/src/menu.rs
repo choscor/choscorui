@@ -754,7 +754,10 @@ impl CustomControl for HostedDropdownMenu {
                     None => EventReply::Continue,
                 }
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) if *key != Key::Tab => {
+            // Command and Control chords go on to the shortcuts.
+            ControlEvent::Key(KeyEvent::Down { key, .. })
+                if *key != Key::Tab && !cx.modifiers().is_chord() =>
+            {
                 let response = self.popup.key(*key);
                 self.respond(cx, response);
                 EventReply::Stop

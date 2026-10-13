@@ -12,9 +12,9 @@ use choscorui::controls::{
     CustomControl, Edges, MeasureContext, PaintContext, Recipe, ResolvedStyle, StyleQuery,
 };
 use choscorui::core::{
-    ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Space,
-    TextPreset,
+    AnnouncementPriority, ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, Size, Space, TextPreset,
 };
 use std::rc::Rc;
 
@@ -57,7 +57,11 @@ impl View for ButtonRecipesPage {
             let env = env.clone();
             move || {
                 let title = env.text(key, &[]);
-                last.set(env.text("button-recipes.activated", &[("title", &title)]));
+                let result = env.text("button-recipes.activated", &[("title", &title)]);
+                // The status line is also spoken.
+                env.announcer()
+                    .announce(result.clone(), AnnouncementPriority::Medium);
+                last.set(result);
             }
         };
         let width = Frame::new().width(300.0).alignment(Alignment::FILL);
@@ -187,7 +191,8 @@ impl CustomControl for StarRating {
                 context.request_paint();
                 EventReply::Continue
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+            // Command and Control chords go on to the shortcuts.
+            ControlEvent::Key(KeyEvent::Down { key, .. }) if !context.modifiers().is_chord() => {
                 let value = match key.in_reading_order(self.rtl) {
                     Key::ArrowRight | Key::ArrowUp => self.value.saturating_add(1),
                     Key::ArrowLeft | Key::ArrowDown => self.value.saturating_sub(1),
@@ -317,17 +322,17 @@ pub fn page(id: &str) -> Option<Build> {
 #[cfg(test)]
 mod tests {
     use crate::ui::pages::tests::Harness;
-    use choscorui::core::{Key, KeyEvent, SemanticAction};
+    use choscorui::core::{AnnouncementPriority, Key, KeyEvent, SemanticAction};
 
     #[test]
     fn every_recipe_runs_the_same_behavior() {
         let mut page = Harness::new("button-recipes");
         for title in ["Default", "Square", "Delete", "Continue setup"] {
             assert!(page.act(title, SemanticAction::Activate), "{title}");
-            assert!(
-                page.host.find(&format!("Activated “{title}”")).is_some(),
-                "{title}"
-            );
+            let result = format!("Activated “{title}”");
+            assert!(page.host.find(&result).is_some(), "{title}");
+            let spoken = page.host.take_announcements();
+            assert_eq!(spoken, [(result, AnnouncementPriority::Medium)]);
         }
         let square = page.node("Square");
         assert_eq!(

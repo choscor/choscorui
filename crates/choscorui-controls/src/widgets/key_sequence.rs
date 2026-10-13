@@ -314,6 +314,8 @@ impl CustomControl for KeySequenceEdit {
                     EventReply::Stop
                 }
             }
+            // Recording takes every key, repeats and releases included.
+            ControlEvent::Key(_) if self.is_recording() => EventReply::Stop,
             ControlEvent::Key(KeyEvent::Down {
                 key: Key::Space | Key::Enter,
                 repeat: false,

@@ -290,7 +290,7 @@ impl CustomControl for Breadcrumb {
                 ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
                     self.dismiss_menu(cx);
                 }
-                ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
                     let response = self.menu.key(*key);
                     self.menu_response(cx, response);
                     return EventReply::Stop;

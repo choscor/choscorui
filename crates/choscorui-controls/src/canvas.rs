@@ -751,10 +751,13 @@ impl CustomControl for HostedCanvas {
                     zoom: modifiers.command,
                 }
             }
-            Some(Routed::Key(KeyEvent::Down { key, .. })) => CanvasInput::Key {
-                key,
-                shift: modifiers.shift,
-            },
+            // Command and Control chords go on to the shortcuts.
+            Some(Routed::Key(KeyEvent::Down { key, .. })) if !modifiers.is_chord() => {
+                CanvasInput::Key {
+                    key,
+                    shift: modifiers.shift,
+                }
+            }
             Some(Routed::Cancel) if self.pressed => {
                 self.pressed = false;
                 cx.capture_pointer(false);

@@ -269,6 +269,16 @@ What a control may do while handling an event.
 
 ### Methods
 
+#### `ControlContext::announce`
+
+```rust
+pub fn announce(&mut self, text: impl Into<String>, priority: AnnouncementPriority)
+```
+
+Asks the screen reader to speak `text`, for a live update that no
+focused node carries, such as a status message or a new toast.
+`High` interrupts the current speech. Empty text does nothing.
+
 #### `ControlContext::beep`
 
 ```rust

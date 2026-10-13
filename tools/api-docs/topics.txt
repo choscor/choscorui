@@ -182,6 +182,7 @@ presentation choscorui::prelude::Toast
 presentation choscorui::prelude::ToastPosition
 presentation choscorui::prelude::ToastVariant
 presentation choscorui::prelude::Toasts
+presentation choscorui::prelude::Announcer
 
 # Modifiers: the trait, its result, and its arguments.
 modifiers choscorui::prelude::ViewExt

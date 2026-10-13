@@ -10,8 +10,8 @@ use crate::style::{
     ToastVariant, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
 };
 
 /// The most toasts that show at once while the stack is collapsed.
@@ -221,6 +221,20 @@ impl Toaster {
     fn update(&mut self, cx: &mut ControlContext<'_>) {
         let time = cx.time();
         for op in self.toasts.take() {
+            // A new or changed toast is spoken; an error interrupts.
+            if let ToastOp::Push(_, toast) | ToastOp::Update(_, toast) = &op {
+                let text = [toast.title.as_str(), toast.description.as_str()]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let priority = if toast.variant == ToastVariant::Error {
+                    AnnouncementPriority::High
+                } else {
+                    AnnouncementPriority::Medium
+                };
+                cx.announce(text, priority);
+            }
             self.apply(op, time);
         }
         if !self.paused() {

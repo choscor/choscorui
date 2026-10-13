@@ -14,9 +14,9 @@ use choscorui_controls::{
     ToolbarItem,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, Color, ColorRole, Constraints, DesignTokens,
-    DisplayCommand, DisplayList, ItemShape, ItemStyle, Key, LayoutDirection, Locale, Point,
-    PointerButton, PointerEvent, Rect, Scene, SceneItem, ScrollViewport, SemanticAction,
+    AnnouncementPriority, CivilDate, CivilDateTime, CivilTime, Color, ColorRole, Constraints,
+    DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key, LayoutDirection, Locale,
+    Point, PointerButton, PointerEvent, Rect, Scene, SceneItem, ScrollViewport, SemanticAction,
     SemanticRole, Size, StringListModel, TreeStore, WheelUnit,
 };
 use hosted::{Harness, rect, texts};
@@ -1083,6 +1083,17 @@ fn a_hosted_status_bar_expires_its_message_on_the_host_timer() {
     assert_eq!(semantics.value.as_deref(), Some("Saved, Ln 1"));
     assert_eq!(texts(&h.paint()), vec!["Saved", "Ln 1"]);
 
+    // The message is spoken at once, at low priority.
+    assert_eq!(
+        h.host.next_deadline(&h.tree),
+        Some(f64::NEG_INFINITY),
+        "the announcement is due"
+    );
+    assert!(h.host.advance(&mut h.tree, 0.0));
+    assert_eq!(
+        h.host.take_announcements(),
+        [("Saved".to_owned(), AnnouncementPriority::Low)]
+    );
     assert_eq!(h.host.next_deadline(&h.tree), Some(2.0));
     assert!(!h.host.advance(&mut h.tree, 1.0));
     assert!(h.host.advance(&mut h.tree, 2.0));

@@ -183,6 +183,7 @@ Every example assumes `use choscorui::prelude::*;`.
 ## Presentation
 
 - [`AlertDialog`](presentation.md#alertdialog) type alias: A modal alert with a `title`, a `message`, and ordered `buttons`, open while `presented` is true.
+- [`Announcer`](presentation.md#announcer) struct: The queue of spoken announcements of a view host.
 - [`ContextMenu`](presentation.md#contextmenu) type alias: An area that opens `items` at the pointer on a secondary click.
 - [`Dialog`](presentation.md#dialog) type alias: A trigger button with a modal panel; `open` edits whether it shows.
 - [`DropdownMenu`](presentation.md#dropdownmenu) type alias: A button named `name` that opens a menu of `items`.

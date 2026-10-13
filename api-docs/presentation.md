@@ -57,6 +57,29 @@ pub fn new<M, N>(title: impl IntoLive<TextContent, M>, message: impl IntoLive<Te
 
 An alert with `title`, `message`, and `buttons` that shows while `presented` is true.
 
+## `Announcer`
+
+struct in `choscorui::prelude::Announcer`
+
+```rust
+pub struct Announcer(/* private field */);
+```
+
+The queue of spoken announcements of a view host. Views take it from
+[`Env::announcer`](state.md#envannouncer), and the window speaks each one, for example a
+status line that changes after an action.
+
+### Methods
+
+#### `Announcer::announce`
+
+```rust
+pub fn announce(&self, text: impl Into<String>, priority: AnnouncementPriority)
+```
+
+Asks the screen reader to speak `text`. `High` interrupts the
+current speech. Empty text does nothing.
+
 ## `ContextMenu`
 
 type alias in `choscorui::prelude::ContextMenu`

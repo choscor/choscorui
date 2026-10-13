@@ -385,6 +385,7 @@ impl CustomControl for HostedToolButton {
             PressOutcome::Ignored => {
                 if cx.phase() != EventPhase::Target
                     || hosted::key_down(event) != Some(Key::ArrowDown)
+                    || cx.modifiers().is_chord()
                     || self.button.menu == ToolButtonMenu::None
                 {
                     return EventReply::Continue;

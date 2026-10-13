@@ -6,7 +6,7 @@ use choscorui_controls::{
     ControlMessage, ShortcutModifiers, TOAST_DURATION, Toast, ToastPosition, ToastVariant, Toaster,
     Toasts,
 };
-use choscorui_core::{Key, KeyEvent, LayoutDirection, Point, Rect};
+use choscorui_core::{AnnouncementPriority, Key, KeyEvent, LayoutDirection, Point, Rect};
 use hosted::{Harness, texts};
 
 fn advance(h: &mut Harness, time: f64) -> bool {
@@ -57,6 +57,27 @@ fn pushed_toasts_show_at_the_next_advance_and_close_on_time() {
     advance(&mut h, closing);
     assert_eq!(stack(&h), None);
     assert_eq!(h.host.next_deadline(&h.tree), None);
+}
+
+#[test]
+fn a_new_toast_is_spoken_and_an_error_interrupts() {
+    let toasts = Toasts::new();
+    let mut h = Harness::new(Toaster::new("Notifications", toasts.clone(), "Close"));
+    toasts.push(Toast::new("Event has been created").with_description("Sunday at 9:00"));
+    toasts.push(Toast::new("Upload failed").with_variant(ToastVariant::Error));
+    advance(&mut h, 0.0);
+    assert_eq!(
+        h.host.take_announcements(),
+        [
+            (
+                "Event has been created, Sunday at 9:00".to_owned(),
+                AnnouncementPriority::Medium
+            ),
+            ("Upload failed".to_owned(), AnnouncementPriority::High),
+        ]
+    );
+    advance(&mut h, 1.0);
+    assert!(h.host.take_announcements().is_empty(), "spoken once");
 }
 
 #[test]

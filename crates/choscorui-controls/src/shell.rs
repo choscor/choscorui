@@ -14,9 +14,9 @@ use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer, Measured, NodeId,
-    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size,
+    AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, Size,
 };
 use std::time::Duration;
 
@@ -641,6 +641,15 @@ impl StatusBar {
         self.announcement.take()
     }
 
+    /// Sends the message of the last [`show_message`](Self::show_message)
+    /// to the screen reader at low priority, once. A hosted bar does this
+    /// itself; a control that wraps a bar calls it after `show_message`.
+    pub fn announce(&mut self, cx: &mut ControlContext<'_>) {
+        if let Some(text) = self.take_announcement() {
+            cx.announce(text, AnnouncementPriority::Low);
+        }
+    }
+
     pub fn layout(&self, rect: Rect, direction: LayoutDirection) -> StatusBarLayout {
         let mut trailing = rect.max_x();
         let mut sections = Vec::new();
@@ -1029,6 +1038,10 @@ impl HostedToolbar {
                 self.dismiss_menu(cx);
                 return EventReply::Continue;
             }
+            // Command and Control chords go on to the shortcuts.
+            if cx.modifiers().is_chord() {
+                return EventReply::Continue;
+            }
             let response = self.menu.key(key);
             self.respond(cx, response);
             return EventReply::Stop;
@@ -1183,6 +1196,7 @@ impl CustomControl for StatusBar {
         if *event != ControlEvent::Timer {
             return EventReply::Continue;
         }
+        self.announce(cx);
         self.poll(Duration::from_secs_f64(cx.time().max(0.0)));
         cx.request_paint();
         cx.request_semantics();
@@ -1226,7 +1240,11 @@ impl CustomControl for StatusBar {
 
     /// The expiry of a timed message, in host time: pass the host time as
     /// `now` to [`StatusBar::show_message`].
+    /// A message that waits for its announcement is due at once.
     fn deadline(&self) -> Option<f64> {
+        if self.announcement.is_some() {
+            return Some(f64::NEG_INFINITY);
+        }
         match &self.message {
             Some((_, Some(deadline))) => Some(deadline.as_secs_f64()),
             _ => None,

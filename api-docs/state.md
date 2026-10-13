@@ -251,6 +251,14 @@ descendants that read it.
 
 ### Methods
 
+#### `Env::announcer`
+
+```rust
+pub fn announcer(&self) -> &Announcer
+```
+
+The announcements of the view host, which the window speaks.
+
 #### `Env::button_variant`
 
 ```rust

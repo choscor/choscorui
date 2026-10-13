@@ -4,9 +4,9 @@ use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, CompositionEvent, CursorShape, DisplayList, Feedback, MenuBarModel,
-    MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry, Services, Size, WindowGeometry,
-    WindowOptions,
+    AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
+    Feedback, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry,
+    Services, Size, WindowGeometry, WindowOptions,
 };
 use choscorui_macos::{
     Application, CoreTextShaper, Error, ImeEvent, MainMenu, Modifiers, NativeServices,
@@ -234,6 +234,13 @@ impl NativeWindow {
     /// keeps the cursor that shows.
     pub(crate) fn set_cursor(&self, shape: CursorShape) {
         let _ = self.window.set_cursor(shape);
+    }
+
+    /// Asks VoiceOver to speak `text`. A failure only loses the speech.
+    pub(crate) fn announce(&self, text: &str, priority: AnnouncementPriority) {
+        if let Err(error) = self.window.announce(text, priority) {
+            eprintln!("choscorui: announcement failed: {error}");
+        }
     }
 
     pub(crate) fn publish(

@@ -288,6 +288,7 @@ impl CustomControl for TimedStatus {
         if std::mem::take(&mut self.pending) {
             self.bar
                 .show_message(self.message.clone(), Some(Duration::from_secs(3)), now);
+            self.bar.announce(cx);
         } else {
             let before = self.bar.text().to_owned();
             self.bar.poll(now);
@@ -544,6 +545,9 @@ mod tests {
         page.host.advance(1.0);
         let shown = page.value("Status").unwrap();
         assert!(shown.starts_with("Saved “Notes.txt”"), "{shown}");
+        let spoken = page.host.take_announcements();
+        assert_eq!(spoken.len(), 1, "the message is spoken once");
+        assert!(spoken[0].0.starts_with("Saved “Notes.txt”"), "{spoken:?}");
         page.act("Add words", SemanticAction::Activate);
         page.host.advance(2.0);
         let shown = page.value("Status").unwrap();
