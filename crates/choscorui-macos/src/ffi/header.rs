@@ -1,8 +1,9 @@
-//! The SDK header type of each message argument and result type, for the
-//! message part of the SDK header check.
+//! The SDK header type of each message and callback argument and result
+//! type, for the message and callback parts of the SDK header check.
 
 use super::block::Block;
 use super::class::{AnyClass, AnyProtocol, Obj, Receiver, ReceiverKind, Sel};
+use super::encode::Bool;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 use super::msg::{Autoreleased, Init, Shared, Utf8};
 use super::retained::Retained;
@@ -29,7 +30,8 @@ pub(crate) struct HeaderType {
     pub(crate) check: Check,
 }
 
-/// The header types of a message: the result and each argument.
+/// The header types of a message or a callback: the result and each
+/// argument.
 pub(crate) struct Signature {
     pub(crate) ret: HeaderType,
     pub(crate) args: Vec<HeaderType>,
@@ -96,6 +98,7 @@ macro_rules! header_as {
 header_as!(Scalar:
     () => "void",
     bool => "BOOL",
+    Bool => "BOOL",
     isize => "NSInteger",
     usize => "NSUInteger",
     i16 => "int16_t",
@@ -120,6 +123,13 @@ impl<T> Header for *const T {
     const CHECK: Check = Check::AnyPointer;
     fn header(out: &mut String) {
         out.push_str("const void *");
+    }
+}
+
+impl<T: Header> Header for Option<&mut T> {
+    fn header(out: &mut String) {
+        T::header(out);
+        out.push_str(" *");
     }
 }
 

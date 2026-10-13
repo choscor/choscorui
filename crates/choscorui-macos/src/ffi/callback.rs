@@ -46,6 +46,9 @@ pub(crate) struct Method {
     pub(in crate::ffi) encode: EncodeFn,
     #[cfg(test)]
     pub(in crate::ffi) origin: Origin,
+    /// The header types, for the SDK header check.
+    #[cfg(test)]
+    pub(in crate::ffi) signature: fn() -> crate::ffi::header::Signature,
 }
 
 impl Method {
@@ -324,6 +327,11 @@ macro_rules! define_classes {
                             >,
                             #[cfg(test)]
                             origin: $crate::ffi::callback::define_classes!(@origin $origin $(($marker))?),
+                            #[cfg(test)]
+                            signature: $crate::ffi::header::signature::<
+                                ($($ty,)*),
+                                $crate::ffi::callback::define_classes!(@ret $($ret)?),
+                            >,
                         }),*] },
                     }
                 }

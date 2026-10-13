@@ -2,8 +2,9 @@
 //! runtime.
 //!
 //! Each check collects all mismatches and then fails one time, so one run
-//! shows the whole scope of an SDK change. A missing class, protocol, or
-//! selector is a failure.
+//! shows the whole scope of an SDK change. A missing class or selector is
+//! a failure. A protocol that no loaded image uses has no runtime record,
+//! so the SDK header check covers its messages and callbacks.
 
 mod boundary;
 mod sdk;
@@ -71,8 +72,10 @@ fn crate_classes() -> Vec<ClassDef> {
         .collect()
 }
 
-/// The type encoding that the runtime has for `message`.
-fn runtime_encoding(message: &MsgInfo) -> Result<String, String> {
+/// The type encoding that the runtime has for `message`, or `None` for a
+/// protocol that no loaded image uses. AppKit on macOS 15 does not load
+/// every delegate protocol; the SDK header check covers those messages.
+fn runtime_encoding(message: &MsgInfo) -> Result<Option<String>, String> {
     let selector = Sel::register(message.selector);
     let instance = message.kind == Kind::Instance;
     let types = match message.receiver_kind {
@@ -82,12 +85,13 @@ fn runtime_encoding(message: &MsgInfo) -> Result<String, String> {
             runtime::method_types(class, selector, instance)
         }
         ReceiverKind::Protocol => {
-            let protocol = runtime::get_protocol(message.receiver)
-                .ok_or_else(|| format!("protocol {:?} is missing", message.receiver))?;
+            let Some(protocol) = runtime::get_protocol(message.receiver) else {
+                return Ok(None);
+            };
             runtime::protocol_method_types(protocol, selector, instance)
         }
     };
-    types.ok_or_else(|| {
+    types.map(Some).ok_or_else(|| {
         format!(
             "{:?} has no {} method {:?}",
             message.receiver,
@@ -106,7 +110,7 @@ pub(crate) fn check_messages<'a>(
         let expected = (message.encoding)();
         match runtime_encoding(message) {
             Err(failure) => failures.push(failure),
-            Ok(actual) if !same_encoding(&expected, &actual) => failures.push(format!(
+            Ok(Some(actual)) if !same_encoding(&expected, &actual) => failures.push(format!(
                 "{:?} {:?}: expected {expected}, actual {actual}",
                 message.receiver, message.selector
             )),
@@ -188,17 +192,22 @@ pub(crate) fn check_function_ownership<'a>(
 }
 
 /// The type encoding of `selector` in its origin, or why there is none.
-fn origin_encoding(origin: Origin, selector: Sel) -> Result<String, String> {
+/// `None` stands for a protocol that no loaded image uses; the SDK header
+/// check covers its methods.
+fn origin_encoding(origin: Origin, selector: Sel) -> Result<Option<String>, String> {
     match origin {
         Origin::Super(name) => {
             let class = lookup_class(name).ok_or_else(|| format!("class {name:?} is missing"))?;
             runtime::method_types(class, selector, true)
+                .map(Some)
                 .ok_or_else(|| format!("superclass {name:?} has no such instance method"))
         }
         Origin::Protocol(name) => {
-            let protocol = runtime::get_protocol(name)
-                .ok_or_else(|| format!("protocol {name:?} is missing"))?;
+            let Some(protocol) = runtime::get_protocol(name) else {
+                return Ok(None);
+            };
             runtime::protocol_method_types(protocol, selector, true)
+                .map(Some)
                 .ok_or_else(|| format!("protocol {name:?} has no such instance method"))
         }
         Origin::Own => Err("an own selector has no origin".to_owned()),
@@ -252,7 +261,7 @@ pub(crate) fn check_callbacks<'a>(
             }
             match origin_encoding(method.origin, selector) {
                 Err(failure) => failures.push(format!("{place}: {failure}")),
-                Ok(actual) if !same_encoding(&expected, &actual) => {
+                Ok(Some(actual)) if !same_encoding(&expected, &actual) => {
                     failures.push(format!("{place}: expected {expected}, actual {actual}"));
                 }
                 Ok(_) => {}
@@ -419,12 +428,10 @@ mod tests {
         let wrong = protocol(c"NSDraggingInfo", || "q@:".to_owned());
         let report = check_messages([&wrong]).unwrap_err();
         assert!(report.contains("expected q@:"), "{report}");
-        let missing = protocol(c"ChoscoruiNoSuchProtocol", || "Q@:".to_owned());
-        let report = check_messages([&missing]).unwrap_err();
-        assert!(
-            report.contains("protocol \"ChoscoruiNoSuchProtocol\" is missing"),
-            "{report}"
-        );
+        // The runtime has no record of a protocol that no image uses, so
+        // the SDK header check, not this one, rejects an unknown name.
+        let unloaded = protocol(c"ChoscoruiNoSuchProtocol", || "Q@:".to_owned());
+        assert!(check_messages([&unloaded]).is_ok());
     }
 
     fn callback(origin: Origin, selector: &'static CStr, encode: EncodeFn) -> Method {
@@ -433,6 +440,7 @@ mod tests {
             imp: std::ptr::null(),
             encode,
             origin,
+            signature: crate::ffi::header::signature::<(), ()>,
         }
     }
 

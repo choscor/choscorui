@@ -7,10 +7,12 @@
 //! availability error in one run.
 
 use super::MsgInfo;
-use crate::ffi::callback::ClassDef;
-use crate::ffi::header::{Check, HeaderType, receiver_header};
+use crate::ffi::callback::{ClassDef, Origin};
+use crate::ffi::class::ReceiverKind;
+use crate::ffi::header::{Check, HeaderType, Signature, receiver_header};
 use crate::ffi::msg::Kind;
 use crate::ffi::sdk::{CItem, CStruct, SdkConst, Shape};
+use std::ffi::CStr;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::process::Command;
@@ -250,17 +252,42 @@ fn message_expression(receiver: &str, selector: &str, count: usize) -> String {
     format!("[{receiver} {}]", parts.join(" "))
 }
 
-/// Appends a function that sends `message` with the header types of its
+/// A message that the check sends: a message descriptor, or a callback
+/// that AppKit sends to a crate class.
+struct Send<'a> {
+    /// The name of the generated function.
+    function: String,
+    receiver: &'a CStr,
+    receiver_kind: ReceiverKind,
+    kind: Kind,
+    selector: &'a CStr,
+    signature: Signature,
+}
+
+impl Send<'_> {
+    fn message(index: usize, message: &MsgInfo) -> Send<'_> {
+        Send {
+            function: format!("check_message_{index}"),
+            receiver: message.receiver,
+            receiver_kind: message.receiver_kind,
+            kind: message.kind,
+            selector: message.selector,
+            signature: (message.signature)(),
+        }
+    }
+}
+
+/// Appends a function that sends `send` with the header types of its
 /// descriptor. Compiling it checks the selector, the argument and result
 /// types, the deprecation, and the availability.
-fn write_message(out: &mut String, index: usize, message: &MsgInfo) {
-    let signature = (message.signature)();
-    let receiver_name = message.receiver.to_string_lossy();
-    let selector = message.selector.to_string_lossy();
+fn write_send(out: &mut String, send: Send) {
+    let signature = send.signature;
+    let receiver_name = send.receiver.to_string_lossy();
+    let selector = send.selector.to_string_lossy();
     let mut parameters = Vec::new();
-    let receiver = match message.kind {
+    let receiver = match send.kind {
         Kind::Instance => {
-            let ty = receiver_header(message.receiver, message.receiver_kind);
+            let ty = receiver_header(send.receiver, send.receiver_kind);
             parameters.push(format!("cc::type<{ty}> r"));
             "r".to_owned()
         }
@@ -269,22 +296,18 @@ fn write_message(out: &mut String, index: usize, message: &MsgInfo) {
     for (position, arg) in signature.args.iter().enumerate() {
         parameters.push(format!("{} a{position}", parameter(arg)));
     }
-    let send = message_expression(&receiver, &selector, signature.args.len());
+    let expression = message_expression(&receiver, &selector, signature.args.len());
     let ret = &signature.ret;
-    let _ = writeln!(
-        out,
-        "void check_message_{index}({}) {{",
-        parameters.join(", ")
-    );
+    let _ = writeln!(out, "void {}({}) {{", send.function, parameters.join(", "));
     match ret.check {
         Check::Typed => {
-            let _ = writeln!(out, "  cc::type<{}> result = {send};", ret.name);
+            let _ = writeln!(out, "  cc::type<{}> result = {expression};", ret.name);
             let _ = writeln!(out, "  (void)result;");
         }
         Check::Scalar | Check::AnyPointer => {
             // The lambda body is a definition, so the compiler checks the
             // argument conversions; `decltype` alone would not.
-            let _ = writeln!(out, "  auto send = [&] {{ return {send}; }};");
+            let _ = writeln!(out, "  auto send = [&] {{ return {expression}; }};");
             let _ = writeln!(
                 out,
                 "  static_assert(cc::same_shape<{}, decltype(send())>(), \"{receiver_name} {selector}: expected the result to be {}\");",
@@ -361,6 +384,28 @@ fn write_class(out: &mut String, class: &ClassDef) -> Result<(), String> {
     Ok(())
 }
 
+/// Appends a send of each protocol method that `class` implements, to a
+/// receiver of the protocol. AppKit calls these methods, so the check
+/// compiles the call as AppKit makes it. This check covers a protocol
+/// that the runtime does not load, which the runtime check cannot see.
+fn write_callbacks(out: &mut String, class: &ClassDef) {
+    for (index, method) in class.methods.iter().enumerate() {
+        if let Origin::Protocol(protocol) = method.origin {
+            write_send(
+                out,
+                Send {
+                    function: format!("check_callback_{}_{index}", class.name.to_string_lossy()),
+                    receiver: protocol,
+                    receiver_kind: ReceiverKind::Protocol,
+                    kind: Kind::Instance,
+                    selector: method.selector,
+                    signature: (method.signature)(),
+                },
+            );
+        }
+    }
+}
+
 /// The Objective-C++ source of the check.
 pub(crate) fn source(descriptors: &Descriptors) -> Result<String, String> {
     let mut out = PRELUDE.to_owned();
@@ -377,7 +422,10 @@ pub(crate) fn source(descriptors: &Descriptors) -> Result<String, String> {
         write_struct(&mut out, layout);
     }
     for (index, message) in descriptors.messages.iter().enumerate() {
-        write_message(&mut out, index, message);
+        write_send(&mut out, Send::message(index, message));
+    }
+    for class in descriptors.classes {
+        write_callbacks(&mut out, class);
     }
     Ok(out)
 }
@@ -458,10 +506,9 @@ pub(crate) fn check_sdk(descriptors: &Descriptors) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ffi::class::ReceiverKind;
+    use crate::ffi::geometry::NSRange;
     use crate::ffi::header::signature;
     use crate::ffi::msg::Ownership;
-    use std::ffi::CStr;
 
     fn check(descriptors: Descriptors) -> String {
         check_sdk(&descriptors).unwrap_err()
@@ -577,6 +624,57 @@ mod tests {
             report.contains("'disableScreenUpdatesUntilFlush' is deprecated"),
             "{report}"
         );
+    }
+
+    /// A class with one protocol callback.
+    fn callback_class(
+        protocol: &'static CStr,
+        selector: &'static CStr,
+        signature: fn() -> crate::ffi::header::Signature,
+    ) -> ClassDef {
+        let method = crate::ffi::callback::Method {
+            selector,
+            imp: std::ptr::null(),
+            encode: |_| {},
+            origin: Origin::Protocol(protocol),
+            signature,
+        };
+        ClassDef {
+            name: c"ChoscoruiCheckDelegate",
+            superclass: c"NSObject",
+            protocols: &[],
+            methods: Vec::leak(vec![method]),
+        }
+    }
+
+    #[test]
+    fn a_wrong_callback_argument_names_the_selector_and_both_types() {
+        let wrong = callback_class(
+            c"NSApplicationDelegate",
+            c"applicationDidBecomeActive:",
+            signature::<(NSRange,), ()>,
+        );
+        let report = check(Descriptors {
+            classes: &[wrong],
+            ..only_consts(&[])
+        });
+        assert!(report.contains("applicationDidBecomeActive:"), "{report}");
+        assert!(report.contains("NSRange"), "{report}");
+        assert!(report.contains("NSNotification"), "{report}");
+    }
+
+    #[test]
+    fn a_callback_of_an_unknown_protocol_fails() {
+        let unknown = callback_class(
+            c"ChoscoruiNoSuchProtocol",
+            c"applicationDidBecomeActive:",
+            signature::<(), ()>,
+        );
+        let report = check(Descriptors {
+            classes: &[unknown],
+            ..only_consts(&[])
+        });
+        assert!(report.contains("ChoscoruiNoSuchProtocol"), "{report}");
     }
 
     #[test]

@@ -45,9 +45,9 @@ The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, I
 
 `cargo test -p choscorui-macos` runs these checks. Each check collects all mismatches and then fails one time, so one run shows the whole effect of an SDK change.
 
-- **Runtime.** `messages_match_runtime` compares the type encoding of each `Msg` with the encoding of the method in the Objective-C runtime. `callbacks_match_sdk` compares each crate method with its superclass method or protocol method. A selector that the crate invents must not occur in the superclass or in an adopted protocol.
+- **Runtime.** `messages_match_runtime` compares the type encoding of each `Msg` with the encoding of the method in the Objective-C runtime. `callbacks_match_sdk` compares each crate method with its superclass method or protocol method. A selector that the crate invents must not occur in the superclass or in an adopted protocol. The runtime has no record of a protocol that no loaded image uses, for example `NSApplicationDelegate` on macOS 15. The runtime checks skip such a protocol, and the header check covers it.
 - **Ownership.** `ownership_follows_naming` checks the Cocoa naming rule for each `Msg` and the `Create` or `Copy` rule for each C function.
-- **SDK headers.** `sdk_headers_compile` makes one Objective-C++ file from all declarations and compiles it against the SDK headers with `xcrun clang++`. The minimum system is macOS 15, and all warnings are errors.
+- **SDK headers.** `sdk_headers_compile` makes one Objective-C++ file from all declarations and compiles it against the SDK headers with `xcrun clang++`. The minimum system is macOS 15, and all warnings are errors. The file sends each message, and each protocol method of a crate class, with the header types of its Rust signature.
 - **Boundary.** `boundary_is_closed` reads the sources. Outside `src/ffi/`, it fails for a selector literal, `objc_msgSend`, `transmute`, `extern "C"`, or `class_addMethod`. Inside `ffi`, only `define_classes!` adds methods to a class.
 
 How to read a failure:
