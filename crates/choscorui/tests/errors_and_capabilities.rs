@@ -1,6 +1,7 @@
 //! Every public error type reports through `std::error::Error`, and the
 //! backend answers capability queries.
 
+use choscorui::compose::view::StorageError;
 use choscorui::compose::{ComposeError, ReactiveError, StateError};
 use choscorui::controls::{
     CommandError, CommandSyncError, ContainerError, DockError, MaskError, RangeError,
@@ -9,8 +10,10 @@ use choscorui::controls::{
 use choscorui::core::{
     AnimationError, DisplayListError, EngineError, ImageError, LayoutError, LocaleError,
     ModelError, NotifyError, ResourceError, RichTextError, SceneError, SemanticError,
-    SettingsError, SvgError, TextError, TextLayoutError, ThemeError, TreeError, WorkError,
+    MenuError, ServiceError, SettingsError, SvgError, TextError, TextLayoutError, ThemeError,
+    TreeError, WorkError,
 };
+use choscorui::{App, AppError};
 
 fn reportable<E: std::error::Error + Send + Sync + 'static>() {}
 
@@ -45,18 +48,21 @@ fn every_public_error_is_a_std_error() {
     reportable::<ThemeError>();
     reportable::<TreeError>();
     reportable::<WorkError>();
+    reportable::<AppError>();
+    reportable::<MenuError>();
+    reportable::<ServiceError>();
+    reportable::<StorageError>();
     #[cfg(target_os = "macos")]
     {
         use choscorui::platform::{
-            AccessibilityActionError, BitmapError, DesktopError, DialogError, Error, MenuError,
-            PostError, ShapeError,
+            AccessibilityActionError, BitmapError, DesktopError, DialogError, Error, PostError,
+            ShapeError,
         };
         reportable::<AccessibilityActionError>();
         reportable::<BitmapError>();
         reportable::<DesktopError>();
         reportable::<DialogError>();
         reportable::<Error>();
-        reportable::<MenuError>();
         reportable::<PostError>();
         reportable::<ShapeError>();
     }
@@ -95,5 +101,23 @@ fn capabilities_describe_the_running_backend() {
             capabilities,
             choscorui::BackendCapabilities::none("headless")
         );
+    }
+}
+
+#[test]
+fn an_app_without_a_backend_reports_unsupported() {
+    let error = AppError::Unsupported;
+    assert_eq!(
+        error.to_string(),
+        "no backend exists for this operating system"
+    );
+    assert!(std::error::Error::source(&error).is_none());
+    let menu = AppError::Menu(MenuError::InvalidText);
+    assert_eq!(
+        std::error::Error::source(&menu).map(ToString::to_string),
+        Some("menu text contains an interior NUL character".to_owned())
+    );
+    if choscorui::capabilities().backend == "headless" {
+        assert!(matches!(App::new().start(), Err(AppError::Unsupported)));
     }
 }

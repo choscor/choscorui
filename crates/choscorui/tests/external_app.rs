@@ -1,6 +1,7 @@
+use choscorui::core::{FileDialogKind, FileDialogRequest};
 use choscorui::{
-    AlertButton, AlertSpec, Button, ButtonInput, CommandId, ControlAction, Event, FileDialogMode,
-    FileDialogSpec, Node, Point, Rect, Size, Theme, Tree, WindowOptions,
+    Button, ButtonInput, CommandId, ControlAction, Event, Node, Point, Rect, Size, Theme, Tree,
+    WindowOptions,
 };
 
 #[test]
@@ -30,6 +31,15 @@ fn application_code_can_build_a_control_tree_through_the_facade() {
 
     let _theme = Theme::light();
     let _window = WindowOptions::new("Facade example", 320.0, 200.0);
+    let request = FileDialogRequest::new(FileDialogKind::Save).suggested_name("notes.txt");
+    assert_eq!(request.kind, FileDialogKind::Save);
+    assert_eq!(request.suggested_name.as_deref(), Some("notes.txt"));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn the_platform_escape_hatch_reaches_native_dialog_specs() {
+    use choscorui::platform::{AlertButton, AlertSpec, FileDialogMode, FileDialogSpec};
     let alert = AlertSpec::new("Save changes?", [AlertButton::new("Save")]).unwrap();
     assert_eq!(alert.message(), "Save changes?");
     assert_eq!(FileDialogSpec::save_file().mode(), FileDialogMode::SaveFile);

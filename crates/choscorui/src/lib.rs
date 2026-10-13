@@ -3,13 +3,14 @@
 //! Depend on this crate alone. Native handles and backend FFI never appear
 //! in its API, and it forbids `unsafe` code itself.
 //!
-//! - [`prelude`] holds the types most applications start with.
+//! - [`prelude`] holds the types most applications start with. Code that
+//!   uses only the prelude compiles on every target.
 //! - [`core`], [`controls`], and [`compose`] re-export the platform-neutral
 //!   crates in full: geometry, the retained tree, layout, text, models,
 //!   themes, accessibility semantics, controls, and declarative state.
-//! - [`platform`] re-exports the backend for the current OS: application,
-//!   windows, menus, dialogs, clipboard, desktop integration, and text
-//!   shaping. Check [`capabilities`] before relying on optional features.
+//! - [`platform`] re-exports the backend for the current OS, as an escape
+//!   hatch. It is empty on a target without a backend. Check
+//!   [`capabilities`] before relying on optional features.
 //!
 //! The flat re-exports below predate the modules and remain for
 //! compatibility; see docs/versioning.md for the stability policy.
@@ -32,58 +33,46 @@ pub mod compose {
     pub use choscorui_compose::*;
 }
 
-/// The backend for the current operating system.
-#[cfg(target_os = "macos")]
-pub mod platform {
-    pub use choscorui_macos::*;
-}
-
-#[cfg(target_os = "macos")]
 mod app;
-#[cfg(target_os = "macos")]
-pub use app::{App, AppContext, AppError, Scene, WindowId};
+mod backend;
+mod context;
+pub use app::{App, AppError, Scene, WindowId};
+pub use backend::platform;
+pub use context::AppContext;
 
 pub use choscorui_core::{BackendCapabilities, Support};
 
 /// The examples in `docs/guide.md`, compiled and run as doctests so that
 /// the guide stays correct.
-#[cfg(all(doctest, target_os = "macos"))]
+#[cfg(doctest)]
 #[doc = include_str!("../../../docs/guide.md")]
 pub struct GuideExamples;
 
 /// What the current backend provides. Without a backend (an unsupported
 /// OS) every capability is `Unsupported`.
 pub fn capabilities() -> BackendCapabilities {
-    #[cfg(target_os = "macos")]
-    {
-        choscorui_macos::capabilities()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        BackendCapabilities::none("headless")
-    }
+    backend::capabilities()
 }
 
 /// The types most applications start with: the views, their modifiers
-/// and state, and the [`App`] entry point.
+/// and state, the [`App`] entry point, and the desktop services. Every
+/// item exists on every target.
 pub mod prelude {
     pub use crate::capabilities;
-    #[cfg(target_os = "macos")]
-    pub use crate::{App, AppContext, Scene, WindowId};
+    pub use crate::{App, AppContext, AppError, Scene, WindowId};
     pub use choscorui_compose::Runtime;
     pub use choscorui_compose::t;
     pub use choscorui_compose::view::*;
     pub use choscorui_controls::{
         ButtonVariant, ControlKind, ControlSize, FieldOrientation, IntegerRange, SheetSide,
-        SplitOrientation, TabsVariant, Toast, ToastPosition, ToastVariant, Toasts,
+        ShortcutModifiers, SplitOrientation, TabsVariant, Toast, ToastPosition, ToastVariant,
+        Toasts,
     };
     pub use choscorui_core::{
-        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, FontWeight, Icon,
-        LayoutDirection, Locale, Point, Rect, Size, Space, TextPreset,
-    };
-    #[cfg(target_os = "macos")]
-    pub use choscorui_macos::{
-        MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, WindowOptions,
+        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, FileDialogKind,
+        FileDialogRequest, FontWeight, Icon, LayoutDirection, Locale, NotificationPermission,
+        Point, Rect, ServiceError, Services, Size, Space, StatusItemSpec, SystemNotification,
+        TextPreset, WindowOptions,
     };
 }
 
@@ -146,11 +135,7 @@ pub enum Event {
     Text(String),
 }
 
-#[cfg(target_os = "macos")]
-pub use choscorui_macos::{
-    AlertButton, AlertResponse, AlertSpec, AlertStyle, Application, Clipboard, DialogError,
-    Error as PlatformError, FileDialogMode, FileDialogResponse, FileDialogSpec, ImeEvent, MainMenu,
+pub use choscorui_core::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
-    MenuShortcutModifiers, MenuSpec, Modifiers, PostError, Poster, TextInputState, Timer, Window,
-    WindowEvent, WindowOptions,
+    MenuShortcutModifiers, MenuSpec, WindowOptions,
 };
