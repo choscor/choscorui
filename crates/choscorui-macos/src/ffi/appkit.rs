@@ -486,6 +486,7 @@ c_functions! {
         pub(crate) safe static NSAccessibilityTextAreaRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilitySelectedTextChangedNotification: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilitySecureTextFieldSubrole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilitySearchFieldSubrole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityWindowRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityTableRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityRowRole: &'static Obj<NSString>;

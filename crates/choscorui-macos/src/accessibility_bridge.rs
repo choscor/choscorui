@@ -15,17 +15,18 @@ use crate::ffi::appkit::{
     NSAccessibilityMenuItemRole, NSAccessibilityMenuRole, NSAccessibilityOutlineRole,
     NSAccessibilityPostNotification, NSAccessibilityProgressIndicatorRole,
     NSAccessibilityRadioButtonRole, NSAccessibilityRowRole, NSAccessibilityScrollAreaRole,
-    NSAccessibilityScrollBarRole, NSAccessibilitySecureTextFieldSubrole,
-    NSAccessibilitySelectedTextChangedNotification, NSAccessibilitySliderRole,
-    NSAccessibilityStaticTextRole, NSAccessibilityTableRole, NSAccessibilityTextAreaRole,
-    NSAccessibilityTextFieldRole, NSAccessibilityTitleChangedNotification,
-    NSAccessibilityToolbarRole, NSAccessibilityValueChangedNotification, NSAccessibilityWindowRole,
-    NSView, NSWindow, SET_ACCESSIBILITY_CHILDREN, SET_ACCESSIBILITY_COLUMN_COUNT,
-    SET_ACCESSIBILITY_ENABLED, SET_ACCESSIBILITY_EXPANDED, SET_ACCESSIBILITY_FOCUSED,
-    SET_ACCESSIBILITY_FRAME, SET_ACCESSIBILITY_HELP, SET_ACCESSIBILITY_INDEX,
-    SET_ACCESSIBILITY_LABEL, SET_ACCESSIBILITY_LINKED_UI_ELEMENTS, SET_ACCESSIBILITY_ROLE,
-    SET_ACCESSIBILITY_ROW_COUNT, SET_ACCESSIBILITY_SELECTED, SET_ACCESSIBILITY_SELECTED_TEXT_RANGE,
-    SET_ACCESSIBILITY_SUBROLE, SET_ACCESSIBILITY_TITLE_UI_ELEMENT, SET_ACCESSIBILITY_VALUE,
+    NSAccessibilityScrollBarRole, NSAccessibilitySearchFieldSubrole,
+    NSAccessibilitySecureTextFieldSubrole, NSAccessibilitySelectedTextChangedNotification,
+    NSAccessibilitySliderRole, NSAccessibilityStaticTextRole, NSAccessibilityTableRole,
+    NSAccessibilityTextAreaRole, NSAccessibilityTextFieldRole,
+    NSAccessibilityTitleChangedNotification, NSAccessibilityToolbarRole,
+    NSAccessibilityValueChangedNotification, NSAccessibilityWindowRole, NSView, NSWindow,
+    SET_ACCESSIBILITY_CHILDREN, SET_ACCESSIBILITY_COLUMN_COUNT, SET_ACCESSIBILITY_ENABLED,
+    SET_ACCESSIBILITY_EXPANDED, SET_ACCESSIBILITY_FOCUSED, SET_ACCESSIBILITY_FRAME,
+    SET_ACCESSIBILITY_HELP, SET_ACCESSIBILITY_INDEX, SET_ACCESSIBILITY_LABEL,
+    SET_ACCESSIBILITY_LINKED_UI_ELEMENTS, SET_ACCESSIBILITY_ROLE, SET_ACCESSIBILITY_ROW_COUNT,
+    SET_ACCESSIBILITY_SELECTED, SET_ACCESSIBILITY_SELECTED_TEXT_RANGE, SET_ACCESSIBILITY_SUBROLE,
+    SET_ACCESSIBILITY_TITLE_UI_ELEMENT, SET_ACCESSIBILITY_VALUE,
 };
 use crate::ffi::encode::Bool;
 use crate::ffi::foundation::{
@@ -406,8 +407,11 @@ fn apply_attributes(
         native_accessibility_role(semantic.role)
     };
     SET_ACCESSIBILITY_ROLE.send(native, (Some(role),));
-    let subrole = (semantic.role == SemanticRole::PasswordField)
-        .then_some(NSAccessibilitySecureTextFieldSubrole);
+    let subrole = match semantic.role {
+        SemanticRole::PasswordField => Some(NSAccessibilitySecureTextFieldSubrole),
+        SemanticRole::SearchField => Some(NSAccessibilitySearchFieldSubrole),
+        _ => None,
+    };
     SET_ACCESSIBILITY_SUBROLE.send(native, (subrole,));
     SET_ACCESSIBILITY_FRAME.send(
         native,
@@ -470,7 +474,9 @@ fn native_accessibility_role(role: SemanticRole) -> &'static Obj<NSString> {
         SemanticRole::RadioGroup | SemanticRole::TabList | SemanticRole::TabPanel => {
             NSAccessibilityGroupRole
         }
-        SemanticRole::TextField | SemanticRole::PasswordField => NSAccessibilityTextFieldRole,
+        SemanticRole::TextField | SemanticRole::PasswordField | SemanticRole::SearchField => {
+            NSAccessibilityTextFieldRole
+        }
         SemanticRole::StaticText => NSAccessibilityStaticTextRole,
         SemanticRole::List => NSAccessibilityListRole,
         SemanticRole::ScrollArea => NSAccessibilityScrollAreaRole,

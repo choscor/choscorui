@@ -934,7 +934,7 @@ this behavior.
 
 | Field | `semantics(tree, id).shared()` |
 | --- | --- |
-| Role | `TextField` (AXTextField), or `PasswordField` (AXTextField, AXSecureTextField subrole) |
+| Role | `TextField` (AXTextField), `PasswordField` (AXTextField, AXSecureTextField subrole), or `SearchField` for `InputType::Search` (AXTextField, AXSearchField subrole) |
 | Name / value | label / text, masked for a password |
 | State | disabled, invalid; the error message is the description |
 | Actions | `SetValue`, `Focus` while enabled |

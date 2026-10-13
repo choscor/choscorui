@@ -7,8 +7,8 @@ use crate::style::{ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery};
 use crate::text_field::{TextField, ValidationState};
 use crate::{CharClass, DateInput, InputFilter, InputMask, NumberInput, ValidationError};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, SemanticAction, SemanticNode, Size,
-    TextInputInfo,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, SemanticAction, SemanticNode,
+    SemanticRole, Size, TextInputInfo,
 };
 use std::rc::Rc;
 
@@ -348,7 +348,11 @@ impl CustomControl for Input {
     }
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        self.editor.hosted_semantics(strings)
+        let mut node = self.editor.hosted_semantics(strings);
+        if self.kind == InputType::Search && node.role == SemanticRole::TextField {
+            node.role = SemanticRole::SearchField;
+        }
+        node
     }
 
     fn text_input(&self) -> Option<TextInputInfo> {

@@ -13,6 +13,8 @@ pub enum SemanticRole {
     RadioGroup,
     TextField,
     PasswordField,
+    /// A text field for a search query.
+    SearchField,
     StaticText,
     List,
     ListItem,
