@@ -597,21 +597,23 @@ pub(crate) fn paint_stepper_field(
     steppers: Rect,
 ) {
     let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
-    paint_stepper_box(cx, state, steppers, |cx, rect| {
+    let arrow = VisualState::NONE.set(VisualState::DISABLED, state.disabled());
+    paint_stepper_box(cx, state, steppers, [arrow; 2], |cx, rect| {
         cx.label(rect, text, &style, TextAlign::Start);
     });
 }
 
 /// Paints an input box with a stepper column with up and down chevrons
-/// at `steppers`. `text` paints the text in the rest of the box.
+/// at `steppers` in the states `arrows`. `text` paints the text in the
+/// rest of the box.
 pub(crate) fn paint_stepper_box(
     cx: &mut PaintContext<'_>,
     state: VisualState,
     steppers: Rect,
+    arrows: [VisualState; 2],
     text: impl FnOnce(&mut PaintContext<'_>, Rect),
 ) {
     let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
-    let icon = cx.style(StyleQuery::new(ControlKind::Input, Slot::Icon).state(state));
     let bounds = cx.bounds;
     cx.slot(bounds, &style, |cx, rect| {
         let width = (rect.size.width - steppers.size.width).max(0.0);
@@ -632,11 +634,15 @@ pub(crate) fn paint_stepper_box(
             half,
         );
         let down = up.translate(0.0, half);
-        let mut chevron = icon.clone();
-        chevron.icon_size = icon.icon_size.min(half + 2.0);
-        cx.icon(up, Icon::ChevronUp, &chevron);
-        cx.icon(down, Icon::ChevronDown, &chevron);
-        cx.cursor(steppers, icon.cursor);
+        for ((rect, glyph), arrow) in [(up, Icon::ChevronUp), (down, Icon::ChevronDown)]
+            .into_iter()
+            .zip(arrows)
+        {
+            let query = StyleQuery::new(ControlKind::Input, Slot::Icon).state(arrow);
+            let mut chevron = cx.style(query);
+            chevron.icon_size = chevron.icon_size.min(half + 2.0);
+            cx.slot(rect, &chevron, |cx, rect| cx.icon(rect, glyph, &chevron));
+        }
     });
 }
 
@@ -1072,16 +1078,12 @@ impl crate::CustomControl for SpinBox {
         }
         let rtl = self.direction == LayoutDirection::Rtl;
         let steppers = Self::steppers(cx.bounds(), rtl);
+        if let Some(key) = self.text.track_steppers(cx, event, steppers) {
+            self.step(cx, key);
+            cx.request_focus();
+            return EventReply::Stop;
+        }
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if steppers.contains(*position) => {
-                let up = position.y < steppers.center().y;
-                self.step(cx, if up { Key::ArrowUp } else { Key::ArrowDown });
-                cx.request_focus();
-                EventReply::Stop
-            }
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if cx.is_focused()
                     && matches!(key, Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End) =>

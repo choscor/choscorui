@@ -1,7 +1,7 @@
 //! A section that shows or hides its items behind a toggle button.
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted::{self, Press, PressOutcome, Reveal};
+use crate::hosted::{self, Parts, Press, PressOutcome, Reveal};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, ItemVariant, PaintContext, Slot, StyleQuery,
     TextAlign, VisualState,
@@ -21,6 +21,8 @@ pub struct Collapsible {
     items: Vec<String>,
     reveal: Reveal,
     press: Press,
+    /// Hover and press of the toggle.
+    tracked: Parts<()>,
     /// The header, the toggle, and the item boxes.
     header: Rect,
     toggle: Rect,
@@ -44,6 +46,7 @@ impl Collapsible {
             items,
             reveal: Reveal::default(),
             press: Press::default(),
+            tracked: Parts::default(),
             header: Rect::default(),
             toggle: Rect::default(),
             boxes: Vec::new(),
@@ -146,9 +149,13 @@ impl CustomControl for Collapsible {
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         let toggle = self.toggle;
+        let pressed = self.tracked.pressed;
+        self.tracked
+            .track(cx, event, |point| toggle.contains(point).then_some(()));
         let outcome = self.press.event(cx, event);
         match outcome {
-            PressOutcome::Activated(Some(point)) if !toggle.contains(point) => {}
+            PressOutcome::Activated(Some(_))
+                if pressed.is_none() || self.tracked.hovered.is_none() => {}
             PressOutcome::Activated(_) => self.change_open(cx, !self.reveal.open),
             _ => {}
         }
@@ -160,7 +167,8 @@ impl CustomControl for Collapsible {
         let title = cx.style(StyleQuery::new(ControlKind::Collapsible, Slot::Trigger));
         let item = cx.style(Self::box_query());
         let state = host
-            .set(VisualState::PRESSED, self.press.pressed)
+            .without(VisualState::HOVERED.with(VisualState::PRESSED))
+            .with(self.tracked.state((), host))
             .set(VisualState::OPEN, self.reveal.open);
         let toggle = cx.style(Self::toggle_query(state));
         let label = Rect::from_xywh(

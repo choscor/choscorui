@@ -9,6 +9,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::hosted::Parts;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TextAlign, TextLine, VisualState, content_rect,
     draw_text, paint_box,
@@ -107,6 +108,8 @@ pub struct ItemState {
     pub indent: f64,
     pub has_children: bool,
     pub expanded: bool,
+    /// The hover and press of the row, and the disabled flag of the view.
+    pub pointer: VisualState,
 }
 
 /// Paints one item or cell in the context's bounds. Implementations never
@@ -155,6 +158,8 @@ pub struct ItemView {
     bar: crate::OverlayScrollBar,
     /// Whether rows and grid cells start at the right.
     rtl: bool,
+    /// Hover and press of the rows in the viewport of a hosted view.
+    tracked: Parts<ItemKey>,
 }
 
 /// The height of a `ListView` row: the minimum height of the row recipe,
@@ -200,6 +205,7 @@ impl ItemView {
             caption: String::new(),
             footer: Vec::new(),
             bar: crate::OverlayScrollBar::new(crate::ScrollOrientation::Vertical),
+            tracked: Parts::default(),
             rtl: false,
         }
     }
@@ -963,6 +969,7 @@ impl ItemView {
                 indent: self.indent,
                 has_children: model.has_children(key),
                 expanded: self.expanded.contains(&key),
+                pointer: self.tracked.state(key, state),
             };
             if columns.is_empty() {
                 delegate.paint_cell(&mut cx.at(bounds), model, key, 0, item_state);
@@ -1018,7 +1025,8 @@ impl ItemDelegate for TextItemDelegate {
         state: ItemState,
     ) {
         let rect = cx.bounds;
-        let flags = VisualState::NONE
+        let flags = state
+            .pointer
             .set(VisualState::SELECTED, state.selected)
             .set(VisualState::HIGHLIGHTED, state.selected && state.focused);
         let query = |slot| StyleQuery::new(self.kind, slot).state(flags);
@@ -1255,6 +1263,9 @@ impl CustomControl for ItemView {
                 return EventReply::Stop;
             }
         }
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.key_at(point));
+        self.tracked = tracked;
         match event {
             ControlEvent::Pointer(PointerEvent::Down { position, button })
                 if self.viewport.contains(*position) =>
@@ -1284,7 +1295,11 @@ impl CustomControl for ItemView {
                     delta_y: delta.y * scale,
                 };
                 match self.hosted_input(cx, input) {
-                    Some(response) if response.scrolled => EventReply::Stop,
+                    Some(response) if response.scrolled => {
+                        // Other rows move under the pointer.
+                        self.tracked.hovered = None;
+                        EventReply::Stop
+                    }
                     _ => EventReply::Continue,
                 }
             }

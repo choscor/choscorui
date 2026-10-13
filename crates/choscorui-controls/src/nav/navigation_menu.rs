@@ -2,7 +2,7 @@
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
-use crate::hosted::{self, Reveal};
+use crate::hosted::{self, Parts, Reveal};
 use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
@@ -58,11 +58,11 @@ pub struct NavigationMenu {
     links: Vec<Rect>,
     reveal: Reveal,
     motion_ms: u32,
-    hovered: Option<Focus>,
+    /// Hover and press of the triggers and the links.
+    tracked: Parts<Focus>,
     /// The trigger the pointer rests on, and when its panel opens.
     pending: Option<(usize, f64)>,
     close_at: Option<f64>,
-    pressed: Option<Focus>,
     enabled: bool,
     rtl: bool,
     /// The area that the panel fits in.
@@ -86,10 +86,9 @@ impl NavigationMenu {
             links: Vec::new(),
             reveal: Reveal::default(),
             motion_ms: 0,
-            hovered: None,
+            tracked: Parts::default(),
             pending: None,
             close_at: None,
-            pressed: None,
             enabled: true,
             rtl: false,
             room: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
@@ -373,8 +372,13 @@ impl NavigationMenu {
         EventReply::Stop
     }
 
-    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
-        let hit = self.hit(event.position());
+    fn pointer(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &PointerEvent,
+        pressed: Option<Focus>,
+    ) -> EventReply {
+        let hit = self.tracked.hovered;
         match *event {
             PointerEvent::Down {
                 button: PointerButton::Primary,
@@ -386,26 +390,17 @@ impl NavigationMenu {
                     }
                     return EventReply::Stop;
                 };
-                self.pressed = Some(focus);
                 self.focus = focus;
                 cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
                 EventReply::Stop
             }
-            PointerEvent::Up { .. } if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                if let Some(focus) = self.pressed.take().filter(|focus| hit == Some(*focus)) {
+            PointerEvent::Up { .. } if pressed.is_some() => {
+                if let Some(focus) = pressed.filter(|focus| hit == Some(*focus)) {
                     self.activate(cx, focus);
                 }
-                cx.request_paint();
                 EventReply::Stop
             }
             PointerEvent::Move { .. } => {
-                if hit != self.hovered {
-                    self.hovered = hit;
-                    cx.request_paint();
-                }
                 if let Some(Focus::Trigger(item)) = hit
                     && self.has_links(item)
                     && self.open != Some(item)
@@ -425,17 +420,20 @@ impl NavigationMenu {
         }
     }
 
+    /// The state of the trigger or link `focus`: hovered, pressed, and
+    /// focused on its own, and disabled with the host.
+    fn part_state(&self, focus: Focus, host: VisualState) -> VisualState {
+        let focused = self.focus == focus;
+        self.tracked
+            .state(focus, host)
+            .set(VisualState::FOCUSED, host.focused() && focused)
+            .set(VisualState::FOCUS_VISIBLE, host.focus_visible() && focused)
+    }
+
     fn paint_trigger(&self, cx: &mut PaintContext<'_>, item: usize, rect: Rect) {
-        let host = cx.state;
-        let focus = Focus::Trigger(item);
-        let state = VisualState::NONE
-            .set(VisualState::HOVERED, self.hovered == Some(focus))
-            .set(VisualState::OPEN, self.open == Some(item))
-            .set(
-                VisualState::FOCUS_VISIBLE,
-                host.focus_visible() && self.focus == focus,
-            )
-            .set(VisualState::DISABLED, host.disabled());
+        let state = self
+            .part_state(Focus::Trigger(item), cx.state)
+            .set(VisualState::OPEN, self.open == Some(item));
         let slot = if self.has_links(item) {
             Slot::Trigger
         } else {
@@ -556,19 +554,21 @@ impl CustomControl for NavigationMenu {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.tracked.pressed;
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.hit(point));
+        self.tracked = tracked;
         match event {
-            ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
+            ControlEvent::Pointer(pointer) => self.pointer(cx, pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::Hover(hovered) => {
                 if *hovered {
                     self.close_at = None;
                 } else {
-                    self.hovered = None;
                     self.pending = None;
                     if self.open.is_some() {
                         self.close_at = Some(cx.time() + NAVIGATION_CLOSE_DELAY);
                     }
-                    cx.request_paint();
                 }
                 EventReply::Continue
             }
@@ -620,13 +620,7 @@ impl CustomControl for NavigationMenu {
         Reveal::paint(cx, panel, progress, slide, |cx| {
             cx.slot(panel, &content, |_, _| {});
             for (index, (entry, rect)) in self.items[item].1.iter().zip(&self.links).enumerate() {
-                let focus = Focus::Link(index);
-                let state = VisualState::NONE
-                    .set(VisualState::HOVERED, self.hovered == Some(focus))
-                    .set(
-                        VisualState::FOCUS_VISIBLE,
-                        host.focus_visible() && self.focus == focus,
-                    );
+                let state = self.part_state(Focus::Link(index), host);
                 let style = cx.style(Self::query(Slot::Link, state));
                 let title = cx.style(Self::query(Slot::Title, state));
                 let description = cx.style(Self::query(Slot::Description, state));

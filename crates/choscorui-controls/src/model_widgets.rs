@@ -5,7 +5,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::Routed;
+use crate::hosted::{Parts, Routed};
 use crate::item_view::list_row_height;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::validation::{DateError, NumberError, ValidationError};
@@ -51,6 +51,8 @@ pub struct HeaderView {
     /// The start edge of the first column in reading order.
     origin_x: f64,
     rtl: bool,
+    /// Hover and press of the cells.
+    tracked: Parts,
 }
 
 /// Distance from a column edge that starts a resize.
@@ -66,6 +68,7 @@ impl HeaderView {
             resizing: None,
             origin_x: 0.0,
             rtl: false,
+            tracked: Parts::default(),
         }
     }
     pub fn columns(&self) -> &[HeaderColumn] {
@@ -238,6 +241,7 @@ impl HeaderView {
     /// Paints the header row in the context's bounds with the `Table`
     /// recipe. `focus_visible` rings the focused column.
     pub fn paint(&self, cx: &mut PaintContext<'_>, focus_visible: bool) {
+        let host = cx.state;
         let bounds = cx.bounds;
         let query = |slot| StyleQuery::new(ControlKind::Table, slot);
         let header = cx.style(query(Slot::Header));
@@ -255,7 +259,9 @@ impl HeaderView {
                 Point::new(x, bounds.origin.y),
                 Size::new(column.width, bounds.size.height),
             );
-            let state = VisualState::NONE
+            let state = self
+                .tracked
+                .state(index, host)
                 .set(VisualState::FOCUSED, index == self.focused)
                 .set(
                     VisualState::FOCUS_VISIBLE,
@@ -705,7 +711,20 @@ impl ColumnBrowser {
         selected: bool,
         active: bool,
     ) {
-        let state = VisualState::NONE
+        Self::paint_row(cx, label, has_children, selected, active, VisualState::NONE);
+    }
+
+    /// Paints one entry as [`Self::paint_entry`] does, with the hover,
+    /// press, and disabled flags in `pointer`.
+    fn paint_row(
+        cx: &mut PaintContext<'_>,
+        label: &str,
+        has_children: bool,
+        selected: bool,
+        active: bool,
+        pointer: VisualState,
+    ) {
+        let state = pointer
             .set(VisualState::SELECTED, selected)
             .set(VisualState::HIGHLIGHTED, selected && active);
         let query = |slot| StyleQuery::new(ControlKind::ListView, slot).state(state);
@@ -881,6 +900,14 @@ impl CustomControl for HeaderView {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let bounds = cx.bounds();
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| {
+            let offset = self.offset(point.x);
+            let cell = bounds.contains(point) && self.edge_at(offset).is_none();
+            cell.then(|| self.column_at(offset)).flatten()
+        });
+        self.tracked = tracked;
         let Some(routed) = crate::hosted::route(cx, event) else {
             return EventReply::Continue;
         };
@@ -983,6 +1010,7 @@ impl ColumnBrowser {
             row_height: 1.0,
             bounds: Rect::default(),
             rtl: false,
+            tracked: Parts::default(),
         }
     }
 }
@@ -999,6 +1027,8 @@ pub struct HostedColumnBrowser {
     row_height: f64,
     bounds: Rect,
     rtl: bool,
+    /// Hover and press of the rows, by column and row.
+    tracked: Parts<(usize, usize)>,
 }
 
 impl HostedColumnBrowser {
@@ -1060,16 +1090,20 @@ impl HostedColumnBrowser {
         cx.request_semantics();
     }
 
+    /// The column at `position` and the row that it shows there.
+    fn entry_at(&self, position: Point) -> Option<(usize, usize)> {
+        let count = self.browser.columns(self.model.as_ref()).len();
+        let column = (0..count).find(|column| self.column_rect(*column).contains(position))?;
+        let line = ((position.y - self.bounds.origin.y) / self.row_height).floor() as usize;
+        Some((column, self.first_row(column) + line))
+    }
+
     fn press(&mut self, cx: &mut ControlContext<'_>, position: Point) -> EventReply {
-        let columns = self.browser.columns(self.model.as_ref());
-        let Some(column) =
-            (0..columns.len()).find(|column| self.column_rect(*column).contains(position))
-        else {
+        let Some((column, row)) = self.entry_at(position) else {
             return EventReply::Continue;
         };
-        let line = ((position.y - self.bounds.origin.y) / self.row_height).floor() as usize;
-        let row = self.first_row(column) + line;
-        if let Some(key) = self.model.key(columns[column], row) {
+        let parent = self.browser.columns(self.model.as_ref())[column];
+        if let Some(key) = self.model.key(parent, row) {
             let before = self.browser.clone();
             self.browser.select(column, key);
             if self.browser != before {
@@ -1107,6 +1141,9 @@ impl CustomControl for HostedColumnBrowser {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.entry_at(point));
+        self.tracked = tracked;
         let Some(routed) = crate::hosted::route(cx, event) else {
             return EventReply::Continue;
         };
@@ -1139,7 +1176,8 @@ impl CustomControl for HostedColumnBrowser {
 
     /// Paints only the rows that fit in each column.
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let focused = cx.state.focused();
+        let host = cx.state;
+        let focused = host.focused();
         let page = self.page();
         for (column, parent) in self.browser.columns(self.model.as_ref()).iter().enumerate() {
             let rect = self.column_rect(column);
@@ -1160,12 +1198,13 @@ impl CustomControl for HostedColumnBrowser {
                 let label = self.model.data(key, 0, Role::Display).to_display_string();
                 let has_children =
                     self.model.has_children(key) || self.model.can_fetch_more(Some(key));
-                ColumnBrowser::paint_entry(
+                ColumnBrowser::paint_row(
                     &mut cx.at(entry),
                     &label,
                     has_children,
                     selected == Some(key),
                     active,
+                    self.tracked.state((column, row), host),
                 );
             }
         }

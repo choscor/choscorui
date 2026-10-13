@@ -228,11 +228,17 @@ fn input(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
         Slot::Placeholder => muted_text(cx, TextSize::Sm),
         Slot::Icon => {
-            // Stepper chevrons and other glyphs inside the field.
+            // Stepper chevrons and other glyphs inside the field. A
+            // hovered stepper takes the muted fill.
             let mut style = muted_text(cx, TextSize::Sm);
             style.icon_size = 16.0;
             // A stepper is a button, not text.
             style.cursor = Cursor::Arrow;
+            if cx.q.kind == ControlKind::Input && cx.s().interactive_hover() {
+                style.background = cx.c(ColorRole::Muted).into();
+                style.foreground = cx.c(ColorRole::Foreground);
+                style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            }
             style
         }
         _ => {

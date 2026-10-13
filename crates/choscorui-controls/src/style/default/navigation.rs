@@ -186,7 +186,7 @@ fn navigation_menu(cx: &Cx) -> ResolvedStyle {
             if s.open() || s.selected() {
                 style.background = cx.a(ColorRole::Muted, 0.5).into();
             }
-            if s.interactive_hover() || s.focused() {
+            if s.interactive_hover() || s.pressed() || s.focused() {
                 style.background = cx.c(ColorRole::Muted).into();
             }
             if s.focus_visible() {

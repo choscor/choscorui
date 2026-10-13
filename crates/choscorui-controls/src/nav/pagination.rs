@@ -3,7 +3,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
@@ -43,8 +43,8 @@ pub struct Pagination {
     metrics: Metrics,
     bounds: Rect,
     focus: usize,
-    hovered: Option<usize>,
-    pressed: Option<usize>,
+    /// Hover and press of the page links and the arrows.
+    tracked: Parts,
     enabled: bool,
     rtl: bool,
 }
@@ -69,8 +69,7 @@ impl Pagination {
             metrics: Metrics::default(),
             bounds: Rect::default(),
             focus: 0,
-            hovered: None,
-            pressed: None,
+            tracked: Parts::default(),
             enabled: true,
             rtl: false,
         }
@@ -247,44 +246,29 @@ impl CustomControl for Pagination {
             return EventReply::Continue;
         }
         let stops = self.stops();
+        let pressed = self.tracked.pressed;
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.part_at(point));
+        self.tracked = tracked;
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
-                position,
                 button: PointerButton::Primary,
+                ..
             }) => {
-                let Some(part) = self.part_at(*position) else {
+                let Some(part) = self.tracked.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(part);
                 if let Some(stop) = stops.iter().position(|stop| *stop == part) {
                     self.focus = stop;
                 }
                 cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = self.part_at(*position);
-                if let Some(part) = self.pressed.take().filter(|part| hit == Some(*part)) {
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if let Some(part) = pressed.filter(|part| self.tracked.hovered == Some(*part)) {
                     self.activate(cx, part);
                 }
-                cx.request_paint();
                 EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hovered = self.part_at(*position);
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
-                EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => match key {
                 Key::Tab => match hosted::tab_stop(self.focus, stops.len(), cx.modifiers().shift) {
@@ -324,9 +308,9 @@ impl CustomControl for Pagination {
         let stops = self.stops();
         let focused = stops.get(self.focus).copied();
         for (index, (part, rect)) in self.parts.iter().enumerate() {
-            let state = VisualState::NONE
-                .set(VisualState::HOVERED, self.hovered == Some(index))
-                .set(VisualState::PRESSED, self.pressed == Some(index))
+            let state = self
+                .tracked
+                .state(index, host)
                 .set(
                     VisualState::FOCUS_VISIBLE,
                     host.focus_visible() && focused == Some(index),

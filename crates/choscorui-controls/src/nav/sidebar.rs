@@ -4,7 +4,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::{self, Reveal};
+use crate::hosted::{self, Parts, Reveal};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, SheetSide, SidebarItemVariant,
     SidebarVariant, Slot, StyleQuery, TextAlign, Variant, VisualState,
@@ -140,8 +140,8 @@ pub struct Sidebar {
     selected: Option<usize>,
     /// The focused part, as an index into the active parts.
     focus: usize,
-    hovered: Option<usize>,
-    pressed: Option<usize>,
+    /// Hover and press of the rows and the toggle.
+    tracked: Parts,
     mobile: bool,
     parts: Vec<(Part, Rect)>,
     sheet_parts: Vec<(Part, Rect)>,
@@ -172,8 +172,7 @@ impl Sidebar {
             open: Vec::new(),
             selected: None,
             focus: 0,
-            hovered: None,
-            pressed: None,
+            tracked: Parts::default(),
             mobile: false,
             parts: Vec::new(),
             sheet_parts: Vec::new(),
@@ -612,7 +611,12 @@ impl Sidebar {
         EventReply::Stop
     }
 
-    fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+    fn pointer(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &PointerEvent,
+        pressed: Option<usize>,
+    ) -> EventReply {
         let position = event.position();
         match *event {
             PointerEvent::Down {
@@ -624,34 +628,20 @@ impl Sidebar {
                     cx.emit(ControlMessage::Dismissed);
                     return EventReply::Stop;
                 }
-                let Some(part) = self.part_at(position) else {
+                let Some(part) = self.tracked.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(part);
                 if let Some(stop) = self.stops().iter().position(|stop| *stop == part) {
                     self.focus = stop;
                 }
                 cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
                 EventReply::Stop
             }
-            PointerEvent::Up { .. } if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = self.part_at(position);
-                if let Some(part) = self.pressed.take().filter(|part| hit == Some(*part)) {
+            PointerEvent::Up { .. } if pressed.is_some() => {
+                if let Some(part) = pressed.filter(|part| self.tracked.hovered == Some(*part)) {
                     self.activate(cx, part);
                 }
-                cx.request_paint();
                 EventReply::Stop
-            }
-            PointerEvent::Move { .. } => {
-                let hovered = self.part_at(position);
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-                EventReply::Continue
             }
             _ => EventReply::Continue,
         }
@@ -669,14 +659,10 @@ impl Sidebar {
         let focused = stops.get(self.focus).copied();
         let entries = self.entries();
         for (index, (part, rect)) in parts.iter().enumerate() {
-            let state = VisualState::NONE
-                .set(VisualState::HOVERED, self.hovered == Some(index))
-                .set(VisualState::PRESSED, self.pressed == Some(index))
-                .set(
-                    VisualState::FOCUS_VISIBLE,
-                    host.focus_visible() && focused == Some(index),
-                )
-                .set(VisualState::DISABLED, host.disabled());
+            let state = self.tracked.state(index, host).set(
+                VisualState::FOCUS_VISIBLE,
+                host.focus_visible() && focused == Some(index),
+            );
             match part {
                 Part::Toggle => {
                     let style = cx.style(Self::toggle_query(state));
@@ -825,18 +811,17 @@ impl CustomControl for Sidebar {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let pressed = self.tracked.pressed;
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.part_at(point));
+        self.tracked = tracked;
         match event {
-            ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
+            ControlEvent::Pointer(pointer) => self.pointer(cx, pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::Shortcut(_) if self.collapse != SidebarCollapse::None || self.mobile => {
                 let expanded = !self.is_expanded();
                 self.set_expanded(cx, expanded);
                 EventReply::Stop
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
-                EventReply::Continue
             }
             ControlEvent::FocusChanged(_) => {
                 cx.request_paint();

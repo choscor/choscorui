@@ -3,15 +3,20 @@
 
 use crate::InputFilter;
 use crate::custom::{ControlContext, ControlEvent};
+use crate::hosted::Parts;
 use crate::range_controls::paint_stepper_box;
 use crate::style::{PaintContext, VisualState};
 use crate::text_field::{TextField, ValidationState};
-use choscorui_core::{EventReply, Localizer, Rect, SemanticNode};
+use choscorui_core::{
+    EventReply, Key, Localizer, Point, PointerButton, PointerEvent, Rect, SemanticNode,
+};
 
 /// The text of a spin box. Its edits report no message: the spin box
 /// reports its value when the user commits the text.
 pub(crate) struct StepText {
     editor: TextField,
+    /// Hover and press of the steppers, by the key that they step with.
+    steppers: Parts<Key>,
 }
 
 impl StepText {
@@ -20,6 +25,7 @@ impl StepText {
     pub fn new(name: &str, text: &str, filter: InputFilter) -> Self {
         Self {
             editor: TextField::new(name, text).with_filter(filter).quiet(),
+            steppers: Parts::default(),
         }
     }
 
@@ -65,6 +71,25 @@ impl StepText {
         (reply, self.text() != before)
     }
 
+    /// Tracks hover and press of the steppers at `steppers`. Returns the
+    /// key of the stepper that a primary press starts on.
+    pub fn track_steppers(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+        steppers: Rect,
+    ) -> Option<Key> {
+        self.steppers
+            .track(cx, event, |point| stepper_at(steppers, point));
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                button: PointerButton::Primary,
+                ..
+            }) => self.steppers.pressed,
+            _ => None,
+        }
+    }
+
     /// The text part of the spin box's semantics.
     pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
         self.editor.hosted_semantics(strings)
@@ -77,12 +102,22 @@ impl StepText {
     }
 
     /// Paints the input box, the text with its caret and selection, and
-    /// the steppers at `steppers`.
+    /// the steppers at `steppers`, each hovered and pressed on its own.
     pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState, steppers: Rect) {
-        paint_stepper_box(cx, state, steppers, |cx, rect| {
+        let arrows = [Key::ArrowUp, Key::ArrowDown].map(|key| self.steppers.state(key, state));
+        paint_stepper_box(cx, state, steppers, arrows, |cx, rect| {
             self.editor.paint_hosted_text(cx, rect, state);
         });
     }
+}
+
+/// The stepper at `point` in the column `steppers`: the up stepper in
+/// the top half and the down stepper in the bottom half.
+fn stepper_at(steppers: Rect, point: Point) -> Option<Key> {
+    let up = point.y < steppers.center().y;
+    steppers
+        .contains(point)
+        .then_some(if up { Key::ArrowUp } else { Key::ArrowDown })
 }
 
 /// The text part of a spin box's `bounds`: all but the stepper column.

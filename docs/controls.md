@@ -239,6 +239,12 @@ the parts that use it:
 - the `Calendar` and `DatePicker` month buttons and enabled days
 - the `InputGroup` button addons and the `ButtonGroup` members
 - the `Toolbar` commands, the `Menubar` titles, and the `ToolBox` headers
+- the `HeaderView` cells and the `HostedColumnBrowser` rows
+- the `ItemView` rows in the viewport
+- the `Collapsible` toggle and the `Sidebar` rows
+- the `NavigationMenu` triggers and links, and the `Pagination` links
+- the `SpinBox` and `DecimalSpinBox` steppers
+- the `HostedToolButton` label and split arrow
 
 **Disabled look.** In a `ControlHost`, a disabled control paints under one
 group opacity, the opacity of a disabled `Button` `Root`. Its disabled
@@ -490,6 +496,8 @@ pins this behavior.
   checked and disabled state to the host's flags.
 - An `Instant` menu adds a chevron at the end. A `Split` menu adds a 1 pt
   divider and a chevron in `arrow_width`.
+- In a control host, the label and the split arrow of a `Split` button
+  show the hover fill one at a time.
 - **`ButtonGroup` members.** `ButtonGroup::new` makes one `Toggle`
   member for each command. `from_members` takes `ButtonGroupMember`
   values: `Toggle(command)`, `Button(command, variant)`, `Separator`, and
@@ -1193,6 +1201,9 @@ These limits are the defaults. Invalid limits and values clamp and report a
   direction replaces `set_direction`.
 - **Look.** `paint` uses the `Input` look: the value at the start, and up
   and down chevrons in `muted-foreground` in the stepper column.
+- In a control host, the stepper under the pointer gets a `muted` fill
+  with radius sm and `foreground` chevrons. The `Input` `Icon` slot gives
+  this look. The pressed stepper keeps it only while the pointer is on it.
 - ArrowUp and ArrowDown step. Home and End go to the bounds. PageUp and
   PageDown do nothing.
 - Values clamp and do not wrap. A step past a bound beeps.
@@ -1247,7 +1258,8 @@ this behavior.
 - The control has no disabled state.
 - **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
   start and the steppers at the end. `stepper_rect` returns the stepper
-  column. An invalid text sets the `invalid` flag.
+  column. An invalid text sets the `invalid` flag. The steppers show the
+  hover and press of the `SpinBox` steppers.
 
 | Field | `DecimalSpinBox::semantics` |
 | --- | --- |
@@ -1721,7 +1733,10 @@ pin this behavior.
   no disabled state.
 - **Look.** `paint` calls the delegate once per realized cell with a
   context for the cell. `TextItemDelegate` uses the `ListView` recipe, and
-  `TextItemDelegate::table()` uses the `Table` recipe:
+  `TextItemDelegate::table()` uses the `Table` recipe. `ItemState::pointer`
+  gives the hover and press of the row and the disabled flag of the view.
+  A hosted view tracks only the rows in the viewport, and a scroll clears
+  the hover until the next pointer move:
 
 | Part | Slot | List value | Table value |
 | --- | --- | --- | --- |
@@ -1800,7 +1815,9 @@ pin this behavior.
   bottom `border` line. Each `HeaderCell` draws its title in sm medium
   `foreground` text with 8 pt inline padding. The sorted column shows a
   16 pt `muted-foreground` chevron at the end. A 1 pt `border` divider marks
-  each resize edge. `focus_visible` rings the focused column.
+  each resize edge. `focus_visible` rings the focused column. In a control
+  host, the cell under the pointer gets a `muted` fill at 50%. A press
+  near a resize edge presses no cell.
 
 | Field | `HeaderView::column_semantics` |
 | --- | --- |
@@ -1882,7 +1899,7 @@ These types have no semantic node. Show the rows in an `ItemView`.
 `HostedColumnBrowser` that owns the model and mounts as one node. It paints
 one column for each level, and each column shows the rows that fit. A
 column scrolls to keep the path item visible. A press selects the row under
-the pointer. Columns follow reading order, so ArrowLeft and ArrowRight
+the pointer. The row under the pointer shows the `ListView` hover fill. Columns follow reading order, so ArrowLeft and ArrowRight
 mirror in right-to-left layouts. The node has the `Tree` role, the name,
 and the focused path item as its value. Its only action is `Focus`.
 
@@ -3297,10 +3314,10 @@ last page. `set_open` returns false.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Trigger | `Trigger` | 36 pt high, sm medium text, padding 16 by 8 pt, radius md; `muted` fill while hovered or focused, 50% while open |
+| Trigger | `Trigger` | 36 pt high, sm medium text, padding 16 by 8 pt, radius md; `muted` fill while hovered, pressed, or focused, 50% while open |
 | Chevron | `Icon` | 12 pt; points up while open |
 | Panel | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius lg, shadow sm, 8 pt padding (10 pt at the end) |
-| Link | `Link` | radius md, 8 pt padding; `muted` fill while hovered or focused |
+| Link | `Link` | radius md, 8 pt padding; `muted` fill while hovered, pressed, or focused |
 | Link title | `Title` | sm medium `foreground` text |
 | Link description | `Description` | sm `muted-foreground` text, 4 pt below the title |
 
@@ -3773,7 +3790,8 @@ behavior.
   open.
 - The toggle, Enter, Space, `Activate`, `Expand`, and `Collapse` open or
   close the section and emit `OpenChanged`. A click on the title does
-  nothing.
+  nothing. Only the toggle shows the hover and press, and a release off
+  the toggle does nothing.
 - The items fade in with the content motion. The height changes at once.
 - The toggle sits at the left in a right-to-left layout.
 

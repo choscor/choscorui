@@ -10,8 +10,8 @@ use choscorui_controls::{
     SpinBox, Tabs, TabsVariant, TextField, VisualState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point, Rect,
-    SemanticAction, SemanticRole, Tree,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Tree,
 };
 use hosted::{Harness, paints, rect, rounded_fills, texts};
 
@@ -191,6 +191,66 @@ fn a_hosted_spin_box_steps_by_pointer_key_and_action() {
     let bounds = rtl.bounds();
     rtl.click(Point::new(bounds.origin.x + 4.0, bounds.max_y() - 4.0));
     assert_eq!(rtl.messages(), vec![number(4.0)]);
+}
+
+#[test]
+fn spin_box_steppers_show_hover_and_press_while_inside() {
+    let range = IntegerRange::new(0, 10, 2, 1, 5).unwrap();
+    let mut h = Harness::new(SpinBox::new("Copies", range));
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    let bounds = h.bounds();
+    let up = Point::new(bounds.max_x() - 4.0, bounds.origin.y + 4.0);
+    let down = Point::new(bounds.max_x() - 4.0, bounds.max_y() - 4.0);
+    let text = Point::new(bounds.origin.x + 4.0, bounds.center().y);
+    // The fills after the state transitions finish.
+    let fills = |h: &mut Harness| {
+        let time = h.time + 1.0;
+        h.paint();
+        h.set_time(time);
+        rounded_fills(&h.paint(), muted)
+    };
+    assert!(fills(&mut h).is_empty(), "no stepper fills at rest");
+
+    h.hover(up);
+    let hovered = fills(&mut h);
+    assert_eq!(hovered.len(), 1, "only the stepper under the pointer fills");
+    assert!(hovered[0].contains(up) && !hovered[0].contains(down));
+    h.hover(down);
+    assert!(fills(&mut h).iter().all(|fill| fill.contains(down)));
+
+    let button = PointerButton::Primary;
+    let pointer = |h: &mut Harness, event| h.host.dispatch_pointer(&mut h.tree, event);
+    pointer(
+        &mut h,
+        PointerEvent::Down {
+            position: up,
+            button,
+        },
+    );
+    assert_eq!(h.messages(), vec![number(3.0)], "a press steps once");
+    assert_eq!(fills(&mut h).len(), 1, "the pressed stepper fills");
+    h.hover(text);
+    assert!(
+        fills(&mut h).is_empty(),
+        "dragged off, the stepper shows no press"
+    );
+    h.hover(up);
+    assert_eq!(fills(&mut h).len(), 1);
+    pointer(
+        &mut h,
+        PointerEvent::Up {
+            position: text,
+            button,
+        },
+    );
+    assert!(h.messages().is_empty(), "a release does not step");
+
+    h.set_enabled(false);
+    h.hover(up);
+    assert!(
+        fills(&mut h).is_empty(),
+        "a disabled stepper shows no hover"
+    );
 }
 
 #[test]

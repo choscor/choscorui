@@ -708,16 +708,12 @@ impl CustomControl for DecimalSpinBox {
             return EventReply::Continue;
         }
         let steppers = Self::stepper_rect(cx.bounds(), self.rtl);
+        if let Some(key) = self.text.track_steppers(cx, event, steppers) {
+            cx.request_focus();
+            self.hosted_key(cx, key);
+            return EventReply::Stop;
+        }
         match event {
-            ControlEvent::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            }) if steppers.contains(*position) => {
-                cx.request_focus();
-                let up = position.y < steppers.center().y;
-                self.hosted_key(cx, if up { Key::ArrowUp } else { Key::ArrowDown });
-                EventReply::Stop
-            }
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if cx.is_focused()
                     && matches!(

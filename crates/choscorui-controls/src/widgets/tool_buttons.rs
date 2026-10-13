@@ -4,7 +4,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::{self, Press, PressOutcome};
+use crate::hosted::{self, Parts, Press, PressOutcome};
 use crate::style::fill_area;
 use crate::style::{
     ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
@@ -137,6 +137,27 @@ impl ToolButton {
     /// on hover or while checked. A menu adds a chevron at the end; a split
     /// menu also adds a divider before the arrow.
     pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
+        self.paint_segments(cx, state, None);
+    }
+
+    /// Paints the button in `state`. `segments` gives the hover and press
+    /// of the label and of the arrow: a split button fills each segment
+    /// on its own, and other buttons take the label's flags.
+    fn paint_segments(
+        &self,
+        cx: &mut PaintContext<'_>,
+        state: VisualState,
+        segments: Option<[VisualState; 2]>,
+    ) {
+        let split = self.menu == ToolButtonMenu::Split;
+        let pointer = VisualState::HOVERED.with(VisualState::PRESSED);
+        let state = match segments {
+            Some(_) if split => state.without(pointer),
+            Some([label, _]) => state
+                .without(pointer)
+                .with(label.without(VisualState::DISABLED)),
+            None => state,
+        };
         let style = cx.style(StyleQuery::new(ControlKind::Toggle, Slot::Root).state(state));
         let rule = cx.style(StyleQuery::new(ControlKind::ButtonGroup, Slot::Separator));
         let bounds = cx.bounds;
@@ -148,7 +169,6 @@ impl ToolButton {
         .min(bounds.size.width);
         // Instant menus keep the chevron inside the padding; a split arrow
         // spans the button's end edge.
-        let split = self.menu == ToolButtonMenu::Split;
         let (label_bounds, arrow_rect) = if arrow == 0.0 {
             (bounds, None)
         } else if split {
@@ -180,6 +200,26 @@ impl ToolButton {
             (bounds, None)
         };
         cx.slot(bounds, &style, |cx, inner| {
+            if let (Some(arrow), Some(segments)) = (arrow_rect, segments) {
+                for (rect, segment, start) in [
+                    (label_bounds, segments[0], true),
+                    (arrow, segments[1], false),
+                ] {
+                    if !segment.interactive_hover() {
+                        continue;
+                    }
+                    let query = StyleQuery::new(ControlKind::Toggle, Slot::Root).state(segment);
+                    let mut fill = cx.style(query);
+                    fill.border_width = 0.0;
+                    let radius = &mut fill.radius;
+                    if start {
+                        (radius.top_end, radius.bottom_end) = (0.0, 0.0);
+                    } else {
+                        (radius.top_start, radius.bottom_start) = (0.0, 0.0);
+                    }
+                    cx.slot(rect, &fill, |_, _| {});
+                }
+            }
             let mut label = content_rect(label_bounds, &style, cx.rtl);
             label.size.height = inner.size.height;
             label.origin.y = inner.origin.y;
@@ -226,6 +266,7 @@ impl ToolButton {
             button: self,
             commands,
             press: Press::default(),
+            segments: Parts::default(),
             open: false,
             rtl: false,
         }
@@ -241,8 +282,19 @@ pub struct HostedToolButton {
     button: ToolButton,
     commands: CommandRegistry,
     press: Press,
+    /// Hover and press of the label and of the split arrow.
+    segments: Parts<Segment>,
     open: bool,
     rtl: bool,
+}
+
+/// A part of a hosted tool button that hovers on its own.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Segment {
+    /// The label, or the whole button without a split arrow.
+    Label,
+    /// The split arrow.
+    Arrow,
 }
 
 impl HostedToolButton {
@@ -276,15 +328,30 @@ impl HostedToolButton {
         cx.request_semantics();
     }
 
-    /// A click at `point`, with the split arrow at the end of the reading
-    /// order.
-    fn click(&mut self, bounds: Rect, point: Point) -> ToolButtonAction {
-        let x = if self.rtl {
+    /// The x of `point` in reading order, with the split arrow at the end.
+    fn reading_x(&self, bounds: Rect, point: Point) -> f64 {
+        if self.rtl {
             bounds.origin.x + bounds.max_x() - point.x
         } else {
             point.x
-        };
+        }
+    }
+
+    /// A click at `point`.
+    fn click(&mut self, bounds: Rect, point: Point) -> ToolButtonAction {
+        let x = self.reading_x(bounds, point);
         self.button.click(bounds, x, &mut self.commands)
+    }
+
+    /// The segment at `point` in `bounds`.
+    fn segment_at(&self, bounds: Rect, point: Point) -> Option<Segment> {
+        let arrow = self.button.menu == ToolButtonMenu::Split
+            && self.reading_x(bounds, point) >= bounds.max_x() - self.button.arrow_width;
+        bounds.contains(point).then_some(if arrow {
+            Segment::Arrow
+        } else {
+            Segment::Label
+        })
     }
 }
 
@@ -307,6 +374,10 @@ impl CustomControl for HostedToolButton {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let bounds = cx.bounds();
+        let mut segments = self.segments;
+        segments.track(cx, event, |point| self.segment_at(bounds, point));
+        self.segments = segments;
         let action = match self.press.event(cx, event) {
             PressOutcome::Activated(Some(point)) => self.click(cx.bounds(), point),
             PressOutcome::Activated(None) => self.button.handle_key(Key::Enter, &mut self.commands),
@@ -329,9 +400,10 @@ impl CustomControl for HostedToolButton {
         let state = self
             .button
             .visual_state(&self.commands, cx.state)
-            .set(VisualState::PRESSED, self.press.pressed)
             .set(VisualState::OPEN, self.open);
-        self.button.paint(cx, state);
+        let segments =
+            [Segment::Label, Segment::Arrow].map(|part| self.segments.state(part, state));
+        self.button.paint_segments(cx, state, Some(segments));
     }
 
     fn semantics(&self) -> SemanticNode {

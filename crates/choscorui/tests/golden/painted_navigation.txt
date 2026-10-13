@@ -288,6 +288,10 @@ text "Aa" at 48,32.9 system-ui 14 w500 t0 #0a0a0aff
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 48,32.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 48,32.9 system-ui 14 w500 t0 #0a0a0aff
 # focused
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -310,7 +314,7 @@ text "Aa" at 48,32.9 system-ui 14 w500 t0 #0a0a0aff
 fill 10,10 120x36 r8 #f5f5f580
 stroke-path M39.33333333333333,24 L32,31.333333333333332 L28.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 48,32.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: pressed invalid checked indeterminate highlighted
+= rest: invalid checked indeterminate highlighted
 ### navigation-menu default default link
 # rest
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -319,6 +323,10 @@ text "Aa" at 40,32.9 system-ui 14 w400 t0 #0a0a0aff
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 40,32.9 system-ui 14 w400 t0 #0a0a0aff
+# pressed
+fill 10,10 120x36 r8 #f5f5f5ff
+stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 40,32.9 system-ui 14 w400 t0 #0a0a0aff
 # focused
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -341,7 +349,7 @@ text "Aa" at 40,32.9 system-ui 14 w400 t0 #0a0a0aff
 fill 10,10 120x36 r8 #f5f5f580
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 40,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed invalid checked indeterminate highlighted
+= rest: invalid checked indeterminate highlighted
 ## sidebar
 sizes default sm lg icon
 slot root: root track range thumb indicator icon label title description trigger value placeholder item-indicator shortcut overlay caption cell header-cell media fallback close addon text ellipsis previous next day weekday legend error viewport scrollbar bar avatar choice progress
