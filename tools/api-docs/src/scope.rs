@@ -7,6 +7,8 @@ use crate::model::{ItemRef, World};
 
 /// The module whose items are always in scope.
 pub const PRELUDE: &str = "choscorui::prelude";
+/// The backend escape hatch. It is not part of the app-author surface.
+pub const PLATFORM: &str = "choscorui::platform";
 /// The trait whose methods are the modifiers of every view.
 pub const MODIFIER_TRAIT: &str = "ViewExt";
 /// The trait that a view type implements.
@@ -183,6 +185,13 @@ pub fn collect(world: &World, lines: &[TopicLine]) -> Result<Scope, Vec<String>>
     let mut entries = Vec::new();
     let mut modifiers = Vec::new();
     for line in lines {
+        if line.path == PLATFORM || line.path.starts_with(&format!("{PLATFORM}::")) {
+            errors.push(format!(
+                "topics.txt:{}: `{PLATFORM}` is not part of the app-author surface",
+                line.number
+            ));
+            continue;
+        }
         let target = match resolve_path(world, &line.path) {
             Ok(target) => target,
             Err(message) => {

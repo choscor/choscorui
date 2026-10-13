@@ -316,3 +316,13 @@ fn a_format_version_mismatch_names_both_versions() {
             .contains("bump tools/api-docs/nightly.txt and FORMAT_VERSION")
     );
 }
+
+#[test]
+fn a_platform_item_fails() {
+    let topics = format!("{TOPICS}other choscorui::platform::Window\n");
+    let error = generate(&world(), &topics).expect_err("platform is out of scope");
+    assert!(
+        error.contains("topics.txt:10: `choscorui::platform` is not part"),
+        "{error}"
+    );
+}
