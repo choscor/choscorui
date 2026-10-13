@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::appkit::{
     EVENT_APPLICATION_DEFINED, OTHER_EVENT, POST_EVENT_AT_START, SHARED_APPLICATION, STOP,
@@ -89,13 +87,13 @@ impl Perform for PostInner {
 /// input.
 pub(crate) fn stop_application() {
     let _pool = Pool::new();
-    let Some(application) = SHARED_APPLICATION.send_class(()).ok().flatten() else {
+    let Some(application) = SHARED_APPLICATION.class_send(()).ok().flatten() else {
         return;
     };
     STOP.send(application, (None,));
     let origin = NSPoint { x: 0.0, y: 0.0 };
     let event = OTHER_EVENT
-        .send_class((EVENT_APPLICATION_DEFINED, origin, 0, 0.0, 0, None, 0, 0, 0))
+        .class_send((EVENT_APPLICATION_DEFINED, origin, 0, 0.0, 0, None, 0, 0, 0))
         .ok()
         .flatten();
     if let Some(event) = event {

@@ -1,7 +1,6 @@
 //! Window placement persistence, screen enumeration, and native context
 //! menus. Coordinates use a top-left origin at the main screen's top-left
 //! corner, y growing downward, matching `WindowGeometry`.
-#![deny(unsafe_code)]
 
 use super::{ContextMenu, Error, MenuCommandId, NSPoint, NSRect, NSSize, Pool, Size, Window};
 use crate::ffi::appkit::{
@@ -14,7 +13,7 @@ use choscorui_core::{Point, Rect, WindowGeometry};
 
 /// The connected screens, main (menu-bar) screen first. Requires a pool.
 fn screen_frames(frame: impl Fn(&crate::ffi::Obj<NSScreen>) -> NSRect) -> Vec<NSRect> {
-    let Ok(Some(screens)) = SCREENS.send_class(()) else {
+    let Ok(Some(screens)) = SCREENS.class_send(()) else {
         return Vec::new();
     };
     array_items(&screens)

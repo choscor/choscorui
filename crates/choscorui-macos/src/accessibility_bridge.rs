@@ -1,7 +1,6 @@
 //! The AppKit side of the accessibility bridge: one native
 //! `NSAccessibilityElement` per projected semantic node, the
 //! assistive-technology action callbacks, and the notifications.
-#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -132,7 +131,7 @@ pub(crate) fn perform_cancel(element: &Obj<ChoscoruiV2AccessibilityElement>) -> 
 pub(crate) fn set_expanded(element: &Obj<ChoscoruiV2AccessibilityElement>, expanded: Bool) {
     let expanded = expanded.get();
     if binding(element).is_some_and(|binding| binding.updating) {
-        let _ = ELEMENT_SET_EXPANDED.send_super(element, (expanded,));
+        let _ = ELEMENT_SET_EXPANDED.super_send(element, (expanded,));
     } else {
         queue_accessibility_action(
             element,
@@ -153,7 +152,7 @@ pub(crate) fn set_value(
         return;
     };
     if binding.updating {
-        let _ = ELEMENT_SET_VALUE.send_super(element, (value,));
+        let _ = ELEMENT_SET_VALUE.super_send(element, (value,));
         return;
     }
     if !binding.actions.contains(&SemanticAction::SetValue) {
@@ -181,7 +180,7 @@ pub(crate) fn set_focused(element: &Obj<ChoscoruiV2AccessibilityElement>, focuse
         return;
     };
     if binding.updating {
-        let _ = ELEMENT_SET_FOCUSED.send_super(element, (focused.get(),));
+        let _ = ELEMENT_SET_FOCUSED.super_send(element, (focused.get(),));
         return;
     }
     if !focused.get() || !binding.actions.contains(&SemanticAction::Focus) {
@@ -256,7 +255,7 @@ impl Window {
             };
             let frame = accessibility_screen_rect(view, window, element.bounds);
             let native = ELEMENT_WITH_ROLE
-                .send_subclass::<ChoscoruiV2AccessibilityElement>((
+                .subclass_send::<ChoscoruiV2AccessibilityElement>((
                     native_accessibility_role(element.semantic.role),
                     frame,
                     Some(&label),
@@ -426,7 +425,7 @@ fn apply_attributes(
     SET_ACCESSIBILITY_HELP.send(native, (Some(&*ns_string(&semantic.description)?),));
     let value: Option<Retained<NSObject>> = if let Some(checked) = semantic.state.checked {
         let number = NUMBER_WITH_BOOL
-            .send_class((checked,))?
+            .class_send((checked,))?
             .ok_or(Error::AppKitUnavailable)?;
         Some(number.into_super())
     } else if let Some(value) = &semantic.value {

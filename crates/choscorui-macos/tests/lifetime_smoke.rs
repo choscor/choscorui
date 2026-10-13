@@ -23,18 +23,23 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(target_os = "macos")]
 use std::time::{Duration, Instant};
 
+// The footprint check reads the process footprint, which only libproc
+// reports; the public API of the crate has no such seam.
 #[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
 unsafe extern "C" {
-    fn getpid() -> i32;
     fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut *mut std::ffi::c_void) -> i32;
 }
 
 /// Physical footprint in bytes (`rusage_info_v2.ri_phys_footprint`).
 #[cfg(target_os = "macos")]
+#[allow(unsafe_code)] // The test calls libproc; see the declaration above.
 fn footprint() -> u64 {
     let mut info = [0u64; 40];
-    // SAFETY: The v2 struct fits in `info`; the API takes its address.
-    let ok = unsafe { proc_pid_rusage(getpid(), 2, info.as_mut_ptr() as *mut _) } == 0;
+    let pid = i32::try_from(std::process::id()).unwrap();
+    // SAFETY: `RUSAGE_INFO_V2` (2) writes a `rusage_info_v2`, which fits in
+    // `info`; the function takes the buffer address.
+    let ok = unsafe { proc_pid_rusage(pid, 2, info.as_mut_ptr().cast()) } == 0;
     assert!(ok, "proc_pid_rusage");
     info[9]
 }

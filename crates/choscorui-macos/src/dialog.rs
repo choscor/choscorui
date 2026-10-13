@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::{Application, Pool};
 use crate::ffi::appkit::{
     ADD_BUTTON_WITH_TITLE, ALERT_FIRST_BUTTON_RETURN, ALERT_RUN_MODAL, ALERT_STYLE_CRITICAL,
@@ -323,7 +321,7 @@ fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogE
     let _pool = Pool::new().map_err(map_error)?;
     let paths = if spec.mode == FileDialogMode::SaveFile {
         let panel = SAVE_PANEL
-            .send_class(())
+            .class_send(())
             .map_err(map_error)?
             .ok_or(DialogError::AppKitUnavailable)?;
         configure_panel(&panel, spec)?;
@@ -333,7 +331,7 @@ fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogE
         vec![path_from_url(PANEL_URL.send(&panel, ()).as_deref())?]
     } else {
         let panel = OPEN_PANEL
-            .send_class(())
+            .class_send(())
             .map_err(map_error)?
             .ok_or(DialogError::AppKitUnavailable)?;
         configure_panel(&panel, spec)?;
@@ -368,7 +366,7 @@ fn configure_panel(panel: &Obj<NSSavePanel>, spec: &FileDialogSpec) -> Result<()
     if let Some(directory) = &spec.initial_directory {
         let path = directory.to_str().ok_or(DialogError::InvalidText)?;
         let url = FILE_URL_WITH_PATH
-            .send_class((&*ns_string(path)?,))
+            .class_send((&*ns_string(path)?,))
             .map_err(map_error)?;
         SET_DIRECTORY_URL.send(panel, (url.as_deref(),));
     }
@@ -380,7 +378,7 @@ fn configure_panel(panel: &Obj<NSSavePanel>, spec: &FileDialogSpec) -> Result<()
         let mut types = Vec::new();
         for extension in &spec.allowed_extensions {
             let kind = TYPE_WITH_FILENAME_EXTENSION
-                .send_class((&*ns_string(extension)?,))
+                .class_send((&*ns_string(extension)?,))
                 .map_err(map_error)?
                 .ok_or(DialogError::InvalidExtension)?;
             types.push(kind);

@@ -4,23 +4,58 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 
 ## General rules
 
-- The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, and the Objective-C runtime by hand. The crate uses no build script and no binding generator.
-- The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSApplication.h`, `NSWindow.h`, `NSGraphics.h`, and `objc/message.h`.
+The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, and the Objective-C runtime by hand. It uses no build script and no binding generator. The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSWindow.h` and `objc/message.h`. Apple's [NSApplication reference](https://developer.apple.com/documentation/appkit/nsapplication) and [NSWindow reference](https://developer.apple.com/documentation/appkit/nswindow) define the platform behavior.
+
+### The `ffi` module
+
+- All `unsafe` code of the crate is in `src/ffi/`. The crate root denies `unsafe_code`, and only `mod ffi` allows it.
+- Each `unsafe` block holds one raw operation and a `SAFETY` comment. The `[lints]` table of the crate enforces both rules.
+- The code outside `ffi` is safe. It sends messages through a registered `Msg` and holds objects in `Retained` or `CfRetained`.
+- Raw Objective-C ids stay private to the crate. The safe types are `!Send` and `!Sync`, except `Poster`.
+
+### The registry
+
+- `messages!` declares each message as a `Msg`: the receiver class or protocol, the selector, the argument types, and the result type.
+- `Msg::send` casts `objc_msgSend` to exactly these types. It passes `NSRect` by value and reads Objective-C `BOOL` as one byte.
 - `c_functions!` declares the C functions and statics of each framework in one `extern "C-unwind"` block. Each item states `safe` or `unsafe`.
 - `sdk_const!` declares each SDK constant with the SDK symbol that it equals. `ffi_struct!` declares each `repr(C)` struct with its C name and C field names.
-- The `sdk_headers_compile` test makes one Objective-C++ file from these declarations and from each `Msg`. It compiles the file against the SDK headers with `xcrun clang++`.
-- That test fails for a wrong argument or result shape, a wrong constant, or a wrong struct layout. It also fails for an API that is deprecated or newer than macOS 15.
-- The `ownership_follows_naming` test checks that a C function returns `CfRetained` when its name contains `Create` or `Copy`, and only then.
-- No SDK header declares the Block ABI layouts in `ffi/block.rs`. They follow the clang Block ABI specification, and the header test does not check them.
-- Raw Objective-C ids stay private to the crate. The safe types are `!Send` and `!Sync`, except `Poster`.
-- Each message descriptor (`Msg`) states the SDK argument and return types. `Msg::send` casts `objc_msgSend` to exactly these types. It passes `NSRect` by value and reads Objective-C `BOOL` as one byte.
 - `define_classes!` in `ffi/classes.rs` declares each Objective-C class of the crate. Each method states its origin: a superclass method, a protocol method, or a selector that the crate invents.
-- The macro makes an `extern "C"` trampoline for each method. It derives the type encoding from the Rust argument and return types. `BOOL` encodes as `B` on arm64 and as `c` on x86-64.
+- The macro makes an `extern "C"` trampoline for each method. It derives the type encoding from the Rust types. `BOOL` encodes as `B` on arm64 and as `c` on x86-64.
+- No SDK header declares the Block ABI layouts in `ffi/block.rs`. They follow the clang Block ABI specification.
+
+### Ownership
+
+- `Retained<T>` holds one +1 reference to an Objective-C object and releases it in `Drop`. `CfRetained<T>` does the same for a Core Foundation object.
+- A message in the `alloc`, `new`, `copy`, `mutableCopy`, or `init` family returns a +1 object. Any other object result is autoreleased or borrowed from the receiver.
+- A C function whose name contains `Create` or `Copy` returns a `CfRetained`. Any other object result is borrowed from its argument.
+- A nil result or a missing class returns `None` or an `Error`, not a panic.
+
+### Objective-C exceptions
+
+- `objc_msgSend` and every C function are `extern "C-unwind"`. Thus, an Objective-C exception that leaves a call unwinds through Rust as a defined foreign unwind.
+- The callback trampolines stay `extern "C"`. An exception that reaches one of them aborts the process, unless AppKit handles it first.
+- The crate calls selectors only with validated inputs, so an exception is a defect. The abort makes it loud.
+
+### Panics in callbacks
+
 - Each trampoline runs its handler inside `catch_unwind`. After a panic, it writes the class and the selector to standard error. Then it returns the fallback of the method, for example `NO`, 0, or a zero rectangle.
-- The run loop callbacks and the authorization block also catch panics. Thus, a panic never unwinds into AppKit or Core Foundation.
-- The `callbacks_match_sdk` test compares each method with its superclass method or protocol method. A selector that the crate invents must not occur in the superclass or in an adopted protocol.
-- Objective-C exceptions are not caught. The crate calls selectors only with validated inputs.
-- Apple's [NSApplication reference](https://developer.apple.com/documentation/appkit/nsapplication) and [NSWindow reference](https://developer.apple.com/documentation/appkit/nswindow) define the platform behavior.
+- The run loop callbacks and the authorization block also catch panics and report them. Thus, a panic never unwinds into AppKit or Core Foundation.
+
+## Checks
+
+`cargo test -p choscorui-macos` runs these checks. Each check collects all mismatches and then fails one time, so one run shows the whole effect of an SDK change.
+
+- **Runtime.** `messages_match_runtime` compares the type encoding of each `Msg` with the encoding of the method in the Objective-C runtime. `callbacks_match_sdk` compares each crate method with its superclass method or protocol method. A selector that the crate invents must not occur in the superclass or in an adopted protocol.
+- **Ownership.** `ownership_follows_naming` checks the Cocoa naming rule for each `Msg` and the `Create` or `Copy` rule for each C function.
+- **SDK headers.** `sdk_headers_compile` makes one Objective-C++ file from all declarations and compiles it against the SDK headers with `xcrun clang++`. The minimum system is macOS 15, and all warnings are errors.
+- **Boundary.** `boundary_is_closed` reads the sources. Outside `src/ffi/`, it fails for a selector literal, `objc_msgSend`, `transmute`, `extern "C"`, or `class_addMethod`. Inside `ffi`, only `define_classes!` adds methods to a class.
+
+How to read a failure:
+
+- A runtime failure names the class, the selector, the expected encoding, and the actual encoding. Change the Rust types of the descriptor to the actual types.
+- A header failure is a compiler error. Its message names the symbol, and the note "expression evaluates to" shows both values.
+- A deprecation or availability error names the API. Change the code to the API that the message names. Do not suppress the warning.
+- If `xcrun` or the SDK is missing, the header check fails and names the prerequisite in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Architectures
 

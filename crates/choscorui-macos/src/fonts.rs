@@ -3,8 +3,6 @@
 //! faces (SF Pro and SF Mono) at the requested weight; any other name is a
 //! family that Core Text looks up.
 
-#![deny(unsafe_code)]
-
 use crate::ffi::appkit::{MONOSPACED_SYSTEM_FONT_OF_SIZE_WEIGHT, SYSTEM_FONT_OF_SIZE_WEIGHT};
 use crate::ffi::cf::{CFNumber, CFString, CfRetained, cf_number, cf_string};
 use crate::ffi::text::{
@@ -52,7 +50,7 @@ pub(crate) fn create_font(
                 MONOSPACED_SYSTEM_FONT_OF_SIZE_WEIGHT
             };
             let font = message
-                .send_class((size, appkit_weight(weight)))
+                .class_send((size, appkit_weight(weight)))
                 .ok()
                 .flatten()?;
             CTFont::from_ns_font(font)

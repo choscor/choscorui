@@ -5,6 +5,7 @@
 //! shows the whole scope of an SDK change. A missing class, protocol, or
 //! selector is a failure.
 
+mod boundary;
 mod sdk;
 
 use super::callback::{ClassDef, Origin};
@@ -285,6 +286,17 @@ fn ownership_follows_naming() {
         .filter_map(Result::err)
         .collect();
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn boundary_is_closed() {
+    let sources = boundary::crate_sources();
+    let sources = sources
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()));
+    if let Err(report) = boundary::check_sources(sources) {
+        panic!("{report}");
+    }
 }
 
 #[test]

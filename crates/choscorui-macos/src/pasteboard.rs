@@ -8,8 +8,6 @@
 //! | `Url` | `public.url` |
 //! | `Custom(name)` | `com.choscorui.private.<name>`, same-process only by convention |
 
-#![deny(unsafe_code)]
-
 use super::{Error, imaging};
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
@@ -125,7 +123,7 @@ pub(crate) fn pasteboard_items(
                     }
                     let path = ns_string(path).map_err(|_| Error::InvalidClipboardText)?;
                     let url = FILE_URL_WITH_PATH
-                        .send_class((&path,))?
+                        .class_send((&path,))?
                         .ok_or(Error::AppKitUnavailable)?;
                     let absolute = ABSOLUTE_STRING
                         .send(&url, ())
@@ -183,7 +181,7 @@ pub(crate) fn available_formats(pasteboard: &Obj<NSPasteboard>) -> Vec<DragForma
 /// the decomposed (NFD) file-system form; macOS file systems look names
 /// up normalization-insensitively, so the path is precomposed.
 fn file_path(url: &Obj<NSString>) -> Option<PathBuf> {
-    let url = URL_WITH_STRING.send_class((url,)).ok()??;
+    let url = URL_WITH_STRING.class_send((url,)).ok()??;
     if !IS_FILE_URL.send(&url, ()) {
         return None;
     }

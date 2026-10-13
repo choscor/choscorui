@@ -102,7 +102,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-macos
 
-`choscorui-macos` is the supported backend. It contains all hand-written AppKit, Core Foundation, Core Graphics, Core Text, ImageIO, and UserNotifications FFI. Its main types are `Application`, `Window`, `WindowEvent`, `Poster`, `Timer`, `MainMenu`, `ContextMenu`, `Clipboard`, `CoreTextShaper`, and the dialog specs. The whole crate has `#![cfg(target_os = "macos")]`, so it is empty on other targets. [platform-macos.md](platform-macos.md) describes the backend, and [ffi.md](ffi.md) records each FFI boundary.
+`choscorui-macos` is the supported backend. It contains all hand-written AppKit, Core Foundation, Core Graphics, Core Text, ImageIO, and UserNotifications FFI. All of its `unsafe` code is in the `ffi` module, which declares each message, C function, SDK constant, struct, and callback class. The rest of the crate is safe code. Its main types are `Application`, `Window`, `WindowEvent`, `Poster`, `Timer`, `MainMenu`, `ContextMenu`, `Clipboard`, `CoreTextShaper`, and the dialog specs. The whole crate has `#![cfg(target_os = "macos")]`, so it is empty on other targets. [platform-macos.md](platform-macos.md) describes the backend, and [ffi.md](ffi.md) records each FFI boundary.
 
 Dependencies: `choscorui-core` only.
 
@@ -227,12 +227,12 @@ An application asks `choscorui::capabilities()` what the backend supports. It do
 Runtime code uses only these sources:
 
 - The Rust standard library.
-- Hand-written FFI to the system SDKs. The ABI shapes come from the SDK headers, and [ffi.md](ffi.md) records each FFI boundary.
+- Hand-written FFI to the system SDKs. The ABI shapes come from the SDK headers, and [ffi.md](ffi.md) records each FFI boundary. In `choscorui-macos`, `macro_rules!` macros in the `ffi` module declare this FFI.
 - One audited crate, `unicode-segmentation`. `choscorui-core` uses it for extended grapheme cluster boundaries.
 
 The UAX #29 segmentation tables are versioned Unicode data. The toolkit does not keep a copy of these tables by hand, so it uses `unicode-segmentation`. That crate has no dependencies of its own.
 
-The workspace has no build scripts, no binding generators, and no procedural macro crates. Test code uses the standard library and the built-in Cargo test harness. The developer tools (clippy, rustquty, cargo-machete, and cargo-bylaw) run outside the build graph and are never crate dependencies.
+The workspace has no build scripts, no binding generators, and no procedural macro crates. A `choscorui-macos` test makes Objective-C++ checks from the `ffi` declarations and compiles them against the SDK headers with `xcrun clang++`. This step runs only in the test, outside the build graph. Test code uses the standard library and the built-in Cargo test harness. The developer tools (clippy, rustquty, cargo-machete, and cargo-bylaw) run outside the build graph and are never crate dependencies.
 
 To add a crate to the build graph, do these steps:
 

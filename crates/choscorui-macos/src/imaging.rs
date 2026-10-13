@@ -1,7 +1,5 @@
 //! ImageIO decoding and encoding between encoded files and core images.
 
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::appkit::{INIT_WITH_CG_IMAGE_SIZE, NSImage};
 use crate::ffi::cf::{cf_data, cf_mutable_data, cf_string};

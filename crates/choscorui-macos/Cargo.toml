@@ -5,6 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+missing_safety_doc = "deny"
+
 [dependencies]
 choscorui-core = { path = "../choscorui-core" }
 

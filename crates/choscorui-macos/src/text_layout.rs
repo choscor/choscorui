@@ -2,8 +2,6 @@
 //! fallback, bidi, and line breaking come from Core Text; the result is
 //! copied into owned glyph runs that both measurement and painting use.
 
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::cf::{
     CFType, CfRetained, cf_array, cf_attributed_string, cf_dictionary, cf_string, kCFBooleanTrue,

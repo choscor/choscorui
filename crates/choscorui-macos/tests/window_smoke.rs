@@ -13,6 +13,10 @@ use std::time::{Duration, Instant};
 use std::{cell::Cell, rc::Rc};
 
 #[cfg(target_os = "macos")]
+#[path = "window_smoke/native.rs"]
+mod native;
+
+#[cfg(target_os = "macos")]
 fn main() {
     if std::env::var_os("CHOSCORUI_RUN_MACOS_SMOKE").is_none() {
         return;
@@ -707,9 +711,7 @@ fn check_accessibility_collections_and_announcements(
     semantics: &mut SemanticTree,
 ) {
     use choscorui_core::{AnnouncementPriority, SemanticCollection, SemanticText};
-    use std::ffi::{CStr, c_void};
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
+    use native::Id;
     let node = |role, name: &str, text| SemanticNode {
         role,
         name: name.into(),
@@ -773,44 +775,20 @@ fn check_accessibility_collections_and_announcements(
     window
         .set_accessibility(&semantics.snapshot(tree), &[SemanticChange::Tree])
         .unwrap();
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_isize: unsafe extern "C" fn(Id, Sel) -> isize =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_cstr: unsafe extern "C" fn(Id, Sel) -> *const i8 =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let native_window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(native_window, selector(c"contentView"));
-        let children = send_id(view, selector(c"accessibilityChildren"));
-        assert_eq!(send_isize(children, selector(c"count")), 4);
-        let native_list = send_id_usize(children, selector(c"objectAtIndex:"), 2);
-        let native_notes = send_id_usize(children, selector(c"objectAtIndex:"), 3);
-        let role = |object: Id| {
-            let value = send_id(object, selector(c"accessibilityRole"));
-            CStr::from_ptr(send_cstr(value, selector(c"UTF8String")))
-                .to_str()
-                .unwrap()
-                .to_owned()
-        };
-        assert_eq!(role(native_list), "AXList");
-        assert_eq!(
-            send_isize(native_list, selector(c"accessibilityRowCount")),
-            10_000
-        );
-        let rows = send_id(native_list, selector(c"accessibilityChildren"));
-        let row = send_id_usize(rows, selector(c"objectAtIndex:"), 0);
-        assert_eq!(send_isize(row, selector(c"accessibilityIndex")), 39);
-        assert_eq!(role(native_notes), "AXTextArea");
-    }
+    let children: Id = native::send(native::content_view(), c"accessibilityChildren", ());
+    assert_eq!(native::send::<_, isize>(children, c"count", ()), 4);
+    let native_list: Id = native::send(children, c"objectAtIndex:", (2usize,));
+    let native_notes: Id = native::send(children, c"objectAtIndex:", (3usize,));
+    let role = |object: Id| native::rust_string(native::send(object, c"accessibilityRole", ()));
+    assert_eq!(role(native_list), "AXList");
+    assert_eq!(
+        native::send::<_, isize>(native_list, c"accessibilityRowCount", ()),
+        10_000
+    );
+    let rows: Id = native::send(native_list, c"accessibilityChildren", ());
+    let row: Id = native::send(rows, c"objectAtIndex:", (0usize,));
+    assert_eq!(native::send::<_, isize>(row, c"accessibilityIndex", ()), 39);
+    assert_eq!(role(native_notes), "AXTextArea");
     window
         .announce("Đã lưu", AnnouncementPriority::High)
         .unwrap();
@@ -962,84 +940,39 @@ fn check_geometry_and_context_menu(window: &mut choscorui_macos::Window) {
 
 #[cfg(target_os = "macos")]
 fn perform_first_accessibility_press() -> bool {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_bool: unsafe extern "C" fn(Id, Sel) -> i8 =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let children = send_id(view, selector(c"accessibilityChildren"));
-        let first = send_id_usize(children, selector(c"objectAtIndex:"), 0);
-        send_bool(first, selector(c"accessibilityPerformPress")) != 0
-    }
+    let first = native::accessibility_child(0);
+    native::send::<_, i8>(first, c"accessibilityPerformPress", ()) != 0
 }
 
 #[cfg(target_os = "macos")]
 fn assert_accessibility_properties() {
-    use std::ffi::{CStr, c_void};
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_bool: unsafe extern "C" fn(Id, Sel) -> i8 =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_usize: unsafe extern "C" fn(Id, Sel) -> usize =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_cstr: unsafe extern "C" fn(Id, Sel) -> *const i8 =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let children = send_id(view, selector(c"accessibilityChildren"));
-        assert_eq!(send_usize(children, selector(c"count")), 2);
-        let button = send_id_usize(children, selector(c"objectAtIndex:"), 0);
-        let field = send_id_usize(children, selector(c"objectAtIndex:"), 1);
-        let string = |object: Id, property: &std::ffi::CStr| {
-            let value = send_id(object, selector(property));
-            CStr::from_ptr(send_cstr(value, selector(c"UTF8String")))
-                .to_str()
-                .unwrap()
-                .to_owned()
-        };
-        assert_eq!(string(button, c"accessibilityRole"), "AXButton");
-        assert_eq!(string(button, c"accessibilityLabel"), "Chạy");
-        assert_ne!(send_bool(button, selector(c"isAccessibilityEnabled")), 0);
-        assert_eq!(string(field, c"accessibilityRole"), "AXTextField");
-        assert_eq!(string(field, c"accessibilityLabel"), "Tên");
-        assert_eq!(string(field, c"accessibilityValue"), "Lan");
-        assert_ne!(send_bool(field, selector(c"isAccessibilityEditable")), 0);
-        assert_eq!(
-            send_usize(field, selector(c"accessibilityNumberOfCharacters")),
-            3
-        );
-        let selection = send_native_range(field, selector(c"accessibilitySelectedTextRange"));
-        assert_eq!(selection.location, 0);
-        assert_eq!(selection.length, 3);
-        assert_eq!(
-            send_id(field, selector(c"accessibilityTitleUIElement")),
-            button
-        );
-    }
+    use native::{Id, NativeRange};
+    let children: Id = native::send(native::content_view(), c"accessibilityChildren", ());
+    assert_eq!(native::send::<_, usize>(children, c"count", ()), 2);
+    let button = native::accessibility_child(0);
+    let field = native::accessibility_child(1);
+    let string = |object: Id, property: &std::ffi::CStr| {
+        native::rust_string(native::send(object, property, ()))
+    };
+    let flag = |object: Id, property: &std::ffi::CStr| native::send::<_, i8>(object, property, ());
+    assert_eq!(string(button, c"accessibilityRole"), "AXButton");
+    assert_eq!(string(button, c"accessibilityLabel"), "Chạy");
+    assert_ne!(flag(button, c"isAccessibilityEnabled"), 0);
+    assert_eq!(string(field, c"accessibilityRole"), "AXTextField");
+    assert_eq!(string(field, c"accessibilityLabel"), "Tên");
+    assert_eq!(string(field, c"accessibilityValue"), "Lan");
+    assert_ne!(flag(field, c"isAccessibilityEditable"), 0);
+    assert_eq!(
+        native::send::<_, usize>(field, c"accessibilityNumberOfCharacters", ()),
+        3
+    );
+    let selection: NativeRange = native::send(field, c"accessibilitySelectedTextRange", ());
+    assert_eq!(selection.location, 0);
+    assert_eq!(selection.length, 3);
+    assert_eq!(
+        native::send::<_, Id>(field, c"accessibilityTitleUIElement", ()),
+        button
+    );
 }
 
 #[cfg(target_os = "macos")]
@@ -1062,206 +995,81 @@ fn send_native_text_client_message(
     text: &str,
     selection: Option<std::ops::Range<usize>>,
 ) {
-    use std::ffi::{CString, c_void};
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_cstr: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let text = CString::new(text).unwrap();
-        let string = send_id_cstr(
-            objc_getClass(c"NSString".as_ptr()),
-            selector(c"stringWithUTF8String:"),
-            text.as_ptr(),
-        );
-        let absent = NativeRange {
-            location: usize::MAX,
-            length: 0,
+    use native::NativeRange;
+    let view = native::content_view();
+    let string = native::ns_string(text);
+    let absent = NativeRange {
+        location: usize::MAX,
+        length: 0,
+    };
+    if let Some(selection) = selection {
+        let selected = NativeRange {
+            location: selection.start,
+            length: selection.end - selection.start,
         };
-        if let Some(selection) = selection {
-            let send: unsafe extern "C" fn(Id, Sel, Id, NativeRange, NativeRange) =
-                std::mem::transmute(objc_msgSend as *const ());
-            send(
-                view,
-                selector(method),
-                string,
-                NativeRange {
-                    location: selection.start,
-                    length: selection.end - selection.start,
-                },
-                absent,
-            );
-        } else {
-            let send: unsafe extern "C" fn(Id, Sel, Id, NativeRange) =
-                std::mem::transmute(objc_msgSend as *const ());
-            send(view, selector(method), string, absent);
-        }
+        native::send::<_, ()>(view, method, (string, selected, absent));
+    } else {
+        native::send::<_, ()>(view, method, (string, absent));
     }
 }
 
 #[cfg(target_os = "macos")]
 fn set_second_accessibility_value(value: &str) {
-    use std::ffi::{CString, c_void};
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_cstr: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_id: unsafe extern "C" fn(Id, Sel, Id) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let children = send_id(view, selector(c"accessibilityChildren"));
-        let second = send_id_usize(children, selector(c"objectAtIndex:"), 1);
-        let value = CString::new(value).unwrap();
-        let string = send_id_cstr(
-            objc_getClass(c"NSString".as_ptr()),
-            selector(c"stringWithUTF8String:"),
-            value.as_ptr(),
-        );
-        send_void_id(second, selector(c"setAccessibilityValue:"), string);
-    }
+    let second = native::accessibility_child(1);
+    native::send::<_, ()>(
+        second,
+        c"setAccessibilityValue:",
+        (native::ns_string(value),),
+    );
 }
 
 #[cfg(target_os = "macos")]
 fn focus_second_accessibility_element() {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_bool: unsafe extern "C" fn(Id, Sel, i8) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let children = send_id(view, selector(c"accessibilityChildren"));
-        let second = send_id_usize(children, selector(c"objectAtIndex:"), 1);
-        send_void_bool(second, selector(c"setAccessibilityFocused:"), 1);
-    }
+    let second = native::accessibility_child(1);
+    native::send::<_, ()>(second, c"setAccessibilityFocused:", (1i8,));
 }
 
 #[cfg(not(target_os = "macos"))]
 fn main() {}
 
 #[cfg(target_os = "macos")]
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NativePoint {
-    x: f64,
-    y: f64,
-}
-
-#[cfg(target_os = "macos")]
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NativeRange {
-    location: usize,
-    length: usize,
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn send_native_range(
-    receiver: *mut std::ffi::c_void,
-    selector: *mut std::ffi::c_void,
-) -> NativeRange {
-    let send: unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void) -> NativeRange =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { send(receiver, selector) }
-}
-
-#[cfg(target_os = "macos")]
-#[link(name = "objc")]
-unsafe extern "C" {
-    fn objc_getClass(name: *const i8) -> *mut std::ffi::c_void;
-    fn sel_registerName(name: *const i8) -> *mut std::ffi::c_void;
-    fn objc_msgSend();
-}
-
-#[cfg(target_os = "macos")]
-#[link(name = "CoreGraphics", kind = "framework")]
-unsafe extern "C" {
-    fn CGEventCreateScrollWheelEvent2(
-        source: *mut std::ffi::c_void,
-        units: u32,
-        count: u32,
-        y: i32,
-        x: i32,
-        z: i32,
-    ) -> *mut std::ffi::c_void;
-}
-
-#[cfg(target_os = "macos")]
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    fn CFRelease(object: *const std::ffi::c_void);
-}
-
-#[cfg(target_os = "macos")]
 fn send_native_scroll_event(units: u32, y: i32) {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    // SAFETY: Core Graphics creates a retained scroll event; NSEvent retains
-    // it for the duration of the direct NSView callback.
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_id: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_id: unsafe extern "C" fn(Id, Sel, Id) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let cg = CGEventCreateScrollWheelEvent2(std::ptr::null_mut(), units, 1, y, 0, 0);
-        assert!(!cg.is_null());
-        let event = send_id_id(
-            objc_getClass(c"NSEvent".as_ptr()),
-            selector(c"eventWithCGEvent:"),
-            cg,
-        );
-        CFRelease(cg);
-        assert!(!event.is_null());
-        send_void_id(view, selector(c"scrollWheel:"), event);
-    }
+    let event = native::scroll_event(units, y);
+    native::send::<_, ()>(native::content_view(), c"scrollWheel:", (event,));
+}
+
+/// A mouse `NSEvent` of `kind` at a point 30 points below the top of the
+/// content of the first window.
+#[cfg(target_os = "macos")]
+fn native_mouse_event(
+    content_height: f64,
+    kind: usize,
+    flags: usize,
+    event_number: isize,
+) -> native::Id {
+    use native::{Id, NativePoint};
+    let window = native::first_window();
+    let number: isize = native::send(window, c"windowNumber", ());
+    let event: Id = native::send(
+        native::class(c"NSEvent"),
+        c"mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:",
+        (
+            kind,
+            NativePoint {
+                x: 40.0,
+                y: content_height - 30.0,
+            },
+            flags,
+            0.0f64,
+            number,
+            std::ptr::null_mut::<std::ffi::c_void>(),
+            event_number,
+            1isize,
+            1.0f32,
+        ),
+    );
+    assert!(!event.is_null());
+    event
 }
 
 #[cfg(target_os = "macos")]
@@ -1271,124 +1079,25 @@ fn send_native_mouse_event(
     method: &std::ffi::CStr,
     flags: usize,
 ) {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    // SAFETY: This test constructs an NSEvent with SDK-declared argument types
-    // and sends it to the actual content view of the current key window.
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_isize: unsafe extern "C" fn(Id, Sel) -> isize =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_id: unsafe extern "C" fn(Id, Sel, Id) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let event_new: unsafe extern "C" fn(
-            Id,
-            Sel,
-            usize,
-            NativePoint,
-            usize,
-            f64,
-            isize,
-            Id,
-            isize,
-            isize,
-            f32,
-        ) -> Id = std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        assert!(!window.is_null());
-        let view = send_id(window, selector(c"contentView"));
-        assert_eq!(send_id(window, selector(c"firstResponder")), view);
-        let number = send_isize(window, selector(c"windowNumber"));
-        let event = event_new(
-            objc_getClass(c"NSEvent".as_ptr()), selector(c"mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
-            kind, NativePoint { x: 40.0, y: content_height - 30.0 }, flags, 0.0, number,
-            std::ptr::null_mut(), 1, 1, 1.0,
-        );
-        assert!(!event.is_null());
-        send_void_id(view, selector(method), event);
-    }
+    let window = native::first_window();
+    let view = native::content_view();
+    assert_eq!(
+        native::send::<_, native::Id>(window, c"firstResponder", ()),
+        view
+    );
+    let event = native_mouse_event(content_height, kind, flags, 1);
+    native::send::<_, ()>(view, method, (event,));
 }
 
 #[cfg(target_os = "macos")]
 fn send_native_mouse_through_window(content_height: f64) {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    // SAFETY: The SDK event factory returns a live NSEvent, sent through the
-    // live NSWindow while AppKit's run loop is active.
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_isize: unsafe extern "C" fn(Id, Sel) -> isize =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_id: unsafe extern "C" fn(Id, Sel, Id) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let event_new: unsafe extern "C" fn(
-            Id,
-            Sel,
-            usize,
-            NativePoint,
-            usize,
-            f64,
-            isize,
-            Id,
-            isize,
-            isize,
-            f32,
-        ) -> Id = std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let number = send_isize(window, selector(c"windowNumber"));
-        let event = event_new(
-            objc_getClass(c"NSEvent".as_ptr()), selector(c"mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
-            1, NativePoint { x: 40.0, y: content_height - 30.0 }, 0, 0.0, number,
-            std::ptr::null_mut(), 99, 1, 1.0,
-        );
-        assert!(!event.is_null());
-        send_void_id(window, selector(c"sendEvent:"), event);
-    }
+    let event = native_mouse_event(content_height, 1, 0, 99);
+    native::send::<_, ()>(native::first_window(), c"sendEvent:", (event,));
 }
 
 #[cfg(target_os = "macos")]
 fn send_native_window_close() {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    // SAFETY: The window remains retained by the Rust Window handle; closing
-    // it through AppKit exercises the delegate path used by a user close.
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void: unsafe extern "C" fn(Id, Sel) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        send_void(window, selector(c"close"));
-    }
+    native::send::<_, ()>(native::first_window(), c"close", ());
 }
 
 #[cfg(target_os = "macos")]
@@ -1413,61 +1122,31 @@ fn send_native_key_event_text(
     via_window: bool,
     text: &str,
 ) {
-    use std::ffi::c_void;
-    type Id = *mut c_void;
-    type Sel = *mut c_void;
-    // SAFETY: The test creates an NSEvent through the SDK's key event factory
-    // and sends it to the actual custom NSView.
-    unsafe {
-        let send_id: unsafe extern "C" fn(Id, Sel) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_usize: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_isize: unsafe extern "C" fn(Id, Sel) -> isize =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_void_id: unsafe extern "C" fn(Id, Sel, Id) =
-            std::mem::transmute(objc_msgSend as *const ());
-        let send_id_cstr: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
-            std::mem::transmute(objc_msgSend as *const ());
-        let event_new: unsafe extern "C" fn(
-            Id,
-            Sel,
-            usize,
-            NativePoint,
-            usize,
-            f64,
-            isize,
-            Id,
-            Id,
-            Id,
-            i8,
-            u16,
-        ) -> Id = std::mem::transmute(objc_msgSend as *const ());
-        let selector = |name: &std::ffi::CStr| sel_registerName(name.as_ptr());
-        let application = send_id(
-            objc_getClass(c"NSApplication".as_ptr()),
-            selector(c"sharedApplication"),
-        );
-        let windows = send_id(application, selector(c"windows"));
-        let window = send_id_usize(windows, selector(c"objectAtIndex:"), 0);
-        let view = send_id(window, selector(c"contentView"));
-        let number = send_isize(window, selector(c"windowNumber"));
-        let characters_c = std::ffi::CString::new(text).unwrap();
-        let characters = send_id_cstr(
-            objc_getClass(c"NSString".as_ptr()),
-            selector(c"stringWithUTF8String:"),
-            characters_c.as_ptr(),
-        );
-        let event = event_new(
-            objc_getClass(c"NSEvent".as_ptr()), selector(c"keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
-            kind, NativePoint { x: 0.0, y: 0.0 }, flags, 0.0, number,
-            std::ptr::null_mut(), characters, characters, i8::from(repeat), code,
-        );
-        assert!(!event.is_null());
-        if via_window {
-            send_void_id(window, selector(c"sendEvent:"), event);
-        } else {
-            send_void_id(view, selector(method), event);
-        }
+    use native::{Id, NativePoint};
+    let window = native::first_window();
+    let view = native::content_view();
+    let number: isize = native::send(window, c"windowNumber", ());
+    let characters = native::ns_string(text);
+    let event: Id = native::send(
+        native::class(c"NSEvent"),
+        c"keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:",
+        (
+            kind,
+            NativePoint { x: 0.0, y: 0.0 },
+            flags,
+            0.0f64,
+            number,
+            std::ptr::null_mut::<std::ffi::c_void>(),
+            characters,
+            characters,
+            i8::from(repeat),
+            code,
+        ),
+    );
+    assert!(!event.is_null());
+    if via_window {
+        native::send::<_, ()>(window, c"sendEvent:", (event,));
+    } else {
+        native::send::<_, ()>(view, method, (event,));
     }
 }

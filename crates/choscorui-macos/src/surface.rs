@@ -1,5 +1,4 @@
 //! Cursor shapes, view capture, occlusion, and damage-driven invalidation.
-#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -56,7 +55,7 @@ fn native_cursor(shape: &CursorShape) -> Option<Retained<NSCursor>> {
         CursorShape::ResizeUpDown => &RESIZE_UP_DOWN_CURSOR,
         CursorShape::Custom { image, hotspot } => return custom_cursor(image, *hotspot),
     };
-    cursor.send_class(()).ok().flatten().map(Obj::retain)
+    cursor.class_send(()).ok().flatten().map(Obj::retain)
 }
 
 fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {

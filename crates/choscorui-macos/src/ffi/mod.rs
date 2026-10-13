@@ -4,12 +4,6 @@
 //! frameworks are here. Typed descriptors declare each binding one time,
 //! and the checks in `checks` compare every descriptor with the runtime.
 //! Each `unsafe` block holds one raw operation with its `SAFETY` comment.
-#![deny(
-    unsafe_op_in_unsafe_fn,
-    clippy::undocumented_unsafe_blocks,
-    clippy::multiple_unsafe_ops_per_block,
-    clippy::missing_safety_doc
-)]
 
 pub(crate) mod appkit;
 pub(crate) mod block;

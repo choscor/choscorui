@@ -1,5 +1,4 @@
 //! System appearance and accessibility display preferences.
-#![deny(unsafe_code)]
 
 use super::{Error, Pool};
 use crate::ffi::appkit::{
@@ -17,7 +16,7 @@ use choscorui_core::AccessibilityPreferences;
 pub fn system_accessibility_preferences() -> Result<AccessibilityPreferences, Error> {
     let _pool = Pool::new()?;
     let workspace = SHARED_WORKSPACE
-        .send_class(())?
+        .class_send(())?
         .ok_or(Error::AppKitUnavailable)?;
     Ok(AccessibilityPreferences {
         high_contrast: SHOULD_INCREASE_CONTRAST.send(workspace, ()),
@@ -31,7 +30,7 @@ pub fn system_accessibility_preferences() -> Result<AccessibilityPreferences, Er
 pub fn system_prefers_dark() -> Result<bool, Error> {
     let _pool = Pool::new()?;
     let app = SHARED_APPLICATION
-        .send_class(())?
+        .class_send(())?
         .ok_or(Error::AppKitUnavailable)?;
     let Some(appearance) = EFFECTIVE_APPEARANCE.send(app, ()) else {
         return Ok(false);

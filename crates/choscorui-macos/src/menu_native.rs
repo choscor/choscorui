@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::{MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool};
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
@@ -10,16 +8,12 @@ use crate::ffi::appkit::{
     SET_KEY_EQUIVALENT_MODIFIER_MASK, SET_MAIN_MENU, SET_STATE, SET_SUBMENU, SET_TARGET,
     SHARED_APPLICATION,
 };
-use crate::ffi::class::Sel as Selector;
 use crate::ffi::foundation::{NSObject, NSString, TextError};
 use crate::ffi::retained::{Retained, alloc, alloc_init};
 use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
-
-/// The action that every command item sends to its target.
-const ACTION: &std::ffi::CStr = c"choscorMenuItemActivated:";
 
 struct TargetBinding {
     commands: HashMap<usize, MenuCommandId>,
@@ -152,7 +146,7 @@ impl MainMenu {
 /// The shared `NSApplication`.
 fn shared_application() -> Result<&'static Obj<crate::ffi::appkit::NSApplication>, MenuError> {
     SHARED_APPLICATION
-        .send_class(())
+        .class_send(())
         .ok()
         .flatten()
         .ok_or(MenuError::AppKitUnavailable)
@@ -176,7 +170,7 @@ fn populate(
         match entry {
             MenuEntry::Separator => {
                 let separator = SEPARATOR_ITEM
-                    .send_class(())
+                    .class_send(())
                     .ok()
                     .flatten()
                     .ok_or(MenuError::AppKitUnavailable)?;
@@ -188,7 +182,7 @@ fn populate(
                     state.shortcut.as_ref().map(|s| s.key.as_str()),
                 )?;
                 SET_TARGET.send(&item, (Some(target.upcast()),));
-                SET_ACTION.send(&item, (Some(Selector::register(ACTION)),));
+                SET_ACTION.send(&item, (Some(MENU_ITEM_ACTIVATED.selector()),));
                 apply_state(&item, state)?;
                 ADD_ITEM.send(menu, (&item,));
                 commands.insert(item.addr(), *command);

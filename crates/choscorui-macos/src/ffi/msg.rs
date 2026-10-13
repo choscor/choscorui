@@ -70,6 +70,11 @@ impl<C, A, R> Msg<C, A, R> {
             _types: PhantomData,
         }
     }
+
+    /// The registered selector, for example the action of a control.
+    pub(crate) fn selector(&self) -> Sel {
+        Sel::register(self.selector)
+    }
 }
 
 impl<C: Receiver, A: Args, R: Ret> Msg<C, A, R> {
@@ -87,12 +92,12 @@ impl<C: Receiver, A: Args, R: Ret> Msg<C, A, R> {
 
 impl<C: ClassType, A: Args, R: ClassRet> Msg<C, A, R> {
     /// Sends the message to the class object of `C`.
-    pub(crate) fn send_class<'a>(&self, args: A::In<'a>) -> Result<R::Out<'a>, Error> {
-        self.send_to_class(C::class()?, args)
+    pub(crate) fn class_send<'a>(&self, args: A::In<'a>) -> Result<R::Out<'a>, Error> {
+        self.class_send_to(C::class()?, args)
     }
 
     /// Sends the message to `class`, a subclass of `C`.
-    pub(in crate::ffi) fn send_to_class<'a>(
+    pub(in crate::ffi) fn class_send_to<'a>(
         &self,
         class: &'static AnyClass,
         args: A::In<'a>,
@@ -110,7 +115,7 @@ impl<C: ClassType, A: Args, R: Ret> Msg<C, A, R> {
     /// Sends the message to the implementation in class `C`, skipping the
     /// override in the receiver's class, a crate subclass of `C`. This is
     /// `[super ...]` in an override.
-    pub(crate) fn send_super<'a>(
+    pub(crate) fn super_send<'a>(
         &self,
         receiver: &'a Obj<C>,
         args: A::In<'a>,
@@ -131,12 +136,12 @@ impl<C: ClassType, A: Args, R: Ret> Msg<C, A, R> {
 impl<C: ClassType, A: Args> Msg<C, A, Autoreleased<C>> {
     /// Sends a class message that returns `instancetype` to the subclass
     /// `S` of `C`, so the result is an `S`.
-    pub(crate) fn send_subclass<'a, S: ClassType + IsA<C>>(
+    pub(crate) fn subclass_send<'a, S: ClassType + IsA<C>>(
         &self,
         args: A::In<'a>,
     ) -> Result<Option<Retained<S>>, Error> {
         Ok(self
-            .send_to_class(S::class()?, args)?
+            .class_send_to(S::class()?, args)?
             .map(Retained::cast_owned))
     }
 }

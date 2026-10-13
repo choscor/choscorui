@@ -118,7 +118,7 @@ impl From<TextError> for Error {
 pub(crate) fn ns_string(value: &str) -> Result<Retained<NSString>, TextError> {
     let value = CString::new(value).map_err(|_| TextError::InteriorNul)?;
     STRING_WITH_UTF8_STRING
-        .send_class((value.as_c_str(),))
+        .class_send((value.as_c_str(),))
         .ok()
         .flatten()
         .ok_or(TextError::Unavailable)
@@ -144,14 +144,14 @@ pub(crate) fn ns_dictionary(
 ) -> Result<Retained<NSDictionary>, Error> {
     let (keys, values): (Vec<_>, Vec<_>) = entries.iter().copied().unzip();
     DICTIONARY_WITH_OBJECTS
-        .send_class((values.as_ptr().cast(), keys.as_ptr().cast(), entries.len()))?
+        .class_send((values.as_ptr().cast(), keys.as_ptr().cast(), entries.len()))?
         .ok_or(Error::AppKitUnavailable)
 }
 
 /// A new `NSArray` that retains each of `values`.
 pub(crate) fn ns_array(values: &[&Obj<NSObject>]) -> Result<Retained<NSArray>, Error> {
     ARRAY_WITH_OBJECTS
-        .send_class((values.as_ptr().cast(), values.len()))?
+        .class_send((values.as_ptr().cast(), values.len()))?
         .ok_or(Error::AppKitUnavailable)
 }
 
@@ -163,7 +163,7 @@ pub(crate) fn array_items(array: &Obj<NSArray>) -> impl Iterator<Item = &Obj<NSO
 /// A new `NSData` with a copy of `bytes`.
 pub(crate) fn ns_data(bytes: &[u8]) -> Result<Retained<NSData>, Error> {
     DATA_WITH_BYTES
-        .send_class((bytes.as_ptr().cast(), bytes.len()))?
+        .class_send((bytes.as_ptr().cast(), bytes.len()))?
         .ok_or(Error::AppKitUnavailable)
 }
 

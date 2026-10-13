@@ -238,7 +238,7 @@ fn parameter(arg: &HeaderType) -> String {
 }
 
 /// The message send expression: `[receiver part:a0 part:a1]`.
-fn send_expression(receiver: &str, selector: &str, count: usize) -> String {
+fn message_expression(receiver: &str, selector: &str, count: usize) -> String {
     if count == 0 {
         return format!("[{receiver} {selector}]");
     }
@@ -269,7 +269,7 @@ fn write_message(out: &mut String, index: usize, message: &MsgInfo) {
     for (position, arg) in signature.args.iter().enumerate() {
         parameters.push(format!("{} a{position}", parameter(arg)));
     }
-    let send = send_expression(&receiver, &selector, signature.args.len());
+    let send = message_expression(&receiver, &selector, signature.args.len());
     let ret = &signature.ret;
     let _ = writeln!(
         out,

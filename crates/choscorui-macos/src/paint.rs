@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::cf::CfRetained;
 use crate::ffi::graphics::{

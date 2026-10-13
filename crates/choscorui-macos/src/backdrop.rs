@@ -1,8 +1,6 @@
 //! Backdrop blur: reads the pixels of a bitmap context, blurs them with
 //! the shared core blur, and draws them back inside a rounded rectangle.
 
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::graphics::{
     CGAffineTransformInvert, CGContext, CGContextClip, CGContextConcatCTM, CGContextDrawImage,

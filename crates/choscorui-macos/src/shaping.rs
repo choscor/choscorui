@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::cf::{
     CFType, CfRetained, cf_attributed_string, cf_dictionary, cf_string, kCFBooleanTrue,

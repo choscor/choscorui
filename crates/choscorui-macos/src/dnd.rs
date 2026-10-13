@@ -1,7 +1,6 @@
 //! Native drag-and-drop for the content view: NSDraggingDestination
 //! callbacks that filter formats and negotiate operations, and an
 //! NSDraggingSource that starts drags from Rust payloads.
-#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -103,7 +102,7 @@ fn evaluate(
     let source = operations_from_mask(DRAGGING_SOURCE_OPERATION_MASK.send(info, ()));
     let allowed = intersect(source, state.drop_operations);
     let same_application = DRAGGING_SOURCE.send(info, ()).is_some();
-    let modifiers = Modifiers::from_native(MODIFIER_FLAGS.send_class(()).ok()?);
+    let modifiers = Modifiers::from_native(MODIFIER_FLAGS.class_send(()).ok()?);
     let operation = negotiate_drag(
         allowed,
         modifiers.option,
@@ -295,7 +294,7 @@ impl Window {
         let _pool = Pool::new()?;
         let window = self.ns_window();
         let app = SHARED_APPLICATION
-            .send_class(())?
+            .class_send(())?
             .ok_or(Error::AppKitUnavailable)?;
         let event = CURRENT_EVENT.send(app, ()).filter(|event| {
             matches!(

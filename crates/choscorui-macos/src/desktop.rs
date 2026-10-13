@@ -1,7 +1,6 @@
 //! Desktop integration: application activation, reopen, and open-document
 //! events; menu-bar status items; user notifications; and opening URLs
 //! with the system handler.
-#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -240,7 +239,7 @@ pub(super) fn install_app_delegate(application: &Obj<NSApplication>) -> Result<(
 /// The shared `NSApplication`.
 fn shared_application() -> Result<&'static Obj<NSApplication>, Error> {
     SHARED_APPLICATION
-        .send_class(())?
+        .class_send(())?
         .ok_or(Error::AppKitUnavailable)
 }
 
@@ -295,7 +294,7 @@ fn ns_string(value: &str) -> Result<Retained<NSString>, DesktopError> {
 fn ns_url(url: &str) -> Result<Retained<NsUrl>, DesktopError> {
     let text = ns_string(url).map_err(|_| DesktopError::InvalidUrl)?;
     let url = URL_WITH_STRING
-        .send_class((&text,))?
+        .class_send((&text,))?
         .ok_or(DesktopError::InvalidUrl)?;
     if SCHEME.send(&url, ()).is_none() {
         return Err(DesktopError::InvalidUrl);
@@ -309,7 +308,7 @@ pub fn url_handler(url: &str) -> Result<Option<PathBuf>, DesktopError> {
     let _pool = Pool::new()?;
     let url = ns_url(url)?;
     let workspace = SHARED_WORKSPACE
-        .send_class(())?
+        .class_send(())?
         .ok_or(DesktopError::AppKitUnavailable)?;
     let Some(app) = URL_FOR_APPLICATION_TO_OPEN_URL.send(workspace, (&url,)) else {
         return Ok(None);
@@ -329,7 +328,7 @@ pub fn open_url(url: &str) -> Result<(), DesktopError> {
     let _pool = Pool::new()?;
     let url = ns_url(url)?;
     let workspace = SHARED_WORKSPACE
-        .send_class(())?
+        .class_send(())?
         .ok_or(DesktopError::AppKitUnavailable)?;
     if !WORKSPACE_OPEN_URL.send(workspace, (&url,)) {
         return Err(DesktopError::NoHandler);
@@ -350,7 +349,7 @@ impl StatusItem {
     pub fn new(title: &str) -> Result<Self, Error> {
         let _pool = Pool::new()?;
         let bar = SYSTEM_STATUS_BAR
-            .send_class(())?
+            .class_send(())?
             .ok_or(Error::AppKitUnavailable)?;
         // NSVariableStatusItemLength = -1.
         let item = STATUS_ITEM_WITH_LENGTH
@@ -419,7 +418,7 @@ impl StatusItem {
 impl Drop for StatusItem {
     fn drop(&mut self) {
         SET_STATUS_ITEM_MENU.send(&self.item, (None,));
-        if let Ok(Some(bar)) = SYSTEM_STATUS_BAR.send_class(()) {
+        if let Ok(Some(bar)) = SYSTEM_STATUS_BAR.class_send(()) {
             REMOVE_STATUS_ITEM.send(bar, (&self.item,));
         }
     }
@@ -451,7 +450,7 @@ pub fn has_bundle_identifier() -> bool {
         return false;
     };
     MAIN_BUNDLE
-        .send_class(())
+        .class_send(())
         .ok()
         .flatten()
         .is_some_and(|bundle| BUNDLE_IDENTIFIER.send(&bundle, ()).is_some())
@@ -462,7 +461,7 @@ fn notification_center() -> Result<&'static Obj<UNUserNotificationCenter>, Deskt
         return Err(DesktopError::RequiresAppBundle);
     }
     let center = CURRENT_NOTIFICATION_CENTER
-        .send_class(())?
+        .class_send(())?
         .ok_or(DesktopError::AppKitUnavailable)?;
     SET_CENTER_DELEGATE.send(center, (Some(app_delegate()?),));
     Ok(center)
@@ -504,14 +503,14 @@ pub fn post_notification(identifier: &str, title: &str, body: &str) -> Result<()
     let _pool = Pool::new()?;
     let center = notification_center()?;
     let content = NEW_CONTENT
-        .send_class(())?
+        .class_send(())?
         .ok_or(DesktopError::AppKitUnavailable)?;
     SET_CONTENT_TITLE.send(&content, (&*ns_string(title)?,));
     SET_CONTENT_BODY.send(&content, (&*ns_string(body)?,));
-    let sound = DEFAULT_SOUND.send_class(())?;
+    let sound = DEFAULT_SOUND.class_send(())?;
     SET_CONTENT_SOUND.send(&content, (sound.as_deref(),));
     let request = REQUEST_WITH_IDENTIFIER
-        .send_class((&*ns_string(identifier)?, &content, None))?
+        .class_send((&*ns_string(identifier)?, &content, None))?
         .ok_or(DesktopError::AppKitUnavailable)?;
     ADD_NOTIFICATION_REQUEST.send(center, (&request, None));
     Ok(())

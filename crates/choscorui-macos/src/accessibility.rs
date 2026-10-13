@@ -16,7 +16,6 @@
 //!
 //! The `choscorui-macos` README describes the role mapping, the
 //! notifications, and the action callbacks.
-#![deny(unsafe_code)]
 
 use choscorui_core::{
     NodeId, Rect, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry, SemanticNode,

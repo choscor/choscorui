@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::ffi::appkit::{
     GENERAL_PASTEBOARD, NSPasteboard, NSPasteboardTypeString, PASTEBOARD_WITH_UNIQUE_NAME,
@@ -36,7 +34,7 @@ impl Clipboard {
         let _pool = Pool::new()?;
         // The class methods return an autoreleased board; the send retains
         // it for this handle until Drop.
-        let pasteboard = message.send_class(())?.ok_or(Error::AppKitUnavailable)?;
+        let pasteboard = message.class_send(())?.ok_or(Error::AppKitUnavailable)?;
         Ok(Self {
             pasteboard,
             temporary,

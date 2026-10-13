@@ -1,6 +1,7 @@
 //! AppKit window bootstrap. All public handles stay on the main thread.
 
 #![cfg(target_os = "macos")]
+#![deny(unsafe_code)]
 
 use choscorui_core::{
     Color, DisplayCommand, DisplayList, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
@@ -43,6 +44,10 @@ use runloop::{PostInner, PostState, TimerAction, TimerInner};
 mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod announce;
+// All `unsafe` of the crate is in `ffi`: each block is one raw FFI
+// operation with its `SAFETY` comment, and the checks in `ffi::checks`
+// compare every binding with the runtime and the SDK headers.
+#[allow(unsafe_code)]
 mod ffi;
 use ffi::Obj;
 use ffi::Pool;
@@ -236,7 +241,7 @@ fn view_draw_rect(view: &Obj<ChoscoruiV2ContentView>, dirty: NSRect) {
     let list = Arc::clone(&paint.lock().unwrap().list);
     // drawRect: runs with a current graphics context. Its CGContext is
     // borrowed only during this callback.
-    let Some(graphics) = CURRENT_GRAPHICS_CONTEXT.send_class(()).ok().flatten() else {
+    let Some(graphics) = CURRENT_GRAPHICS_CONTEXT.class_send(()).ok().flatten() else {
         return;
     };
     let Some(context) = GRAPHICS_CG_CONTEXT.send(&graphics, ()) else {
@@ -550,7 +555,7 @@ impl Application {
         }
         let _pool = Pool::new()?;
         let application = SHARED_APPLICATION
-            .send_class(())?
+            .class_send(())?
             .ok_or(Error::AppKitUnavailable)?;
         // Launched from an app bundle, AppKit may already be in the Regular
         // policy and refuse the redundant switch; only a policy that stays
@@ -724,7 +729,7 @@ impl Application {
     pub fn dispatch_next_event(&self, timeout: Duration) -> bool {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
         let date = DATE_WITH_TIME_INTERVAL_SINCE_NOW
-            .send_class((timeout.as_secs_f64(),))
+            .class_send((timeout.as_secs_f64(),))
             .expect("NSDate unavailable");
         let event = NEXT_EVENT.send(
             self.application,

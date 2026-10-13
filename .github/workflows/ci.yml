@@ -45,6 +45,11 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    # A message to a released object crashes with a zombie report, and freed
+    # memory is scribbled, so a memory error is loud.
+    env:
+      NSZombieEnabled: "YES"
+      MallocScribble: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Smoke tests
@@ -53,7 +58,8 @@ jobs:
         run: |
           cargo test -p choscorui-macos --test window_smoke --locked
           cargo test -p choscorui-macos --test menu_smoke --locked
-          cargo test -p choscorui-macos --test lifetime_smoke --locked
+          # The footprint check needs freed memory back, so zombies are freed.
+          NSDeallocateZombies=YES cargo test -p choscorui-macos --test lifetime_smoke --locked
           cargo test -p choscorui --test app_smoke --locked
           CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
       - name: Gallery first frame

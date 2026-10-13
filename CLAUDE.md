@@ -19,10 +19,20 @@ Read [architecture.md](docs/architecture.md) before a cross-crate change.
 - Platform-independent behavior and policy live in core, `controls`, or
   `compose`, never in a backend.
 - Branch on `capabilities()`, not the OS version or `cfg!(target_os)`.
-- `unsafe` FFI lives only in platform crates, with a safety comment, a
-  [docs/ffi.md](docs/ffi.md) entry, and a focused test. Catch callback panics
-  at the FFI boundary.
 - Fallible public APIs return a domain error enum, never panic.
+
+## FFI
+
+- `unsafe` lives only in platform crates. In `choscorui-macos` it lives only
+  in `src/ffi/`: each block is one raw call with a `SAFETY` comment.
+- Outside `ffi` the code is safe. Send messages through a registered `Msg`,
+  hold objects in `Retained`/`CfRetained`, and declare C functions, SDK
+  constants, structs, and callbacks through the `ffi` macros.
+- `cargo test -p choscorui-macos` checks each binding against the runtime and
+  the SDK headers, deprecations included. Fix the binding; never weaken, skip,
+  or suppress the check.
+- Catch callback panics at the boundary, and record each boundary in
+  [docs/ffi.md](docs/ffi.md).
 
 ## Controls and theming
 

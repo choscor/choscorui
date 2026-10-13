@@ -1,6 +1,5 @@
 //! Spoken announcements for live updates (validation errors, progress,
 //! completed actions) that have no focused element to carry them.
-#![deny(unsafe_code)]
 
 use super::{Error, Pool, Window};
 use crate::ffi::Obj;
@@ -32,7 +31,7 @@ impl Window {
         let _pool = Pool::new()?;
         let text = ns_string(message)?;
         let level = NUMBER_WITH_INTEGER
-            .send_class((priority_level(priority),))?
+            .class_send((priority_level(priority),))?
             .ok_or(Error::AppKitUnavailable)?;
         let entries: [(&Obj<NSObject>, &Obj<NSObject>); 2] = [
             (NSAccessibilityAnnouncementKey, &text),
@@ -40,7 +39,7 @@ impl Window {
         ];
         let info = ns_dictionary(&entries)?;
         let app = SHARED_APPLICATION
-            .send_class(())?
+            .class_send(())?
             .ok_or(Error::AppKitUnavailable)?;
         NSAccessibilityPostNotificationWithUserInfo(
             app,

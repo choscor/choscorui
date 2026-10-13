@@ -73,7 +73,7 @@ impl<C> Obj<C> {
 /// A +1 instance of `S` from `+alloc`. Initialize it with an `init` message.
 pub(crate) fn alloc<S: ClassType + IsA<NSObject>>() -> Result<Retained<S>, Error> {
     ALLOC
-        .send_to_class(S::class()?, ())?
+        .class_send_to(S::class()?, ())?
         .map(Retained::cast_owned)
         .ok_or(Error::AppKitUnavailable)
 }

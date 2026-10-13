@@ -40,10 +40,13 @@ For backend or UI changes, also run the native checks from the CI `native` job.
 
 > **Caution:** The native checks open foreground AppKit windows. Run them one at a time. Runs at the same time can change the focus and make input tests fail.
 
+The native checks run with `NSZombieEnabled=YES` and `MallocScribble=1`. Then a message to a released object crashes with a zombie report, and freed memory is scribbled. The lifetime check also sets `NSDeallocateZombies=YES`, because its footprint check needs freed memory back.
+
 ```sh
+export NSZombieEnabled=YES MallocScribble=1
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test menu_smoke --locked
-CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke --locked
+NSDeallocateZombies=YES CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui --test app_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
 CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
@@ -115,6 +118,10 @@ Use these rules for code size:
 Fix first-party warnings and lint findings. An `#[allow(...)]` or `#[expect(...)]` names one specific lint at the narrowest location. Write the reason why the code is correct next to it. Do not add blanket lint allowances, test retries, or fixes that only increase a timeout.
 
 The `choscorui` facade forbids `unsafe`. Hand-written `unsafe` FFI goes in the platform crates. Each use documents its safety invariant, has an entry in [docs/ffi.md](docs/ffi.md), and has a focused test.
+
+In `choscorui-macos`, `unsafe` code is only in `src/ffi/`. The crate root denies `unsafe_code`, and the one `#[allow(unsafe_code)]` is on `mod ffi`. The `[lints]` table in its `Cargo.toml` also denies undocumented `unsafe` blocks and blocks with more than one `unsafe` operation.
+
+The native smoke tests are the exception: the public API has no seam to read AppKit state. Each `unsafe` item in a smoke test allows `unsafe_code` by itself, with its reason.
 
 Do not make a test weaker to hide a race. Required tests run one time. If you must remove a check for a short time, write the exact reason and the tracking issue.
 

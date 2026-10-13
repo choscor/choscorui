@@ -1,5 +1,3 @@
-#![deny(unsafe_code)]
-
 use super::*;
 use crate::accessibility_bridge::accessibility_screen_rect;
 use crate::ffi::Obj;
