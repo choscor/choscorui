@@ -143,12 +143,22 @@ impl Select {
         true
     }
 
-    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
-        if self.apply_open(open, cx.time()) {
+    /// Opens or closes the popup and reports it. Returns true when it
+    /// changed.
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) -> bool {
+        let changed = self.apply_open(open, cx.time());
+        if changed {
             cx.emit(ControlMessage::OpenChanged(open));
             cx.request_paint();
             cx.request_semantics();
         }
+        changed
+    }
+
+    /// Closes the popup without a choice, and reports `Dismissed`.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let closed = self.change_open(cx, false);
+        hosted::dismissed(cx, closed)
     }
 
     fn choose(&mut self, cx: &mut ControlContext<'_>, index: usize) {
@@ -187,7 +197,11 @@ impl Select {
                 button: PointerButton::Primary,
             } if cx.bounds().contains(position) => {
                 cx.request_focus();
-                self.change_open(cx, !open);
+                if open {
+                    self.dismiss(cx);
+                } else {
+                    self.change_open(cx, true);
+                }
                 EventReply::Stop
             }
             _ => EventReply::Continue,
@@ -208,17 +222,18 @@ impl Select {
             Key::Enter | Key::Space => {
                 match self.list.highlighted {
                     Some(index) => self.choose(cx, index),
-                    None => self.change_open(cx, false),
+                    None => {
+                        self.dismiss(cx);
+                    }
                 }
                 EventReply::Stop
             }
             Key::Escape => {
-                self.change_open(cx, false);
-                cx.emit(ControlMessage::Dismissed);
+                self.dismiss(cx);
                 EventReply::Stop
             }
             Key::Tab => {
-                self.change_open(cx, false);
+                self.dismiss(cx);
                 EventReply::Continue
             }
             key if self.list.step(key) => {
@@ -293,10 +308,7 @@ impl CustomControl for Select {
                 }
                 EventReply::Stop
             }
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.change_open(cx, false);
-                EventReply::Continue
-            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
             ControlEvent::Hover(false) => {
                 self.list.stop_scroll();
                 EventReply::Continue
@@ -417,7 +429,7 @@ impl CustomControl for Select {
                 true
             }
             SemanticAction::Collapse => {
-                self.change_open(cx, false);
+                self.dismiss(cx);
                 true
             }
             SemanticAction::SetValue => {

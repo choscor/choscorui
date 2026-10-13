@@ -107,7 +107,13 @@ fn a_hosted_combobox_closes_on_an_outside_press_and_takes_its_value() {
     assert!(h.messages().is_empty());
     assert!(h.host.get(h.node).unwrap().overlay().is_some());
     h.click(Point::new(700.0, 500.0));
-    assert_eq!(h.messages(), vec![ControlMessage::OpenChanged(false)]);
+    assert_eq!(
+        h.messages(),
+        vec![
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
     assert!(set_value(&mut h, ControlValue::Index(Some(2))));
     assert!(set_value(&mut h, ControlValue::Text("Apple".into())));
     assert!(!set_value(&mut h, ControlValue::Text("Durian".into())));
@@ -124,6 +130,14 @@ fn a_hosted_combobox_closes_on_an_outside_press_and_takes_its_value() {
         ]
     );
     h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        vec![
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "disabling closes the open popup and reports it"
+    );
     assert!(h.host.get(h.node).unwrap().overlay().is_none());
     h.click(h.bounds().center());
     assert!(!h.perform(SemanticAction::ShowMenu, None));
@@ -704,4 +718,70 @@ fn a_hosted_size_grip_grows_left_in_right_to_left_layouts() {
         h.messages(),
         vec![changed(ControlValue::Range(840.0, 600.0))]
     );
+}
+
+/// A combobox with `count` items named "Item 1" and up.
+fn many(count: u64) -> Combobox {
+    let mut combo = Combobox::new("Many", false);
+    let items = (1..=count)
+        .map(|index| ComboItem {
+            key: ItemKey(index),
+            text: format!("Item {index}"),
+        })
+        .collect();
+    combo.set_items(items);
+    combo
+}
+
+#[test]
+fn a_long_combobox_list_scrolls_past_eight_rows_and_keeps_the_highlight_visible() {
+    let mut h = Harness::new(many(20));
+    h.focus();
+    h.key(Key::Space);
+    let popup = h.host.get(h.node).unwrap().overlay().unwrap();
+    assert_eq!(popup.size.height, 8.0 * 32.0 + 8.0, "eight rows show");
+    h.set_time(1.0);
+    let rows = |h: &Harness| texts(&h.paint());
+    assert_eq!(rows(&h).first().map(String::as_str), Some("Item 1"));
+    for _ in 0..10 {
+        h.key(Key::ArrowDown);
+    }
+    let shown = rows(&h);
+    assert_eq!(shown.len(), 8);
+    assert_eq!(shown.last().map(String::as_str), Some("Item 11"));
+    assert_eq!(
+        h.host.get(h.node).unwrap().semantics().value.as_deref(),
+        Some(""),
+        "highlighting does not choose"
+    );
+    // A click on the second shown row chooses the item in that row.
+    h.click(suggestion(&h, 1.0));
+    assert_eq!(h.semantics().value.as_deref(), Some("Item 5"));
+}
+
+#[test]
+fn the_wheel_scrolls_a_long_combobox_list() {
+    let mut h = Harness::new(many(20));
+    assert!(h.host.set_open(&mut h.tree, h.node, true));
+    h.set_time(1.0);
+    let popup = h.host.get(h.node).unwrap().overlay().unwrap();
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Wheel {
+            position: popup.center(),
+            delta: Point::new(0.0, 3.0),
+            unit: choscorui_core::WheelUnit::Lines,
+        },
+    );
+    assert_eq!(texts(&h.paint())[0], "Item 4");
+}
+
+#[test]
+fn near_the_bottom_edge_the_combobox_list_opens_above() {
+    let mut h = Harness::new(fruits(false));
+    let size = h.bounds().size;
+    h.place(hosted::rect(10.0, 550.0, size.width, size.height));
+    assert!(h.host.set_open(&mut h.tree, h.node, true));
+    let popup = h.host.get(h.node).unwrap().overlay().unwrap();
+    assert_eq!(popup.max_y(), 546.0, "4 pt above the trigger");
 }

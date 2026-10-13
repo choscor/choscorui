@@ -401,8 +401,10 @@ Input delivered to a control.
 - `FocusChanged(bool)`
 - `Hover(bool)`: The pointer entered (`true`) or left (`false`) the node, one of its
   descendants, or its overlay.
-- `Dismiss`: A press landed outside the control and its open overlay, or a modal
-  overlay opened above it: close transient popups.
+- `Dismiss`: A press landed outside the control and its open overlay, or the
+  control becomes disabled: close transient popups and emit
+  `ControlMessage::Dismissed`. Reply `Stop` when a popup closed, so
+  that the host consumes the press.
 - `Timer`: The host time reached the control's [`CustomControl::deadline`](#customcontroldeadline).
 - `Shortcut(Shortcut)`: The user pressed one of the control's
   [`CustomControl::window_shortcuts`](#customcontrolwindow_shortcuts), and the focused control did
@@ -735,6 +737,15 @@ What a control reads while it measures or arranges.
 - `text`
 
 ### Methods
+
+#### `MeasureContext::popup_bounds`
+
+```rust
+pub fn popup_bounds(&self) -> Rect
+```
+
+The area that a popup of the control fits in, from
+`crate::popup_bounds`.
 
 #### `MeasureContext::rtl`
 

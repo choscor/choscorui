@@ -8,13 +8,14 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::Reveal;
+use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
 };
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, Measured, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    Size, fold_for_search, grapheme_boundaries,
+    DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, LayoutDirection, Measured,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, Size, WheelUnit, fold_for_search, grapheme_boundaries,
 };
 
 /// The most suggestions that the hosted popup shows.
@@ -106,6 +107,12 @@ pub struct Combobox {
     reveal: Reveal,
     motion_ms: u32,
     anchor: Rect,
+    /// The area that the hosted popup fits in.
+    bounds: Rect,
+    /// The index in `matches` of the first suggestion that the popup
+    /// shows, and the most rows that it shows at a time.
+    first: usize,
+    page: usize,
 }
 
 /// Deprecated name of [`Combobox`].
@@ -131,6 +138,9 @@ impl Combobox {
             reveal: Reveal::default(),
             motion_ms: 0,
             anchor: Rect::default(),
+            bounds: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
+            first: 0,
+            page: POPUP_ROWS,
         }
     }
 
@@ -262,6 +272,41 @@ impl Combobox {
         if self.open && self.matches.is_empty() && self.editable {
             self.open = false;
         }
+        self.reveal_highlight();
+    }
+
+    /// Scrolls the popup rows so that the highlighted suggestion shows.
+    fn reveal_highlight(&mut self) {
+        let page = self.page.max(1);
+        let position = self.highlighted.and_then(|key| {
+            self.matches
+                .iter()
+                .position(|index| self.items[*index].key == key)
+        });
+        if let Some(position) = position {
+            if position < self.first {
+                self.first = position;
+            } else if position >= self.first + page {
+                self.first = position + 1 - page;
+            }
+        }
+        self.first = self.first.min(self.matches.len().saturating_sub(page));
+    }
+
+    /// Scrolls the popup rows by `rows`, within the suggestions. Returns
+    /// true when the first row changed.
+    fn scroll_rows(&mut self, rows: isize) -> bool {
+        let last = self.matches.len().saturating_sub(self.page.max(1));
+        let first = self.first.saturating_add_signed(rows).min(last);
+        let changed = first != self.first;
+        self.first = first;
+        changed
+    }
+
+    /// The suggestion rows that fit in `popup`.
+    fn rows_in(&self, popup: Rect) -> usize {
+        let inner = (popup.size.height - 2.0 * self.metrics.inset).max(0.0);
+        (inner / self.metrics.row).floor() as usize
     }
 
     fn open_popup(&mut self) -> ComboChange {
@@ -312,6 +357,7 @@ impl Combobox {
             return ComboChange::None;
         }
         self.highlighted = Some(key);
+        self.reveal_highlight();
         ComboChange::Highlighted
     }
 
@@ -497,25 +543,33 @@ impl Combobox {
         });
     }
 
-    /// The popup below `anchor`, showing at most `max_rows` suggestions.
-    pub fn popup_rect(&self, anchor: Rect, max_rows: usize) -> Rect {
+    /// The popup below `anchor`, as wide as the anchor, showing at most
+    /// `max_rows` suggestions. [`place_popup`] keeps it inside `bounds`
+    /// (from [`crate::popup_bounds`]): it opens above the anchor when only
+    /// that side fits, and else it shrinks and its rows scroll.
+    pub fn popup_rect(&self, anchor: Rect, max_rows: usize, bounds: Rect) -> Rect {
         let rows = self.matches.len().min(max_rows) as f64;
-        Rect::from_xywh(
-            anchor.origin.x,
-            anchor.max_y() + self.metrics.inset,
+        let size = Size::new(
             anchor.size.width,
             rows * self.metrics.row + 2.0 * self.metrics.inset,
-        )
+        );
+        let anchor = gap_anchor(anchor, self.metrics.inset, None);
+        place_popup(anchor, size, bounds, Placement::Below, LayoutDirection::Ltr).rect
     }
 
-    /// The suggestion under `point` in a popup at `popup`.
+    /// The suggestion under `point` in a popup at `popup`, as an index in
+    /// [`Combobox::suggestions`].
     pub fn suggestion_at(&self, popup: Rect, point: Point) -> Option<usize> {
         if !popup.contains(point) {
             return None;
         }
         let y = point.y - popup.origin.y - self.metrics.inset;
-        let index = (y / self.metrics.row).floor();
-        (index >= 0.0 && (index as usize) < self.matches.len()).then_some(index as usize)
+        let row = (y / self.metrics.row).floor();
+        if row < 0.0 || row as usize >= self.rows_in(popup) {
+            return None;
+        }
+        let index = self.first + row as usize;
+        (index < self.matches.len()).then_some(index)
     }
 
     /// Paints the open popup in the context's bounds, from
@@ -533,9 +587,9 @@ impl Combobox {
         let content = cx.style(query(Slot::Content));
         cx.slot(popup, &content, |_, _| {});
         let inner = content_rect(popup, &content, cx.rtl);
-        let rows =
-            ((inner.size.height / self.metrics.row).floor() as usize).min(self.matches.len());
-        for (index, item) in self.suggestions().into_iter().take(rows).enumerate() {
+        let rows = self.rows_in(popup);
+        let shown = self.suggestions().into_iter().skip(self.first).take(rows);
+        for (index, item) in shown.enumerate() {
             let state = VisualState::NONE
                 .set(VisualState::HIGHLIGHTED, self.highlighted == Some(item.key))
                 .set(VisualState::SELECTED, self.selected == Some(item.key));
@@ -698,7 +752,7 @@ impl Combobox {
 
     /// The hosted popup below the trigger.
     fn hosted_popup(&self) -> Rect {
-        self.popup_rect(self.anchor, POPUP_ROWS)
+        self.popup_rect(self.anchor, POPUP_ROWS, self.bounds)
     }
 
     /// Reports the changes since `before` (text and selection) and the
@@ -750,6 +804,20 @@ impl Combobox {
                     None => (None, EventReply::Continue),
                 }
             }
+            PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            } if self.open && popup.contains(position) => {
+                let rows = match unit {
+                    WheelUnit::Lines => delta.y,
+                    WheelUnit::Points => delta.y / self.metrics.row,
+                };
+                if self.scroll_rows(rows.round() as isize) {
+                    cx.request_paint();
+                }
+                (None, EventReply::Stop)
+            }
             PointerEvent::Move { position } if self.open => {
                 if let Some(index) = self.suggestion_at(popup, position) {
                     let key = self.items[self.matches[index]].key;
@@ -782,6 +850,20 @@ impl CustomControl for Combobox {
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.set_metrics(cx.styles, cx.tokens);
         self.anchor = bounds;
+        self.bounds = cx.popup_bounds();
+        // The rows that fit when the popup has all of its rows.
+        let full = place_popup(
+            gap_anchor(bounds, self.metrics.inset, None),
+            Size::new(
+                bounds.size.width,
+                POPUP_ROWS as f64 * self.metrics.row + 2.0 * self.metrics.inset,
+            ),
+            self.bounds,
+            Placement::Below,
+            LayoutDirection::Ltr,
+        );
+        self.page = self.rows_in(full.rect).clamp(1, POPUP_ROWS);
+        self.reveal_highlight();
         self.motion_ms = cx
             .style(StyleQuery::new(ControlKind::Combobox, Slot::Content).state(VisualState::OPEN))
             .motion_ms;
@@ -819,19 +901,21 @@ impl CustomControl for Combobox {
         let Some(input) = input else {
             return reply;
         };
-        let escape = matches!(
+        // Escape, an outside press, and focus loss close without a choice.
+        let dismiss = matches!(
             input,
-            ComboInput::Key {
-                key: Key::Escape,
-                ..
-            }
+            ComboInput::Dismiss
+                | ComboInput::Key {
+                    key: Key::Escape,
+                    ..
+                }
         );
         let change = self.handle(input);
         if change == ComboChange::None {
             return reply;
         }
         self.report(cx, before);
-        if escape {
+        if dismiss {
             cx.emit(ControlMessage::Dismissed);
         }
         EventReply::Stop

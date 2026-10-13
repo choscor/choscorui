@@ -1,7 +1,7 @@
 use choscorui_controls::{
     ComboChange, ComboInput, ComboItem, Combobox, CommandId, CommandRegistry, CommandState,
     CompletionMode, DropdownMenu, FontChooser, MenuCheck, MenuItem, MenuResponse, Placement,
-    PopupPress, PopupStack, TOOLTIP_DELAY, TooltipController, place_popup, text_key,
+    PopupPress, PopupStack, TOOLTIP_DELAY, TooltipController, place_popup, popup_bounds, text_key,
 };
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
@@ -68,10 +68,85 @@ fn placement_flips_clamps_and_mirrors() {
     );
     assert_eq!(
         tall.placement,
-        Placement::Below,
-        "neither side fits: keep preferred"
+        Placement::Above,
+        "neither side fits: the side with more room"
     );
-    assert_eq!(tall.rect.origin.y, 200.0);
+    assert_eq!(
+        tall.rect,
+        rect(100.0, 0.0, 100.0, 300.0),
+        "shrunk to the room"
+    );
+}
+
+/// A window and a 200 x 150 popup, placed from an anchor near each edge.
+fn near(anchor: Rect, preferred: Placement) -> choscorui_controls::PopupPlacement {
+    let window = popup_bounds(rect(0.0, 0.0, 800.0, 600.0), &DesignTokens::light());
+    assert_eq!(window, rect(8.0, 8.0, 784.0, 584.0), "an 8 pt margin");
+    place_popup(
+        anchor,
+        Size::new(200.0, 150.0),
+        window,
+        preferred,
+        LayoutDirection::Ltr,
+    )
+}
+
+#[test]
+fn placement_at_the_top_edge_stays_below() {
+    let placed = near(rect(300.0, 0.0, 80.0, 20.0), Placement::Above);
+    assert_eq!(placed.placement, Placement::Below, "no room above: flips");
+    assert_eq!(placed.rect, rect(300.0, 20.0, 200.0, 150.0));
+}
+
+#[test]
+fn placement_at_the_bottom_edge_flips_above() {
+    let placed = near(rect(300.0, 570.0, 80.0, 20.0), Placement::Below);
+    assert_eq!(placed.placement, Placement::Above);
+    assert_eq!(placed.rect, rect(300.0, 420.0, 200.0, 150.0));
+}
+
+#[test]
+fn placement_at_the_left_edge_clamps_and_flips_after() {
+    let below = near(rect(-40.0, 100.0, 80.0, 20.0), Placement::Below);
+    assert_eq!(below.rect.origin.x, 8.0, "shifted inside the margin");
+    let side = near(rect(0.0, 100.0, 80.0, 20.0), Placement::Before);
+    assert_eq!(side.placement, Placement::After, "no room before: flips");
+    assert_eq!(side.rect.origin, Point::new(80.0, 100.0));
+}
+
+#[test]
+fn placement_at_the_right_edge_clamps_and_flips_before() {
+    let below = near(rect(700.0, 100.0, 80.0, 20.0), Placement::Below);
+    assert_eq!(below.rect.origin.x, 592.0, "shifted inside the margin");
+    let side = near(rect(700.0, 100.0, 80.0, 20.0), Placement::After);
+    assert_eq!(side.placement, Placement::Before, "no room after: flips");
+    assert_eq!(side.rect.origin, Point::new(500.0, 100.0));
+}
+
+#[test]
+fn placement_limits_the_size_to_the_window() {
+    let window = rect(8.0, 8.0, 184.0, 584.0);
+    let wide = place_popup(
+        rect(20.0, 20.0, 80.0, 20.0),
+        Size::new(300.0, 100.0),
+        window,
+        Placement::Below,
+        LayoutDirection::Ltr,
+    );
+    assert_eq!(
+        wide.rect,
+        rect(8.0, 40.0, 184.0, 100.0),
+        "no wider than the window"
+    );
+    let tall = place_popup(
+        rect(20.0, 20.0, 80.0, 20.0),
+        Size::new(100.0, 1000.0),
+        window,
+        Placement::Below,
+        LayoutDirection::Ltr,
+    );
+    assert_eq!(tall.placement, Placement::Below);
+    assert_eq!(tall.rect.size.height, 552.0, "down to the bottom margin");
 }
 
 #[test]
@@ -440,7 +515,7 @@ fn combobox_paints_trigger_and_popup_from_the_recipe() {
 
     combo.handle(ComboInput::Press);
     // Rows are 32 pt with a 4 pt inset, below a 4 pt gap.
-    let popup = combo.popup_rect(anchor, 6);
+    let popup = combo.popup_rect(anchor, 6, rect(0.0, 0.0, 800.0, 600.0));
     assert_eq!(popup, rect(0.0, 40.0, 200.0, 3.0 * 32.0 + 8.0));
     assert_eq!(
         combo.suggestion_at(popup, Point::new(10.0, 40.0 + 4.0 + 32.0 + 1.0)),

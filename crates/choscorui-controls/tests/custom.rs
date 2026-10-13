@@ -1,8 +1,9 @@
 //! A star-rating control written only against the public extension API.
 
 use choscorui_controls::{
-    ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
-    EstimatedText, HostEnv, MeasureContext, PaintContext, Styles, VisualState,
+    Button, CommandId, ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue,
+    CustomControl, EstimatedText, HostEnv, ListEntry, MeasureContext, PaintContext, Select, Styles,
+    VisualState,
 };
 use choscorui_core::{
     Color, ColorRole, Constraints, DesignTokens, Dirty, DisplayCommand, DisplayList, EventPhase,
@@ -452,13 +453,16 @@ fn overlays_get_hits_first_and_outside_presses_dismiss_them() {
     );
     assert!(list.is_balanced());
 
-    // A press outside the overlay dismisses it and still reaches the target.
+    // A press outside the overlay dismisses it. The press closed a popup,
+    // so no control gets it.
+    let presses = other.0.borrow().presses;
     f.host.dispatch_pointer(&mut f.tree, down(300.0, 200.0));
     assert!(!menu.0.borrow().open);
     assert_eq!(
         f.host.take_messages(),
         vec![(menu_node, ControlMessage::Dismissed)]
     );
+    assert_eq!(other.0.borrow().presses, presses);
     f.host.dispatch_pointer(&mut f.tree, down(10.0, 50.0));
     assert_eq!(other.0.borrow().presses, 1);
     assert_eq!(f.tree.focus(), Some(other_node));
@@ -589,5 +593,61 @@ fn host_layout_measures_controls_and_other_leaves_then_arranges() {
         popup.0.borrow().bounds,
         f.tree.bounds(control).unwrap(),
         "arranged after layout"
+    );
+}
+
+#[test]
+fn a_press_that_closes_a_select_does_not_reach_the_button_below() {
+    let mut f = Fixture::new();
+    let root = f.tree.root();
+    let select = Select::new(
+        "Fruit",
+        vec![ListEntry::option("Apple"), ListEntry::option("Banana")],
+    );
+    let select_node = f.host.mount(&mut f.tree, root, Box::new(select)).unwrap();
+    f.tree
+        .set_bounds(select_node, rect(10.0, 10.0, 160.0, 36.0))
+        .unwrap();
+    let button = Button::new("Save", CommandId(1));
+    let button_node = f.host.mount(&mut f.tree, root, Box::new(button)).unwrap();
+    f.tree
+        .set_bounds(button_node, rect(10.0, 240.0, 100.0, 36.0))
+        .unwrap();
+    f.arrange();
+    let click = |f: &mut Fixture, x: f64, y: f64| {
+        f.host.dispatch_pointer(&mut f.tree, down(x, y));
+        f.host.dispatch_pointer(
+            &mut f.tree,
+            PointerEvent::Up {
+                position: Point::new(x, y),
+                button: PointerButton::Primary,
+            },
+        );
+    };
+
+    click(&mut f, 50.0, 28.0);
+    assert!(f.host.get(select_node).unwrap().overlay().is_some());
+    f.host.take_messages();
+
+    click(&mut f, 50.0, 258.0);
+    assert!(
+        f.host.get(select_node).unwrap().overlay().is_none(),
+        "the outside press closes the list"
+    );
+    assert_eq!(
+        f.host.take_messages(),
+        vec![
+            (select_node, ControlMessage::OpenChanged(false)),
+            (select_node, ControlMessage::Dismissed),
+        ],
+        "the button below is not activated"
+    );
+    assert_eq!(f.tree.focus(), Some(select_node), "focus stays");
+
+    click(&mut f, 50.0, 258.0);
+    assert_eq!(
+        f.host.take_messages(),
+        vec![(button_node, ControlMessage::Activated)],
+        "with no popup open, the press reaches the button"
     );
 }

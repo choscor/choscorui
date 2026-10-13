@@ -4,6 +4,7 @@
 use super::panel::PanelText;
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::hosted::{self, Press, PressOutcome, Reveal};
+use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
@@ -107,12 +108,23 @@ impl Popover {
         true
     }
 
-    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
-        if self.apply_open(open, cx.time()) {
+    /// Opens or closes the panel and reports it. Returns true when it
+    /// changed.
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) -> bool {
+        let changed = self.apply_open(open, cx.time());
+        if changed {
             cx.emit(ControlMessage::OpenChanged(open));
             cx.request_paint();
             cx.request_semantics();
         }
+        changed
+    }
+
+    /// Closes the panel without a choice. A popover reports `Dismissed`;
+    /// a hover card closes quietly and lets the press through.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let closed = self.change_open(cx, false);
+        hosted::dismissed(cx, closed && !self.hover_card)
     }
 
     /// Starts the open or close delay of a hover card.
@@ -140,20 +152,22 @@ impl CustomControl for Popover {
         let query = StyleQuery::new(self.kind(), Slot::Content);
         let panel = cx.style(query);
         self.motion_ms = panel.motion_ms;
-        let width = panel.min_width;
+        let room = cx.popup_bounds();
+        // The panel width, limited to the window.
+        let width = panel.min_width.min(room.size.width);
         let inner = width - panel.padding.horizontal();
         let height = self.text.height(cx, query, inner) + panel.padding.vertical();
-        let gap = cx.tokens.spacing;
-        let viewport = cx.viewport;
         // Centered on the trigger, kept in the window.
-        let x = (bounds.center().x - width / 2.0)
-            .min(viewport.max_x() - width)
-            .max(viewport.origin.x);
-        let below = bounds.max_y() + gap;
-        let above = bounds.origin.y - gap - height;
-        self.above = below + height > viewport.max_y() && above >= viewport.origin.y;
-        let y = if self.above { above } else { below };
-        self.frame = Rect::from_xywh(x, y, width, height);
+        let anchor = gap_anchor(bounds, cx.tokens.spacing, Some(width));
+        let placed = place_popup(
+            anchor,
+            Size::new(width, height),
+            room,
+            Placement::Below,
+            cx.direction,
+        );
+        self.above = placed.placement == Placement::Above;
+        self.frame = placed.rect;
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -183,8 +197,13 @@ impl CustomControl for Popover {
                 cx.emit(ControlMessage::Dismissed);
                 return EventReply::Stop;
             }
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.change_open(cx, false);
+            ControlEvent::Dismiss => {
+                let reply = self.dismiss(cx);
+                self.press.event(cx, event);
+                return reply;
+            }
+            ControlEvent::FocusChanged(false) => {
+                self.dismiss(cx);
             }
             _ => {}
         }
@@ -192,9 +211,10 @@ impl CustomControl for Popover {
         if let PressOutcome::Activated(_) = outcome {
             if self.hover_card {
                 cx.emit(ControlMessage::Activated);
+            } else if self.reveal.open {
+                self.dismiss(cx);
             } else {
-                let open = !self.reveal.open;
-                self.change_open(cx, open);
+                self.change_open(cx, true);
             }
         }
         hosted::reply(outcome)

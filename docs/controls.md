@@ -195,7 +195,7 @@ changes as `ControlMessage` values:
 | `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle; `active` names that handle | `Number` |
 | `HostedStack` | - | `Index(Some(page))` |
 | `StatusBar`, `ScrollArea`, `HostedGroupBox` | - | - |
-| `Combobox`, `FontChooser` | `Changed(Index)`, `Changed(Text)` when editable, `OpenChanged`, `Dismissed` on Escape | `Index`, or `Text` when editable |
+| `Combobox`, `FontChooser` | `Changed(Index)`, `Changed(Text)` when editable, `OpenChanged`, `Dismissed` on a close without a choice | `Index`, or `Text` when editable |
 | `TextEditor` | `Changed(Text)` | `Text` |
 | `ScrollBar`, `DecimalSpinBox` | `Changed(Number)` | `Number` |
 | `HostedDial` | `Changed(Number)` | `Number`, rounded |
@@ -931,7 +931,8 @@ behavior.
 - **Escape** (open) closes the popup and restores the text from when the
   popup opened.
 - **`Dismiss`** (an outside press or window deactivation) closes the popup.
-  It keeps the edited text and commits nothing.
+  It keeps the edited text and commits nothing. A focus loss does the
+  same, and `set_enabled(false)` closes the popup through `Dismiss`.
 - **Semantic actions.** `ShowMenu` and `Expand` open the popup.
   `Collapse` and `Dismiss` close it.
 - Semantic `SetValue` commits the item with the same text. Only an
@@ -942,15 +943,21 @@ behavior.
 - **Invalid.** `set_invalid(true)` or `with_invalid(true)` gives the
   trigger the invalid look and the node the invalid semantic state. The
   host's invalid flag also shows the invalid look.
-- **In a control host.** The popup shows at most eight suggestions, and
-  it animates. A click on a suggestion commits it. Backspace deletes the
-  last character of an editable combobox. Escape also reports `Dismissed`.
+- **In a control host.** The popup shows at most eight rows, and it
+  animates. A longer list scrolls with the wheel. The highlight scrolls
+  into view.
+- `place_popup` keeps the popup in the window. Near the bottom edge it
+  opens above the trigger, and in a short window it shows fewer rows.
+- A click on a suggestion commits it. Backspace deletes the last
+  character of an editable combobox.
+- Escape, an outside press, focus loss, and disabling close the popup
+  without a choice and report `Dismissed`.
 - **`FontChooser`** is an editable combobox named "Font". A family that
   the system does not have resolves to the fallback family.
 - `ComboBox` is a deprecated alias of `Combobox`.
 - **Look.** `paint` draws the trigger and `paint_popup` draws the open
-  list. `popup_rect` places the list below the anchor, and `suggestion_at`
-  maps a point to a row. `set_metrics` reads the row height from the
+  list. `popup_rect` places the list with `place_popup`, below the anchor
+  and inside the bounds. `suggestion_at` maps a point to a shown row. `set_metrics` reads the row height from the
   `Combobox` recipe:
 
 | Part | Slot | Value |
@@ -1809,10 +1816,15 @@ its command through `.on_command`. The `dropdown_menu` modifier of
   outside all popups closes them all, and the press goes no further.
 - `window_deactivated` closes all popups. `prune` closes the popups whose
   owner left the tree.
-- `place_popup` puts a popup on the preferred side of its anchor. It flips
-  to the other side when only that side fits.
-- `place_popup` then moves the popup into the bounds, and does not resize
-  it. In right-to-left layouts, `After` means to the left.
+- `place_popup` places every popup and menu of the toolkit. It puts a popup
+  on the preferred side of its anchor, and flips it when only the other
+  side fits.
+- When no side fits, the popup goes on the side with more room and shrinks
+  to that room. The popup then scrolls its content.
+- The popup also shrinks to the width or height of the bounds, and moves
+  into the bounds. In right-to-left layouts, `After` means to the left.
+- `popup_bounds` gives the bounds: the window less a margin of
+  `gap(Space::S2)` (8 pt) on each side.
 
 `PopupStack` has no semantic node.
 
@@ -2435,6 +2447,8 @@ shows the caps of a combination.
   enabled option chooses it and closes the list.
 - The list opens 4 pt below the trigger, aligned with its leading edge. It
   is at least as wide as the trigger. Past eight options it scrolls.
+- `place_popup` keeps the list in the window. Near the bottom edge it opens
+  above the trigger. In a short window it shrinks and scrolls.
 - **Keys while closed.** ArrowDown, ArrowUp, Enter, or Space opens the
   list. Typed text chooses the first matching option.
 - **Keys while open.** ArrowUp and ArrowDown move the highlight over the
@@ -2442,6 +2456,8 @@ shows the caps of a combination.
   the last option.
 - Enter or Space chooses the highlighted option. Escape closes the list and
   emits `Dismissed`. Tab closes the list and moves focus.
+- Each close without a choice emits `Dismissed`: Escape, Tab, a press
+  outside, a press on the trigger, focus loss, and disabling.
 - Typed text highlights the first matching option after the highlight.
   Characters typed within 1 second build one search. A repeated character
   cycles through the options that start with it.
@@ -2764,10 +2780,11 @@ false.
 
 - The trigger is an outline button. A press, Enter, or Space opens or
   closes the panel. Escape closes it and emits `Dismissed`. A press
-  outside the panel closes it.
-- The panel is 4 pt below the trigger and centered on it. It moves to stay
-  inside the window, and opens above the trigger when only that side
-  fits. It fades, zooms, and slides in like a select list.
+  outside the panel, focus loss, and disabling also close it and emit
+  `Dismissed`.
+- The panel is 4 pt below the trigger and centered on it. `place_popup`
+  keeps it in the window, and opens it above the trigger when only that
+  side fits. The panel is no wider than the window. It fades, zooms, and slides in like a select list.
 - **`Popover::hover_card`.** The trigger is a link. Enter or Space emits
   `Activated`. The panel opens when the pointer rests on the link for
   `HOVER_CARD_OPEN_DELAY` (0.7 s). It closes
@@ -3774,6 +3791,12 @@ behavior.
   path under the pointer when the path changes.
 - An open overlay gets pointer events inside its rectangle first. A press
   outside the overlay sends `Dismiss` to its control.
+- A control that closes a popup for `Dismiss` replies `Stop`. Then the
+  host consumes the press, so the control under the pointer does not get
+  it, and focus stays.
+- `set_enabled(false)` sends `Dismiss` to a control that shows an overlay
+  or holds a modal scope. The control closes and emits `OpenChanged(false)`
+  and `Dismissed`.
 - While a control is modal, pointer events outside its subtree go to it,
   and focus traversal stays inside its subtree.
 - A disabled control gets no input, leaves keyboard traversal, paints with

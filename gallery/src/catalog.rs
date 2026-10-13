@@ -302,6 +302,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("MenuCheck", "dropdown-menu"),
     ("PopupStack", "dropdown-menu"),
     ("place_popup", "dropdown-menu"),
+    ("popup_bounds", "dropdown-menu"),
     ("Placement", "dropdown-menu"),
     ("TooltipController", "tooltip"),
     ("AlertDialog", "alert-dialog"),

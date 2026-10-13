@@ -61,7 +61,7 @@ pub use model_widgets::{
 mod popup;
 pub use popup::{
     Placement, PopupId, PopupPlacement, PopupPress, PopupStack, TOOLTIP_DELAY, TOOLTIP_GRACE,
-    TooltipController, VisibleTooltip, place_popup,
+    TooltipController, VisibleTooltip, place_popup, popup_bounds,
 };
 mod menu;
 #[expect(

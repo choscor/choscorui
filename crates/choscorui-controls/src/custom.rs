@@ -29,8 +29,10 @@ pub enum ControlEvent {
     /// The pointer entered (`true`) or left (`false`) the node, one of its
     /// descendants, or its overlay.
     Hover(bool),
-    /// A press landed outside the control and its open overlay, or a modal
-    /// overlay opened above it: close transient popups.
+    /// A press landed outside the control and its open overlay, or the
+    /// control becomes disabled: close transient popups and emit
+    /// [`ControlMessage::Dismissed`]. Reply `Stop` when a popup closed, so
+    /// that the host consumes the press.
     Dismiss,
     /// The host time reached the control's [`CustomControl::deadline`].
     Timer,
@@ -135,6 +137,12 @@ impl MeasureContext<'_> {
     /// The resolved style of `query`, from the cache.
     pub fn style(&self, query: StyleQuery) -> ResolvedStyle {
         self.styles.resolve(self.tokens, query)
+    }
+
+    /// The area that a popup of the control fits in, from
+    /// [`crate::popup_bounds`].
+    pub fn popup_bounds(&self) -> Rect {
+        crate::popup_bounds(self.viewport, self.tokens)
     }
 }
 
@@ -417,13 +425,20 @@ impl ControlHost {
     }
 
     /// Enables or disables a mounted control. A disabled control gets no
-    /// pointer, key, or text input, and it leaves keyboard traversal.
+    /// pointer, key, or text input, and it leaves keyboard traversal. A
+    /// control that shows an overlay or holds a modal scope gets
+    /// [`ControlEvent::Dismiss`] first, so that it closes and reports it.
     pub fn set_enabled(
         &mut self,
         tree: &mut Tree,
         node: NodeId,
         enabled: bool,
     ) -> Result<(), TreeError> {
+        let control = self.controls.get(&node).ok_or(TreeError::MissingNode)?;
+        let open = control.overlay().is_some() || control.modal();
+        if !enabled && open && !self.disabled.contains(&node) {
+            self.deliver(tree, node, EventPhase::Target, &ControlEvent::Dismiss);
+        }
         let control = self.controls.get_mut(&node).ok_or(TreeError::MissingNode)?;
         control.set_enabled(enabled);
         let focusable = enabled && control.focusable();
@@ -735,7 +750,10 @@ impl ControlHost {
 
     /// Routes a pointer event: an open overlay first, then capture, target,
     /// and bubble through the tree. A press outside an open overlay sends
-    /// `Dismiss` to its control. Pressing a focusable control focuses it.
+    /// `Dismiss` to its control. When a control replies `Stop` to that
+    /// `Dismiss`, the press closed its popup, and the host consumes the
+    /// press: no control gets it, and focus stays. Else pressing a
+    /// focusable control focuses it.
     pub fn dispatch_pointer(&mut self, tree: &mut Tree, event: PointerEvent) {
         let target = self.route(tree, event.position());
         if matches!(event, PointerEvent::Move { .. } | PointerEvent::Down { .. }) {
@@ -753,8 +771,15 @@ impl ControlHost {
                 })
                 .filter(|node| target.is_none_or(|target| !tree.is_within(target, *node)))
                 .collect();
+            let mut closed = false;
             for node in open {
-                self.deliver(tree, node, EventPhase::Target, &ControlEvent::Dismiss);
+                closed |= self.deliver(tree, node, EventPhase::Target, &ControlEvent::Dismiss)
+                    == EventReply::Stop;
+            }
+            if closed {
+                // The press closed a popup: it does not reach the control
+                // under the pointer.
+                return;
             }
             if let Some(target) = target
                 && tree.contains(target)

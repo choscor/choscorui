@@ -70,6 +70,20 @@ impl Press {
     }
 }
 
+/// Reports a popup that closed without a choice (an outside press,
+/// Escape, focus loss, or disabling): emits
+/// [`ControlMessage::Dismissed`](crate::ControlMessage::Dismissed) when
+/// `closed` is true. The reply is `Stop` when the popup closed, so that the
+/// host consumes an outside press.
+pub(crate) fn dismissed(cx: &mut ControlContext<'_>, closed: bool) -> EventReply {
+    if closed {
+        cx.emit(crate::ControlMessage::Dismissed);
+        EventReply::Stop
+    } else {
+        EventReply::Continue
+    }
+}
+
 /// The reply for a press outcome that the control has acted on.
 pub(crate) fn reply(outcome: PressOutcome) -> EventReply {
     match outcome {

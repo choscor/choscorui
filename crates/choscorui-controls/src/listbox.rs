@@ -3,10 +3,11 @@
 //! lists can share it.
 
 use crate::custom::MeasureContext;
+use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
     Content, ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
 };
-use choscorui_core::{Icon, Key, Point, PointerButton, PointerEvent, Rect, WheelUnit};
+use choscorui_core::{Icon, Key, Point, PointerButton, PointerEvent, Rect, Size, WheelUnit};
 
 /// One row of a popup list.
 #[derive(Clone, Debug, PartialEq)]
@@ -154,7 +155,9 @@ impl ListPopup {
     }
 
     /// Places the list `gap` below `anchor`, at least `min_width` wide and
-    /// aligned with the anchor's leading edge.
+    /// aligned with the anchor's leading edge. It shows at most 8 options.
+    /// It flips above the anchor when it does not fit below, and it
+    /// shrinks to the window (and scrolls) when it fits on neither side.
     pub fn place(&mut self, cx: &MeasureContext<'_>, anchor: Rect, min_width: f64, gap: f64) {
         let content = cx.style(self.query(Slot::Content, VisualState::NONE));
         self.button_height = cx
@@ -163,47 +166,47 @@ impl ListPopup {
         self.line = cx
             .style(self.query(Slot::Item, VisualState::NONE))
             .min_height;
-        let width = self.natural_width(cx).max(min_width);
-        let x = if cx.rtl() {
-            anchor.max_x() - width
-        } else {
-            anchor.origin.x
-        };
-        let top = anchor.max_y() + gap;
-        let inner_x = x + content.padding.horizontal() / 2.0;
-        let inner_width = width - content.padding.horizontal();
-        let mut y = top + content.padding.block_start;
-        let mut options = 0;
-        let mut visible_height = 0.0;
-        self.rows = self
+        let heights: Vec<f64> = self
             .entries
             .iter()
-            .map(|entry| {
-                let style = self.entry_style(entry, |query| cx.style(query));
-                let height = Self::entry_height(entry, &style);
-                let row = Rect::from_xywh(inner_x, y, inner_width, height);
+            .map(|entry| Self::entry_height(entry, &self.entry_style(entry, |q| cx.style(q))))
+            .collect();
+        let mut options = 0;
+        let mut visible_height = 0.0;
+        for (entry, height) in self.entries.iter().zip(&heights) {
+            if options < MAX_ROWS {
+                visible_height += height;
+            }
+            if matches!(entry, ListEntry::Option { .. }) {
+                options += 1;
+            }
+        }
+        let size = Size::new(
+            self.natural_width(cx).max(min_width),
+            (visible_height + content.padding.vertical()).max(content.min_height),
+        );
+        let placed = place_popup(
+            gap_anchor(anchor, gap, None),
+            size,
+            cx.popup_bounds(),
+            Placement::Below,
+            cx.direction,
+        );
+        self.frame = placed.rect;
+        let inner_x = self.frame.origin.x + content.padding.horizontal() / 2.0;
+        let inner_width = (self.frame.size.width - content.padding.horizontal()).max(0.0);
+        let top = self.frame.origin.y + content.padding.block_start;
+        let mut y = top;
+        self.rows = heights
+            .iter()
+            .map(|height| {
+                let row = Rect::from_xywh(inner_x, y, inner_width, *height);
                 y += height;
-                if options < MAX_ROWS {
-                    visible_height += height;
-                }
-                if matches!(entry, ListEntry::Option { .. }) {
-                    options += 1;
-                }
                 row
             })
             .collect();
-        self.viewport = Rect::from_xywh(
-            inner_x,
-            top + content.padding.block_start,
-            inner_width,
-            visible_height,
-        );
-        self.frame = Rect::from_xywh(
-            x,
-            top,
-            width,
-            (visible_height + content.padding.vertical()).max(content.min_height),
-        );
+        let room = (self.frame.size.height - content.padding.vertical()).max(0.0);
+        self.viewport = Rect::from_xywh(inner_x, top, inner_width, visible_height.min(room));
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
     }
 

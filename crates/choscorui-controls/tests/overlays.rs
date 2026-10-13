@@ -29,7 +29,7 @@ fn a_popover_opens_below_its_trigger_and_closes_on_escape() {
     let frame = overlay(&h).expect("open");
     assert_eq!(frame.size.width, 288.0);
     assert_eq!(frame.origin.y, bounds.max_y() + 4.0);
-    assert_eq!(frame.origin.x, 0.0, "kept inside the window");
+    assert_eq!(frame.origin.x, 8.0, "kept inside the window margin");
     h.set_time(1.0);
     let painted = texts(&h.paint());
     assert!(painted.contains(&"Dimensions".to_string()));
@@ -50,8 +50,44 @@ fn a_popover_opens_below_its_trigger_and_closes_on_escape() {
         ]
     );
     assert!(h.perform(SemanticAction::Expand, None));
+    h.messages();
     h.click(Point::new(790.0, 590.0));
     assert!(overlay(&h).is_none(), "a press outside closes it");
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "a close without a choice reports Dismissed"
+    );
+    assert!(h.perform(SemanticAction::Expand, None));
+    h.messages();
+    h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "disabling closes the open panel"
+    );
+}
+
+#[test]
+fn a_popover_panel_is_no_wider_than_the_window() {
+    let mut h = Harness::new(Popover::new("Open", "Title", "Text"));
+    h.tree
+        .set_bounds(
+            h.tree.root(),
+            choscorui_core::Rect::from_xywh(0.0, 0.0, 200.0, 600.0),
+        )
+        .unwrap();
+    h.place(choscorui_core::Rect::from_xywh(20.0, 20.0, 80.0, 36.0));
+    h.click(Point::new(40.0, 38.0));
+    let frame = overlay(&h).unwrap();
+    assert_eq!(frame.origin.x, 8.0);
+    assert_eq!(frame.size.width, 184.0, "the window less the margins");
 }
 
 #[test]

@@ -334,3 +334,78 @@ fn semantics_name_the_choice_and_assistive_actions_choose() {
     assert!(h.semantics().actions.is_empty());
     assert_eq!(overlay(&h), None, "disabling closes the list");
 }
+
+#[test]
+fn near_the_bottom_edge_the_list_opens_above_the_trigger() {
+    let mut h = Harness::new(fruit());
+    let size = h.bounds().size;
+    h.place(hosted::rect(10.0, 540.0, size.width, size.height));
+    h.click(h.bounds().center());
+    let frame = overlay(&h).expect("open");
+    assert_eq!(frame.max_y(), 540.0 - 4.0, "4 pt above the trigger");
+    assert!(frame.origin.y >= 8.0);
+}
+
+#[test]
+fn near_the_right_edge_the_list_stays_inside_the_window() {
+    let mut h = Harness::new(fruit());
+    let size = h.bounds().size;
+    h.place(hosted::rect(700.0, 100.0, 90.0, size.height));
+    h.click(h.bounds().center());
+    let frame = overlay(&h).expect("open");
+    assert!(
+        frame.size.width > 92.0,
+        "wider than the room after the trigger"
+    );
+    assert_eq!(frame.max_x(), 792.0, "shifted inside the 8 pt margin");
+    assert_eq!(frame.origin.y, h.bounds().max_y() + 4.0);
+}
+
+#[test]
+fn in_a_short_window_the_list_shrinks_and_scrolls() {
+    let names = [
+        "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf",
+    ];
+    let entries = names.iter().map(|name| ListEntry::option(*name)).collect();
+    let mut h = Harness::new(Select::new("Letter", entries));
+    h.tree
+        .set_bounds(h.tree.root(), hosted::rect(0.0, 0.0, 800.0, 160.0))
+        .unwrap();
+    h.place(h.bounds());
+    h.click(h.bounds().center());
+    let frame = overlay(&h).expect("open");
+    assert_eq!(frame.max_y(), 152.0, "down to the bottom margin");
+    h.key(Key::End);
+    h.set_time(1.0);
+    let painted = texts(&h.paint());
+    assert!(
+        painted.contains(&"Golf".to_string()) && !painted.contains(&"Alpha".to_string()),
+        "the list scrolls to the last option: {painted:?}"
+    );
+}
+
+#[test]
+fn an_outside_press_or_disabling_closes_the_list_with_dismissed() {
+    let mut h = Harness::new(fruit());
+    h.click(h.bounds().center());
+    h.messages();
+    h.click(Point::new(700.0, 500.0));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    h.click(h.bounds().center());
+    h.messages();
+    h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    assert_eq!(overlay(&h), None);
+}

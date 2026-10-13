@@ -12,7 +12,7 @@ use crate::style::{
 };
 use choscorui_core::{
     DesignTokens, FillRule, LayoutDirection, NodeId, Path, Point, Rect, SemanticNode, SemanticRole,
-    SemanticState, Size, Tree, TreeError,
+    SemanticState, Size, Space, Tree, TreeError,
 };
 use std::time::Duration;
 
@@ -32,12 +32,27 @@ pub struct PopupPlacement {
     pub placement: Placement,
 }
 
-/// Places a popup of `size` next to `anchor` inside `bounds` (the screen's
-/// visible frame or the window). The preferred side flips when the popup
-/// does not fit there but fits on the other side; the popup is then
-/// shifted (never resized) to stay inside `bounds`. In right-to-left
-/// layouts start alignment uses the anchor's right edge and `After` means
-/// to the left.
+/// The area that popups fit in: `viewport` (the window content) inset by
+/// the popup margin, two spacing units on each side.
+pub fn popup_bounds(viewport: Rect, tokens: &DesignTokens) -> Rect {
+    viewport.inset(tokens.gap(Space::S2))
+}
+
+/// Places a popup of `size` next to `anchor` inside `bounds` (from
+/// [`popup_bounds`]). Every popup and menu uses this function.
+///
+/// - The popup opens on the `preferred` side when it fits there. Else it
+///   flips to the opposite side when it fits there.
+/// - When it fits on neither side, it opens on the side with more room,
+///   and its extent on that axis shrinks to the room. The caller scrolls
+///   the content of a popup that shrinks.
+/// - The extent on the other axis shrinks to `bounds`, and the popup
+///   shifts to stay inside `bounds`.
+/// - In right-to-left layouts, start alignment uses the anchor's right
+///   edge, and `After` means to the left.
+///
+/// A popup that keeps a gap from its anchor gets an anchor that the
+/// caller grew by the gap.
 pub fn place_popup(
     anchor: Rect,
     size: Size,
@@ -46,67 +61,79 @@ pub fn place_popup(
     direction: LayoutDirection,
 ) -> PopupPlacement {
     let rtl = direction == LayoutDirection::Rtl;
-    let (preferred, opposite) = match (preferred, rtl) {
-        (Placement::After, true) => (Placement::Before, Placement::After),
-        (Placement::Before, true) => (Placement::After, Placement::Before),
-        (Placement::Below, _) => (Placement::Below, Placement::Above),
-        (Placement::Above, _) => (Placement::Above, Placement::Below),
-        (Placement::After, false) => (Placement::After, Placement::Before),
-        (Placement::Before, false) => (Placement::Before, Placement::After),
+    let preferred = match (preferred, rtl) {
+        (Placement::After, true) => Placement::Before,
+        (Placement::Before, true) => Placement::After,
+        (placement, _) => placement,
     };
-    let origin_for = |placement: Placement| -> Point {
-        let start_x = if rtl {
-            anchor.origin.x + anchor.size.width - size.width
-        } else {
-            anchor.origin.x
+    let opposite = match preferred {
+        Placement::Below => Placement::Above,
+        Placement::Above => Placement::Below,
+        Placement::After => Placement::Before,
+        Placement::Before => Placement::After,
+    };
+    // The room on each side of the anchor, and the extent that must fit.
+    let room = |placement: Placement| -> f64 {
+        let room = match placement {
+            Placement::Below => bounds.max_y() - anchor.max_y(),
+            Placement::Above => anchor.origin.y - bounds.origin.y,
+            Placement::After => bounds.max_x() - anchor.max_x(),
+            Placement::Before => anchor.origin.x - bounds.origin.x,
         };
-        match placement {
-            Placement::Below => Point::new(start_x, anchor.origin.y + anchor.size.height),
-            Placement::Above => Point::new(start_x, anchor.origin.y - size.height),
-            Placement::After => Point::new(anchor.origin.x + anchor.size.width, anchor.origin.y),
-            Placement::Before => Point::new(anchor.origin.x - size.width, anchor.origin.y),
-        }
+        room.max(0.0)
     };
-    let fits = |placement: Placement| -> bool {
-        let origin = origin_for(placement);
-        match placement {
-            Placement::Below | Placement::Above => {
-                origin.y >= bounds.origin.y
-                    && origin.y + size.height <= bounds.origin.y + bounds.size.height
-            }
-            Placement::After | Placement::Before => {
-                origin.x >= bounds.origin.x
-                    && origin.x + size.width <= bounds.origin.x + bounds.size.width
-            }
-        }
-    };
-    let placement = if fits(preferred) || !fits(opposite) {
+    let vertical = matches!(preferred, Placement::Below | Placement::Above);
+    let need = if vertical { size.height } else { size.width };
+    let placement = if need <= room(preferred) {
         preferred
-    } else {
+    } else if need <= room(opposite) || room(opposite) > room(preferred) {
         opposite
+    } else {
+        preferred
     };
-    let origin = origin_for(placement);
-    let clamp = |value: f64, low: f64, extent: f64, high_edge: f64| -> f64 {
-        value.min(high_edge - extent).max(low)
+    let size = if vertical {
+        Size::new(
+            size.width.min(bounds.size.width),
+            size.height.min(room(placement)),
+        )
+    } else {
+        Size::new(
+            size.width.min(room(placement)),
+            size.height.min(bounds.size.height),
+        )
     };
+    let start_x = if rtl {
+        anchor.max_x() - size.width
+    } else {
+        anchor.origin.x
+    };
+    let origin = match placement {
+        Placement::Below => Point::new(start_x, anchor.max_y()),
+        Placement::Above => Point::new(start_x, anchor.origin.y - size.height),
+        Placement::After => Point::new(anchor.max_x(), anchor.origin.y),
+        Placement::Before => Point::new(anchor.origin.x - size.width, anchor.origin.y),
+    };
+    let clamp = |value: f64, low: f64, extent: f64, high: f64| value.min(high - extent).max(low);
     let rect = Rect::new(
         Point::new(
-            clamp(
-                origin.x,
-                bounds.origin.x,
-                size.width,
-                bounds.origin.x + bounds.size.width,
-            ),
-            clamp(
-                origin.y,
-                bounds.origin.y,
-                size.height,
-                bounds.origin.y + bounds.size.height,
-            ),
+            clamp(origin.x, bounds.origin.x, size.width, bounds.max_x()),
+            clamp(origin.y, bounds.origin.y, size.height, bounds.max_y()),
         ),
         size,
     );
     PopupPlacement { rect, placement }
+}
+
+/// `anchor` grown by `gap` above and below, so that a popup placed with
+/// [`place_popup`] keeps the gap on either side. With `width`, the result
+/// is that wide and centered on the anchor, for popups that center on
+/// their trigger.
+pub(crate) fn gap_anchor(anchor: Rect, gap: f64, width: Option<f64>) -> Rect {
+    let (x, w) = match width {
+        Some(width) => (anchor.center().x - width / 2.0, width),
+        None => (anchor.origin.x, anchor.size.width),
+    };
+    Rect::from_xywh(x, anchor.origin.y - gap, w, anchor.size.height + 2.0 * gap)
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -271,10 +298,11 @@ impl VisibleTooltip {
     }
 
     /// Places the bubble above the anchor, centered, with room for the
-    /// arrow. It flips below when it does not fit inside `bounds`.
+    /// arrow. It flips below when it does not fit inside the
+    /// [`popup_bounds`] of `viewport`.
     pub fn place(
         &self,
-        bounds: Rect,
+        viewport: Rect,
         styles: &Styles,
         tokens: &DesignTokens,
         text: &dyn TextMeasure,
@@ -285,14 +313,8 @@ impl VisibleTooltip {
             tokens,
             StyleQuery::new(ControlKind::Tooltip, Slot::Indicator),
         );
-        let reach = arrow.min_height / 2.0;
-        let center = self.anchor.origin.x + self.anchor.size.width / 2.0;
-        let anchor = Rect::from_xywh(
-            center - size.width / 2.0,
-            self.anchor.origin.y - reach,
-            size.width,
-            self.anchor.size.height + 2.0 * reach,
-        );
+        let anchor = gap_anchor(self.anchor, arrow.min_height / 2.0, Some(size.width));
+        let bounds = popup_bounds(viewport, tokens);
         place_popup(anchor, size, bounds, Placement::Above, direction)
     }
 
