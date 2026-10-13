@@ -420,6 +420,21 @@ mod tests {
     }
 
     #[test]
+    fn a_spin_box_takes_a_typed_number() {
+        let mut page = Harness::new("spin-box");
+        let copies = "Copies (1–99)";
+        assert!(page.act(copies, SemanticAction::Focus));
+        assert!(page.host.text("87"));
+        press(&mut page, Key::Enter);
+        assert_eq!(page.value(copies).as_deref(), Some("87"));
+        // A number past the maximum clamps when it commits.
+        assert!(page.act(copies, SemanticAction::Focus));
+        page.host.text("150");
+        press(&mut page, Key::Enter);
+        assert_eq!(page.value(copies).as_deref(), Some("99"));
+    }
+
+    #[test]
     fn slider_caption_follows_assistive_steps() {
         let mut page = Harness::new("slider");
         assert!(page.act("Volume", SemanticAction::Increment));
