@@ -24,11 +24,11 @@ fn main() {
 mod smoke {
     use choscorui::compose::view::StorageError;
     use choscorui::core::{Point, Rect, SemanticAction, Service, Size, WindowGeometry};
-    use std::cell::RefCell;
-    use std::rc::Rc;
     use choscorui::platform::{MenuShortcutModifiers, NativeAccess};
     use choscorui::prelude::*;
+    use std::cell::RefCell;
     use std::path::Path;
+    use std::rc::Rc;
 
     struct Counter;
 
@@ -86,9 +86,12 @@ mod smoke {
             let (counted, label, get, set) =
                 (counted.clone(), label.clone(), check.clone(), check.clone());
             vec![
-                MenuChoice::action(move || format!("Count {}", label.get()), move || {
-                    counted.set(counted.get() + 1);
-                })
+                MenuChoice::action(
+                    move || format!("Count {}", label.get()),
+                    move || {
+                        counted.set(counted.get() + 1);
+                    },
+                )
                 .keyboard_shortcut('k', command),
                 MenuChoice::separator(),
                 MenuChoice::checkbox(
@@ -125,7 +128,10 @@ mod smoke {
         assert!(running.pump());
         let model = running.menu_bar().unwrap();
         let checkbox = model.find("Checked").unwrap();
-        assert!(model.state(checkbox).unwrap().checked, "the check mark follows state");
+        assert!(
+            model.state(checkbox).unwrap().checked,
+            "the check mark follows state"
+        );
         assert!(running.choose(checkbox));
         assert!(!checked.get(), "choosing a checkbox row flips its binding");
 
@@ -200,11 +206,14 @@ mod smoke {
             && (a.size.height - b.size.height).abs() < 1.0
     }
 
+    /// An error and the window that reported it.
+    type Reported = (Option<WindowId>, ViewError);
+
     /// A corrupt settings file is moved aside and reported through
     /// `on_error` without a window; the services reach AppKit.
     pub fn recovery_and_services(settings: &Path) {
         std::fs::write(settings, "not a settings file\n").unwrap();
-        let errors: Rc<RefCell<Vec<(Option<WindowId>, ViewError)>>> = Rc::default();
+        let errors: Rc<RefCell<Vec<Reported>>> = Rc::default();
         let seen = errors.clone();
         let mut running = App::new()
             .settings_path(settings)

@@ -111,9 +111,12 @@ fn host(env: Env, view: impl View) -> ViewHost {
     host
 }
 
+/// What a file importer reports.
+type Imported = Result<Vec<PathBuf>, ServiceError>;
+
 #[test]
 fn a_file_importer_without_dialogs_returns_the_service_error() {
-    let results: Rc<RefCell<Vec<Result<Vec<PathBuf>, ServiceError>>>> = Rc::default();
+    let results: Rc<RefCell<Vec<Imported>>> = Rc::default();
     let seen = results.clone();
     let view = move || {
         let seen = seen.clone();
@@ -165,10 +168,7 @@ fn counter() -> impl View {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "choscorui-stored-{}-{name}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("choscorui-stored-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir.join("settings.txt")
 }
@@ -186,7 +186,11 @@ fn stored_state_loads_the_default_saves_a_change_and_reloads_it() {
     assert_eq!(storage.take_errors(), []);
     let mut first = host(with_storage(&storage), counter());
     assert!(first.find("count 0").is_some(), "the default loads");
-    assert_eq!(storage.save(), Ok(false), "an unchanged default is not saved");
+    assert_eq!(
+        storage.save(),
+        Ok(false),
+        "an unchanged default is not saved"
+    );
     let add = first.find("Add").unwrap();
     assert!(first.perform(add, SemanticAction::Activate, None));
     first.flush();
@@ -196,7 +200,10 @@ fn stored_state_loads_the_default_saves_a_change_and_reloads_it() {
 
     let reloaded = Storage::open(SettingsSchema::new(1), path);
     let mut second = host(with_storage(&reloaded), counter());
-    assert!(second.find("count 1").is_some(), "a new mount reads the saved value");
+    assert!(
+        second.find("count 1").is_some(),
+        "a new mount reads the saved value"
+    );
     assert_eq!(second.take_errors(), []);
 }
 

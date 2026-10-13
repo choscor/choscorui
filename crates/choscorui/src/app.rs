@@ -10,7 +10,6 @@ use choscorui_compose::view::{CommandMenu, Env, IntoLive, Live, Storage, View, V
 use choscorui_core::{DesignTokens, Locale, MenuError, SettingsSchema, WindowOptions};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Instant;
 
 /// What can stop an application from starting.
 #[derive(Debug)]
@@ -106,6 +105,8 @@ impl Scene {
     /// when it opens. A frame that no longer fits the screens moves onto
     /// them. When two windows use the same key, the last one to close
     /// wins.
+    ///
+    /// # Examples
     ///
     /// ```no_run
     /// use choscorui::prelude::*;
@@ -367,6 +368,8 @@ impl App {
     /// an identifier or a settings path, they last until the application
     /// quits.
     ///
+    /// # Examples
+    ///
     /// ```no_run
     /// use choscorui::prelude::*;
     ///
@@ -382,6 +385,8 @@ impl App {
     /// Keeps the settings in the file at `path` instead of the per-user
     /// location of [`App::id`].
     ///
+    /// # Examples
+    ///
     /// ```no_run
     /// use choscorui::prelude::*;
     ///
@@ -396,6 +401,8 @@ impl App {
 
     /// The version, defaults, and migrations of the settings file.
     /// Without a schema, the file has version 1 and no defaults.
+    ///
+    /// # Examples
     ///
     /// ```no_run
     /// use choscorui::prelude::*;
@@ -454,7 +461,6 @@ impl App {
             self.tokens,
             self.on_tick,
             self.on_error,
-            Instant::now(),
         );
         if !self.commands.is_empty() {
             context.commands = Some(Commands::new(&context, self.commands));

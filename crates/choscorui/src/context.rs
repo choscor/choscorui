@@ -93,7 +93,6 @@ impl AppContext {
         tokens: Live<DesignTokens>,
         on_tick: Option<Hook>,
         on_error: ErrorHandler,
-        started: Instant,
     ) -> Self {
         let retheme = Rc::new(Cell::new(false));
         let watched = tokens.clone();
@@ -119,7 +118,7 @@ impl AppContext {
             on_tick,
             on_error,
             quit: false,
-            started,
+            started: Instant::now(),
         }
     }
 
@@ -214,7 +213,10 @@ impl AppContext {
             return;
         };
         let geometry = entry.native.geometry();
-        if let Err(error) = self.storage().update(|settings| geometry.store(settings, key)) {
+        if let Err(error) = self
+            .storage()
+            .update(|settings| geometry.store(settings, key))
+        {
             let error = choscorui_compose::view::StorageError::Save {
                 message: error.to_string(),
             };

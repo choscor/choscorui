@@ -4,8 +4,8 @@ use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, DisplayList, MenuBarModel, MenuCommandId, MenuError, Rect,
-    SemanticChange, SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
+    BackendCapabilities, DisplayList, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange,
+    SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
 };
 use choscorui_macos::{
     Application, CoreTextShaper, Error, MainMenu, Modifiers, NativeServices, Window, WindowEvent,

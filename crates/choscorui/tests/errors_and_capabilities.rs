@@ -8,10 +8,9 @@ use choscorui::controls::{
     SelectionError,
 };
 use choscorui::core::{
-    AnimationError, DisplayListError, EngineError, ImageError, LayoutError, LocaleError,
-    ModelError, NotifyError, ResourceError, RichTextError, SceneError, SemanticError,
-    MenuError, ServiceError, SettingsError, SvgError, TextError, TextLayoutError, ThemeError,
-    TreeError, WorkError,
+    AnimationError, DisplayListError, EngineError, ImageError, LayoutError, LocaleError, MenuError,
+    ModelError, NotifyError, ResourceError, RichTextError, SceneError, SemanticError, ServiceError,
+    SettingsError, SvgError, TextError, TextLayoutError, ThemeError, TreeError, WorkError,
 };
 use choscorui::{App, AppError};
 
