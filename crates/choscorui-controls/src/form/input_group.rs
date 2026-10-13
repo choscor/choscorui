@@ -100,6 +100,13 @@ impl InputGroup {
         self.editor.field.value()
     }
 
+    /// Text shown in muted color while the field is empty.
+    #[must_use]
+    pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.editor.field = self.editor.field.with_placeholder(placeholder);
+        self
+    }
+
     pub fn addons(&self) -> &[InputGroupAddon] {
         &self.addons
     }

@@ -2530,7 +2530,8 @@ breaks. `set_open` returns false.
 
 **As a view.** `InputGroup::new(name, addons, value)` edits a
 `Binding<String>` through the `Text` value in both directions. A button
-addon reports its index through `on_item`.
+addon reports its index through `on_item`. `InputGroup::with_placeholder`
+sets the text that shows while the field is empty.
 
 [input.rs](../crates/choscorui-controls/tests/input.rs) pins the behavior of
 `Input`, `InputGroup`, `Textarea`, and `InputOtp`.
