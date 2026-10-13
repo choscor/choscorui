@@ -13,16 +13,17 @@
 
 pub(crate) mod appkit;
 pub(crate) mod block;
+pub(crate) mod callback;
 pub(crate) mod cf;
 #[cfg(test)]
 pub(crate) mod checks;
 pub(crate) mod class;
+mod classes;
 pub(crate) mod encode;
 pub(crate) mod foundation;
 pub(crate) mod geometry;
 pub(crate) mod graphics;
 pub(crate) mod image_io;
-pub(crate) mod legacy;
 pub(crate) mod msg;
 pub(crate) mod retained;
 pub(crate) mod runloop;

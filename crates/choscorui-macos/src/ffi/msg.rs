@@ -10,7 +10,6 @@
 use super::block::Block;
 use super::class::{AnyClass, AnyProtocol, ClassType, IsA, Obj, Receiver, Sel};
 use super::encode::Bool;
-#[cfg(test)]
 use super::encode::Encode;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 use super::retained::Retained;
@@ -19,17 +18,6 @@ use crate::Error;
 use std::ffi::{CStr, c_char};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-
-/// In tests every argument type also implements [`Encode`]; in other
-/// builds the encodings are not compiled.
-#[cfg(test)]
-pub(crate) trait ArgEncode: Encode {}
-#[cfg(test)]
-impl<T: Encode> ArgEncode for T {}
-#[cfg(not(test))]
-pub(crate) trait ArgEncode {}
-#[cfg(not(test))]
-impl<T> ArgEncode for T {}
 
 /// Whether a message goes to instances or to the class object.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -175,7 +163,6 @@ impl<C: ClassType, A: Args> Msg<C, A, Init<C>> {
     }
 }
 
-#[cfg(test)]
 impl<X: ClassType> Encode for Init<X> {
     fn encode(out: &mut String) {
         out.push('@');
@@ -273,7 +260,6 @@ impl Ret for bool {
 }
 impl ClassRet for bool {}
 
-#[cfg(test)]
 impl Encode for bool {
     fn encode(out: &mut String) {
         Bool::encode(out);
@@ -307,7 +293,6 @@ impl<C: Receiver> Ret for Option<&'static Obj<C>> {
     }
 }
 
-#[cfg(test)]
 impl<C: Receiver> Encode for Option<&Obj<C>> {
     fn encode(out: &mut String) {
         out.push('@');
@@ -327,7 +312,6 @@ impl<C: Receiver> Ret for Option<Retained<C>> {
 }
 impl<C: Receiver> ClassRet for Option<Retained<C>> {}
 
-#[cfg(test)]
 impl<C: Receiver> Encode for Option<Retained<C>> {
     fn encode(out: &mut String) {
         out.push('@');
@@ -349,7 +333,6 @@ impl<C: Receiver> Ret for Autoreleased<C> {
 }
 impl<C: Receiver> ClassRet for Autoreleased<C> {}
 
-#[cfg(test)]
 impl<C: Receiver> Encode for Autoreleased<C> {
     fn encode(out: &mut String) {
         out.push('@');
@@ -371,7 +354,6 @@ impl<C: Receiver> Ret for Shared<C> {
 }
 impl<C: Receiver> ClassRet for Shared<C> {}
 
-#[cfg(test)]
 impl<C: Receiver> Encode for Shared<C> {
     fn encode(out: &mut String) {
         out.push('@');
@@ -419,7 +401,6 @@ impl Arg for &'static CStr {
     }
 }
 
-#[cfg(test)]
 impl Encode for &CStr {
     fn encode(out: &mut String) {
         out.push('*');
@@ -441,7 +422,6 @@ impl Ret for Utf8 {
     }
 }
 
-#[cfg(test)]
 impl Encode for Utf8 {
     fn encode(out: &mut String) {
         out.push('*');
@@ -464,7 +444,6 @@ impl Arg for Option<Sel> {
     }
 }
 
-#[cfg(test)]
 impl Encode for Option<Sel> {
     fn encode(out: &mut String) {
         out.push(':');
@@ -492,7 +471,6 @@ impl<T: 'static> Ret for *const T {
     }
 }
 
-#[cfg(test)]
 impl<T: Encode> Encode for *const T {
     fn encode(out: &mut String) {
         out.push('^');
@@ -556,14 +534,13 @@ const fn struct_return<T>() -> bool {
 /// Implements [`Args`] for a tuple of [`Arg`] types.
 macro_rules! args_tuple {
     ($($arg:ident $index:tt),*) => {
-        impl<$($arg: Arg + ArgEncode),*> Args for ($($arg,)*) {
+        impl<$($arg: Arg + Encode),*> Args for ($($arg,)*) {
             type In<'a> = ($($arg::In<'a>,)*);
 
             #[cfg(test)]
             fn encode(_out: &mut String) {
                 $(<$arg as Encode>::encode(_out);)*
             }
-
 
             fn invoke<'a, Recv: Target, R: Ret>(
                 receiver: Recv,

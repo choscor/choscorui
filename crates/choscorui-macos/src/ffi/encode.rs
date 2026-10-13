@@ -5,14 +5,12 @@
 //! functions here are pure.
 
 /// The Objective-C type encoding of one FFI type.
-#[cfg(test)]
 pub(crate) trait Encode {
     /// Appends the Objective-C type encoding, for example `@` or `q`.
     fn encode(out: &mut String);
 }
 
 /// Implements [`Encode`] for a type with a fixed encoding and spelling.
-#[cfg(test)]
 macro_rules! encode_as {
     ($ty:ty, $encoding:literal) => {
         impl $crate::ffi::encode::Encode for $ty {
@@ -22,30 +20,18 @@ macro_rules! encode_as {
         }
     };
 }
-#[cfg(test)]
 pub(crate) use encode_as;
 
-#[cfg(test)]
 encode_as!((), "v");
-#[cfg(test)]
 encode_as!(isize, "q");
-#[cfg(test)]
 encode_as!(usize, "Q");
-#[cfg(test)]
 encode_as!(i32, "i");
-#[cfg(test)]
 encode_as!(u32, "I");
-#[cfg(test)]
 encode_as!(i16, "s");
-#[cfg(test)]
 encode_as!(u16, "S");
-#[cfg(test)]
 encode_as!(i8, "c");
-#[cfg(test)]
 encode_as!(u8, "C");
-#[cfg(test)]
 encode_as!(f64, "d");
-#[cfg(test)]
 encode_as!(std::ffi::c_void, "v");
 
 /// Objective-C `BOOL`: `bool` on arm64 and `signed char` on x86-64. Rust
@@ -63,7 +49,6 @@ impl Bool {
     }
 }
 
-#[cfg(test)]
 impl Encode for Bool {
     fn encode(out: &mut String) {
         out.push(if cfg!(target_arch = "aarch64") {

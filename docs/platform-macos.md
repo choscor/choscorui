@@ -48,7 +48,7 @@ flowchart TD
 - A repeating timer skips missed ticks. It does not fire a burst of ticks.
 - `Timer::cancel` or a drop of the `Timer` stops further calls, also from inside the timer callback.
 
-A panic in a posted task, a timer, or a menu callback does not unwind into AppKit. The backend catches it and increments a counter: `Application::posted_panic_count`, `Application::timer_panic_count`, or `MainMenu::callback_panic_count`.
+A panic in a native callback does not unwind into AppKit. The backend catches it, writes the callback to standard error, and returns a fallback value. For a posted task, a timer, or a menu callback, it also increments a counter: `Application::posted_panic_count`, `Application::timer_panic_count`, or `MainMenu::callback_panic_count`.
 
 ## Windows
 

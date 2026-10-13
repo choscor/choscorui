@@ -1,6 +1,7 @@
 //! Desktop integration: application activation, reopen, and open-document
 //! events; menu-bar status items; user notifications; and opening URLs
 //! with the system handler.
+#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -12,18 +13,19 @@ use crate::ffi::appkit::{
     STATUS_ITEM_WITH_LENGTH, SYSTEM_STATUS_BAR, URL_FOR_APPLICATION_TO_OPEN_URL,
     WORKSPACE_OPEN_URL,
 };
-use crate::ffi::block::{AuthorizationArgs, AuthorizationBlock, GlobalBlock};
+use crate::ffi::block::{AuthorizationArgs, AuthorizationHandler, Block, GlobalBlock};
 use crate::ffi::encode::Bool;
 use crate::ffi::foundation::{
-    ABSOLUTE_STRING, BUNDLE_IDENTIFIER, IS_FILE_URL, MAIN_BUNDLE, NSArray, NSObject, NSString,
-    NsUrl, PATH, SCHEME, TextError, URL_WITH_STRING, array_items, string,
+    ABSOLUTE_STRING, BUNDLE_IDENTIFIER, IS_FILE_URL, MAIN_BUNDLE, NSArray, NSNotification,
+    NSObject, NSString, NsUrl, PATH, SCHEME, TextError, URL_WITH_STRING, array_items, string,
 };
-use crate::ffi::retained::{Retained, alloc_init};
+use crate::ffi::retained::{ProcessObject, Retained, alloc_init};
 use crate::ffi::user_notifications::{
     ADD_NOTIFICATION_REQUEST, CURRENT_NOTIFICATION_CENTER, DEFAULT_SOUND, NEW_CONTENT,
     NOTIFICATION_REQUEST, REQUEST_AUTHORIZATION, REQUEST_IDENTIFIER, REQUEST_WITH_IDENTIFIER,
     RESPONSE_ACTION_IDENTIFIER, RESPONSE_NOTIFICATION, SET_CENTER_DELEGATE, SET_CONTENT_BODY,
-    SET_CONTENT_SOUND, SET_CONTENT_TITLE, UNNotificationResponse, UNUserNotificationCenter,
+    SET_CONTENT_SOUND, SET_CONTENT_TITLE, UNNotification, UNNotificationResponse,
+    UNUserNotificationCenter,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -114,147 +116,111 @@ fn urls_from_array(urls: &Obj<NSArray>) -> (Vec<PathBuf>, Vec<String>) {
     (files, others)
 }
 
-unsafe extern "C" fn app_did_become_active(_: Id, _: Sel, _: Id) {
-    let _ = catch_unwind(|| push_event(AppEvent::Activated));
+pub(crate) fn app_did_become_active(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<NSNotification>>,
+) {
+    push_event(AppEvent::Activated);
 }
 
-unsafe extern "C" fn app_did_resign_active(_: Id, _: Sel, _: Id) {
-    let _ = catch_unwind(|| push_event(AppEvent::Deactivated));
+pub(crate) fn app_did_resign_active(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<NSNotification>>,
+) {
+    push_event(AppEvent::Deactivated);
 }
 
-unsafe extern "C" fn app_should_handle_reopen(_: Id, _: Sel, _: Id, visible: i8) -> i8 {
-    let _ = catch_unwind(|| {
-        push_event(AppEvent::Reopen {
-            has_visible_windows: visible != 0,
-        })
+/// Queues a reopen event. The application decides what to show, so AppKit
+/// does nothing more.
+pub(crate) fn app_should_handle_reopen(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<NSApplication>>,
+    visible: Bool,
+) -> bool {
+    push_event(AppEvent::Reopen {
+        has_visible_windows: visible.get(),
     });
-    // The application decides what to show; AppKit does nothing more.
-    0
+    false
 }
 
-unsafe extern "C" fn app_open_urls(_: Id, _: Sel, _: Id, urls: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes an NSArray<NSURL *> valid for the call.
-        let Some(urls) = (unsafe { ffi::legacy::borrow(urls) }) else {
-            return;
-        };
-        let (files, others) = urls_from_array(urls);
-        if !files.is_empty() {
-            push_event(AppEvent::OpenFiles(files));
-        }
-        if !others.is_empty() {
-            push_event(AppEvent::OpenUrls(others));
-        }
-    }));
-}
-
-unsafe extern "C" fn notification_did_receive(_: Id, _: Sel, _: Id, response: Id, handler: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: response is a live UNNotificationResponse for the call.
-        let Some(response) = (unsafe { ffi::legacy::borrow::<UNNotificationResponse>(response) })
-        else {
-            return;
-        };
-        let identifier = RESPONSE_NOTIFICATION
-            .send(response, ())
-            .and_then(|notification| NOTIFICATION_REQUEST.send(notification, ()))
-            .and_then(|request| REQUEST_IDENTIFIER.send(request, ()))
-            .and_then(|identifier| string(&identifier))
-            .unwrap_or_default();
-        let action = RESPONSE_ACTION_IDENTIFIER
-            .send(response, ())
-            .and_then(|action| string(&action))
-            .unwrap_or_default();
-        push_event(AppEvent::NotificationActivated { identifier, action });
-    }));
-    // SAFETY: the completion handler is a block that takes no arguments and
-    // lives for the call; it must be called exactly once.
-    if let Some(handler) = unsafe { ffi::legacy::block::<()>(handler) } {
-        handler.call();
+pub(crate) fn app_open_urls(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<NSApplication>>,
+    urls: Option<&Obj<NSArray>>,
+) {
+    let Some(urls) = urls else {
+        return;
+    };
+    let (files, others) = urls_from_array(urls);
+    if !files.is_empty() {
+        push_event(AppEvent::OpenFiles(files));
+    }
+    if !others.is_empty() {
+        push_event(AppEvent::OpenUrls(others));
     }
 }
 
-unsafe extern "C" fn notification_will_present(_: Id, _: Sel, _: Id, _: Id, handler: Id) {
-    // Show banners while the app is frontmost too:
+/// Calls a completion handler when it drops, also while a panic unwinds,
+/// so the handler runs exactly one time.
+struct CompletionHandler<'a>(Option<&'a Block<()>>);
+
+impl Drop for CompletionHandler<'_> {
+    fn drop(&mut self) {
+        if let Some(handler) = self.0 {
+            handler.call();
+        }
+    }
+}
+
+/// Queues the activation of a notification and then calls the completion
+/// handler.
+pub(crate) fn notification_did_receive(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<UNUserNotificationCenter>>,
+    response: Option<&Obj<UNNotificationResponse>>,
+    handler: Option<&Block<()>>,
+) {
+    let _handler = CompletionHandler(handler);
+    let Some(response) = response else {
+        return;
+    };
+    let identifier = RESPONSE_NOTIFICATION
+        .send(response, ())
+        .and_then(|notification| NOTIFICATION_REQUEST.send(notification, ()))
+        .and_then(|request| REQUEST_IDENTIFIER.send(request, ()))
+        .and_then(|identifier| string(&identifier))
+        .unwrap_or_default();
+    let action = RESPONSE_ACTION_IDENTIFIER
+        .send(response, ())
+        .and_then(|action| string(&action))
+        .unwrap_or_default();
+    push_event(AppEvent::NotificationActivated { identifier, action });
+}
+
+/// Shows banners while the app is frontmost too.
+pub(crate) fn notification_will_present(
+    _: &Obj<ChoscoruiV2AppDelegate>,
+    _: Option<&Obj<UNUserNotificationCenter>>,
+    _: Option<&Obj<UNNotification>>,
+    handler: Option<&Block<(usize,)>>,
+) {
     // UNNotificationPresentationOptionSound | List | Banner.
-    // SAFETY: the completion handler is a block that takes one NSUInteger
-    // and lives for the call.
-    if let Some(handler) = unsafe { ffi::legacy::block::<(usize,)>(handler) } {
+    if let Some(handler) = handler {
         handler.call((1 << 1) | (1 << 3) | (1 << 4));
     }
-}
-
-/// Registers the delegate class on first use.
-pub(crate) unsafe fn app_delegate_class() -> Result<Id, Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = CLASS.get_or_init(|| unsafe {
-        let superclass = class(c"NSObject")?;
-        let cls = objc_allocateClassPair(superclass, c"ChoscoruiV2AppDelegate".as_ptr(), 0);
-        if cls.is_null() {
-            return Err(Error::AppKitUnavailable);
-        }
-        let methods: [(&CStr, *const c_void, &CStr); 6] = [
-            (
-                c"applicationDidBecomeActive:",
-                app_did_become_active as *const c_void,
-                c"v@:@",
-            ),
-            (
-                c"applicationDidResignActive:",
-                app_did_resign_active as *const c_void,
-                c"v@:@",
-            ),
-            (
-                c"applicationShouldHandleReopen:hasVisibleWindows:",
-                app_should_handle_reopen as *const c_void,
-                c"c@:@c",
-            ),
-            (
-                c"application:openURLs:",
-                app_open_urls as *const c_void,
-                c"v@:@@",
-            ),
-            (
-                c"userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:",
-                notification_did_receive as *const c_void,
-                c"v@:@@@?",
-            ),
-            (
-                c"userNotificationCenter:willPresentNotification:withCompletionHandler:",
-                notification_will_present as *const c_void,
-                c"v@:@@@?",
-            ),
-        ];
-        for (name, imp, types) in methods {
-            if class_addMethod(cls, selector(name), imp, types.as_ptr()) == 0 {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            }
-        }
-        objc_registerClassPair(cls);
-        Ok(cls as usize)
-    });
-    result.map(|value| value as Id)
 }
 
 /// The process-wide delegate object. NSApplication and the notification
 /// center hold delegates weakly, so it lives for the whole process.
 fn app_delegate() -> Result<&'static Obj<NSObject>, Error> {
-    struct Delegate(Retained<NSObject>);
-    // SAFETY: the delegate is created and used on the main thread only; the
-    // static keeps its reference for the whole process.
-    unsafe impl Send for Delegate {}
-    // SAFETY: as above, no other thread reads it.
-    unsafe impl Sync for Delegate {}
-    static DELEGATE: OnceLock<Result<Delegate, Error>> = OnceLock::new();
+    static DELEGATE: OnceLock<Result<ProcessObject<NSObject>, Error>> = OnceLock::new();
     let result = DELEGATE.get_or_init(|| {
-        // SAFETY: registration runs once on the main thread.
-        unsafe { app_delegate_class() }?;
+        ChoscoruiV2AppDelegate::register()?;
         alloc_init::<ChoscoruiV2AppDelegate>()
-            .map(|delegate| Delegate(delegate.upcast::<NSObject>().retain()))
+            .map(|delegate| ProcessObject::new(delegate.into_super::<NSObject>()))
     });
     match result {
-        Ok(delegate) => Ok(&delegate.0),
+        Ok(delegate) => delegate.get().ok_or(Error::WrongThread),
         Err(error) => Err(*error),
     }
 }
@@ -501,15 +467,20 @@ fn notification_center() -> Result<&'static Obj<UNUserNotificationCenter>, Deskt
     Ok(center)
 }
 
-extern "C" fn authorization_finished(_: &AuthorizationBlock, granted: Bool, _: *const c_void) {
-    PERMISSION.store(if granted.get() { 2 } else { 3 }, Ordering::SeqCst);
+/// Stores the answer of the authorization request.
+struct PermissionAnswer;
+
+impl AuthorizationHandler for PermissionAnswer {
+    fn finished(granted: bool) {
+        PERMISSION.store(if granted { 2 } else { 3 }, Ordering::SeqCst);
+    }
 }
 
 /// Asks for alert, sound, and badge permission. The answer arrives
 /// asynchronously; poll `notification_permission`.
 pub fn request_notification_permission() -> Result<(), DesktopError> {
     static BLOCK: OnceLock<GlobalBlock<AuthorizationArgs>> = OnceLock::new();
-    let block = BLOCK.get_or_init(|| GlobalBlock::authorization(authorization_finished));
+    let block = BLOCK.get_or_init(GlobalBlock::authorization::<PermissionAnswer>);
     let _pool = Pool::new()?;
     let center = notification_center()?;
     PERMISSION.store(1, Ordering::SeqCst);

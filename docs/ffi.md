@@ -8,8 +8,11 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 - The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSApplication.h`, `NSWindow.h`, `NSGraphics.h`, and `objc/message.h`.
 - Raw Objective-C ids stay private to the crate. The safe types are `!Send` and `!Sync`, except `Poster`.
 - Each message descriptor (`Msg`) states the SDK argument and return types. `Msg::send` casts `objc_msgSend` to exactly these types. It passes `NSRect` by value and reads Objective-C `BOOL` as one byte.
-- The callbacks for events, accessibility actions, drawing, posted tasks, timers, menus, and the application delegate catch Rust panics before they return.
-- Some small callbacks do not catch panics, for example `accessibility_character_count` and `notification_will_present`. If one of them panics, Rust stops the process at the `extern "C"` boundary. Thus, a panic never unwinds into AppKit.
+- `define_classes!` in `ffi/classes.rs` declares each Objective-C class of the crate. Each method states its origin: a superclass method, a protocol method, or a selector that the crate invents.
+- The macro makes an `extern "C"` trampoline for each method. It derives the type encoding from the Rust argument and return types. `BOOL` encodes as `B` on arm64 and as `c` on x86-64.
+- Each trampoline runs its handler inside `catch_unwind`. After a panic, it writes the class and the selector to standard error. Then it returns the fallback of the method, for example `NO`, 0, or a zero rectangle.
+- The run loop callbacks and the authorization block also catch panics. Thus, a panic never unwinds into AppKit or Core Foundation.
+- The `callbacks_match_sdk` test compares each method with its superclass method or protocol method. A selector that the crate invents must not occur in the superclass or in an adopted protocol.
 - Objective-C exceptions are not caught. The crate calls selectors only with validated inputs.
 - Apple's [NSApplication reference](https://developer.apple.com/documentation/appkit/nsapplication) and [NSWindow reference](https://developer.apple.com/documentation/appkit/nswindow) define the platform behavior.
 
@@ -154,6 +157,7 @@ The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes th
 - **Callbacks.** Callbacks copy URL paths and strings into Rust and queue `AppEvent` values behind a `Mutex`.
 - **Blocks.** The delegate calls each system completion block exactly one time, through the `invoke` pointer of the block ABI.
 - **Authorization block.** The authorization callback is a global block with no captures. It writes an `AtomicU8`, so any queue can call it.
+- **Delegate object.** A `ProcessObject` keeps the delegate. It lends the delegate only on the main thread.
 - **Status item.** `StatusItem` retains its `NSStatusItem` and owns its `ContextMenu`. `Drop` clears the menu, calls `removeStatusItem:`, and then releases the item.
 - **Notifications.** UserNotifications calls need a bundle identifier, because the framework raises an Objective-C exception without one. Without a bundle, the call returns an error.
 - **Tests.** `window_smoke` drives the open-URLs and reopen methods, the status item, URL handler lookup, and the notification error for an application without a bundle.

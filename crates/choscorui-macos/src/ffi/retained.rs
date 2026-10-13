@@ -83,6 +83,37 @@ pub(crate) fn alloc_init<S: ClassType + IsA<NSObject>>() -> Result<Retained<S>, 
     INIT.init(alloc::<S>()?, ()).ok_or(Error::AppKitUnavailable)
 }
 
+/// An object that lives for the whole process, such as a delegate that
+/// AppKit holds weakly. Only the main thread borrows it.
+pub(crate) struct ProcessObject<C> {
+    pointer: NonNull<Obj<C>>,
+}
+
+// SAFETY: `get` borrows the object only on the main thread, and nothing
+// releases the object.
+unsafe impl<C> Send for ProcessObject<C> {}
+// SAFETY: as above.
+unsafe impl<C> Sync for ProcessObject<C> {}
+
+impl<C> ProcessObject<C> {
+    /// Keeps the +1 reference of `object` until the process exits.
+    pub(crate) fn new(object: Retained<C>) -> Self {
+        Self {
+            pointer: object.into_raw(),
+        }
+    }
+
+    /// The object, or `None` off the main thread.
+    pub(crate) fn get(&self) -> Option<&'static Obj<C>> {
+        if !super::is_main_thread() {
+            return None;
+        }
+        // SAFETY: the +1 reference is never released, so the object lives
+        // until the process exits.
+        Some(unsafe { self.pointer.as_ref() })
+    }
+}
+
 /// An `NSAutoreleasePool` for the current scope. Objects autoreleased
 /// while it lives are released when it drops. Create and drop it on one
 /// thread.

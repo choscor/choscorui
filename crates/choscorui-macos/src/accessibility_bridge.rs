@@ -1,6 +1,7 @@
 //! The AppKit side of the accessibility bridge: one native
 //! `NSAccessibilityElement` per projected semantic node, the
 //! assistive-technology action callbacks, and the notifications.
+#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
@@ -8,7 +9,7 @@ use crate::ffi::appkit::{
     CONTENT_VIEW, CONVERT_RECT_TO_SCREEN, CONVERT_RECT_TO_VIEW, ChoscoruiV2AccessibilityElement,
     ELEMENT_SET_EXPANDED, ELEMENT_SET_FOCUSED, ELEMENT_SET_VALUE, ELEMENT_WITH_ROLE,
     NSAccessibility, NSAccessibilityButtonRole, NSAccessibilityCellRole,
-    NSAccessibilityCheckBoxRole, NSAccessibilityComboBoxRole, NSAccessibilityElement,
+    NSAccessibilityCheckBoxRole, NSAccessibilityComboBoxRole,
     NSAccessibilityFocusedUIElementChangedNotification, NSAccessibilityGroupRole,
     NSAccessibilityHelpTagRole, NSAccessibilityImageRole, NSAccessibilityIncrementorRole,
     NSAccessibilityLayoutChangedNotification, NSAccessibilityLinkRole, NSAccessibilityListRole,
@@ -27,6 +28,7 @@ use crate::ffi::appkit::{
     SET_ACCESSIBILITY_ROW_COUNT, SET_ACCESSIBILITY_SELECTED, SET_ACCESSIBILITY_SELECTED_TEXT_RANGE,
     SET_ACCESSIBILITY_SUBROLE, SET_ACCESSIBILITY_TITLE_UI_ELEMENT, SET_ACCESSIBILITY_VALUE,
 };
+use crate::ffi::encode::Bool;
 use crate::ffi::foundation::{
     DESCRIPTION, NSObject, NSString, NUMBER_WITH_BOOL, ns_array, ns_string, string,
 };
@@ -76,22 +78,28 @@ pub(crate) fn unbind(element: &Obj<ChoscoruiV2AccessibilityElement>) {
         .remove(&element.addr());
 }
 
-unsafe extern "C" fn accessibility_perform_press(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Activate)
-    }))
-    .unwrap_or(0)
-}
-
-fn queue_accessibility_action(element: Id, action: SemanticAction) -> i8 {
-    let binding = accessibility_bindings()
+/// The binding of a live element.
+fn binding(element: &Obj<ChoscoruiV2AccessibilityElement>) -> Option<NativeAccessibilityBinding> {
+    accessibility_bindings()
         .lock()
         .unwrap()
-        .get(&(element as usize))
-        .cloned();
-    let Some(binding) = binding else { return 0 };
+        .get(&element.addr())
+        .cloned()
+}
+
+pub(crate) fn perform_press(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    queue_accessibility_action(element, SemanticAction::Activate)
+}
+
+fn queue_accessibility_action(
+    element: &Obj<ChoscoruiV2AccessibilityElement>,
+    action: SemanticAction,
+) -> bool {
+    let Some(binding) = binding(element) else {
+        return false;
+    };
     if !binding.actions.contains(&action) {
-        return 0;
+        return false;
     }
     binding
         .queue
@@ -102,256 +110,108 @@ fn queue_accessibility_action(element: Id, action: SemanticAction) -> i8 {
             action,
             value: None,
         });
-    1
+    true
 }
 
-unsafe extern "C" fn accessibility_perform_increment(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Increment)
-    }))
-    .unwrap_or(0)
+pub(crate) fn perform_increment(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    queue_accessibility_action(element, SemanticAction::Increment)
 }
 
-unsafe extern "C" fn accessibility_perform_decrement(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Decrement)
-    }))
-    .unwrap_or(0)
+pub(crate) fn perform_decrement(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    queue_accessibility_action(element, SemanticAction::Decrement)
 }
 
-unsafe extern "C" fn accessibility_perform_show_menu(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::ShowMenu)
-    }))
-    .unwrap_or(0)
+pub(crate) fn perform_show_menu(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    queue_accessibility_action(element, SemanticAction::ShowMenu)
 }
 
-unsafe extern "C" fn accessibility_perform_cancel(element: Id, _: Sel) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        queue_accessibility_action(element, SemanticAction::Dismiss)
-    }))
-    .unwrap_or(0)
+pub(crate) fn perform_cancel(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    queue_accessibility_action(element, SemanticAction::Dismiss)
 }
 
-/// The element of an action callback.
-///
-/// # Safety
-///
-/// `element` is nil or a live accessibility element of this crate.
-unsafe fn callback_element<'a>(element: Id) -> Option<&'a Obj<NSAccessibilityElement>> {
-    // SAFETY: the caller guarantees the class and that the element lives
-    // for the callback.
-    unsafe { ffi::legacy::borrow(element) }
+pub(crate) fn set_expanded(element: &Obj<ChoscoruiV2AccessibilityElement>, expanded: Bool) {
+    let expanded = expanded.get();
+    if binding(element).is_some_and(|binding| binding.updating) {
+        let _ = ELEMENT_SET_EXPANDED.send_super(element, (expanded,));
+    } else {
+        queue_accessibility_action(
+            element,
+            if expanded {
+                SemanticAction::Expand
+            } else {
+                SemanticAction::Collapse
+            },
+        );
+    }
 }
 
-unsafe extern "C" fn accessibility_set_expanded(element: Id, _: Sel, expanded: i8) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let updating = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .is_some_and(|binding| binding.updating);
-        if updating {
-            // SAFETY: AppKit passes the live element.
-            if let Some(element) = unsafe { callback_element(element) } {
-                let _ = ELEMENT_SET_EXPANDED.send_super(element, (expanded != 0,));
-            }
-        } else {
-            queue_accessibility_action(
-                element,
-                if expanded != 0 {
-                    SemanticAction::Expand
-                } else {
-                    SemanticAction::Collapse
-                },
-            );
-        }
-    }));
-}
-
-unsafe extern "C" fn accessibility_set_value(element: Id, _: Sel, value: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let binding = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .cloned();
-        let Some(binding) = binding else { return };
-        // SAFETY: AppKit passes the live element and a nil or live value.
-        let (Some(element), value) = (unsafe { callback_element(element) }, unsafe {
-            ffi::legacy::borrow::<NSObject>(value)
-        }) else {
-            return;
-        };
-        if binding.updating {
-            let _ = ELEMENT_SET_VALUE.send_super(element, (value,));
-            return;
-        }
-        if !binding.actions.contains(&SemanticAction::SetValue) {
-            return;
-        }
-        let Some(value) = value
-            .and_then(|value| DESCRIPTION.send(value, ()))
-            .and_then(|description| string(&description))
-        else {
-            return;
-        };
-        binding
-            .queue
-            .lock()
-            .unwrap()
-            .push_back(AccessibilityActionRequest {
-                node: binding.node,
-                action: SemanticAction::SetValue,
-                value: Some(value),
-            });
-    }));
-}
-
-unsafe extern "C" fn accessibility_set_focused(element: Id, _: Sel, focused: i8) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        let binding = accessibility_bindings()
-            .lock()
-            .unwrap()
-            .get(&(element as usize))
-            .cloned();
-        let Some(binding) = binding else { return };
-        if binding.updating {
-            // SAFETY: AppKit passes the live element.
-            if let Some(element) = unsafe { callback_element(element) } {
-                let _ = ELEMENT_SET_FOCUSED.send_super(element, (focused != 0,));
-            }
-            return;
-        }
-        if focused == 0 || !binding.actions.contains(&SemanticAction::Focus) {
-            return;
-        }
-        binding
-            .queue
-            .lock()
-            .unwrap()
-            .push_back(AccessibilityActionRequest {
-                node: binding.node,
-                action: SemanticAction::Focus,
-                value: None,
-            });
-    }));
-}
-
-unsafe extern "C" fn accessibility_is_editable(element: Id, _: Sel) -> i8 {
-    accessibility_bindings()
+pub(crate) fn set_value(
+    element: &Obj<ChoscoruiV2AccessibilityElement>,
+    value: Option<&Obj<NSObject>>,
+) {
+    let Some(binding) = binding(element) else {
+        return;
+    };
+    if binding.updating {
+        let _ = ELEMENT_SET_VALUE.send_super(element, (value,));
+        return;
+    }
+    if !binding.actions.contains(&SemanticAction::SetValue) {
+        return;
+    }
+    let Some(value) = value
+        .and_then(|value| DESCRIPTION.send(value, ()))
+        .and_then(|description| string(&description))
+    else {
+        return;
+    };
+    binding
+        .queue
         .lock()
         .unwrap()
-        .get(&(element as usize))
-        .is_some_and(|binding| {
-            binding.text.is_some() && binding.actions.contains(&SemanticAction::SetValue)
+        .push_back(AccessibilityActionRequest {
+            node: binding.node,
+            action: SemanticAction::SetValue,
+            value: Some(value),
+        });
+}
+
+pub(crate) fn set_focused(element: &Obj<ChoscoruiV2AccessibilityElement>, focused: Bool) {
+    let Some(binding) = binding(element) else {
+        return;
+    };
+    if binding.updating {
+        let _ = ELEMENT_SET_FOCUSED.send_super(element, (focused.get(),));
+        return;
+    }
+    if !focused.get() || !binding.actions.contains(&SemanticAction::Focus) {
+        return;
+    }
+    binding
+        .queue
+        .lock()
+        .unwrap()
+        .push_back(AccessibilityActionRequest {
+            node: binding.node,
+            action: SemanticAction::Focus,
+            value: None,
+        });
+}
+
+pub(crate) fn is_editable(element: &Obj<ChoscoruiV2AccessibilityElement>) -> bool {
+    binding(element).is_some_and(|binding| {
+        binding.text.is_some() && binding.actions.contains(&SemanticAction::SetValue)
+    })
+}
+
+/// The UTF-16 length of the element's text. AppKit declares the count as
+/// `NSInteger`.
+pub(crate) fn character_count(element: &Obj<ChoscoruiV2AccessibilityElement>) -> isize {
+    binding(element)
+        .and_then(|binding| binding.text)
+        .map_or(0, |text| {
+            isize::try_from(text.character_count_utf16).unwrap_or(isize::MAX)
         })
-        .into()
-}
-
-unsafe extern "C" fn accessibility_character_count(element: Id, _: Sel) -> usize {
-    accessibility_bindings()
-        .lock()
-        .unwrap()
-        .get(&(element as usize))
-        .and_then(|binding| binding.text.as_ref())
-        .map_or(0, |text| text.character_count_utf16)
-}
-
-/// Registers the element class on first use.
-pub(crate) unsafe fn accessibility_element_class() -> Result<Id, Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = CLASS.get_or_init(|| unsafe {
-        let superclass = class(c"NSAccessibilityElement")?;
-        let cls =
-            objc_allocateClassPair(superclass, c"ChoscoruiV2AccessibilityElement".as_ptr(), 0);
-        if cls.is_null() {
-            return Err(Error::AppKitUnavailable);
-        }
-        if class_addMethod(
-            cls,
-            selector(c"accessibilityPerformPress"),
-            accessibility_perform_press as *const c_void,
-            c"c@:".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        for (name, imp) in [
-            (
-                c"accessibilityPerformIncrement",
-                accessibility_perform_increment as *const c_void,
-            ),
-            (
-                c"accessibilityPerformDecrement",
-                accessibility_perform_decrement as *const c_void,
-            ),
-            (
-                c"accessibilityPerformShowMenu",
-                accessibility_perform_show_menu as *const c_void,
-            ),
-            (
-                c"accessibilityPerformCancel",
-                accessibility_perform_cancel as *const c_void,
-            ),
-        ] {
-            if class_addMethod(cls, selector(name), imp, c"c@:".as_ptr()) == 0 {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            }
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityExpanded:"),
-            accessibility_set_expanded as *const c_void,
-            c"v@:c".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityFocused:"),
-            accessibility_set_focused as *const c_void,
-            c"v@:c".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        for (name, imp, types) in [
-            (
-                c"isAccessibilityEditable",
-                accessibility_is_editable as *const c_void,
-                c"c@:",
-            ),
-            (
-                c"accessibilityNumberOfCharacters",
-                accessibility_character_count as *const c_void,
-                c"Q@:",
-            ),
-        ] {
-            if class_addMethod(cls, selector(name), imp, types.as_ptr()) == 0 {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            }
-        }
-        if class_addMethod(
-            cls,
-            selector(c"setAccessibilityValue:"),
-            accessibility_set_value as *const c_void,
-            c"v@:@".as_ptr(),
-        ) == 0
-        {
-            objc_disposeClassPair(cls);
-            return Err(Error::AppKitUnavailable);
-        }
-        objc_registerClassPair(cls);
-        Ok(cls as usize)
-    });
-    result.map(|value| value as Id)
 }
 
 /// The accessibility attributes of `object`.
@@ -381,8 +241,7 @@ impl Window {
                 unbind(&element);
             }
         }
-        // SAFETY: registration runs once on the main thread.
-        unsafe { accessibility_element_class() }?;
+        ChoscoruiV2AccessibilityElement::register()?;
         for element in &update.elements {
             if state.elements.contains_key(&element.identity) {
                 continue;

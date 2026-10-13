@@ -6,7 +6,6 @@
 //! superclass through `Deref`. A conversion to a subclass is checked with
 //! `isKindOfClass:` and returns `Option`.
 
-#[cfg(test)]
 use super::encode::Encode;
 use super::runtime;
 use crate::Error;
@@ -106,7 +105,6 @@ impl<C> Obj<C> {
     }
 }
 
-#[cfg(test)]
 impl<C> Encode for &Obj<C>
 where
     C: Receiver,
@@ -125,12 +123,6 @@ impl Sel {
     /// Registers `name` with the runtime, or finds it when it exists.
     pub(crate) fn register(name: &CStr) -> Self {
         runtime::register_selector(name)
-    }
-
-    /// The raw selector, for the modules that still send messages through
-    /// their own casts.
-    pub(crate) fn as_ptr(self) -> *mut c_void {
-        self.0.as_ptr()
     }
 }
 
@@ -209,21 +201,18 @@ macro_rules! objc_protocol {
 }
 pub(crate) use objc_protocol;
 
-#[cfg(test)]
 impl Encode for &'static AnyProtocol {
     fn encode(out: &mut String) {
         out.push('@');
     }
 }
 
-#[cfg(test)]
 impl Encode for &'static AnyClass {
     fn encode(out: &mut String) {
         out.push('#');
     }
 }
 
-#[cfg(test)]
 impl Encode for Sel {
     fn encode(out: &mut String) {
         out.push(':');

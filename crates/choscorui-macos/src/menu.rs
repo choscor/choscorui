@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

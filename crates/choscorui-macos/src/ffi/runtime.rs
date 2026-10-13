@@ -4,7 +4,9 @@
 //! The message functions are `C-unwind`: an Objective-C exception that
 //! leaves a message send unwinds through Rust as a defined foreign unwind.
 
-use super::class::{AnyClass, AnyProtocol, Sel};
+use super::class::{AnyClass, AnyProtocol, Obj, Sel};
+use super::encode::Bool;
+use super::foundation::NSObject;
 use std::ffi::{CStr, c_char};
 
 #[link(name = "objc")]
@@ -12,7 +14,18 @@ unsafe extern "C-unwind" {
     fn objc_getClass(name: *const c_char) -> Option<&'static AnyClass>;
     fn objc_getProtocol(name: *const c_char) -> Option<&'static AnyProtocol>;
     fn sel_registerName(name: *const c_char) -> Sel;
-    pub(crate) fn objc_msgSend();
+    safe fn sel_getName(name: Sel) -> *const c_char;
+    safe fn object_getClassName(object: &Obj<NSObject>) -> *const c_char;
+    fn objc_allocateClassPair(
+        superclass: &AnyClass,
+        name: *const c_char,
+        extra_bytes: usize,
+    ) -> Option<&'static AnyClass>;
+    safe fn objc_registerClassPair(class: &AnyClass);
+    fn objc_disposeClassPair(class: &AnyClass);
+    fn class_addMethod(class: &AnyClass, name: Sel, imp: *const (), types: *const c_char) -> Bool;
+    safe fn class_addProtocol(class: &AnyClass, protocol: &AnyProtocol) -> Bool;
+    fn objc_msgSend();
     fn objc_msgSendSuper();
     #[cfg(target_arch = "x86_64")]
     fn objc_msgSend_stret();
@@ -38,6 +51,74 @@ pub(super) fn register_selector(name: &CStr) -> Sel {
     // SAFETY: `name` is a NUL-terminated string that lives for the call;
     // the runtime copies it and never returns null.
     unsafe { sel_registerName(name.as_ptr()) }
+}
+
+/// A copy of a name that the runtime keeps for the life of the process.
+fn runtime_name(name: *const c_char) -> String {
+    if name.is_null() {
+        return String::new();
+    }
+    // SAFETY: the runtime returns a NUL-terminated name that it never frees;
+    // the pointer is not null.
+    let name = unsafe { CStr::from_ptr(name) };
+    name.to_string_lossy().into_owned()
+}
+
+/// The name of the class of `object`.
+pub(super) fn class_name(object: &Obj<NSObject>) -> String {
+    runtime_name(object_getClassName(object))
+}
+
+/// The name of `selector`.
+pub(super) fn selector_name(selector: Sel) -> String {
+    runtime_name(sel_getName(selector))
+}
+
+/// A new class pair named `name` with `superclass`, which the caller
+/// completes with methods and then registers or disposes. `None` when a
+/// class with `name` exists.
+pub(super) fn allocate_class(superclass: &AnyClass, name: &CStr) -> Option<&'static AnyClass> {
+    // SAFETY: `name` is a NUL-terminated string that lives for the call;
+    // the runtime copies it.
+    unsafe { objc_allocateClassPair(superclass, name.as_ptr(), 0) }
+}
+
+/// Adds `protocol` to a class that is not registered yet.
+pub(super) fn add_protocol(class: &AnyClass, protocol: &AnyProtocol) -> bool {
+    class_addProtocol(class, protocol).get()
+}
+
+/// Adds the method `name` to a class that is not registered yet.
+///
+/// # Safety
+///
+/// `imp` is an `extern "C"` function whose parameters and return type
+/// match `types`: the receiver, the selector, and then the arguments.
+/// `types` lives as long as the class.
+pub(super) unsafe fn add_method(
+    class: &AnyClass,
+    name: Sel,
+    imp: *const (),
+    types: &'static CStr,
+) -> bool {
+    // SAFETY: the caller guarantees that `imp` matches `types`.
+    unsafe { class_addMethod(class, name, imp, types.as_ptr()) }.get()
+}
+
+/// Registers a completed class pair.
+pub(super) fn register_class(class: &AnyClass) {
+    objc_registerClassPair(class);
+}
+
+/// Destroys a class pair.
+///
+/// # Safety
+///
+/// `class` is a class pair from [`allocate_class`] that is not registered,
+/// so it has no instances and no subclasses. Nothing uses it afterward.
+pub(super) unsafe fn dispose_class(class: &'static AnyClass) {
+    // SAFETY: the caller guarantees an unused, unregistered class pair.
+    unsafe { objc_disposeClassPair(class) };
 }
 
 /// The address of `objc_msgSend`, or of `objc_msgSendSuper` for a send to

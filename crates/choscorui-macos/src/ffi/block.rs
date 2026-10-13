@@ -5,13 +5,13 @@
 //! `flags`, `reserved`, and `invoke`, and `invoke` takes the block itself
 //! first.
 
+use super::callback::report_panic;
 use super::class::Obj;
-use super::encode::Bool;
-#[cfg(test)]
-use super::encode::Encode;
+use super::encode::{Bool, Encode};
 use super::foundation::NSObject;
 use std::ffi::{CStr, c_char, c_void};
 use std::marker::{PhantomData, PhantomPinned};
+use std::panic::catch_unwind;
 use std::ptr::NonNull;
 
 /// The start of every block.
@@ -63,14 +63,12 @@ impl Block<(usize,)> {
     }
 }
 
-#[cfg(test)]
 impl<A> Encode for &Block<A> {
     fn encode(out: &mut String) {
         out.push_str("@?");
     }
 }
 
-#[cfg(test)]
 impl<A> Encode for Option<&Block<A>> {
     fn encode(out: &mut String) {
         out.push_str("@?");
@@ -101,8 +99,23 @@ pub(crate) type AuthorizationArgs = (bool, Option<&'static Obj<NSObject>>);
 /// The authorization completion block.
 pub(crate) type AuthorizationBlock = Block<AuthorizationArgs>;
 
-/// The `invoke` function of an [`AuthorizationBlock`].
-pub(crate) type AuthorizationInvoke = extern "C" fn(&AuthorizationBlock, Bool, *const c_void);
+/// The Rust side of an [`AuthorizationBlock`].
+pub(crate) trait AuthorizationHandler: 'static {
+    /// Takes the answer: whether access was granted.
+    fn finished(granted: bool);
+}
+
+/// The `invoke` function of an [`AuthorizationBlock`]. A panic of the
+/// handler is caught and reported.
+extern "C" fn authorization_invoke<H: AuthorizationHandler>(
+    _: &AuthorizationBlock,
+    granted: Bool,
+    _: Option<&Obj<NSObject>>,
+) {
+    if catch_unwind(|| H::finished(granted.get())).is_err() {
+        report_panic("the authorization completion block");
+    }
+}
 
 /// A block without captures that lives for the whole process.
 #[repr(C)]
@@ -122,8 +135,8 @@ unsafe impl<A> Sync for GlobalBlock<A> {}
 unsafe impl<A> Send for GlobalBlock<A> {}
 
 impl GlobalBlock<AuthorizationArgs> {
-    /// A global authorization completion block that calls `invoke`.
-    pub(crate) fn authorization(invoke: AuthorizationInvoke) -> Self {
+    /// A global authorization completion block that calls `H`.
+    pub(crate) fn authorization<H: AuthorizationHandler>() -> Self {
         static DESCRIPTOR: SyncDescriptor = SyncDescriptor(BlockDescriptor {
             reserved: 0,
             size: std::mem::size_of::<GlobalBlock<()>>(),
@@ -133,7 +146,7 @@ impl GlobalBlock<AuthorizationArgs> {
             isa: &raw const _NSConcreteGlobalBlock,
             flags: GLOBAL_FLAGS,
             reserved: 0,
-            invoke: invoke as *const (),
+            invoke: authorization_invoke::<H> as *const (),
             descriptor: &DESCRIPTOR.0,
             _args: PhantomData,
         }

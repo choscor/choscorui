@@ -22,12 +22,7 @@ pub use dialog::{
     AlertButton, AlertResponse, AlertSpec, AlertStyle, DialogError, FileDialogMode,
     FileDialogResponse, FileDialogSpec,
 };
-use ime::{
-    ImeHandle, ime_states, view_attributed_substring, view_character_index_for_point,
-    view_do_command, view_first_rect_for_range, view_has_marked_text, view_insert_text,
-    view_marked_range, view_selected_range, view_set_marked_text, view_unmark_text,
-    view_valid_marked_attributes,
-};
+use ime::{ImeHandle, ime_states};
 pub use menu_native::{ContextMenu, MainMenu};
 mod desktop;
 pub use desktop::{
@@ -58,14 +53,14 @@ use ffi::appkit::{
     EVENT_MODIFIER_FLAGS, EVENT_TYPE, FINISH_LAUNCHING, GRAPHICS_CG_CONTEXT,
     HAS_PRECISE_SCROLLING_DELTAS, INIT_WITH_CONTENT_RECT, INIT_WITH_FRAME, INTERPRET_KEY_EVENTS,
     IS_A_REPEAT, IS_WINDOW_VISIBLE, KEY_CODE, LOCATION_IN_WINDOW, MAKE_KEY_AND_ORDER_FRONT,
-    NEXT_EVENT, NSApplication, NSEvent, NSView, NSWindow, RUN, SCROLLING_DELTA_X,
-    SCROLLING_DELTA_Y, SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS, SET_ACTIVATION_POLICY,
-    SET_CONTENT_SIZE, SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE, SET_WINDOW_DELEGATE,
-    SHARED_APPLICATION, VIEW_FRAME, VIEW_WINDOW, WINDOW_TITLE,
+    NEXT_EVENT, NSApplication, NSEvent, NSWindow, RUN, SCROLLING_DELTA_X, SCROLLING_DELTA_Y,
+    SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS, SET_ACTIVATION_POLICY, SET_CONTENT_SIZE,
+    SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE, SET_WINDOW_DELEGATE, SHARED_APPLICATION,
+    VIEW_FRAME, VIEW_WINDOW, WINDOW_TITLE,
 };
 use ffi::foundation::{
-    COUNT, DATE_WITH_TIME_INTERVAL_SINCE_NOW, NOTIFICATION_OBJECT, NSDefaultRunLoopMode, ns_array,
-    ns_string, string,
+    COUNT, DATE_WITH_TIME_INTERVAL_SINCE_NOW, NOTIFICATION_OBJECT, NSDefaultRunLoopMode,
+    NSNotification, ns_array, ns_string, string,
 };
 use ffi::retained::{Retained, alloc, alloc_init};
 use ffi::runloop::{MainRunLoop, RunLoopSource, RunLoopTimer};
@@ -86,7 +81,6 @@ use shaping::draw_text_run;
 pub use shaping::*;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ffi::{CStr, c_void};
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -95,19 +89,7 @@ use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::Duration;
 pub use text_layout::{CoreTextShaper, available_font_families};
 
-type Id = *mut c_void;
-type Sel = *mut c_void;
-
 use ffi::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
-
-#[link(name = "objc")]
-unsafe extern "C" {
-    fn objc_allocateClassPair(superclass: Id, name: *const i8, extra_bytes: usize) -> Id;
-    fn objc_disposeClassPair(class: Id);
-    fn objc_registerClassPair(class: Id);
-    fn class_addMethod(class: Id, name: Sel, imp: *const c_void, types: *const i8) -> i8;
-    fn class_addProtocol(class: Id, protocol: Id) -> i8;
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
@@ -236,39 +218,33 @@ fn paint_states() -> &'static Mutex<HashMap<usize, PaintHandle>> {
     PAINT_STATES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-unsafe extern "C" fn view_draw_rect(view: Id, _: Sel, dirty: NSRect) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live content view.
-        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
-            return;
-        };
-        let Some(window) = VIEW_WINDOW.send(view, ()) else {
-            return;
-        };
-        let paint = paint_states().lock().unwrap().get(&window.addr()).cloned();
-        let Some(paint) = paint else {
-            return;
-        };
-        let started = std::time::Instant::now();
-        let list = Arc::clone(&paint.lock().unwrap().list);
-        // drawRect: runs with a current graphics context. Its CGContext is
-        // borrowed only during this callback.
-        let Some(graphics) = CURRENT_GRAPHICS_CONTEXT.send_class(()).ok().flatten() else {
-            return;
-        };
-        let Some(context) = GRAPHICS_CG_CONTEXT.send(&graphics, ()) else {
-            return;
-        };
-        if paint::paint_commands(context, dirty, &list) {
-            let finished = std::time::Instant::now();
-            let mut paint = paint.lock().unwrap();
-            paint.count += 1;
-            paint.last_paint = Some(PaintTiming {
-                finished,
-                duration: finished - started,
-            });
-        }
-    }));
+fn view_draw_rect(view: &Obj<ChoscoruiV2ContentView>, dirty: NSRect) {
+    let Some(window) = VIEW_WINDOW.send(view, ()) else {
+        return;
+    };
+    let paint = paint_states().lock().unwrap().get(&window.addr()).cloned();
+    let Some(paint) = paint else {
+        return;
+    };
+    let started = std::time::Instant::now();
+    let list = Arc::clone(&paint.lock().unwrap().list);
+    // drawRect: runs with a current graphics context. Its CGContext is
+    // borrowed only during this callback.
+    let Some(graphics) = CURRENT_GRAPHICS_CONTEXT.send_class(()).ok().flatten() else {
+        return;
+    };
+    let Some(context) = GRAPHICS_CG_CONTEXT.send(&graphics, ()) else {
+        return;
+    };
+    if paint::paint_commands(context, dirty, &list) {
+        let finished = std::time::Instant::now();
+        let mut paint = paint.lock().unwrap();
+        paint.count += 1;
+        paint.last_paint = Some(PaintTiming {
+            finished,
+            duration: finished - started,
+        });
+    }
 }
 
 fn native_rect(rect: choscorui_core::Rect) -> NSRect {
@@ -285,161 +261,140 @@ fn native_rect(rect: choscorui_core::Rect) -> NSRect {
 }
 
 /// Queues the event of a window delegate notification.
-///
-/// # Safety
-///
-/// `notification` is nil or a live `NSNotification`.
-unsafe fn record_window_event(
-    notification: Id,
-    make_event: impl FnOnce(&Obj<NSWindow>) -> WindowEvent,
+fn record_window_event(
+    notification: Option<&Obj<NSNotification>>,
+    make_event: fn(&Obj<NSWindow>) -> WindowEvent,
 ) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: the caller guarantees the notification.
-        let Some(notification) = (unsafe { ffi::legacy::borrow(notification) }) else {
-            return;
-        };
-        let Some(window) = NOTIFICATION_OBJECT
-            .send(notification, ())
-            .and_then(|object| object.downcast::<NSWindow>())
-        else {
-            return;
-        };
-        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
-        if let Some(queue) = queue {
-            let event = make_event(window);
-            queue.lock().unwrap().push_back(event);
-        }
-    }));
-}
-
-unsafe extern "C" fn window_did_resize(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe {
-        record_window_event(notification, |window| WindowEvent::Resized {
-            size: read_content_size(window),
-            scale: BACKING_SCALE_FACTOR.send(window, ()),
-        })
+    let Some(window) = notification
+        .and_then(|notification| NOTIFICATION_OBJECT.send(notification, ()))
+        .and_then(|object| object.downcast::<NSWindow>())
+    else {
+        return;
     };
+    let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+    if let Some(queue) = queue {
+        let event = make_event(window);
+        queue.lock().unwrap().push_back(event);
+    }
 }
-unsafe extern "C" fn window_did_change_scale(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe {
-        record_window_event(notification, |window| WindowEvent::ScaleChanged {
-            scale: BACKING_SCALE_FACTOR.send(window, ()),
-        })
+
+fn window_did_resize(
+    _: &Obj<ChoscoruiV2WindowDelegate>,
+    notification: Option<&Obj<NSNotification>>,
+) {
+    record_window_event(notification, |window| WindowEvent::Resized {
+        size: read_content_size(window),
+        scale: BACKING_SCALE_FACTOR.send(window, ()),
+    });
+}
+fn window_did_change_scale(
+    _: &Obj<ChoscoruiV2WindowDelegate>,
+    notification: Option<&Obj<NSNotification>>,
+) {
+    record_window_event(notification, |window| WindowEvent::ScaleChanged {
+        scale: BACKING_SCALE_FACTOR.send(window, ()),
+    });
+}
+fn window_did_focus(
+    _: &Obj<ChoscoruiV2WindowDelegate>,
+    notification: Option<&Obj<NSNotification>>,
+) {
+    record_window_event(notification, |_| WindowEvent::Focused(true));
+}
+fn window_did_blur(_: &Obj<ChoscoruiV2WindowDelegate>, notification: Option<&Obj<NSNotification>>) {
+    record_window_event(notification, |_| WindowEvent::Focused(false));
+}
+fn window_will_close(
+    _: &Obj<ChoscoruiV2WindowDelegate>,
+    notification: Option<&Obj<NSNotification>>,
+) {
+    record_window_event(notification, |_| WindowEvent::Closing);
+}
+
+fn view_is_flipped(_: &Obj<ChoscoruiV2ContentView>) -> bool {
+    true
+}
+fn view_accepts_first_responder(_: &Obj<ChoscoruiV2ContentView>) -> bool {
+    true
+}
+fn view_accepts_first_mouse(_: &Obj<ChoscoruiV2ContentView>, _: Option<&Obj<NSEvent>>) -> bool {
+    true
+}
+
+/// The event of an event callback and the window of the view.
+fn event_arguments<'a>(
+    view: &'a Obj<ChoscoruiV2ContentView>,
+    event: Option<&'a Obj<NSEvent>>,
+) -> Option<(&'a Obj<NSWindow>, &'a Obj<NSEvent>)> {
+    Some((VIEW_WINDOW.send(view, ())?, event?))
+}
+
+fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<NSEvent>>) {
+    let Some((window, native_event)) = event_arguments(view, native_event) else {
+        return;
     };
-}
-unsafe extern "C" fn window_did_focus(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe { record_window_event(notification, |_| WindowEvent::Focused(true)) };
-}
-unsafe extern "C" fn window_did_blur(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe { record_window_event(notification, |_| WindowEvent::Focused(false)) };
-}
-unsafe extern "C" fn window_will_close(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe { record_window_event(notification, |_| WindowEvent::Closing) };
-}
-
-unsafe extern "C" fn view_is_flipped(_: Id, _: Sel) -> i8 {
-    1
-}
-unsafe extern "C" fn view_accepts_first_responder(_: Id, _: Sel) -> i8 {
-    1
-}
-unsafe extern "C" fn view_accepts_first_mouse(_: Id, _: Sel, _: Id) -> i8 {
-    1
-}
-
-/// The content view and the event of an event callback, with the window
-/// of the view.
-///
-/// # Safety
-///
-/// `view` is nil or the live content view, and `event` is nil or a live
-/// `NSEvent`.
-unsafe fn event_arguments<'a>(
-    view: Id,
-    event: Id,
-) -> Option<(&'a Obj<NSView>, &'a Obj<NSWindow>, &'a Obj<NSEvent>)> {
-    // SAFETY: the caller guarantees the view.
-    let view = unsafe { ffi::legacy::borrow::<NSView>(view) }?;
-    // SAFETY: the caller guarantees the event.
-    let event = unsafe { ffi::legacy::borrow::<NSEvent>(event) }?;
-    Some((view, VIEW_WINDOW.send(view, ())?, event))
-}
-
-unsafe extern "C" fn view_pointer_event(view: Id, _: Sel, native_event: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live content view and a live event.
-        let Some((view, window, native_event)) = (unsafe { event_arguments(view, native_event) })
-        else {
-            return;
-        };
-        // `convertPoint:fromView:nil` maps the window point into the
-        // flipped view's logical coordinates.
-        let location = LOCATION_IN_WINDOW.send(native_event, ());
-        let point = CONVERT_POINT_FROM_VIEW.send(view, (location, None));
-        let position = Point::new(point.x, point.y);
-        let native_type = EVENT_TYPE.send(native_event, ());
-        let event = match native_type {
-            1 => PointerEvent::Down {
+    // `convertPoint:fromView:nil` maps the window point into the
+    // flipped view's logical coordinates.
+    let location = LOCATION_IN_WINDOW.send(native_event, ());
+    let point = CONVERT_POINT_FROM_VIEW.send(view, (location, None));
+    let position = Point::new(point.x, point.y);
+    let native_type = EVENT_TYPE.send(native_event, ());
+    let event = match native_type {
+        1 => PointerEvent::Down {
+            position,
+            button: PointerButton::Primary,
+        },
+        2 => PointerEvent::Up {
+            position,
+            button: PointerButton::Primary,
+        },
+        3 => PointerEvent::Down {
+            position,
+            button: PointerButton::Secondary,
+        },
+        4 => PointerEvent::Up {
+            position,
+            button: PointerButton::Secondary,
+        },
+        5 | 6 | 7 | 27 => PointerEvent::Move { position },
+        22 => {
+            let unit = if HAS_PRECISE_SCROLLING_DELTAS.send(native_event, ()) {
+                WheelUnit::Points
+            } else {
+                WheelUnit::Lines
+            };
+            PointerEvent::Wheel {
                 position,
-                button: PointerButton::Primary,
-            },
-            2 => PointerEvent::Up {
-                position,
-                button: PointerButton::Primary,
-            },
-            3 => PointerEvent::Down {
-                position,
-                button: PointerButton::Secondary,
-            },
-            4 => PointerEvent::Up {
-                position,
-                button: PointerButton::Secondary,
-            },
-            5 | 6 | 7 | 27 => PointerEvent::Move { position },
-            22 => {
-                let unit = if HAS_PRECISE_SCROLLING_DELTAS.send(native_event, ()) {
-                    WheelUnit::Points
-                } else {
-                    WheelUnit::Lines
-                };
-                PointerEvent::Wheel {
-                    position,
-                    delta: Point::new(
-                        -SCROLLING_DELTA_X.send(native_event, ()),
-                        -SCROLLING_DELTA_Y.send(native_event, ()),
-                    ),
-                    unit,
-                }
+                delta: Point::new(
+                    -SCROLLING_DELTA_X.send(native_event, ()),
+                    -SCROLLING_DELTA_Y.send(native_event, ()),
+                ),
+                unit,
             }
-            25 | 26 => {
-                let number = BUTTON_NUMBER.send(native_event, ()) as usize;
-                let button = if number == 2 {
-                    PointerButton::Middle
-                } else {
-                    PointerButton::Other(number)
-                };
-                if native_type == 25 {
-                    PointerEvent::Down { position, button }
-                } else {
-                    PointerEvent::Up { position, button }
-                }
-            }
-            _ => return,
-        };
-        let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
-        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
-        if let Some(queue) = queue {
-            queue
-                .lock()
-                .unwrap()
-                .push_back(WindowEvent::Pointer { event, modifiers });
         }
-    }));
+        25 | 26 => {
+            let number = BUTTON_NUMBER.send(native_event, ()) as usize;
+            let button = if number == 2 {
+                PointerButton::Middle
+            } else {
+                PointerButton::Other(number)
+            };
+            if native_type == 25 {
+                PointerEvent::Down { position, button }
+            } else {
+                PointerEvent::Up { position, button }
+            }
+        }
+        _ => return,
+    };
+    let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+    let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+    if let Some(queue) = queue {
+        queue
+            .lock()
+            .unwrap()
+            .push_back(WindowEvent::Pointer { event, modifiers });
+    }
 }
 
 /// Maps a macOS virtual keycode for a named key to its [`Key`]. A keycode
@@ -491,293 +446,65 @@ fn is_text_character(character: &char) -> bool {
     !character.is_control() && !('\u{f700}'..='\u{f8ff}').contains(character)
 }
 
-unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live content view and a live event.
-        let Some((view, window, native_event)) = (unsafe { event_arguments(view, native_event) })
-        else {
-            return;
+fn view_key_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<NSEvent>>) {
+    let Some((window, native_event)) = event_arguments(view, native_event) else {
+        return;
+    };
+    // Keycodes are macOS virtual keycodes; text insertion remains a
+    // separate path.
+    let code = KEY_CODE.send(native_event, ());
+    let key = match key_from_code(code) {
+        Some(key) => key,
+        None => {
+            let printable = CHARACTERS_IGNORING_MODIFIERS
+                .send(native_event, ())
+                .and_then(string)
+                .and_then(|text| text.chars().next())
+                .filter(is_text_character);
+            match printable {
+                Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
+                None => Key::Other(u32::from(code)),
+            }
+        }
+    };
+    let event = match EVENT_TYPE.send(native_event, ()) {
+        10 => KeyEvent::Down {
+            key,
+            repeat: IS_A_REPEAT.send(native_event, ()),
+        },
+        11 => KeyEvent::Up { key },
+        _ => return,
+    };
+    let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+    let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+    if let Some(queue) = queue {
+        let event_count = {
+            let mut queue = queue.lock().unwrap();
+            queue.push_back(WindowEvent::Key { event, modifiers });
+            queue.len()
         };
-        // Keycodes are macOS virtual keycodes; text insertion remains a
-        // separate path.
-        let code = KEY_CODE.send(native_event, ());
-        let key = match key_from_code(code) {
-            Some(key) => key,
-            None => {
-                let printable = CHARACTERS_IGNORING_MODIFIERS
+        if matches!(event, KeyEvent::Down { .. }) && !modifiers.control && !modifiers.command {
+            if let Ok(events) = ns_array(&[native_event.upcast()]) {
+                INTERPRET_KEY_EVENTS.send(view, (&events,));
+            }
+            let mut queue = queue.lock().unwrap();
+            if queue.len() == event_count {
+                let text: String = CHARACTERS
                     .send(native_event, ())
                     .and_then(string)
-                    .and_then(|text| text.chars().next())
-                    .filter(is_text_character);
-                match printable {
-                    Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
-                    None => Key::Other(u32::from(code)),
-                }
-            }
-        };
-        let event = match EVENT_TYPE.send(native_event, ()) {
-            10 => KeyEvent::Down {
-                key,
-                repeat: IS_A_REPEAT.send(native_event, ()),
-            },
-            11 => KeyEvent::Up { key },
-            _ => return,
-        };
-        let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
-        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
-        if let Some(queue) = queue {
-            let event_count = {
-                let mut queue = queue.lock().unwrap();
-                queue.push_back(WindowEvent::Key { event, modifiers });
-                queue.len()
-            };
-            if matches!(event, KeyEvent::Down { .. }) && !modifiers.control && !modifiers.command {
-                if let Ok(events) = ns_array(&[native_event.upcast()]) {
-                    INTERPRET_KEY_EVENTS.send(view, (&events,));
-                }
-                let mut queue = queue.lock().unwrap();
-                if queue.len() == event_count {
-                    let text: String = CHARACTERS
-                        .send(native_event, ())
-                        .and_then(string)
-                        .unwrap_or_default()
-                        .chars()
-                        .filter(is_text_character)
-                        .collect();
-                    if !text.is_empty() {
-                        queue.push_back(WindowEvent::Ime(ImeEvent::CommitText {
-                            text,
-                            replacement_utf16: None,
-                        }));
-                    }
+                    .unwrap_or_default()
+                    .chars()
+                    .filter(is_text_character)
+                    .collect();
+                if !text.is_empty() {
+                    queue.push_back(WindowEvent::Ime(ImeEvent::CommitText {
+                        text,
+                        replacement_utf16: None,
+                    }));
                 }
             }
         }
-    }));
-}
-
-/// Registers the content view class once.
-///
-/// # Safety
-///
-/// Call on the main thread.
-unsafe fn view_class() -> Result<(), Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = CLASS.get_or_init(|| {
-        // SAFETY: Registration happens once. BOOL methods use c@: and
-        // mouseDown: uses v@:@ as required by Objective-C runtime ABI.
-        unsafe {
-            let superclass = class(c"NSView")?;
-            let cls = objc_allocateClassPair(superclass, c"ChoscoruiV2ContentView".as_ptr(), 0);
-            if cls.is_null() {
-                return Err(Error::AppKitUnavailable);
-            }
-            for (name, imp, types) in [
-                (c"isFlipped", view_is_flipped as *const c_void, c"c@:"),
-                (
-                    c"acceptsFirstResponder",
-                    view_accepts_first_responder as *const c_void,
-                    c"c@:",
-                ),
-                (
-                    c"acceptsFirstMouse:",
-                    view_accepts_first_mouse as *const c_void,
-                    c"c@:@",
-                ),
-                (c"mouseDown:", view_pointer_event as *const c_void, c"v@:@"),
-                (c"mouseUp:", view_pointer_event as *const c_void, c"v@:@"),
-                (
-                    c"rightMouseDown:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"rightMouseUp:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"otherMouseDown:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"otherMouseUp:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (c"mouseMoved:", view_pointer_event as *const c_void, c"v@:@"),
-                (
-                    c"scrollWheel:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"mouseDragged:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"rightMouseDragged:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"otherMouseDragged:",
-                    view_pointer_event as *const c_void,
-                    c"v@:@",
-                ),
-                (c"keyDown:", view_key_event as *const c_void, c"v@:@"),
-                (c"keyUp:", view_key_event as *const c_void, c"v@:@"),
-                (
-                    c"hasMarkedText",
-                    view_has_marked_text as *const c_void,
-                    c"c@:",
-                ),
-                (
-                    c"markedRange",
-                    view_marked_range as *const c_void,
-                    c"{_NSRange=QQ}@:",
-                ),
-                (
-                    c"selectedRange",
-                    view_selected_range as *const c_void,
-                    c"{_NSRange=QQ}@:",
-                ),
-                (
-                    c"setMarkedText:selectedRange:replacementRange:",
-                    view_set_marked_text as *const c_void,
-                    c"v@:@{_NSRange=QQ}{_NSRange=QQ}",
-                ),
-                (
-                    c"insertText:replacementRange:",
-                    view_insert_text as *const c_void,
-                    c"v@:@{_NSRange=QQ}",
-                ),
-                (c"unmarkText", view_unmark_text as *const c_void, c"v@:"),
-                (
-                    c"validAttributesForMarkedText",
-                    view_valid_marked_attributes as *const c_void,
-                    c"@@:",
-                ),
-                (
-                    c"attributedSubstringForProposedRange:actualRange:",
-                    view_attributed_substring as *const c_void,
-                    c"@@:{_NSRange=QQ}^{_NSRange=QQ}",
-                ),
-                (
-                    c"firstRectForCharacterRange:actualRange:",
-                    view_first_rect_for_range as *const c_void,
-                    c"{CGRect={CGPoint=dd}{CGSize=dd}}@:{_NSRange=QQ}^{_NSRange=QQ}",
-                ),
-                (
-                    c"characterIndexForPoint:",
-                    view_character_index_for_point as *const c_void,
-                    c"Q@:{CGPoint=dd}",
-                ),
-                (
-                    c"doCommandBySelector:",
-                    view_do_command as *const c_void,
-                    c"v@::",
-                ),
-                (
-                    c"draggingEntered:",
-                    dnd::view_dragging_entered as *const c_void,
-                    c"Q@:@",
-                ),
-                (
-                    c"draggingUpdated:",
-                    dnd::view_dragging_updated as *const c_void,
-                    c"Q@:@",
-                ),
-                (
-                    c"draggingExited:",
-                    dnd::view_dragging_exited as *const c_void,
-                    c"v@:@",
-                ),
-                (
-                    c"prepareForDragOperation:",
-                    dnd::view_prepare_drag as *const c_void,
-                    c"c@:@",
-                ),
-                (
-                    c"performDragOperation:",
-                    dnd::view_perform_drag as *const c_void,
-                    c"c@:@",
-                ),
-                (
-                    c"draggingSession:sourceOperationMaskForDraggingContext:",
-                    dnd::view_source_operation_mask as *const c_void,
-                    c"Q@:@q",
-                ),
-                (
-                    c"draggingSession:endedAtPoint:operation:",
-                    dnd::view_drag_ended as *const c_void,
-                    c"v@:@{CGPoint=dd}Q",
-                ),
-                (
-                    c"resetCursorRects",
-                    surface::view_reset_cursor_rects as *const c_void,
-                    c"v@:",
-                ),
-                (
-                    c"drawRect:",
-                    view_draw_rect as *const c_void,
-                    c"v@:{CGRect={CGPoint=dd}{CGSize=dd}}",
-                ),
-            ] {
-                if class_addMethod(cls, selector(name), imp, types.as_ptr()) == 0 {
-                    objc_disposeClassPair(cls);
-                    return Err(Error::AppKitUnavailable);
-                }
-            }
-            objc_registerClassPair(cls);
-            Ok(cls as usize)
-        }
-    });
-    result.map(|_| ())
-}
-
-/// Registers the window delegate class once.
-///
-/// # Safety
-///
-/// Call on the main thread.
-unsafe fn delegate_class() -> Result<(), Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = CLASS.get_or_init(|| {
-        // SAFETY: Runtime registration happens once; all method signatures
-        // are void(id, SEL, NSNotification*) with Objective-C type v@:@.
-        unsafe {
-            let superclass = class(c"NSObject")?;
-            let cls = objc_allocateClassPair(superclass, c"ChoscoruiV2WindowDelegate".as_ptr(), 0);
-            if cls.is_null() {
-                return Err(Error::AppKitUnavailable);
-            }
-            for (name, imp) in [
-                (c"windowDidResize:", window_did_resize as *const c_void),
-                (
-                    c"windowDidChangeBackingProperties:",
-                    window_did_change_scale as *const c_void,
-                ),
-                (c"windowDidBecomeKey:", window_did_focus as *const c_void),
-                (c"windowDidResignKey:", window_did_blur as *const c_void),
-                (c"windowWillClose:", window_will_close as *const c_void),
-                (
-                    c"windowDidChangeOcclusionState:",
-                    surface::window_did_change_occlusion as *const c_void,
-                ),
-            ] {
-                if class_addMethod(cls, selector(name), imp, c"v@:@".as_ptr()) == 0 {
-                    objc_disposeClassPair(cls);
-                    return Err(Error::AppKitUnavailable);
-                }
-            }
-            objc_registerClassPair(cls);
-            Ok(cls as usize)
-        }
-    });
-    result.map(|_| ())
+    }
 }
 
 pub struct WindowOptions {
@@ -879,8 +606,7 @@ impl Application {
         // The handle owns the window, so closing must not release it.
         SET_RELEASED_WHEN_CLOSED.send(&window, (false,));
         SET_TITLE.send(&window, (&title,));
-        // SAFETY: registration runs on the main thread, checked above.
-        unsafe { view_class() }?;
+        ChoscoruiV2ContentView::register()?;
         let content = INIT_WITH_FRAME
             .init(
                 alloc::<ChoscoruiV2ContentView>()?,
@@ -893,8 +619,7 @@ impl Application {
         SET_CONTENT_VIEW.send(&window, (Some(content.upcast()),));
         drop(content);
         SET_ACCEPTS_MOUSE_MOVED_EVENTS.send(&window, (true,));
-        // SAFETY: as above.
-        unsafe { delegate_class() }?;
+        ChoscoruiV2WindowDelegate::register()?;
         let delegate = alloc_init::<ChoscoruiV2WindowDelegate>()?;
         let events = Arc::new(Mutex::new(VecDeque::new()));
         let paint = Arc::new(Mutex::new(PaintState {
@@ -1212,17 +937,6 @@ fn read_content_size(window: &Obj<NSWindow>) -> Size {
             let frame = VIEW_FRAME.send(view, ());
             Size::new(frame.size.width, frame.size.height)
         })
-}
-
-/// The class named `name`, for class registration.
-unsafe fn class(name: &CStr) -> Result<Id, Error> {
-    ffi::class::lookup_class(name)
-        .map(|class| std::ptr::from_ref(class).cast_mut().cast())
-        .ok_or(Error::AppKitUnavailable)
-}
-/// The selector named `name`, for class registration.
-unsafe fn selector(name: &CStr) -> Sel {
-    ffi::class::Sel::register(name).as_ptr()
 }
 
 #[cfg(test)]

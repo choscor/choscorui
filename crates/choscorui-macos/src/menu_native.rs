@@ -1,7 +1,6 @@
-use super::{
-    Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool, Sel,
-    class, class_addMethod, objc_allocateClassPair, objc_registerClassPair, selector,
-};
+#![deny(unsafe_code)]
+
+use super::{MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool};
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
     ADD_ITEM, ChoscorMenuTarget, INIT_WITH_TITLE, INIT_WITH_TITLE_ACTION_KEY, MAIN_MENU,
@@ -11,12 +10,10 @@ use crate::ffi::appkit::{
     SHARED_APPLICATION,
 };
 use crate::ffi::class::Sel as Selector;
-use crate::ffi::foundation::{NSString, TextError};
+use crate::ffi::foundation::{NSObject, NSString, TextError};
 use crate::ffi::retained::{Retained, alloc, alloc_init};
 use std::collections::{HashMap, VecDeque};
-use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -34,54 +31,34 @@ fn bindings() -> &'static Mutex<HashMap<usize, TargetBinding>> {
     BINDINGS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-unsafe extern "C" fn activate_menu_item(target: Id, _: Sel, sender: Id) {
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        let bindings = bindings().lock().unwrap();
-        let Some(binding) = bindings.get(&(target as usize)) else {
-            return;
-        };
-        let Some(command) = binding.commands.get(&(sender as usize)).copied() else {
-            return;
-        };
-        binding.activations.lock().unwrap().push_back(command);
-    }));
-    if result.is_err()
-        && let Ok(bindings) = bindings().lock()
-        && let Some(binding) = bindings.get(&(target as usize))
-        && let Ok(mut count) = binding.panics.lock()
-    {
-        *count += 1;
+/// Counts a panic of the menu callback of a target while it unwinds, for
+/// [`MainMenu::callback_panic_count`]. The callback then reports the panic
+/// as every callback does.
+struct PanicCount(usize);
+
+impl Drop for PanicCount {
+    fn drop(&mut self) {
+        if std::thread::panicking()
+            && let Ok(bindings) = bindings().lock()
+            && let Some(binding) = bindings.get(&self.0)
+            && let Ok(mut count) = binding.panics.lock()
+        {
+            *count += 1;
+        }
     }
 }
 
-/// Registers the target class on first use.
-pub(crate) fn menu_target_class() -> Result<Id, MenuError> {
-    static CLASS: OnceLock<Result<usize, MenuError>> = OnceLock::new();
-    CLASS
-        .get_or_init(|| unsafe {
-            let superclass = class(c"NSObject").map_err(|_| MenuError::AppKitUnavailable)?;
-            let class = objc_allocateClassPair(superclass, c"ChoscorMenuTarget".as_ptr(), 0);
-            if class.is_null() {
-                return super::class(c"ChoscorMenuTarget")
-                    .map(|existing| existing as usize)
-                    .map_err(|_| MenuError::AppKitUnavailable);
-            }
-            let action = selector(ACTION);
-            if class_addMethod(
-                class,
-                action,
-                activate_menu_item as *const c_void,
-                c"v@:@".as_ptr(),
-            ) == 0
-            {
-                return Err(MenuError::AppKitUnavailable);
-            }
-            objc_registerClassPair(class);
-            Ok(class as usize)
-        })
-        .as_ref()
-        .map(|&class| class as Id)
-        .map_err(|error| *error)
+/// Queues the command of the activated item.
+pub(crate) fn activate_menu_item(target: &Obj<ChoscorMenuTarget>, sender: Option<&Obj<NSObject>>) {
+    let _count = PanicCount(target.addr());
+    let bindings = bindings().lock().unwrap();
+    let Some(binding) = bindings.get(&target.addr()) else {
+        return;
+    };
+    let Some(command) = sender.and_then(|sender| binding.commands.get(&sender.addr())) else {
+        return;
+    };
+    binding.activations.lock().unwrap().push_back(*command);
 }
 
 /// Main-thread AppKit menu ownership and command activation queue.
@@ -182,7 +159,7 @@ fn shared_application() -> Result<&'static Obj<crate::ffi::appkit::NSApplication
 
 /// A new instance of the target class.
 fn new_target() -> Result<Retained<ChoscorMenuTarget>, MenuError> {
-    menu_target_class()?;
+    ChoscorMenuTarget::register().map_err(|_| MenuError::AppKitUnavailable)?;
     alloc_init::<ChoscorMenuTarget>().map_err(|_| MenuError::AppKitUnavailable)
 }
 

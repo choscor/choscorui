@@ -1,7 +1,7 @@
 //! UserNotifications classes, protocols, and messages.
 
 use super::block::{AuthorizationBlock, Block};
-use super::class::{Obj, objc_class};
+use super::class::{Obj, objc_class, objc_protocol};
 use super::foundation::{NSObject, NSString};
 use super::msg::{Autoreleased, Shared, messages};
 use super::retained::Retained;
@@ -17,6 +17,7 @@ objc_class!(UNNotificationTrigger: NSObject);
 objc_class!(UNNotificationRequest: NSObject);
 objc_class!(UNNotification: NSObject);
 objc_class!(UNNotificationResponse: NSObject);
+objc_protocol!(UNUserNotificationCenterDelegate);
 
 messages! {
     pub(crate) CURRENT_NOTIFICATION_CENTER: class UNUserNotificationCenter,

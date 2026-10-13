@@ -1,6 +1,5 @@
 //! Core Graphics and Foundation structs that cross the boundary by value.
 
-#[cfg(test)]
 use super::encode::encode_as;
 
 /// `NSPoint`, the same type as `CGPoint`.
@@ -35,6 +34,14 @@ pub(crate) struct NSRange {
     pub(crate) length: usize,
 }
 
+impl NSRange {
+    /// A range without a location, as the text input callbacks report it.
+    pub(crate) const NONE: Self = Self {
+        location: usize::MAX,
+        length: 0,
+    };
+}
+
 /// `CGAffineTransform`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -47,13 +54,8 @@ pub(crate) struct CGAffineTransform {
     pub(crate) ty: f64,
 }
 
-#[cfg(test)]
 encode_as!(NSPoint, "{CGPoint=dd}");
-#[cfg(test)]
 encode_as!(NSSize, "{CGSize=dd}");
-#[cfg(test)]
 encode_as!(NSRect, "{CGRect={CGPoint=dd}{CGSize=dd}}");
-#[cfg(test)]
 encode_as!(NSRange, "{_NSRange=QQ}");
-#[cfg(test)]
 encode_as!(CGAffineTransform, "{CGAffineTransform=dddddd}");

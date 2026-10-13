@@ -37,7 +37,10 @@ objc_class!(NSDraggingItem: NSObject);
 objc_class!(NSDraggingSession: NSObject);
 objc_protocol!(NSDraggingInfo);
 objc_protocol!(NSDraggingDestination);
+objc_protocol!(NSDraggingSource);
 objc_protocol!(NSApplicationDelegate);
+objc_protocol!(NSWindowDelegate);
+objc_protocol!(NSTextInputClient);
 objc_protocol!(
     /// The accessibility attributes of views and accessibility elements.
     NSAccessibility

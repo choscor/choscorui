@@ -212,7 +212,7 @@ All UI types belong to the main thread. `Application` and `Window` contain a `Ph
 
 - **Work from other threads.** `Application::poster` returns a `Poster`, which is `Send` and `Clone`. `Poster::post` puts a closure in a FIFO queue, and the main run loop runs it. After the `Application` drops, `post` returns `PostError::Stopped`.
 - **Timers.** `Application::schedule_once` and `Application::schedule_repeating` return a `Timer`. When you drop or cancel the `Timer`, no more callbacks occur, also from inside the callback. Timers fire in all common run-loop modes, for example during live resize and menu tracking.
-- **Panic containment.** Posted tasks, timer callbacks, and the native menu action run inside `catch_unwind`. Thus a panic in them stops at the FFI boundary and does not unwind into AppKit. `Application::posted_panic_count`, `Application::timer_panic_count`, and `MainMenu::callback_panic_count` count these panics.
+- **Panic containment.** Every native callback runs inside `catch_unwind`. Thus a panic stops at the FFI boundary and does not unwind into AppKit. `Application::posted_panic_count`, `Application::timer_panic_count`, and `MainMenu::callback_panic_count` count the panics of posted tasks, timers, and menu actions.
 
 The source for posted work and timers is [runloop.rs](../crates/choscorui-macos/src/runloop.rs). [ffi.md](ffi.md) gives the safety invariants.
 

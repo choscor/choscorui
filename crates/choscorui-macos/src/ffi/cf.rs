@@ -43,20 +43,17 @@ macro_rules! cf_type {
                 raw
             }
         }
-        #[cfg(test)]
         impl $crate::ffi::encode::Encode for $name {
             fn encode(out: &mut String) {
                 out.push_str(concat!("{", stringify!($name), "=}"));
             }
         }
-        #[cfg(test)]
         impl $crate::ffi::encode::Encode for &$name {
             fn encode(out: &mut String) {
                 out.push('^');
                 <$name as $crate::ffi::encode::Encode>::encode(out);
             }
         }
-        #[cfg(test)]
         impl $crate::ffi::encode::Encode for Option<&$name> {
             fn encode(out: &mut String) {
                 <&$name as $crate::ffi::encode::Encode>::encode(out);

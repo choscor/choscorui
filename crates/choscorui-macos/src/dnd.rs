@@ -1,21 +1,22 @@
 //! Native drag-and-drop for the content view: NSDraggingDestination
 //! callbacks that filter formats and negotiate operations, and an
 //! NSDraggingSource that starts drags from Rust payloads.
+#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
     BEGIN_DRAGGING_SESSION, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW, CONVERT_POINT_TO_VIEW,
-    CURRENT_EVENT, ChoscoruiV2SimulatedDraggingInfo, DRAGGING_ENTERED, DRAGGING_EXITED,
-    DRAGGING_LOCATION, DRAGGING_PASTEBOARD, DRAGGING_SOURCE, DRAGGING_SOURCE_OPERATION_MASK,
-    DRAGGING_UPDATED, EVENT_TYPE, EVENT_WINDOW, INIT_WITH_PASTEBOARD_WRITER, MODIFIER_FLAGS,
-    NSDraggingDestination, NSDraggingInfo, NSDraggingItem, NSView, PERFORM_DRAG_OPERATION,
+    CURRENT_EVENT, ChoscoruiV2ContentView, ChoscoruiV2SimulatedDraggingInfo, DRAGGING_ENTERED,
+    DRAGGING_EXITED, DRAGGING_LOCATION, DRAGGING_PASTEBOARD, DRAGGING_SOURCE,
+    DRAGGING_SOURCE_OPERATION_MASK, DRAGGING_UPDATED, EVENT_TYPE, EVENT_WINDOW,
+    INIT_WITH_PASTEBOARD_WRITER, MODIFIER_FLAGS, NSDraggingDestination, NSDraggingInfo,
+    NSDraggingItem, NSDraggingSession, NSPasteboard, NSView, PERFORM_DRAG_OPERATION,
     PREPARE_FOR_DRAG_OPERATION, REGISTER_FOR_DRAGGED_TYPES, SET_DRAGGING_FRAME, SHARED_APPLICATION,
     UNREGISTER_DRAGGED_TYPES, VIEW_WINDOW,
 };
-use crate::ffi::class::ProtocolType;
 use crate::ffi::foundation::NSObject;
-use crate::ffi::retained::{alloc, alloc_init};
+use crate::ffi::retained::{Retained, alloc, alloc_init};
 use choscorui_core::{
     DragEvent, DragFormat, DragItem, DragOperation, DragOperations, Image, negotiate_drag,
 };
@@ -111,23 +112,6 @@ fn evaluate(
     (operation != DragOperation::None).then_some((formats, allowed, operation))
 }
 
-/// The view and the dragging info of a destination callback.
-///
-/// # Safety
-///
-/// `view` is a live NSView and `info` is nil or a live NSDraggingInfo,
-/// both for `'a`.
-unsafe fn destination<'a>(
-    view: Id,
-    info: Id,
-) -> Option<(&'a Obj<NSView>, &'a Obj<NSDraggingInfo>)> {
-    // SAFETY: the caller guarantees both objects.
-    let view = unsafe { ffi::legacy::borrow::<NSView>(view) }?;
-    // SAFETY: as above.
-    let info = unsafe { ffi::legacy::borrow::<NSDraggingInfo>(info) }?;
-    Some((view, info))
-}
-
 fn dragging_moved(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> usize {
     let Some((paint, queue)) = lookup(view) else {
         return 0;
@@ -158,56 +142,47 @@ fn dragging_moved(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> usize {
     mask_from_operation(operation)
 }
 
-pub(crate) unsafe extern "C" fn view_dragging_entered(view: Id, _: Sel, info: Id) -> usize {
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view and dragging info.
-        unsafe { destination(view, info) }.map_or(0, |(view, info)| dragging_moved(view, info))
-    }))
-    .unwrap_or(0)
+pub(crate) fn view_dragging_entered(
+    view: &Obj<ChoscoruiV2ContentView>,
+    info: Option<&Obj<NSDraggingInfo>>,
+) -> usize {
+    info.map_or(0, |info| dragging_moved(view, info))
 }
 
-pub(crate) unsafe extern "C" fn view_dragging_updated(view: Id, _: Sel, info: Id) -> usize {
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view and dragging info.
-        unsafe { destination(view, info) }.map_or(0, |(view, info)| dragging_moved(view, info))
-    }))
-    .unwrap_or(0)
+pub(crate) fn view_dragging_updated(
+    view: &Obj<ChoscoruiV2ContentView>,
+    info: Option<&Obj<NSDraggingInfo>>,
+) -> usize {
+    info.map_or(0, |info| dragging_moved(view, info))
 }
 
-pub(crate) unsafe extern "C" fn view_dragging_exited(view: Id, _: Sel, _: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view.
-        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
-            return;
-        };
-        let Some((paint, queue)) = lookup(view) else {
-            return;
-        };
-        if std::mem::take(&mut paint.lock().unwrap().drag_inside) {
-            queue
-                .lock()
-                .unwrap()
-                .push_back(WindowEvent::Drag(DragEvent::Leave));
-        }
-    }));
+pub(crate) fn view_dragging_exited(
+    view: &Obj<ChoscoruiV2ContentView>,
+    _: Option<&Obj<NSDraggingInfo>>,
+) {
+    let Some((paint, queue)) = lookup(view) else {
+        return;
+    };
+    if std::mem::take(&mut paint.lock().unwrap().drag_inside) {
+        queue
+            .lock()
+            .unwrap()
+            .push_back(WindowEvent::Drag(DragEvent::Leave));
+    }
 }
 
-pub(crate) unsafe extern "C" fn view_prepare_drag(view: Id, _: Sel, _: Id) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view.
-        unsafe { ffi::legacy::borrow::<NSView>(view) }
-            .and_then(lookup)
-            .is_some_and(|(paint, _)| paint.lock().unwrap().drag_inside)
-    }))
-    .map_or(0, i8::from)
+pub(crate) fn view_prepare_drag(
+    view: &Obj<ChoscoruiV2ContentView>,
+    _: Option<&Obj<NSDraggingInfo>>,
+) -> bool {
+    lookup(view).is_some_and(|(paint, _)| paint.lock().unwrap().drag_inside)
 }
 
-pub(crate) unsafe extern "C" fn view_perform_drag(view: Id, _: Sel, info: Id) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view and dragging info.
-        unsafe { destination(view, info) }.is_some_and(|(view, info)| perform_drag(view, info))
-    }))
-    .map_or(0, i8::from)
+pub(crate) fn view_perform_drag(
+    view: &Obj<ChoscoruiV2ContentView>,
+    info: Option<&Obj<NSDraggingInfo>>,
+) -> bool {
+    info.is_some_and(|info| perform_drag(view, info))
 }
 
 fn perform_drag(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> bool {
@@ -246,43 +221,29 @@ fn perform_drag(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> bool {
     accepted
 }
 
-pub(crate) unsafe extern "C" fn view_source_operation_mask(
-    view: Id,
-    _: Sel,
-    _: Id,
+pub(crate) fn view_source_operation_mask(
+    view: &Obj<ChoscoruiV2ContentView>,
+    _: Option<&Obj<NSDraggingSession>>,
     _context: isize,
 ) -> usize {
-    catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view.
-        unsafe { ffi::legacy::borrow::<NSView>(view) }
-            .and_then(lookup)
-            .map_or(0, |(paint, _)| {
-                mask_from_operations(paint.lock().unwrap().source_operations)
-            })
-    }))
-    .unwrap_or(0)
+    lookup(view).map_or(0, |(paint, _)| {
+        mask_from_operations(paint.lock().unwrap().source_operations)
+    })
 }
 
-pub(crate) unsafe extern "C" fn view_drag_ended(
-    view: Id,
-    _: Sel,
-    _: Id,
+pub(crate) fn view_drag_ended(
+    view: &Obj<ChoscoruiV2ContentView>,
+    _: Option<&Obj<NSDraggingSession>>,
     _: NSPoint,
     operation: usize,
 ) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit passes the live view.
-        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
-            return;
-        };
-        if let Some((paint, queue)) = lookup(view) {
-            paint.lock().unwrap().source_operations = DragOperations::NONE;
-            queue
-                .lock()
-                .unwrap()
-                .push_back(WindowEvent::DragEnded(operation_from_mask(operation)));
-        }
-    }));
+    if let Some((paint, queue)) = lookup(view) {
+        paint.lock().unwrap().source_operations = DragOperations::NONE;
+        queue
+            .lock()
+            .unwrap()
+            .push_back(WindowEvent::DragEnded(operation_from_mask(operation)));
+    }
 }
 
 impl Window {
@@ -416,46 +377,53 @@ impl Window {
             ),
         );
         FAKE_INFO.with(|fake| {
-            *fake.borrow_mut() = (
-                ffi::legacy::id(pasteboard.pasteboard()) as usize,
-                window_point,
-                mask_from_operations(source),
-            );
+            *fake.borrow_mut() = FakeInfo {
+                pasteboard: Some(pasteboard.pasteboard().retain()),
+                location: window_point,
+                mask: mask_from_operations(source),
+            };
         });
-        // The fake info object lives until this call returns; the view
-        // callbacks read it synchronously.
-        // SAFETY: registration runs once on the main thread.
-        if unsafe { fake_info_class() }.is_err() {
-            return DragOperation::None;
+        // The view callbacks read the fake info synchronously, before this
+        // call returns.
+        let result = simulate_phase(view, phase);
+        FAKE_INFO.with(|fake| fake.borrow_mut().pasteboard = None);
+        result
+    }
+}
+
+/// Sends the destination message of `phase` to `view` with a simulated
+/// dragging info.
+fn simulate_phase(view: &Obj<NSView>, phase: SimulatedDragPhase) -> DragOperation {
+    if ChoscoruiV2SimulatedDraggingInfo::register().is_err() {
+        return DragOperation::None;
+    }
+    let Ok(info) = alloc_init::<ChoscoruiV2SimulatedDraggingInfo>() else {
+        return DragOperation::None;
+    };
+    let (Some(info), Some(destination)) = (
+        info.conforming::<NSDraggingInfo>(),
+        view.conforming::<NSDraggingDestination>(),
+    ) else {
+        return DragOperation::None;
+    };
+    match phase {
+        SimulatedDragPhase::Enter => {
+            operation_from_mask(DRAGGING_ENTERED.send(destination, (info,)))
         }
-        let Ok(info) = alloc_init::<ChoscoruiV2SimulatedDraggingInfo>() else {
-            return DragOperation::None;
-        };
-        let (Some(info), Some(destination)) = (
-            info.conforming::<NSDraggingInfo>(),
-            view.conforming::<NSDraggingDestination>(),
-        ) else {
-            return DragOperation::None;
-        };
-        match phase {
-            SimulatedDragPhase::Enter => {
-                operation_from_mask(DRAGGING_ENTERED.send(destination, (info,)))
-            }
-            SimulatedDragPhase::Update => {
-                operation_from_mask(DRAGGING_UPDATED.send(destination, (info,)))
-            }
-            SimulatedDragPhase::Exit => {
-                DRAGGING_EXITED.send(destination, (Some(info),));
+        SimulatedDragPhase::Update => {
+            operation_from_mask(DRAGGING_UPDATED.send(destination, (info,)))
+        }
+        SimulatedDragPhase::Exit => {
+            DRAGGING_EXITED.send(destination, (Some(info),));
+            DragOperation::None
+        }
+        SimulatedDragPhase::Drop => {
+            if PREPARE_FOR_DRAG_OPERATION.send(destination, (info,))
+                && PERFORM_DRAG_OPERATION.send(destination, (info,))
+            {
+                DragOperation::Copy
+            } else {
                 DragOperation::None
-            }
-            SimulatedDragPhase::Drop => {
-                if PREPARE_FOR_DRAG_OPERATION.send(destination, (info,))
-                    && PERFORM_DRAG_OPERATION.send(destination, (info,))
-                {
-                    DragOperation::Copy
-                } else {
-                    DragOperation::None
-                }
             }
         }
     }
@@ -470,65 +438,37 @@ pub enum SimulatedDragPhase {
     Drop,
 }
 
+/// The answers of the simulated dragging info.
+struct FakeInfo {
+    pasteboard: Option<Retained<NSPasteboard>>,
+    location: NSPoint,
+    mask: usize,
+}
+
 thread_local! {
-    static FAKE_INFO: RefCell<(usize, NSPoint, usize)> =
-        const { RefCell::new((0, NSPoint { x: 0.0, y: 0.0 }, 0)) };
-}
-
-unsafe extern "C" fn fake_pasteboard(_: Id, _: Sel) -> Id {
-    FAKE_INFO.with(|fake| fake.borrow().0 as Id)
-}
-unsafe extern "C" fn fake_location(_: Id, _: Sel) -> NSPoint {
-    FAKE_INFO.with(|fake| fake.borrow().1)
-}
-unsafe extern "C" fn fake_mask(_: Id, _: Sel) -> usize {
-    FAKE_INFO.with(|fake| fake.borrow().2)
-}
-unsafe extern "C" fn fake_source(_: Id, _: Sel) -> Id {
-    std::ptr::null_mut()
-}
-
-/// Registers the simulated dragging info class on first use.
-pub(crate) unsafe fn fake_info_class() -> Result<Id, Error> {
-    static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
-    CLASS
-        .get_or_init(|| unsafe {
-            let superclass = class(c"NSObject")?;
-            let cls =
-                objc_allocateClassPair(superclass, c"ChoscoruiV2SimulatedDraggingInfo".as_ptr(), 0);
-            if cls.is_null() {
-                return Err(Error::AppKitUnavailable);
-            }
-            let Some(protocol) = NSDraggingInfo::protocol().ok() else {
-                objc_disposeClassPair(cls);
-                return Err(Error::AppKitUnavailable);
-            };
-            class_addProtocol(cls, std::ptr::from_ref(protocol).cast_mut().cast());
-            for (name, imp, types) in [
-                (
-                    c"draggingPasteboard",
-                    fake_pasteboard as *const c_void,
-                    c"@@:",
-                ),
-                (
-                    c"draggingLocation",
-                    fake_location as *const c_void,
-                    c"{CGPoint=dd}@:",
-                ),
-                (
-                    c"draggingSourceOperationMask",
-                    fake_mask as *const c_void,
-                    c"Q@:",
-                ),
-                (c"draggingSource", fake_source as *const c_void, c"@@:"),
-            ] {
-                if class_addMethod(cls, selector(name), imp, types.as_ptr()) == 0 {
-                    objc_disposeClassPair(cls);
-                    return Err(Error::AppKitUnavailable);
-                }
-            }
-            objc_registerClassPair(cls);
-            Ok(cls as usize)
+    static FAKE_INFO: RefCell<FakeInfo> = const {
+        RefCell::new(FakeInfo {
+            pasteboard: None,
+            location: NSPoint { x: 0.0, y: 0.0 },
+            mask: 0,
         })
-        .map(|value| value as Id)
+    };
+}
+
+pub(crate) fn fake_pasteboard(
+    _: &Obj<ChoscoruiV2SimulatedDraggingInfo>,
+) -> Option<Retained<NSPasteboard>> {
+    FAKE_INFO.with(|fake| fake.borrow().pasteboard.clone())
+}
+
+pub(crate) fn fake_location(_: &Obj<ChoscoruiV2SimulatedDraggingInfo>) -> NSPoint {
+    FAKE_INFO.with(|fake| fake.borrow().location)
+}
+
+pub(crate) fn fake_mask(_: &Obj<ChoscoruiV2SimulatedDraggingInfo>) -> usize {
+    FAKE_INFO.with(|fake| fake.borrow().mask)
+}
+
+pub(crate) fn fake_source(_: &Obj<ChoscoruiV2SimulatedDraggingInfo>) -> Option<Retained<NSObject>> {
+    None
 }

@@ -1,9 +1,11 @@
-//! Checks of every FFI descriptor against the Objective-C runtime.
+//! Checks of every FFI descriptor and callback against the Objective-C
+//! runtime.
 //!
 //! Each check collects all mismatches and then fails one time, so one run
 //! shows the whole scope of an SDK change. A missing class, protocol, or
 //! selector is a failure.
 
+use super::callback::{ClassDef, Origin};
 use super::class::{ReceiverKind, Sel, lookup_class};
 use super::encode::{same_encoding, selector_family};
 use super::msg::{Kind, Ownership};
@@ -33,9 +35,16 @@ fn all_messages() -> Vec<&'static MsgInfo> {
 }
 
 /// Registers every class that this crate defines, so the checks find
-/// them. A class that fails to register is reported as missing.
-fn register_crate_classes() {
-    let _ = crate::menu_native::menu_target_class();
+/// them, and returns their definitions. A class that fails to register is
+/// reported as missing.
+fn crate_classes() -> Vec<ClassDef> {
+    super::classes::CLASSES
+        .iter()
+        .map(|class| {
+            let _ = (class.register)();
+            (class.definition)()
+        })
+        .collect()
 }
 
 /// The type encoding that the runtime has for `message`.
@@ -123,6 +132,96 @@ pub(crate) fn check_message_ownership<'a>(
     }
 }
 
+/// The type encoding of `selector` in its origin, or why there is none.
+fn origin_encoding(origin: Origin, selector: Sel) -> Result<String, String> {
+    match origin {
+        Origin::Super(name) => {
+            let class = lookup_class(name).ok_or_else(|| format!("class {name:?} is missing"))?;
+            runtime::method_types(class, selector, true)
+                .ok_or_else(|| format!("superclass {name:?} has no such instance method"))
+        }
+        Origin::Protocol(name) => {
+            let protocol = runtime::get_protocol(name)
+                .ok_or_else(|| format!("protocol {name:?} is missing"))?;
+            runtime::protocol_method_types(protocol, selector, true)
+                .ok_or_else(|| format!("protocol {name:?} has no such instance method"))
+        }
+        Origin::Own => Err("an own selector has no origin".to_owned()),
+    }
+}
+
+/// Where the superclass or an adopted protocol of `class` already
+/// declares `selector`.
+fn own_collisions(class: &ClassDef, selector: Sel) -> Vec<String> {
+    let mut found = Vec::new();
+    match lookup_class(class.superclass) {
+        None => found.push(format!("class {:?} is missing", class.superclass)),
+        Some(superclass) => {
+            if let Some(types) = runtime::method_types(superclass, selector, true) {
+                found.push(format!(
+                    "superclass {:?} declares {types}",
+                    class.superclass
+                ));
+            }
+        }
+    }
+    for &name in class.protocols {
+        match runtime::get_protocol(name) {
+            None => found.push(format!("protocol {name:?} is missing")),
+            Some(protocol) => {
+                if let Some(types) = runtime::protocol_method_types(protocol, selector, true) {
+                    found.push(format!("protocol {name:?} declares {types}"));
+                }
+            }
+        }
+    }
+    found
+}
+
+/// Compares each callback with the superclass method or the protocol
+/// method that it implements, and checks that each own selector is new.
+pub(crate) fn check_callbacks<'a>(
+    classes: impl IntoIterator<Item = &'a ClassDef>,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+    for class in classes {
+        for method in class.methods {
+            let selector = Sel::register(method.selector);
+            let expected = method.encoding();
+            let place = format!("{:?} {:?}", class.name, method.selector);
+            if let Origin::Own = method.origin {
+                for collision in own_collisions(class, selector) {
+                    failures.push(format!("{place}: own selector, but {collision}"));
+                }
+                continue;
+            }
+            match origin_encoding(method.origin, selector) {
+                Err(failure) => failures.push(format!("{place}: {failure}")),
+                Ok(actual) if !same_encoding(&expected, &actual) => {
+                    failures.push(format!("{place}: expected {expected}, actual {actual}"));
+                }
+                Ok(_) => {}
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} callbacks do not match the SDK:\n{}",
+            failures.len(),
+            failures.join("\n")
+        ))
+    }
+}
+
+#[test]
+fn callbacks_match_sdk() {
+    if let Err(report) = check_callbacks(&crate_classes()) {
+        panic!("{report}");
+    }
+}
+
 #[test]
 fn ownership_follows_naming() {
     if let Err(report) = check_message_ownership(all_messages()) {
@@ -132,7 +231,7 @@ fn ownership_follows_naming() {
 
 #[test]
 fn messages_match_runtime() {
-    register_crate_classes();
+    crate_classes();
     if let Err(report) = check_messages(all_messages()) {
         panic!("{report}");
     }
@@ -141,6 +240,8 @@ fn messages_match_runtime() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ffi::callback::{EncodeFn, Method, ReturnedObject, method_encoding};
+    use crate::ffi::geometry::NSPoint;
 
     fn message(selector: &'static CStr, encoding: fn() -> String) -> MsgInfo {
         MsgInfo {
@@ -216,6 +317,98 @@ mod tests {
             report.contains("protocol \"ChoscoruiNoSuchProtocol\" is missing"),
             "{report}"
         );
+    }
+
+    fn callback(origin: Origin, selector: &'static CStr, encode: EncodeFn) -> Method {
+        Method {
+            selector,
+            imp: std::ptr::null(),
+            encode,
+            origin,
+        }
+    }
+
+    fn class(protocols: Vec<&'static CStr>, methods: Vec<Method>) -> ClassDef {
+        ClassDef {
+            name: c"ChoscoruiV2CheckedClass",
+            superclass: c"NSObject",
+            protocols: protocols.leak(),
+            methods: methods.leak(),
+        }
+    }
+
+    #[test]
+    fn a_wrong_callback_type_names_both_encodings() {
+        let wrong = class(
+            Vec::new(),
+            vec![callback(
+                Origin::Super(c"NSObject"),
+                c"isEqual:",
+                method_encoding::<(), (isize,)>,
+            )],
+        );
+        let report = check_callbacks([&wrong]).unwrap_err();
+        assert!(report.contains("\"ChoscoruiV2CheckedClass\""), "{report}");
+        assert!(report.contains("isEqual:"), "{report}");
+        assert!(report.contains("expected v@:q"), "{report}");
+        assert!(report.contains("actual"), "{report}");
+        let missing = class(
+            Vec::new(),
+            vec![callback(
+                Origin::Protocol(c"NSDraggingInfo"),
+                c"choscoruiNoSuchSelector",
+                method_encoding::<(), ()>,
+            )],
+        );
+        let report = check_callbacks([&missing]).unwrap_err();
+        assert!(report.contains("choscoruiNoSuchSelector"), "{report}");
+        assert!(
+            report.contains("\"NSDraggingInfo\" has no such"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn a_colliding_own_selector_names_its_origin() {
+        let colliding = class(
+            vec![c"NSDraggingInfo"],
+            vec![
+                callback(
+                    Origin::Own,
+                    c"description",
+                    method_encoding::<ReturnedObject<()>, ()>,
+                ),
+                callback(
+                    Origin::Own,
+                    c"draggingLocation",
+                    method_encoding::<NSPoint, ()>,
+                ),
+                callback(
+                    Origin::Own,
+                    c"choscoruiNewSelector",
+                    method_encoding::<(), ()>,
+                ),
+            ],
+        );
+        let report = check_callbacks([&colliding]).unwrap_err();
+        // NSDraggingInfo incorporates the NSObject protocol, which also
+        // declares `description`.
+        assert!(report.starts_with("3 callbacks"), "{report}");
+        assert!(report.contains("\"description\""), "{report}");
+        assert!(
+            report.contains("superclass \"NSObject\" declares @"),
+            "{report}"
+        );
+        assert!(
+            report.contains("protocol \"NSDraggingInfo\" declares @"),
+            "{report}"
+        );
+        assert!(report.contains("\"draggingLocation\""), "{report}");
+        assert!(
+            report.contains("protocol \"NSDraggingInfo\" declares {CGPoint=dd}"),
+            "{report}"
+        );
+        assert!(!report.contains("choscoruiNewSelector"), "{report}");
     }
 
     #[test]

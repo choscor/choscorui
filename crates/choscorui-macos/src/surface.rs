@@ -1,13 +1,15 @@
 //! Cursor shapes, view capture, occlusion, and damage-driven invalidation.
+#![deny(unsafe_code)]
 
 use super::*;
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
     ADD_CURSOR_RECT, ARROW_CURSOR, BITMAP_CG_IMAGE, BITMAP_IMAGE_REP_FOR_CACHING, BOUNDS,
-    CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR, I_BEAM_CURSOR,
-    INIT_WITH_IMAGE_HOT_SPOT, INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor,
-    NSView, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR,
-    RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
+    CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR,
+    ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, I_BEAM_CURSOR, INIT_WITH_IMAGE_HOT_SPOT,
+    INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor, OCCLUSION_STATE,
+    OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR, RESIZE_UP_DOWN_CURSOR,
+    SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
 };
 use crate::ffi::retained::{Retained, alloc};
 use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
@@ -15,29 +17,18 @@ use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
 /// NSWindowOcclusionStateVisible.
 const OCCLUSION_VISIBLE: usize = 1 << 1;
 
-pub(crate) unsafe extern "C" fn window_did_change_occlusion(_: Id, _: Sel, notification: Id) {
-    // SAFETY: AppKit passes a live notification.
-    unsafe {
-        record_window_event(notification, |window| {
-            WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_VISIBLE == 0)
-        })
-    };
-}
-
-pub(crate) unsafe extern "C" fn view_reset_cursor_rects(view: Id, _: Sel) {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit calls resetCursorRects on the main thread for an
-        // attached view.
-        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
-            return;
-        };
-        reset_cursor_rects(view);
-    }));
+pub(crate) fn window_did_change_occlusion(
+    _: &Obj<ChoscoruiV2WindowDelegate>,
+    notification: Option<&Obj<NSNotification>>,
+) {
+    record_window_event(notification, |window| {
+        WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_VISIBLE == 0)
+    });
 }
 
 /// Adds the cursor rect of the window's current cursor shape. The cursor
 /// rect retains the cursor.
-fn reset_cursor_rects(view: &Obj<NSView>) {
+pub(crate) fn view_reset_cursor_rects(view: &Obj<ChoscoruiV2ContentView>) {
     let Some(window) = VIEW_WINDOW.send(view, ()) else {
         return;
     };
