@@ -95,10 +95,11 @@ unsafe fn evaluate(
         if pasteboard.is_null() {
             return None;
         }
-        let formats: Vec<DragFormat> = pasteboard::available_formats(pasteboard)
-            .into_iter()
-            .filter(|format| state.drop_formats.contains(format))
-            .collect();
+        let formats: Vec<DragFormat> =
+            pasteboard::available_formats(ffi::legacy::borrow(pasteboard)?)
+                .into_iter()
+                .filter(|format| state.drop_formats.contains(format))
+                .collect();
         if formats.is_empty() {
             return None;
         }
@@ -198,7 +199,9 @@ pub(crate) unsafe extern "C" fn view_perform_drag(view: Id, _: Sel, info: Id) ->
             return false;
         };
         drop(state);
-        let items = pasteboard::read_items(send_id(info, c"draggingPasteboard"), &formats);
+        let items = ffi::legacy::borrow(send_id(info, c"draggingPasteboard"))
+            .map(|pasteboard| pasteboard::read_items(pasteboard, &formats))
+            .unwrap_or_default();
         let accepted = !items.is_empty();
         let event = if accepted {
             DragEvent::Drop {
@@ -270,8 +273,8 @@ impl Window {
             if formats.is_empty() || operations == DragOperations::NONE {
                 send_void(view, c"unregisterDraggedTypes");
             } else {
-                let types = pasteboard::type_array(formats).ok_or(Error::AppKitUnavailable)?;
-                send_void_id(view, c"registerForDraggedTypes:", types.as_ptr());
+                let types = pasteboard::type_array(formats)?;
+                send_void_id(view, c"registerForDraggedTypes:", ffi::legacy::id(&types));
             }
         }
         let mut state = self.paint.lock().unwrap();
@@ -335,7 +338,7 @@ impl Window {
                 let item = CfOwned::new(send_id_id(
                     send_id(item_class, c"alloc"),
                     c"initWithPasteboardWriter:",
-                    writer.as_ptr(),
+                    ffi::legacy::id(writer),
                 ))
                 .ok_or(Error::AppKitUnavailable)?;
                 send_void_rect_id(
@@ -346,15 +349,18 @@ impl Window {
                 );
                 dragging.push(item);
             }
-            let raw: Vec<Id> = dragging.iter().map(CfOwned::as_ptr).collect();
-            let array = pasteboard::ns_array(&raw).ok_or(Error::AppKitUnavailable)?;
+            let objects: Vec<&ffi::Obj<ffi::foundation::NSObject>> = dragging
+                .iter()
+                .filter_map(|item| ffi::legacy::borrow(item.as_ptr()))
+                .collect();
+            let array = ffi::foundation::ns_array(&objects)?;
             self.paint.lock().unwrap().source_operations = allowed;
             let begin: unsafe extern "C" fn(Id, Sel, Id, Id, Id) -> Id =
                 std::mem::transmute(objc_msgSend as *const ());
             let session = begin(
                 view,
                 selector(c"beginDraggingSessionWithItems:event:source:"),
-                array.as_ptr(),
+                ffi::legacy::id(&array),
                 event,
                 view,
             );
@@ -397,7 +403,7 @@ impl Window {
             );
             FAKE_INFO.with(|fake| {
                 *fake.borrow_mut() = (
-                    pasteboard.as_ptr() as usize,
+                    ffi::legacy::id(pasteboard.pasteboard()) as usize,
                     window_point,
                     mask_from_operations(source),
                 );

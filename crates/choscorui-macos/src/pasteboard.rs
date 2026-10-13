@@ -8,7 +8,20 @@
 //! | `Url` | `public.url` |
 //! | `Custom(name)` | `com.choscorui.private.<name>`, same-process only by convention |
 
-use super::*;
+#![deny(unsafe_code)]
+
+use super::{Error, imaging};
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    CLEAR_CONTENTS, DATA_FOR_TYPE, ITEM_SET_DATA_FOR_TYPE, ITEM_SET_STRING_FOR_TYPE,
+    ITEM_STRING_FOR_TYPE, NSPasteboard, NSPasteboardItem, PASTEBOARD_ITEMS, STRING_FOR_TYPE, TYPES,
+    WRITE_OBJECTS,
+};
+use crate::ffi::foundation::{
+    ABSOLUTE_STRING, FILE_URL_WITH_PATH, IS_FILE_URL, NSArray, NSObject, NSString, PATH,
+    PRECOMPOSED, URL_WITH_STRING, array_items, data_bytes, ns_array, ns_data, ns_string, string,
+};
+use crate::ffi::retained::{Retained, alloc_init};
 use choscorui_core::{DragFormat, DragItem};
 use std::path::PathBuf;
 
@@ -18,17 +31,6 @@ const PNG: &str = "public.png";
 const TIFF: &str = "public.tiff";
 const URL: &str = "public.url";
 const CUSTOM_PREFIX: &str = "com.choscorui.private.";
-
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    static kCFTypeArrayCallBacks: c_void;
-    fn CFArrayCreate(
-        allocator: Id,
-        values: *const Id,
-        count: isize,
-        callbacks: *const c_void,
-    ) -> Id;
-}
 
 fn valid_custom(name: &str) -> bool {
     !name.is_empty()
@@ -60,253 +62,180 @@ fn format_for(kind: &str) -> Option<DragFormat> {
     })
 }
 
-/// Autoreleased-compatible +1 NSArray of `values`, retaining each.
-pub(crate) unsafe fn ns_array(values: &[Id]) -> Option<CfOwned> {
-    unsafe {
-        CfOwned::new(CFArrayCreate(
-            std::ptr::null_mut(),
-            values.as_ptr(),
-            values.len() as isize,
-            &raw const kCFTypeArrayCallBacks,
-        ))
-    }
-}
-
-/// +1 NSArray of NSString type names for `formats`.
-pub(crate) unsafe fn type_array(formats: &[DragFormat]) -> Option<CfOwned> {
+/// A new NSArray of NSString type names for `formats`.
+pub(crate) fn type_array(formats: &[DragFormat]) -> Result<Retained<NSArray>, Error> {
     let mut strings = Vec::new();
     for format in formats {
         for kind in types_for(format) {
-            strings.push(unsafe { cf_utf8(&kind) }?);
+            strings.push(ns_string(&kind)?);
         }
     }
-    let raw: Vec<Id> = strings.iter().map(CfOwned::as_ptr).collect();
-    unsafe { ns_array(&raw) }
+    let objects: Vec<&Obj<NSObject>> = strings.iter().map(|kind| kind.upcast()).collect();
+    ns_array(&objects)
 }
 
-pub(crate) unsafe fn ns_string_to_rust(value: Id) -> Option<String> {
-    if value.is_null() {
-        return None;
-    }
-    unsafe {
-        let ptr = send_cstr(value, c"UTF8String");
-        (!ptr.is_null()).then(|| CStr::from_ptr(ptr).to_string_lossy().into_owned())
-    }
+/// The type name `kind` as an NSString.
+fn type_name(kind: &str) -> Result<Retained<NSString>, Error> {
+    ns_string(kind).map_err(|_| Error::AppKitUnavailable)
 }
 
-unsafe fn ns_data_bytes(data: Id) -> Option<Vec<u8>> {
-    if data.is_null() {
-        return None;
-    }
-    unsafe {
-        let length = send_usize(data, c"length");
-        if length == 0 {
-            return Some(Vec::new());
-        }
-        let bytes = send_id(data, c"bytes") as *const u8;
-        (!bytes.is_null()).then(|| std::slice::from_raw_parts(bytes, length).to_vec())
-    }
-}
-
-unsafe fn ns_data(bytes: &[u8]) -> Result<Id, Error> {
-    let f: unsafe extern "C" fn(Id, Sel, *const u8, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    let data = unsafe {
-        f(
-            class(c"NSData")?,
-            selector(c"dataWithBytes:length:"),
-            bytes.as_ptr(),
-            bytes.len(),
-        )
-    };
-    if data.is_null() {
-        Err(Error::AppKitUnavailable)
-    } else {
-        Ok(data)
-    }
-}
-
-/// +1 NSPasteboardItem objects for `items`: one per file, plus one item
+/// New NSPasteboardItem objects for `items`: one per file, plus one item
 /// carrying text, URL, image, and custom data. Requires a pool.
-pub(crate) unsafe fn pasteboard_items(items: &[DragItem]) -> Result<Vec<CfOwned>, Error> {
-    unsafe {
-        let item_class = class(c"NSPasteboardItem")?;
-        let new_item = || -> Result<CfOwned, Error> {
-            CfOwned::new(send_id(send_id(item_class, c"alloc"), c"init"))
-                .ok_or(Error::AppKitUnavailable)
-        };
-        let set_string = |item: Id, value: &str, kind: &str| -> Result<(), Error> {
-            let value = cf_utf8(value).ok_or(Error::InvalidClipboardText)?;
-            let kind = cf_utf8(kind).ok_or(Error::AppKitUnavailable)?;
-            if send_bool_id_id(item, c"setString:forType:", value.as_ptr(), kind.as_ptr()) == 0 {
-                return Err(Error::ClipboardWriteFailed);
-            }
-            Ok(())
-        };
-        let set_data = |item: Id, bytes: &[u8], kind: &str| -> Result<(), Error> {
-            let data = ns_data(bytes)?;
-            let kind = cf_utf8(kind).ok_or(Error::AppKitUnavailable)?;
-            if send_bool_id_id(item, c"setData:forType:", data, kind.as_ptr()) == 0 {
-                return Err(Error::ClipboardWriteFailed);
-            }
-            Ok(())
-        };
-        let mut out = Vec::new();
-        let main = new_item()?;
-        let mut main_used = false;
-        for item in items {
-            match item {
-                DragItem::Text(text) => set_string(main.as_ptr(), text, TEXT)?,
-                DragItem::Url(url) => set_string(main.as_ptr(), url, URL)?,
-                DragItem::Image(png) => {
-                    if !png.starts_with(b"\x89PNG") {
-                        return Err(Error::UnsupportedFormat);
-                    }
-                    set_data(main.as_ptr(), png, PNG)?;
-                }
-                DragItem::Custom { format, bytes } => {
-                    if !valid_custom(format) {
-                        return Err(Error::UnsupportedFormat);
-                    }
-                    set_data(main.as_ptr(), bytes, &format!("{CUSTOM_PREFIX}{format}"))?;
-                }
-                DragItem::Files(paths) => {
-                    for path in paths {
-                        let path = path.to_str().ok_or(Error::InvalidClipboardText)?;
-                        if !path.starts_with('/') {
-                            return Err(Error::InvalidClipboardText);
-                        }
-                        let ns_path = cf_utf8(path).ok_or(Error::InvalidClipboardText)?;
-                        let url =
-                            send_id_id(class(c"NSURL")?, c"fileURLWithPath:", ns_path.as_ptr());
-                        let absolute = ns_string_to_rust(send_id(url, c"absoluteString"))
-                            .ok_or(Error::AppKitUnavailable)?;
-                        let file = new_item()?;
-                        set_string(file.as_ptr(), &absolute, FILE_URL)?;
-                        out.push(file);
-                    }
-                    continue;
-                }
-            }
-            main_used = true;
-        }
-        if main_used {
-            out.insert(0, main);
-        }
-        Ok(out)
-    }
-}
-
-/// Replaces the pasteboard contents with `items`.
-pub(crate) unsafe fn write_items(pasteboard: Id, items: &[DragItem]) -> Result<(), Error> {
-    unsafe {
-        let objects = pasteboard_items(items)?;
-        let raw: Vec<Id> = objects.iter().map(CfOwned::as_ptr).collect();
-        let array = ns_array(&raw).ok_or(Error::AppKitUnavailable)?;
-        send_usize(pasteboard, c"clearContents");
-        if !raw.is_empty() && send_bool_id(pasteboard, c"writeObjects:", array.as_ptr()) == 0 {
+pub(crate) fn pasteboard_items(
+    items: &[DragItem],
+) -> Result<Vec<Retained<NSPasteboardItem>>, Error> {
+    let set_string = |item: &Obj<NSPasteboardItem>, value: &str, kind: &str| {
+        let value = ns_string(value).map_err(|_| Error::InvalidClipboardText)?;
+        if !ITEM_SET_STRING_FOR_TYPE.send(item, (&value, &*type_name(kind)?)) {
             return Err(Error::ClipboardWriteFailed);
         }
         Ok(())
+    };
+    let set_data = |item: &Obj<NSPasteboardItem>, bytes: &[u8], kind: &str| {
+        let data = ns_data(bytes)?;
+        if !ITEM_SET_DATA_FOR_TYPE.send(item, (&data, &*type_name(kind)?)) {
+            return Err(Error::ClipboardWriteFailed);
+        }
+        Ok(())
+    };
+    let mut out = Vec::new();
+    let main = alloc_init::<NSPasteboardItem>()?;
+    let mut main_used = false;
+    for item in items {
+        match item {
+            DragItem::Text(text) => set_string(&main, text, TEXT)?,
+            DragItem::Url(url) => set_string(&main, url, URL)?,
+            DragItem::Image(png) => {
+                if !png.starts_with(b"\x89PNG") {
+                    return Err(Error::UnsupportedFormat);
+                }
+                set_data(&main, png, PNG)?;
+            }
+            DragItem::Custom { format, bytes } => {
+                if !valid_custom(format) {
+                    return Err(Error::UnsupportedFormat);
+                }
+                set_data(&main, bytes, &format!("{CUSTOM_PREFIX}{format}"))?;
+            }
+            DragItem::Files(paths) => {
+                for path in paths {
+                    let path = path.to_str().ok_or(Error::InvalidClipboardText)?;
+                    if !path.starts_with('/') {
+                        return Err(Error::InvalidClipboardText);
+                    }
+                    let path = ns_string(path).map_err(|_| Error::InvalidClipboardText)?;
+                    let url = FILE_URL_WITH_PATH
+                        .send_class((&path,))?
+                        .ok_or(Error::AppKitUnavailable)?;
+                    let absolute = ABSOLUTE_STRING
+                        .send(&url, ())
+                        .as_deref()
+                        .and_then(string)
+                        .ok_or(Error::AppKitUnavailable)?;
+                    let file = alloc_init::<NSPasteboardItem>()?;
+                    set_string(&file, &absolute, FILE_URL)?;
+                    out.push(file);
+                }
+                continue;
+            }
+        }
+        main_used = true;
     }
+    if main_used {
+        out.insert(0, main);
+    }
+    Ok(out)
+}
+
+/// Replaces the pasteboard contents with `items`.
+pub(crate) fn write_items(pasteboard: &Obj<NSPasteboard>, items: &[DragItem]) -> Result<(), Error> {
+    let objects = pasteboard_items(items)?;
+    let writers: Vec<&Obj<NSObject>> = objects.iter().map(|item| item.upcast()).collect();
+    let array = ns_array(&writers)?;
+    CLEAR_CONTENTS.send(pasteboard, ());
+    if !writers.is_empty() && !WRITE_OBJECTS.send(pasteboard, (&array,)) {
+        return Err(Error::ClipboardWriteFailed);
+    }
+    Ok(())
 }
 
 /// Formats currently offered, in a stable order without duplicates.
-pub(crate) unsafe fn available_formats(pasteboard: Id) -> Vec<DragFormat> {
+pub(crate) fn available_formats(pasteboard: &Obj<NSPasteboard>) -> Vec<DragFormat> {
     let mut formats = Vec::new();
-    unsafe {
-        let types = send_id(pasteboard, c"types");
-        if types.is_null() {
-            return formats;
-        }
-        for index in 0..send_usize(types, c"count") {
-            let kind = send_id_usize(types, c"objectAtIndex:", index);
-            if let Some(format) = ns_string_to_rust(kind).as_deref().and_then(format_for)
-                && !formats.contains(&format)
-            {
-                formats.push(format);
-            }
+    let Some(types) = TYPES.send(pasteboard, ()) else {
+        return formats;
+    };
+    for kind in array_items(&types) {
+        if let Some(format) = kind
+            .downcast::<NSString>()
+            .and_then(string)
+            .as_deref()
+            .and_then(format_for)
+            && !formats.contains(&format)
+        {
+            formats.push(format);
         }
     }
     formats
 }
 
-/// Reads the requested formats that are present.
-pub(crate) unsafe fn read_items(pasteboard: Id, formats: &[DragFormat]) -> Vec<DragItem> {
-    let mut items = Vec::new();
-    unsafe {
-        let string_for = |kind: &str| {
-            cf_utf8(kind).and_then(|kind| {
-                ns_string_to_rust(send_id_id(pasteboard, c"stringForType:", kind.as_ptr()))
-            })
-        };
-        let data_for = |kind: &str| {
-            cf_utf8(kind).and_then(|kind| {
-                ns_data_bytes(send_id_id(pasteboard, c"dataForType:", kind.as_ptr()))
-            })
-        };
-        for format in formats {
-            let item = match format {
-                DragFormat::Text => string_for(TEXT).map(DragItem::Text),
-                DragFormat::Url => string_for(URL).map(DragItem::Url),
-                DragFormat::Image => data_for(PNG)
-                    .or_else(|| {
-                        let tiff = data_for(TIFF)?;
-                        let image = imaging::decode_image(&tiff).ok()?;
-                        imaging::encode_png(&image).ok()
-                    })
-                    .map(DragItem::Image),
-                DragFormat::Custom(name) if valid_custom(name) => {
-                    data_for(&format!("{CUSTOM_PREFIX}{name}")).map(|bytes| DragItem::Custom {
-                        format: name.clone(),
-                        bytes,
-                    })
-                }
-                DragFormat::Custom(_) => None,
-                DragFormat::Files => {
-                    let mut paths = Vec::new();
-                    let entries = send_id(pasteboard, c"pasteboardItems");
-                    let kind = cf_utf8(FILE_URL);
-                    if let (false, Some(kind)) = (entries.is_null(), kind) {
-                        for index in 0..send_usize(entries, c"count") {
-                            let entry = send_id_usize(entries, c"objectAtIndex:", index);
-                            let value = send_id_id(entry, c"stringForType:", kind.as_ptr());
-                            if value.is_null() {
-                                continue;
-                            }
-                            let url = send_id_id(
-                                class(c"NSURL").unwrap_or(std::ptr::null_mut()),
-                                c"URLWithString:",
-                                value,
-                            );
-                            if url.is_null() || send_bool(url, c"isFileURL") == 0 {
-                                continue;
-                            }
-                            // File URLs carry the decomposed (NFD) file-system
-                            // form; macOS file systems look names up
-                            // normalization-insensitively, so return NFC.
-                            let path = send_id(url, c"path");
-                            let path = if path.is_null() {
-                                path
-                            } else {
-                                send_id(path, c"precomposedStringWithCanonicalMapping")
-                            };
-                            if let Some(path) = ns_string_to_rust(path) {
-                                paths.push(PathBuf::from(path));
-                            }
-                        }
-                    }
-                    (!paths.is_empty()).then_some(DragItem::Files(paths))
-                }
-            };
-            items.extend(item);
-        }
+/// The file path of a `public.file-url` string, in NFC. File URLs carry
+/// the decomposed (NFD) file-system form; macOS file systems look names
+/// up normalization-insensitively, so the path is precomposed.
+fn file_path(url: &Obj<NSString>) -> Option<PathBuf> {
+    let url = URL_WITH_STRING.send_class((url,)).ok()??;
+    if !IS_FILE_URL.send(&url, ()) {
+        return None;
     }
-    items
+    let path = PATH.send(&url, ())?;
+    let path = PRECOMPOSED.send(&path, ())?;
+    string(&path).map(PathBuf::from)
 }
 
-unsafe fn send_id_usize(receiver: Id, name: &CStr, value: usize) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
+/// Reads the requested formats that are present.
+pub(crate) fn read_items(pasteboard: &Obj<NSPasteboard>, formats: &[DragFormat]) -> Vec<DragItem> {
+    let string_for = |kind: &str| {
+        let kind = type_name(kind).ok()?;
+        string(&*STRING_FOR_TYPE.send(pasteboard, (&kind,))?)
+    };
+    let data_for = |kind: &str| {
+        let kind = type_name(kind).ok()?;
+        Some(data_bytes(&*DATA_FOR_TYPE.send(pasteboard, (&kind,))?))
+    };
+    let mut items = Vec::new();
+    for format in formats {
+        let item = match format {
+            DragFormat::Text => string_for(TEXT).map(DragItem::Text),
+            DragFormat::Url => string_for(URL).map(DragItem::Url),
+            DragFormat::Image => data_for(PNG)
+                .or_else(|| {
+                    let tiff = data_for(TIFF)?;
+                    let image = imaging::decode_image(&tiff).ok()?;
+                    imaging::encode_png(&image).ok()
+                })
+                .map(DragItem::Image),
+            DragFormat::Custom(name) if valid_custom(name) => {
+                data_for(&format!("{CUSTOM_PREFIX}{name}")).map(|bytes| DragItem::Custom {
+                    format: name.clone(),
+                    bytes,
+                })
+            }
+            DragFormat::Custom(_) => None,
+            DragFormat::Files => {
+                let entries = PASTEBOARD_ITEMS.send(pasteboard, ());
+                let kind = type_name(FILE_URL).ok();
+                let paths: Vec<PathBuf> = match (&entries, &kind) {
+                    (Some(entries), Some(kind)) => array_items(entries)
+                        .filter_map(|entry| entry.downcast::<NSPasteboardItem>())
+                        .filter_map(|entry| ITEM_STRING_FOR_TYPE.send(entry, (kind,)))
+                        .filter_map(|url| file_path(&url))
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                (!paths.is_empty()).then_some(DragItem::Files(paths))
+            }
+        };
+        items.extend(item);
+    }
+    items
 }

@@ -36,7 +36,7 @@ pub fn system_prefers_dark() -> Result<bool, Error> {
         if appearance.is_null() {
             return Ok(false);
         }
-        let name = pasteboard::ns_string_to_rust(send_id(appearance, c"name")).unwrap_or_default();
+        let name = ffi::legacy::string(send_id(appearance, c"name")).unwrap_or_default();
         Ok(name.contains("Dark"))
     }
 }

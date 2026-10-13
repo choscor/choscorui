@@ -147,7 +147,7 @@ impl Window {
                 return None;
             }
             send_bool_id_point_id(
-                menu.raw(),
+                ffi::legacy::id(menu.menu()),
                 c"popUpMenuPositioningItem:atLocation:inView:",
                 std::ptr::null_mut(),
                 NSPoint { x: at.x, y: at.y },

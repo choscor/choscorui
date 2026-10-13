@@ -66,6 +66,20 @@ pub(crate) fn lookup_class(name: &CStr) -> Option<&'static AnyClass> {
 }
 
 impl<C> Obj<C> {
+    /// This object as an instance of its superclass `S`.
+    pub(crate) fn upcast<S: ClassType>(&self) -> &Obj<S>
+    where
+        C: IsA<S>,
+    {
+        self.cast()
+    }
+
+    /// The object address, a key for the tables that map AppKit objects to
+    /// Rust state. It is unique while the object lives.
+    pub(crate) fn addr(&self) -> usize {
+        std::ptr::from_ref(self).addr()
+    }
+
     /// Reinterprets the handle as another class or protocol. The caller
     /// inside `ffi` knows that the object has that type.
     pub(in crate::ffi) fn cast<D>(&self) -> &Obj<D> {
@@ -105,19 +119,27 @@ impl Sel {
 }
 
 /// Declares a class marker with its superclass chain, for example
-/// `objc_class!(NSWindow: NSResponder: NSObject)`.
+/// `objc_class!(NSWindow: NSResponder: NSObject)`. A marker whose Rust name
+/// differs from the runtime name gives it as a string, for example
+/// `objc_class!(NsUrl = "NSURL": NSObject)`.
 macro_rules! objc_class {
-    ($(#[$meta:meta])* $name:ident) => {
+    ($(#[$meta:meta])* $name:ident $(= $runtime:literal)?) => {
         $(#[$meta])*
         pub(crate) enum $name {}
-        $crate::ffi::class::objc_class!(@receiver $name, stringify!($name));
+        $crate::ffi::class::objc_class!(@receiver $name, $crate::ffi::class::objc_class!(@runtime $name $($runtime)?));
         impl $crate::ffi::class::IsA<$name> for $name {}
     };
-    ($(#[$meta:meta])* $name:ident : $superclass:ident $(: $ancestor:ident)*) => {
+    ($(#[$meta:meta])* $name:ident $(= $runtime:literal)? : $superclass:ident $(: $ancestor:ident)*) => {
         $(#[$meta])*
         pub(crate) enum $name {}
-        $crate::ffi::class::objc_class!(@receiver $name, stringify!($name));
+        $crate::ffi::class::objc_class!(@receiver $name, $crate::ffi::class::objc_class!(@runtime $name $($runtime)?));
         $crate::ffi::class::objc_class!(@chain $name: $superclass $(: $ancestor)*);
+    };
+    (@runtime $name:ident) => {
+        stringify!($name)
+    };
+    (@runtime $name:ident $runtime:literal) => {
+        $runtime
     };
     (@receiver $name:ident, $runtime:expr) => {
         impl $crate::ffi::class::Receiver for $name {

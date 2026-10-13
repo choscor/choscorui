@@ -67,7 +67,7 @@ use shaping::draw_text_run;
 pub use shaping::*;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ffi::{CStr, CString, c_int, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -117,7 +117,6 @@ struct CGAffineTransform {
 
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {
-    static NSPasteboardTypeString: Id;
     static NSAccessibilityButtonRole: Id;
     static NSAccessibilityCheckBoxRole: Id;
     static NSAccessibilityGroupRole: Id;
@@ -203,10 +202,6 @@ struct ObjcSuper {
     receiver: Id,
     superclass: Id,
 }
-unsafe extern "C" {
-    fn pthread_main_np() -> c_int;
-}
-
 #[repr(C)]
 struct CFRunLoopSourceContext {
     version: isize,
@@ -1282,8 +1277,7 @@ pub struct Application {
 }
 impl Application {
     pub fn new() -> Result<Self, Error> {
-        // SAFETY: pthread_main_np takes no arguments and returns a C int.
-        if unsafe { pthread_main_np() } == 0 {
+        if !ffi::is_main_thread() {
             return Err(Error::WrongThread);
         }
         let _pool = Pool::new()?;
@@ -1348,7 +1342,7 @@ impl Application {
     }
 
     pub fn install_main_menu(&self, model: MenuBarModel) -> Result<MainMenu, MenuError> {
-        MainMenu::install(self, model)
+        MainMenu::install(model)
     }
 
     pub fn create_window(&self, options: WindowOptions) -> Result<Window, Error> {
@@ -2340,11 +2334,6 @@ unsafe fn send_bool(receiver: Id, name: &CStr) -> i8 {
     let f: unsafe extern "C" fn(Id, Sel) -> i8 =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_bool_id_id(receiver: Id, name: &CStr, first: Id, second: Id) -> i8 {
-    let f: unsafe extern "C" fn(Id, Sel, Id, Id) -> i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), first, second) }
 }
 unsafe fn send_bool_id(receiver: Id, name: &CStr, value: Id) -> i8 {
     let f: unsafe extern "C" fn(Id, Sel, Id) -> i8 =

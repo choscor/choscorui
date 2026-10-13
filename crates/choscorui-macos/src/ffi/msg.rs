@@ -353,6 +353,51 @@ impl Encode for &CStr {
     }
 }
 
+/// The return marker of a borrowed NUL-terminated UTF-8 buffer, such as
+/// the result of `-[NSString UTF8String]`. A descriptor with this return
+/// stays private to `ffi`.
+pub(crate) struct Utf8;
+
+impl Ret for Utf8 {
+    type Raw<'a> = *const c_char;
+    type Out<'a> = *const c_char;
+    #[cfg(test)]
+    const OWNERSHIP: Ownership = Ownership::Value;
+    fn out<'a>(raw: Self::Raw<'a>) -> Self::Out<'a> {
+        raw
+    }
+}
+
+#[cfg(test)]
+impl Encode for Utf8 {
+    fn encode(out: &mut String) {
+        out.push('*');
+    }
+}
+
+impl Arg for Sel {
+    type In<'a> = Sel;
+    type Raw<'a> = Sel;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
+impl Arg for Option<Sel> {
+    type In<'a> = Option<Sel>;
+    type Raw<'a> = Option<Sel>;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
+#[cfg(test)]
+impl Encode for Option<Sel> {
+    fn encode(out: &mut String) {
+        out.push(':');
+    }
+}
+
 /// A pointer to `count` values that a helper in `ffi` passes with its
 /// length. A descriptor with this argument stays private to `ffi`.
 impl<T: 'static> Arg for *const T {
@@ -360,6 +405,17 @@ impl<T: 'static> Arg for *const T {
     type Raw<'a> = *const T;
     fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
         value
+    }
+}
+
+/// A pointer result that a helper in `ffi` reads before it returns.
+impl<T: 'static> Ret for *const T {
+    type Raw<'a> = *const T;
+    type Out<'a> = *const T;
+    #[cfg(test)]
+    const OWNERSHIP: Ownership = Ownership::Value;
+    fn out<'a>(raw: Self::Raw<'a>) -> Self::Out<'a> {
+        raw
     }
 }
 

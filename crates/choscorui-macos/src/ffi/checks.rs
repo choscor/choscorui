@@ -28,6 +28,12 @@ fn all_messages() -> Vec<&'static MsgInfo> {
         .collect()
 }
 
+/// Registers every class that this crate defines, so the checks find
+/// them. A class that fails to register is reported as missing.
+fn register_crate_classes() {
+    let _ = crate::menu_native::menu_target_class();
+}
+
 /// The type encoding that the runtime has for `message`.
 fn runtime_encoding(message: &MsgInfo) -> Result<String, String> {
     let selector = Sel::register(message.selector);
@@ -117,6 +123,7 @@ fn ownership_follows_naming() {
 
 #[test]
 fn messages_match_runtime() {
+    register_crate_classes();
     if let Err(report) = check_messages(all_messages()) {
         panic!("{report}");
     }

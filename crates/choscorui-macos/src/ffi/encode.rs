@@ -43,6 +43,8 @@ encode_as!(i8, "c");
 encode_as!(u8, "C");
 #[cfg(test)]
 encode_as!(f64, "d");
+#[cfg(test)]
+encode_as!(std::ffi::c_void, "v");
 
 /// Objective-C `BOOL`: `bool` on arm64 and `signed char` on x86-64. Rust
 /// reads it as one byte, so a value other than 0 or 1 is still defined.

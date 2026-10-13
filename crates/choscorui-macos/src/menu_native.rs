@@ -1,15 +1,27 @@
 use super::{
-    Application, Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec,
-    Pool, Sel, class, class_addMethod, objc_allocateClassPair, objc_registerClassPair, selector,
-    send_id, send_id_cstr, send_void, send_void_id,
+    Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool, Sel,
+    class, class_addMethod, objc_allocateClassPair, objc_registerClassPair, selector,
 };
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    ADD_ITEM, ChoscorMenuTarget, INIT_WITH_TITLE, INIT_WITH_TITLE_ACTION_KEY, MAIN_MENU,
+    MENU_ITEM_ACTIVATED, NSMenu, NSMenuItem, NUMBER_OF_ITEMS, SEPARATOR_ITEM, SET_ACTION,
+    SET_AUTOENABLES_ITEMS, SET_ENABLED, SET_ITEM_TITLE, SET_KEY_EQUIVALENT,
+    SET_KEY_EQUIVALENT_MODIFIER_MASK, SET_MAIN_MENU, SET_STATE, SET_SUBMENU, SET_TARGET,
+    SHARED_APPLICATION,
+};
+use crate::ffi::class::Sel as Selector;
+use crate::ffi::foundation::{NSString, TextError};
+use crate::ffi::retained::{Retained, alloc, alloc_init};
 use std::collections::{HashMap, VecDeque};
-use std::ffi::{CStr, CString, c_void};
+use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
+
+/// The action that every command item sends to its target.
+const ACTION: &std::ffi::CStr = c"choscorMenuItemActivated:";
 
 struct TargetBinding {
     commands: HashMap<usize, MenuCommandId>,
@@ -42,7 +54,8 @@ unsafe extern "C" fn activate_menu_item(target: Id, _: Sel, sender: Id) {
     }
 }
 
-fn menu_target_class() -> Result<Id, MenuError> {
+/// Registers the target class on first use.
+pub(crate) fn menu_target_class() -> Result<Id, MenuError> {
     static CLASS: OnceLock<Result<usize, MenuError>> = OnceLock::new();
     CLASS
         .get_or_init(|| unsafe {
@@ -53,7 +66,7 @@ fn menu_target_class() -> Result<Id, MenuError> {
                     .map(|existing| existing as usize)
                     .map_err(|_| MenuError::AppKitUnavailable);
             }
-            let action = selector(c"choscorMenuItemActivated:");
+            let action = selector(ACTION);
             if class_addMethod(
                 class,
                 action,
@@ -73,10 +86,9 @@ fn menu_target_class() -> Result<Id, MenuError> {
 
 /// Main-thread AppKit menu ownership and command activation queue.
 pub struct MainMenu {
-    application: NonNull<c_void>,
-    root: NonNull<c_void>,
-    target: NonNull<c_void>,
-    items: HashMap<MenuCommandId, NonNull<c_void>>,
+    root: Retained<NSMenu>,
+    target: Retained<ChoscorMenuTarget>,
+    items: HashMap<MenuCommandId, Retained<NSMenuItem>>,
     model: MenuBarModel,
     activations: Arc<Mutex<VecDeque<MenuCommandId>>>,
     panics: Arc<Mutex<usize>>,
@@ -84,56 +96,41 @@ pub struct MainMenu {
 }
 
 impl MainMenu {
-    pub(super) fn install(
-        application: &Application,
-        model: MenuBarModel,
-    ) -> Result<Self, MenuError> {
+    pub(super) fn install(model: MenuBarModel) -> Result<Self, MenuError> {
         // setMainMenu: autoreleases objects that retain every open window;
         // without a pool here they were never released.
         let _pool = Pool::new();
-        unsafe {
-            let root = owned_menu("")?;
-            let target = NonNull::new(send_id(send_id(menu_target_class()?, c"alloc"), c"init"))
-                .ok_or(MenuError::AppKitUnavailable)?;
-            let mut items = HashMap::new();
-            let mut commands = HashMap::new();
-            for menu in model.menus() {
-                let submenu = owned_menu(&menu.title)?;
-                let parent_item = owned_menu_item(&menu.title, None)?;
-                send_void_id(parent_item.as_ptr(), c"setSubmenu:", submenu.as_ptr());
-                send_void_id(root.as_ptr(), c"addItem:", parent_item.as_ptr());
-                populate(
-                    submenu.as_ptr(),
-                    &menu.entries,
-                    target.as_ptr(),
-                    &mut items,
-                    &mut commands,
-                )?;
-                send_void(submenu.as_ptr(), c"release");
-                send_void(parent_item.as_ptr(), c"release");
-            }
-            let activations = Arc::new(Mutex::new(VecDeque::new()));
-            let panics = Arc::new(Mutex::new(0));
-            bindings().lock().unwrap().insert(
-                target.as_ptr() as usize,
-                TargetBinding {
-                    commands,
-                    activations: Arc::clone(&activations),
-                    panics: Arc::clone(&panics),
-                },
-            );
-            send_void_id(application.raw.as_ptr(), c"setMainMenu:", root.as_ptr());
-            Ok(Self {
-                application: application.raw,
-                root,
-                target,
-                items,
-                model,
-                activations,
-                panics,
-                _main_thread: PhantomData,
-            })
+        let root = owned_menu("")?;
+        let target = new_target()?;
+        let mut items = HashMap::new();
+        let mut commands = HashMap::new();
+        for menu in model.menus() {
+            let submenu = owned_menu(&menu.title)?;
+            let parent_item = owned_menu_item(&menu.title, None)?;
+            SET_SUBMENU.send(&parent_item, (Some(&submenu),));
+            ADD_ITEM.send(&root, (&parent_item,));
+            populate(&submenu, &menu.entries, &target, &mut items, &mut commands)?;
         }
+        let activations = Arc::new(Mutex::new(VecDeque::new()));
+        let panics = Arc::new(Mutex::new(0));
+        bindings().lock().unwrap().insert(
+            target.addr(),
+            TargetBinding {
+                commands,
+                activations: Arc::clone(&activations),
+                panics: Arc::clone(&panics),
+            },
+        );
+        SET_MAIN_MENU.send(shared_application()?, (Some(&root),));
+        Ok(Self {
+            root,
+            target,
+            items,
+            model,
+            activations,
+            panics,
+            _main_thread: PhantomData,
+        })
     }
 
     pub fn model(&self) -> &MenuBarModel {
@@ -147,8 +144,7 @@ impl MainMenu {
     ) -> Result<(), MenuError> {
         let _pool = Pool::new();
         self.model.set_state(command, state.clone())?;
-        let item = self.items[&command];
-        unsafe { apply_state(item.as_ptr(), &state) }
+        apply_state(&self.items[&command], &state)
     }
 
     pub fn take_activations(&self) -> Vec<MenuCommandId> {
@@ -165,15 +161,8 @@ impl MainMenu {
         let item = self
             .items
             .get(&command)
-            .copied()
             .ok_or(MenuError::UnknownCommand(command))?;
-        unsafe {
-            send_void_id(
-                self.target.as_ptr(),
-                c"choscorMenuItemActivated:",
-                item.as_ptr(),
-            )
-        };
+        MENU_ITEM_ACTIVATED.send(&self.target, (item,));
         Ok(true)
     }
 
@@ -182,37 +171,51 @@ impl MainMenu {
     }
 }
 
+/// The shared `NSApplication`.
+fn shared_application() -> Result<&'static Obj<crate::ffi::appkit::NSApplication>, MenuError> {
+    SHARED_APPLICATION
+        .send_class(())
+        .ok()
+        .flatten()
+        .ok_or(MenuError::AppKitUnavailable)
+}
+
+/// A new instance of the target class.
+fn new_target() -> Result<Retained<ChoscorMenuTarget>, MenuError> {
+    menu_target_class()?;
+    alloc_init::<ChoscorMenuTarget>().map_err(|_| MenuError::AppKitUnavailable)
+}
+
 /// Adds `entries` to `menu`, wiring command items to `target`.
-unsafe fn populate(
-    menu: Id,
+fn populate(
+    menu: &Obj<NSMenu>,
     entries: &[MenuEntry],
-    target: Id,
-    items: &mut HashMap<MenuCommandId, NonNull<c_void>>,
+    target: &Obj<ChoscorMenuTarget>,
+    items: &mut HashMap<MenuCommandId, Retained<NSMenuItem>>,
     commands: &mut HashMap<usize, MenuCommandId>,
 ) -> Result<(), MenuError> {
     for entry in entries {
         match entry {
-            MenuEntry::Separator => unsafe {
-                let separator = send_id(
-                    class(c"NSMenuItem").map_err(|_| MenuError::AppKitUnavailable)?,
-                    c"separatorItem",
-                );
-                send_void_id(menu, c"addItem:", separator);
-            },
-            MenuEntry::Command { command, state } => unsafe {
+            MenuEntry::Separator => {
+                let separator = SEPARATOR_ITEM
+                    .send_class(())
+                    .ok()
+                    .flatten()
+                    .ok_or(MenuError::AppKitUnavailable)?;
+                ADD_ITEM.send(menu, (&separator,));
+            }
+            MenuEntry::Command { command, state } => {
                 let item = owned_menu_item(
                     &state.title,
                     state.shortcut.as_ref().map(|s| s.key.as_str()),
                 )?;
-                send_void_id(item.as_ptr(), c"setTarget:", target);
-                set_action(item.as_ptr(), c"choscorMenuItemActivated:");
-                apply_state(item.as_ptr(), state)?;
-                send_void_id(menu, c"addItem:", item.as_ptr());
-                commands.insert(item.as_ptr() as usize, *command);
+                SET_TARGET.send(&item, (Some(target.upcast()),));
+                SET_ACTION.send(&item, (Some(Selector::register(ACTION)),));
+                apply_state(&item, state)?;
+                ADD_ITEM.send(menu, (&item,));
+                commands.insert(item.addr(), *command);
                 items.insert(*command, item);
-                // The menu retains the item; `items` holds a weak pointer.
-                send_void(item.as_ptr(), c"release");
-            },
+            }
         }
     }
     Ok(())
@@ -222,9 +225,9 @@ unsafe fn populate(
 /// Shift-F10, or the accessibility ShowMenu action). Activations use the
 /// same target/action path as the main menu.
 pub struct ContextMenu {
-    menu: NonNull<c_void>,
-    target: NonNull<c_void>,
-    items: HashMap<MenuCommandId, NonNull<c_void>>,
+    menu: Retained<NSMenu>,
+    target: Retained<ChoscorMenuTarget>,
+    items: HashMap<MenuCommandId, Retained<NSMenuItem>>,
     model: MenuBarModel,
     activations: Arc<Mutex<VecDeque<MenuCommandId>>>,
     _main_thread: PhantomData<Rc<()>>,
@@ -235,40 +238,37 @@ impl ContextMenu {
     pub fn new(spec: MenuSpec) -> Result<Self, MenuError> {
         let _pool = Pool::new();
         let model = MenuBarModel::new(vec![spec])?;
-        unsafe {
-            let menu = owned_menu(&model.menus()[0].title)?;
-            // Items keep their own enabled state instead of AppKit's
-            // responder-chain validation.
-            send_void_bool(menu.as_ptr(), c"setAutoenablesItems:", 0);
-            let target = NonNull::new(send_id(send_id(menu_target_class()?, c"alloc"), c"init"))
-                .ok_or(MenuError::AppKitUnavailable)?;
-            let mut items = HashMap::new();
-            let mut commands = HashMap::new();
-            populate(
-                menu.as_ptr(),
-                &model.menus()[0].entries,
-                target.as_ptr(),
-                &mut items,
-                &mut commands,
-            )?;
-            let activations = Arc::new(Mutex::new(VecDeque::new()));
-            bindings().lock().unwrap().insert(
-                target.as_ptr() as usize,
-                TargetBinding {
-                    commands,
-                    activations: Arc::clone(&activations),
-                    panics: Arc::new(Mutex::new(0)),
-                },
-            );
-            Ok(Self {
-                menu,
-                target,
-                items,
-                model,
-                activations,
-                _main_thread: PhantomData,
-            })
-        }
+        let menu = owned_menu(&model.menus()[0].title)?;
+        // Items keep their own enabled state instead of AppKit's
+        // responder-chain validation.
+        SET_AUTOENABLES_ITEMS.send(&menu, (false,));
+        let target = new_target()?;
+        let mut items = HashMap::new();
+        let mut commands = HashMap::new();
+        populate(
+            &menu,
+            &model.menus()[0].entries,
+            &target,
+            &mut items,
+            &mut commands,
+        )?;
+        let activations = Arc::new(Mutex::new(VecDeque::new()));
+        bindings().lock().unwrap().insert(
+            target.addr(),
+            TargetBinding {
+                commands,
+                activations: Arc::clone(&activations),
+                panics: Arc::new(Mutex::new(0)),
+            },
+        );
+        Ok(Self {
+            menu,
+            target,
+            items,
+            model,
+            activations,
+            _main_thread: PhantomData,
+        })
     }
 
     pub fn spec(&self) -> &MenuSpec {
@@ -278,7 +278,7 @@ impl ContextMenu {
     /// Number of native items, separators included.
     pub fn item_count(&self) -> usize {
         let _pool = Pool::new();
-        unsafe { super::send_usize(self.menu.as_ptr(), c"numberOfItems") }
+        usize::try_from(NUMBER_OF_ITEMS.send(&self.menu, ())).unwrap_or(0)
     }
 
     pub fn set_state(
@@ -288,8 +288,7 @@ impl ContextMenu {
     ) -> Result<(), MenuError> {
         let _pool = Pool::new();
         self.model.set_state(command, state.clone())?;
-        let item = self.items[&command];
-        unsafe { apply_state(item.as_ptr(), &state) }
+        apply_state(&self.items[&command], &state)
     }
 
     pub fn take_activations(&self) -> Vec<MenuCommandId> {
@@ -302,160 +301,76 @@ impl ContextMenu {
         if !self.model.state(command)?.enabled {
             return Ok(false);
         }
-        let item = self.items[&command];
-        unsafe {
-            send_void_id(
-                self.target.as_ptr(),
-                c"choscorMenuItemActivated:",
-                item.as_ptr(),
-            )
-        };
+        MENU_ITEM_ACTIVATED.send(&self.target, (&*self.items[&command],));
         Ok(true)
     }
 
-    pub(super) fn raw(&self) -> Id {
-        self.menu.as_ptr()
+    pub(super) fn menu(&self) -> &Obj<NSMenu> {
+        &self.menu
     }
 }
 
 impl Drop for ContextMenu {
     fn drop(&mut self) {
         let _pool = Pool::new();
-        bindings()
-            .lock()
-            .unwrap()
-            .remove(&(self.target.as_ptr() as usize));
-        unsafe {
-            send_void(self.target.as_ptr(), c"release");
-            send_void(self.menu.as_ptr(), c"release");
-        }
+        bindings().lock().unwrap().remove(&self.target.addr());
     }
 }
 
 impl Drop for MainMenu {
     fn drop(&mut self) {
         let _pool = Pool::new();
-        bindings()
-            .lock()
-            .unwrap()
-            .remove(&(self.target.as_ptr() as usize));
-        unsafe {
-            if send_id(self.application.as_ptr(), c"mainMenu") == self.root.as_ptr() {
-                send_void_id(
-                    self.application.as_ptr(),
-                    c"setMainMenu:",
-                    std::ptr::null_mut(),
-                );
-            }
-            send_void(self.target.as_ptr(), c"release");
-            send_void(self.root.as_ptr(), c"release");
+        bindings().lock().unwrap().remove(&self.target.addr());
+        if let Ok(application) = shared_application()
+            && MAIN_MENU
+                .send(application, ())
+                .is_some_and(|menu| menu.addr() == self.root.addr())
+        {
+            SET_MAIN_MENU.send(application, (None,));
         }
     }
 }
 
-unsafe fn owned_menu(title: &str) -> Result<NonNull<c_void>, MenuError> {
+fn owned_menu(title: &str) -> Result<Retained<NSMenu>, MenuError> {
     let title = ns_string(title)?;
-    unsafe {
-        NonNull::new(send_id_id_cstr(
-            send_id(
-                class(c"NSMenu").map_err(|_| MenuError::AppKitUnavailable)?,
-                c"alloc",
-            ),
-            c"initWithTitle:",
-            title,
-        ))
+    let menu = alloc::<NSMenu>().map_err(|_| MenuError::AppKitUnavailable)?;
+    INIT_WITH_TITLE
+        .init(menu, (&title,))
         .ok_or(MenuError::AppKitUnavailable)
-    }
 }
 
-unsafe fn owned_menu_item(
-    title: &str,
-    shortcut: Option<&str>,
-) -> Result<NonNull<c_void>, MenuError> {
+fn owned_menu_item(title: &str, shortcut: Option<&str>) -> Result<Retained<NSMenuItem>, MenuError> {
     let title = ns_string(title)?;
     let shortcut = ns_string(shortcut.unwrap_or(""))?;
-    unsafe {
-        NonNull::new(send_menu_item_init(
-            send_id(
-                class(c"NSMenuItem").map_err(|_| MenuError::AppKitUnavailable)?,
-                c"alloc",
-            ),
-            c"initWithTitle:action:keyEquivalent:",
-            title,
-            std::ptr::null_mut(),
-            shortcut,
-        ))
+    let item = alloc::<NSMenuItem>().map_err(|_| MenuError::AppKitUnavailable)?;
+    INIT_WITH_TITLE_ACTION_KEY
+        .init(item, (&title, None, &shortcut))
         .ok_or(MenuError::AppKitUnavailable)
-    }
 }
 
-unsafe fn apply_state(item: Id, state: &MenuItemState) -> Result<(), MenuError> {
-    unsafe {
-        send_void_id(item, c"setTitle:", ns_string(&state.title)?);
-        send_void_bool(item, c"setEnabled:", i8::from(state.enabled));
-        send_void_isize(item, c"setState:", isize::from(state.checked));
-        let key = state
-            .shortcut
-            .as_ref()
-            .map_or("", |shortcut| shortcut.key.as_str());
-        send_void_id(item, c"setKeyEquivalent:", ns_string(key)?);
-        let mask = state.shortcut.as_ref().map_or(0, |shortcut| {
-            let modifiers = shortcut.modifiers;
-            (usize::from(modifiers.shift) << 17)
-                | (usize::from(modifiers.control) << 18)
-                | (usize::from(modifiers.option) << 19)
-                | (usize::from(modifiers.command) << 20)
-        });
-        send_void_usize(item, c"setKeyEquivalentModifierMask:", mask);
-    }
+fn apply_state(item: &Obj<NSMenuItem>, state: &MenuItemState) -> Result<(), MenuError> {
+    SET_ITEM_TITLE.send(item, (&*ns_string(&state.title)?,));
+    SET_ENABLED.send(item, (state.enabled,));
+    SET_STATE.send(item, (isize::from(state.checked),));
+    let key = state
+        .shortcut
+        .as_ref()
+        .map_or("", |shortcut| shortcut.key.as_str());
+    SET_KEY_EQUIVALENT.send(item, (&*ns_string(key)?,));
+    let mask = state.shortcut.as_ref().map_or(0, |shortcut| {
+        let modifiers = shortcut.modifiers;
+        (usize::from(modifiers.shift) << 17)
+            | (usize::from(modifiers.control) << 18)
+            | (usize::from(modifiers.option) << 19)
+            | (usize::from(modifiers.command) << 20)
+    });
+    SET_KEY_EQUIVALENT_MODIFIER_MASK.send(item, (mask,));
     Ok(())
 }
 
-fn ns_string(value: &str) -> Result<Id, MenuError> {
-    let value = CString::new(value).map_err(|_| MenuError::InvalidText)?;
-    unsafe {
-        NonNull::new(send_id_cstr(
-            class(c"NSString").map_err(|_| MenuError::AppKitUnavailable)?,
-            c"stringWithUTF8String:",
-            value.as_ptr(),
-        ))
-        .map(NonNull::as_ptr)
-        .ok_or(MenuError::AppKitUnavailable)
-    }
-}
-
-unsafe fn send_id_id_cstr(receiver: Id, name: &CStr, value: Id) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-
-unsafe fn send_menu_item_init(receiver: Id, name: &CStr, title: Id, action: Sel, key: Id) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, Id, Sel, Id) -> Id =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), title, action, key) }
-}
-
-unsafe fn set_action(receiver: Id, action: &CStr) {
-    let function: unsafe extern "C" fn(Id, Sel, Sel) =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(c"setAction:"), selector(action)) }
-}
-
-unsafe fn send_void_bool(receiver: Id, name: &CStr, value: i8) {
-    let function: unsafe extern "C" fn(Id, Sel, i8) =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-
-unsafe fn send_void_isize(receiver: Id, name: &CStr, value: isize) {
-    let function: unsafe extern "C" fn(Id, Sel, isize) =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-
-unsafe fn send_void_usize(receiver: Id, name: &CStr, value: usize) {
-    let function: unsafe extern "C" fn(Id, Sel, usize) =
-        unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
+fn ns_string(value: &str) -> Result<Retained<NSString>, MenuError> {
+    crate::ffi::foundation::ns_string(value).map_err(|error| match error {
+        TextError::InteriorNul => MenuError::InvalidText,
+        TextError::Unavailable => MenuError::AppKitUnavailable,
+    })
 }

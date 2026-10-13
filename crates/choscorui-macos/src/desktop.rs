@@ -130,12 +130,10 @@ unsafe fn urls_from_array(urls: Id) -> (Vec<PathBuf>, Vec<String>) {
                 continue;
             }
             if send_bool(url, c"isFileURL") != 0 {
-                if let Some(path) = pasteboard::ns_string_to_rust(send_id(url, c"path")) {
+                if let Some(path) = ffi::legacy::string(send_id(url, c"path")) {
                     files.push(PathBuf::from(path));
                 }
-            } else if let Some(text) =
-                pasteboard::ns_string_to_rust(send_id(url, c"absoluteString"))
-            {
+            } else if let Some(text) = ffi::legacy::string(send_id(url, c"absoluteString")) {
                 others.push(text);
             }
         }
@@ -180,9 +178,9 @@ unsafe extern "C" fn notification_did_receive(_: Id, _: Sel, _: Id, response: Id
         unsafe {
             let request = send_id(send_id(response, c"notification"), c"request");
             let identifier =
-                pasteboard::ns_string_to_rust(send_id(request, c"identifier")).unwrap_or_default();
-            let action = pasteboard::ns_string_to_rust(send_id(response, c"actionIdentifier"))
-                .unwrap_or_default();
+                ffi::legacy::string(send_id(request, c"identifier")).unwrap_or_default();
+            let action =
+                ffi::legacy::string(send_id(response, c"actionIdentifier")).unwrap_or_default();
             push_event(AppEvent::NotificationActivated { identifier, action });
         }
     }));
@@ -343,7 +341,7 @@ pub fn url_handler(url: &str) -> Result<Option<PathBuf>, DesktopError> {
         if app.is_null() {
             return Ok(None);
         }
-        Ok(pasteboard::ns_string_to_rust(send_id(app, c"path")).map(PathBuf::from))
+        Ok(ffi::legacy::string(send_id(app, c"path")).map(PathBuf::from))
     }
 }
 
@@ -403,9 +401,7 @@ impl StatusItem {
 
     pub fn title(&self) -> String {
         let _pool = Pool::new();
-        unsafe {
-            pasteboard::ns_string_to_rust(send_id(self.button(), c"title")).unwrap_or_default()
-        }
+        unsafe { ffi::legacy::string(send_id(self.button(), c"title")).unwrap_or_default() }
     }
 
     /// Tooltip, also used as the accessibility help text.
@@ -433,7 +429,8 @@ impl StatusItem {
             send_void_id(
                 self.raw.as_ptr(),
                 c"setMenu:",
-                menu.as_ref().map_or(std::ptr::null_mut(), ContextMenu::raw),
+                menu.as_ref()
+                    .map_or(std::ptr::null_mut(), |menu| ffi::legacy::id(menu.menu())),
             )
         };
         self.menu = menu;

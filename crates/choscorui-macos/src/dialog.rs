@@ -1,7 +1,20 @@
-use super::{Application, Id, Pool, Sel, objc_msgSend, selector};
-use std::ffi::{CStr, CString, c_void};
+#![deny(unsafe_code)]
+
+use super::{Application, Pool};
+use crate::ffi::appkit::{
+    ADD_BUTTON_WITH_TITLE, ALERT_RUN_MODAL, NSAlert, NSSavePanel, OPEN_PANEL, PANEL_RUN_MODAL,
+    PANEL_URL, PANEL_URLS, SAVE_PANEL, SET_ALERT_STYLE, SET_ALLOWED_CONTENT_TYPES,
+    SET_ALLOWS_MULTIPLE_SELECTION, SET_CAN_CHOOSE_DIRECTORIES, SET_CAN_CHOOSE_FILES,
+    SET_DIRECTORY_URL, SET_INFORMATIVE_TEXT, SET_MESSAGE_TEXT, SET_NAME_FIELD_STRING_VALUE,
+    SET_PROMPT, SET_SHOWS_HIDDEN_FILES, SET_TITLE, TYPE_WITH_FILENAME_EXTENSION,
+};
+use crate::ffi::foundation::{
+    self, FILE_URL_WITH_PATH, NSObject, NSString, NsUrl, PATH, TextError, array_items, ns_array,
+    string,
+};
+use crate::ffi::retained::{Retained, alloc_init};
+use crate::ffi::{self, Obj};
 use std::path::{Path, PathBuf};
-use std::ptr::NonNull;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DialogError {
@@ -285,137 +298,104 @@ impl Application {
 fn show_alert(spec: &AlertSpec) -> Result<AlertResponse, DialogError> {
     ensure_main_thread()?;
     let _pool = Pool::new().map_err(map_error)?;
-    unsafe {
-        let alert = OwnedNative::new(send_id(send_id(class(c"NSAlert")?, c"alloc"), c"init"))?;
-        send_void_id(
-            alert.as_ptr(),
-            c"setMessageText:",
-            ns_string(&spec.message)?,
-        );
-        if let Some(detail) = &spec.detail {
-            send_void_id(alert.as_ptr(), c"setInformativeText:", ns_string(detail)?);
-        }
-        let style = match spec.style {
-            AlertStyle::Warning => 0,
-            AlertStyle::Informational => 1,
-            AlertStyle::Critical => 2,
-        };
-        send_void_isize(alert.as_ptr(), c"setAlertStyle:", style);
-        for button in &spec.buttons {
-            send_id_id(
-                alert.as_ptr(),
-                c"addButtonWithTitle:",
-                ns_string(&button.title)?,
-            );
-        }
-        let response = send_isize(alert.as_ptr(), c"runModal");
-        AlertResponse::from_native_code(response, spec.buttons.len())
-            .ok_or(DialogError::InvalidResult)
+    let alert = alloc_init::<NSAlert>().map_err(map_error)?;
+    SET_MESSAGE_TEXT.send(&alert, (&*ns_string(&spec.message)?,));
+    if let Some(detail) = &spec.detail {
+        SET_INFORMATIVE_TEXT.send(&alert, (&*ns_string(detail)?,));
     }
+    let style = match spec.style {
+        AlertStyle::Warning => 0,
+        AlertStyle::Informational => 1,
+        AlertStyle::Critical => 2,
+    };
+    SET_ALERT_STYLE.send(&alert, (style,));
+    for button in &spec.buttons {
+        ADD_BUTTON_WITH_TITLE.send(&alert, (&*ns_string(&button.title)?,));
+    }
+    let response = ALERT_RUN_MODAL.send(&alert, ());
+    AlertResponse::from_native_code(response, spec.buttons.len()).ok_or(DialogError::InvalidResult)
 }
 
 fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogError> {
     ensure_main_thread()?;
     let _pool = Pool::new().map_err(map_error)?;
-    unsafe {
-        let panel = match spec.mode {
-            FileDialogMode::SaveFile => send_id(class(c"NSSavePanel")?, c"savePanel"),
-            _ => send_id(class(c"NSOpenPanel")?, c"openPanel"),
-        };
-        let panel = NonNull::new(panel).ok_or(DialogError::AppKitUnavailable)?;
-        configure_panel(panel.as_ptr(), spec)?;
-        if send_isize(panel.as_ptr(), c"runModal") != 1 {
+    let paths = if spec.mode == FileDialogMode::SaveFile {
+        let panel = SAVE_PANEL
+            .send_class(())
+            .map_err(map_error)?
+            .ok_or(DialogError::AppKitUnavailable)?;
+        configure_panel(&panel, spec)?;
+        if PANEL_RUN_MODAL.send(&panel, ()) != 1 {
             return Ok(FileDialogResponse::Cancelled);
         }
-        let paths = match spec.mode {
-            FileDialogMode::OpenFile
-            | FileDialogMode::OpenFiles
-            | FileDialogMode::SelectDirectory => paths_from_urls(send_id(panel.as_ptr(), c"URLs"))?,
-            FileDialogMode::SaveFile => vec![path_from_url(send_id(panel.as_ptr(), c"URL"))?],
-        };
-        if paths.is_empty() {
-            Err(DialogError::InvalidResult)
-        } else {
-            Ok(FileDialogResponse::Selected(paths))
+        vec![path_from_url(PANEL_URL.send(&panel, ()).as_deref())?]
+    } else {
+        let panel = OPEN_PANEL
+            .send_class(())
+            .map_err(map_error)?
+            .ok_or(DialogError::AppKitUnavailable)?;
+        configure_panel(&panel, spec)?;
+        let directories = spec.mode == FileDialogMode::SelectDirectory;
+        SET_CAN_CHOOSE_DIRECTORIES.send(&panel, (directories,));
+        SET_CAN_CHOOSE_FILES.send(&panel, (!directories,));
+        SET_ALLOWS_MULTIPLE_SELECTION.send(&panel, (spec.mode == FileDialogMode::OpenFiles,));
+        if PANEL_RUN_MODAL.send(&panel, ()) != 1 {
+            return Ok(FileDialogResponse::Cancelled);
         }
+        let urls = PANEL_URLS
+            .send(&panel, ())
+            .ok_or(DialogError::InvalidResult)?;
+        array_items(&urls)
+            .map(|url| path_from_url(url.downcast::<NsUrl>()))
+            .collect::<Result<_, _>>()?
+    };
+    if paths.is_empty() {
+        Err(DialogError::InvalidResult)
+    } else {
+        Ok(FileDialogResponse::Selected(paths))
     }
 }
 
-unsafe fn configure_panel(panel: Id, spec: &FileDialogSpec) -> Result<(), DialogError> {
+fn configure_panel(panel: &Obj<NSSavePanel>, spec: &FileDialogSpec) -> Result<(), DialogError> {
     if let Some(title) = &spec.title {
-        unsafe { send_void_id(panel, c"setTitle:", ns_string(title)?) };
+        SET_TITLE.send(panel, (&*ns_string(title)?,));
     }
     if let Some(prompt) = &spec.prompt {
-        unsafe { send_void_id(panel, c"setPrompt:", ns_string(prompt)?) };
+        SET_PROMPT.send(panel, (&*ns_string(prompt)?,));
     }
     if let Some(directory) = &spec.initial_directory {
         let path = directory.to_str().ok_or(DialogError::InvalidText)?;
-        let url = unsafe { send_id_id(class(c"NSURL")?, c"fileURLWithPath:", ns_string(path)?) };
-        unsafe { send_void_id(panel, c"setDirectoryURL:", url) };
+        let url = FILE_URL_WITH_PATH
+            .send_class((&*ns_string(path)?,))
+            .map_err(map_error)?;
+        SET_DIRECTORY_URL.send(panel, (url.as_deref(),));
     }
     if let Some(name) = &spec.suggested_name {
-        unsafe { send_void_id(panel, c"setNameFieldStringValue:", ns_string(name)?) };
+        SET_NAME_FIELD_STRING_VALUE.send(panel, (&*ns_string(name)?,));
     }
-    unsafe {
-        send_void_bool(
-            panel,
-            c"setShowsHiddenFiles:",
-            i8::from(spec.shows_hidden_files),
-        )
-    };
+    SET_SHOWS_HIDDEN_FILES.send(panel, (spec.shows_hidden_files,));
     if !spec.allowed_extensions.is_empty() {
-        let strings: Result<Vec<_>, _> = spec
-            .allowed_extensions
-            .iter()
-            .map(|s| ns_string(s))
-            .collect();
-        let strings = strings?;
-        let array = unsafe {
-            send_id_ptr_usize(
-                class(c"NSArray")?,
-                c"arrayWithObjects:count:",
-                strings.as_ptr(),
-                strings.len(),
-            )
-        };
-        unsafe { send_void_id(panel, c"setAllowedFileTypes:", array) };
-    }
-    if spec.mode != FileDialogMode::SaveFile {
-        let directories = spec.mode == FileDialogMode::SelectDirectory;
-        unsafe {
-            send_void_bool(panel, c"setCanChooseDirectories:", i8::from(directories));
-            send_void_bool(panel, c"setCanChooseFiles:", i8::from(!directories));
-            send_void_bool(
-                panel,
-                c"setAllowsMultipleSelection:",
-                i8::from(spec.mode == FileDialogMode::OpenFiles),
-            );
+        let mut types = Vec::new();
+        for extension in &spec.allowed_extensions {
+            let kind = TYPE_WITH_FILENAME_EXTENSION
+                .send_class((&*ns_string(extension)?,))
+                .map_err(map_error)?
+                .ok_or(DialogError::InvalidExtension)?;
+            types.push(kind);
         }
+        let objects: Vec<&Obj<NSObject>> = types.iter().map(|kind| kind.upcast()).collect();
+        SET_ALLOWED_CONTENT_TYPES.send(panel, (&*ns_array(&objects).map_err(map_error)?,));
     }
     Ok(())
 }
 
-unsafe fn paths_from_urls(urls: Id) -> Result<Vec<PathBuf>, DialogError> {
-    let count = unsafe { send_usize(urls, c"count") };
-    (0..count)
-        .map(|index| unsafe { path_from_url(send_id_usize(urls, c"objectAtIndex:", index)) })
-        .collect()
-}
-
-unsafe fn path_from_url(url: Id) -> Result<PathBuf, DialogError> {
-    if url.is_null() {
-        return Err(DialogError::InvalidResult);
-    }
-    let path = unsafe { send_id(url, c"path") };
-    let utf8 = unsafe { send_cstr(path, c"UTF8String") };
-    if utf8.is_null() {
-        return Err(DialogError::InvalidResult);
-    }
-    Ok(PathBuf::from(
-        unsafe { CStr::from_ptr(utf8) }
-            .to_str()
-            .map_err(|_| DialogError::InvalidResult)?,
-    ))
+fn path_from_url(url: Option<&Obj<NsUrl>>) -> Result<PathBuf, DialogError> {
+    let path = PATH
+        .send(url.ok_or(DialogError::InvalidResult)?, ())
+        .ok_or(DialogError::InvalidResult)?;
+    string(&path)
+        .map(PathBuf::from)
+        .ok_or(DialogError::InvalidResult)
 }
 
 fn validate_text(value: &str) -> Result<(), DialogError> {
@@ -427,10 +407,10 @@ fn validate_text(value: &str) -> Result<(), DialogError> {
 }
 
 fn ensure_main_thread() -> Result<(), DialogError> {
-    if unsafe { super::pthread_main_np() } == 0 {
-        Err(DialogError::WrongThread)
-    } else {
+    if ffi::is_main_thread() {
         Ok(())
+    } else {
+        Err(DialogError::WrongThread)
     }
 }
 
@@ -441,101 +421,9 @@ fn map_error(error: super::Error) -> DialogError {
     }
 }
 
-struct OwnedNative(NonNull<c_void>);
-
-impl OwnedNative {
-    fn new(raw: Id) -> Result<Self, DialogError> {
-        NonNull::new(raw)
-            .map(Self)
-            .ok_or(DialogError::AppKitUnavailable)
-    }
-
-    fn as_ptr(&self) -> Id {
-        self.0.as_ptr()
-    }
-}
-
-impl Drop for OwnedNative {
-    fn drop(&mut self) {
-        // SAFETY: this wrapper exclusively owns the +1 Objective-C reference.
-        unsafe { send_void(self.0.as_ptr(), c"release") };
-    }
-}
-
-fn ns_string(value: &str) -> Result<Id, DialogError> {
-    let value = CString::new(value).map_err(|_| DialogError::InvalidText)?;
-    unsafe {
-        NonNull::new(send_id_cstr(
-            class(c"NSString")?,
-            c"stringWithUTF8String:",
-            value.as_ptr(),
-        ))
-        .map(NonNull::as_ptr)
-        .ok_or(DialogError::AppKitUnavailable)
-    }
-}
-
-unsafe fn class(name: &CStr) -> Result<Id, DialogError> {
-    unsafe { super::class(name) }.map_err(map_error)
-}
-
-unsafe fn send_id(receiver: Id, name: &CStr) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name)) }
-}
-unsafe fn send_id_id(receiver: Id, name: &CStr, value: Id) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_id_cstr(receiver: Id, name: &CStr, value: *const i8) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_id_usize(receiver: Id, name: &CStr, value: usize) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_id_ptr_usize(receiver: Id, name: &CStr, values: *const Id, count: usize) -> Id {
-    let function: unsafe extern "C" fn(Id, Sel, *const Id, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), values, count) }
-}
-unsafe fn send_void(receiver: Id, name: &CStr) {
-    let function: unsafe extern "C" fn(Id, Sel) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name)) }
-}
-unsafe fn send_void_id(receiver: Id, name: &CStr, value: Id) {
-    let function: unsafe extern "C" fn(Id, Sel, Id) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_void_bool(receiver: Id, name: &CStr, value: i8) {
-    let function: unsafe extern "C" fn(Id, Sel, i8) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_void_isize(receiver: Id, name: &CStr, value: isize) {
-    let function: unsafe extern "C" fn(Id, Sel, isize) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name), value) }
-}
-unsafe fn send_isize(receiver: Id, name: &CStr) -> isize {
-    let function: unsafe extern "C" fn(Id, Sel) -> isize =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name)) }
-}
-unsafe fn send_usize(receiver: Id, name: &CStr) -> usize {
-    let function: unsafe extern "C" fn(Id, Sel) -> usize =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name)) }
-}
-unsafe fn send_cstr(receiver: Id, name: &CStr) -> *const i8 {
-    let function: unsafe extern "C" fn(Id, Sel) -> *const i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { function(receiver, selector(name)) }
+fn ns_string(value: &str) -> Result<Retained<NSString>, DialogError> {
+    foundation::ns_string(value).map_err(|error| match error {
+        TextError::InteriorNul => DialogError::InvalidText,
+        TextError::Unavailable => DialogError::AppKitUnavailable,
+    })
 }

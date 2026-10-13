@@ -17,10 +17,13 @@ pub(crate) mod checks;
 pub(crate) mod class;
 pub(crate) mod encode;
 pub(crate) mod foundation;
+pub(crate) mod legacy;
 pub(crate) mod msg;
 pub(crate) mod retained;
 mod runtime;
+mod thread;
 
 pub(crate) use class::Obj;
 pub(crate) use retained::Pool;
 pub(crate) use runtime::objc_msgSend;
+pub(crate) use thread::is_main_thread;
