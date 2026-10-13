@@ -298,6 +298,80 @@ fn textarea_wraps_lines_and_grows() {
     assert!(texts(&h.paint()).last().is_some_and(|line| line == "end"));
 }
 
+/// The baseline height of the first text run `text` in `list`.
+fn baseline_of(list: &DisplayList, text: &str) -> f64 {
+    list.commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawText {
+                baseline,
+                text: run,
+                ..
+            } if run == text => Some(baseline.y),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{text} is not painted"))
+}
+
+fn wheel(h: &mut Harness, dy: f64) {
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        choscorui_core::PointerEvent::Wheel {
+            position: Point::new(50.0, 40.0),
+            delta: Point::new(0.0, dy),
+            unit: choscorui_core::WheelUnit::Points,
+        },
+    );
+}
+
+fn numbered_lines(count: usize) -> String {
+    (0..count)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn a_textarea_stops_at_its_maximum_height_and_scrolls_to_the_caret() {
+    let mut h = Harness::new(Textarea::new("Notes", "").with_max_height(100.0));
+    h.focus();
+    h.text(&numbered_lines(20));
+    let height = h.measure().height;
+    assert_eq!(height, 100.0);
+    h.place(hosted::rect(10.0, 10.0, 240.0, height));
+    // The caret is on the last line, so the text scrolls to show it.
+    let last = baseline_of(&h.paint(), "line 19");
+    assert!((10.0..=110.0).contains(&last), "{last}");
+    assert!(baseline_of(&h.paint(), "line 0") < 10.0);
+    // The wheel scrolls back to the top.
+    wheel(&mut h, -1.0e4);
+    let first = baseline_of(&h.paint(), "line 0");
+    assert!((10.0..=40.0).contains(&first), "{first}");
+}
+
+#[test]
+fn a_hosted_text_editor_scrolls_with_the_wheel_and_follows_the_caret() {
+    use choscorui_controls::TextEditor;
+    let mut h = Harness::new(TextEditor::new("Doc", numbered_lines(30)));
+    h.place(hosted::rect(10.0, 10.0, 240.0, 120.0));
+    h.focus();
+    let top = baseline_of(&h.paint(), "line 0");
+    // The overlay scroll bar paints its thumb at the trailing edge.
+    let thumb = DesignTokens::light().color(ColorRole::Border);
+    let thumbs = hosted::rounded_fills(&h.paint(), thumb);
+    assert!(thumbs.iter().any(|rect| rect.min_x() > 200.0), "{thumbs:?}");
+    wheel(&mut h, 60.0);
+    assert_eq!(baseline_of(&h.paint(), "line 0"), top - 60.0);
+    wheel(&mut h, -1.0e4);
+    assert_eq!(baseline_of(&h.paint(), "line 0"), top);
+    // Moving the caret down past the bottom scrolls it into view.
+    for _ in 0..29 {
+        h.key(Key::ArrowDown);
+    }
+    let last = baseline_of(&h.paint(), "line 29");
+    assert!((10.0..=130.0).contains(&last), "{last}");
+}
+
 #[test]
 fn native_select_keeps_the_chevron_in_the_end_padding() {
     use choscorui_controls::{ListEntry, Select};

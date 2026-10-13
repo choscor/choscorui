@@ -948,6 +948,13 @@ behavior.
 - In a host, the Edit commands and the composition events work as in
   [Text editing](#text-editing). The host sends the click count with each
   press.
+- In a host, the editor is as tall as its lines, up to the offered
+  height. Taller text scrolls. The wheel scrolls it, and each change of
+  the caret scrolls the caret into view. At a limit, the editor does not
+  use the wheel, so an outer scroll view scrolls.
+- In a host, an [`OverlayScrollBar`](#overlayscrollbar) at the trailing
+  edge of the text shows the scroll position. Its thumb drag and track
+  press scroll the text.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -1313,6 +1320,10 @@ work does not change with the content size.
 The bar publishes no semantic node. The control that owns the viewport
 publishes the scroll semantics.
 
+The scroll view, the hosted `ItemView`, `MessageScroller`, the hosted
+`TextEditor`, and `Textarea` use this bar. In a control host, a bar
+takes a press, a drag, and a move before the content under it.
+
 **As a view.** `ScrollView` paints its scroll bar with an
 `OverlayScrollBar` (see [ScrollArea](#scrollarea)).
 
@@ -1368,10 +1379,11 @@ scroll view use the same bar.
 - The bar takes a press before the content under it. A thumb drag and a
   press on the track scroll the view, and the thumb hover changes its
   look.
-- The wheel scrolls the view after the content had the event.
+- The wheel scrolls the view after the content had the event. At a limit
+  the view does not use the wheel, so an outer scroll view scrolls.
 - With `.focusable(true)`, the view takes focus. Then the arrow keys
   scroll 40 pt, PageUp, PageDown, and Space scroll one page, and Home and
-  End go to the ends.
+  End go to the ends. Shift+Space scrolls one page back.
 - A page is the viewport less 40 pt of overlap. Semantic `Increment` and
   `Decrement` page forward and back.
 - A press does not focus the view.
@@ -1681,6 +1693,11 @@ reports the context menu. Rows that the model must fetch are not reported.
 `with_styled_rows` makes a hosted view take its row height from the
 `ListView` row recipe each time that it measures and arranges.
 
+- A hosted view paints an [`OverlayScrollBar`](#overlayscrollbar) at the
+  trailing edge of its rows. A thumb drag and a track press scroll the
+  rows, and the press selects no row.
+- At a limit, a hosted view does not use the wheel, so an outer scroll
+  view scrolls.
 - `with_footer(rows)` adds footer rows, for example totals, with one cell
   for each column. A hosted view paints them right under the last row,
   or under the viewport when the rows fill it.
@@ -2632,6 +2649,9 @@ sets the text that shows while the field is empty.
   layouts mirror the hit test of a press.
 - Lines break after spaces and at line breaks. The textarea grows with its
   lines from a 64 pt minimum, and requests layout after each edit.
+- `with_max_height(points)` stops the growth. Then the text scrolls as in a
+  hosted [`TextEditor`](#texteditor), with the wheel, an overlay scroll
+  bar, and the caret kept in view. The compose view has `max_height`.
 - Each edit emits `Changed(Text)`. `set_invalid` gives it the invalid
   border and ring.
 - The placeholder shows in `muted-foreground` while the value is empty.
@@ -3288,7 +3308,8 @@ and the size with `.with(|group| group.with_count(count))` and
   activates the focused button.
 - A drag moves the slides with the pointer. A wheel scrolls them. When
   the drag ends, or 0.15 s after the last wheel event, the carousel snaps
-  to the nearest slide.
+  to the nearest slide. At the first or the last slide, the carousel does
+  not use the wheel, so an outer scroll view scrolls.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -3788,8 +3809,12 @@ behavior.
 - The scroller sticks to the bottom. While it shows the last message, new
   messages and size changes keep the last message in view. After a scroll
   up, the view stays put.
-- The wheel, ArrowUp, ArrowDown, Page Up, Page Down, Home, and End scroll
-  it. `Increment` and `Decrement` scroll one page.
+- The wheel, ArrowUp, ArrowDown, Page Up, Page Down, Space, Home, and End
+  scroll it. Shift+Space scrolls one page up. `Increment` and `Decrement`
+  scroll one page. At the top or the bottom, the scroller does not use
+  the wheel, so an outer scroll view scrolls.
+- An [`OverlayScrollBar`](#overlayscrollbar) at the trailing edge shows
+  the position. A thumb drag and a track press scroll the messages.
 
 | Part | Slot | Value |
 | --- | --- | --- |

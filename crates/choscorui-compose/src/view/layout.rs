@@ -595,12 +595,15 @@ impl ScrollControl {
         }
     }
 
-    /// Asks the scroll view to move to `offset` along its axis.
-    fn scroll_to(&self, cx: &mut ControlContext<'_>, offset: f64) {
+    /// Asks the scroll view to move to `offset` along its axis. Returns
+    /// false when the offset stays, for example at a limit.
+    fn scroll_to(&self, cx: &mut ControlContext<'_>, offset: f64) -> bool {
         let offset = offset.clamp(0.0, self.bar.maximum());
-        if offset != self.bar.offset() {
+        let moved = offset != self.bar.offset();
+        if moved {
             cx.emit(ControlMessage::Changed(ControlValue::Number(offset)));
         }
+        moved
     }
 
     /// The wheel distance along the axis, in points.
@@ -623,7 +626,8 @@ impl ScrollControl {
     }
 
     /// The offset that `key` moves to, if it scrolls along the axis.
-    fn key_target(&self, key: Key) -> Option<f64> {
+    /// Shift+Space pages back.
+    fn key_target(&self, key: Key, shift: bool) -> Option<f64> {
         let (back, forward) = match self.axis {
             Axis::Vertical => (Key::ArrowUp, Key::ArrowDown),
             Axis::Horizontal => (Key::ArrowLeft, Key::ArrowRight),
@@ -632,6 +636,7 @@ impl ScrollControl {
         match key {
             key if key == back => Some(offset - WHEEL_LINE),
             key if key == forward => Some(offset + WHEEL_LINE),
+            Key::Space if shift => Some(offset - self.page()),
             Key::PageUp => Some(offset - self.page()),
             Key::PageDown | Key::Space => Some(offset + self.page()),
             Key::Home => Some(0.0),
@@ -642,13 +647,17 @@ impl ScrollControl {
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
         if let PointerEvent::Wheel { delta, unit, .. } = *event {
-            // The wheel scrolls after the content had its turn.
+            // The wheel scrolls after the content had its turn. At a limit
+            // the wheel goes on to the outer scroll view.
             let amount = self.wheel(delta, unit);
             if cx.phase() == EventPhase::Capture || amount == 0.0 {
                 return EventReply::Continue;
             }
-            self.scroll_to(cx, self.bar.offset() + amount);
-            return EventReply::Stop;
+            return if self.scroll_to(cx, self.bar.offset() + amount) {
+                EventReply::Stop
+            } else {
+                EventReply::Continue
+            };
         }
         // The bar is above the content, so it takes the pointer in the
         // capture phase, before the content under it.
@@ -704,7 +713,7 @@ impl CustomControl for ScrollControl {
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if cx.is_focused() && cx.phase() == EventPhase::Target =>
             {
-                match self.key_target(*key) {
+                match self.key_target(*key, cx.modifiers().shift) {
                     Some(target) => {
                         self.scroll_to(cx, target);
                         EventReply::Stop

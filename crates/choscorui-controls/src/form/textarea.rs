@@ -6,23 +6,30 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::style::{
-    ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, TextAlign, TextMeasure, VisualState,
+    ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, TextAlign, TextMeasure,
+    VisualState, content_rect,
 };
 use crate::text_editor::{
-    TextEditor, TextEditorChange, TextEditorInput, layout_point, window_rect,
+    TextEditor, TextEditorChange, TextEditorInput, layout_point, lines_height, reveal_caret,
+    scroll_event, window_rect,
 };
+use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
-    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Measured, Rect, SemanticAction,
-    SemanticNode, Size, TextInputInfo, TextLayout, TextSize, Tree, TypeSpec,
+    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Measured, Point, Rect,
+    SemanticAction, SemanticNode, Size, TextInputInfo, TextLayout, TextSize, Tree, TypeSpec,
 };
 use std::cell::{Cell, RefCell};
 
 /// A textarea: the `Textarea` recipe box around multiline editable text.
-/// It grows with its lines, from a 64 pt minimum.
+/// It grows with its lines, from a 64 pt minimum, up to an optional
+/// maximum height. Then the text scrolls.
 pub struct Textarea {
     editor: TextEditor,
     placeholder: String,
     invalid: bool,
+    max_height: Option<f64>,
+    /// The overlay scroll bar, which keeps the scroll offset.
+    bar: OverlayScrollBar,
     /// The text width and type from the last measure or arrange.
     width: f64,
     spec: Option<TypeSpec>,
@@ -39,6 +46,8 @@ impl Textarea {
             editor: TextEditor::new(name, value),
             placeholder: String::new(),
             invalid: false,
+            max_height: None,
+            bar: OverlayScrollBar::new(ScrollOrientation::Vertical),
             width: 0.0,
             spec: None,
             layout: RefCell::new(None),
@@ -50,6 +59,14 @@ impl Textarea {
     #[must_use]
     pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = placeholder.into();
+        self
+    }
+
+    /// Stops the growth at `height` points. Taller text scrolls with the
+    /// wheel and the scroll bar, and the caret stays in view.
+    #[must_use]
+    pub fn with_max_height(mut self, height: f64) -> Self {
+        self.max_height = Some(height).filter(|height| height.is_finite());
         self
     }
 
@@ -109,6 +126,22 @@ impl Textarea {
         cached.or_else(|| self.spec.map(|spec| self.layout_for(&spec, &EstimatedText)))
     }
 
+    /// Scrolls the caret into view, with the painted layout while it has
+    /// the current text, otherwise with an estimate.
+    fn reveal(&mut self, cx: &mut ControlContext<'_>) {
+        let Some(spec) = self.spec else {
+            return;
+        };
+        let text = self.editor.layout_text();
+        let layout = self
+            .layout
+            .borrow()
+            .clone()
+            .filter(|layout| layout.text() == text)
+            .unwrap_or_else(|| self.layout_for(&spec, &EstimatedText));
+        reveal_caret(cx, &mut self.bar, &self.editor, (&layout, &spec));
+    }
+
     fn apply(&mut self, cx: &mut ControlContext<'_>, input: TextEditorInput) {
         let Some(layout) = self.current_layout() else {
             return;
@@ -140,6 +173,7 @@ impl CustomControl for Textarea {
         self.spec = Some(style.text);
         let lines = self.layout_for(&style.text, cx.text).lines().len().max(1);
         let height = lines as f64 * style.text.line_height + style.padding.vertical();
+        let height = self.max_height.map_or(height, |max| height.min(max));
         Measured {
             size: Size::new(width, height.max(style.min_height)),
             baseline: None,
@@ -151,6 +185,9 @@ impl CustomControl for Textarea {
         self.width = (bounds.size.width - style.padding.horizontal()).max(1.0);
         self.spec = Some(style.text);
         self.rtl = cx.rtl();
+        self.bar.arrange(cx, content_rect(bounds, &style, self.rtl));
+        let layout = self.layout_for(&style.text, cx.text);
+        self.bar.set_content(lines_height(&layout, &style.text));
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -160,13 +197,19 @@ impl CustomControl for Textarea {
         let Some(layout) = self.current_layout() else {
             return EventReply::Continue;
         };
-        let (inner, rtl) = (self.inner.get(), self.rtl);
-        let reply = self
-            .editor
-            .hosted_event(cx, event, &layout, |point| layout_point(inner, rtl, point));
+        let line = self.spec.map_or(0.0, |spec| spec.line_height);
+        let pressed = self.editor.is_pressed();
+        if let Some(reply) = scroll_event(cx, &mut self.bar, (event, pressed), line) {
+            return reply;
+        }
+        let (inner, rtl, scroll) = (self.inner.get(), self.rtl, self.bar.offset());
+        let reply = self.editor.hosted_event(cx, event, &layout, |point| {
+            layout_point(inner, rtl, Point::new(point.x, point.y + scroll))
+        });
         if reply == EventReply::Stop {
             // The textarea grows or shrinks with its lines.
             cx.request_layout();
+            self.reveal(cx);
         }
         reply
     }
@@ -177,9 +220,11 @@ impl CustomControl for Textarea {
         let bounds = cx.bounds;
         let layout = self.layout_for(&root.text, cx.text);
         let focused = state.focused();
-        cx.slot(bounds, &root, |cx, inner| {
+        cx.slot(bounds, &root, |cx, mut inner| {
             self.inner.set(inner);
             cx.list.push_clip(inner);
+            // The text moves up by the scroll offset, inside the clip.
+            inner.origin.y -= self.bar.offset();
             if self.editor.value().is_empty() {
                 let placeholder = cx.style(Self::query(Slot::Placeholder, state));
                 let line = Rect::from_xywh(
@@ -231,6 +276,7 @@ impl CustomControl for Textarea {
                 cx.list.fill_rect(rect, root.foreground);
             }
             let _ = cx.list.pop_clip();
+            self.bar.paint(cx);
         });
         *self.layout.borrow_mut() = Some(layout);
     }
@@ -243,9 +289,10 @@ impl CustomControl for Textarea {
 
     fn text_input(&self) -> Option<TextInputInfo> {
         let layout = self.layout.borrow();
-        let (inner, rtl) = (self.inner.get(), self.rtl);
-        self.editor
-            .hosted_text_input(layout.as_ref()?, |rect| window_rect(inner, rtl, rect))
+        let (inner, rtl, scroll) = (self.inner.get(), self.rtl, self.bar.offset());
+        self.editor.hosted_text_input(layout.as_ref()?, |rect| {
+            window_rect(inner, rtl, rect.translate(0.0, -scroll))
+        })
     }
 
     fn perform(

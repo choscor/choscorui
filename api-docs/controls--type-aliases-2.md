@@ -527,6 +527,15 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `Textarea::max_height`
+
+```rust
+pub fn max_height(self, height: f64) -> Self
+```
+
+Stops the growth at `height` points. Taller text scrolls with the
+wheel and the scroll bar, and the caret stays in view.
+
 #### `Textarea::new`
 
 ```rust

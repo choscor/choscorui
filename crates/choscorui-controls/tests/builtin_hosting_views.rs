@@ -91,6 +91,20 @@ fn a_hosted_item_view_selects_activates_and_scrolls() {
 }
 
 #[test]
+fn a_hosted_item_view_shows_an_overlay_scroll_bar_whose_track_pages() {
+    let mut h = Harness::new(rows(50));
+    let bounds = h.bounds();
+    let thumb = DesignTokens::light().color(choscorui_core::ColorRole::Border);
+    let edge = bounds.max_x() - 12.0;
+    let bars = hosted::rounded_fills(&h.paint(), thumb);
+    assert!(bars.iter().any(|bar| bar.min_x() >= edge), "{bars:?}");
+    // A press on the track under the thumb pages and selects no row.
+    h.click(Point::new(bounds.max_x() - 4.0, bounds.max_y() - 4.0));
+    assert!(h.messages().is_empty());
+    assert_ne!(texts(&h.paint()).first().map(String::as_str), Some("Row 0"));
+}
+
+#[test]
 fn a_hosted_item_view_with_styled_rows_takes_the_list_row_height() {
     let mut h = Harness::new(rows(50).with_styled_rows());
     // The `ListView` row recipe is 32 pt high, so this point is in row 3,

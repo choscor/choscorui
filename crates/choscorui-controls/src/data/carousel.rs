@@ -307,6 +307,11 @@ impl Carousel {
                 }
                 let free =
                     (self.settled() + along * scale / self.step).clamp(0.0, self.last() as f64);
+                // At the first or last slide the wheel goes on to an outer
+                // scroll view.
+                if free == self.settled() {
+                    return EventReply::Continue;
+                }
                 self.free = Some(free);
                 self.snap_at = Some(cx.time() + SNAP_DELAY);
                 cx.request_paint();

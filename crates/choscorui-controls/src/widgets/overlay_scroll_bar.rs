@@ -2,9 +2,9 @@
 //! another layer keeps, such as a layout engine.
 
 use super::{ScrollBar, ScrollBarInput, ScrollOrientation};
-use crate::custom::MeasureContext;
+use crate::custom::{ControlContext, MeasureContext};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
-use choscorui_core::{Point, PointerButton, PointerEvent, Rect};
+use choscorui_core::{EventReply, Point, PointerButton, PointerEvent, Rect, WheelUnit};
 
 /// The content must be longer than the viewport by more than this, in
 /// points, before the bar shows. Rounding in layout stays below it.
@@ -207,5 +207,69 @@ impl OverlayScrollBar {
             .set(VisualState::HOVERED, self.hovered)
             .set(VisualState::PRESSED, self.dragging());
         self.bar.paint_track(cx, track, state);
+    }
+
+    /// Moves the offset to `offset`, clamped. Returns false when the
+    /// offset stays, for example at a limit.
+    pub(crate) fn scroll_to(&mut self, offset: f64) -> bool {
+        self.bar.set_value(offset)
+    }
+
+    /// Sets the content length and keeps the offset, clamped.
+    pub(crate) fn set_content(&mut self, content: f64) {
+        self.set_scroll(content, self.offset());
+    }
+
+    /// Scrolls the least distance that shows `start..end` of the content.
+    pub(crate) fn reveal(&mut self, start: f64, end: f64) -> bool {
+        let (offset, length) = (self.offset(), self.length());
+        if start < offset {
+            self.scroll_to(start)
+        } else if end > offset + length {
+            self.scroll_to(end.min(start + length) - length)
+        } else {
+            false
+        }
+    }
+
+    /// Scrolls a vertical bar by a wheel event in a control host, where a
+    /// wheel line is `line` points. At a limit the event goes on to an
+    /// outer scroll view.
+    pub(crate) fn wheel(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        delta: Point,
+        unit: WheelUnit,
+        line: f64,
+    ) -> EventReply {
+        let scale = match unit {
+            WheelUnit::Points => 1.0,
+            WheelUnit::Lines => line,
+        };
+        if delta.y != 0.0 && self.scroll_to(self.offset() + delta.y * scale) {
+            cx.request_paint();
+            EventReply::Stop
+        } else {
+            EventReply::Continue
+        }
+    }
+
+    /// Gives a pointer event to the bar in a control host. The host holds
+    /// the pointer capture during a thumb drag and repaints. Returns
+    /// `Some(scrolled)` when the bar used the event.
+    pub(crate) fn hosted_pointer(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &PointerEvent,
+    ) -> Option<bool> {
+        let dragging = self.dragging();
+        let reply = self.pointer(event);
+        if dragging != self.dragging() {
+            cx.capture_pointer(self.dragging());
+        }
+        if reply.repaint || reply.scrolled {
+            cx.request_paint();
+        }
+        reply.consumed.then_some(reply.scrolled)
     }
 }

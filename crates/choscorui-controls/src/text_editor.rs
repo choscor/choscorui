@@ -16,6 +16,7 @@ use crate::style::{
     ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
     VisualState, content_rect,
 };
+use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
     CompositionEvent, DesignTokens, Dirty, EventPhase, EventReply, KeyEvent, Measured, NodeId,
     Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
@@ -101,14 +102,76 @@ pub struct TextEditor {
 
 /// What the editor keeps in a control host, where it lays out its own
 /// text: the text width and type, the content rectangle, the direction,
-/// and the layout of the last paint.
-#[derive(Default)]
+/// the layout of the last paint, and the scroll bar that keeps the scroll
+/// offset.
 struct HostedText {
     width: f64,
     spec: Option<TypeSpec>,
     inner: Rect,
     rtl: bool,
     layout: RefCell<Option<TextLayout>>,
+    bar: OverlayScrollBar,
+}
+
+impl Default for HostedText {
+    fn default() -> Self {
+        Self {
+            width: 0.0,
+            spec: None,
+            inner: Rect::default(),
+            rtl: false,
+            layout: RefCell::new(None),
+            bar: OverlayScrollBar::new(ScrollOrientation::Vertical),
+        }
+    }
+}
+
+/// The height of the lines of `layout`, in `spec` lines.
+pub(crate) fn lines_height(layout: &TextLayout, spec: &TypeSpec) -> f64 {
+    layout.lines().len().max(1) as f64 * spec.line_height
+}
+
+/// Scrolls `bar` to show the caret of `editor` in `layout`, and repaints
+/// when the offset changed.
+pub(crate) fn reveal_caret(
+    cx: &mut ControlContext<'_>,
+    bar: &mut OverlayScrollBar,
+    editor: &TextEditor,
+    (layout, spec): (&TextLayout, &TypeSpec),
+) {
+    bar.set_content(lines_height(layout, spec));
+    if editor
+        .caret_rect(layout)
+        .is_some_and(|caret| bar.reveal(caret.min_y(), caret.max_y()))
+    {
+        cx.request_paint();
+    }
+}
+
+/// The scroll input of hosted text: the wheel scrolls `bar`, and the bar
+/// takes the pointer before the text under it while no text press is
+/// held. Returns the reply when the scroll used the event.
+pub(crate) fn scroll_event(
+    cx: &mut ControlContext<'_>,
+    bar: &mut OverlayScrollBar,
+    (event, pressed): (&ControlEvent, bool),
+    line: f64,
+) -> Option<EventReply> {
+    match event {
+        ControlEvent::Pointer(PointerEvent::Wheel { delta, unit, .. }) => {
+            Some(bar.wheel(cx, *delta, *unit, line))
+        }
+        ControlEvent::Pointer(pointer) if !pressed => {
+            bar.hosted_pointer(cx, pointer).map(|_| EventReply::Stop)
+        }
+        ControlEvent::Hover(false) | ControlEvent::Dismiss => {
+            if bar.release() {
+                cx.request_paint();
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 impl TextEditor {
@@ -734,6 +797,11 @@ impl TextEditor {
         }
     }
 
+    /// True while a hosted press is held.
+    pub(crate) fn is_pressed(&self) -> bool {
+        self.pressed
+    }
+
     /// Handles `event` in a control host for text laid out as `layout`.
     /// `to_layout` maps a window point to layout coordinates. Presses use
     /// the click count: two select a word and three a paragraph. Keys go
@@ -829,7 +897,8 @@ impl TextEditor {
 }
 
 impl CustomControl for TextEditor {
-    /// Grows with the lines of the text, in the default input width.
+    /// Grows with the lines of the text, in the default input width, up to
+    /// the offered height. Then the text scrolls.
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let root = cx.style(Self::query(Slot::Root, VisualState::NONE));
         let spec = cx.style(Self::query(Slot::Text, VisualState::NONE)).text;
@@ -839,7 +908,8 @@ impl CustomControl for TextEditor {
         let lines = self
             .hosted_layout(cx.text)
             .map_or(1, |layout| layout.lines().len().max(1));
-        let height = lines as f64 * spec.line_height + root.padding.vertical();
+        let height = (lines as f64 * spec.line_height + root.padding.vertical())
+            .min(cx.constraints.max.height);
         Measured::new(Size::new(width, height.max(root.min_height)))
     }
 
@@ -849,23 +919,45 @@ impl CustomControl for TextEditor {
         self.host.inner = inner;
         self.host.rtl = cx.rtl();
         self.host.width = inner.size.width.max(1.0);
-        self.host.spec = Some(cx.style(Self::query(Slot::Text, VisualState::NONE)).text);
+        let spec = cx.style(Self::query(Slot::Text, VisualState::NONE)).text;
+        self.host.spec = Some(spec);
         self.set_page_height(inner.size.height);
+        self.host.bar.arrange(cx, inner);
+        if let Some(layout) = self.hosted_layout(cx.text) {
+            self.host.bar.set_content(lines_height(&layout, &spec));
+        }
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        let Some(layout) = self.current_layout() else {
+        let (Some(layout), Some(spec)) = (self.current_layout(), self.host.spec) else {
             return EventReply::Continue;
         };
-        let (inner, rtl) = (self.host.inner, self.host.rtl);
-        self.hosted_event(cx, event, &layout, |point| layout_point(inner, rtl, point))
+        let mut bar = self.host.bar.clone();
+        let scrolled = scroll_event(cx, &mut bar, (event, self.pressed), spec.line_height);
+        self.host.bar = bar;
+        if let Some(reply) = scrolled {
+            return reply;
+        }
+        let (inner, rtl, scroll) = (self.host.inner, self.host.rtl, self.host.bar.offset());
+        let reply = self.hosted_event(cx, event, &layout, |point| {
+            layout_point(inner, rtl, Point::new(point.x, point.y + scroll))
+        });
+        if reply == EventReply::Stop
+            && let Some(layout) = self.current_layout()
+        {
+            let mut bar = self.host.bar.clone();
+            reveal_caret(cx, &mut bar, self, (&layout, &spec));
+            self.host.bar = bar;
+        }
+        reply
     }
 
     /// Paints the box, then the selection, the lines, and the caret while
-    /// focused. Right-to-left layouts mirror the lines in the box.
+    /// focused, scrolled by the offset, and the scroll bar above them.
+    /// Right-to-left layouts mirror the lines in the box.
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let state = cx.state.set(VisualState::DISABLED, !self.enabled);
         let root = cx.style(Self::query(Slot::Root, state));
@@ -879,8 +971,9 @@ impl CustomControl for TextEditor {
                 return;
             };
             let rtl = cx.rtl;
+            let scroll = self.host.bar.offset();
             let place = |rect: Rect| {
-                let rect = rect.translate(inner.origin.x, inner.origin.y);
+                let rect = rect.translate(inner.origin.x, inner.origin.y - scroll);
                 if rtl {
                     let x = inner.origin.x + inner.max_x() - rect.max_x();
                     Rect::from_xywh(x, rect.origin.y, rect.size.width, rect.size.height)
@@ -914,6 +1007,7 @@ impl CustomControl for TextEditor {
                 fill_area(cx.list, rect, cx.rtl, &caret.background);
             }
             let _ = cx.list.pop_clip();
+            self.host.bar.paint(cx);
         });
         *self.host.layout.borrow_mut() = layout;
     }
@@ -924,8 +1018,10 @@ impl CustomControl for TextEditor {
 
     fn text_input(&self) -> Option<TextInputInfo> {
         let layout = self.host.layout.borrow();
-        let (inner, rtl) = (self.host.inner, self.host.rtl);
-        self.hosted_text_input(layout.as_ref()?, |rect| window_rect(inner, rtl, rect))
+        let (inner, rtl, scroll) = (self.host.inner, self.host.rtl, self.host.bar.offset());
+        self.hosted_text_input(layout.as_ref()?, |rect| {
+            window_rect(inner, rtl, rect.translate(0.0, -scroll))
+        })
     }
 
     fn perform(

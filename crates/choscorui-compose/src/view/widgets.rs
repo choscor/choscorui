@@ -609,6 +609,12 @@ impl Configured<controls::Textarea> {
         })
         .bind(value, ControlValue::Text, as_text)
     }
+
+    /// Stops the growth at `height` points. Taller text scrolls with the
+    /// wheel and the scroll bar, and the caret stays in view.
+    pub fn max_height(self, height: f64) -> Self {
+        self.with(move |control| control.with_max_height(height))
+    }
 }
 
 /// A one-time code input of `length` characters that edits `value`.

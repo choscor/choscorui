@@ -135,6 +135,8 @@ pub struct MessageScroller {
     stuck: bool,
     rtl: bool,
     enabled: bool,
+    /// The overlay scroll bar at the trailing edge.
+    bar: crate::OverlayScrollBar,
 }
 
 impl MessageScroller {
@@ -152,6 +154,7 @@ impl MessageScroller {
             stuck: true,
             rtl: false,
             enabled: true,
+            bar: crate::OverlayScrollBar::new(crate::ScrollOrientation::Vertical),
         }
     }
 
@@ -201,15 +204,18 @@ impl MessageScroller {
         }
     }
 
-    fn scroll_to(&mut self, cx: &mut ControlContext<'_>, offset: f64) {
+    /// Moves to `offset`, clamped. Returns false when the offset stays.
+    fn scroll_to(&mut self, cx: &mut ControlContext<'_>, offset: f64) -> bool {
         let bottom = self.bottom();
         let offset = offset.clamp(0.0, bottom);
         self.stuck = offset >= bottom - 0.5;
-        if offset != self.offset {
+        let moved = offset != self.offset;
+        if moved {
             self.offset = offset;
             cx.request_layout();
             cx.request_paint();
         }
+        moved
     }
 
     fn receive(&mut self, cx: &mut ControlContext<'_>) {
@@ -259,6 +265,7 @@ impl CustomControl for MessageScroller {
         }
         self.viewport = bounds;
         self.settle(cx);
+        self.bar.arrange(cx, bounds);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -269,25 +276,43 @@ impl CustomControl for MessageScroller {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        // The scroll bar takes the pointer before the messages under it.
+        if let ControlEvent::Pointer(pointer) = event {
+            self.bar.set_scroll(self.heights.total(), self.offset);
+            if let Some(scrolled) = self.bar.hosted_pointer(cx, pointer) {
+                if scrolled {
+                    self.scroll_to(cx, self.bar.offset());
+                }
+                return EventReply::Stop;
+            }
+        }
         match event {
+            ControlEvent::Hover(false) | ControlEvent::Dismiss => {
+                if self.bar.release() {
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
             ControlEvent::Pointer(PointerEvent::Wheel { delta, unit, .. }) => {
                 let scale = match unit {
                     WheelUnit::Points => 1.0,
                     WheelUnit::Lines => LINE,
                 };
-                if delta.y == 0.0 {
-                    return EventReply::Continue;
+                // At a limit the wheel goes on to an outer scroll view.
+                if delta.y != 0.0 && self.scroll_to(cx, self.offset + delta.y * scale) {
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
                 }
-                self.scroll_to(cx, self.offset + delta.y * scale);
-                EventReply::Stop
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                 let page = self.viewport.size.height * 0.9;
                 let offset = match key {
                     Key::ArrowUp => self.offset - LINE,
                     Key::ArrowDown => self.offset + LINE,
+                    Key::Space if cx.modifiers().shift => self.offset - page,
                     Key::PageUp => self.offset - page,
-                    Key::PageDown => self.offset + page,
+                    Key::PageDown | Key::Space => self.offset + page,
                     Key::Home => 0.0,
                     Key::End => f64::INFINITY,
                     _ => return EventReply::Continue,
@@ -331,6 +356,9 @@ impl CustomControl for MessageScroller {
             self.messages[*index].paint_layout(cx, layout, None);
         }
         let _ = cx.list.pop_clip();
+        let mut bar = self.bar.clone();
+        bar.set_scroll(self.heights.total(), self.offset);
+        bar.paint(cx);
         if cx.state.focus_visible() {
             let style =
                 cx.style(StyleQuery::new(ControlKind::ScrollArea, Slot::Root).state(cx.state));
@@ -369,8 +397,12 @@ impl CustomControl for MessageScroller {
     ) -> bool {
         let page = self.viewport.size.height * 0.9;
         match action {
-            SemanticAction::Increment => self.scroll_to(cx, self.offset + page),
-            SemanticAction::Decrement => self.scroll_to(cx, self.offset - page),
+            SemanticAction::Increment => {
+                self.scroll_to(cx, self.offset + page);
+            }
+            SemanticAction::Decrement => {
+                self.scroll_to(cx, self.offset - page);
+            }
             SemanticAction::Focus => cx.request_focus(),
             _ => return false,
         }

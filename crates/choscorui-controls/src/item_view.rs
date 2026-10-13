@@ -150,6 +150,8 @@ pub struct ItemView {
     caption: String,
     /// The cells of each footer row of a hosted table, one per column.
     footer: Vec<Vec<String>>,
+    /// The overlay scroll bar of a hosted view.
+    bar: crate::OverlayScrollBar,
 }
 
 /// The height of a `ListView` row: the minimum height of the row recipe,
@@ -194,6 +196,7 @@ impl ItemView {
             styled_rows: false,
             caption: String::new(),
             footer: Vec::new(),
+            bar: crate::OverlayScrollBar::new(crate::ScrollOrientation::Vertical),
         }
     }
 
@@ -1204,6 +1207,7 @@ impl CustomControl for ItemView {
         viewport.size.height = (bounds.size.height - below).max(0.0);
         self.viewport = viewport;
         self.clamp_offset();
+        self.bar.arrange(cx, viewport);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -1215,6 +1219,16 @@ impl CustomControl for ItemView {
             shift: shortcut.shift,
             command: shortcut.command,
         };
+        // The scroll bar takes the pointer before the rows under it.
+        if let ControlEvent::Pointer(pointer) = event {
+            self.bar.set_scroll(self.content_height(), self.offset);
+            if let Some(scrolled) = self.bar.hosted_pointer(cx, pointer) {
+                if scrolled {
+                    self.offset = self.bar.offset();
+                }
+                return EventReply::Stop;
+            }
+        }
         match event {
             ControlEvent::Pointer(PointerEvent::Down { position, button })
                 if self.viewport.contains(*position) =>
@@ -1267,11 +1281,18 @@ impl CustomControl for ItemView {
                 cx.request_paint();
                 EventReply::Continue
             }
+            ControlEvent::Hover(false) | ControlEvent::Dismiss => {
+                if self.bar.release() {
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
             _ => EventReply::Continue,
         }
     }
 
-    /// Paints only the rows in the viewport, plus the overscan.
+    /// Paints only the rows in the viewport, plus the overscan, and the
+    /// overlay scroll bar above them.
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let Some(source) = &self.source else {
             return;
@@ -1291,6 +1312,9 @@ impl CustomControl for ItemView {
             rows,
         );
         self.paint_footer(cx, &source.columns);
+        let mut bar = self.bar.clone();
+        bar.set_scroll(self.content_height(), self.offset);
+        bar.paint(cx);
     }
 
     fn semantics(&self) -> SemanticNode {

@@ -3,7 +3,8 @@
 //! item model.
 
 use choscorui_compose::view::{
-    Binding, Button, Cx, Env, LazyHStack, LazyVStack, List, ScrollView, Text, View, ViewHost,
+    Binding, Button, Cx, Env, LazyHStack, LazyVStack, List, ScrollView, Text, View, ViewExt,
+    ViewHost,
 };
 use choscorui_compose::{Property, Runtime};
 use choscorui_controls::{EstimatedText, ShortcutModifiers};
@@ -143,6 +144,58 @@ fn scrolling_mounts_the_items_that_come_into_view_and_unmounts_the_rest() {
     assert_eq!(bounds(&mut host, "Row 6").min_y(), ROW / 2.0);
     wheel(&mut host, -1.0e9);
     assert_eq!(shown(&mut host, "Row "), names(0..15));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn a_wheel_at_the_end_of_an_inner_scroll_view_scrolls_the_outer_one() {
+    use choscorui_compose::view::{Frame, VStack};
+    let inner = ScrollView::new(
+        LazyVStack::new(20_usize, ROW, |index| Text::new(format!("Inner {index}"))).spacing(0.0),
+    )
+    .frame(Frame::new().height(200.0));
+    let outer = ScrollView::new(VStack::new((
+        inner,
+        LazyVStack::new(40_usize, ROW, |index| Text::new(format!("Row {index}"))).spacing(0.0),
+    )));
+    let mut host = host_with(outer, env("en"), Runtime::new());
+    let first = bounds(&mut host, "Row 0").min_y();
+    // The inner view takes the wheel until it reaches its end.
+    wheel(&mut host, 1.0e9);
+    assert_eq!(bounds(&mut host, "Inner 19").max_y(), 200.0);
+    assert_eq!(bounds(&mut host, "Row 0").min_y(), first);
+    // At its end the inner view returns Continue, so the outer view scrolls.
+    let before = bounds(&mut host, "Inner 19").max_y();
+    wheel(&mut host, 2.0 * ROW);
+    assert_eq!(bounds(&mut host, "Inner 19").max_y(), before - 2.0 * ROW);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn space_pages_a_focused_scroll_view_down_and_shift_space_pages_it_up() {
+    let rows = ScrollView::new(
+        LazyVStack::new(100_usize, ROW, |index| Text::new(format!("Row {index}"))).spacing(0.0),
+    )
+    .focusable(true);
+    let mut host = host_with(rows, env("en"), Runtime::new());
+    key(&mut host, Key::Tab);
+    key(&mut host, Key::Space);
+    host.layout();
+    let paged = bounds(&mut host, "Row 14").min_y();
+    assert!(paged < 14.0 * ROW, "{paged}");
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    host.key(
+        KeyEvent::Down {
+            key: Key::Space,
+            repeat: false,
+        },
+        shift,
+    );
+    host.layout();
+    assert_eq!(bounds(&mut host, "Row 0").min_y(), 0.0);
     assert_eq!(host.take_errors(), Vec::new());
 }
 
