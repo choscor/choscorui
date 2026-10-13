@@ -149,9 +149,19 @@ controls choscorui::prelude::Toggle
 controls choscorui::prelude::ToggleGroup
 controls choscorui::prelude::Toolbar
 controls choscorui::prelude::ControlKind
+controls choscorui::prelude::AvatarGroup
+controls choscorui::prelude::CommandLink
+controls choscorui::prelude::FontChooser
+controls choscorui::prelude::GroupBox
+controls choscorui::prelude::ScrollBar
+controls choscorui::prelude::StackedContainer
+controls choscorui::prelude::ToolBox
+controls choscorui::prelude::ToolButton
 
 # Dialogs, popovers, menus, and toasts.
 presentation choscorui::prelude::Dialog
+presentation choscorui::prelude::AlertDialog
+presentation choscorui::prelude::Toaster
 presentation choscorui::prelude::FontDialog
 presentation choscorui::prelude::InputDialog
 presentation choscorui::prelude::Popover
