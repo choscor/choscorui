@@ -4,7 +4,7 @@ use crate::style::{
     paint_choice,
 };
 use choscorui_core::{
-    DesignTokens, Dirty, Icon, Key, KeyEvent, NodeId, PointerButton, PointerEvent,
+    DesignTokens, Dirty, Icon, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect,
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
     TreeError,
 };
@@ -73,6 +73,9 @@ pub struct Checkbox {
     pointer_armed: bool,
     pointer_inside: bool,
     space_armed: bool,
+    /// The box and the label inside the arranged bounds: the part that
+    /// takes pointer input.
+    hit_area: Option<Rect>,
 }
 
 impl Checkbox {
@@ -87,6 +90,7 @@ impl Checkbox {
             pointer_armed: false,
             pointer_inside: false,
             space_armed: false,
+            hit_area: None,
         }
     }
 
@@ -333,6 +337,27 @@ impl crate::CustomControl for Checkbox {
     fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
         let size = Checkbox::measure(self, cx.styles, cx.tokens, cx.text);
         choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
+        let width = Checkbox::measure(self, cx.styles, cx.tokens, cx.text)
+            .width
+            .min(bounds.size.width);
+        let x = if cx.rtl() {
+            bounds.max_x() - width
+        } else {
+            bounds.origin.x
+        };
+        self.hit_area = Some(Rect::from_xywh(
+            x,
+            bounds.origin.y,
+            width,
+            bounds.size.height,
+        ));
+    }
+
+    fn hit(&self, point: Point) -> bool {
+        self.hit_area.is_none_or(|area| area.contains(point))
     }
 
     fn event(

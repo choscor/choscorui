@@ -6,8 +6,8 @@ use crate::custom::{
 };
 use crate::hosted::{self, Parts};
 use crate::style::{
-    ButtonVariant, Content, ControlKind, Orientation, PaintContext, ResolvedStyle, Slot,
-    StyleQuery, TextAlign, ToggleVariant, VisualState, join_segment,
+    ButtonVariant, Content, ControlKind, ControlSize, Orientation, PaintContext, ResolvedStyle,
+    Slot, StyleQuery, TextAlign, ToggleVariant, VisualState, join_segment,
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
@@ -39,8 +39,8 @@ impl ButtonGroupMember {
         }
     }
 
-    /// The style query of the member in `state`.
-    fn query(self, state: VisualState) -> StyleQuery {
+    /// The style query of the member in `state` and `size`.
+    fn query(self, state: VisualState, size: ControlSize) -> StyleQuery {
         match self {
             Self::Toggle(_) => StyleQuery::new(ControlKind::ToggleGroup, Slot::Item)
                 .variant(ToggleVariant::Outline),
@@ -50,6 +50,7 @@ impl ButtonGroupMember {
             Self::Separator => StyleQuery::new(ControlKind::ButtonGroup, Slot::Separator),
             Self::Text => StyleQuery::new(ControlKind::ButtonGroup, Slot::Text),
         }
+        .size(size)
         .state(state)
     }
 
@@ -75,6 +76,7 @@ pub struct ButtonGroup {
     members: Vec<ButtonGroupMember>,
     exclusive: bool,
     orientation: Orientation,
+    size: ControlSize,
 }
 
 impl ButtonGroup {
@@ -92,7 +94,16 @@ impl ButtonGroup {
             members,
             exclusive,
             orientation: Orientation::Horizontal,
+            size: ControlSize::Default,
         }
+    }
+
+    /// The size of the toggle, button, and text members: `Sm`,
+    /// `Default`, or `Lg`.
+    #[must_use]
+    pub fn with_size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
     }
 
     /// Joins the members in a row (the default) or a column.
@@ -145,7 +156,7 @@ impl ButtonGroup {
         let Some(member) = self.members.get(index).copied() else {
             return;
         };
-        let mut style = cx.style(member.query(state));
+        let mut style = cx.style(member.query(state, self.size));
         let bounds = cx.bounds;
         if member == ButtonGroupMember::Separator {
             let line = match self.orientation {
@@ -306,10 +317,19 @@ impl HostedButtonGroup {
         self.group.members.get(index)?.command()
     }
 
-    /// The indices of the toggle and button members.
+    /// True for an enabled toggle or button member.
+    fn enabled(&self, index: usize) -> bool {
+        self.command(index).is_some_and(|command| {
+            self.commands
+                .state(command)
+                .is_ok_and(|state| state.enabled)
+        })
+    }
+
+    /// The indices of the enabled toggle and button members.
     fn focusable_members(&self) -> Vec<usize> {
         (0..self.group.members.len())
-            .filter(|index| self.command(*index).is_some())
+            .filter(|index| self.enabled(*index))
             .collect()
     }
 
@@ -360,55 +380,34 @@ impl HostedButtonGroup {
         self.group.orientation == Orientation::Horizontal
     }
 
-    /// True for the key that moves forward in reading order, false for the
-    /// key that moves back, and `None` for other keys.
-    fn direction(&self, key: Key) -> Option<bool> {
-        let (next, previous) = match (self.horizontal(), self.rtl) {
-            (true, false) => (Key::ArrowRight, Key::ArrowLeft),
-            (true, true) => (Key::ArrowLeft, Key::ArrowRight),
-            (false, _) => (Key::ArrowDown, Key::ArrowUp),
-        };
-        (key == next || key == previous).then_some(key == next)
-    }
-
-    /// Moves the focus with `key`. In an exclusive group the check moves
-    /// with it. In other groups, Tab and Shift+Tab also move the focus
-    /// until they pass the last or the first member.
+    /// Moves the focus with `key` over the enabled members. In an
+    /// exclusive group, a toggle member that gets the focus also gets the
+    /// check. In other groups, Tab and Shift+Tab also move the focus until
+    /// they pass the last or the first member.
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
-        if self.group.exclusive {
-            let Some(forward) = self.direction(key) else {
-                return EventReply::Continue;
-            };
-            if let Some(member) = self.group.step(&mut self.commands, forward) {
-                self.focus = self
-                    .group
-                    .members
-                    .iter()
-                    .position(|other| *other == ButtonGroupMember::Toggle(member))
-                    .unwrap_or(0);
-                self.changed(cx);
-            }
-            return EventReply::Stop;
-        }
         let stops = self.focusable_members();
         let current = stops
             .iter()
             .position(|index| *index == self.focus)
             .unwrap_or(0);
-        let next = if key == Key::Tab {
-            hosted::tab_stop(current, stops.len(), cx.modifiers().shift)
-        } else {
-            hosted::rove(key, current, stops.len(), self.horizontal(), self.rtl)
+        let next = match key {
+            Key::Tab if self.group.exclusive => None,
+            Key::Tab => hosted::tab_stop(current, stops.len(), cx.modifiers().shift),
+            _ => hosted::rove(key, current, stops.len(), self.horizontal(), self.rtl),
         };
-        match next {
-            Some(next) => {
-                self.focus = stops[next];
-                cx.request_paint();
-                cx.request_semantics();
-                EventReply::Stop
-            }
-            None => EventReply::Continue,
+        let Some(next) = next else {
+            return EventReply::Continue;
+        };
+        self.focus = stops[next];
+        if let (true, Some(ButtonGroupMember::Toggle(member))) =
+            (self.group.exclusive, self.group.members.get(self.focus))
+            && self.group.toggle(&mut self.commands, *member)
+        {
+            self.changed(cx);
         }
+        cx.request_paint();
+        cx.request_semantics();
+        EventReply::Stop
     }
 
     /// The natural size of each member.
@@ -418,7 +417,7 @@ impl HostedButtonGroup {
             .iter()
             .enumerate()
             .map(|(index, member)| {
-                let style = cx.style(member.query(VisualState::NONE));
+                let style = cx.style(member.query(VisualState::NONE, self.group.size));
                 member.size(&style, self.label(index), cx)
             })
             .collect()
@@ -468,7 +467,10 @@ impl CustomControl for HostedButtonGroup {
             .filter(|(member, _)| member.command().is_none())
             .map(|(_, size)| main(size))
             .sum();
-        let shared = self.focusable_members().len().max(1) as f64;
+        let shared = (self.group.members.iter())
+            .filter(|member| member.command().is_some())
+            .count()
+            .max(1) as f64;
         let length = if horizontal {
             bounds.size.width
         } else {
@@ -520,7 +522,7 @@ impl CustomControl for HostedButtonGroup {
         let pressed = self.parts.pressed;
         let mut parts = self.parts;
         parts.track(cx, event, |point| {
-            hosted::hit(&self.rects, point).filter(|index| self.command(*index).is_some())
+            hosted::hit(&self.rects, point).filter(|index| self.enabled(*index))
         });
         self.parts = parts;
         match event {
@@ -548,15 +550,23 @@ impl CustomControl for HostedButtonGroup {
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::FocusChanged(focused) => {
                 // Tab into a group with tab stops starts at its first
-                // member, and Shift+Tab at its last.
-                if *focused && !self.group.exclusive && self.parts.pressed.is_none() {
+                // member, and Shift+Tab at its last. An exclusive group
+                // starts at its checked member.
+                if *focused && self.parts.pressed.is_none() {
                     let stops = self.focusable_members();
-                    let edge = if cx.modifiers().shift {
-                        stops.last()
+                    let edge = if self.group.exclusive {
+                        let checked = self.checked_indices();
+                        hosted::roving_entry(
+                            self.group.members.len(),
+                            &|index| self.enabled(index),
+                            &|index| checked.contains(&index),
+                        )
+                    } else if cx.modifiers().shift {
+                        stops.last().copied()
                     } else {
-                        stops.first()
+                        stops.first().copied()
                     };
-                    self.focus = edge.copied().unwrap_or(0);
+                    self.focus = edge.unwrap_or(self.focus);
                 }
                 cx.request_paint();
                 cx.request_semantics();
@@ -606,9 +616,11 @@ impl CustomControl for HostedButtonGroup {
         } else {
             Vec::new()
         };
+        // A toggle is a button with a checked state. In an exclusive group
+        // it is a radio button.
         let toggle = matches!(self.group.members[self.focus], ButtonGroupMember::Toggle(_));
-        let role = if toggle {
-            SemanticRole::Checkbox
+        let role = if toggle && self.group.exclusive {
+            SemanticRole::RadioButton
         } else {
             SemanticRole::Button
         };

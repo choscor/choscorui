@@ -319,7 +319,8 @@ fn button_group_matches_its_reference_table() {
             (bg(&text), text.border, text.border_width),
             (
                 tokens.color(ColorRole::Muted),
-                tokens.color(ColorRole::Border),
+                // The edge of the outline toggle members it joins.
+                tokens.color(ColorRole::Input),
                 1.0
             )
         );

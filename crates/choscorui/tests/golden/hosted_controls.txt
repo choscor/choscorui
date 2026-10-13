@@ -1552,29 +1552,6 @@ FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { 
 FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
 DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
-# avatar default Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
-semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-PopClip
-# switch xs Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
-PopClip
-# avatar xs Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
-semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-PopClip
 # switch sm Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 132.10000000000002, height: 14.0 } }
 semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
@@ -1584,21 +1561,26 @@ FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { 
 FillRoundedRect { rect: Rect { origin: Point { x: 21.0, y: 11.0 }, size: Size { width: 12.0, height: 12.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
 DrawText { baseline: Point { x: 42.0, y: 21.9 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
+# avatar default Ltr
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
+semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
+FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+PopClip
+# avatar xs Ltr
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
+semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
+FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+PopClip
 # avatar sm Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 24.0, height: 24.0 } }
 semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 24.0, height: 24.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 24.0, height: 24.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 15.399999999999999, y: 26.2 }, text: "AL", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-PopClip
-# switch lg Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # avatar lg Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 40.0, height: 40.0 } }
@@ -1607,30 +1589,12 @@ PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 40.0, he
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 40.0, height: 40.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 22.299999999999997, y: 34.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
-# switch icon Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
-PopClip
 # avatar icon Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
 semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-PopClip
-# switch icon-xs Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # avatar icon-xs Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
@@ -1639,30 +1603,12 @@ PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, he
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
-# switch icon-sm Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
-PopClip
 # avatar icon-sm Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }
 semantics SemanticNode { role: Image, name: "Ana Lee", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-PopClip
-# switch icon-lg Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 24.799999999999997, y: 11.2 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane mode", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # avatar icon-lg Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }

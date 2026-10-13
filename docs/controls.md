@@ -372,6 +372,9 @@ and runs `action` when it reports `Activated`.
   look.
 - **Look.** `paint` draws the box at the start of the bounds and the label
   after it. In right-to-left layouts, the box is at the right.
+- In a control host, only the box and the label take pointer input. A
+  press in the bounds after the label goes to the parent node, so a wide
+  frame does not make a large target.
 
 | Part | Value |
 | --- | --- |
@@ -510,7 +513,7 @@ pins this behavior.
 | Part | Kind and slot | Value |
 | --- | --- | --- |
 | Group | `ButtonGroup` `Root` | radius md, 8 pt gap |
-| Text part | `ButtonGroup` `Text` | 36 pt high, `muted` fill, 1 pt `border`, radius md, 10 pt sides, sm medium text, shadow xs |
+| Text part | `ButtonGroup` `Text` | 36 pt high, `muted` fill, 1 pt `input` edge as the toggle members, radius md, 10 pt sides, sm medium text, shadow xs |
 | Separator | `ButtonGroup` `Separator` | 1 pt `input` line |
 | Toggle member | `ToggleGroup` `Item`, `Outline` | the toggle look |
 | Button member | `Button` `Root`, its variant | the button look, `Outline` in the gallery |
@@ -527,10 +530,10 @@ semantics.
 
 | Field | `HostedButtonGroup::semantics` |
 | --- | --- |
-| Role | the focused member: `Checkbox` (AXCheckBox) for a toggle, `Button` (AXButton) for a button |
+| Role | the focused member: `RadioButton` (AXRadioButton) for a toggle in an exclusive group, else `Button` (AXButton) |
 | Name / value | the member label / - |
 | Description | the labels of the text parts |
-| State | disabled; checked for a toggle member |
+| State | disabled; checked for a toggle member, as on a `Toggle` |
 | Actions | `Activate`, `Focus`, while the member is enabled |
 
 **In a control host.** `ToolButton::hosted` keeps the command state
@@ -538,9 +541,10 @@ itself, because the host has no `CommandRegistry`. In right-to-left
 layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
 node for the whole group, with a label for each member. It paints the
 `Root` slot, then each member. That node publishes the focused member.
-Arrow keys move the focus among the toggle and button members, and skip
-separators and text parts. In an exclusive group, arrow keys also move
-the check.
+Arrow keys, Home, and End move the focus among the enabled toggle and
+button members. They skip disabled members, separators, and text parts.
+In an exclusive group, a toggle member that gets the focus also gets the
+check, and focus enters the group at the checked member.
 - In a non-exclusive group, each toggle and button member is a tab stop.
   Tab and Shift+Tab move the focus in the group, and leave it after the
   last or the first member.
@@ -548,8 +552,10 @@ the check.
   reports `Changed(Indices)`, and a button member `ItemActivated(member)`.
 - The toggle and button members share the width evenly. Separators and
   text parts keep their natural width.
-- `with_enabled(index, false)` disables a member: it takes no click, key,
-  or action, and arrow keys skip it in an exclusive group.
+- `with_enabled(index, false)` disables a member: it takes no press, key,
+  action, or focus.
+- `ButtonGroup::with_size` sets the size of the toggle, button, and text
+  members: `Sm`, `Default`, or `Lg`.
 - The compose `ButtonGroup` view takes a `ButtonGroup`, the labels, and a
   binding for the checked toggle members. Button members report through
   `.on_item`.
@@ -2497,7 +2503,8 @@ behavior and the look.
 - A flip from input slides the thumb over the track's `motion_ms` with the
   `motion.easing` curve. `set_value` and `set_checked` move it at once, and
   reduced motion skips the slide.
-- `with_size` takes `Default` or `Sm`.
+- `with_size` takes a `SwitchSize`: `Default` or `Sm`.
+- `perform(Focus)` returns false while the switch is disabled.
 - A switch has no invalid state. A `Field` around a required switch shows
   the error message and a `destructive` label, and the switch stays the
   same.
@@ -2531,10 +2538,13 @@ From the application, `set_value` takes `Bool`. `set_open` returns false.
 
 - **`Toggle`.** A click, Space, or Enter flips the value and emits
   `Changed(Bool)`. `with_icon` adds an icon before the label.
+  `icon_only` shows only the icon. The label stays the accessible name.
 - **`ToggleGroup`.** A single-selection group keeps at most one item on. A
   flip of the on item turns it off. A multiple-selection group flips each
   item on its own. Each flip emits `Changed(Indices)`.
-- **Keys.** The group is one tab stop. The arrow keys along the orientation
+- **Keys.** The group is one tab stop. When focus enters the group, the
+  first enabled item that is on gets the focus. With no such item, the
+  first enabled item gets it. The arrow keys along the orientation
   move focus over the enabled items and wrap. Home and End go to the first
   and the last item. In a right-to-left row, ArrowLeft moves forward.
 - Space or Enter flips the focused item. A disabled item gets no focus and
@@ -2571,6 +2581,10 @@ text.
 | Description | "toggle" | label of the focused item |
 | State | checked, disabled | disabled |
 | Actions | `Activate` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
+
+A toggle is a button with a checked state. The toggle members of a
+`ButtonGroup` use the same model. `perform(Focus)` returns false while the
+control is disabled.
 
 `SetValue` with an item label flips that item. An unknown label returns
 false.
@@ -3995,6 +4009,8 @@ behavior.
   focusable when the control's `focusable` returns true.
 - `dispatch_pointer` routes a pointer event through the capture, target,
   and bubble phases. A press on a focusable control focuses it.
+- When the control's `hit` returns false for the pointer position, the
+  host gives the event to the parent node. The default `hit` returns true.
 - `dispatch_key` routes a key event through the tree and returns whether a
   control stopped it. `dispatch_text` gives committed text to the focused
   control.

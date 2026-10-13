@@ -11,6 +11,14 @@ use choscorui_core::{
     EventReply, Localizer, Measured, Point, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
+/// The sizes of a [`Switch`]. A switch has no larger size.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SwitchSize {
+    #[default]
+    Default,
+    Sm,
+}
+
 /// A switch: a pill track with a sliding thumb, and a label after it. A
 /// click anywhere on the control, Space, or Enter flips it.
 #[derive(Clone, Debug)]
@@ -42,10 +50,13 @@ impl Switch {
         }
     }
 
-    /// `Default` or `Sm`.
+    /// The size of the track and the thumb.
     #[must_use]
-    pub fn with_size(mut self, size: ControlSize) -> Self {
-        self.size = size;
+    pub fn with_size(mut self, size: SwitchSize) -> Self {
+        self.size = match size {
+            SwitchSize::Default => ControlSize::Default,
+            SwitchSize::Sm => ControlSize::Sm,
+        };
         self
     }
 
@@ -191,7 +202,7 @@ impl CustomControl for Switch {
                 self.flip(cx);
                 true
             }
-            SemanticAction::Focus => {
+            SemanticAction::Focus if self.enabled => {
                 cx.request_focus();
                 true
             }

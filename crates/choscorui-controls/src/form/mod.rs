@@ -23,6 +23,6 @@ pub use kbd::Kbd;
 pub use otp::InputOtp;
 pub use range_slider::RangeSlider;
 pub use select::Select;
-pub use switch::Switch;
+pub use switch::{Switch, SwitchSize};
 pub use textarea::Textarea;
 pub use toggle::{Toggle, ToggleGroup, ToggleItem};

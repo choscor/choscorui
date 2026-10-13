@@ -3,11 +3,11 @@
 mod hosted;
 
 use choscorui_controls::{
-    ControlMessage, ControlSize, ControlValue, Kbd, Switch, Toggle, ToggleGroup, ToggleItem,
-    ToggleVariant,
+    ControlMessage, ControlSize, ControlValue, Kbd, Switch, SwitchSize, Toggle, ToggleGroup,
+    ToggleItem, ToggleVariant,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, Key, LayoutDirection, Point, SemanticAction, SemanticRole, Size,
+    ColorRole, DesignTokens, Icon, Key, LayoutDirection, Point, SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, fills, rounded_fills, texts};
 
@@ -58,7 +58,7 @@ fn switch_flips_on_click_keys_and_actions_and_slides_its_thumb() {
 #[test]
 fn small_switch_and_rtl_put_the_track_at_the_start() {
     let mut h = Harness::with_direction(
-        Switch::new("", true).with_size(ControlSize::Sm),
+        Switch::new("", true).with_size(SwitchSize::Sm),
         LayoutDirection::Rtl,
     );
     assert_eq!(h.measure(), Size::new(24.0, 14.0));
@@ -187,4 +187,45 @@ fn kbd_paints_one_cap_per_key_and_takes_no_focus() {
     assert_eq!(rounded_fills(&h.paint(), muted).len(), 2);
     assert_eq!(h.host.focus_next(&mut h.tree, false), None);
     assert_eq!(h.semantics().name, "⌘ K");
+}
+
+#[test]
+fn disabled_switch_and_toggle_refuse_the_focus_action() {
+    let mut switch = Harness::new(Switch::new("Wi-Fi", false));
+    switch.set_enabled(false);
+    assert!(!switch.perform(SemanticAction::Focus, None));
+    let mut toggle = Harness::new(Toggle::new("Bold", false));
+    toggle.set_enabled(false);
+    assert!(!toggle.perform(SemanticAction::Focus, None));
+}
+
+#[test]
+fn an_icon_only_toggle_paints_no_label_and_keeps_its_name() {
+    let mut h = Harness::new(Toggle::new("Bold", true).with_icon(Icon::Bold).icon_only());
+    assert!(texts(&h.paint()).is_empty());
+    let node = h.semantics();
+    assert_eq!(
+        (node.role, node.name.as_str()),
+        (SemanticRole::Button, "Bold")
+    );
+    assert_eq!(node.state.checked, Some(true));
+    h.messages();
+}
+
+#[test]
+fn toggle_group_focus_enters_at_the_selected_or_first_enabled_item() {
+    let mut items = alignment();
+    items.set_selected(&[2]);
+    let mut h = Harness::new(items);
+    h.focus();
+    assert_eq!(h.semantics().description, "Right");
+    let mut first = ToggleGroup::new(
+        "Alignment",
+        vec![ToggleItem::new("Left").disabled(), ToggleItem::new("Right")],
+        false,
+    );
+    first.set_selected(&[]);
+    let mut h = Harness::new(first);
+    h.focus();
+    assert_eq!(h.semantics().description, "Right");
 }

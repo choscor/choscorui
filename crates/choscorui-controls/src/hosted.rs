@@ -227,6 +227,19 @@ pub(crate) fn rove(
     }
 }
 
+/// The part that takes the roving focus when focus enters a group of
+/// `count` parts: the first enabled part that is checked, else the first
+/// enabled part.
+pub(crate) fn roving_entry(
+    count: usize,
+    enabled: &dyn Fn(usize) -> bool,
+    checked: &dyn Fn(usize) -> bool,
+) -> Option<usize> {
+    (0..count)
+        .find(|index| enabled(*index) && checked(*index))
+        .or_else(|| (0..count).find(|index| enabled(*index)))
+}
+
 /// The tab stop that Tab, or Shift+Tab with `back`, moves to among
 /// `count` stops inside one control. `None` means focus leaves the
 /// control.

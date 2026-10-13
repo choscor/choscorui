@@ -11,7 +11,7 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::{
     self, AddonAlign, CalendarMode, ControlSize, FieldOrientation, InputGroupAddon, KbdVariant,
-    ListEntry, Orientation, ToggleItem, ToggleVariant, ValidationState,
+    ListEntry, Orientation, SwitchSize, ToggleItem, ToggleVariant, ValidationState,
 };
 use choscorui::core::{CivilDate, Icon, Space};
 
@@ -20,7 +20,7 @@ fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-fn switch(cx: &mut Cx, key: &'static str, on: bool, size: ControlSize) -> Switch {
+fn switch(cx: &mut Cx, key: &'static str, on: bool, size: SwitchSize) -> Switch {
     Switch::new(t!(key), cx.state(on).binding()).with(move |switch| switch.with_size(size))
 }
 
@@ -30,15 +30,15 @@ pub fn switch_page(_: &PageCx) -> AnyView {
             section(
                 t!("switch.default"),
                 row((
-                    switch(cx, "switch.airplane", false, ControlSize::Default),
-                    switch(cx, "switch.wifi", true, ControlSize::Default),
+                    switch(cx, "switch.airplane", false, SwitchSize::Default),
+                    switch(cx, "switch.wifi", true, SwitchSize::Default),
                 )),
             ),
             section(
                 t!("switch.small"),
                 row((
-                    switch(cx, "switch.bluetooth", false, ControlSize::Sm),
-                    switch(cx, "switch.hotspot", true, ControlSize::Sm),
+                    switch(cx, "switch.bluetooth", false, SwitchSize::Sm),
+                    switch(cx, "switch.hotspot", true, SwitchSize::Sm),
                 )),
             ),
         ))
@@ -505,7 +505,7 @@ pub fn field(_: &PageCx) -> AnyView {
                 narrow(
                     Field::new(
                         t!("field.marketing"),
-                        switch(cx, "field.marketing", true, ControlSize::Default),
+                        switch(cx, "field.marketing", true, SwitchSize::Default),
                     )
                     .description(t!("field.receive"))
                     .orientation(FieldOrientation::Horizontal),

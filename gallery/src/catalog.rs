@@ -201,6 +201,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("ListEntry", "select"),
     ("Select", "select"),
     ("Switch", "switch"),
+    ("SwitchSize", "switch"),
     ("Toggle", "toggle"),
     ("ToggleGroup", "toggle-group"),
     ("ToggleItem", "toggle-group"),

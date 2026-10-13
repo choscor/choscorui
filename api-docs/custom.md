@@ -648,6 +648,16 @@ fn focusable(&self) -> bool
 
 True when the control can take the keyboard focus. The default is true.
 
+#### `CustomControl::hit`
+
+```rust
+fn hit(&self, point: Point) -> bool
+```
+
+True when `point`, in window coordinates inside the bounds, is on
+a part of the control that takes pointer input. The host gives a
+point that misses to the parent node. The default is true.
+
 #### `CustomControl::measure`
 
 ```rust

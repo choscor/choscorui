@@ -18,6 +18,8 @@ use choscorui_core::{
 pub struct Toggle {
     label: String,
     icon: Option<Icon>,
+    /// False when only the icon shows; the label stays the name.
+    show_label: bool,
     on: bool,
     variant: ToggleVariant,
     size: ControlSize,
@@ -30,6 +32,7 @@ impl Toggle {
         Self {
             label: label.into(),
             icon: None,
+            show_label: true,
             on,
             variant: ToggleVariant::Default,
             size: ControlSize::Default,
@@ -42,6 +45,14 @@ impl Toggle {
     #[must_use]
     pub fn with_icon(mut self, icon: Icon) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    /// Shows only the icon of [`with_icon`](Self::with_icon). The label
+    /// stays the accessible name.
+    #[must_use]
+    pub fn icon_only(mut self) -> Self {
+        self.show_label = false;
         self
     }
 
@@ -84,7 +95,11 @@ impl Toggle {
     fn content(&self) -> Content<'_> {
         Content {
             leading: self.icon,
-            label: &self.label,
+            label: if self.show_label || self.icon.is_none() {
+                &self.label
+            } else {
+                ""
+            },
             trailing: None,
         }
     }
@@ -151,7 +166,7 @@ impl CustomControl for Toggle {
                 self.flip(cx);
                 true
             }
-            SemanticAction::Focus => {
+            SemanticAction::Focus if self.enabled => {
                 cx.request_focus();
                 true
             }
@@ -447,7 +462,16 @@ impl CustomControl for ToggleGroup {
                 cx.request_paint();
                 EventReply::Continue
             }
-            ControlEvent::FocusChanged(_) => {
+            ControlEvent::FocusChanged(gained) => {
+                if *gained {
+                    self.focused = hosted::roving_entry(
+                        self.items.len(),
+                        &|index| self.items[index].enabled,
+                        &|index| self.on[index],
+                    )
+                    .unwrap_or(0);
+                    cx.request_semantics();
+                }
                 cx.request_paint();
                 EventReply::Continue
             }
@@ -552,7 +576,7 @@ impl CustomControl for ToggleGroup {
                 self.flip(cx, index);
                 true
             }
-            SemanticAction::Focus => {
+            SemanticAction::Focus if self.enabled => {
                 cx.request_focus();
                 true
             }

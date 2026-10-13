@@ -19,7 +19,7 @@ use choscorui::controls::{
     EstimatedText, HostEnv, IntegerRange, Item, ItemGroup, ItemVariant, ItemView, Kbd, KbdVariant,
     Marker, MarkerVariant, Message, PaintContext, Progress, ShortcutModifiers, Sidebar,
     SidebarItem, SidebarItemVariant, SidebarVariant, Slider, SliderOrientation, SpinBox, Styles,
-    Switch, TextField, TextItemDelegate, Toast, ToastVariant, Toaster, Toasts, Toggle,
+    Switch, SwitchSize, TextField, TextItemDelegate, Toast, ToastVariant, Toaster, Toasts, Toggle,
     ToggleVariant, VisualState,
 };
 use choscorui::core::{
@@ -491,9 +491,11 @@ fn hosted_variants() -> Vec<(String, Box<dyn CustomControl>)> {
             out.push((label, Box::new(group)));
         }
     }
-    for size in ControlSize::ALL {
+    for (size, name) in [(SwitchSize::Default, "default"), (SwitchSize::Sm, "sm")] {
         let switch = Switch::new("Airplane mode", true).with_size(size);
-        out.push((format!("switch {}", size.name()), Box::new(switch)));
+        out.push((format!("switch {name}"), Box::new(switch)));
+    }
+    for size in ControlSize::ALL {
         let avatar = Avatar::new("Ana Lee", "AL").with_size(size);
         out.push((format!("avatar {}", size.name()), Box::new(avatar)));
     }

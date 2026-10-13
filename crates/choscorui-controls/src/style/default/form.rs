@@ -139,7 +139,8 @@ fn button_group(cx: &Cx) -> ResolvedStyle {
         Slot::Text => {
             let mut style = cx.base();
             style.background = cx.c(ColorRole::Muted).into();
-            style.border = cx.c(ColorRole::Border);
+            // The same edge as the outline toggle members it joins.
+            style.border = cx.c(ColorRole::Input);
             style.border_width = cx.t.border_width;
             style.radius = Corners::all(cx.r(RadiusScale::Md));
             style.gap = cx.sp(2.0);

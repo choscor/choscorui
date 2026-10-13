@@ -147,8 +147,8 @@ pub use feedback::{
 };
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldLayout, FieldPart, FieldText, Input,
-    InputGroup, InputGroupAddon, InputOtp, InputType, Kbd, RangeSlider, Select, Switch, Textarea,
-    Toggle, ToggleGroup, ToggleItem,
+    InputGroup, InputGroupAddon, InputOtp, InputType, Kbd, RangeSlider, Select, Switch, SwitchSize,
+    Textarea, Toggle, ToggleGroup, ToggleItem,
 };
 pub use layout::{Accordion, AspectRatio, Collapsible, Item, ItemGroup, ItemMedia};
 pub use listbox::ListEntry;

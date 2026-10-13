@@ -328,6 +328,14 @@ pub trait CustomControl {
         false
     }
 
+    /// True when `point`, in window coordinates inside the bounds, is on
+    /// a part of the control that takes pointer input. The host gives a
+    /// point that misses to the parent node. The default is true.
+    fn hit(&self, point: Point) -> bool {
+        let _ = point;
+        true
+    }
+
     /// True when the control can take the keyboard focus. The default is true.
     fn focusable(&self) -> bool {
         true
@@ -781,9 +789,14 @@ impl ControlHost {
         if let Some(capture) = tree.pointer_capture() {
             return Some(capture);
         }
-        let target = self
+        let mut target = self
             .overlay_at(tree, point)
             .or_else(|| tree.hit_test(point));
+        while let Some(node) = target
+            && self.controls.get(&node).is_some_and(|c| !c.hit(point))
+        {
+            target = tree.parent(node);
+        }
         match (self.modal(tree), target) {
             (Some(modal), Some(target)) if !tree.is_within(target, modal) => Some(modal),
             (Some(modal), None) => Some(modal),

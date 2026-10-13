@@ -4,7 +4,7 @@
 mod hosted;
 
 use choscorui_controls::{Button, Checkbox, CommandId, ControlMessage, ControlValue};
-use choscorui_core::{Key, SemanticAction, SemanticRole};
+use choscorui_core::{Key, Point, SemanticAction, SemanticRole};
 use hosted::{Harness, texts};
 
 #[test]
@@ -55,4 +55,20 @@ fn a_hosted_checkbox_reports_and_takes_its_value() {
 fn a_hosted_checkbox_can_start_invalid() {
     let h = Harness::new(Checkbox::new("Accept the terms", false).with_invalid(true));
     assert!(h.semantics().state.invalid);
+}
+
+#[test]
+fn a_wide_hosted_checkbox_takes_presses_on_its_box_and_label_only() {
+    let mut h = Harness::new(Checkbox::new("Remember me", false));
+    let natural = h.bounds();
+    h.place(hosted::rect(10.0, 10.0, 320.0, natural.size.height));
+    let y = natural.center().y;
+    h.click(Point::new(320.0, y));
+    assert!(h.messages().is_empty());
+    assert_ne!(h.tree.focus(), Some(h.node));
+    h.click(Point::new(natural.max_x() - 2.0, y));
+    assert_eq!(
+        h.messages(),
+        vec![ControlMessage::Changed(ControlValue::Bool(true))]
+    );
 }

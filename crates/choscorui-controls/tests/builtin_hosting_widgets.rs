@@ -6,9 +6,9 @@ mod hosted;
 
 use choscorui_controls::{
     ButtonGroup, ButtonGroupMember, ButtonVariant, ComboItem, Combobox, CommandId, CommandLink,
-    ControlMessage, ControlValue, DecimalSpinBox, Dial, FontChooser, IntegerRange, KeySequenceEdit,
-    NumberBase, NumericDisplay, ScrollBar, ScrollOrientation, ShortcutModifiers, SizeGrip,
-    TextEditor, ToolBox, ToolButton, ToolButtonMenu,
+    ControlMessage, ControlSize, ControlValue, DecimalSpinBox, Dial, FontChooser, IntegerRange,
+    KeySequenceEdit, NumberBase, NumericDisplay, ScrollBar, ScrollOrientation, ShortcutModifiers,
+    SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
 };
 use choscorui_core::{
     ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent, SemanticAction,
@@ -460,9 +460,11 @@ fn a_hosted_button_group_mirrors_and_toggles_members() {
 fn a_hosted_button_group_skips_a_disabled_member() {
     let mut h = Harness::new(alignment(true).hosted(labels()).with_enabled(1, false));
     assert!(set_value(&mut h, ControlValue::Indices(vec![0])));
+    // A press on the disabled member focuses the group at its checked
+    // member and does not reach the disabled one.
     h.click(member(&h, 1));
-    assert_eq!(h.semantics().name, "Center");
-    assert!(h.semantics().state.disabled);
+    assert_eq!(h.semantics().name, "Left");
+    assert!(!h.semantics().state.disabled);
     assert!(h.messages().is_empty());
     h.focus();
     h.key(Key::ArrowLeft);
@@ -475,6 +477,47 @@ fn a_hosted_button_group_skips_a_disabled_member() {
             changed(ControlValue::Indices(vec![0])),
         ]
     );
+}
+
+#[test]
+fn a_hosted_exclusive_button_group_starts_at_the_check_and_reaches_buttons() {
+    use ButtonGroupMember::{Button, Toggle};
+    let group = ButtonGroup::from_members(
+        vec![
+            Toggle(CommandId(1)),
+            Toggle(CommandId(2)),
+            Button(CommandId(3), ButtonVariant::Outline),
+        ],
+        true,
+    );
+    let mut h = Harness::new(group.hosted(labels()));
+    assert!(set_value(&mut h, ControlValue::Indices(vec![1])));
+    h.focus();
+    let node = h.semantics();
+    assert_eq!(
+        (node.name.as_str(), node.role),
+        ("Center", SemanticRole::RadioButton)
+    );
+    h.key(Key::ArrowRight);
+    assert_eq!(
+        h.semantics().name,
+        "Right",
+        "arrow keys reach a button member"
+    );
+    assert!(h.messages().is_empty(), "a button member takes no check");
+    h.key(Key::Home);
+    assert_eq!(h.semantics().name, "Left");
+    h.key(Key::End);
+    assert_eq!(h.semantics().name, "Right");
+    assert_eq!(h.messages(), vec![changed(ControlValue::Indices(vec![0]))]);
+}
+
+#[test]
+fn a_button_group_size_sets_the_member_height() {
+    let small = Harness::new(alignment(false).with_size(ControlSize::Sm).hosted(labels()));
+    let large = Harness::new(alignment(false).with_size(ControlSize::Lg).hosted(labels()));
+    assert_eq!(small.bounds().size.height, 32.0);
+    assert_eq!(large.bounds().size.height, 40.0);
 }
 
 /// A zoom group: a text part, two outline buttons with a separator
@@ -509,7 +552,8 @@ fn a_hosted_button_group_runs_buttons_and_skips_parts() {
     h.key(Key::Enter);
     h.key(Key::Tab);
     assert_eq!(h.semantics().name, "Fit");
-    assert_eq!(h.semantics().role, SemanticRole::Checkbox);
+    assert_eq!(h.semantics().role, SemanticRole::Button);
+    assert_eq!(h.semantics().state.checked, Some(false));
     h.key(Key::Space);
     h.key(Key::ArrowRight);
     assert_eq!(h.semantics().name, "Out", "arrow keys wrap");
@@ -563,11 +607,11 @@ fn a_hosted_button_group_keeps_parts_at_their_natural_width() {
     assert_eq!(before[0], after[0]);
     assert!(after[1].1.x > before[1].1.x);
     assert!((after[3].1.x - before[3].1.x - 75.0).abs() < 0.5);
-    // The disabled button takes no click.
+    // The disabled button takes no click and no focus.
     h.click(after[1].1);
     assert!(h.messages().is_empty());
-    assert_eq!(h.semantics().name, "Out");
-    assert!(h.semantics().state.disabled);
+    assert_eq!(h.semantics().name, "In");
+    assert!(!h.semantics().state.disabled);
 }
 
 #[test]
