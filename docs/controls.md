@@ -2066,7 +2066,10 @@ through the `Text` value in both directions. Accept runs `on_activate`.
   command states. A command reports `Command`. Focus that enters the
   toolbar goes to the first item.
 - A click on the chevron opens the overflowed commands in a menu and
-  reports `OpenChanged`. The view layer places the embedded controls in
+  reports `OpenChanged`. The menu opens away from the window edge of the
+  bar: below a top bar, above a bottom bar, and beside a side bar.
+- A press on the bar outside the open menu only closes the menu. Each
+  close without a choice emits `Dismissed`. The view layer places the embedded controls in
   the `layout()` rectangles.
 
 | Part | Slot | Value |
@@ -2683,6 +2686,10 @@ character that the code does not accept. `set_open` returns false.
   dates, or the placeholder. It is at least 240 pt wide.
 - A press on the trigger, Enter, Space, or ArrowDown opens the calendar 4
   pt below the trigger. It fades, zooms, and slides in like a select list.
+- `place_popup` keeps the calendar in the window. Near the bottom edge it
+  opens above the trigger. The calendar keeps its size.
+- Each close without a choice emits `Dismissed`: Escape, Tab, a press
+  outside, a press on the trigger, focus loss, and disabling.
 - **Keys while open.** The calendar keys move the cursor and do not choose.
   Enter or Space chooses the cursor day. Escape closes and emits
   `Dismissed`. Tab closes and moves focus.
@@ -2737,8 +2744,14 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   clears the other radio actions between the same separators.
 - Escape at the root closes the menu and emits `Dismissed`. Tab closes the
   menu and moves focus. A press outside the menu closes it.
+- Each close without a choice emits `Dismissed`: Escape, Tab, a press
+  outside, focus loss, and disabling. The press that closes the menu goes
+  no further.
 - A submenu opens beside its row, toward the end of the line. In
   right-to-left layouts, the menus open toward the left.
+- `place_popup` keeps every panel in the window. A menu near the bottom
+  edge opens above its anchor. A submenu near the end edge opens on the
+  start side. A panel keeps its size and moves into the window.
 - **`ContextMenu`.** A secondary press or a Control-press in the area
   opens the menu with its top-start corner at the pointer. Enter, Space,
   Shift-F10, the Menu key, or `ShowMenu` opens it at the center of the
@@ -2937,6 +2950,9 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 - `with_collapsed(range)` hides those items behind an ellipsis. The first
   and the last item always show. Activating the ellipsis opens a menu of
   the hidden items. A choice emits `ItemActivated(index)`.
+- A press on the trail outside the open menu only closes the menu, and
+  emits `OpenChanged(false)` and `Dismissed`. Escape, Tab, and focus loss
+  also emit `Dismissed`.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -3010,6 +3026,9 @@ last page. `set_open` returns false.
   `ItemActivated(index)` and closes the panel. Links count in order, and a
   trigger without links counts as one link. Escape closes the panel and
   emits `Dismissed`.
+- A press outside the panel, focus loss, `Collapse`, and disabling also
+  close the panel and emit `Dismissed`. `place_popup` keeps the panel in
+  the window.
 - A panel with more than three links shows them in two 240 pt columns.
 
 | Part | Slot | Value |
@@ -3239,6 +3258,9 @@ without an animation. `set_open` returns false.
 - **Columns.** `with_column_menu(label)` adds a menu button at the toolbar
   end. Each menu item shows or hides one column. `with_hidden(column)`
   hides a column at the start.
+- The column menu opens below its button with the end edges aligned.
+  `place_popup` keeps it in the window. A press on the table outside the
+  open menu only closes the menu and emits `Dismissed`.
 - **Sort.** A click on a header, or Enter or Space on a header cell,
   sorts by that column. Each activation goes from ascending to
   descending to source order. An arrow after the label shows the order.
@@ -3299,6 +3321,8 @@ behavior.
 - **Tooltip.** Hover picks the category under the pointer. Arrow keys,
   Home, and End pick a category while the chart has focus. The tooltip
   shows the category and its values beside the pick. Escape hides it.
+  `place_popup` puts the tooltip 10 pt after the pick, and before it when
+  only that side fits.
 - `with_legend()` shows the series names, or the category names for pie
   and radial charts, under the chart.
 - `with_format(format)` formats values in the tooltip and in semantics.

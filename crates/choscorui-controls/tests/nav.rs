@@ -231,3 +231,47 @@ fn navigation_menu_opens_on_hover_after_a_delay() {
         ]
     );
 }
+
+#[test]
+fn a_press_on_the_trail_outside_the_ellipsis_menu_only_closes_it() {
+    let mut h = Harness::new(trail());
+    h.focus();
+    assert!(tab(&mut h));
+    h.key(Key::Enter);
+    h.messages();
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.origin.x + 5.0, bounds.center().y));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "the press closes the menu and does not activate Home"
+    );
+    h.click(Point::new(bounds.origin.x + 5.0, bounds.center().y));
+    assert_eq!(h.messages(), [ControlMessage::ItemActivated(0)]);
+}
+
+#[test]
+fn a_navigation_panel_stays_in_the_window_and_disabling_closes_it() {
+    let mut h = Harness::new(site());
+    let size = h.bounds().size;
+    h.place(hosted::rect(0.0, 540.0, size.width, size.height));
+    h.focus();
+    h.key(Key::ArrowDown);
+    let panel = h.host.get(h.node).unwrap().overlay().expect("open");
+    assert!(
+        panel.max_y() <= 540.0,
+        "near the bottom edge it opens above"
+    );
+    h.messages();
+    h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+}

@@ -7,6 +7,7 @@ use crate::custom::{
 };
 use crate::datetime_controls::{Calendar, CalendarFocus, CalendarLayout, CalendarMode};
 use crate::hosted::{self, Reveal};
+use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
     Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
 };
@@ -161,11 +162,30 @@ impl DatePicker {
         true
     }
 
-    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
-        if self.apply_open(open, cx.time()) {
+    /// Opens or closes the popover and reports it. Returns true when it
+    /// changed.
+    fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) -> bool {
+        let changed = self.apply_open(open, cx.time());
+        if changed {
             cx.emit(ControlMessage::OpenChanged(open));
             cx.request_paint();
             cx.request_semantics();
+        }
+        changed
+    }
+
+    /// Closes the popover without a choice, and reports `Dismissed`.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let closed = self.change_open(cx, false);
+        hosted::dismissed(cx, closed)
+    }
+
+    /// Opens a closed popover, and closes an open one without a choice.
+    fn toggle(&mut self, cx: &mut ControlContext<'_>) {
+        if self.reveal.open {
+            self.dismiss(cx);
+        } else {
+            self.change_open(cx, true);
         }
     }
 
@@ -232,7 +252,7 @@ impl DatePicker {
         }
         if cx.bounds().contains(position) {
             cx.request_focus();
-            self.change_open(cx, !self.reveal.open);
+            self.toggle(cx);
             return EventReply::Stop;
         }
         EventReply::Continue
@@ -268,12 +288,11 @@ impl DatePicker {
         }
         match key {
             Key::Escape => {
-                self.change_open(cx, false);
-                cx.emit(ControlMessage::Dismissed);
+                self.dismiss(cx);
                 EventReply::Stop
             }
             Key::Tab => {
-                self.change_open(cx, false);
+                self.dismiss(cx);
                 EventReply::Continue
             }
             Key::Enter | Key::Space => {
@@ -351,12 +370,16 @@ impl CustomControl for DatePicker {
             grid.width + calendar.padding.horizontal(),
             grid.height + calendar.padding.vertical(),
         );
-        let x = if cx.rtl() {
-            bounds.max_x() - size.width
-        } else {
-            bounds.origin.x
-        };
-        self.frame = Rect::new(Point::new(x, bounds.max_y() + cx.tokens.spacing), size);
+        // The calendar does not scroll, so it keeps its size where
+        // `place_popup` puts it.
+        let placed = place_popup(
+            gap_anchor(bounds, cx.tokens.spacing, None),
+            size,
+            cx.popup_bounds(),
+            Placement::Below,
+            cx.direction,
+        );
+        self.frame = Rect::new(placed.rect.origin, size);
         let inner = content_rect(self.frame, &calendar, cx.rtl());
         let layout = Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl());
         self.calendar.arrange_caption(cx, &layout);
@@ -391,10 +414,7 @@ impl CustomControl for DatePicker {
                 cx.request_semantics();
                 EventReply::Stop
             }
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.change_open(cx, false);
-                EventReply::Continue
-            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
             ControlEvent::Hover(false) => {
                 self.calendar.caption_stop_scroll();
                 EventReply::Continue
@@ -516,7 +536,7 @@ impl CustomControl for DatePicker {
     ) -> bool {
         match action {
             SemanticAction::Activate => {
-                self.change_open(cx, !self.reveal.open);
+                self.toggle(cx);
                 true
             }
             SemanticAction::Expand => {
@@ -524,7 +544,7 @@ impl CustomControl for DatePicker {
                 true
             }
             SemanticAction::Collapse => {
-                self.change_open(cx, false);
+                self.dismiss(cx);
                 true
             }
             SemanticAction::Focus => {

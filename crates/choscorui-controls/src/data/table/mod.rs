@@ -11,10 +11,11 @@ use crate::form::input::Editor;
 use crate::hosted;
 use crate::menu::{MenuCheck, MenuItem, MenuResponse};
 use crate::overlay::menu_popup::MenuPopup;
+use crate::popup::gap_anchor;
 use crate::style::PaintContext;
 use crate::{CommandState, TextField};
 use choscorui_core::{
-    EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Measured, Point, PointerButton,
+    EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Measured, PointerButton,
     PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode, SemanticAction,
     SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter,
 };
@@ -381,13 +382,15 @@ impl DataTable {
     fn show_menu(&mut self, time: f64, keyboard: bool) {
         let button = self.geometry.columns;
         let width = self.menu_width();
+        // The menu's end edge lines up with the button's end edge.
         let x = if self.rtl {
-            button.origin.x + width
+            button.origin.x
         } else {
             button.max_x() - width
         };
+        let anchor = Rect::from_xywh(x, button.origin.y, width, button.size.height);
         self.menu
-            .open(Point::new(x, button.max_y() + 4.0), time, keyboard);
+            .open(gap_anchor(anchor, 4.0, None), time, keyboard);
     }
 
     fn open_menu(&mut self, cx: &mut ControlContext<'_>, keyboard: bool) {
@@ -427,9 +430,19 @@ impl DataTable {
                 }
                 self.close_menu(cx);
             }
-            MenuResponse::Closed => self.close_menu(cx),
+            MenuResponse::Closed => {
+                self.dismiss_menu(cx);
+            }
         }
         cx.request_paint();
+    }
+
+    /// Closes the open menu without a choice, and reports `Dismissed`. The
+    /// reply is `Stop` when the menu closed.
+    fn dismiss_menu(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let open = self.menu.is_open();
+        self.close_menu(cx);
+        hosted::dismissed(cx, open)
     }
 
     /// Routes `event` to the open column menu. `None` when the menu does
@@ -445,7 +458,11 @@ impl DataTable {
         match event {
             ControlEvent::Pointer(pointer) => {
                 let released = matches!(pointer, PointerEvent::Up { .. });
-                let response = self.menu.pointer(pointer.position(), released)?;
+                let Some(response) = self.menu.pointer(pointer.position(), released) else {
+                    // A press on the table outside the menu only closes it.
+                    return matches!(pointer, PointerEvent::Down { .. })
+                        .then(|| self.dismiss_menu(cx));
+                };
                 if released {
                     self.menu_response(cx, response);
                 } else {
@@ -453,10 +470,10 @@ impl DataTable {
                 }
                 Some(EventReply::Stop)
             }
+            ControlEvent::Dismiss => Some(self.dismiss_menu(cx)),
             ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. })
-            | ControlEvent::Dismiss
             | ControlEvent::FocusChanged(false) => {
-                self.close_menu(cx);
+                self.dismiss_menu(cx);
                 None
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {

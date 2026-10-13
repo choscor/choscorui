@@ -186,3 +186,38 @@ fn an_invalid_picker_shows_the_destructive_border_and_reports_it() {
     assert!(h.semantics().state.invalid);
     assert!(paints(&h.paint(), destructive), "the trigger border");
 }
+
+#[test]
+fn near_the_bottom_edge_the_calendar_opens_above() {
+    let mut h = Harness::new(picker(CalendarMode::Single));
+    let size = h.bounds().size;
+    h.place(hosted::rect(10.0, 550.0, size.width, size.height));
+    h.click(h.bounds().center());
+    assert_eq!(frame(&h).max_y(), 546.0, "4 pt above the trigger");
+}
+
+#[test]
+fn closing_without_a_choice_reports_dismissed_and_disabling_closes() {
+    let mut h = Harness::new(picker(CalendarMode::Single));
+    h.click(h.bounds().center());
+    h.messages();
+    h.click(choscorui_core::Point::new(790.0, 590.0));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    h.click(h.bounds().center());
+    h.messages();
+    h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    assert!(h.host.get(h.node).unwrap().overlay().is_none());
+}

@@ -2,8 +2,11 @@
 
 use super::{Chart, ChartKind, chart_color};
 use crate::custom::MeasureContext;
+use crate::popup::{Placement, place_popup};
 use crate::style::{PaintContext, ResolvedStyle, Slot, TextAlign, fill_area, paint_in};
-use choscorui_core::{Color, FillRule, LineJoin, Paint, Path, Point, Rect, Size, StrokeStyle};
+use choscorui_core::{
+    Color, FillRule, LayoutDirection, LineJoin, Paint, Path, Point, Rect, Size, StrokeStyle,
+};
 use std::f64::consts::TAU;
 
 /// The number of steps between grid lines on the value axis.
@@ -353,28 +356,14 @@ impl Chart {
         // The tooltip sits 10 pt past the anchor in reading order, and on
         // the other side when it would leave the window.
         let gap = 10.0;
+        let anchor = Rect::from_xywh(anchor.x - gap, anchor.y, 2.0 * gap, 0.0);
+        let direction = if self.rtl {
+            LayoutDirection::Rtl
+        } else {
+            LayoutDirection::Ltr
+        };
         let viewport = self.plot.viewport;
-        let after = if self.rtl {
-            anchor.x - gap - size.width
-        } else {
-            anchor.x + gap
-        };
-        let before = if self.rtl {
-            anchor.x + gap
-        } else {
-            anchor.x - gap - size.width
-        };
-        let fits = |x: f64| x >= viewport.origin.x && x + size.width <= viewport.max_x();
-        let x = if fits(after) || !fits(before) {
-            after
-        } else {
-            before
-        };
-        let y = anchor
-            .y
-            .min(viewport.max_y() - size.height)
-            .max(viewport.origin.y);
-        Rect::new(Point::new(x, y), size)
+        place_popup(anchor, size, viewport, Placement::After, direction).unshrunk(size, viewport)
     }
 
     fn grid(&self, cx: &mut PaintContext<'_>, track: &ResolvedStyle) {

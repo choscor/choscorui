@@ -5,19 +5,27 @@
 use crate::custom::{ControlContext, ControlMessage, MeasureContext};
 use crate::hosted::Reveal;
 use crate::menu::{DropdownMenu, MenuCheck, MenuItem, MenuResponse};
+use crate::popup::{Placement, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use crate::{CommandError, CommandId, CommandRegistry, CommandState};
-use choscorui_core::{Key, Point, Rect};
+use choscorui_core::{Key, LayoutDirection, Point, Rect};
 
 /// An open or closed dropdown menu that a hosted control owns.
 pub(crate) struct MenuPopup {
     pub menu: DropdownMenu,
     pub commands: CommandRegistry,
     pub reveal: Reveal,
-    /// The top-start corner of the root panel, in window coordinates.
-    anchor: Point,
+    /// What the root panel opens next to, in window coordinates. A menu
+    /// in place puts its root panel at the top-start corner.
+    anchor: Rect,
+    /// True when the root panel stays in place, in the control's bounds.
+    in_place: bool,
+    /// The side of the anchor that the root panel prefers.
+    side: Placement,
+    /// The area that the panels fit in, from `popup_bounds`.
+    bounds: Rect,
     width: f64,
-    rtl: bool,
+    direction: LayoutDirection,
     motion_ms: u32,
 }
 
@@ -30,10 +38,23 @@ impl MenuPopup {
             menu: DropdownMenu::new(items),
             commands,
             reveal: Reveal::default(),
-            anchor: Point::new(0.0, 0.0),
+            anchor: Rect::default(),
+            in_place: false,
+            side: Placement::Below,
+            bounds: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
             width: 0.0,
-            rtl: false,
+            direction: LayoutDirection::Ltr,
             motion_ms: 0,
+        }
+    }
+
+    /// A menu whose root panel stays at the top-start corner of its
+    /// anchor, as in a [`crate::HostedDropdownMenu`]. Only its submenus
+    /// are placed as popups.
+    pub fn in_place(items: Vec<MenuItem>) -> Self {
+        Self {
+            in_place: true,
+            ..Self::new(items)
         }
     }
 
@@ -54,13 +75,22 @@ impl MenuPopup {
         let root = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Root));
         let rows = widest(self.menu.items(), cx);
         self.width = (rows + root.padding.horizontal()).max(min_width);
-        self.rtl = cx.rtl();
+        self.direction = cx.direction;
+        self.bounds = cx.popup_bounds();
         self.motion_ms = root.motion_ms;
     }
 
-    /// Opens the menu with its root panel's top-start corner at
-    /// `anchor`. A keyboard open highlights the first enabled item.
-    pub fn open(&mut self, anchor: Point, time: f64, keyboard: bool) {
+    /// Opens the menu below `anchor`: a trigger grown by its gap, or an
+    /// empty rectangle at the pointer. `place_popup` keeps every panel in
+    /// the window. A keyboard open highlights the first enabled item.
+    pub fn open(&mut self, anchor: Rect, time: f64, keyboard: bool) {
+        self.open_beside(anchor, Placement::Below, time, keyboard);
+    }
+
+    /// Opens the menu on the `side` of `anchor` that it prefers, as
+    /// [`MenuPopup::open`] does below it.
+    pub fn open_beside(&mut self, anchor: Rect, side: Placement, time: f64, keyboard: bool) {
+        self.side = side;
         self.menu.reset();
         self.anchor = anchor;
         if keyboard {
@@ -73,30 +103,38 @@ impl MenuPopup {
         self.reveal.set(false, time);
     }
 
-    /// The panel of each open level, root first.
+    /// The panel of each open level, root first. The root opens below
+    /// its anchor, and a submenu beside its row with the rows aligned.
+    /// Each panel flips and moves to stay inside the bounds.
     pub fn panels(&self) -> Vec<Rect> {
         let mut panels = Vec::new();
-        let mut origin = self.anchor;
+        let mut anchor = self.anchor;
+        let mut preferred = self.side;
         let path = self.menu.path();
         for level in 0..self.menu.depth() {
             let size = self.menu.level_size(level, self.width);
-            let x = if self.rtl {
-                origin.x - size.width
+            let panel = if level == 0 && self.in_place {
+                let x = if self.direction == LayoutDirection::Rtl {
+                    anchor.max_x() - size.width
+                } else {
+                    anchor.origin.x
+                };
+                Rect::from_xywh(x, anchor.origin.y, size.width, size.height)
             } else {
-                origin.x
+                place_popup(anchor, size, self.bounds, preferred, self.direction)
+                    .unshrunk(size, self.bounds)
             };
-            let panel = Rect::from_xywh(x, origin.y, size.width, size.height);
             panels.push(panel);
             if let Some(Some(index)) = path.get(level)
                 && let Some(row) = self.menu.item_rect(level, panel, *index)
             {
-                // A submenu opens beside its row, rows aligned.
-                let side = if self.rtl {
-                    panel.origin.x
-                } else {
-                    panel.max_x()
-                };
-                origin = Point::new(side, row.origin.y - self.menu.inset());
+                anchor = Rect::from_xywh(
+                    panel.origin.x,
+                    row.origin.y - self.menu.inset(),
+                    panel.size.width,
+                    row.size.height,
+                );
+                preferred = Placement::After;
             }
         }
         panels

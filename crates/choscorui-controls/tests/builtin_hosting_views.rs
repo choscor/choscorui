@@ -684,6 +684,15 @@ fn a_hosted_alert_moves_focus_between_its_buttons() {
     );
     open(&mut h);
     h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        vec![
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "disabling closes the open alert and reports it"
+    );
+    assert!(h.host.modal(&h.tree).is_none());
     h.key(Key::Enter);
     assert!(h.messages().is_empty());
 }

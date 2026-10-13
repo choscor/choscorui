@@ -26,10 +26,34 @@ pub enum Placement {
     Before,
 }
 
+/// Where [`place_popup`] put a popup: its rectangle and its side.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PopupPlacement {
     pub rect: Rect,
     pub placement: Placement,
+}
+
+impl PopupPlacement {
+    /// The rectangle of a popup that cannot scroll: the full `size` on
+    /// the placed side, moved into `bounds` as far as it fits. A popup
+    /// that does not fit on either side then covers its anchor.
+    pub fn unshrunk(self, size: Size, bounds: Rect) -> Rect {
+        let mut origin = self.rect.origin;
+        match self.placement {
+            Placement::Above => origin.y = self.rect.max_y() - size.height,
+            Placement::Before => origin.x = self.rect.max_x() - size.width,
+            Placement::Below | Placement::After => {}
+        }
+        let clamp =
+            |value: f64, low: f64, extent: f64, high: f64| value.min(high - extent).max(low);
+        Rect::new(
+            Point::new(
+                clamp(origin.x, bounds.origin.x, size.width, bounds.max_x()),
+                clamp(origin.y, bounds.origin.y, size.height, bounds.max_y()),
+            ),
+            size,
+        )
+    }
 }
 
 /// The area that popups fit in: `viewport` (the window content) inset by

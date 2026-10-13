@@ -1327,6 +1327,8 @@ impl CustomControl for HostedAlertDialog {
             ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer),
             ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => self.key(cx, *key),
             ControlEvent::Key(_) => {}
+            // The host sends `Dismiss` to an open alert that it disables.
+            ControlEvent::Dismiss => self.dismiss(cx),
             _ => return EventReply::Continue,
         }
         EventReply::Stop

@@ -232,6 +232,8 @@ fn a_submenu_opens_beside_its_row() {
     assert_eq!(h.host.get(h.node).unwrap().overlay().unwrap(), root);
 
     let mut rtl = Harness::with_direction(area(), LayoutDirection::Rtl);
+    let size = rtl.bounds().size;
+    rtl.place(hosted::rect(300.0, 10.0, size.width, size.height));
     let at = rtl.bounds().center();
     press(&mut rtl, at, PointerButton::Secondary);
     let frame = rtl.host.get(rtl.node).unwrap().overlay().unwrap();
@@ -320,4 +322,84 @@ fn menubar_pointer_opens_switches_and_activates() {
     let frame = rtl.host.get(rtl.node).unwrap().overlay().unwrap();
     assert_eq!(rtl.semantics().value.as_deref(), Some("File"));
     assert!(frame.max_x() <= bounds.max_x(), "File is at the right end");
+}
+
+/// A context menu area that fills the 800 x 600 window.
+fn window_area() -> Harness {
+    let mut h = Harness::new(area());
+    h.place(hosted::rect(0.0, 0.0, 800.0, 600.0));
+    h
+}
+
+#[test]
+fn near_the_bottom_edge_a_context_menu_opens_above_the_pointer() {
+    let mut h = window_area();
+    let at = Point::new(100.0, 580.0);
+    press(&mut h, at, PointerButton::Secondary);
+    let frame = h.host.get(h.node).unwrap().overlay().unwrap();
+    assert_eq!(frame.max_y(), at.y, "flipped above the pointer");
+    assert_eq!(frame.origin.x, at.x);
+}
+
+#[test]
+fn near_the_right_edge_a_context_menu_and_its_submenu_stay_inside() {
+    let mut h = window_area();
+    let at = Point::new(700.0, 100.0);
+    press(&mut h, at, PointerButton::Secondary);
+    let root = h.host.get(h.node).unwrap().overlay().unwrap();
+    assert_eq!(root.max_x(), 792.0, "shifted inside the 8 pt margin");
+    h.hover(row(root.origin, 2));
+    let both = h.host.get(h.node).unwrap().overlay().unwrap();
+    assert!(
+        both.origin.x < root.origin.x,
+        "the submenu flips to the start side: {both:?} {root:?}"
+    );
+    assert_eq!(both.max_x(), root.max_x());
+}
+
+#[test]
+fn an_outside_press_closes_a_context_menu_with_dismissed() {
+    let mut h = Harness::new(area());
+    let at = h.bounds().center();
+    press(&mut h, at, PointerButton::Secondary);
+    h.messages();
+    h.click(Point::new(700.0, 500.0));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    assert!(h.host.get(h.node).unwrap().overlay().is_none());
+    press(&mut h, at, PointerButton::Secondary);
+    h.messages();
+    h.set_enabled(false);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "disabling closes the open menu"
+    );
+}
+
+#[test]
+fn an_outside_press_closes_a_menubar_menu_with_dismissed() {
+    let mut h = Harness::new(bar());
+    h.click(Point::new(
+        h.bounds().origin.x + 12.0,
+        h.bounds().center().y,
+    ));
+    assert!(h.host.get(h.node).unwrap().overlay().is_some());
+    h.messages();
+    h.click(Point::new(700.0, 500.0));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
 }

@@ -4,6 +4,7 @@ use super::menu_popup::{CommandResult, MenuPopup};
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::hosted;
 use crate::menu::{MenuItem, MenuResponse};
+use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandState, Shortcut};
 use choscorui_core::{
@@ -50,7 +51,8 @@ impl ContextMenu {
 
     fn open(&mut self, cx: &mut ControlContext<'_>, at: Point, keyboard: bool) {
         let was_open = self.popup.is_open();
-        self.popup.open(at, cx.time(), keyboard);
+        self.popup
+            .open(Rect::new(at, Size::ZERO), cx.time(), keyboard);
         if !was_open {
             cx.emit(ControlMessage::OpenChanged(true));
         }
@@ -58,13 +60,17 @@ impl ContextMenu {
         cx.request_semantics();
     }
 
-    fn close(&mut self, cx: &mut ControlContext<'_>) {
-        if self.popup.is_open() {
+    /// Closes the menu without a choice: reports `OpenChanged(false)` and
+    /// `Dismissed` when it was open.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let open = self.popup.is_open();
+        if open {
             self.popup.close(cx.time());
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
         }
+        hosted::dismissed(cx, open)
     }
 
     fn respond(&mut self, cx: &mut ControlContext<'_>, response: MenuResponse) {
@@ -109,8 +115,7 @@ impl CustomControl for ContextMenu {
                     self.open(cx, *position, false);
                     return EventReply::Stop;
                 }
-                self.close(cx);
-                EventReply::Continue
+                self.dismiss(cx)
             }
             ControlEvent::Pointer(PointerEvent::Move { position }) if self.popup.is_open() => {
                 if self.popup.pointer(*position, false).is_some() {
@@ -142,17 +147,14 @@ impl CustomControl for ContextMenu {
                     return EventReply::Continue;
                 }
                 if *key == Key::Tab {
-                    self.close(cx);
+                    self.dismiss(cx);
                     return EventReply::Continue;
                 }
                 let response = self.popup.menu.handle_key(*key, &self.popup.commands);
                 self.respond(cx, response);
                 EventReply::Stop
             }
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.close(cx);
-                EventReply::Continue
-            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
             _ => EventReply::Continue,
         }
     }
@@ -228,7 +230,8 @@ impl CustomControl for ContextMenu {
         } else if !self.enabled {
             return false;
         } else if !self.popup.is_open() {
-            self.popup.open(self.center, time, true);
+            self.popup
+                .open(Rect::new(self.center, Size::ZERO), time, true);
         }
         true
     }
@@ -302,15 +305,9 @@ impl Menubar {
         StyleQuery::new(ControlKind::Menubar, slot).state(state)
     }
 
-    /// The top-start corner of menu `index` below its title.
-    fn anchor(&self, index: usize) -> Point {
-        let trigger = self.triggers[index];
-        let x = if self.rtl {
-            trigger.max_x()
-        } else {
-            trigger.origin.x
-        };
-        Point::new(x, trigger.max_y() + self.offset)
+    /// The anchor of menu `index`: its title, grown by the gap.
+    fn anchor(&self, index: usize) -> Rect {
+        gap_anchor(self.triggers[index], self.offset, None)
     }
 
     /// Opens menu `index` at `time` and closes another open menu. Returns
@@ -350,12 +347,16 @@ impl Menubar {
         cx.request_semantics();
     }
 
-    fn close(&mut self, cx: &mut ControlContext<'_>) {
-        if self.hide(cx.time()) {
+    /// Closes the open menu without a choice: reports `OpenChanged(false)`
+    /// and `Dismissed` when a menu was open.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let closed = self.hide(cx.time());
+        if closed {
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
         }
+        hosted::dismissed(cx, closed)
     }
 
     fn respond(&mut self, cx: &mut ControlContext<'_>, index: usize, response: MenuResponse) {
@@ -394,12 +395,11 @@ impl Menubar {
         let nested = popup.menu.depth() > 1;
         match key {
             Key::Tab => {
-                self.close(cx);
+                self.dismiss(cx);
                 EventReply::Continue
             }
             Key::Escape if !nested => {
-                self.close(cx);
-                cx.emit(ControlMessage::Dismissed);
+                self.dismiss(cx);
                 EventReply::Stop
             }
             Key::ArrowRight if on_submenu => self.forward(cx, index, key),
@@ -444,7 +444,7 @@ impl Menubar {
                 ..
             } => match trigger {
                 Some(index) if self.open == Some(index) => {
-                    self.close(cx);
+                    self.dismiss(cx);
                     EventReply::Stop
                 }
                 Some(index) => {
@@ -452,10 +452,7 @@ impl Menubar {
                     self.open_at(cx, index, false);
                     EventReply::Stop
                 }
-                None => {
-                    self.close(cx);
-                    EventReply::Continue
-                }
+                None => self.dismiss(cx),
             },
             // Hover moves an open menu to another title.
             PointerEvent::Move { .. } => {
@@ -533,10 +530,7 @@ impl CustomControl for Menubar {
         match event {
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.close(cx);
-                EventReply::Continue
-            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
             _ => EventReply::Continue,
         }
     }
@@ -621,7 +615,7 @@ impl CustomControl for Menubar {
                 true
             }
             SemanticAction::Collapse => {
-                self.close(cx);
+                self.dismiss(cx);
                 true
             }
             SemanticAction::Focus => {

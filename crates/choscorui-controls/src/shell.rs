@@ -6,9 +6,10 @@
 //! takes no space in the window.
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted::Reveal;
+use crate::hosted::{self, Reveal};
 use crate::menu::MenuResponse;
 use crate::overlay::menu_popup::{CommandResult, MenuPopup};
+use crate::popup::Placement;
 use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
@@ -884,23 +885,31 @@ impl HostedToolbar {
             return false;
         };
         if !self.menu.is_open() {
-            let x = if self.direction == LayoutDirection::Rtl {
-                button.max_x()
-            } else {
-                button.origin.x
+            // The menu opens away from the window edge of the toolbar.
+            let rtl = self.direction == LayoutDirection::Rtl;
+            let side = match (self.toolbar.area, rtl) {
+                (ToolbarArea::Top, _) => Placement::Below,
+                (ToolbarArea::Bottom, _) => Placement::Above,
+                (ToolbarArea::Left, false) | (ToolbarArea::Right, true) => Placement::After,
+                (ToolbarArea::Left, true) | (ToolbarArea::Right, false) => Placement::Before,
             };
-            self.menu.open(Point::new(x, button.max_y()), time, false);
+            self.menu.open_beside(button, side, time, false);
         }
         true
     }
 
-    fn close_menu(&mut self, cx: &mut ControlContext<'_>) {
-        if self.menu.is_open() {
+    /// Closes the overflow menu without a choice: reports
+    /// `OpenChanged(false)` and `Dismissed`. The reply is `Stop` when the
+    /// menu closed.
+    fn dismiss_menu(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let open = self.menu.is_open();
+        if open {
             self.menu.close(cx.time());
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
         }
+        hosted::dismissed(cx, open)
     }
 
     fn respond(&mut self, cx: &mut ControlContext<'_>, response: MenuResponse) {
@@ -933,7 +942,7 @@ impl HostedToolbar {
                     .is_some_and(|button| button.contains(position))
                 {
                     if self.menu.is_open() {
-                        self.close_menu(cx);
+                        self.dismiss_menu(cx);
                     } else if self.open_menu(cx.time()) {
                         cx.emit(ControlMessage::OpenChanged(true));
                         cx.request_paint();
@@ -941,7 +950,10 @@ impl HostedToolbar {
                     }
                     return EventReply::Stop;
                 }
-                self.close_menu(cx);
+                if self.menu.is_open() {
+                    // A press on the bar outside the menu only closes it.
+                    return self.dismiss_menu(cx);
+                }
                 let Some(index) = self.item_at(position) else {
                     return EventReply::Continue;
                 };
@@ -976,7 +988,7 @@ impl HostedToolbar {
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
         if self.menu.is_open() {
             if key == Key::Tab {
-                self.close_menu(cx);
+                self.dismiss_menu(cx);
                 return EventReply::Continue;
             }
             let response = self.menu.menu.handle_key(key, &self.menu.commands);
@@ -1068,9 +1080,8 @@ impl CustomControl for HostedToolbar {
                 if self.pressed.take().is_some() {
                     cx.capture_pointer(false);
                 }
-                self.close_menu(cx);
                 cx.request_paint();
-                EventReply::Continue
+                self.dismiss_menu(cx)
             }
             _ => EventReply::Continue,
         }

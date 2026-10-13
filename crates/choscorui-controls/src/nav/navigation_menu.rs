@@ -3,10 +3,11 @@
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted::{self, Reveal};
+use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// How long the pointer rests on a trigger before its panel opens, in
@@ -64,6 +65,8 @@ pub struct NavigationMenu {
     pressed: Option<Focus>,
     enabled: bool,
     rtl: bool,
+    /// The area that the panel fits in.
+    room: Rect,
     /// Link heights and the panel padding, read from the recipe.
     link_heights: Vec<Vec<f64>>,
     padding: crate::style::Edges,
@@ -89,6 +92,7 @@ impl NavigationMenu {
             pressed: None,
             enabled: true,
             rtl: false,
+            room: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
             link_heights: Vec::new(),
             padding: crate::style::Edges::ZERO,
             gap: 0.0,
@@ -146,13 +150,23 @@ impl NavigationMenu {
         let height = row_heights.iter().sum::<f64>()
             + rows.saturating_sub(1) as f64 * self.gap
             + pad.vertical();
-        let x = if self.rtl {
-            trigger.max_x() - width
+        let direction = if self.rtl {
+            LayoutDirection::Rtl
         } else {
-            trigger.origin.x
+            LayoutDirection::Ltr
         };
-        let y = trigger.max_y() + 6.0;
-        self.panel = Rect::from_xywh(x, y, width, height);
+        let size = Size::new(width, height);
+        // The panel does not scroll, so it keeps its size where
+        // `place_popup` puts it.
+        self.panel = place_popup(
+            gap_anchor(trigger, 6.0, None),
+            size,
+            self.room,
+            Placement::Below,
+            direction,
+        )
+        .unshrunk(size, self.room);
+        let (x, y) = (self.panel.origin.x, self.panel.origin.y);
         let mut links = Vec::new();
         let mut top = y + pad.block_start;
         for (row, row_height) in row_heights.iter().enumerate() {
@@ -230,12 +244,22 @@ impl NavigationMenu {
         cx.request_semantics();
     }
 
-    fn close(&mut self, cx: &mut ControlContext<'_>) {
-        if self.hide(cx.time()) {
+    /// Closes the open panel. Returns true when a panel was open.
+    fn close(&mut self, cx: &mut ControlContext<'_>) -> bool {
+        let closed = self.hide(cx.time());
+        if closed {
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
             cx.request_semantics();
         }
+        closed
+    }
+
+    /// Closes the open panel without a choice (Escape, an outside press,
+    /// focus loss, or disabling), and reports `Dismissed`.
+    fn dismiss(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let closed = self.close(cx);
+        hosted::dismissed(cx, closed)
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, focus: Focus) {
@@ -282,8 +306,7 @@ impl NavigationMenu {
         let links = self.open.map_or(0, |item| self.items[item].1.len());
         match (key, self.focus) {
             (Key::Escape, _) if self.open.is_some() => {
-                self.close(cx);
-                cx.emit(ControlMessage::Dismissed);
+                self.dismiss(cx);
             }
             (Key::Enter | Key::Space, focus) => self.activate(cx, focus),
             (Key::ArrowDown, Focus::Trigger(item)) if self.has_links(item) => {
@@ -351,8 +374,7 @@ impl NavigationMenu {
             } => {
                 let Some(focus) = hit else {
                     if !self.panel.contains(event.position()) || self.open.is_none() {
-                        self.close(cx);
-                        return EventReply::Continue;
+                        return self.dismiss(cx);
                     }
                     return EventReply::Stop;
                 };
@@ -470,6 +492,7 @@ impl CustomControl for NavigationMenu {
         let title = cx.style(Self::query(Slot::Title, VisualState::NONE));
         let description = cx.style(Self::query(Slot::Description, VisualState::NONE));
         self.rtl = cx.rtl();
+        self.room = cx.popup_bounds();
         self.motion_ms = link.motion_ms;
         self.padding = content.padding;
         self.gap = cx.tokens.spacing;
@@ -560,10 +583,7 @@ impl CustomControl for NavigationMenu {
                 cx.request_paint();
                 EventReply::Continue
             }
-            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                self.close(cx);
-                EventReply::Continue
-            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
             _ => EventReply::Continue,
         }
     }
@@ -685,7 +705,7 @@ impl CustomControl for NavigationMenu {
                 self.open.is_some()
             }
             SemanticAction::Collapse => {
-                self.close(cx);
+                self.dismiss(cx);
                 true
             }
             SemanticAction::Focus => {

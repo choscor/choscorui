@@ -589,13 +589,13 @@ impl DropdownMenu {
     /// with its own command states. Every action starts enabled and
     /// unchecked.
     pub fn hosted(self, name: impl Into<String>) -> HostedDropdownMenu {
-        let mut popup = MenuPopup::new(self.items);
+        let mut popup = MenuPopup::in_place(self.items);
         // Always shown: nothing animates.
-        popup.open(Point::new(0.0, 0.0), f64::NEG_INFINITY, false);
+        popup.open(Rect::default(), f64::NEG_INFINITY, false);
         HostedDropdownMenu {
             name: name.into(),
             popup,
-            anchor: Point::new(0.0, 0.0),
+            anchor: Rect::default(),
             keyboard: false,
         }
     }
@@ -608,8 +608,8 @@ impl DropdownMenu {
 pub struct HostedDropdownMenu {
     name: String,
     popup: MenuPopup,
-    /// The top-start corner of the root level, in window coordinates.
-    anchor: Point,
+    /// The control's bounds, where the root level shows.
+    anchor: Rect,
     /// Whether the keyboard opened the menu, so placing it highlights the
     /// first row.
     keyboard: bool,
@@ -669,16 +669,10 @@ impl CustomControl for HostedDropdownMenu {
         let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
         self.popup
             .arrange(cx, content.min_width.max(bounds.size.width));
-        let x = if cx.rtl() {
-            bounds.max_x()
-        } else {
-            bounds.origin.x
-        };
-        let anchor = Point::new(x, bounds.origin.y);
-        if anchor != self.anchor {
-            self.anchor = anchor;
+        if bounds != self.anchor {
+            self.anchor = bounds;
             self.popup.close(f64::NEG_INFINITY);
-            self.popup.open(anchor, f64::NEG_INFINITY, self.keyboard);
+            self.popup.open(bounds, f64::NEG_INFINITY, self.keyboard);
         }
     }
 

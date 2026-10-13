@@ -6,6 +6,7 @@ use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl,
 use crate::hosted;
 use crate::menu::{MenuItem, MenuResponse};
 use crate::overlay::menu_popup::MenuPopup;
+use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
@@ -126,13 +127,7 @@ impl Breadcrumb {
         else {
             return false;
         };
-        let x = if self.rtl {
-            rect.max_x()
-        } else {
-            rect.origin.x
-        };
-        let anchor = Point::new(x, rect.max_y() + 4.0);
-        self.menu.open(anchor, time, true);
+        self.menu.open(gap_anchor(rect, 4.0, None), time, true);
         true
     }
 
@@ -156,18 +151,25 @@ impl Breadcrumb {
                 cx.emit(ControlMessage::ItemActivated(index as usize));
                 cx.emit(ControlMessage::OpenChanged(false));
             }
-            MenuResponse::Closed => self.close_menu(cx),
+            MenuResponse::Closed => {
+                self.dismiss_menu(cx);
+            }
         }
         cx.request_paint();
         cx.request_semantics();
     }
 
-    fn close_menu(&mut self, cx: &mut ControlContext<'_>) {
-        if self.menu.is_open() {
+    /// Closes the open menu without a choice: reports `OpenChanged(false)`
+    /// and `Dismissed`. The reply is `Stop` when the menu closed.
+    fn dismiss_menu(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let open = self.menu.is_open();
+        if open {
             self.menu.close(cx.time());
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_paint();
+            cx.request_semantics();
         }
+        hosted::dismissed(cx, open)
     }
 
     fn width(&self, cx: &MeasureContext<'_>, part: Part) -> f64 {
@@ -254,10 +256,17 @@ impl CustomControl for Breadcrumb {
                         }
                         return EventReply::Stop;
                     }
+                    // A press on the trail outside the menu only closes it.
+                    if matches!(pointer, PointerEvent::Down { .. }) {
+                        return self.dismiss_menu(cx);
+                    }
                 }
-                ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. })
-                | ControlEvent::Dismiss
-                | ControlEvent::FocusChanged(false) => self.close_menu(cx),
+                ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
+                    return self.dismiss_menu(cx);
+                }
+                ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
+                    self.dismiss_menu(cx);
+                }
                 ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                     let response = self.menu.menu.handle_key(*key, &self.menu.commands);
                     self.menu_response(cx, response);
