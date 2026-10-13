@@ -1529,6 +1529,11 @@ value, and the other kinds use ISO 8601 text. A date or time editor keeps
 the other part of the bound value. The fields follow the locale of the
 environment.
 
+`Calendar::new(selected)` edits one `Binding<CivilDate>` in `Single` mode.
+`Calendar::dates(month, mode, dates)` edits a `Binding<Vec<CivilDate>>` in
+the other modes, and first shows `month`. A change to `dates` moves the
+cursor to the first chosen day.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs),
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
 and [calendar_caption.rs](../crates/choscorui-controls/tests/calendar_caption.rs)
@@ -1713,8 +1718,8 @@ mirror in right-to-left layouts. The node has the `Tree` role, the name,
 and the focused path item as its value. Its only action is `Focus`.
 
 **As a view.** `ColumnBrowser::new(name, model, path)` mounts a
-`HostedColumnBrowser`. `path` follows the `Indices` value in both
-directions.
+`HostedColumnBrowser`. `model` makes the tree model in the view's
+environment. `path` follows the `Indices` value in both directions.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)

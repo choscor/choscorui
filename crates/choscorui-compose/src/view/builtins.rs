@@ -6,11 +6,12 @@ use super::configured::Configured;
 use super::limits::{Limits, SharedLimits};
 use super::state::{Binding, IntoLive};
 use super::text::TextContent;
-use super::widgets::{Items, as_index, as_position, as_text, label, text, to_position};
+use super::widgets::{Items, as_dates, as_index, as_position, as_text, label, text, to_position};
 use crate::reactive::Runtime;
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ComboItem, ControlKind, ControlMessage, ControlValue, RangeError, SliderOrientation,
+    CalendarMode, ComboItem, ControlKind, ControlMessage, ControlValue, RangeError,
+    SliderOrientation,
 };
 use choscorui_core::{CivilDate, ItemKey};
 use std::cell::Cell;
@@ -392,5 +393,32 @@ impl Configured<controls::Calendar> {
                 selected.set(*day);
             }
         })
+    }
+
+    /// A calendar that chooses several days, or a range with
+    /// `CalendarMode::Range`; `dates` edits them. It first shows
+    /// `month`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::CalendarMode;
+    /// # use choscorui_core::CivilDate;
+    /// struct Trip;
+    ///
+    /// impl View for Trip {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let month = CivilDate::new(2026, 10, 1).expect("a valid date");
+    ///         let days = cx.state(Vec::new());
+    ///         Calendar::dates(month, CalendarMode::Range, days.binding())
+    ///     }
+    /// }
+    /// ```
+    pub fn dates(month: CivilDate, mode: CalendarMode, dates: Binding<Vec<CivilDate>>) -> Self {
+        Configured::custom(ControlKind::Calendar, move |env| {
+            controls::Calendar::new(env.locale(), month).with_mode(mode)
+        })
+        .bind(dates, ControlValue::Dates, as_dates)
     }
 }

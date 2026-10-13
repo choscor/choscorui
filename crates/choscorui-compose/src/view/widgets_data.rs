@@ -224,7 +224,7 @@ impl View for HeaderView {
 /// impl View for Files {
 ///     fn body(&self, cx: &mut Cx) -> impl View {
 ///         let path = cx.state(Vec::new());
-///         let model = || Box::new(StringListModel::from_strings(["Documents", "Music"])) as Box<dyn ItemModel>;
+///         let model = |_: &Env| Box::new(StringListModel::from_strings(["Documents", "Music"])) as Box<dyn ItemModel>;
 ///         ColumnBrowser::new("Files", model, path.binding())
 ///     }
 /// }
@@ -232,15 +232,16 @@ impl View for HeaderView {
 pub type ColumnBrowser = Configured<controls::HostedColumnBrowser>;
 
 impl Configured<controls::HostedColumnBrowser> {
-    /// A column browser named `name` of the tree model that `model` makes.
+    /// A column browser named `name` of the tree model that `model` makes
+    /// in the view's environment.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
-        model: impl Fn() -> Box<dyn ItemModel> + 'static,
+        model: impl Fn(&Env) -> Box<dyn ItemModel> + 'static,
         path: Binding<Vec<usize>>,
     ) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::ListView, move |env| {
-            controls::ColumnBrowser::new().hosted(text(&name, env), model())
+            controls::ColumnBrowser::new().hosted(text(&name, env), model(env))
         })
         .bind(path, ControlValue::Indices, as_indices)
     }

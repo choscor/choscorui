@@ -367,7 +367,7 @@ fn a_column_browser_binds_its_path_both_ways() {
     let mut host = host(move |cx| {
         let rows_path = cx.state(vec![0_usize]);
         shared.set(Some(rows_path));
-        ColumnBrowser::new("Places", rows, rows_path.binding()).into_any()
+        ColumnBrowser::new("Places", |_: &Env| rows(), rows_path.binding()).into_any()
     });
     let node = host.find("Places").unwrap();
     host.focus(Some(node));

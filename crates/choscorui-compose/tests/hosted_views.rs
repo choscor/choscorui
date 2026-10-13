@@ -5,17 +5,19 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    AlertDialog, AnyView, AvatarGroup, Checkbox, Command, CommandLink, Configured, Cx,
+    AlertDialog, AnyView, AvatarGroup, Calendar, Checkbox, Command, CommandLink, Configured, Cx,
     DropdownMenu, Env, FontChooser, GroupBox, Kbd, NumericDisplay, ScrollBar, StackedContainer,
     State, Toaster, ToolBox, ToolButton, View, ViewHost,
 };
 use choscorui_controls as controls;
 use choscorui_controls::{
-    Avatar, CommandId, CommandItem, ControlKind, ControlValue, DialogButton, DialogButtonRole,
-    EstimatedText, MenuItem, NumberBase, ScrollOrientation, ShortcutModifiers, Toast, Toasts,
+    Avatar, CalendarMode, CommandId, CommandItem, ControlKind, ControlValue, DialogButton,
+    DialogButtonRole, EstimatedText, MenuItem, NumberBase, ScrollOrientation, ShortcutModifiers,
+    Toast, Toasts,
 };
 use choscorui_core::{
-    Catalog, DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticEntry, Size,
+    Catalog, CivilDate, DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticEntry,
+    Size,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -518,4 +520,28 @@ fn a_command_dialog_keeps_the_configured_semantics() {
             .into_any()
         },
     );
+}
+
+#[test]
+fn a_calendar_of_several_days_edits_its_dates() {
+    let day = |day| CivilDate::new(2026, 10, day).unwrap();
+    let dates = slot();
+    let shared = dates.clone();
+    let mut host = host(move |cx| {
+        let chosen = cx.state(vec![day(8)]);
+        shared.set(Some(chosen));
+        Calendar::dates(day(1), CalendarMode::Multiple, chosen.binding())
+            .with(|calendar| calendar.with_name("Meetings"))
+            .into_any()
+    });
+    let node = host.find("Meetings").unwrap();
+    host.focus(Some(node));
+    press(&mut host, Key::ArrowRight);
+    press(&mut host, Key::Enter);
+    assert_eq!(take(&dates).get(), vec![day(8), day(9)]);
+    take(&dates).set(vec![day(20)]);
+    host.flush();
+    press(&mut host, Key::Enter);
+    assert_eq!(take(&dates).get(), Vec::new());
+    assert_eq!(host.take_errors(), Vec::new());
 }

@@ -125,7 +125,7 @@ fn as_date(value: &ControlValue) -> Option<Option<CivilDate>> {
     }
 }
 
-fn as_dates(value: &ControlValue) -> Option<Vec<CivilDate>> {
+pub(super) fn as_dates(value: &ControlValue) -> Option<Vec<CivilDate>> {
     match value {
         ControlValue::Dates(dates) => Some(dates.clone()),
         _ => None,
