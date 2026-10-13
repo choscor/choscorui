@@ -96,7 +96,8 @@ impl Shared {
     /// The locale of the current language.
     pub fn locale(&self) -> Locale {
         crate::strings::language(self.language.get())
-            .unwrap_or_else(|| Locale::parse(crate::strings::REFERENCE).expect("valid tag"))
+            .or_else(|| crate::strings::language(crate::strings::REFERENCE))
+            .unwrap_or_else(Locale::root)
     }
 
     /// A translated string, or `fallback` when the catalog lacks it.

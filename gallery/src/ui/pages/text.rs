@@ -311,20 +311,25 @@ fn number_fields(env: &Env) -> Vec<RuleField> {
     ]
 }
 
+/// The masked fields. A pattern that does not parse leaves its field
+/// out.
 fn mask_fields(env: &Env) -> Vec<RuleField> {
     let masked = |key: &str, raw: &str, pattern: &str| {
-        let mask = InputMask::parse(pattern).expect("demo masks are valid");
-        RuleField {
+        let mask = InputMask::parse(pattern).ok()?;
+        Some(RuleField {
             label: env.text(key, &[("mask", pattern)]),
             raw: raw.into(),
             placeholder: mask.placeholder('_'),
             rule: Rc::new(move |raw| (mask.apply(raw).display, mask.validate(raw))),
-        }
+        })
     };
-    vec![
+    [
         masked("input-mask.phone", "0905", "(999) 999-9999"),
         masked("input-mask.plate", "", ">AA-99999"),
     ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 fn date_fields(env: &Env) -> Vec<RuleField> {
@@ -335,7 +340,7 @@ fn date_fields(env: &Env) -> Vec<RuleField> {
         CivilDate::new(2026, 1, 1).ok(),
         CivilDate::new(2026, 12, 31).ok(),
     );
-    let today = CivilDate::new(2026, 10, 12).expect("valid date");
+    let today = CivilDate::clamped(2026, 10, 12);
     let sample = any.format(today);
     vec![
         RuleField {

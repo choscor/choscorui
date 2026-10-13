@@ -544,7 +544,7 @@ pub fn field(_: &PageCx) -> AnyView {
 
 pub fn date_picker(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let today = CivilDate::new(2026, 10, 12).expect("the demo date is valid");
+        let today = CivilDate::clamped(2026, 10, 12);
         let placeholder = text(cx.env(), "date-picker.placeholder");
         let pick = move |picker: controls::DatePicker| {
             picker

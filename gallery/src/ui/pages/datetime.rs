@@ -10,13 +10,13 @@ use choscorui::controls::{CalendarMode, ControlMessage, ControlValue, DateTimeKi
 use choscorui::core::{CivilDate, CivilDateTime, CivilTime, Space, TextPreset};
 
 fn date(year: i32, month: u8, day: u8) -> CivilDate {
-    CivilDate::new(year, month, day).expect("demo dates are valid")
+    CivilDate::clamped(year, month, day)
 }
 
 pub(crate) fn date_time(day: CivilDate, hour: u8, minute: u8) -> CivilDateTime {
     CivilDateTime {
         date: day,
-        time: CivilTime::new(hour, minute, 0).expect("demo times are valid"),
+        time: CivilTime::clamped(hour, minute, 0),
     }
 }
 

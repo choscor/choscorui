@@ -119,12 +119,8 @@ pub fn stateful<V: View>(build: impl Fn(&mut Cx) -> V + 'static) -> AnyView {
 /// A small diagonal gradient that stands in for a photo.
 pub fn portrait() -> Image {
     let side = 32u32;
-    let pixels = (0..side * side)
-        .flat_map(|index| {
-            let (x, y) = (index % side, index / side);
-            let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
-            [shade, 96, 255 - shade, 255]
-        })
-        .collect();
-    Image::from_rgba8(side, side, pixels).expect("the pixel count matches the size")
+    Image::from_fn(side, side, |x, y| {
+        let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
+        [shade, 96, 255 - shade, 255]
+    })
 }
