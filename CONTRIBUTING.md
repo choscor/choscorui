@@ -26,6 +26,7 @@ Install these tools:
 - Rust stable with `rustfmt` and `clippy`
 - Rust 1.88 for the minimum version check: `rustup toolchain install 1.88`
 - the nightly toolchain that `tools/api-docs/nightly.txt` names, for the [API reference](#api-reference). Install it with `rustup toolchain install <nightly> --profile minimal --target aarch64-apple-darwin`.
+- the Windows and Linux targets for the portable app check: `rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-gnu`
 
 Run the fast checks from the CI `check` job. CI supports only macOS, so it leaves out the Windows and Linux backend crates:
 
@@ -36,7 +37,11 @@ cargo fmt --all --check
 cargo clippy --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked -- -D warnings
 cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
 cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
+cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
+cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
 ```
+
+The last two commands check that the facade and the gallery build on a target without a backend. They only compile, so they need no other SDK.
 
 For backend or UI changes, also run the native checks from the CI `native` job.
 

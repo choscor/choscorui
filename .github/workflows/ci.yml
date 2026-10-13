@@ -28,6 +28,8 @@ jobs:
           rustup toolchain install 1.88 --profile minimal
           # The pinned nightly writes the rustdoc JSON of api-docs/.
           rustup toolchain install "$(grep -v '^#' tools/api-docs/nightly.txt | head -n 1)" --profile minimal --target aarch64-apple-darwin
+          # The portable app layer must build for targets without a backend.
+          rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-gnu
       - name: Docs
         run: scripts/check-docs.sh
       - name: API docs are current
@@ -40,6 +42,10 @@ jobs:
         run: cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
       - name: Tests
         run: cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
+      - name: Portable app layer
+        run: |
+          cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
+          cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
 
   native:
     name: native macOS app (${{ matrix.os }})
