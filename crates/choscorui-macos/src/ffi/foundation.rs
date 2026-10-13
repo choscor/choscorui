@@ -1,7 +1,7 @@
 //! Foundation classes, messages, and helpers.
 
 use super::class::{AnyClass, AnyProtocol, ClassType, Obj, ProtocolType, objc_class};
-use super::msg::{Autoreleased, Init, Utf8, messages};
+use super::msg::{Autoreleased, Init, Shared, Utf8, messages};
 use super::retained::Retained;
 use super::sdk::c_functions;
 use crate::Error;
@@ -22,6 +22,7 @@ objc_class!(NsUrl = "NSURL": NSObject);
 objc_class!(NSBundle: NSObject);
 objc_class!(NSDate: NSObject);
 objc_class!(NSNotification: NSObject);
+objc_class!(NSRunLoop: NSObject);
 
 messages! {
     pub(crate) RETAIN: instance NSObject, c"retain", () -> Option<&Obj<NSObject>>;
@@ -61,6 +62,7 @@ messages! {
     pub(crate) IS_FILE_URL: instance NsUrl, c"isFileURL", () -> bool;
     pub(crate) SCHEME: instance NsUrl, c"scheme", () -> Autoreleased<NSString>;
     pub(crate) MAIN_BUNDLE: class NSBundle, c"mainBundle", () -> Autoreleased<NSBundle>;
+    pub(crate) MAIN_RUN_LOOP: class NSRunLoop, c"mainRunLoop", () -> Shared<NSRunLoop>;
     pub(crate) BUNDLE_IDENTIFIER: instance NSBundle, c"bundleIdentifier",
         () -> Autoreleased<NSString>;
 
@@ -74,6 +76,7 @@ c_functions! {
     #[link(name = "Foundation", kind = "framework")]
     statics {
         pub(crate) safe static NSDefaultRunLoopMode: &'static Obj<NSString>;
+        pub(crate) safe static NSRunLoopCommonModes: &'static Obj<NSString>;
     }
     functions {}
 }

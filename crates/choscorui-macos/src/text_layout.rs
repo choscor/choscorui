@@ -357,47 +357,52 @@ pub(crate) fn draw_glyph_run(
     if run.glyphs.is_empty() {
         return true;
     }
+    let Some(font) = run_font(&run.font, run.size) else {
+        return false;
+    };
+    // Positions are stored y-down; the context is flipped around the
+    // baseline so Core Text draws upright glyphs.
+    let points: Vec<NSPoint> = run
+        .positions
+        .iter()
+        .map(|p| NSPoint { x: p.x, y: -p.y })
+        .collect();
+    let previous = CGContextGetTextMatrix(context);
+    CGContextSaveGState(context);
+    paint::set_fill_color(context, color);
+    CGContextTranslateCTM(context, origin.x, origin.y);
+    CGContextScaleCTM(context, 1.0, -1.0);
+    CGContextSetTextMatrix(
+        context,
+        CGAffineTransform {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            tx: 0.0,
+            ty: 0.0,
+        },
+    );
+    font.draw_glyphs(&run.glyphs, &points, context);
+    CGContextRestoreGState(context);
+    CGContextSetTextMatrix(context, previous);
+    true
+}
+
+/// The font of a pre-shaped glyph run, by PostScript name and size. Both
+/// painters use it, so they draw a run with the same font.
+pub(crate) fn run_font(name: &str, size: f64) -> Option<CfRetained<CTFont>> {
     FONTS.with(|fonts| {
         let mut fonts = fonts.borrow_mut();
-        let key = (run.font.clone(), run.size.to_bits());
-        if !fonts.contains_key(&key) {
-            if fonts.len() >= FONT_CACHE_LIMIT {
-                fonts.clear();
-            }
-            let Some(font) =
-                cf_string(&run.font).and_then(|name| CTFontCreateWithName(&name, run.size, None))
-            else {
-                return false;
-            };
-            fonts.insert(key.clone(), font);
+        let key = (name.to_owned(), size.to_bits());
+        if let Some(font) = fonts.get(&key) {
+            return Some(font.clone());
         }
-        let font = &fonts[&key];
-        // Positions are stored y-down; the context is flipped around the
-        // baseline so Core Text draws upright glyphs.
-        let points: Vec<NSPoint> = run
-            .positions
-            .iter()
-            .map(|p| NSPoint { x: p.x, y: -p.y })
-            .collect();
-        let previous = CGContextGetTextMatrix(context);
-        CGContextSaveGState(context);
-        paint::set_fill_color(context, color);
-        CGContextTranslateCTM(context, origin.x, origin.y);
-        CGContextScaleCTM(context, 1.0, -1.0);
-        CGContextSetTextMatrix(
-            context,
-            CGAffineTransform {
-                a: 1.0,
-                b: 0.0,
-                c: 0.0,
-                d: 1.0,
-                tx: 0.0,
-                ty: 0.0,
-            },
-        );
-        font.draw_glyphs(&run.glyphs, &points, context);
-        CGContextRestoreGState(context);
-        CGContextSetTextMatrix(context, previous);
-        true
+        if fonts.len() >= FONT_CACHE_LIMIT {
+            fonts.clear();
+        }
+        let font = CTFontCreateWithName(&*cf_string(name)?, size, None)?;
+        fonts.insert(key, font.clone());
+        Some(font)
     })
 }

@@ -53,6 +53,10 @@ pub(crate) trait Receiver: 'static {
     /// Whether `NAME` is a class or a protocol.
     #[cfg(test)]
     const KIND: ReceiverKind;
+    /// For a class cluster: the private subclass that implements the
+    /// instance methods. The runtime check looks up the methods there.
+    #[cfg(test)]
+    const IMPLEMENTATION: Option<&'static CStr> = None;
 }
 
 /// A class marker. The class object exists in the runtime after its
@@ -129,18 +133,24 @@ impl Sel {
 /// Declares a class marker with its superclass chain, for example
 /// `objc_class!(NSWindow: NSResponder: NSObject)`. A marker whose Rust name
 /// differs from the runtime name gives it as a string, for example
-/// `objc_class!(NsUrl = "NSURL": NSObject)`.
+/// `objc_class!(NsUrl = "NSURL": NSObject)`. A class cluster names the
+/// private subclass that implements its instance methods, for example
+/// `objc_class!(MTLTextureDescriptor in "MTLTextureDescriptorInternal": NSObject)`.
 macro_rules! objc_class {
     ($(#[$meta:meta])* $name:ident $(= $runtime:literal)?) => {
         $(#[$meta])*
         pub(crate) enum $name {}
-        $crate::ffi::class::objc_class!(@receiver $name, $crate::ffi::class::objc_class!(@runtime $name $($runtime)?));
+        $crate::ffi::class::objc_class!(@receiver $name, $crate::ffi::class::objc_class!(@runtime $name $($runtime)?), None);
         impl $crate::ffi::class::IsA<$name> for $name {}
     };
-    ($(#[$meta:meta])* $name:ident $(= $runtime:literal)? : $superclass:ident $(: $ancestor:ident)*) => {
+    ($(#[$meta:meta])* $name:ident $(= $runtime:literal)? $(in $implementation:literal)? : $superclass:ident $(: $ancestor:ident)*) => {
         $(#[$meta])*
         pub(crate) enum $name {}
-        $crate::ffi::class::objc_class!(@receiver $name, $crate::ffi::class::objc_class!(@runtime $name $($runtime)?));
+        $crate::ffi::class::objc_class!(
+            @receiver $name,
+            $crate::ffi::class::objc_class!(@runtime $name $($runtime)?),
+            $crate::ffi::class::objc_class!(@implementation $($implementation)?)
+        );
         $crate::ffi::class::objc_class!(@chain $name: $superclass $(: $ancestor)*);
     };
     (@runtime $name:ident) => {
@@ -149,7 +159,16 @@ macro_rules! objc_class {
     (@runtime $name:ident $runtime:literal) => {
         $runtime
     };
-    (@receiver $name:ident, $runtime:expr) => {
+    (@implementation) => {
+        None
+    };
+    (@implementation $implementation:literal) => {
+        Some(match ::std::ffi::CStr::from_bytes_with_nul(concat!($implementation, "\0").as_bytes()) {
+            Ok(name) => name,
+            Err(_) => panic!("class names contain no NUL"),
+        })
+    };
+    (@receiver $name:ident, $runtime:expr, $implementation:expr) => {
         impl $crate::ffi::class::Receiver for $name {
             const NAME: &'static ::std::ffi::CStr =
                 match ::std::ffi::CStr::from_bytes_with_nul(concat!($runtime, "\0").as_bytes()) {
@@ -158,6 +177,8 @@ macro_rules! objc_class {
                 };
             #[cfg(test)]
             const KIND: $crate::ffi::class::ReceiverKind = $crate::ffi::class::ReceiverKind::Class;
+            #[cfg(test)]
+            const IMPLEMENTATION: Option<&'static ::std::ffi::CStr> = $implementation;
         }
         impl $crate::ffi::class::ClassType for $name {}
     };
@@ -176,14 +197,18 @@ macro_rules! objc_class {
 pub(crate) use objc_class;
 
 /// Declares a protocol marker, for example `objc_protocol!(NSDraggingInfo)`.
-/// A handle to a conforming object dereferences to `Obj<NSObject>`.
+/// A handle to a conforming object dereferences to `Obj<NSObject>`. A
+/// marker whose Rust name differs from the runtime name gives it as a
+/// string, for example `objc_protocol!(DispatchData = "OS_dispatch_data")`.
 macro_rules! objc_protocol {
-    ($(#[$meta:meta])* $name:ident) => {
+    ($(#[$meta:meta])* $name:ident $(= $runtime:literal)?) => {
         $(#[$meta])*
         pub(crate) enum $name {}
         impl $crate::ffi::class::Receiver for $name {
             const NAME: &'static ::std::ffi::CStr =
-                match ::std::ffi::CStr::from_bytes_with_nul(concat!(stringify!($name), "\0").as_bytes()) {
+                match ::std::ffi::CStr::from_bytes_with_nul(
+                    concat!($crate::ffi::class::objc_class!(@runtime $name $($runtime)?), "\0").as_bytes(),
+                ) {
                     Ok(name) => name,
                     Err(_) => panic!("protocol names contain no NUL"),
                 };

@@ -61,7 +61,7 @@ number_shape!(Signed: i8, i16, i32, i64, isize);
 #[cfg(test)]
 number_shape!(Unsigned: u8, u16, u32, u64, usize, bool);
 #[cfg(test)]
-number_shape!(Float: f64);
+number_shape!(Float: f32, f64);
 
 #[cfg(test)]
 impl CShape for () {
@@ -104,6 +104,14 @@ pointer_shape!(
 
 #[cfg(test)]
 impl<T: CfType> CShape for Option<CfRetained<T>> {
+    const SHAPE: Shape = Shape::Pointer;
+    const OWNED: bool = true;
+}
+
+/// A +1 Objective-C object from a C function of the create rule, such as
+/// `MTLCreateSystemDefaultDevice`.
+#[cfg(test)]
+impl<C> CShape for Option<super::retained::Retained<C>> {
     const SHAPE: Shape = Shape::Pointer;
     const OWNED: bool = true;
 }

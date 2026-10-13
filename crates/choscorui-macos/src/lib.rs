@@ -16,6 +16,8 @@ pub use choscorui_core::{
 pub use ime::{ImeEvent, TextInputState};
 mod backdrop;
 mod dialog;
+mod metal;
+pub use metal::Painter;
 mod menu_native;
 mod paint;
 pub use dialog::{
@@ -184,7 +186,7 @@ pub enum WindowEvent {
     DragEnded(choscorui_core::DragOperation),
 }
 
-/// Timing of one completed `drawRect:` replay.
+/// Timing of one paint that reached the display.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PaintTiming {
     pub finished: std::time::Instant,
@@ -277,15 +279,19 @@ fn native_rect(rect: choscorui_core::Rect) -> NSRect {
     }
 }
 
+/// The window that posted a window delegate notification.
+fn notification_window(notification: Option<&Obj<NSNotification>>) -> Option<&Obj<NSWindow>> {
+    notification
+        .and_then(|notification| NOTIFICATION_OBJECT.send(notification, ()))
+        .and_then(|object| object.downcast::<NSWindow>())
+}
+
 /// Queues the event of a window delegate notification.
 fn record_window_event(
     notification: Option<&Obj<NSNotification>>,
     make_event: fn(&Obj<NSWindow>) -> WindowEvent,
 ) {
-    let Some(window) = notification
-        .and_then(|notification| NOTIFICATION_OBJECT.send(notification, ()))
-        .and_then(|object| object.downcast::<NSWindow>())
-    else {
+    let Some(window) = notification_window(notification) else {
         return;
     };
     let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
@@ -303,6 +309,9 @@ fn window_did_resize(
         size: read_content_size(window),
         scale: BACKING_SCALE_FACTOR.send(window, ()),
     });
+    if let Some(window) = notification_window(notification) {
+        metal::surface::window_changed(window.addr());
+    }
 }
 fn window_did_change_scale(
     _: &Obj<ChoscoruiV2WindowDelegate>,
@@ -311,6 +320,9 @@ fn window_did_change_scale(
     record_window_event(notification, |window| WindowEvent::ScaleChanged {
         scale: BACKING_SCALE_FACTOR.send(window, ()),
     });
+    if let Some(window) = notification_window(notification) {
+        metal::surface::window_changed(window.addr());
+    }
 }
 fn window_did_focus(
     _: &Obj<ChoscoruiV2WindowDelegate>,
@@ -674,6 +686,7 @@ impl Application {
             .unwrap()
             .insert(window.addr(), Arc::clone(&ime));
         SET_WINDOW_DELEGATE.send(&window, (Some(delegate.upcast()),));
+        metal::surface::attach(&window, Arc::clone(&paint), self.poster());
         Ok(Window {
             _delegate: delegate,
             window,
@@ -852,12 +865,21 @@ impl Window {
         *self.ime.lock().unwrap() = state;
     }
 
+    /// The painter that draws this window: Metal, or Core Graphics when
+    /// the process has no usable GPU, `CHOSCORUI_PAINTER=core-graphics` is
+    /// set, or the GPU failed a frame of this window.
+    pub fn painter(&self) -> Painter {
+        metal::surface::painter(self.window.addr())
+    }
+
     pub fn paint_count(&self) -> usize {
         self.paint.lock().unwrap().count
     }
 
-    /// When the most recent completed paint finished and how long the
-    /// display-list replay took. Benchmarks use this as the present point.
+    /// When the most recent paint reached the display and how long it
+    /// took. With Metal it ends when the frame is presented; with Core
+    /// Graphics, when `drawRect:` completes. Benchmarks use this as the
+    /// present point.
     pub fn last_paint(&self) -> Option<PaintTiming> {
         self.paint.lock().unwrap().last_paint
     }
@@ -869,6 +891,7 @@ impl Window {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
         MAKE_KEY_AND_ORDER_FRONT.send(&self.window, (None,));
         self.closed = false;
+        metal::surface::window_changed(self.window.addr());
     }
 
     pub fn set_title(&self, title: &str) -> Result<(), Error> {
@@ -935,6 +958,7 @@ impl Drop for Window {
         // them, so a caller without its own pool does not keep the window
         // alive. It drops after the window and delegate fields.
         self.drop_pool = Pool::new().ok();
+        metal::surface::detach(self.window.addr());
         self.close();
         for (_, element) in self.accessibility.get_mut().elements.drain() {
             accessibility_bridge::unbind(&element);
@@ -948,6 +972,7 @@ impl Drop for Window {
         ime_states().lock().unwrap().remove(&window);
         if paint_states().lock().unwrap().is_empty() {
             paint::clear_image_cache();
+            metal::clear_image_cache();
         }
     }
 }

@@ -21,6 +21,9 @@ pub(crate) fn window_did_change_occlusion(
     record_window_event(notification, |window| {
         WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_STATE_VISIBLE == 0)
     });
+    if let Some(window) = notification_window(notification) {
+        metal::surface::occlusion_changed(window.addr());
+    }
 }
 
 /// Adds the cursor rect of the window's current cursor shape. The cursor
@@ -93,8 +96,9 @@ fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {
 }
 
 impl Window {
-    /// Replaces the display list. Only the region whose drawing changed is
-    /// invalidated; an identical list schedules no frame at all.
+    /// Replaces the display list. An identical list schedules no frame at
+    /// all. With Metal, damage schedules a full frame; with Core Graphics,
+    /// only the region whose drawing changed is invalidated.
     pub fn set_display_list(&self, list: DisplayList) {
         let _pool = Pool::new();
         let mut paint = self.paint.lock().unwrap();
@@ -105,6 +109,9 @@ impl Window {
         };
         paint.last_damage = Some(region);
         drop(paint);
+        if metal::surface::request_frame(self.ns_window().addr()) {
+            return;
+        }
         // Round out and pad one point so antialiased edges repaint too.
         let x = region.origin.x.floor() - 1.0;
         let y = region.origin.y.floor() - 1.0;
@@ -157,8 +164,13 @@ impl Window {
     }
 
     /// Renders the content view into straight-alpha sRGB pixels at the
-    /// backing scale. Capturing runs `drawRect:` and counts as a paint.
+    /// backing scale. With Metal, the GPU draws the current display list
+    /// offscreen and the capture is not a paint. With Core Graphics,
+    /// capturing runs `drawRect:` and counts as a paint.
     pub fn capture(&self) -> Result<Image, ImageError> {
+        if let Some(result) = metal::surface::capture(self.ns_window().addr()) {
+            return result;
+        }
         let _pool = Pool::new().map_err(|_| ImageError::DecodeFailed)?;
         let view = CONTENT_VIEW
             .send(self.ns_window(), ())

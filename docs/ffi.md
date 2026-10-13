@@ -139,7 +139,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 
 ### Core Text
 
-- **Lines.** `ShapedLine` owns the `CTLine` that it uses for metrics, caret offsets, hit tests, and `CTLineDraw`. Rust RAII releases each Core Text object.
+- **Lines.** `ShapedLine` owns the `CTLine` that it uses for metrics, caret offsets, hit tests, and glyph runs. Rust RAII releases each Core Text object.
 - **Wrapping.** `WrappedText` keeps its attributed string and font alive while a +1 typesetter gives break counts. Rust maps each break to a grapheme boundary.
 - **Shaping.** `CoreTextShaper` creates the font, paragraph style, attributes, attributed string, and typesetter for each paragraph. It copies glyphs, positions, and font names into owned `GlyphRun` values. No Core Text object lives after `shape`.
 - **Font faces.** `fonts::create_font` makes each primary font. The generic families `system-ui` and `ui-monospace` call `NSFont systemFontOfSize:weight:` and `monospacedSystemFontOfSize:weight:`. These return autoreleased fonts, and `CFRetain` makes them +1. `NSFont` is toll-free bridged to `CTFont`. Other families use `CTFontCreateWithName` and the symbolic bold and italic traits.

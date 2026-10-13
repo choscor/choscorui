@@ -4,14 +4,14 @@ use crate::ffi::cf::{
 };
 use crate::ffi::graphics::{
     CGContext, CGContextGetTextMatrix, CGContextRestoreGState, CGContextSaveGState,
-    CGContextScaleCTM, CGContextSetRGBFillColor, CGContextSetTextMatrix, CGContextSetTextPosition,
-    CGContextTranslateCTM, PREMULTIPLIED_RGBA, bitmap_context,
+    CGContextScaleCTM, CGContextSetRGBFillColor, CGContextSetTextMatrix, CGContextTranslateCTM,
+    PREMULTIPLIED_RGBA, bitmap_context,
 };
 use crate::ffi::text::{
-    CTFontCreateWithName, CTLine, CTLineCreateWithAttributedString, CTLineDraw,
+    CTFont, CTFontCreateWithName, CTLine, CTLineCreateWithAttributedString, CTLineGetGlyphRuns,
     CTLineGetOffsetForStringIndex, CTLineGetTypographicBounds,
-    CTTypesetterCreateWithAttributedString, CTTypesetterSuggestLineBreak, kCTFontAttributeName,
-    kCTForegroundColorFromContextAttributeName,
+    CTTypesetterCreateWithAttributedString, CTTypesetterSuggestLineBreak, RunGlyphs,
+    kCTFontAttributeName, kCTForegroundColorFromContextAttributeName,
 };
 use choscorui_core::{FontSlant, FontWeight, TextRun};
 
@@ -245,6 +245,15 @@ impl ShapedLine {
         nearest
     }
 
+    /// The font, the glyphs, and the glyph positions of each run, in the
+    /// order of the line. Positions are y up from the baseline origin.
+    pub(crate) fn glyph_runs(&self) -> Vec<(CfRetained<CTFont>, RunGlyphs)> {
+        CTLineGetGlyphRuns(&self.line)
+            .iter()
+            .filter_map(|run| Some((CfRetained::retain(run.font()?), run.glyphs())))
+            .collect()
+    }
+
     fn draw(&self, context: &CGContext, baseline: Point, color: choscorui_core::Color) {
         let previous_text_matrix = CGContextGetTextMatrix(context);
         CGContextSaveGState(context);
@@ -268,8 +277,11 @@ impl ShapedLine {
                 ty: 0.0,
             },
         );
-        CGContextSetTextPosition(context, 0.0, 0.0);
-        CTLineDraw(&self.line, context);
+        // Each run draws at the glyph positions of the line, as the Metal
+        // painter draws it.
+        for (font, run) in self.glyph_runs() {
+            font.draw_glyphs(&run.glyphs, &run.positions, context);
+        }
         CGContextRestoreGState(context);
         CGContextSetTextMatrix(context, previous_text_matrix);
     }

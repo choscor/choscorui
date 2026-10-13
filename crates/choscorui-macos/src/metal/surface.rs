@@ -1,0 +1,519 @@
+//! The Metal surface of a window: its `CAMetalLayer`, the display link
+//! that paces its frames, presentation, and capture.
+//!
+//! A display-list change with damage marks the window pending. The
+//! window draws at once when fewer than [`IN_FLIGHT`] frames are on the
+//! GPU and it is visible; otherwise the display link draws it at the next
+//! refresh. The link pauses when nothing is pending.
+
+use super::encode::{Targets, encode};
+use super::plan;
+use super::{COLOR_FORMAT, Gpu, gpu};
+use crate::ffi::Obj;
+use crate::ffi::Pool;
+use crate::ffi::appkit::{
+    BACKING_SCALE_FACTOR, BOUNDS, CONTENT_VIEW, ChoscoruiV2ContentView, IN_LIVE_RESIZE,
+    IS_WINDOW_VISIBLE, NSView, NSWindow, OCCLUSION_STATE, OCCLUSION_STATE_VISIBLE,
+    SET_NEEDS_DISPLAY, VIEW_WINDOW,
+};
+use crate::ffi::block::{GlobalBlock, ObjectHandler};
+use crate::ffi::foundation::{MAIN_RUN_LOOP, NSRunLoopCommonModes};
+use crate::ffi::geometry::NSSize;
+use crate::ffi::graphics::srgb;
+use crate::ffi::metal::{
+    ADD_COMPLETED_HANDLER, ADD_PRESENTED_HANDLER, BLIT_ENCODER, COMMAND_BUFFER,
+    COMMAND_BUFFER_STATUS, COMMAND_BUFFER_STATUS_ERROR, COMMIT, COPY_TEXTURE_TO_BUFFER,
+    CommandBufferArgs, DrawableArgs, END_BLIT_ENCODING, MTLCommandBuffer, MTLDrawable, MTLOrigin,
+    MTLSize, NEW_BUFFER_WITH_LENGTH, PRESENT, PRESENT_DRAWABLE, PRESENTED_TIME,
+    RESOURCE_STORAGE_SHARED, WAIT_UNTIL_COMPLETED, WAIT_UNTIL_SCHEDULED, completed_block,
+    presented_block, read_buffer,
+};
+use crate::ffi::quartz::{
+    ADD_TO_RUN_LOOP, CACurrentMediaTime, CADisplayLink, CAFrameRateRange, CAMetalLayer,
+    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DRAWABLE_SIZE,
+    SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE, SET_LAYER_OPAQUE,
+    SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
+    SET_PREFERRED_FRAME_RATE_RANGE, SET_PRESENTS_WITH_TRANSACTION, SET_VIEW_LAYER, SET_WANTS_LAYER,
+    view_display_link,
+};
+use crate::ffi::retained::{Retained, alloc_init};
+use crate::{PaintHandle, PaintTiming, Poster};
+use choscorui_core::{Image, ImageError};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
+
+/// The painter of a window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Painter {
+    /// Metal draws the window on the GPU.
+    Metal,
+    /// Core Graphics draws the window on the CPU.
+    CoreGraphics,
+}
+
+/// The most frames of one window that the GPU works on at a time.
+const IN_FLIGHT: usize = 2;
+
+/// The state of a window that the Metal handlers share, on any thread.
+struct Shared {
+    window: usize,
+    in_flight: AtomicUsize,
+    /// Frames sent to the display whose presented handler has not run.
+    unpresented: AtomicUsize,
+    failed: AtomicBool,
+    poster: Poster,
+}
+
+struct Surface {
+    view: Retained<NSView>,
+    layer: Retained<CAMetalLayer>,
+    link: Option<Retained<CADisplayLink>>,
+    paint: PaintHandle,
+    shared: Arc<Shared>,
+    targets: Targets,
+    pending: bool,
+    /// True once AppKit reported the occlusion state of the window. Until
+    /// then, a window on screen counts as visible.
+    occlusion_reported: bool,
+    presented_once: bool,
+    transaction: bool,
+    size: (usize, usize),
+    scale: f64,
+}
+
+thread_local! {
+    /// The surfaces of the windows that paint with Metal, by window.
+    static SURFACES: RefCell<HashMap<usize, Surface>> = RefCell::new(HashMap::new());
+}
+
+/// A frame on its way to the display.
+struct Presentation {
+    paint: PaintHandle,
+    shared: Arc<Shared>,
+    started: Instant,
+}
+
+/// The frames waiting for their presented handler, by drawable.
+static PRESENTATIONS: LazyLock<Mutex<HashMap<usize, Presentation>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// The command buffers waiting for their completed handler.
+static COMMANDS: LazyLock<Mutex<HashMap<usize, Arc<Shared>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static PRESENTED: LazyLock<GlobalBlock<DrawableArgs>> = LazyLock::new(presented_block::<Presented>);
+static COMPLETED: LazyLock<GlobalBlock<CommandBufferArgs>> =
+    LazyLock::new(completed_block::<Completed>);
+
+/// Records the paint when a frame reaches the display.
+struct Presented;
+
+impl ObjectHandler<MTLDrawable> for Presented {
+    const BOUNDARY: &'static str = "the Metal presented handler";
+
+    fn call(drawable: Option<&Obj<MTLDrawable>>) {
+        let Some(drawable) = drawable else {
+            return;
+        };
+        let presentation = PRESENTATIONS.lock().unwrap().remove(&drawable.addr());
+        let Some(presentation) = presentation else {
+            return;
+        };
+        // `presentedTime` is on the clock of `CACurrentMediaTime`, and it
+        // is 0 for a frame that the display never showed.
+        let presented = PRESENTED_TIME.send(drawable, ());
+        let now = Instant::now();
+        let finished = if presented > 0.0 {
+            let age = (CACurrentMediaTime() - presented).max(0.0);
+            now.checked_sub(Duration::from_secs_f64(age)).unwrap_or(now)
+        } else {
+            now
+        };
+        presentation
+            .shared
+            .unpresented
+            .fetch_sub(1, Ordering::AcqRel);
+        let mut paint = presentation.paint.lock().unwrap();
+        paint.count += 1;
+        paint.last_paint = Some(PaintTiming {
+            finished,
+            duration: finished.saturating_duration_since(presentation.started),
+        });
+    }
+}
+
+/// Frees a frame slot, and moves the window to Core Graphics when the
+/// GPU failed the frame.
+struct Completed;
+
+impl ObjectHandler<MTLCommandBuffer> for Completed {
+    const BOUNDARY: &'static str = "the Metal completed handler";
+
+    fn call(buffer: Option<&Obj<MTLCommandBuffer>>) {
+        let Some(buffer) = buffer else {
+            return;
+        };
+        let shared = COMMANDS.lock().unwrap().remove(&buffer.addr());
+        let Some(shared) = shared else {
+            return;
+        };
+        shared.in_flight.fetch_sub(1, Ordering::AcqRel);
+        let failed = COMMAND_BUFFER_STATUS.send(buffer, ()) == COMMAND_BUFFER_STATUS_ERROR;
+        if failed && !shared.failed.swap(true, Ordering::AcqRel) {
+            let window = shared.window;
+            // Without an application, no window remains to repaint.
+            let _ = shared.poster.post(move || fall_back(window));
+        }
+    }
+}
+
+/// Makes the content view of `window` host a Metal layer. Returns `false`
+/// when the window paints with Core Graphics instead.
+pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster) -> bool {
+    let Some(gpu) = gpu() else {
+        return false;
+    };
+    let Some(view) = CONTENT_VIEW.send(window, ()) else {
+        return false;
+    };
+    let Ok(layer) = alloc_init::<CAMetalLayer>() else {
+        return false;
+    };
+    SET_LAYER_DEVICE.send(&layer, (Some(&*gpu.device),));
+    SET_LAYER_PIXEL_FORMAT.send(&layer, (COLOR_FORMAT,));
+    if let Some(space) = srgb() {
+        SET_LAYER_COLORSPACE.send(&layer, (space,));
+    }
+    SET_FRAMEBUFFER_ONLY.send(&layer, (true,));
+    SET_MAXIMUM_DRAWABLE_COUNT.send(&layer, (3,));
+    SET_LAYER_OPAQUE.send(&layer, (false,));
+    SET_PRESENTS_WITH_TRANSACTION.send(&layer, (true,));
+    // A layer-hosting view: the layer first, then `wantsLayer`.
+    SET_VIEW_LAYER.send(view, (Some(layer.upcast()),));
+    SET_WANTS_LAYER.send(view, (true,));
+    let link = view_display_link(view);
+    if let Some(link) = &link {
+        SET_PREFERRED_FRAME_RATE_RANGE.send(
+            link,
+            (CAFrameRateRange {
+                minimum: 80.0,
+                maximum: 120.0,
+                preferred: 120.0,
+            },),
+        );
+        SET_LINK_PAUSED.send(link, (true,));
+        if let Ok(Some(run_loop)) = MAIN_RUN_LOOP.class_send(()) {
+            ADD_TO_RUN_LOOP.send(link, (run_loop, NSRunLoopCommonModes));
+        }
+    }
+    let shared = Arc::new(Shared {
+        window: window.addr(),
+        in_flight: AtomicUsize::new(0),
+        unpresented: AtomicUsize::new(0),
+        failed: AtomicBool::new(false),
+        poster,
+    });
+    let surface = Surface {
+        view: view.retain(),
+        layer,
+        link,
+        paint,
+        shared,
+        targets: Targets::default(),
+        pending: true,
+        occlusion_reported: false,
+        presented_once: false,
+        transaction: true,
+        size: (0, 0),
+        scale: 0.0,
+    };
+    SURFACES.with(|surfaces| surfaces.borrow_mut().insert(window.addr(), surface));
+    true
+}
+
+/// The painter of `window`.
+pub(crate) fn painter(window: usize) -> Painter {
+    if SURFACES.with(|surfaces| surfaces.borrow().contains_key(&window)) {
+        Painter::Metal
+    } else {
+        Painter::CoreGraphics
+    }
+}
+
+/// Stops the display link of a window that closes for good.
+pub(crate) fn detach(window: usize) {
+    let surface = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window));
+    if let Some(Surface {
+        link: Some(link), ..
+    }) = &surface
+    {
+        INVALIDATE_LINK.send(link, ());
+    }
+}
+
+/// Moves `window` to Core Graphics for the rest of its life and repaints
+/// it in full.
+fn fall_back(window: usize) {
+    let Some(surface) = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window)) else {
+        return;
+    };
+    let _pool = Pool::new();
+    if let Some(link) = &surface.link {
+        INVALIDATE_LINK.send(link, ());
+    }
+    // Without its own layer, the view is layer-backed again and AppKit
+    // calls `drawRect:`.
+    SET_VIEW_LAYER.send(&surface.view, (None,));
+    SET_NEEDS_DISPLAY.send(&surface.view, (true,));
+}
+
+/// Marks `window` pending and draws it when it can. Returns `false` when
+/// the window paints with Core Graphics.
+pub(crate) fn request_frame(window: usize) -> bool {
+    let attached = SURFACES.with(|surfaces| {
+        let mut surfaces = surfaces.borrow_mut();
+        let Some(surface) = surfaces.get_mut(&window) else {
+            return false;
+        };
+        surface.pending = true;
+        true
+    });
+    if attached {
+        drive(window);
+    }
+    attached
+}
+
+/// Draws `window` again when it became visible, changed size, or moved
+/// to another display.
+pub(crate) fn window_changed(window: usize) {
+    request_frame(window);
+}
+
+/// Draws `window` again when AppKit reports a new occlusion state.
+pub(crate) fn occlusion_changed(window: usize) {
+    SURFACES.with(|surfaces| {
+        if let Some(surface) = surfaces.borrow_mut().get_mut(&window) {
+            surface.occlusion_reported = true;
+        }
+    });
+    request_frame(window);
+}
+
+/// The display-link callback of a content view.
+pub(crate) fn display_link_fired(
+    view: &Obj<ChoscoruiV2ContentView>,
+    _: Option<&Obj<CADisplayLink>>,
+) {
+    if let Some(window) = VIEW_WINDOW.send(view, ()) {
+        drive(window.addr());
+    }
+}
+
+/// Draws a pending window when it is visible and a frame slot is free,
+/// and runs the display link only while a frame waits.
+fn drive(window: usize) {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let failed = SURFACES.with(|surfaces| {
+        let mut surfaces = surfaces.borrow_mut();
+        let Some(surface) = surfaces.get_mut(&window) else {
+            return false;
+        };
+        let _pool = Pool::new();
+        let visible = VIEW_WINDOW.send(&surface.view, ()).is_some_and(|window| {
+            if surface.occlusion_reported {
+                OCCLUSION_STATE.send(window, ()) & OCCLUSION_STATE_VISIBLE != 0
+            } else {
+                IS_WINDOW_VISIBLE.send(window, ())
+            }
+        });
+        let mut wait = false;
+        if surface.pending && visible {
+            if surface.shared.in_flight.load(Ordering::Acquire) >= IN_FLIGHT {
+                wait = true;
+            } else {
+                match render(gpu, surface) {
+                    Frame::Presented => surface.pending = false,
+                    Frame::NoDrawable => wait = true,
+                    Frame::Failed => return true,
+                }
+            }
+        }
+        if let Some(link) = &surface.link {
+            // The link also runs until the last frame is on the display:
+            // displays with a variable refresh rate may hold a frame back
+            // while no display link runs.
+            let showing = surface.shared.unpresented.load(Ordering::Acquire) > 0;
+            SET_LINK_PAUSED.send(link, (!wait && !showing,));
+        }
+        false
+    });
+    if failed {
+        fall_back(window);
+    }
+}
+
+/// The outcome of one attempt to draw.
+enum Frame {
+    Presented,
+    /// No drawable was free; the display link tries again.
+    NoDrawable,
+    /// Metal could not record the frame.
+    Failed,
+}
+
+/// The size of the view's backing store in pixels, and the scale.
+fn backing_size(view: &Obj<NSView>) -> Option<((usize, usize), f64)> {
+    let window = VIEW_WINDOW.send(view, ())?;
+    let scale = BACKING_SCALE_FACTOR.send(window, ());
+    let bounds = BOUNDS.send(view, ());
+    let width = (bounds.size.width * scale).round();
+    let height = (bounds.size.height * scale).round();
+    (width >= 1.0 && height >= 1.0 && scale > 0.0)
+        .then_some(((width as usize, height as usize), scale))
+}
+
+fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
+    let Some((size, scale)) = backing_size(&surface.view) else {
+        // An empty view shows nothing.
+        return Frame::Presented;
+    };
+    if size != surface.size || scale != surface.scale {
+        SET_CONTENTS_SCALE.send(&surface.layer, (scale,));
+        SET_DRAWABLE_SIZE.send(
+            &surface.layer,
+            (NSSize {
+                width: size.0 as f64,
+                height: size.1 as f64,
+            },),
+        );
+        surface.size = size;
+        surface.scale = scale;
+    }
+    // Startup and live resize present inside the Core Animation
+    // transaction, so the content matches the window frame.
+    let transaction = !surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ());
+    if transaction != surface.transaction {
+        SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (transaction,));
+        surface.transaction = transaction;
+    }
+    let started = Instant::now();
+    let list = Arc::clone(&surface.paint.lock().unwrap().list);
+    let Some(drawable) = NEXT_DRAWABLE.send(&surface.layer, ()) else {
+        return Frame::NoDrawable;
+    };
+    let Some(texture) = DRAWABLE_TEXTURE.send(&drawable, ()) else {
+        return Frame::NoDrawable;
+    };
+    let plan = plan::build(gpu, &list, size.0, size.1, scale);
+    let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) else {
+        return Frame::Failed;
+    };
+    if encode(gpu, &mut surface.targets, &plan, &command_buffer, texture).is_none() {
+        return Frame::Failed;
+    }
+    let drawable = drawable.as_drawable();
+    PRESENTATIONS.lock().unwrap().insert(
+        drawable.addr(),
+        Presentation {
+            paint: Arc::clone(&surface.paint),
+            shared: Arc::clone(&surface.shared),
+            started,
+        },
+    );
+    ADD_PRESENTED_HANDLER.send(drawable, (PRESENTED.as_block(),));
+    COMMANDS
+        .lock()
+        .unwrap()
+        .insert(command_buffer.addr(), Arc::clone(&surface.shared));
+    ADD_COMPLETED_HANDLER.send(&command_buffer, (COMPLETED.as_block(),));
+    surface.shared.in_flight.fetch_add(1, Ordering::AcqRel);
+    surface.shared.unpresented.fetch_add(1, Ordering::AcqRel);
+    if transaction {
+        COMMIT.send(&command_buffer, ());
+        WAIT_UNTIL_SCHEDULED.send(&command_buffer, ());
+        PRESENT.send(drawable, ());
+    } else {
+        PRESENT_DRAWABLE.send(&command_buffer, (drawable,));
+        COMMIT.send(&command_buffer, ());
+    }
+    surface.presented_once = true;
+    Frame::Presented
+}
+
+/// Draws the current display list of a Metal window offscreen and reads
+/// it back as straight-alpha sRGB pixels at the backing scale. Returns
+/// `None` when the window paints with Core Graphics. A capture is not a
+/// paint.
+pub(crate) fn capture(window: usize) -> Option<Result<Image, ImageError>> {
+    let gpu = gpu()?;
+    SURFACES.with(|surfaces| {
+        let mut surfaces = surfaces.borrow_mut();
+        let surface = surfaces.get_mut(&window)?;
+        Some(read_back(gpu, surface).ok_or(ImageError::DecodeFailed))
+    })
+}
+
+fn read_back(gpu: &Gpu, surface: &mut Surface) -> Option<Image> {
+    let _pool = Pool::new().ok()?;
+    let ((width, height), scale) = backing_size(&surface.view)?;
+    let list = Arc::clone(&surface.paint.lock().unwrap().list);
+    let plan = plan::build(gpu, &list, width, height, scale);
+    let texture = gpu.target_texture(COLOR_FORMAT, width, height)?;
+    let command_buffer = COMMAND_BUFFER.send(&gpu.queue, ())?;
+    encode(gpu, &mut surface.targets, &plan, &command_buffer, &texture)?;
+    let row = width * 4;
+    let length = row * height;
+    let buffer = NEW_BUFFER_WITH_LENGTH.send(&gpu.device, (length, RESOURCE_STORAGE_SHARED))?;
+    let blit = BLIT_ENCODER.send(&command_buffer, ())?;
+    COPY_TEXTURE_TO_BUFFER.send(
+        &blit,
+        (
+            &texture,
+            0,
+            0,
+            MTLOrigin::new(0, 0),
+            MTLSize::new(width, height),
+            &buffer,
+            0,
+            row,
+            length,
+        ),
+    );
+    END_BLIT_ENCODING.send(&blit, ());
+    COMMIT.send(&command_buffer, ());
+    WAIT_UNTIL_COMPLETED.send(&command_buffer, ());
+    if COMMAND_BUFFER_STATUS.send(&command_buffer, ()) == COMMAND_BUFFER_STATUS_ERROR {
+        return None;
+    }
+    let bgra = read_buffer(&buffer, length)?;
+    let pixels = bgra
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|pixel| {
+            let alpha = pixel[3];
+            let straight = |channel: u8| {
+                if alpha == 0 {
+                    0
+                } else {
+                    let value =
+                        (u16::from(channel) * 255 + u16::from(alpha) / 2) / u16::from(alpha);
+                    value.min(255) as u8
+                }
+            };
+            [
+                straight(pixel[2]),
+                straight(pixel[1]),
+                straight(pixel[0]),
+                alpha,
+            ]
+        })
+        .collect();
+    Image::from_rgba8(width as u32, height as u32, pixels).ok()
+}

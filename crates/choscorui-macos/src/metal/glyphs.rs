@@ -1,0 +1,389 @@
+//! Text for the Metal painter: shaped lines, the fonts of their runs, and
+//! glyph atlases that Core Text rasterizes into.
+//!
+//! A glyph is keyed by font, glyph, pixel size, offset in sixteenths of
+//! a pixel, and dark or light ink. Outline glyphs keep their coverage in
+//! an alpha atlas; glyphs of color fonts keep premultiplied colors in a
+//! color atlas. A full atlas starts over in a new texture, so frames that
+//! still read the old one keep their glyphs.
+
+use super::Gpu;
+use super::coverage::Shelves;
+use crate::ShapedLine;
+use crate::ffi::cf::CfRetained;
+use crate::ffi::geometry::{NSPoint, NSRect, NSSize};
+use crate::ffi::graphics::{
+    CGContextFillRect, CGContextScaleCTM, CGContextSetAllowsFontSmoothing,
+    CGContextSetRGBFillColor, CGContextSetShouldSmoothFonts,
+    CGContextSetShouldSubpixelQuantizeFonts, PREMULTIPLIED_RGBA, bitmap_context,
+};
+use crate::ffi::metal::{
+    MTLOrigin, MTLRegion, MTLSize, MTLTexture, PIXEL_FORMAT_R8, PIXEL_FORMAT_RGBA8, replace_region,
+};
+use crate::ffi::retained::Retained;
+use crate::ffi::text::{
+    CTFont, CTFontCopyPostScriptName, CTFontGetSize, CTFontGetSymbolicTraits,
+    FONT_TRAIT_COLOR_GLYPHS,
+};
+use crate::text_layout::run_font;
+use choscorui_core::{FontSlant, Point, TextRun};
+use std::collections::HashMap;
+use std::rc::Rc;
+
+/// The offsets of a glyph in each pixel, on each axis. Core Graphics
+/// places glyphs at fractions of a pixel, so the atlas keeps glyphs at
+/// sixteenths of a pixel.
+pub(super) const SUBPIXELS: f64 = 16.0;
+
+const LINE_LIMIT: usize = 1024;
+const FONT_LIMIT: usize = 256;
+const MONO_ATLAS: u32 = 2048;
+const COLOR_ATLAS: u32 = 1024;
+
+/// A font of the registry.
+pub(super) type FontId = u32;
+
+/// One run of a shaped line.
+pub(super) struct LineRun {
+    pub(super) font: FontId,
+    pub(super) glyphs: Vec<u16>,
+    /// Glyph origins relative to the baseline origin, y down.
+    pub(super) positions: Vec<Point>,
+}
+
+/// Where a glyph is in its atlas and how it sits on its pen position.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct GlyphEntry {
+    pub(super) color: bool,
+    /// Left, top, right, and bottom texels in the atlas.
+    pub(super) texels: [u32; 4],
+    /// The offset of the bitmap from the whole pixel of the pen.
+    pub(super) left: i32,
+    pub(super) top: i32,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct LineKey {
+    text: String,
+    family: String,
+    size: u64,
+    weight: u16,
+    slant: FontSlant,
+    tracking: u64,
+}
+
+struct Atlas {
+    texture: Option<Retained<MTLTexture>>,
+    shelves: Shelves,
+    size: u32,
+    format: usize,
+    bytes_per_pixel: usize,
+}
+
+impl Atlas {
+    fn new(size: u32, format: usize, bytes_per_pixel: usize) -> Self {
+        Self {
+            texture: None,
+            shelves: Shelves::new(size),
+            size,
+            format,
+            bytes_per_pixel,
+        }
+    }
+
+    /// Starts over in a new texture.
+    fn reset(&mut self) {
+        self.texture = None;
+        self.shelves.clear();
+    }
+
+    /// Copies a `width × height` bitmap into free texels. Returns their
+    /// top-left corner, or `None` when the atlas is full.
+    fn insert(&mut self, gpu: &Gpu, width: u32, height: u32, bytes: &[u8]) -> Option<(u32, u32)> {
+        let (x, y) = self.shelves.allocate(width, height)?;
+        if self.texture.is_none() {
+            self.texture = gpu.upload_texture(self.format, self.size as usize, self.size as usize);
+        }
+        let texture = self.texture.as_ref()?;
+        let region = MTLRegion {
+            origin: MTLOrigin::new(x as usize, y as usize),
+            size: MTLSize::new(width as usize, height as usize),
+        };
+        let row = width as usize * self.bytes_per_pixel;
+        replace_region(texture, region, bytes, row, self.bytes_per_pixel).then_some((x, y))
+    }
+}
+
+/// How a glyph draws into the atlas. Core Graphics smooths dark text
+/// and light text by different amounts, so each has its own entries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Ink {
+    /// An outline glyph in a color darker than middle gray.
+    Dark,
+    /// An outline glyph in a lighter color.
+    Light,
+    /// A glyph of a color font.
+    Color,
+}
+
+/// A glyph in the atlas: font, glyph, pixel size bits, offset, and ink.
+type GlyphKey = (FontId, u16, u64, [u8; 2], Ink);
+
+/// The text caches of the process. Only the main thread uses them.
+pub(super) struct Text {
+    fonts: Vec<(CfRetained<CTFont>, bool)>,
+    font_ids: HashMap<(String, u64), FontId>,
+    /// The fonts of pre-shaped runs, apart from the fonts of shaped lines,
+    /// because a PostScript name does not always find the font of a line.
+    run_font_ids: HashMap<(String, u64), FontId>,
+    lines: HashMap<LineKey, Rc<Vec<LineRun>>>,
+    glyphs: HashMap<GlyphKey, Option<GlyphEntry>>,
+    mono: Atlas,
+    color: Atlas,
+}
+
+impl Text {
+    pub(super) fn new() -> Self {
+        Self {
+            fonts: Vec::new(),
+            font_ids: HashMap::new(),
+            run_font_ids: HashMap::new(),
+            lines: HashMap::new(),
+            glyphs: HashMap::new(),
+            mono: Atlas::new(MONO_ATLAS, PIXEL_FORMAT_R8, 1),
+            color: Atlas::new(COLOR_ATLAS, PIXEL_FORMAT_RGBA8, 4),
+        }
+    }
+
+    /// The atlas texture of outline glyphs or of color glyphs.
+    pub(super) fn atlas(&self, color: bool) -> Option<&Retained<MTLTexture>> {
+        if color {
+            self.color.texture.as_ref()
+        } else {
+            self.mono.texture.as_ref()
+        }
+    }
+
+    /// The registry id of `font`. The caller keeps the id by name.
+    fn register(&mut self, font: CfRetained<CTFont>) -> FontId {
+        if self.fonts.len() >= FONT_LIMIT {
+            // Lines and glyphs name fonts by id, so they start over too.
+            self.fonts.clear();
+            self.font_ids.clear();
+            self.run_font_ids.clear();
+            self.lines.clear();
+            self.glyphs.clear();
+            self.mono.reset();
+            self.color.reset();
+        }
+        let color = CTFontGetSymbolicTraits(&font) & FONT_TRAIT_COLOR_GLYPHS != 0;
+        let id = self.fonts.len() as FontId;
+        self.fonts.push((font, color));
+        id
+    }
+
+    /// The font of a pre-shaped glyph run, by PostScript name. It is the
+    /// font that Core Graphics draws the run with.
+    pub(super) fn named_font(&mut self, name: &str, size: f64) -> Option<FontId> {
+        let key = (name.to_owned(), size.to_bits());
+        if let Some(id) = self.run_font_ids.get(&key) {
+            return Some(*id);
+        }
+        let id = self.register(run_font(name, size)?);
+        self.run_font_ids.insert(key, id);
+        Some(id)
+    }
+
+    /// The runs of a line of `text`, shaped as `DrawText` shapes it.
+    pub(super) fn line(&mut self, text: &str, run: &TextRun<'_>) -> Option<Rc<Vec<LineRun>>> {
+        let key = LineKey {
+            text: text.to_owned(),
+            family: run.family.to_owned(),
+            size: run.size.to_bits(),
+            weight: run.weight.0,
+            slant: run.slant,
+            tracking: run.tracking.to_bits(),
+        };
+        if let Some(runs) = self.lines.get(&key) {
+            return Some(Rc::clone(runs));
+        }
+        let shaped = ShapedLine::styled(text, run).ok()?;
+        let mut runs = Vec::new();
+        for (font, glyphs) in shaped.glyph_runs() {
+            let name = CTFontCopyPostScriptName(&font)?.to_rust()?;
+            let key = (name, CTFontGetSize(&font).to_bits());
+            let id = match self.font_ids.get(&key) {
+                Some(id) => *id,
+                None => {
+                    let id = self.register(font);
+                    self.font_ids.insert(key, id);
+                    id
+                }
+            };
+            runs.push(LineRun {
+                font: id,
+                glyphs: glyphs.glyphs,
+                positions: glyphs
+                    .positions
+                    .iter()
+                    .map(|p| Point::new(p.x, -p.y))
+                    .collect(),
+            });
+        }
+        if self.lines.len() >= LINE_LIMIT {
+            self.lines.clear();
+        }
+        let runs = Rc::new(runs);
+        self.lines.insert(key, Rc::clone(&runs));
+        Some(runs)
+    }
+
+    /// The atlas entry of `glyph` of `font` at `scale` pixels per point,
+    /// shifted right and down by `subpixel` sixteenths of a pixel, for
+    /// light or dark text. `None` means that the glyph draws nothing.
+    pub(super) fn glyph(
+        &mut self,
+        gpu: &Gpu,
+        font: FontId,
+        glyph: u16,
+        scale: f64,
+        subpixel: [u8; 2],
+        light: bool,
+    ) -> Option<GlyphEntry> {
+        let (ct_font, color) = self.fonts.get(font as usize)?;
+        let color = *color;
+        let ink = match (color, light) {
+            (true, _) => Ink::Color,
+            (false, true) => Ink::Light,
+            (false, false) => Ink::Dark,
+        };
+        let key = (font, glyph, scale.to_bits(), subpixel, ink);
+        if let Some(entry) = self.glyphs.get(&key) {
+            return *entry;
+        }
+        let Some(bitmap) = rasterize(ct_font, glyph, scale, subpixel, ink) else {
+            self.glyphs.insert(key, None);
+            return None;
+        };
+        let atlas = if color {
+            &mut self.color
+        } else {
+            &mut self.mono
+        };
+        let corner = match atlas.insert(gpu, bitmap.width, bitmap.height, &bitmap.bytes) {
+            Some(corner) => corner,
+            None => {
+                // A full atlas starts over; the entries of the old one go.
+                atlas.reset();
+                self.glyphs
+                    .retain(|_, entry| entry.is_none_or(|e| e.color != color));
+                let atlas = if color {
+                    &mut self.color
+                } else {
+                    &mut self.mono
+                };
+                atlas.insert(gpu, bitmap.width, bitmap.height, &bitmap.bytes)?
+            }
+        };
+        let entry = GlyphEntry {
+            color,
+            texels: [
+                corner.0,
+                corner.1,
+                corner.0 + bitmap.width,
+                corner.1 + bitmap.height,
+            ],
+            left: bitmap.left,
+            top: bitmap.top,
+        };
+        self.glyphs.insert(key, Some(entry));
+        Some(entry)
+    }
+}
+
+struct Bitmap {
+    width: u32,
+    height: u32,
+    left: i32,
+    top: i32,
+    bytes: Vec<u8>,
+}
+
+/// The largest side of a glyph bitmap in pixels.
+const GLYPH_LIMIT: f64 = 1024.0;
+
+/// Rasterizes one glyph with Core Text: white on transparent, so the
+/// alpha of an outline glyph is its coverage.
+fn rasterize(font: &CTFont, glyph: u16, scale: f64, subpixel: [u8; 2], ink: Ink) -> Option<Bitmap> {
+    let bounds = font.glyph_bounds(glyph);
+    if bounds.size.width <= 0.0 || bounds.size.height <= 0.0 || scale.is_nan() || scale <= 0.0 {
+        return None;
+    }
+    let shift = subpixel.map(|part| f64::from(part) / SUBPIXELS);
+    let left = (bounds.origin.x * scale).floor() - 1.0;
+    let right = ((bounds.origin.x + bounds.size.width) * scale + shift[0]).ceil() + 1.0;
+    let top = (-(bounds.origin.y + bounds.size.height) * scale).floor() - 1.0;
+    let bottom = (-bounds.origin.y * scale + shift[1]).ceil() + 1.0;
+    let (width, height) = (right - left, bottom - top);
+    if !(width.is_finite() && height.is_finite()) || width > GLYPH_LIMIT || height > GLYPH_LIMIT {
+        return None;
+    }
+    let (width, height) = (width as usize, height as usize);
+    let context = bitmap_context(width, height, PREMULTIPLIED_RGBA)?;
+    // Font smoothing makes Core Graphics text heavier by an amount that
+    // depends on the text and background colors. Outline glyphs draw on
+    // an opaque background, so the atlas gets the same smoothing.
+    CGContextSetAllowsFontSmoothing(&context, true);
+    CGContextSetShouldSmoothFonts(&context, true);
+    // The glyph goes at its offset, not at the nearest quarter pixel.
+    CGContextSetShouldSubpixelQuantizeFonts(&context, false);
+    let (paper, gray) = match ink {
+        Ink::Dark => (1.0, 0.0),
+        Ink::Light | Ink::Color => (0.0, 1.0),
+    };
+    if ink != Ink::Color {
+        CGContextSetRGBFillColor(&context, paper, paper, paper, 1.0);
+        let all = NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size: NSSize {
+                width: width as f64,
+                height: height as f64,
+            },
+        };
+        CGContextFillRect(&context, all);
+    }
+    CGContextSetRGBFillColor(&context, gray, gray, gray, 1.0);
+    CGContextScaleCTM(&context, scale, scale);
+    // The bitmap is y up; the pen sits `-top` pixels below its top row.
+    let pen = NSPoint {
+        x: (-left + shift[0]) / scale,
+        y: (height as f64 + top - shift[1]) / scale,
+    };
+    font.draw_glyphs(&[glyph], &[pen], &context);
+    let mut rgba = Vec::new();
+    if !context.copy_bitmap_rows(0..height, 0..width * 4, &mut rgba) {
+        return None;
+    }
+    let bytes = match ink {
+        Ink::Dark => rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| 255 - pixel[0])
+            .collect(),
+        Ink::Light => rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| pixel[0])
+            .collect(),
+        Ink::Color => rgba,
+    };
+    Some(Bitmap {
+        width: width as u32,
+        height: height as u32,
+        left: left as i32,
+        top: top as i32,
+        bytes,
+    })
+}

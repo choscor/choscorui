@@ -12,7 +12,7 @@ use super::foundation::NSObject;
 use super::sdk::c_functions;
 use std::ffi::{CStr, c_char, c_void};
 use std::marker::{PhantomData, PhantomPinned};
-use std::panic::catch_unwind;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::NonNull;
 
 /// The start of every block.
@@ -163,6 +163,44 @@ const AUTHORIZATION_SIGNATURE: &CStr = if cfg!(target_arch = "aarch64") {
 } else {
     c"v@?c@"
 };
+
+/// The Rust side of a block that takes one object, such as a Metal
+/// completion block. The system may call it on any thread.
+pub(crate) trait ObjectHandler<C>: 'static {
+    /// The name of the boundary, for the panic report.
+    const BOUNDARY: &'static str;
+    fn call(object: Option<&Obj<C>>);
+}
+
+/// The `invoke` function of a block that takes one object. A panic of the
+/// handler is caught and reported.
+extern "C" fn object_invoke<C: 'static, H: ObjectHandler<C>>(
+    _: &Block<(Option<&'static Obj<C>>,)>,
+    object: Option<&Obj<C>>,
+) {
+    if catch_unwind(AssertUnwindSafe(|| H::call(object))).is_err() {
+        report_panic(H::BOUNDARY);
+    }
+}
+
+impl<C: 'static> GlobalBlock<(Option<&'static Obj<C>>,)> {
+    /// A global block, `void (^)(id)`, that calls `H`.
+    pub(crate) fn object<H: ObjectHandler<C>>() -> Self {
+        static DESCRIPTOR: SyncDescriptor = SyncDescriptor(BlockDescriptor {
+            reserved: 0,
+            size: std::mem::size_of::<GlobalBlock<()>>(),
+            signature: c"v@?@".as_ptr(),
+        });
+        Self {
+            isa: (&raw const _NSConcreteGlobalBlock).cast(),
+            flags: GLOBAL_FLAGS,
+            reserved: 0,
+            invoke: object_invoke::<C, H> as *const (),
+            descriptor: &DESCRIPTOR.0,
+            _args: PhantomData,
+        }
+    }
+}
 
 impl<A> GlobalBlock<A> {
     /// The block, borrowed for a message argument.

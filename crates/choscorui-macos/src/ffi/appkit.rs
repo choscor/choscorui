@@ -259,6 +259,8 @@ messages! {
 
     pub(crate) VIEW_WINDOW: instance NSView, c"window", () -> Option<&Obj<NSWindow>>;
     pub(crate) BOUNDS: instance NSView, c"bounds", () -> NSRect;
+    pub(crate) IN_LIVE_RESIZE: instance NSView, c"inLiveResize", () -> bool;
+    pub(crate) SET_NEEDS_DISPLAY: instance NSView, c"setNeedsDisplay:", (bool) -> ();
     pub(crate) CONVERT_POINT_FROM_VIEW: instance NSView, c"convertPoint:fromView:",
         (NSPoint, Option<&Obj<NSView>>) -> NSPoint;
     pub(crate) CONVERT_POINT_TO_VIEW: instance NSView, c"convertPoint:toView:",

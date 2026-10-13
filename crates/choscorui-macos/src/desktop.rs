@@ -540,6 +540,10 @@ pub fn capabilities() -> choscorui_core::BackendCapabilities {
     capabilities.system_appearance = Supported;
     capabilities.text_shaping = Supported;
     capabilities.image_codecs = Supported;
-    capabilities.gpu_painting = Unsupported;
+    capabilities.gpu_painting = if crate::metal::gpu_painting() {
+        Supported
+    } else {
+        Unsupported
+    };
     capabilities
 }

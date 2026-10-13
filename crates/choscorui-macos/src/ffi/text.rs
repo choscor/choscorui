@@ -2,7 +2,7 @@
 
 use super::appkit::NSFont;
 use super::cf::{CFArray, CFAttributedString, CFDictionary, CFString, CFType, CfRetained, cf_type};
-use super::geometry::{CGAffineTransform, NSPoint, NSSize};
+use super::geometry::{CGAffineTransform, NSPoint, NSRect, NSSize};
 use super::graphics::CGContext;
 use super::retained::Retained;
 use super::sdk::{c_functions, ffi_struct, sdk_const};
@@ -21,6 +21,8 @@ cf_type!(
 sdk_const! {
     pub(crate) FONT_TRAIT_ITALIC: u32 = 1 << 0, sdk = kCTFontTraitItalic;
     pub(crate) FONT_TRAIT_BOLD: u32 = 1 << 1, sdk = kCTFontTraitBold;
+    pub(crate) FONT_TRAIT_COLOR_GLYPHS: u32 = 1 << 13, sdk = kCTFontTraitColorGlyphs;
+    FONT_ORIENTATION_DEFAULT: u32 = 0, sdk = kCTFontOrientationDefault;
     PARAGRAPH_BASE_WRITING_DIRECTION: u32 = 13,
         sdk = kCTParagraphStyleSpecifierBaseWritingDirection;
     WRITING_DIRECTION_LEFT_TO_RIGHT: i8 = 0, sdk = kCTWritingDirectionLeftToRight;
@@ -89,6 +91,14 @@ c_functions! {
         pub(crate) safe fn CTFontGetAscent(font: &CTFont) -> f64;
         pub(crate) safe fn CTFontGetDescent(font: &CTFont) -> f64;
         pub(crate) safe fn CTFontGetLeading(font: &CTFont) -> f64;
+        pub(crate) safe fn CTFontGetSymbolicTraits(font: &CTFont) -> u32;
+        unsafe fn CTFontGetBoundingRectsForGlyphs(
+            font: &CTFont,
+            orientation: u32,
+            glyphs: *const u16,
+            rects: *mut NSRect,
+            count: isize,
+        ) -> NSRect;
         unsafe fn CTFontDrawGlyphs(
             font: &CTFont,
             glyphs: *const u16,
@@ -105,7 +115,6 @@ c_functions! {
         pub(crate) safe fn CTLineCreateWithAttributedString(
             string: &CFAttributedString,
         ) -> Option<CfRetained<CTLine>>;
-        pub(crate) safe fn CTLineDraw(line: &CTLine, context: &CGContext);
         pub(crate) safe fn CTLineGetTypographicBounds(
             line: &CTLine,
             ascent: &mut f64,
@@ -163,6 +172,21 @@ impl CTFont {
         let count = glyphs.len().min(positions.len());
         // SAFETY: both arrays hold at least `count` values.
         unsafe { CTFontDrawGlyphs(self, glyphs.as_ptr(), positions.as_ptr(), count, context) }
+    }
+
+    /// The bounding box of `glyph` in points, y up from the baseline.
+    pub(crate) fn glyph_bounds(&self, glyph: u16) -> NSRect {
+        // SAFETY: one glyph, and a null rectangle array, which makes Core
+        // Text return only the overall box.
+        unsafe {
+            CTFontGetBoundingRectsForGlyphs(
+                self,
+                FONT_ORIENTATION_DEFAULT,
+                &glyph,
+                std::ptr::null_mut(),
+                1,
+            )
+        }
     }
 }
 

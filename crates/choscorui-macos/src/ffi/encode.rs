@@ -31,6 +31,7 @@ encode_as!(i16, "s");
 encode_as!(u16, "S");
 encode_as!(i8, "c");
 encode_as!(u8, "C");
+encode_as!(f32, "f");
 encode_as!(f64, "d");
 encode_as!(std::ffi::c_void, "v");
 
@@ -104,11 +105,19 @@ pub(crate) fn selector_family(selector: &str) -> Option<&'static str> {
         })
 }
 
-/// True when a C function name follows the Core Foundation create rule:
-/// it contains `Create` or `Copy`, so the caller owns the result.
+/// True when a C function name follows a create rule, so the caller owns
+/// the result: the Core Foundation rule (the name contains `Create` or
+/// `Copy`) or the libdispatch rule (the name ends in `_create`).
 #[cfg(test)]
 pub(crate) fn follows_create_rule(function: &str) -> bool {
-    function.contains("Create") || function.contains("Copy")
+    function.contains("Create") || function.contains("Copy") || function.ends_with("_create")
+}
+
+/// True when a method type encoding returns an object, the only kind of
+/// result that the Cocoa ownership families describe.
+#[cfg(test)]
+pub(crate) fn returns_object(encoding: &str) -> bool {
+    encoding.starts_with('@')
 }
 
 #[cfg(test)]
@@ -182,5 +191,9 @@ mod tests {
         assert!(follows_create_rule("CTLineCreateWithAttributedString"));
         assert!(follows_create_rule("CTFontCopyPostScriptName"));
         assert!(!follows_create_rule("CTLineGetGlyphRuns"));
+        assert!(follows_create_rule("dispatch_data_create"));
+        assert!(!follows_create_rule("dispatch_data_create_map_view"));
+        assert!(returns_object("@@:@"));
+        assert!(!returns_object("v@:@QQ"));
     }
 }

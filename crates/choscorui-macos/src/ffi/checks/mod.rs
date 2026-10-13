@@ -10,8 +10,8 @@ mod boundary;
 mod sdk;
 
 use super::callback::{ClassDef, Origin};
-use super::class::{ReceiverKind, Sel, lookup_class};
-use super::encode::{same_encoding, selector_family};
+use super::class::{AnyClass, ReceiverKind, Sel, lookup_class};
+use super::encode::{follows_create_rule, returns_object, same_encoding, selector_family};
 use super::msg::{Kind, Ownership};
 use super::runtime;
 use super::sdk::CItem;
@@ -21,6 +21,9 @@ use std::ffi::CStr;
 pub(crate) struct MsgInfo {
     pub(crate) receiver: &'static CStr,
     pub(crate) receiver_kind: ReceiverKind,
+    /// The private subclass that implements the instance methods of a
+    /// class cluster.
+    pub(crate) implementation: Option<&'static CStr>,
     pub(crate) kind: Kind,
     pub(crate) selector: &'static CStr,
     pub(crate) ownership: Ownership,
@@ -34,6 +37,8 @@ fn all_messages() -> Vec<&'static MsgInfo> {
         super::foundation::MESSAGES,
         super::appkit::MESSAGES,
         super::user_notifications::MESSAGES,
+        super::metal::MESSAGES,
+        super::quartz::MESSAGES,
     ]
     .into_iter()
     .flatten()
@@ -53,6 +58,8 @@ fn all_c_items() -> Vec<CItem> {
         super::runtime::c_items(),
         super::text::c_items(),
         super::thread::c_items(),
+        super::metal::c_items(),
+        super::quartz::c_items(),
     ]
     .into_iter()
     .flatten()
@@ -72,6 +79,24 @@ fn crate_classes() -> Vec<ClassDef> {
         .collect()
 }
 
+/// The implementation subclass `name` of the class cluster `class`. It
+/// must be a direct subclass, so a renamed or moved implementation fails.
+fn implementation_class(
+    class: &'static AnyClass,
+    name: &'static CStr,
+) -> Result<&'static AnyClass, String> {
+    let implementation =
+        lookup_class(name).ok_or_else(|| format!("implementation class {name:?} is missing"))?;
+    if runtime::superclass(implementation).is_some_and(|superclass| std::ptr::eq(superclass, class))
+    {
+        Ok(implementation)
+    } else {
+        Err(format!(
+            "{name:?} is not a direct subclass of its class cluster"
+        ))
+    }
+}
+
 /// The type encoding that the runtime has for `message`, or `None` for a
 /// protocol that no loaded image uses. AppKit on macOS 15 does not load
 /// every delegate protocol; the SDK header check covers those messages.
@@ -82,7 +107,13 @@ fn runtime_encoding(message: &MsgInfo) -> Result<Option<String>, String> {
         ReceiverKind::Class => {
             let class = lookup_class(message.receiver)
                 .ok_or_else(|| format!("class {:?} is missing", message.receiver))?;
-            runtime::method_types(class, selector, instance)
+            match message.implementation {
+                Some(name) if instance => {
+                    let implementation = implementation_class(class, name)?;
+                    runtime::method_types(implementation, selector, true)
+                }
+                _ => runtime::method_types(class, selector, instance),
+            }
         }
         ReceiverKind::Protocol => {
             let Some(protocol) = runtime::get_protocol(message.receiver) else {
@@ -129,14 +160,17 @@ pub(crate) fn check_messages<'a>(
 }
 
 /// Checks that a message returns a +1 object exactly when its selector is
-/// in the `alloc`, `new`, `copy`, `mutableCopy`, or `init` family.
+/// in the `alloc`, `new`, `copy`, `mutableCopy`, or `init` family. The
+/// families describe object results only, so a message that returns no
+/// object, such as `-[MTLBlitCommandEncoder copyFromTexture:...]`, has
+/// no family.
 pub(crate) fn check_message_ownership<'a>(
     messages: impl IntoIterator<Item = &'a MsgInfo>,
 ) -> Result<(), String> {
     let mut failures = Vec::new();
     for message in messages {
         let selector = message.selector.to_string_lossy();
-        let family = selector_family(&selector);
+        let family = selector_family(&selector).filter(|_| returns_object(&(message.encoding)()));
         let owned = message.ownership == Ownership::Owned;
         if family.is_some() != owned {
             failures.push(format!(
@@ -160,21 +194,19 @@ pub(crate) fn check_message_ownership<'a>(
     }
 }
 
-/// Checks that a C function returns a `CfRetained` exactly when its name
-/// contains `Create` or `Copy`, the Core Foundation rule for a +1 result.
+/// Checks that a C function returns an owned reference exactly when its
+/// name follows a create rule (see [`follows_create_rule`]).
 pub(crate) fn check_function_ownership<'a>(
     items: impl IntoIterator<Item = &'a CItem>,
 ) -> Result<(), String> {
     let failures: Vec<_> = items
         .into_iter()
         .filter_map(|item| match *item {
-            CItem::Function { name, owned, .. }
-                if (name.contains("Create") || name.contains("Copy")) != owned =>
-            {
+            CItem::Function { name, owned, .. } if follows_create_rule(name) != owned => {
                 Some(if owned {
-                    format!("{name}: expected a borrowed result, actual CfRetained")
+                    format!("{name}: expected a borrowed result, actual an owned reference")
                 } else {
-                    format!("{name}: expected a CfRetained result of the Create or Copy rule")
+                    format!("{name}: expected an owned result of the create rule")
                 })
             }
             _ => None,
@@ -318,6 +350,7 @@ fn sdk_headers_compile() {
         super::keys::SDK_CONSTS,
         super::text::SDK_CONSTS,
         super::user_notifications::SDK_CONSTS,
+        super::metal::SDK_CONSTS,
     ]
     .concat();
     let structs = [
@@ -326,6 +359,8 @@ fn sdk_headers_compile() {
         super::runloop::STRUCTS,
         super::runtime::STRUCTS,
         super::text::STRUCTS,
+        super::metal::STRUCTS,
+        super::quartz::STRUCTS,
     ]
     .concat();
     let messages = all_messages();
@@ -363,6 +398,7 @@ mod tests {
         MsgInfo {
             receiver: c"NSObject",
             receiver_kind: ReceiverKind::Class,
+            implementation: None,
             kind: Kind::Instance,
             selector,
             ownership: Ownership::Value,
@@ -535,5 +571,19 @@ mod tests {
         assert!(report.starts_with("2 message descriptors"), "{report}");
         assert!(report.contains("isKindOfClass:"), "{report}");
         assert!(report.contains("choscoruiNoSuchSelector"), "{report}");
+    }
+
+    #[test]
+    fn a_class_cluster_needs_a_direct_implementation_subclass() {
+        let cluster = |implementation| MsgInfo {
+            receiver: c"NSString",
+            implementation: Some(implementation),
+            ..message(c"length", || "Q@:".to_owned())
+        };
+        assert!(check_messages([&cluster(c"NSMutableString")]).is_ok());
+        let report = check_messages([&cluster(c"NSMutableAttributedString")]).unwrap_err();
+        assert!(report.contains("not a direct subclass"), "{report}");
+        let report = check_messages([&cluster(c"ChoscoruiNoSuchClass")]).unwrap_err();
+        assert!(report.contains("ChoscoruiNoSuchClass"), "{report}");
     }
 }

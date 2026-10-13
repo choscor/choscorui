@@ -40,6 +40,8 @@ const PRELUDE: &str = r#"#import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 #import <CoreText/CoreText.h>
 #import <ImageIO/ImageIO.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
 #include <Block.h>
@@ -91,6 +93,8 @@ template <class R, class... A> struct function<R (*)(A...)> {
   using ret = R;
   template <std::size_t I> using arg = std::tuple_element_t<I, std::tuple<A...>>;
 };
+// libdispatch declares its functions `noexcept` in C++.
+template <class R, class... A> struct function<R (*)(A...) noexcept> : function<R (*)(A...)> {};
 
 template <class T> using type = T;
 
@@ -532,6 +536,7 @@ mod tests {
         MsgInfo {
             receiver,
             receiver_kind: ReceiverKind::Class,
+            implementation: None,
             kind: Kind::Instance,
             selector,
             ownership: Ownership::Value,

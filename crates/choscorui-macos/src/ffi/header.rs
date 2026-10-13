@@ -5,7 +5,9 @@ use super::block::Block;
 use super::class::{AnyClass, AnyProtocol, Obj, Receiver, ReceiverKind, Sel};
 use super::encode::Bool;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLSize};
 use super::msg::{Autoreleased, Init, Shared, Utf8};
+use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
 use std::ffi::CStr;
 
@@ -103,6 +105,7 @@ header_as!(Scalar:
     usize => "NSUInteger",
     i16 => "int16_t",
     u16 => "uint16_t",
+    f32 => "float",
     f64 => "double",
 );
 header_as!(Typed:
@@ -111,6 +114,11 @@ header_as!(Typed:
     NSRect => "NSRect",
     NSRange => "NSRange",
     CGAffineTransform => "CGAffineTransform",
+    MTLClearColor => "MTLClearColor",
+    MTLOrigin => "MTLOrigin",
+    MTLSize => "MTLSize",
+    MTLRegion => "MTLRegion",
+    CAFrameRateRange => "CAFrameRateRange",
     &AnyClass => "Class",
     &AnyProtocol => "Protocol *",
     Sel => "SEL",

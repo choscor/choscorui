@@ -10,10 +10,11 @@ use crate::ffi::graphics::{
     CGContextReplacePathWithStrokedPath, CGContextRestoreGState, CGContextSaveGState,
     CGContextScaleCTM, CGContextSetAlpha, CGContextSetFillColorWithColor,
     CGContextSetInterpolationQuality, CGContextSetLineCap, CGContextSetLineJoin,
-    CGContextSetLineWidth, CGContextSetMiterLimit, CGContextSetStrokeColorWithColor,
-    CGContextStrokePath, CGContextStrokeRectWithWidth, CGContextTranslateCTM, CGImage,
-    GRADIENT_EXTEND, Interpolation, LineCap as CgLineCap, LineJoin as CgLineJoin, PixelLayout,
-    STRAIGHT_RGBA, image_from_pixels, srgb, srgb_color, srgb_gradient,
+    CGContextSetLineWidth, CGContextSetMiterLimit, CGContextSetShouldSubpixelQuantizeFonts,
+    CGContextSetStrokeColorWithColor, CGContextStrokePath, CGContextStrokeRectWithWidth,
+    CGContextTranslateCTM, CGImage, GRADIENT_EXTEND, Interpolation, LineCap as CgLineCap,
+    LineJoin as CgLineJoin, PixelLayout, STRAIGHT_RGBA, image_from_pixels, srgb, srgb_color,
+    srgb_gradient,
 };
 use choscorui_core::{
     FillRule, Image, ImageSampling, LineCap, LineJoin, Paint, Path, PathElement, Shadow,
@@ -69,6 +70,8 @@ pub(crate) fn clear_image_cache() {
 pub(super) fn paint_commands(context: &CGContext, dirty: NSRect, list: &DisplayList) -> bool {
     CGContextSaveGState(context);
     CGContextClipToRect(context, dirty);
+    // Glyphs go at their exact positions, as the Metal painter puts them.
+    CGContextSetShouldSubpixelQuantizeFonts(context, false);
     let mut stack: Vec<bool> = Vec::new(); // true = transparency layer
     let mut success = true;
     for command in list.commands() {

@@ -12,6 +12,8 @@ use super::class::{AnyClass, AnyProtocol, ClassType, IsA, Obj, Receiver, Sel};
 use super::encode::Bool;
 use super::encode::Encode;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLSize};
+use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
 use super::runtime;
 use super::sdk::ffi_struct;
@@ -233,7 +235,13 @@ plain_value!(
     NSSize,
     NSRect,
     NSRange,
-    CGAffineTransform
+    CGAffineTransform,
+    f32,
+    MTLClearColor,
+    MTLOrigin,
+    MTLSize,
+    MTLRegion,
+    CAFrameRateRange
 );
 
 impl Ret for () {
@@ -634,6 +642,7 @@ where
         super::checks::MsgInfo {
             receiver: C::NAME,
             receiver_kind: C::KIND,
+            implementation: C::IMPLEMENTATION,
             kind: self.kind,
             selector: self.selector,
             ownership: R::OWNERSHIP,

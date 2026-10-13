@@ -43,6 +43,8 @@ c_functions! {
         #[cfg(test)]
         safe fn class_getClassMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
         #[cfg(test)]
+        safe fn class_getSuperclass(class: &AnyClass) -> Option<&'static AnyClass>;
+        #[cfg(test)]
         safe fn method_getTypeEncoding(method: &Method) -> *const c_char;
         #[cfg(test)]
         safe fn protocol_getMethodDescription(
@@ -189,6 +191,12 @@ fn copy_types(types: *const c_char) -> Option<String> {
     // process; the pointer is not null.
     let types = unsafe { CStr::from_ptr(types) };
     Some(types.to_string_lossy().into_owned())
+}
+
+/// The superclass of `class`, or `None` for a root class.
+#[cfg(test)]
+pub(super) fn superclass(class: &AnyClass) -> Option<&'static AnyClass> {
+    class_getSuperclass(class)
 }
 
 /// The type encoding of a method that `class` or a superclass declares.

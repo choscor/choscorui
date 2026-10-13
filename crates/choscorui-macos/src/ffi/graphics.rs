@@ -187,6 +187,12 @@ c_functions! {
             quality: Interpolation,
         );
         pub(crate) safe fn CGContextDrawImage(context: &CGContext, rect: NSRect, image: &CGImage);
+        pub(crate) safe fn CGContextSetShouldSmoothFonts(context: &CGContext, smooth: bool);
+        pub(crate) safe fn CGContextSetAllowsFontSmoothing(context: &CGContext, allow: bool);
+        pub(crate) safe fn CGContextSetShouldSubpixelQuantizeFonts(
+            context: &CGContext,
+            quantize: bool,
+        );
         pub(crate) safe fn CGContextDrawLinearGradient(
             context: &CGContext,
             gradient: &CGGradient,
@@ -203,7 +209,6 @@ c_functions! {
             end_radius: f64,
             options: u32,
         );
-        pub(crate) safe fn CGContextSetTextPosition(context: &CGContext, x: f64, y: f64);
         pub(crate) safe fn CGContextSetTextMatrix(context: &CGContext, matrix: CGAffineTransform);
         pub(crate) safe fn CGContextGetTextMatrix(context: &CGContext) -> CGAffineTransform;
     }

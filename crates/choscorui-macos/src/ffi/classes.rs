@@ -20,6 +20,7 @@ use super::class::{Obj, Sel};
 use super::encode::Bool;
 use super::foundation::{NSArray, NSNotification, NSObject};
 use super::geometry::{NSPoint, NSRange, NSRect};
+use super::quartz::CADisplayLink;
 use super::retained::Retained;
 #[cfg(test)]
 use super::user_notifications::UNUserNotificationCenterDelegate;
@@ -112,6 +113,9 @@ define_classes! {
             => dnd::view_drag_ended;
         Super(NSView) c"resetCursorRects" () => surface::view_reset_cursor_rects;
         Super(NSView) c"drawRect:" (dirty: NSRect) => crate::view_draw_rect;
+        // The display link of the view's Metal layer sends it.
+        Own c"choscoruiDisplayLinkFired:" (link: Option<&Obj<CADisplayLink>>)
+            => crate::metal::surface::display_link_fired;
     }
 
     ChoscoruiV2WindowDelegate: NSObject, adopts [] {
