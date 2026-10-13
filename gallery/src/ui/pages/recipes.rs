@@ -4,13 +4,12 @@
 use crate::ui::page::{Build, PageCx, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, ControlView, Cx, Env, Frame, HorizontalAlignment,
+    Alignment, AnyView, Button, CommandLink, ControlView, Cx, Env, Frame, HorizontalAlignment,
     State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    ButtonVariant, CommandId, CommandLink, ControlContext, ControlEvent, ControlKind,
-    ControlMessage, ControlValue, CustomControl, Edges, MeasureContext, PaintContext, Recipe,
-    ResolvedStyle, StyleQuery,
+    ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
+    CustomControl, Edges, MeasureContext, PaintContext, Recipe, ResolvedStyle, StyleQuery,
 };
 use choscorui::core::{
     ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton,
@@ -83,14 +82,11 @@ impl View for ButtonRecipesPage {
             .variant(ButtonVariant::Destructive)
             .accessibility_hint(text("button-recipes.delete_hint"))
             .frame(width),
-            Configured::custom(ControlKind::Item, |env| {
-                CommandLink::new(
-                    env.text("button-recipes.continue", &[]),
-                    env.text("button-recipes.link_description", &[]),
-                )
-                .hosted(CommandId(4))
-            })
-            .on_activate(activated("button-recipes.continue"))
+            CommandLink::new(
+                t!("button-recipes.continue"),
+                t!("button-recipes.link_description"),
+                activated("button-recipes.continue"),
+            )
             .frame(width),
             status(last),
         ))

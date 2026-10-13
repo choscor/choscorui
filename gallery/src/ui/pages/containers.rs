@@ -9,12 +9,10 @@ mod tool_box;
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Dynamic, Env, FocusFrame, Frame, HStack,
-    HorizontalAlignment, Resizable, Spacer, Text, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Dynamic, Env, FocusFrame, Frame, HStack, HorizontalAlignment,
+    Resizable, Spacer, StackedContainer, Text, VStack, View, ViewExt, ZStack,
 };
-use choscorui::controls::{
-    ButtonVariant, ControlKind, ControlValue, SplitOrientation, StackedContainer,
-};
+use choscorui::controls::{ButtonVariant, SplitOrientation};
 use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space, TextPreset};
 
 pub use dock::dock;
@@ -192,11 +190,7 @@ pub fn stacked(_: &PageCx) -> AnyView {
             })
             .collect();
         let stack = ZStack::new((
-            Configured::try_custom(ControlKind::Card, |env| {
-                let name = env.text("stacked.settings_pages", &[]);
-                StackedContainer::hosted(&name, STACK_PAGES.len(), 0)
-            })
-            .value(move || ControlValue::Index(Some(current.get()))),
+            StackedContainer::new(t!("stacked.settings_pages"), STACK_PAGES.len(), current),
             Dynamic::new(move || stack_page(&env, current.get())),
         ))
         .alignment(Alignment::FILL)

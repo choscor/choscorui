@@ -162,7 +162,7 @@ impl Configured<controls::ToolBox> {
 
 /// A standalone scroll bar named `name` over `content` points, of which
 /// `viewport` show; `offset` edits the scroll position. The arrow keys
-/// move one line, 1 point until `.line_step` changes it.
+/// move one line, 16 points until `.line_step` changes it.
 ///
 /// # Examples
 ///

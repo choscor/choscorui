@@ -3,10 +3,9 @@
 
 use crate::ui::page::{Build, PageCx, column, row, section, stateful};
 use choscorui::compose::t;
-use choscorui::compose::view::{Alert, AnyView, Button, Configured, EmptyState, Skeleton, Spinner};
+use choscorui::compose::view::{Alert, AnyView, Button, EmptyState, Skeleton, Spinner, Toaster};
 use choscorui::controls::{
-    AlertVariant, Avatar, ButtonVariant, ControlKind, Toast, ToastPosition, ToastVariant, Toaster,
-    Toasts,
+    AlertVariant, Avatar, ButtonVariant, Toast, ToastPosition, ToastVariant, Toasts,
 };
 use choscorui::core::Icon;
 
@@ -119,14 +118,8 @@ pub fn toast(_: &PageCx) -> AnyView {
         };
         let toaster = {
             let toasts = toasts.clone();
-            Configured::custom(ControlKind::Toast, move |env| {
-                Toaster::new(
-                    env.text("toast.notifications", &[]),
-                    toasts.clone(),
-                    env.text("toast.close", &[]),
-                )
-                .with_position(ToastPosition::BottomEnd)
-            })
+            Toaster::new(t!("toast.notifications"), toasts.clone(), t!("toast.close"))
+                .position(ToastPosition::BottomEnd)
         };
         column((
             section(

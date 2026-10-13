@@ -4,18 +4,12 @@
 use crate::ui::page::{Build, PageCx, caption, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Canvas, Configured, Cx, DecimalSpinBox, Dial, Env, Frame, HStack,
-    HorizontalAlignment, Localized, Progress, Slider, SpinBox, State, Text, VStack, View, ViewExt,
+    AnyView, Button, Canvas, Cx, DecimalSpinBox, Dial, Env, Frame, HStack, HorizontalAlignment,
+    Localized, NumericDisplay, Progress, ScrollBar, Slider, SpinBox, State, Text, VStack, View,
+    ViewExt,
 };
-use choscorui::controls::{
-    ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
-    CustomControl, HostedNumericDisplay, MeasureContext, NumberBase, NumericDisplay, PaintContext,
-    ScrollBar, ScrollOrientation, TextAlign,
-};
-use choscorui::core::{
-    ColorRole, EventPhase, EventReply, FontWeight, Key, KeyEvent, Measured, Point, RadiusScale,
-    SemanticNode, Space, TextPreset, TextSize,
-};
+use choscorui::controls::{ButtonVariant, NumberBase, ScrollOrientation, TextAlign};
+use choscorui::core::{ColorRole, FontWeight, Point, RadiusScale, Space, TextPreset, TextSize};
 
 /// A demo integer range: the bounds, the start value, the step, and the
 /// page.
@@ -185,20 +179,11 @@ fn scroll_bar(
         ScrollOrientation::Vertical => Frame::new().width(BAR).height(viewport),
         ScrollOrientation::Horizontal => Frame::new().width(viewport).height(BAR),
     };
-    Configured::custom(ControlKind::ScrollArea, move |env| {
-        let mut bar = ScrollBar::new(env.text(key, &[]), orientation);
-        if orientation == ScrollOrientation::Vertical {
-            bar.set_line_step(SCROLL_LINE_HEIGHT);
-        }
-        bar.set_range(content, viewport, viewport);
-        bar
-    })
-    .value(move || ControlValue::Number(offset.get()))
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Number(value)) = message {
-            offset.set(*value);
-        }
-    })
+    let bar = ScrollBar::new(t!(key), orientation, content, viewport, offset.binding());
+    match orientation {
+        ScrollOrientation::Vertical => bar.line_step(SCROLL_LINE_HEIGHT),
+        ScrollOrientation::Horizontal => bar,
+    }
     .frame(frame)
 }
 
@@ -343,75 +328,6 @@ pub fn decimal_spin_box(_: &PageCx) -> AnyView {
     DecimalSpinBoxPage.into_any()
 }
 
-/// A seven-segment display that arrow keys step while it has focus.
-/// `HostedNumericDisplay` takes no input, so this control adds the keys
-/// and reports `Changed(Number)`.
-struct Counter {
-    display: HostedNumericDisplay,
-    value: i64,
-}
-
-impl Counter {
-    fn new(name: String, base: NumberBase) -> Self {
-        Self {
-            display: NumericDisplay::new(8, base).hosted(name),
-            value: 0,
-        }
-    }
-
-    /// The value after `key`, for the keys that change it.
-    fn next(&self, key: Key) -> Option<i64> {
-        Some(match key {
-            Key::ArrowUp | Key::ArrowRight => self.value.saturating_add(1),
-            Key::ArrowDown | Key::ArrowLeft => self.value.saturating_sub(1),
-            Key::PageUp => self.value.saturating_mul(10),
-            Key::PageDown => self.value / 10,
-            _ => return None,
-        })
-    }
-}
-
-impl CustomControl for Counter {
-    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        self.display.measure(cx)
-    }
-
-    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        let ControlEvent::Key(KeyEvent::Down { key, .. }) = event else {
-            return EventReply::Continue;
-        };
-        let next = self.next(*key);
-        match next {
-            Some(value) if cx.phase() == EventPhase::Target => {
-                self.value = value;
-                // A whole number always fits the display.
-                self.display.set_value(&ControlValue::Number(value as f64));
-                cx.emit(ControlMessage::Changed(ControlValue::Number(value as f64)));
-                cx.request_paint();
-                cx.request_semantics();
-                EventReply::Stop
-            }
-            _ => EventReply::Continue,
-        }
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        self.display.paint(cx);
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        self.display.semantics()
-    }
-
-    fn set_value(&mut self, value: &ControlValue) -> bool {
-        let taken = self.display.set_value(value);
-        if taken && let ControlValue::Number(number) = value {
-            self.value = *number as i64;
-        }
-        taken
-    }
-}
-
 /// The bases that the display shows, with the catalog strings of their
 /// button labels.
 const BASES: [(&str, NumberBase); 4] = [
@@ -429,18 +345,12 @@ impl View for NumericDisplayPage {
         let value = cx.state(2026_i64);
         // The index of the chosen base in `BASES`.
         let base = cx.state(0_usize);
-        let display = Configured::custom(ControlKind::NumericDisplay, move |env| {
-            Counter::new(
-                env.text("numeric-display.counter", &[]),
-                BASES[base.get()].1,
-            )
-        })
-        .value(move || ControlValue::Number(value.get() as f64))
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Number(number)) = message {
-                value.set(*number as i64);
-            }
-        })
+        let display = NumericDisplay::counter(
+            t!("numeric-display.counter"),
+            8,
+            move || BASES[base.get()].1,
+            value.binding(),
+        )
         .frame(Frame::new().width(360.0).height(70.0));
         // The chosen base shows as a secondary (filled) button.
         let choice = |index: usize| {

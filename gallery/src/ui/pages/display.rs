@@ -4,11 +4,11 @@
 use crate::ui::page::{Build, PageCx, column, portrait, row, section, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Avatar, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, Env, View, ViewExt,
+    AnyView, Avatar, AvatarGroup, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, Env,
+    View, ViewExt,
 };
 use choscorui::controls::{
-    self, AvatarGroup, BadgeVariant, ButtonVariant, ChartKind, ChartSeries, ControlKind,
-    ControlSize, Orientation,
+    self, BadgeVariant, ButtonVariant, ChartKind, ChartSeries, ControlSize, Orientation,
 };
 use choscorui::core::{Icon, ItemData, ItemModel, ListStore, Role, Value};
 
@@ -83,16 +83,16 @@ pub fn badge(_: &PageCx) -> AnyView {
 
 /// A group of three people at `size`, named by the catalog string `name`.
 fn team(name: &'static str, size: ControlSize, count: Option<&'static str>) -> impl View {
-    Configured::custom(ControlKind::Avatar, move |env| {
-        let people = vec![
-            controls::Avatar::new("Ana Lee", "AL").with_image(portrait()),
-            controls::Avatar::new("Bao Tran", "BT"),
-            controls::Avatar::new("Chi Vo", "CV"),
-        ]
-        .into_iter()
-        .map(|avatar| avatar.with_size(size))
-        .collect();
-        let group = AvatarGroup::new(env.text(name, &[]), people).with_size(size);
+    let people: Vec<_> = vec![
+        controls::Avatar::new("Ana Lee", "AL").with_image(portrait()),
+        controls::Avatar::new("Bao Tran", "BT"),
+        controls::Avatar::new("Chi Vo", "CV"),
+    ]
+    .into_iter()
+    .map(|avatar| avatar.with_size(size))
+    .collect();
+    AvatarGroup::new(t!(name), people).with(move |group| {
+        let group = group.with_size(size);
         match count {
             Some(count) => group.with_count(count),
             None => group,
