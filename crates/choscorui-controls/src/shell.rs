@@ -836,6 +836,11 @@ impl HostedToolbar {
         &self.toolbar
     }
 
+    /// Moves the bar to the `area` edge of the window.
+    pub fn move_to(&mut self, area: ToolbarArea) {
+        self.toolbar.move_to(area);
+    }
+
     /// Sets the enabled and checked state of a toolbar command.
     pub fn set_command(&mut self, command: CommandId, state: CommandState) -> CommandResult {
         self.commands.set_enabled(command, state.enabled)?;

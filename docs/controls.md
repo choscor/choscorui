@@ -2069,7 +2069,9 @@ through the `Text` value in both directions. Accept runs `on_activate`.
 The items publish their own semantics.
 
 **As a view.** `Toolbar::new(name, area, items)` mounts a `HostedToolbar` on
-the `area` edge. A command runs `on_command`.
+the `area` edge. A command runs `on_command`. `HostedToolbar::move_to` in
+`.with_env` moves the bar to another edge, for example the right edge in a
+right-to-left layout.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 
