@@ -2096,7 +2096,9 @@ behavior.
   returns `Err(())`. `can_accept` is true only for a valid value.
 - For the text, integer, and decimal kinds, empty text is `Intermediate`.
   A lone `-` in an integer field is also `Intermediate`.
-- The text kind accepts empty text only with `allow_empty`.
+- The text kind accepts empty text only with `allow_empty`. Its value is
+  the text without the spaces at its ends, which is the text that the
+  dialog checks.
 - The integer and decimal kinds use the same `NumberInput` rule and the
   same messages. `filter` gives the rule's filter. While the user types, a
   value below the minimum is `Intermediate`. `commit` makes it `Invalid`.
@@ -2115,21 +2117,31 @@ While closed, the hosted alert node is hidden and has no actions.
 `InputDialog` has no semantic node. Its field and buttons publish their
 own semantics. The control host has no `InputDialog` control.
 
-**As a view.** The `InputDialog` view of `choscorui-compose` shows the
-title, the prompt, an `Input`, an accept button, and the validation
-message. It edits a `Binding<String>` and validates the text in the
+**As a view.** The `InputDialog` view of `choscorui-compose` is a modal
+dialog. It is open while its `Binding<bool>` is true. It shows the title,
+the prompt, a field, the validation message, and the Cancel and accept
+buttons. It edits a `Binding<String>` and validates the text in the
 locale of the environment.
 
+- The Choice kind uses a `Select` of the options. The other kinds use an
+  `Input`.
 - The accept button is enabled only while `can_accept` is true.
 - The field refuses keys that cannot make a number in the integer and
   decimal kinds.
 - Return in the field and the accept button call `commit`. The view runs
-  its action only with a valid value. It formats an accepted number in
-  the locale.
-- The field shows the validation state. The message line shows only the
-  message of an `Invalid` state.
-- The view is a group with the title as its name. The title and prompt
-  text are hidden, because the group and the field have these names.
+  its action only with a valid value, and then closes.
+- Accept writes the value back to the binding: a number in the locale
+  format, and text without the spaces at its ends.
+- Cancel, Escape, and a press outside the dialog close it without a
+  value. The Cancel label is the built-in `choscorui.cancel` message.
+- Focus moves into the dialog when it opens, and returns to the control
+  that had focus when it closes.
+- The field shows the validation state and gives the message as its
+  description. The message line shows only the message of an `Invalid`
+  state. It is hidden from assistive technology, so the message is not
+  read two times.
+- The dialog has the title as its name. The title and prompt text are
+  hidden, because the dialog and the field have these names.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 
@@ -2186,9 +2198,13 @@ index through `.on_item`, and Escape runs `.on_dismiss`.
 `FontChooser` semantics. The control host has no `FontDialog` control.
 `into_chooser` gives the `FontChooser` to mount in a control host.
 
+`FontChooser::with_name` sets the accessible name of the family chooser.
+The name is "Font" until you set it.
+
 **As a view.** The `FontDialog` view of `choscorui-compose` mounts the
-family combobox, a size `SpinBox`, bold and italic toggles, and a preview.
-It edits a `Binding<TextStyle>`.
+family combobox, a size `DecimalSpinBox`, bold and italic toggles, and a
+preview. It edits a `Binding<TextStyle>`. Its labels name the family,
+size, bold, and italic controls.
 
 - Each change goes through a `FontDialog` model. The view writes the
   family, size, weight, and slant back to the binding. The other fields
@@ -2196,10 +2212,18 @@ It edits a `Binding<TextStyle>`.
 - A typed family that is missing stays in the combobox with the invalid
   state. The binding gets the fallback family.
 - A change of the binding from the application shows in the combobox.
-- Bold sets weight 700, and its toggle is on from weight 600.
-- The preview draws the sample text in the chosen family, size, and
-  weight on the `Card` surface. Its node has the `StaticText` role, the
-  sample text as its name, and the family as its value.
+- Bold sets weight 700, and its toggle is on from weight 600. Bold off
+  sets the weight from before bold went on.
+- The size field keeps one decimal, for example 10.5 points.
+- The controls wrap to a new line when the width is too small.
+- The preview draws the sample text in the chosen family, size, weight,
+  and slant on the `Card` surface. The display list carries the slant to
+  the backend, so italic text shows.
+- The preview measures the sample in the chosen family, and wraps it to
+  the width. It shows at most four lines, and at most a third of the
+  window height. It clips the rest.
+- The preview node has the `StaticText` role, the sample text as its
+  name, and the family as its value.
 
 **As a view.** `ColorPicker::new(name, hex)` edits a `Binding<String>`
 through the `Text` value in both directions. Accept runs `on_activate`.

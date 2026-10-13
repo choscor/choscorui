@@ -13,7 +13,7 @@ use crate::ffi::text::{
     CTTypesetterCreateWithAttributedString, CTTypesetterSuggestLineBreak, kCTFontAttributeName,
     kCTForegroundColorFromContextAttributeName,
 };
-use choscorui_core::{FontSlant, FontWeight};
+use choscorui_core::{FontSlant, FontWeight, TextRun};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BitmapError {
@@ -161,25 +161,26 @@ pub struct ShapedLine {
 
 impl ShapedLine {
     pub fn new(text: &str, family: &str, size: f64) -> Result<Self, ShapeError> {
-        Self::styled(text, family, size, FontWeight::REGULAR, 0.0)
+        let run = TextRun {
+            family,
+            size,
+            weight: FontWeight::REGULAR,
+            slant: FontSlant::Upright,
+            tracking: 0.0,
+        };
+        Self::styled(text, &run)
     }
 
-    /// A line in `family` at `weight`, with `tracking` points after each
-    /// character.
-    pub fn styled(
-        text: &str,
-        family: &str,
-        size: f64,
-        weight: FontWeight,
-        tracking: f64,
-    ) -> Result<Self, ShapeError> {
-        if family.is_empty() || !size.is_finite() || size <= 0.0 {
+    /// A line in the family, size, weight, and slant of `run`, with the
+    /// tracking of `run` after each character.
+    pub fn styled(text: &str, run: &TextRun<'_>) -> Result<Self, ShapeError> {
+        if run.family.is_empty() || !run.size.is_finite() || run.size <= 0.0 {
             return Err(ShapeError::InvalidFont);
         }
         let string = cf_string(text).ok_or(ShapeError::Unavailable)?;
-        let font = fonts::create_font(family, size, weight, FontSlant::Upright)
+        let font = fonts::create_font(run.family, run.size, run.weight, run.slant)
             .ok_or(ShapeError::Unavailable)?;
-        let kern = fonts::kern_attribute(tracking);
+        let kern = fonts::kern_attribute(run.tracking);
         let mut keys = vec![
             kCTFontAttributeName,
             kCTForegroundColorFromContextAttributeName,
@@ -582,10 +583,10 @@ pub(crate) fn draw_text_run(
     context: &CGContext,
     baseline: Point,
     text: &str,
-    run: &choscorui_core::TextRun<'_>,
+    run: &TextRun<'_>,
     color: choscorui_core::Color,
 ) -> bool {
-    let Ok(line) = ShapedLine::styled(text, run.family, run.size, run.weight, run.tracking) else {
+    let Ok(line) = ShapedLine::styled(text, run) else {
         return false;
     };
     line.draw(context, baseline, color);

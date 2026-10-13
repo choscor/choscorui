@@ -21,8 +21,8 @@ use choscorui::controls::{
     ToastVariant, ToggleVariant, Variant, VisualState, draw_icon, draw_text, paint_slot,
 };
 use choscorui::core::{
-    Color, DesignTokens, DisplayCommand, DisplayList, Icon, Paint, PathElement, Point, Rect,
-    TextPreset,
+    Color, DesignTokens, DisplayCommand, DisplayList, FontSlant, Icon, Paint, PathElement, Point,
+    Rect, TextPreset,
 };
 use std::fmt::Write;
 
@@ -338,13 +338,19 @@ fn command(command: &DisplayCommand) -> String {
             font_family,
             font_size,
             font_weight,
+            font_slant,
             tracking,
             color,
         } => format!(
-            "text {text:?} at {} {font_family} {} w{} t{} {}",
+            "text {text:?} at {} {font_family} {} w{}{} t{} {}",
             pt(*baseline),
             n(*font_size),
             font_weight.0,
+            if *font_slant == FontSlant::Italic {
+                " italic"
+            } else {
+                ""
+            },
             n(*tracking),
             hex(*color)
         ),

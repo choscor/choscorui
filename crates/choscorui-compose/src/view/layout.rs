@@ -10,9 +10,10 @@ use choscorui_controls::{
     OverlayScrollBar, PaintContext, ScrollOrientation, Separator, SeparatorOrientation,
 };
 use choscorui_core::{
-    Axis, DesignTokens, Dirty, EventPhase, EventReply, ItemAlign, Key, KeyEvent, LayoutKind,
-    LayoutStyle, MainAlign, Measured, NodeId, Point, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, Space, Track, WheelUnit,
+    Axis, ChildMeasure, Constraints, CustomLayout, DesignTokens, Dirty, EventPhase, EventReply,
+    ItemAlign, Key, KeyEvent, LayoutDirection, LayoutKind, LayoutStyle, MainAlign, Measured,
+    NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    SharedLayout, Size, Space, Track, WheelUnit,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -166,6 +167,77 @@ pub(super) fn stack_node(
         ..LayoutStyle::default()
     };
     cx.node(style)
+}
+
+/// A row of `children` that starts a new line when the next child does
+/// not fit the width, with `spacing` between children and between lines.
+pub(crate) struct WrapRow<C>(pub(crate) C, pub(crate) Space);
+
+impl<C: View> View for WrapRow<C> {
+    fn mount(self, cx: &mut Cx) {
+        let node = wrap_node(cx, self.1);
+        let env = cx.env.clone();
+        cx.within(node, env).mount(self.0);
+    }
+}
+
+#[inline(never)]
+fn wrap_node(cx: &mut Cx, spacing: Space) -> NodeId {
+    let gap = parent_tokens(cx).gap(spacing);
+    cx.node(LayoutStyle {
+        kind: LayoutKind::Custom(SharedLayout::new(WrapLayout { gap })),
+        ..LayoutStyle::default()
+    })
+}
+
+/// Places children at their natural size in lines, each child centered
+/// in the height of its line.
+struct WrapLayout {
+    gap: f64,
+}
+
+impl CustomLayout for WrapLayout {
+    fn layout(
+        &self,
+        space: Constraints,
+        direction: LayoutDirection,
+        children: &mut dyn ChildMeasure,
+    ) -> (Size, Vec<Rect>) {
+        let limit = space.max.width;
+        let sizes: Vec<Size> = (0..children.len())
+            .map(|index| {
+                let loose = Constraints::loose(Size::new(limit, f64::INFINITY));
+                children.measure(index, loose).size
+            })
+            .collect();
+        let mut rects = Vec::with_capacity(sizes.len());
+        let (mut x, mut y, mut line, mut width) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        let mut start = 0;
+        let finish = |rects: &mut Vec<Rect>, start: usize, y: f64, line: f64| {
+            for rect in &mut rects[start..] {
+                rect.origin.y = y + (line - rect.size.height) / 2.0;
+            }
+        };
+        for size in sizes {
+            if x > 0.0 && x + size.width > limit {
+                finish(&mut rects, start, y, line);
+                start = rects.len();
+                (x, y, line) = (0.0, y + line + self.gap, 0.0);
+            }
+            rects.push(Rect::new(Point::new(x, 0.0), size));
+            width = width.max(x + size.width);
+            line = line.max(size.height);
+            x += size.width + self.gap;
+        }
+        finish(&mut rects, start, y, line);
+        let size = space.constrain(Size::new(width, y + line));
+        if direction == LayoutDirection::Rtl {
+            for rect in &mut rects {
+                rect.origin.x = size.width - rect.max_x();
+            }
+        }
+        (size, rects)
+    }
 }
 
 /// Children top to bottom.

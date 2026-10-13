@@ -135,6 +135,7 @@ pub(super) fn paint_commands(context: &CGContext, dirty: NSRect, list: &DisplayL
                 font_family,
                 font_size,
                 font_weight,
+                font_slant,
                 tracking,
                 color,
             } => {
@@ -142,6 +143,7 @@ pub(super) fn paint_commands(context: &CGContext, dirty: NSRect, list: &DisplayL
                     family: font_family,
                     size: *font_size,
                     weight: *font_weight,
+                    slant: *font_slant,
                     tracking: *tracking,
                 };
                 if !draw_text_run(context, *baseline, text, &run, *color) {

@@ -27,6 +27,7 @@ choscorui.switch = switch
 choscorui.toggle = toggle
 choscorui.dial = Dial
 choscorui.modal = Modal
+choscorui.cancel = Cancel
 choscorui.status = Status
 choscorui.font = Font
 choscorui.font.fallback = Not installed; using {font}

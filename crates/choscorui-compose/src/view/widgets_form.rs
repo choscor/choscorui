@@ -18,7 +18,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{CivilDate, CivilDateTime, CivilTime, Color};
 
-fn as_number(value: &ControlValue) -> Option<f64> {
+pub(super) fn as_number(value: &ControlValue) -> Option<f64> {
     match value {
         ControlValue::Number(number) if number.is_finite() => Some(*number),
         _ => None,

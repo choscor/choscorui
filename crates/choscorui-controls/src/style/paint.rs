@@ -6,7 +6,7 @@ use super::{
 };
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Localizer, Paint, Path, Point, Rect, Shadow,
-    Size, StrokeStyle, TextRun, TextShaper, TypeSpec,
+    Size, StrokeStyle, TextRun, TextShaper, TextStyle, TypeSpec,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -15,6 +15,31 @@ use std::collections::HashMap;
 pub trait TextMeasure {
     /// The advance width of `text` in `spec`.
     fn width(&self, text: &str, spec: &TypeSpec) -> f64;
+
+    /// The advance width of `text` in the font of `run`, which can name
+    /// any family. The default is the estimate of [`EstimatedText`].
+    fn run_width(&self, text: &str, run: &TextRun<'_>) -> f64 {
+        estimate(text, run.size, run.tracking)
+    }
+}
+
+/// 0.55 em for each grapheme of `text`, plus `tracking`.
+fn estimate(text: &str, size: f64, tracking: f64) -> f64 {
+    let count = choscorui_core::grapheme_boundaries(text)
+        .len()
+        .saturating_sub(1) as f64;
+    count * (size * 0.55 + tracking)
+}
+
+/// The font of `spec` as a text run.
+fn spec_run(spec: &TypeSpec) -> TextRun<'static> {
+    TextRun {
+        family: spec.family.name(),
+        size: spec.size,
+        weight: spec.weight,
+        slant: spec.slant,
+        tracking: spec.tracking,
+    }
 }
 
 /// A deterministic estimate (0.55 em per character plus tracking) for
@@ -24,10 +49,7 @@ pub struct EstimatedText;
 
 impl TextMeasure for EstimatedText {
     fn width(&self, text: &str, spec: &TypeSpec) -> f64 {
-        let count = choscorui_core::grapheme_boundaries(text)
-            .len()
-            .saturating_sub(1) as f64;
-        count * (spec.size * 0.55 + spec.tracking)
+        estimate(text, spec.size, spec.tracking)
     }
 }
 
@@ -48,25 +70,31 @@ impl<'a> ShapedText<'a> {
 
 impl TextMeasure for ShapedText<'_> {
     fn width(&self, text: &str, spec: &TypeSpec) -> f64 {
+        self.run_width(text, &spec_run(spec))
+    }
+
+    fn run_width(&self, text: &str, run: &TextRun<'_>) -> f64 {
         if text.is_empty() {
             return 0.0;
         }
+        let slant = u16::from(run.slant == choscorui_core::FontSlant::Italic) << 15;
         let key = (
-            text.to_owned(),
-            spec.size.to_bits(),
-            spec.weight.0,
-            spec.tracking.to_bits() ^ u64::from(spec.family.name().len() as u32),
+            format!("{}\u{0}{text}", run.family),
+            run.size.to_bits(),
+            run.weight.0 | slant,
+            run.tracking.to_bits(),
         );
         if let Some(width) = self.widths.borrow().get(&key) {
             return *width;
         }
-        let width = self
-            .shaper
-            .shape(text, &spec.text_style(), None)
-            .map_or_else(
-                |_| EstimatedText.width(text, spec),
-                |layout| layout.size().width,
-            );
+        let style = TextStyle::new(run.family, run.size)
+            .with_weight(run.weight)
+            .with_slant(run.slant)
+            .with_tracking(run.tracking);
+        let width = self.shaper.shape(text, &style, None).map_or_else(
+            |_| estimate(text, run.size, run.tracking),
+            |layout| layout.size().width,
+        );
         let mut widths = self.widths.borrow_mut();
         if widths.len() > 4096 {
             widths.clear();
@@ -369,12 +397,7 @@ pub fn draw_text(
     let width = measure.width(line.text, spec);
     let x = align_x(rect, width, line.align, line.rtl);
     let top = rect.origin.y + (rect.size.height - spec.line_height) / 2.0;
-    let run = TextRun {
-        family: spec.family.name(),
-        size: spec.size,
-        weight: spec.weight,
-        tracking: spec.tracking,
-    };
+    let run = spec_run(spec);
     let baseline = top + spec.baseline();
     let _ = list.draw_text_run(Point::new(x, baseline), line.text, &run, line.color);
     if line.underline {

@@ -3,23 +3,24 @@
 //! validate the value, handle the keys, and resolve a missing font; the
 //! views mount their fields and buttons and connect them to state.
 
-use super::View;
-use super::builtins::{as_whole, to_number};
 use super::configured::Configured;
 use super::dynamic::Dynamic;
 use super::env::Fill;
 use super::host::Cx;
-use super::layout::{HStack, HorizontalAlignment, VStack};
+use super::layout::{HStack, HorizontalAlignment, VStack, WrapRow};
 use super::modifier::ViewExt;
 use super::state::{Binding, IntoLive};
-use super::text::{Text, TextContent};
-use super::widgets::{Button, Input, Label, Toggle, label, text};
+use super::text::wrap_lines;
+use super::text::{Localized, Text, TextContent};
+use super::widgets::{Button, Input, Label, Select, Toggle, label, text};
+use super::widgets_form::as_number;
+use super::{Empty, View};
 use crate::reactive::Runtime;
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ComboInput, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
-    CustomControl, InputKind, InputValue, IntegerRange, MeasureContext, PaintContext,
-    ResolvedStyle, Slot, StyleQuery, ValidationState, paint_box,
+    ButtonVariant, ComboInput, ControlContext, ControlEvent, ControlKind, ControlMessage,
+    ControlValue, CustomControl, InputKind, InputValue, ListEntry, MeasureContext, PaintContext,
+    ResolvedStyle, Slot, StyleQuery, TextMeasure, ValidationState, paint_box,
 };
 use choscorui_core::{
     ColorRole, EventReply, FontSlant, FontWeight, Key, Measured, Point, SemanticNode, SemanticRole,
@@ -27,15 +28,20 @@ use choscorui_core::{
 };
 use std::rc::Rc;
 
-/// A dialog for one validated value, shown inline: the title, the prompt,
-/// a field that edits `text`, an accept button, and the validation
-/// message. The button is enabled only while the value is valid, and
-/// Return in the field accepts only a valid value. Both run `on_accept`
-/// with the value. `controls::InputDialog` validates the text for `kind`
-/// in the locale of the environment. An Integer or Decimal field rejects
-/// keys that cannot make a number. A number below the minimum is
-/// incomplete while the user types, and invalid when the user accepts
-/// it. An accepted number gets the locale format.
+/// A modal dialog for one validated value. While `presented` is true, it
+/// shows the title, the prompt, a field that edits `text`, the validation
+/// message, and Cancel and accept buttons. A Choice kind uses a `Select`,
+/// and the other kinds use an `Input`. The accept button is enabled only
+/// while the value is valid, and Return in the field accepts only a valid
+/// value. Both run `on_accept` with the value and close the dialog.
+/// Cancel, Escape, and a press outside the dialog close it without a
+/// value. Focus moves into the dialog when it opens, and returns when it
+/// closes. `controls::InputDialog` validates the text for `kind` in the
+/// locale of the environment. An Integer or Decimal field rejects keys
+/// that cannot make a number. A number below the minimum is incomplete
+/// while the user types, and invalid when the user accepts it. Accept
+/// writes the value back to `text`: a number in the locale format, and
+/// text without the spaces at its ends.
 ///
 /// # Examples
 ///
@@ -47,64 +53,86 @@ use std::rc::Rc;
 /// impl View for Rename {
 ///     fn body(&self, cx: &mut Cx) -> impl View {
 ///         let name = cx.state(String::new());
+///         let open = cx.state(false);
 ///         let kind = InputKind::Text { allow_empty: false };
-///         InputDialog::new("Rename", "New name", "Rename", kind, name.binding(), |value| {
-///             println!("{value:?}");
-///         })
+///         VStack::new((
+///             Button::new("Rename…", move || open.set(true)),
+///             InputDialog::new(
+///                 ("Rename", "New name", "Rename"),
+///                 kind,
+///                 name.binding(),
+///                 open.binding(),
+///                 |value| println!("{value:?}"),
+///             ),
+///         ))
 ///     }
 /// }
 /// ```
-pub struct InputDialog {
+pub struct InputDialog(Rc<InputParts>);
+
+/// What an input dialog shows and edits.
+struct InputParts {
     title: Label,
     prompt: Label,
     accept: Label,
     kind: InputKind,
     text: Binding<String>,
-    on_accept: Rc<dyn Fn(InputValue)>,
+    presented: Binding<bool>,
+    on_accept: Box<dyn Fn(InputValue)>,
 }
 
 impl InputDialog {
-    /// An input dialog with `title`, `prompt`, and an `accept` button for a value of `kind`.
+    /// An input dialog with a title, a prompt, and an accept button label,
+    /// for a value of `kind`, open while `presented` is true.
     pub fn new<M, N, O>(
-        title: impl IntoLive<TextContent, M>,
-        prompt: impl IntoLive<TextContent, N>,
-        accept: impl IntoLive<TextContent, O>,
+        (title, prompt, accept): (
+            impl IntoLive<TextContent, M>,
+            impl IntoLive<TextContent, N>,
+            impl IntoLive<TextContent, O>,
+        ),
         kind: InputKind,
         text: Binding<String>,
+        presented: Binding<bool>,
         on_accept: impl Fn(InputValue) + 'static,
     ) -> Self {
-        Self {
+        Self(Rc::new(InputParts {
             title: label(title),
             prompt: label(prompt),
             accept: label(accept),
             kind,
             text,
-            on_accept: Rc::new(on_accept),
-        }
+            presented,
+            on_accept: Box::new(on_accept),
+        }))
     }
 }
 
 impl View for InputDialog {
     fn mount(self, cx: &mut Cx) {
-        let Self {
-            title,
-            prompt,
-            accept,
-            kind,
-            text: value,
-            on_accept,
-        } = self;
+        let parts = self.0;
+        let (presented, title) = (parts.presented, parts.title.clone());
+        Empty
+            .dialog(presented, title, move || InputPanel(parts.clone()))
+            .mount(cx);
+    }
+}
+
+/// The content of an open input dialog.
+struct InputPanel(Rc<InputParts>);
+
+impl View for InputPanel {
+    fn mount(self, cx: &mut Cx) {
+        let parts = self.0;
         let env = cx.env().clone();
-        let label_env = env.clone();
         let message_env = env.clone();
-        let value_text = value;
+        let value = parts.text;
         let model = {
-            let (title, prompt) = (title.clone(), prompt.clone());
+            let parts = parts.clone();
             Rc::new(move || {
                 controls::InputDialog::new(
-                    text(&title, &env),
-                    text(&prompt, &env),
-                    kind.clone(),
+                    text(&parts.title, &env),
+                    text(&parts.prompt, &env),
+                    parts.kind.clone(),
                     env.locale(),
                     value.try_get().unwrap_or_default(),
                 )
@@ -124,77 +152,121 @@ impl View for InputDialog {
                 .unwrap_or(ValidationState::Intermediate),
         };
         let submit = {
-            let model = model.clone();
+            let (model, parts) = (model.clone(), parts.clone());
             move || {
                 let model = model();
                 match model.commit() {
-                    (_, Some(value)) => {
-                        let formatted = match value {
+                    (_, Some(accepted)) => {
+                        let shown = match &accepted {
                             InputValue::Integer(number) => {
-                                model.number().map(|rule| rule.format(number as f64))
+                                model.number().map(|rule| rule.format(*number as f64))
                             }
                             InputValue::Decimal(number) => {
-                                model.number().map(|rule| rule.format(number))
+                                model.number().map(|rule| rule.format(*number))
                             }
-                            _ => None,
+                            InputValue::Text(text) => Some(text.clone()),
+                            InputValue::Choice(_) => None,
                         };
-                        if let Some(formatted) = formatted {
-                            value_text.set(formatted);
+                        if let Some(shown) = shown {
+                            value.set(shown);
                         }
-                        on_accept(value);
+                        (parts.on_accept)(accepted);
+                        parts.presented.set(false);
                     }
                     (state, None) => refused.set(Some(state)),
                 }
             }
         };
-        let filter = model.clone();
-        let field = Input::new(prompt.clone(), value)
-            .with(move |input| {
-                let mut input = input.with_filter(filter().filter());
-                input.set_validation(current());
-                input
-            })
-            .on_message(move |message| {
-                if let ControlMessage::Changed(_) = message {
-                    refused.set(None);
-                }
-            })
-            .on_activate(submit.clone());
-        let button =
-            Button::new(accept, submit).disabled(move || current() != ValidationState::Valid);
+        let field = match &parts.kind {
+            InputKind::Choice(options) => {
+                choice(parts.prompt.clone(), options, value, refused).into_any()
+            }
+            _ => {
+                let filter = model.clone();
+                Input::new(parts.prompt.clone(), value)
+                    .with(move |input| {
+                        let mut input = input.with_filter(filter().filter());
+                        input.set_validation(current());
+                        input
+                    })
+                    .on_message(move |message| {
+                        if let ControlMessage::Changed(_) = message {
+                            refused.set(None);
+                        }
+                    })
+                    .on_activate(submit.clone())
+                    .into_any()
+            }
+        };
+        // The field publishes the message, so the visible copy is hidden.
         let message = Dynamic::new(move || match current() {
             ValidationState::Invalid(error) => Some(
                 Text::new(error.message(&message_env.localizer()))
                     .text_style(TextPreset::Small)
-                    .foreground(Fill::Role(ColorRole::Destructive)),
+                    .foreground(Fill::Role(ColorRole::Destructive))
+                    .accessibility_hidden(true),
             ),
             _ => None,
         });
-        // The group carries the title, and the field carries the prompt.
+        let presented = parts.presented;
+        let cancel = Button::new(Localized::new("choscorui.cancel"), move || {
+            presented.set(false)
+        });
+        let accept = Button::new(parts.accept.clone(), submit)
+            .disabled(move || current() != ValidationState::Valid);
+        // The dialog carries the title, and the field carries the prompt.
         VStack::new((
-            Text::new(title.clone())
+            Text::new(parts.title.clone())
                 .text_style(TextPreset::Small)
                 .font_weight(FontWeight::MEDIUM)
                 .accessibility_hidden(true),
-            Text::new(prompt)
+            Text::new(parts.prompt.clone())
                 .text_style(TextPreset::Small)
                 .foreground(ColorRole::MutedForeground)
                 .accessibility_hidden(true),
-            HStack::new((field, button)).spacing(Space::S2),
+            field,
             message,
+            HStack::new((cancel.variant(ButtonVariant::Outline), accept)).spacing(Space::S2),
         ))
         .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S1)
-        .accessibility_label(move || text(&title, &label_env))
+        .spacing(Space::S2)
         .mount(cx);
     }
 }
 
+/// The `Select` of a Choice dialog over `options`. It writes the chosen
+/// option to `value`, and clears a refused accept.
+fn choice(
+    name: Label,
+    options: &[String],
+    value: Binding<String>,
+    refused: super::state::State<Option<ValidationState>>,
+) -> impl View + use<> {
+    let entries: Vec<ListEntry> = options.iter().map(ListEntry::option).collect();
+    let (shown, chosen): (Rc<[String]>, Rc<[String]>) = (options.into(), options.into());
+    let selected = Binding::new(
+        move || {
+            let typed = value.try_get().unwrap_or_default();
+            shown.iter().position(|option| option == typed.trim())
+        },
+        move |index: Option<usize>| {
+            if let Some(option) = index.and_then(|index| chosen.get(index)) {
+                value.set(option.clone());
+                refused.set(None);
+            }
+        },
+    );
+    Select::new(name, entries, selected)
+}
+
 /// A font dialog that edits `style`: a family combobox, a size field,
 /// bold and italic toggles, and a preview of `sample` in the chosen
-/// style. `controls::FontDialog` applies each change. A family that is
-/// not in `families` resolves to its fallback, and the size stays from 1
-/// to 4096 points. The other fields of `style` do not change.
+/// style. The labels name the family, size, bold, and italic controls.
+/// `controls::FontDialog` applies each change. A family that is not in
+/// `families` resolves to its fallback, and the size stays from 1 to 4096
+/// points, with one decimal. Bold off restores the weight from before
+/// bold. The other fields of `style` do not change. The controls wrap to
+/// more lines when the width is too small.
 ///
 /// # Examples
 ///
@@ -207,34 +279,35 @@ impl View for InputDialog {
 ///     fn body(&self, cx: &mut Cx) -> impl View {
 ///         let style = cx.state(TextStyle::new("Helvetica", 13.0));
 ///         let families = vec!["Helvetica".to_owned(), "Menlo".to_owned()];
-///         FontDialog::new("The quick fox", "Size", "Bold", "Italic", families, style.binding())
+///         let labels = ("Font", "Size", "Bold", "Italic");
+///         FontDialog::new("The quick fox", labels, families, style.binding())
 ///     }
 /// }
 /// ```
 pub struct FontDialog {
     sample: Label,
-    size: Label,
-    bold: Label,
-    italic: Label,
+    labels: [Label; 4],
     families: Rc<[String]>,
     style: Binding<TextStyle>,
 }
 
 impl FontDialog {
-    /// A font dialog with a preview of `sample` that edits `style`.
-    pub fn new<M, N, O, P>(
+    /// A font dialog with a preview of `sample` that edits `style`. The
+    /// labels name the family, size, bold, and italic controls.
+    pub fn new<M, N, O, P, Q>(
         sample: impl IntoLive<TextContent, M>,
-        size: impl IntoLive<TextContent, N>,
-        bold: impl IntoLive<TextContent, O>,
-        italic: impl IntoLive<TextContent, P>,
+        (family, size, bold, italic): (
+            impl IntoLive<TextContent, N>,
+            impl IntoLive<TextContent, O>,
+            impl IntoLive<TextContent, P>,
+            impl IntoLive<TextContent, Q>,
+        ),
         families: Vec<String>,
         style: Binding<TextStyle>,
     ) -> Self {
         Self {
             sample: label(sample),
-            size: label(size),
-            bold: label(bold),
-            italic: label(italic),
+            labels: [label(family), label(size), label(bold), label(italic)],
             families: families.into(),
             style,
         }
@@ -294,23 +367,35 @@ fn field<T: Clone + PartialEq + 'static>(
     )
 }
 
+/// The weight that bold off goes back to: `weight` when it is not bold.
+fn plain(weight: FontWeight) -> FontWeight {
+    if weight >= FontWeight::SEMIBOLD {
+        FontWeight::REGULAR
+    } else {
+        weight
+    }
+}
+
 impl View for FontDialog {
     fn mount(self, cx: &mut Cx) {
         let Self {
             sample,
-            size,
-            bold,
-            italic,
+            labels: [family_label, size, bold, italic],
             families,
             style,
         } = self;
+        let initial = Runtime::untracked(|| read(style));
         // The family that the user typed or chose. It can be missing.
-        let requested = cx.state(Runtime::untracked(|| read(style)).family);
+        let requested = cx.state(initial.family);
+        // The weight from before bold went on.
+        let regular = cx.state(plain(initial.weight));
         let chooser = {
             let (build, shown, chosen) = (families.clone(), families.clone(), families.clone());
-            Configured::custom(ControlKind::Combobox, move |_| {
+            Configured::custom(ControlKind::Combobox, move |env| {
                 let current = Runtime::untracked(|| read(style));
-                model(&build, &current).into_chooser()
+                model(&build, &current)
+                    .into_chooser()
+                    .with_name(text(&family_label, env))
             })
             // Shows the family of `style`, but keeps a typed family that
             // is missing while `style` has its fallback.
@@ -339,28 +424,34 @@ impl View for FontDialog {
         let points = field(
             &families,
             style,
-            |style| as_whole(&ControlValue::Number(style.size)).unwrap_or(1),
-            |dialog, points: i32| {
-                dialog.set_size(f64::from(points));
+            |style| style.size,
+            |dialog, points: f64| {
+                dialog.set_size(points);
             },
         );
         let spin = Configured::try_custom(ControlKind::Input, move |env| {
-            IntegerRange::new(1, 4096, 1, 1, 10)
-                .map(|range| controls::SpinBox::new(text(&size, env), range))
+            let name = text(&size, env);
+            controls::DecimalSpinBox::new(name, env.locale(), (1.0, 4096.0), 1.0, 1, 1.0)
         })
-        .bind(points, to_number, as_whole);
-        let heavy = field(
-            &families,
-            style,
-            |style| style.weight >= FontWeight::SEMIBOLD,
-            |dialog, on: bool| {
-                dialog.set_weight(if on {
-                    FontWeight::BOLD
-                } else {
-                    FontWeight::REGULAR
-                });
-            },
-        );
+        .bind(points, ControlValue::Number, as_number);
+        let heavy = {
+            let families = families.clone();
+            Binding::new(
+                move || read(style).weight >= FontWeight::SEMIBOLD,
+                move |on: bool| {
+                    let current = read(style).weight;
+                    if on && current < FontWeight::SEMIBOLD {
+                        regular.set(current);
+                    }
+                    let weight = if on {
+                        FontWeight::BOLD
+                    } else {
+                        regular.try_get().unwrap_or(FontWeight::REGULAR)
+                    };
+                    apply(&families, style, |dialog| dialog.set_weight(weight));
+                },
+            )
+        };
         let slanted = field(
             &families,
             style,
@@ -377,32 +468,33 @@ impl View for FontDialog {
             sample: text(&sample, env),
             style: read(style),
         });
-        VStack::new((
-            HStack::new((
-                chooser,
-                spin,
-                Toggle::new(bold, heavy),
-                Toggle::new(italic, slanted),
-            ))
-            .spacing(Space::S2),
-            preview,
-        ))
-        .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S3)
-        .mount(cx);
+        let controls = (
+            chooser,
+            spin,
+            Toggle::new(bold, heavy),
+            Toggle::new(italic, slanted),
+        );
+        VStack::new((WrapRow(controls, Space::S2), preview))
+            .alignment(HorizontalAlignment::Leading)
+            .spacing(Space::S3)
+            .mount(cx);
     }
 }
 
-/// The sample text of a font dialog in the chosen family, size, and
-/// weight, on the card surface.
+/// The most lines of the sample that the preview shows.
+const PREVIEW_LINES: f64 = 4.0;
+
+/// The sample text of a font dialog in the chosen family, size, weight,
+/// and slant, on the card surface. The sample wraps to the width. The
+/// preview is at most four lines high, and at most a third of the window
+/// high.
 struct FontPreview {
     sample: String,
     style: TextStyle,
 }
 
 impl FontPreview {
-    /// The card style, and the type of the sample in it. The theme font
-    /// stands in for the chosen family when the sample is measured.
+    /// The card style, and the type of the sample in it.
     fn styles(&self, resolve: impl Fn(StyleQuery) -> ResolvedStyle) -> (ResolvedStyle, TypeSpec) {
         let card = resolve(StyleQuery::new(ControlKind::Card, Slot::Root));
         let size = self.style.size;
@@ -416,14 +508,42 @@ impl FontPreview {
         };
         (card, spec)
     }
+
+    /// The font of the sample.
+    fn run(&self) -> TextRun<'_> {
+        TextRun {
+            family: &self.style.family,
+            size: self.style.size,
+            weight: self.style.weight,
+            slant: self.style.slant,
+            tracking: self.style.tracking,
+        }
+    }
+
+    /// The lines of the sample in `width`, each with its width.
+    fn lines(&self, measure: &dyn TextMeasure, width: f64) -> Vec<(String, f64)> {
+        let run = self.run();
+        let width_of = |line: &str| measure.run_width(line, &run);
+        wrap_lines(&self.sample, width, &width_of)
+            .into_iter()
+            .map(|line| {
+                let width = width_of(&line);
+                (line, width)
+            })
+            .collect()
+    }
 }
 
 impl CustomControl for FontPreview {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let (card, spec) = self.styles(|query| cx.style(query));
-        let width = cx.text.width(&self.sample, &spec) + card.padding.horizontal();
-        let height = spec.line_height + card.padding.vertical();
-        Measured::new(cx.constraints.constrain(Size::new(width, height)))
+        let inner = cx.constraints.max.width - card.padding.horizontal();
+        let lines = self.lines(cx.text, inner);
+        let width = lines.iter().map(|(_, width)| *width).fold(0.0, f64::max);
+        let shown = (lines.len() as f64).min(PREVIEW_LINES) * spec.line_height;
+        let height = shown.min(cx.viewport.size.height / 3.0) + card.padding.vertical();
+        let size = Size::new(width + card.padding.horizontal(), height);
+        Measured::new(cx.constraints.constrain(size))
     }
 
     fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
@@ -435,23 +555,22 @@ impl CustomControl for FontPreview {
         let bounds = cx.bounds;
         paint_box(cx.list, bounds, &card, cx.rtl);
         let (left, right) = card.padding.left_right(cx.rtl);
-        let width = cx.text.width(&self.sample, &spec);
-        let x = if cx.rtl {
-            bounds.max_x() - right - width
-        } else {
-            bounds.origin.x + left
-        };
-        let baseline = bounds.origin.y + card.padding.block_start + spec.baseline();
-        let run = TextRun {
-            family: &self.style.family,
-            size: spec.size,
-            weight: spec.weight,
-            tracking: spec.tracking,
-        };
+        let run = self.run();
+        let mut baseline = bounds.origin.y + card.padding.block_start + spec.baseline();
         cx.list.push_clip(bounds);
-        let _ = cx
-            .list
-            .draw_text_run(Point::new(x, baseline), &self.sample, &run, card.foreground);
+        for (line, width) in self.lines(cx.text, bounds.size.width - left - right) {
+            if baseline - spec.size > bounds.max_y() {
+                break;
+            }
+            let x = if cx.rtl {
+                bounds.max_x() - right - width
+            } else {
+                bounds.origin.x + left
+            };
+            let origin = Point::new(x, baseline);
+            let _ = cx.list.draw_text_run(origin, &line, &run, card.foreground);
+            baseline += spec.line_height;
+        }
         let _ = cx.list.pop_clip();
     }
 

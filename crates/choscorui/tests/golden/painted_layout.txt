@@ -707,7 +707,7 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # rest
 fill-rect 10,10 2x36 #e5e5e5ff
 stroke-path M47.33333333333333,24 L40,31.333333333333332 L36.666666666666664,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 50,33.6 system-ui 16 w400 t0 #0a0a0aff
+text "Aa" at 50,33.6 system-ui 16 w400 italic t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### typography list default root
 # rest

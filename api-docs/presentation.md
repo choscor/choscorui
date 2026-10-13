@@ -193,9 +193,12 @@ pub struct FontDialog { /* private fields */ }
 
 A font dialog that edits `style`: a family combobox, a size field,
 bold and italic toggles, and a preview of `sample` in the chosen
-style. `controls::FontDialog` applies each change. A family that is
-not in `families` resolves to its fallback, and the size stays from 1
-to 4096 points. The other fields of `style` do not change.
+style. The labels name the family, size, bold, and italic controls.
+`controls::FontDialog` applies each change. A family that is not in
+`families` resolves to its fallback, and the size stays from 1 to 4096
+points, with one decimal. Bold off restores the weight from before
+bold. The other fields of `style` do not change. The controls wrap to
+more lines when the width is too small.
 
 #### Examples
 
@@ -206,7 +209,8 @@ impl View for Fonts {
     fn body(&self, cx: &mut Cx) -> impl View {
         let style = cx.state(TextStyle::new("Helvetica", 13.0));
         let families = vec!["Helvetica".to_owned(), "Menlo".to_owned()];
-        FontDialog::new("The quick fox", "Size", "Bold", "Italic", families, style.binding())
+        let labels = ("Font", "Size", "Bold", "Italic");
+        FontDialog::new("The quick fox", labels, families, style.binding())
     }
 }
 ```
@@ -218,28 +222,34 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 #### `FontDialog::new`
 
 ```rust
-pub fn new<M, N, O, P>(sample: impl IntoLive<TextContent, M>, size: impl IntoLive<TextContent, N>, bold: impl IntoLive<TextContent, O>, italic: impl IntoLive<TextContent, P>, families: Vec<String>, style: Binding<TextStyle>) -> Self
+pub fn new<M, N, O, P, Q>(sample: impl IntoLive<TextContent, M>, (family, size, bold, italic): (impl IntoLive<TextContent, N>, impl IntoLive<TextContent, O>, impl IntoLive<TextContent, P>, impl IntoLive<TextContent, Q>), families: Vec<String>, style: Binding<TextStyle>) -> Self
 ```
 
-A font dialog with a preview of `sample` that edits `style`.
+A font dialog with a preview of `sample` that edits `style`. The
+labels name the family, size, bold, and italic controls.
 
 ## `InputDialog`
 
 struct in `choscorui::prelude::InputDialog`
 
 ```rust
-pub struct InputDialog { /* private fields */ }
+pub struct InputDialog(/* private field */);
 ```
 
-A dialog for one validated value, shown inline: the title, the prompt,
-a field that edits `text`, an accept button, and the validation
-message. The button is enabled only while the value is valid, and
-Return in the field accepts only a valid value. Both run `on_accept`
-with the value. `controls::InputDialog` validates the text for `kind`
-in the locale of the environment. An Integer or Decimal field rejects
-keys that cannot make a number. A number below the minimum is
-incomplete while the user types, and invalid when the user accepts
-it. An accepted number gets the locale format.
+A modal dialog for one validated value. While `presented` is true, it
+shows the title, the prompt, a field that edits `text`, the validation
+message, and Cancel and accept buttons. A Choice kind uses a `Select`,
+and the other kinds use an `Input`. The accept button is enabled only
+while the value is valid, and Return in the field accepts only a valid
+value. Both run `on_accept` with the value and close the dialog.
+Cancel, Escape, and a press outside the dialog close it without a
+value. Focus moves into the dialog when it opens, and returns when it
+closes. `controls::InputDialog` validates the text for `kind` in the
+locale of the environment. An Integer or Decimal field rejects keys
+that cannot make a number. A number below the minimum is incomplete
+while the user types, and invalid when the user accepts it. Accept
+writes the value back to `text`: a number in the locale format, and
+text without the spaces at its ends.
 
 #### Examples
 
@@ -249,10 +259,18 @@ struct Rename;
 impl View for Rename {
     fn body(&self, cx: &mut Cx) -> impl View {
         let name = cx.state(String::new());
+        let open = cx.state(false);
         let kind = InputKind::Text { allow_empty: false };
-        InputDialog::new("Rename", "New name", "Rename", kind, name.binding(), |value| {
-            println!("{value:?}");
-        })
+        VStack::new((
+            Button::new("Rename…", move || open.set(true)),
+            InputDialog::new(
+                ("Rename", "New name", "Rename"),
+                kind,
+                name.binding(),
+                open.binding(),
+                |value| println!("{value:?}"),
+            ),
+        ))
     }
 }
 ```
@@ -264,10 +282,11 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 #### `InputDialog::new`
 
 ```rust
-pub fn new<M, N, O>(title: impl IntoLive<TextContent, M>, prompt: impl IntoLive<TextContent, N>, accept: impl IntoLive<TextContent, O>, kind: InputKind, text: Binding<String>, on_accept: impl Fn(InputValue) + 'static) -> Self
+pub fn new<M, N, O>((title, prompt, accept): (impl IntoLive<TextContent, M>, impl IntoLive<TextContent, N>, impl IntoLive<TextContent, O>), kind: InputKind, text: Binding<String>, presented: Binding<bool>, on_accept: impl Fn(InputValue) + 'static) -> Self
 ```
 
-An input dialog with `title`, `prompt`, and an `accept` button for a value of `kind`.
+An input dialog with a title, a prompt, and an accept button label,
+for a value of `kind`, open while `presented` is true.
 
 ## `MenuChoice`
 

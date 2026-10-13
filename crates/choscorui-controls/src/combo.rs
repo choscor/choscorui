@@ -706,6 +706,12 @@ impl FontChooser {
             fallback: fallback.into(),
         }
     }
+    /// Sets the accessible name of the chooser. It is "Font" until set.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.combo.name = name.into();
+        self
+    }
     pub fn combo(&self) -> &Combobox {
         &self.combo
     }

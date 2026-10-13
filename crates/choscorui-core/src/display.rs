@@ -286,6 +286,8 @@ pub enum DisplayCommand {
         font_size: f64,
         /// Weight of the face; painters pick the nearest available face.
         font_weight: crate::FontWeight,
+        /// Slant of the face; painters use an italic or oblique face.
+        font_slant: crate::FontSlant,
         /// Extra space after each character, in points.
         tracking: f64,
         color: Color,
@@ -363,6 +365,8 @@ pub struct TextRun<'a> {
     pub family: &'a str,
     pub size: f64,
     pub weight: crate::FontWeight,
+    /// Upright, or an italic or oblique face.
+    pub slant: crate::FontSlant,
     /// Extra space after each character, in points.
     pub tracking: f64,
 }
@@ -578,13 +582,14 @@ impl DisplayList {
                 family: font_family,
                 size: font_size,
                 weight: crate::FontWeight::REGULAR,
+                slant: crate::FontSlant::Upright,
                 tracking: 0.0,
             },
             color,
         )
     }
 
-    /// Stores a single text line in a font with weight and tracking.
+    /// Stores a single text line in a font with weight, slant, and tracking.
     pub fn draw_text_run(
         &mut self,
         baseline: Point,
@@ -608,6 +613,7 @@ impl DisplayList {
             font_family: run.family.to_owned(),
             font_size: run.size,
             font_weight: run.weight,
+            font_slant: run.slant,
             tracking: run.tracking,
             color,
         });
@@ -1074,6 +1080,7 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             font_family,
             font_size,
             font_weight,
+            font_slant,
             tracking,
             color,
         } => {
@@ -1082,6 +1089,7 @@ fn hash_command(command: &DisplayCommand, hasher: &mut impl Hasher) {
             font_family.hash(hasher);
             hash_f64(*font_size, hasher);
             font_weight.hash(hasher);
+            font_slant.hash(hasher);
             hash_f64(*tracking, hasher);
             color.hash(hasher);
         }

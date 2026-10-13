@@ -240,9 +240,9 @@ impl TextData {
     }
 }
 
-/// Breaks `text` into lines no wider than `width`, at spaces where it
-/// can and inside words where it must.
-fn wrap_lines(text: &str, spec: &TypeSpec, width: f64, measure: &dyn TextMeasure) -> Vec<String> {
+/// Breaks `text` into lines that `measure` finds no wider than `width`,
+/// at spaces where it can and inside words where it must.
+pub(super) fn wrap_lines(text: &str, width: f64, measure: &dyn Fn(&str) -> f64) -> Vec<String> {
     let mut lines = Vec::new();
     for paragraph in text.split('\n') {
         let mut line = String::new();
@@ -252,7 +252,7 @@ fn wrap_lines(text: &str, spec: &TypeSpec, width: f64, measure: &dyn TextMeasure
             } else {
                 format!("{line} {word}")
             };
-            if line.is_empty() || measure.width(&candidate, spec) <= width {
+            if line.is_empty() || measure(&candidate) <= width {
                 line = candidate;
             } else {
                 lines.push(std::mem::take(&mut line));
@@ -273,7 +273,7 @@ impl TextLeaf {
     fn lines(&self, spec: &TypeSpec, width: f64, measure: &dyn TextMeasure) -> Vec<String> {
         let data = self.data.borrow();
         if data.wrap && width.is_finite() && measure.width(&data.content, spec) > width {
-            wrap_lines(&data.content, spec, width, measure)
+            wrap_lines(&data.content, width, &|line| measure.width(line, spec))
         } else {
             data.content.split('\n').map(str::to_owned).collect()
         }

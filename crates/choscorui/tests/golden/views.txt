@@ -5,7 +5,7 @@ Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.
 # padding then background paint
 FillRect { rect: Rect { origin: Point { x: 174.5, y: 130.0 }, size: Size { width: 51.0, height: 40.0 } }, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 PushClip(Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } })
-DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # background then padding layout
 Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -
@@ -14,7 +14,7 @@ Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.
 # background then padding paint
 FillRect { rect: Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } }, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 PushClip(Rect { origin: Point { x: 184.5, y: 140.0 }, size: Size { width: 31.0, height: 20.0 } })
-DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 184.5, y: 154.9 }, text: "Text", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # stack en layout
 Rect { origin: Point { x: 0.0, y: 0.0 }, size: Size { width: 400.0, height: 300.0 } } -

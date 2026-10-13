@@ -112,8 +112,9 @@ pub fn alert_dialog(_: &PageCx) -> AnyView {
 /// dialog.
 type Spec = (&'static str, &'static str, InputKind, String);
 
-/// Four input dialogs shown inline: text, integer, decimal, and choice.
-/// Each OK button is enabled only while its value is valid.
+/// Four modal input dialogs: text, integer, decimal, and choice. A
+/// button opens each one. Each OK button is enabled only while its value
+/// is valid.
 struct InputDialogPage;
 
 impl InputDialogPage {
@@ -169,25 +170,31 @@ impl View for InputDialogPage {
         let mut dialogs = Vec::new();
         for (title, prompt, kind, initial) in Self::specs(cx) {
             let typed = cx.state(initial);
+            let open = cx.state(false);
             let env = cx.env().clone();
-            dialogs.push(InputDialog::new(
-                t!(title),
-                t!(prompt),
-                t!("input-dialog.ok"),
-                kind,
-                typed.binding(),
-                move |value| {
-                    let title = text(&env, title);
-                    let value = format!("{value:?}");
-                    let args = [("title", title.as_str()), ("value", value.as_str())];
-                    last.set(env.text("input-dialog.accepted", &args));
-                },
-            ));
+            let name = text(&env, title);
+            dialogs.push(HStack::new((
+                Button::new(t!("input-dialog.open", title = name), move || {
+                    open.set(true)
+                }),
+                // The accepted value is in `typed`, in the locale format.
+                InputDialog::new(
+                    (t!(title), t!(prompt), t!("input-dialog.ok")),
+                    kind,
+                    typed.binding(),
+                    open.binding(),
+                    move |_| {
+                        let (title, value) = (text(&env, title), typed.get());
+                        let args = [("title", title.as_str()), ("value", value.as_str())];
+                        last.set(env.text("input-dialog.accepted", &args));
+                    },
+                ),
+            )));
         }
         column((
             VStack::new(dialogs)
                 .alignment(HorizontalAlignment::Leading)
-                .spacing(Space::S4),
+                .spacing(Space::S2),
             readout(move || last.get()),
         ))
     }
@@ -346,9 +353,12 @@ impl View for FontDialogPage {
         column((
             FontDialog::new(
                 t!("font-dialog.preview"),
-                t!("font-dialog.size"),
-                t!("font-dialog.bold"),
-                t!("font-dialog.italic"),
+                (
+                    t!("font-dialog.family"),
+                    t!("font-dialog.size"),
+                    t!("font-dialog.bold"),
+                    t!("font-dialog.italic"),
+                ),
                 families,
                 style.binding(),
             ),
@@ -380,7 +390,7 @@ pub fn page(id: &str) -> Option<Build> {
 mod tests {
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, NodeId, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, SemanticAction};
 
     fn press(page: &mut Harness, key: Key) -> bool {
         let handled = page.host.key(
@@ -425,48 +435,44 @@ mod tests {
         assert!(page.host.find("Tip").is_none());
     }
 
-    /// The OK button of the input dialog titled `title`.
-    fn ok_button(page: &mut Harness, title: &str) -> NodeId {
-        let mut pending = vec![page.node(title)];
-        while let Some(node) = pending.pop() {
-            if page
-                .host
-                .semantic(node)
-                .is_some_and(|semantic| semantic.name == "OK")
-            {
-                return node;
-            }
-            pending.extend_from_slice(page.host.tree().children(node).unwrap_or_default());
-        }
-        panic!("the {title:?} dialog has no OK button");
-    }
-
-    fn ok_disabled(page: &mut Harness, title: &str) -> bool {
-        let node = ok_button(page, title);
+    fn ok_disabled(page: &mut Harness) -> bool {
+        let node = page.node("OK");
         page.host.semantic(node).unwrap().state.disabled
     }
 
     #[test]
     fn input_dialogs_validate_their_kind() {
         let mut page = Harness::new("input-dialog");
-        assert!(!ok_disabled(&mut page, "Rename"));
+        assert!(page.host.find("OK").is_none(), "the dialogs start closed");
+        assert!(page.act("Rename…", SemanticAction::Activate));
+        assert!(!ok_disabled(&mut page));
         page.act("New name", SemanticAction::SetValue);
-        assert!(ok_disabled(&mut page, "Rename"), "a name is required");
+        assert!(ok_disabled(&mut page), "a name is required");
+        assert!(press(&mut page, Key::Escape));
+        assert!(page.host.find("OK").is_none(), "Escape cancels");
+        assert!(page.act("Go to line…", SemanticAction::Activate));
         let mut enter = |text: &str| {
             let node = page.node("Line (1 – 500)");
             page.host
                 .perform(node, SemanticAction::SetValue, Some(text));
             page.host.layout();
-            !ok_disabled(&mut page, "Go to line")
+            !ok_disabled(&mut page)
         };
         assert!(enter("42"));
         assert!(!enter("501"));
         assert!(!enter("forty"));
         assert!(enter("7"));
-        let ok = ok_button(&mut page, "Go to line");
-        assert!(page.host.perform(ok, SemanticAction::Activate, None));
-        page.host.layout();
-        assert!(page.host.find("Go to line: accepted Integer(7)").is_some());
+        assert!(page.act("OK", SemanticAction::Activate));
+        assert!(page.host.find("Go to line: accepted 7").is_some());
+        assert!(page.act("Price…", SemanticAction::Activate));
+        let price = page.node("Price (0 – 1,000,000; 2 decimals)");
+        page.host
+            .perform(price, SemanticAction::SetValue, Some("1234.5"));
+        assert!(page.act("OK", SemanticAction::Activate));
+        assert!(
+            page.host.find("Price: accepted 1,234.50").is_some(),
+            "the readout shows the value in the locale format"
+        );
     }
 
     #[test]

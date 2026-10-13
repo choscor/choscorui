@@ -937,7 +937,7 @@ impl InputDialog {
             }
             _ => (
                 ValidationState::Valid,
-                Some(InputValue::Text(self.text.clone())),
+                Some(InputValue::Text(trimmed.to_owned())),
             ),
         }
     }

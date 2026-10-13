@@ -147,3 +147,32 @@ fn png_encode_decode_round_trips_straight_alpha_pixels() {
     let exported = decode_image(&bitmap.encode_png().unwrap()).unwrap();
     assert_eq!(exported.pixels()[..4], [255, 255, 255, 255]);
 }
+
+/// A line of "IIII" in Helvetica with `slant`, black on white.
+#[cfg(target_os = "macos")]
+fn slanted(slant: choscorui_core::FontSlant) -> Vec<u8> {
+    use choscorui_core::{FontWeight, TextRun};
+    let mut list = DisplayList::new();
+    let rect = Rect::new(Point::new(0.0, 0.0), Size::new(80.0, 40.0));
+    list.fill_rect(rect, Color::rgba8(255, 255, 255, 255));
+    let run = TextRun {
+        family: "Helvetica",
+        size: 24.0,
+        weight: FontWeight::REGULAR,
+        slant,
+        tracking: 0.0,
+    };
+    list.draw_text_run(Point::new(10.0, 28.0), "IIII", &run, Color::BLACK)
+        .unwrap();
+    MacBitmap::render(&list, 80, 40, 1.0)
+        .unwrap()
+        .pixels()
+        .to_vec()
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_text_run_draws_its_slant() {
+    use choscorui_core::FontSlant;
+    assert_ne!(slanted(FontSlant::Upright), slanted(FontSlant::Italic));
+}

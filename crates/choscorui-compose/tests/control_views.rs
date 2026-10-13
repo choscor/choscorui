@@ -9,11 +9,12 @@ use choscorui_compose::view::{
 };
 use choscorui_controls::{
     ButtonGroupMember, ButtonVariant, CommandId, EstimatedText, InputKind, InputValue,
-    ShortcutModifiers, SidebarItem,
+    ShortcutModifiers, SidebarItem, TextMeasure,
 };
 use choscorui_core::{
-    Catalog, DesignTokens, DisplayCommand, DisplayList, Icon, Key, KeyEvent, Locale, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, Size, TextStyle,
+    Catalog, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Icon, Key, KeyEvent,
+    Locale, Point, PointerButton, PointerEvent, Rect, SemanticAction, Size, TextRun, TextStyle,
+    TypeSpec,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -163,57 +164,117 @@ fn the_focus_frame_follows_the_mirrored_layout() {
 // ---------------------------------------------------------------------------
 // Input dialog
 
-/// A "Go to line" dialog that records the values it accepts.
-struct GoToLine {
+/// An "Open" button for an input dialog of `kind`, which records the
+/// values it accepts, and a readout of its text.
+struct Asking {
+    kind: InputKind,
+    text: &'static str,
     accepted: Rc<RefCell<Vec<InputValue>>>,
 }
 
-impl View for GoToLine {
+impl View for Asking {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let text = cx.state("42".to_owned());
+        let text = cx.state(self.text.to_owned());
+        let open = cx.state(false);
         let accepted = self.accepted.clone();
-        InputDialog::new(
-            "Go to line",
-            "Line",
-            "OK",
-            InputKind::Integer {
-                minimum: 1,
-                maximum: 500,
-            },
-            text.binding(),
-            move |value| accepted.borrow_mut().push(value),
-        )
+        VStack::new((
+            choscorui_compose::view::Button::new("Open", move || open.set(true)),
+            InputDialog::new(
+                ("Ask", "Value", "OK"),
+                self.kind.clone(),
+                text.binding(),
+                open.binding(),
+                move |value| accepted.borrow_mut().push(value),
+            ),
+            Text::new(move || format!("[{}]", text.get())),
+        ))
     }
 }
 
-#[test]
-fn the_input_dialog_accepts_only_valid_values() {
+/// A host with an `Asking` view for `kind` and `text`, and its log.
+fn asking(kind: InputKind, text: &'static str) -> (ViewHost, Rc<RefCell<Vec<InputValue>>>) {
     let accepted = Rc::new(RefCell::new(Vec::new()));
-    let mut host = host(GoToLine {
+    let view = Asking {
+        kind,
+        text,
         accepted: accepted.clone(),
-    });
-    assert!(host.find("Go to line").is_some(), "the group has the title");
-    assert!(!disabled(&mut host, "OK"));
-    perform(&mut host, "Line", SemanticAction::SetValue, Some("501"));
+    };
+    (host(view), accepted)
+}
+
+/// Focuses "Open" and activates it, so that the dialog opens.
+fn open_dialog(host: &mut ViewHost) -> choscorui_core::NodeId {
+    let open = node(host, "Open");
+    host.focus(Some(open));
+    perform(host, "Open", SemanticAction::Activate, None);
+    open
+}
+
+#[test]
+fn the_input_dialog_is_modal_and_accepts_only_valid_values() {
+    let lines = InputKind::Integer {
+        minimum: 1,
+        maximum: 500,
+    };
+    let (mut host, accepted) = asking(lines, "42");
+    assert!(host.find("Value").is_none(), "closed until presented");
+    let open = open_dialog(&mut host);
+    let field = node(&mut host, "Value");
+    assert_eq!(host.tree().focus(), Some(field), "focus moves inside");
+    perform(&mut host, "Value", SemanticAction::SetValue, Some("501"));
     assert!(disabled(&mut host, "OK"), "out of range");
-    assert!(host.find("Must be at most 500").is_some());
-    let field = node(&mut host, "Line");
-    host.focus(Some(field));
+    let error = host.semantic(field).unwrap().description;
+    assert!(error.contains("Must be at most 500"), "{error}");
+    assert!(
+        host.find("Must be at most 500").is_none(),
+        "the visible message is not read a second time"
+    );
     press(&mut host, Key::Enter);
     assert!(
         accepted.borrow().is_empty(),
         "Return keeps an invalid value"
     );
 
-    perform(&mut host, "Line", SemanticAction::SetValue, Some("forty"));
-    assert!(disabled(&mut host, "OK"));
-    perform(&mut host, "Line", SemanticAction::SetValue, Some("7"));
+    perform(&mut host, "Value", SemanticAction::SetValue, Some("7"));
     assert!(!disabled(&mut host, "OK"));
-    assert!(host.find("Must be at most 500").is_none());
     press(&mut host, Key::Enter);
     assert_eq!(*accepted.borrow(), vec![InputValue::Integer(7)]);
+    assert!(host.find("Value").is_none(), "accept closes the dialog");
+    assert_eq!(host.tree().focus(), Some(open), "focus returns");
+
+    open_dialog(&mut host);
+    press(&mut host, Key::Escape);
+    assert!(host.find("Value").is_none(), "Escape cancels");
+    assert_eq!(host.tree().focus(), Some(open));
+    open_dialog(&mut host);
+    perform(&mut host, "Cancel", SemanticAction::Activate, None);
+    assert!(host.find("Value").is_none(), "Cancel closes");
+    assert_eq!(accepted.borrow().len(), 1);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn the_input_dialog_trims_text_and_chooses_with_a_select() {
+    let (mut host, accepted) = asking(InputKind::Text { allow_empty: false }, "  Notes ");
+    open_dialog(&mut host);
     perform(&mut host, "OK", SemanticAction::Activate, None);
-    assert_eq!(accepted.borrow().len(), 2);
+    assert_eq!(*accepted.borrow(), vec![InputValue::Text("Notes".into())]);
+    assert!(
+        host.find("[Notes]").is_some(),
+        "the text is the trimmed value"
+    );
+
+    let sizes = InputKind::Choice(vec!["Small".into(), "Medium".into(), "Large".into()]);
+    let (mut host, accepted) = asking(sizes, "Medium");
+    open_dialog(&mut host);
+    let select = node(&mut host, "Value");
+    let node = host.semantic(select).unwrap();
+    assert_eq!(node.role, choscorui_core::SemanticRole::ComboBox);
+    assert_eq!(node.value.as_deref(), Some("Medium"));
+    perform(&mut host, "Value", SemanticAction::SetValue, Some("Large"));
+    perform(&mut host, "OK", SemanticAction::Activate, None);
+    assert_eq!(*accepted.borrow(), vec![InputValue::Choice(2)]);
+    assert!(host.find("[Large]").is_some());
     assert_eq!(host.take_errors(), Vec::new());
 }
 
@@ -230,9 +291,7 @@ impl View for Fonts {
         VStack::new((
             FontDialog::new(
                 "Sample",
-                "Size",
-                "Bold",
-                "Italic",
+                ("Font", "Size", "Bold", "Italic"),
                 families,
                 style.binding(),
             ),
@@ -286,6 +345,114 @@ fn a_missing_family_falls_back_and_stays_in_the_field() {
     assert!(!chooser.state.invalid);
     assert_eq!(chooser.value.as_deref(), Some("Menlo"));
     assert_eq!(value(&mut host, "Sample").as_deref(), Some("Menlo"));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+/// Measures Menlo twice as wide as the estimate, so that a test can see
+/// which family measured the text.
+struct WideMenlo;
+
+impl TextMeasure for WideMenlo {
+    fn width(&self, text: &str, spec: &TypeSpec) -> f64 {
+        EstimatedText.width(text, spec)
+    }
+
+    fn run_width(&self, text: &str, run: &TextRun<'_>) -> f64 {
+        let scale = if run.family == "Menlo" { 2.0 } else { 1.0 };
+        scale * EstimatedText.run_width(text, run)
+    }
+}
+
+/// A narrow medium-weight font dialog with a long sample and a readout.
+struct NarrowFonts;
+
+impl View for NarrowFonts {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let style = cx.state(TextStyle::new("Georgia", 16.0).with_weight(FontWeight::MEDIUM));
+        let families = ["Georgia", "Menlo"].map(String::from).to_vec();
+        let labels = ("Family", "Size", "Bold", "Italic");
+        let sample = "Sphinx of black quartz, judge my vow";
+        VStack::new((
+            FontDialog::new(sample, labels, families, style.binding())
+                .frame(Frame::new().width(260.0)),
+            Text::new(move || {
+                style
+                    .with(|style| format!("{} {} {:?}", style.size, style.weight.0, style.slant))
+                    .unwrap_or_default()
+            }),
+            choscorui_compose::view::Button::new("Use Menlo", move || {
+                style.update(|style| style.family = "Menlo".into())
+            }),
+        ))
+    }
+}
+
+/// The sample lines that the preview draws, with their slant.
+fn sample_lines(host: &mut ViewHost) -> Vec<(String, FontSlant)> {
+    host.paint()
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText {
+                text,
+                font_family,
+                font_slant,
+                ..
+            } if font_family == "Georgia" || font_family == "Menlo" => {
+                Some((text.clone(), *font_slant))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_font_preview_draws_italic_and_wraps_in_the_chosen_family() {
+    let mut host = ViewHost::new(
+        Size::new(600.0, 400.0),
+        DesignTokens::light(),
+        Env::new(Rc::new(Catalog::new()), Locale::parse("en").unwrap()),
+        Runtime::new(),
+        Rc::new(WideMenlo),
+    );
+    host.mount(NarrowFonts);
+    host.layout();
+    let lines = sample_lines(&mut host);
+    assert!(lines.len() > 1, "the sample wraps: {lines:?}");
+    assert!(lines.iter().all(|(_, slant)| *slant == FontSlant::Upright));
+    perform(&mut host, "Italic", SemanticAction::Activate, None);
+    assert!(host.find("16 500 Italic").is_some());
+    let lines = sample_lines(&mut host);
+    assert!(lines.iter().all(|(_, slant)| *slant == FontSlant::Italic));
+    // Menlo measures wider here, so its preview needs more lines.
+    let preview = node(&mut host, "Sphinx of black quartz, judge my vow");
+    let georgia = host.tree().bounds(preview).unwrap();
+    perform(&mut host, "Use Menlo", SemanticAction::Activate, None);
+    let menlo = host.tree().bounds(preview).unwrap();
+    assert!(
+        menlo.size.height > georgia.size.height,
+        "{menlo:?} {georgia:?}"
+    );
+    assert!(menlo.size.width <= 260.0);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn the_font_dialog_restores_the_weight_keeps_fractions_and_wraps_its_row() {
+    let mut host = host(NarrowFonts);
+    assert!(host.find("Family").is_some(), "the label names the chooser");
+    perform(&mut host, "Bold", SemanticAction::Activate, None);
+    assert!(host.find("16 700 Upright").is_some());
+    perform(&mut host, "Bold", SemanticAction::Activate, None);
+    assert!(
+        host.find("16 500 Upright").is_some(),
+        "bold off restores 500"
+    );
+    perform(&mut host, "Size", SemanticAction::SetValue, Some("16.5"));
+    assert!(host.find("16.5 500 Upright").is_some());
+    let family = bounds(&mut host, "Family");
+    let italic = bounds(&mut host, "Italic");
+    assert!(italic.min_y() >= family.max_y(), "the row wraps");
     assert_eq!(host.take_errors(), Vec::new());
 }
 

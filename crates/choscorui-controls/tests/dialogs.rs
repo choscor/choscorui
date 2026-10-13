@@ -179,10 +179,11 @@ fn input_dialog_validates_each_kind() {
     assert!(!text.can_accept());
     assert_eq!(text.handle_key(Key::Enter), None);
     assert_eq!(text.handle_key(Key::Escape), Some(Err(())));
-    text.set_text("Report.txt");
+    text.set_text("  Report.txt ");
     assert_eq!(
         text.handle_key(Key::Enter),
-        Some(Ok(InputValue::Text("Report.txt".into())))
+        Some(Ok(InputValue::Text("Report.txt".into()))),
+        "the value is the trimmed text that the dialog checked"
     );
 
     let mut line = InputDialog::new(
