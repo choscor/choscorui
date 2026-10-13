@@ -35,6 +35,22 @@ use std::rc::Rc;
 /// control shows its invalid look, and the label uses the destructive
 /// color. A press on the label focuses the control, and toggles a
 /// checkbox or a switch.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Signup;
+///
+/// impl View for Signup {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let email = cx.state(String::new());
+///         Field::new("Email", TextField::new("Email", email.binding()))
+///             .description("We send the receipt here.")
+///             .error("Enter an email address.", move || email.get().is_empty())
+///     }
+/// }
+/// ```
 pub struct Field<C> {
     label: Label,
     control: C,
@@ -298,6 +314,28 @@ fn column_node(cx: &mut Cx, gap: FieldGap) -> NodeId {
 
 /// Fields or other content under a legend, with an optional description
 /// between them, 24 pt apart. The set is a group named by its legend.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Address;
+///
+/// impl View for Address {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let street = cx.state(String::new());
+///         let city = cx.state(String::new());
+///         FieldSet::new(
+///             "Address",
+///             FieldGroup::new((
+///                 Field::new("Street", TextField::new("Street", street.binding())),
+///                 Field::new("City", TextField::new("City", city.binding())),
+///             )),
+///         )
+///         .description("Where we ship the order.")
+///     }
+/// }
+/// ```
 pub struct FieldSet<C> {
     legend: Label,
     description: Option<Label>,
@@ -347,9 +385,28 @@ impl<C: View> View for FieldSet<C> {
 }
 
 /// Whole fields stacked 28 pt apart, each filling the width.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Login;
+///
+/// impl View for Login {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let user = cx.state(String::new());
+///         let password = cx.state(String::new());
+///         FieldGroup::new((
+///             Field::new("User", TextField::new("User", user.binding())),
+///             Field::new("Password", TextField::new("Password", password.binding())),
+///         ))
+///     }
+/// }
+/// ```
 pub struct FieldGroup<C>(C);
 
 impl<C: View> FieldGroup<C> {
+    /// A group of `fields`, a view or a tuple of views.
     pub fn new(fields: C) -> Self {
         Self(fields)
     }
@@ -365,9 +422,20 @@ impl<C: View> View for FieldGroup<C> {
 
 /// Text parts stacked 4 pt apart, such as a [`FieldTitle`] above a
 /// description, beside a choice control.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let content = FieldContent::new((
+///     FieldTitle::new("Notifications"),
+///     Text::new("Get a message for each new comment."),
+/// ));
+/// ```
 pub struct FieldContent<C>(C);
 
 impl<C: View> FieldContent<C> {
+    /// A column of `parts`, a view or a tuple of views.
     pub fn new(parts: C) -> Self {
         Self(parts)
     }
@@ -382,9 +450,17 @@ impl<C: View> View for FieldContent<C> {
 }
 
 /// A title inside a field's content, in the label style.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let title = FieldTitle::new("Dark mode");
+/// ```
 pub struct FieldTitle(Label);
 
 impl FieldTitle {
+    /// A title that shows `title`, literal text or a catalog string.
     pub fn new<M>(title: impl IntoLive<TextContent, M>) -> Self {
         Self(label(title))
     }
@@ -397,10 +473,22 @@ impl View for FieldTitle {
 }
 
 /// A rule between field groups, with optional text in its middle.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let view = VStack::new((
+///     Button::new("Sign in with a passkey", || {}),
+///     FieldSeparator::new().text("or"),
+///     Button::new("Sign in with a password", || {}),
+/// ));
+/// ```
 #[derive(Default)]
 pub struct FieldSeparator(Option<Label>);
 
 impl FieldSeparator {
+    /// A rule without text.
     pub fn new() -> Self {
         Self::default()
     }

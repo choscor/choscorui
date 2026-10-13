@@ -1153,10 +1153,12 @@ impl ViewHost {
         std::mem::take(&mut self.inner.errors)
     }
 
+    /// The retained tree of the mounted views.
     pub fn tree(&self) -> &Tree {
         &self.inner.tree
     }
 
+    /// The size of the root node after the last layout.
     pub fn size(&self) -> Size {
         self.inner
             .tree
@@ -1164,10 +1166,12 @@ impl ViewHost {
             .map_or(Size::ZERO, |bounds| bounds.size)
     }
 
+    /// The host of the mounted controls.
     pub fn controls(&self) -> &ControlHost {
         &self.inner.controls
     }
 
+    /// The layout engine of the tree.
     pub fn layout_engine(&self) -> &LayoutEngine {
         &self.inner.engine
     }

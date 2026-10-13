@@ -33,6 +33,24 @@ use std::rc::Rc;
 /// Return in the field accepts only a valid value. Both run `on_accept`
 /// with the value. `controls::InputDialog` validates the text for `kind`
 /// in the locale of the environment.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::InputKind;
+/// struct Rename;
+///
+/// impl View for Rename {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let name = cx.state(String::new());
+///         let kind = InputKind::Text { allow_empty: false };
+///         InputDialog::new("Rename", "New name", "Rename", kind, name.binding(), |value| {
+///             println!("{value:?}");
+///         })
+///     }
+/// }
+/// ```
 pub struct InputDialog {
     title: Label,
     prompt: Label,
@@ -43,6 +61,7 @@ pub struct InputDialog {
 }
 
 impl InputDialog {
+    /// An input dialog with `title`, `prompt`, and an `accept` button for a value of `kind`.
     pub fn new<M, N, O>(
         title: impl IntoLive<TextContent, M>,
         prompt: impl IntoLive<TextContent, N>,
@@ -142,6 +161,22 @@ impl View for InputDialog {
 /// style. `controls::FontDialog` applies each change. A family that is
 /// not in `families` resolves to its fallback, and the size stays from 1
 /// to 4096 points. The other fields of `style` do not change.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::TextStyle;
+/// struct Fonts;
+///
+/// impl View for Fonts {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let style = cx.state(TextStyle::new("Helvetica", 13.0));
+///         let families = vec!["Helvetica".to_owned(), "Menlo".to_owned()];
+///         FontDialog::new("The quick fox", "Size", "Bold", "Italic", families, style.binding())
+///     }
+/// }
+/// ```
 pub struct FontDialog {
     sample: Label,
     size: Label,
@@ -152,6 +187,7 @@ pub struct FontDialog {
 }
 
 impl FontDialog {
+    /// A font dialog with a preview of `sample` that edits `style`.
     pub fn new<M, N, O, P>(
         sample: impl IntoLive<TextContent, M>,
         size: impl IntoLive<TextContent, N>,

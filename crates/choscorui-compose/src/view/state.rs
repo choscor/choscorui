@@ -234,6 +234,7 @@ impl<T: Clone + PartialEq + 'static> Memo<T> {
         self.0.slot
     }
 
+    /// The value, or `Disposed` when the owning component has unmounted.
     pub fn try_get(&self) -> Result<T, ReactiveError> {
         self.0.try_get()
     }
@@ -247,6 +248,7 @@ impl<T: Clone + PartialEq + 'static> Memo<T> {
         self.0.get()
     }
 
+    /// Calls `read` with the value without cloning it.
     pub fn with<R>(&self, read: impl FnOnce(&T) -> R) -> Result<R, ReactiveError> {
         self.0.with(read)
     }
@@ -354,6 +356,7 @@ impl<T: Clone + PartialEq + 'static> Binding<T> {
         }
     }
 
+    /// The value, or `Disposed` when the owner has unmounted.
     pub fn try_get(&self) -> Result<T, ReactiveError> {
         match self.source {
             BindingSource::State(state) => state.try_get(),
@@ -373,6 +376,8 @@ impl<T: Clone + PartialEq + 'static> Binding<T> {
         })
     }
 
+    /// Writes the value, or returns `Disposed` when the owner has
+    /// unmounted.
     pub fn try_set(&self, value: T) -> Result<(), ReactiveError> {
         match self.source {
             BindingSource::State(state) => state.try_set(value),
@@ -471,6 +476,7 @@ pub struct Handle;
 /// Converts a value, a closure, or a state handle into a [`Live`]
 /// property. `M` only tells the conversions apart.
 pub trait IntoLive<T, M> {
+    /// The value as a live property.
     fn into_live(self) -> Live<T>;
 }
 

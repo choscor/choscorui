@@ -28,6 +28,7 @@ pub struct Localized {
 }
 
 impl Localized {
+    /// The catalog string `key`, without arguments.
     pub fn new(key: impl Into<String>) -> Self {
         Self {
             key: key.into(),
@@ -78,6 +79,7 @@ impl std::fmt::Debug for Localized {
 /// Converts a text argument: a displayable value, a state handle, or a
 /// closure. `M` only tells the conversions apart.
 pub trait IntoTextArg<M> {
+    /// The argument as a live string.
     fn into_arg(self) -> Live<String>;
 }
 
@@ -153,6 +155,24 @@ impl From<Localized> for TextContent {
 /// A run of text. It takes a catalog string (`Text::new(t!("title"))`),
 /// or literal text for user data. The text wraps to the width it gets
 /// and mirrors in right-to-left layouts.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_compose::t;
+/// struct Greeting;
+///
+/// impl View for Greeting {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let name = cx.state(String::from("Ada"));
+///         VStack::new((
+///             Text::new(t!("greeting.title")),
+///             Text::new(move || format!("Hello, {}", name.get())).single_line(),
+///         ))
+///     }
+/// }
+/// ```
 pub struct Text {
     content: Live<TextContent>,
     align: TextAlign,
@@ -160,6 +180,8 @@ pub struct Text {
 }
 
 impl Text {
+    /// Text that shows `content`: a string, a catalog string, a state
+    /// handle, or a closure.
     pub fn new<M>(content: impl IntoLive<TextContent, M>) -> Self {
         Self {
             content: content.into_live(),

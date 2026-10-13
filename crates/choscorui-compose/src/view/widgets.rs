@@ -134,6 +134,15 @@ fn as_dates(value: &ControlValue) -> Option<Vec<CivilDate>> {
 /// A push button that runs `action`: `Button::new(t!("save"), move || …)`.
 /// Without a variant or size of its own, it takes the environment's
 /// `button_variant` and `control_size`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::ButtonVariant;
+/// let save = Button::new("Save", || println!("saved"))
+///     .variant(ButtonVariant::Outline);
+/// ```
 pub struct Button {
     label: Label,
     action: Rc<dyn Fn()>,
@@ -144,6 +153,7 @@ pub struct Button {
 }
 
 impl Button {
+    /// A button with `label` that runs `action` when the user activates it.
     pub fn new<M>(label: impl IntoLive<TextContent, M>, action: impl Fn() + 'static) -> Self {
         Self {
             label: label.into_live(),
@@ -219,9 +229,24 @@ impl View for Button {
 }
 
 /// A checkbox that edits `checked`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Terms;
+///
+/// impl View for Terms {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let accepted = cx.state(false);
+///         Checkbox::new("Accept the terms", accepted.binding())
+///     }
+/// }
+/// ```
 pub type Checkbox = Configured<controls::Checkbox>;
 
 impl Configured<controls::Checkbox> {
+    /// A checkbox with `label` that edits `checked`.
     pub fn new<M>(label: impl IntoLive<TextContent, M>, checked: Binding<bool>) -> Self {
         let label = self::label(label);
         Configured::custom(ControlKind::Checkbox, move |env| {
@@ -245,9 +270,24 @@ impl Configured<controls::Checkbox> {
 }
 
 /// An on or off switch that edits `on`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Network;
+///
+/// impl View for Network {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let on = cx.state(true);
+///         Switch::new("Wi-Fi", on.binding())
+///     }
+/// }
+/// ```
 pub type Switch = Configured<controls::Switch>;
 
 impl Configured<controls::Switch> {
+    /// A switch with `label` that edits `on`.
     pub fn new<M>(label: impl IntoLive<TextContent, M>, on: Binding<bool>) -> Self {
         let label = self::label(label);
         Configured::custom(ControlKind::Switch, move |env| {
@@ -258,9 +298,24 @@ impl Configured<controls::Switch> {
 }
 
 /// A button that stays on or off and edits `on`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Format;
+///
+/// impl View for Format {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let bold = cx.state(false);
+///         Toggle::new("Bold", bold.binding())
+///     }
+/// }
+/// ```
 pub type Toggle = Configured<controls::Toggle>;
 
 impl Configured<controls::Toggle> {
+    /// A toggle button with `label` that edits `on`.
     pub fn new<M>(label: impl IntoLive<TextContent, M>, on: Binding<bool>) -> Self {
         let label = self::label(label);
         Configured::custom(ControlKind::Toggle, move |env| {
@@ -271,6 +326,22 @@ impl Configured<controls::Toggle> {
 }
 
 /// A row of toggles.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::ToggleItem;
+/// struct Alignment;
+///
+/// impl View for Alignment {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selected = cx.state(Some(0));
+///         let items = vec![ToggleItem::new("Left"), ToggleItem::new("Center"), ToggleItem::new("Right")];
+///         ToggleGroup::single("Alignment", items, selected.binding())
+///     }
+/// }
+/// ```
 pub type ToggleGroup = Configured<controls::ToggleGroup>;
 
 impl Configured<controls::ToggleGroup> {
@@ -306,9 +377,31 @@ impl Configured<controls::ToggleGroup> {
 /// separators, and text parts. `labels` names each member, and `checked`
 /// edits the indices of the checked toggle members. A button member
 /// reports its index through `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls as controls;
+/// # use choscorui_controls::{ButtonGroupMember, CommandId};
+/// struct Styles;
+///
+/// impl View for Styles {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let checked = cx.state(Vec::new());
+///         let members = vec![
+///             ButtonGroupMember::Toggle(CommandId(1)),
+///             ButtonGroupMember::Toggle(CommandId(2)),
+///         ];
+///         let group = controls::ButtonGroup::from_members(members, false);
+///         ButtonGroup::new(group, vec!["Bold".to_owned(), "Italic".to_owned()], checked.binding())
+///     }
+/// }
+/// ```
 pub type ButtonGroup = Configured<controls::HostedButtonGroup>;
 
 impl Configured<controls::HostedButtonGroup> {
+    /// A view of `group`, with `labels` for its members and `checked` for its toggles.
     pub fn new(
         group: controls::ButtonGroup,
         labels: impl Items<String>,
@@ -322,9 +415,17 @@ impl Configured<controls::HostedButtonGroup> {
 }
 
 /// Key caps for a shortcut.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let shortcut = Kbd::new("⌘K");
+/// ```
 pub type Kbd = Configured<controls::Kbd>;
 
 impl Configured<controls::Kbd> {
+    /// Key caps that show `key`.
     pub fn new<M>(key: impl IntoLive<TextContent, M>) -> Self {
         let key = label(key);
         Configured::custom(ControlKind::Kbd, move |env| {
@@ -341,9 +442,26 @@ impl Configured<controls::Kbd> {
 }
 
 /// A trigger with a popup list; `selected` edits the chosen option.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::ListEntry;
+/// struct Fruit;
+///
+/// impl View for Fruit {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selected = cx.state(None);
+///         let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
+///         Select::new("Fruit", entries, selected.binding())
+///     }
+/// }
+/// ```
 pub type Select = Configured<controls::Select>;
 
 impl Configured<controls::Select> {
+    /// A select named `name` with `entries`; `selected` edits the chosen entry.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         entries: impl Items<ListEntry>,
@@ -372,9 +490,24 @@ impl Configured<controls::Select> {
 }
 
 /// A single-line text input that edits `value`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Profile;
+///
+/// impl View for Profile {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let name = cx.state(String::new());
+///         Input::new("Name", name.binding())
+///     }
+/// }
+/// ```
 pub type Input = Configured<controls::Input>;
 
 impl Configured<controls::Input> {
+    /// An input named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Input, move |env| {
@@ -394,9 +527,24 @@ impl Configured<controls::Input> {
 }
 
 /// A multiline text input that edits `value`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Feedback;
+///
+/// impl View for Feedback {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let notes = cx.state(String::new());
+///         Textarea::new("Notes", notes.binding())
+///     }
+/// }
+/// ```
 pub type Textarea = Configured<controls::Textarea>;
 
 impl Configured<controls::Textarea> {
+    /// A multiline input named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Textarea, move |env| {
@@ -407,9 +555,24 @@ impl Configured<controls::Textarea> {
 }
 
 /// A one-time code input of `length` characters that edits `value`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Verify;
+///
+/// impl View for Verify {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let code = cx.state(String::new());
+///         InputOtp::new("Code", 6, code.binding())
+///     }
+/// }
+/// ```
 pub type InputOtp = Configured<controls::InputOtp>;
 
 impl Configured<controls::InputOtp> {
+    /// A code input named `name` of `length` characters that edits `value`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         length: usize,
@@ -445,6 +608,7 @@ impl Configured<controls::InputOtp> {
 pub type RangeSlider = Configured<controls::RangeSlider>;
 
 impl Configured<controls::RangeSlider> {
+    /// A range slider named `name` that edits `values`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, values: Binding<(f64, f64)>) -> Self {
         let name = label(name);
         let limits = super::builtins::percent();
@@ -479,6 +643,22 @@ impl Configured<controls::RangeSlider> {
 }
 
 /// A button with a calendar popover.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::CivilDate;
+/// struct Booking;
+///
+/// impl View for Booking {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let month = CivilDate::new(2026, 10, 1).expect("a valid date");
+///         let date = cx.state(None);
+///         DatePicker::new("Date", month, date.binding())
+///     }
+/// }
+/// ```
 pub type DatePicker = Configured<controls::DatePicker>;
 
 impl Configured<controls::DatePicker> {
@@ -512,9 +692,18 @@ impl Configured<controls::DatePicker> {
 }
 
 /// A legend, label, description, or error line of a form field.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::FieldPart;
+/// let help = FieldText::new(FieldPart::Description, "Use 8 or more characters.");
+/// ```
 pub type FieldText = Configured<controls::FieldText>;
 
 impl Configured<controls::FieldText> {
+    /// The `part` of a field that shows `text`.
     pub fn new<M>(part: controls::FieldPart, text: impl IntoLive<TextContent, M>) -> Self {
         let content = label(text);
         Configured::custom(ControlKind::Field, move |env| {
@@ -525,9 +714,20 @@ impl Configured<controls::FieldText> {
 
 /// An area that opens `items` at the pointer on a secondary click. Use
 /// `.on_command` for the chosen action.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{CommandId, MenuItem};
+/// let items = vec![MenuItem::action("Copy", CommandId(1)), MenuItem::action("Paste", CommandId(2))];
+/// let area = ContextMenu::new("Canvas", "Right-click here", items)
+///     .on_command(|command| println!("chose {command:?}"));
+/// ```
 pub type ContextMenu = Configured<controls::ContextMenu>;
 
 impl Configured<controls::ContextMenu> {
+    /// An area named `name` with the hint `hint` that opens `items`.
     pub fn new<M, N>(
         name: impl IntoLive<TextContent, M>,
         hint: impl IntoLive<TextContent, N>,
@@ -541,9 +741,20 @@ impl Configured<controls::ContextMenu> {
 }
 
 /// A row of menu titles. Use `.on_command` for the chosen action.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{CommandId, MenuItem};
+/// let file = vec![MenuItem::action("Open", CommandId(1)), MenuItem::action("Save", CommandId(2))];
+/// let bar = Menubar::new("Main menu", vec![("File".to_owned(), file)])
+///     .on_command(|command| println!("chose {command:?}"));
+/// ```
 pub type Menubar = Configured<controls::Menubar>;
 
 impl Configured<controls::Menubar> {
+    /// A menu bar named `name` with one menu for each (title, items) pair.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         menus: impl Items<(String, Vec<MenuItem>)>,
@@ -556,9 +767,24 @@ impl Configured<controls::Menubar> {
 }
 
 /// A trigger button with a floating panel; `open` edits whether it shows.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Help;
+///
+/// impl View for Help {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let open = cx.state(false);
+///         Popover::new("Info", "Shortcuts", "Press ⌘K to search.", open.binding())
+///     }
+/// }
+/// ```
 pub type Popover = Configured<controls::Popover>;
 
 impl Configured<controls::Popover> {
+    /// A popover with a `trigger` button, a `title`, and a `description`; `open` edits whether it shows.
     pub fn new<M, N, O>(
         trigger: impl IntoLive<TextContent, M>,
         title: impl IntoLive<TextContent, N>,
@@ -595,9 +821,24 @@ impl Configured<controls::Popover> {
 
 /// A trigger button with a modal panel; `open` edits whether it shows.
 /// Its action buttons report `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Delete;
+///
+/// impl View for Delete {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let open = cx.state(false);
+///         Dialog::new("Delete", "Delete the file?", "You cannot undo this.", open.binding())
+///     }
+/// }
+/// ```
 pub type Dialog = Configured<controls::Dialog>;
 
 impl Configured<controls::Dialog> {
+    /// A dialog with a `trigger` button, a `title`, and a `description`; `open` edits whether it shows.
     pub fn new<M, N, O>(
         trigger: impl IntoLive<TextContent, M>,
         title: impl IntoLive<TextContent, N>,
@@ -658,9 +899,20 @@ impl Configured<controls::Dialog> {
 
 /// A search input over grouped commands. The chosen row reports
 /// `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::CommandItem;
+/// let groups = vec![("Files".to_owned(), vec![CommandItem::new("Open"), CommandItem::new("Save")])];
+/// let palette = Command::new("Commands", "Type a command", groups)
+///     .on_item(|row| println!("row {row}"));
+/// ```
 pub type Command = Configured<controls::Command>;
 
 impl Configured<controls::Command> {
+    /// A command palette named `name` with `placeholder` text and `groups` of commands.
     pub fn new<M, N>(
         name: impl IntoLive<TextContent, M>,
         placeholder: impl IntoLive<TextContent, N>,
@@ -693,9 +945,18 @@ impl Configured<controls::Command> {
 }
 
 /// A trail of links to the current page. A link reports `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let trail = Breadcrumb::new("Path", vec!["Home".to_owned(), "Docs".to_owned()])
+///     .on_item(|index| println!("go to {index}"));
+/// ```
 pub type Breadcrumb = Configured<controls::Breadcrumb>;
 
 impl Configured<controls::Breadcrumb> {
+    /// A breadcrumb named `name` with one link for each item.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Breadcrumb, move |env| {
@@ -706,9 +967,24 @@ impl Configured<controls::Breadcrumb> {
 
 /// Page links with previous and next buttons; `page` edits the current
 /// page.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Results;
+///
+/// impl View for Results {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let page = cx.state(0);
+///         Pagination::new("Pages", "Previous", "Next", 10, page.binding())
+///     }
+/// }
+/// ```
 pub type Pagination = Configured<controls::Pagination>;
 
 impl Configured<controls::Pagination> {
+    /// A pagination named `name` with `pages` pages; `page` edits the current page.
     pub fn new<M, N, O>(
         name: impl IntoLive<TextContent, M>,
         previous: impl IntoLive<TextContent, N>,
@@ -731,9 +1007,20 @@ impl Configured<controls::Pagination> {
 }
 
 /// Site links whose triggers open panels. A link reports `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::NavigationLink;
+/// let links = vec![NavigationLink::new("Guide", "Start here")];
+/// let menu = NavigationMenu::new("Site", vec![("Docs".to_owned(), links)])
+///     .on_item(|index| println!("link {index}"));
+/// ```
 pub type NavigationMenu = Configured<controls::NavigationMenu>;
 
 impl Configured<controls::NavigationMenu> {
+    /// A navigation menu named `name` with one trigger for each (title, links) pair.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         items: impl Items<(String, Vec<NavigationLink>)>,
@@ -746,9 +1033,27 @@ impl Configured<controls::NavigationMenu> {
 }
 
 /// Grouped navigation items; `selected` edits the chosen item.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::SidebarItem;
+/// # use choscorui_core::Icon;
+/// struct Navigation;
+///
+/// impl View for Navigation {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selected = cx.state(Some(0));
+///         let items = vec![SidebarItem::new("Files", Icon::File), SidebarItem::new("Mail", Icon::Mail)];
+///         Sidebar::new("Navigation", "Toggle sidebar", vec![("Main".to_owned(), items)], selected.binding())
+///     }
+/// }
+/// ```
 pub type Sidebar = Configured<controls::Sidebar>;
 
 impl Configured<controls::Sidebar> {
+    /// A sidebar named `name` with a `toggle` button and `groups` of items.
     pub fn new<M, N>(
         name: impl IntoLive<TextContent, M>,
         toggle: impl IntoLive<TextContent, N>,
@@ -764,9 +1069,17 @@ impl Configured<controls::Sidebar> {
 }
 
 /// A surface with a title and description. Its buttons report `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let card = Card::new("Storage", "12 GB of 50 GB used");
+/// ```
 pub type Card = Configured<controls::Card>;
 
 impl Configured<controls::Card> {
+    /// A card with `title` and `description`.
     pub fn new<M, N>(
         title: impl IntoLive<TextContent, M>,
         description: impl IntoLive<TextContent, N>,
@@ -779,9 +1092,17 @@ impl Configured<controls::Card> {
 }
 
 /// A short status label.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let badge = Badge::new("New");
+/// ```
 pub type Badge = Configured<controls::Badge>;
 
 impl Configured<controls::Badge> {
+    /// A badge that shows `text`.
     pub fn new<M>(text: impl IntoLive<TextContent, M>) -> Self {
         let content = label(text);
         Configured::custom(ControlKind::Badge, move |env| {
@@ -791,9 +1112,17 @@ impl Configured<controls::Badge> {
 }
 
 /// A round user image with a text fallback.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let avatar = Avatar::new("Ada Lovelace", "AL");
+/// ```
 pub type Avatar = Configured<controls::Avatar>;
 
 impl Configured<controls::Avatar> {
+    /// An avatar for `name` that shows the `fallback` text.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, fallback: impl Into<String>) -> Self {
         let name = label(name);
         let fallback = fallback.into();
@@ -804,9 +1133,25 @@ impl Configured<controls::Avatar> {
 }
 
 /// Slides that move one at a time; `current` edits the shown slide.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Gallery;
+///
+/// impl View for Gallery {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let current = cx.state(0);
+///         let slides = vec!["One".to_owned(), "Two".to_owned(), "Three".to_owned()];
+///         Carousel::new("Photos", "Previous", "Next", slides, current.binding())
+///     }
+/// }
+/// ```
 pub type Carousel = Configured<controls::Carousel>;
 
 impl Configured<controls::Carousel> {
+    /// A carousel named `name` of `slides`; `current` edits the shown slide.
     pub fn new<M, N, O>(
         name: impl IntoLive<TextContent, M>,
         previous: impl IntoLive<TextContent, N>,
@@ -829,9 +1174,26 @@ impl Configured<controls::Carousel> {
 
 /// Sorted, filtered, and paged rows of the model that `model` makes;
 /// `selected` edits the selected rows.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{ItemModel, StringListModel};
+/// struct People;
+///
+/// impl View for People {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selected = cx.state(Vec::new());
+///         let model = || Box::new(StringListModel::from_strings(["Ada", "Grace"])) as Box<dyn ItemModel>;
+///         DataTable::new("People", model, "Previous", "Next", selected.binding())
+///     }
+/// }
+/// ```
 pub type DataTable = Configured<controls::DataTable>;
 
 impl Configured<controls::DataTable> {
+    /// A data table named `name` of the model that `model` makes.
     pub fn new<M, N, O>(
         name: impl IntoLive<TextContent, M>,
         model: impl Fn() -> Box<dyn ItemModel> + 'static,
@@ -856,9 +1218,26 @@ impl Configured<controls::DataTable> {
 /// `selection` edits the positions of the selected rows. The list is
 /// virtualized: it paints only the rows in view, so its cost does not
 /// grow with the model. The row height comes from the `ListView` recipe.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{ItemModel, StringListModel};
+/// struct Fruits;
+///
+/// impl View for Fruits {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selection = cx.state(Vec::new());
+///         let model = || Box::new(StringListModel::from_strings(["Apple", "Pear"])) as Box<dyn ItemModel>;
+///         List::new("Fruits", model, selection.binding())
+///     }
+/// }
+/// ```
 pub type List = Configured<controls::ItemView>;
 
 impl Configured<controls::ItemView> {
+    /// A list named `name` of the model that `model` makes.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         model: impl Fn() -> Box<dyn ItemModel> + 'static,
@@ -885,9 +1264,20 @@ impl Configured<controls::ItemView> {
 }
 
 /// A chart of application data.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{ChartKind, ChartSeries};
+/// let months = vec!["Jan".to_owned(), "Feb".to_owned()];
+/// let sales = vec![ChartSeries::new("Sales", vec![120.0, 180.0])];
+/// let chart = Chart::new("Sales", ChartKind::Bar, months, sales);
+/// ```
 pub type Chart = Configured<controls::Chart>;
 
 impl Configured<controls::Chart> {
+    /// A chart named `name` of `kind` with `categories` and `series`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         kind: ChartKind,
@@ -907,9 +1297,17 @@ impl Configured<controls::Chart> {
 }
 
 /// A callout with a title and description. Its buttons report `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let alert = Alert::new("Saved", "Your changes are saved.");
+/// ```
 pub type Alert = Configured<controls::Alert>;
 
 impl Configured<controls::Alert> {
+    /// An alert with `title` and `description`.
     pub fn new<M, N>(
         title: impl IntoLive<TextContent, M>,
         description: impl IntoLive<TextContent, N>,
@@ -922,9 +1320,17 @@ impl Configured<controls::Alert> {
 }
 
 /// A spinning loader.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let loading = Spinner::new("Loading");
+/// ```
 pub type Spinner = Configured<controls::Spinner>;
 
 impl Configured<controls::Spinner> {
+    /// A spinner named `name`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Spinner, move |env| {
@@ -934,9 +1340,17 @@ impl Configured<controls::Spinner> {
 }
 
 /// A pulsing placeholder block of `width` by `height` points.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let placeholder = Skeleton::new("Loading the title", 200.0, 16.0);
+/// ```
 pub type Skeleton = Configured<controls::Skeleton>;
 
 impl Configured<controls::Skeleton> {
+    /// A skeleton block named `name` of `width` by `height` points.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, width: f64, height: f64) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Skeleton, move |env| {
@@ -946,9 +1360,17 @@ impl Configured<controls::Skeleton> {
 }
 
 /// A centered empty state. Its buttons report `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let empty = EmptyState::new("No files", "Add a file to start.");
+/// ```
 pub type EmptyState = Configured<controls::Empty>;
 
 impl Configured<controls::Empty> {
+    /// An empty state with `title` and `description`.
     pub fn new<M, N>(
         title: impl IntoLive<TextContent, M>,
         description: impl IntoLive<TextContent, N>,
@@ -961,9 +1383,17 @@ impl Configured<controls::Empty> {
 }
 
 /// A box with a fixed ratio.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let frame = AspectRatio::new("Video", 16.0 / 9.0);
+/// ```
 pub type AspectRatio = Configured<controls::AspectRatio>;
 
 impl Configured<controls::AspectRatio> {
+    /// A box named `name` with the width-to-height `ratio`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, ratio: f64) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::AspectRatio, move |env| {
@@ -974,9 +1404,25 @@ impl Configured<controls::AspectRatio> {
 
 /// A section that shows or hides its items; `open` edits whether it
 /// shows them.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Details;
+///
+/// impl View for Details {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let open = cx.state(false);
+///         let items = vec!["Size: 2 MB".to_owned()];
+///         Collapsible::new("Details", "Show details", "1 item", items, open.binding())
+///     }
+/// }
+/// ```
 pub type Collapsible = Configured<controls::Collapsible>;
 
 impl Configured<controls::Collapsible> {
+    /// A collapsible section with `title`, a `toggle` button, a `summary`, and `items`.
     pub fn new<M, N, O>(
         title: impl IntoLive<TextContent, M>,
         toggle: impl IntoLive<TextContent, N>,
@@ -998,9 +1444,25 @@ impl Configured<controls::Collapsible> {
 }
 
 /// Stacked sections of (title, content); `open` edits the open sections.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Faq;
+///
+/// impl View for Faq {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let open = cx.state(Vec::new());
+///         let items = vec![("Shipping".to_owned(), "Two to five days.".to_owned())];
+///         Accordion::new("Questions", items, open.binding())
+///     }
+/// }
+/// ```
 pub type Accordion = Configured<controls::Accordion>;
 
 impl Configured<controls::Accordion> {
+    /// An accordion named `name` of (title, content) sections.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         items: impl Items<(String, String)>,
@@ -1015,9 +1477,17 @@ impl Configured<controls::Accordion> {
 }
 
 /// A muted line between chat messages.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let marker = Marker::new("Today");
+/// ```
 pub type Marker = Configured<controls::Marker>;
 
 impl Configured<controls::Marker> {
+    /// A marker that shows `text`.
     pub fn new<M>(text: impl IntoLive<TextContent, M>) -> Self {
         let content = label(text);
         Configured::custom(ControlKind::Marker, move |env| {
@@ -1027,9 +1497,17 @@ impl Configured<controls::Marker> {
 }
 
 /// A file with media, a detail line, and a progress state.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let file = Attachment::new("report.pdf");
+/// ```
 pub type Attachment = Configured<controls::Attachment>;
 
 impl Configured<controls::Attachment> {
+    /// An attachment named `name`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Attachment, move |env| {

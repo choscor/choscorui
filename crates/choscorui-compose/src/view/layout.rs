@@ -74,19 +74,30 @@ pub struct Alignment {
 }
 
 impl Alignment {
+    /// The center on both axes.
     pub const CENTER: Self = Self::new(HorizontalAlignment::Center, VerticalAlignment::Center);
+    /// The leading edge, centered vertically.
     pub const LEADING: Self = Self::new(HorizontalAlignment::Leading, VerticalAlignment::Center);
+    /// The trailing edge, centered vertically.
     pub const TRAILING: Self = Self::new(HorizontalAlignment::Trailing, VerticalAlignment::Center);
+    /// The top edge, centered horizontally.
     pub const TOP: Self = Self::new(HorizontalAlignment::Center, VerticalAlignment::Top);
+    /// The bottom edge, centered horizontally.
     pub const BOTTOM: Self = Self::new(HorizontalAlignment::Center, VerticalAlignment::Bottom);
+    /// The top leading corner.
     pub const TOP_LEADING: Self = Self::new(HorizontalAlignment::Leading, VerticalAlignment::Top);
+    /// The top trailing corner.
     pub const TOP_TRAILING: Self = Self::new(HorizontalAlignment::Trailing, VerticalAlignment::Top);
+    /// The bottom leading corner.
     pub const BOTTOM_LEADING: Self =
         Self::new(HorizontalAlignment::Leading, VerticalAlignment::Bottom);
+    /// The bottom trailing corner.
     pub const BOTTOM_TRAILING: Self =
         Self::new(HorizontalAlignment::Trailing, VerticalAlignment::Bottom);
+    /// The full box on both axes.
     pub const FILL: Self = Self::new(HorizontalAlignment::Fill, VerticalAlignment::Fill);
 
+    /// An alignment from a horizontal and a vertical position.
     pub const fn new(horizontal: HorizontalAlignment, vertical: VerticalAlignment) -> Self {
         Self {
             horizontal,
@@ -158,6 +169,16 @@ pub(super) fn stack_node(
 }
 
 /// Children top to bottom.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Space;
+/// let view = VStack::new((Text::new("Name"), Text::new("Email")))
+///     .spacing(Space::S2)
+///     .alignment(HorizontalAlignment::Leading);
+/// ```
 pub struct VStack<C> {
     children: C,
     spacing: Metric,
@@ -166,6 +187,7 @@ pub struct VStack<C> {
 }
 
 impl<C: View> VStack<C> {
+    /// A stack of `children`, a view or a tuple of views.
     pub fn new(children: C) -> Self {
         Self {
             children,
@@ -212,6 +234,16 @@ impl<C: View> View for VStack<C> {
 
 /// Children from the leading edge to the trailing edge; mirrored in
 /// right-to-left layouts.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Space;
+/// let view = HStack::new((Text::new("Total"), Spacer::new(), Text::new("42")))
+///     .spacing(Space::S4)
+///     .alignment(VerticalAlignment::FirstBaseline);
+/// ```
 pub struct HStack<C> {
     children: C,
     spacing: Metric,
@@ -220,6 +252,7 @@ pub struct HStack<C> {
 }
 
 impl<C: View> HStack<C> {
+    /// A row of `children`, a view or a tuple of views.
     pub fn new(children: C) -> Self {
         Self {
             children,
@@ -229,18 +262,21 @@ impl<C: View> HStack<C> {
         }
     }
 
+    /// The distance between children.
     #[must_use]
     pub fn spacing(mut self, spacing: impl Into<Metric>) -> Self {
         self.spacing = spacing.into();
         self
     }
 
+    /// Where children sit across the row.
     #[must_use]
     pub fn alignment(mut self, alignment: VerticalAlignment) -> Self {
         self.alignment = alignment;
         self
     }
 
+    /// How leftover space is shared along the row.
     #[must_use]
     pub fn distribution(mut self, distribution: MainAlign) -> Self {
         self.distribution = distribution;
@@ -262,12 +298,21 @@ impl<C: View> View for HStack<C> {
 }
 
 /// Children on top of each other, later ones above.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let view = ZStack::new((Text::new("Photo"), Text::new("New")))
+///     .alignment(Alignment::TOP_TRAILING);
+/// ```
 pub struct ZStack<C> {
     children: C,
     alignment: Alignment,
 }
 
 impl<C: View> ZStack<C> {
+    /// A stack of `children`, a view or a tuple of views.
     pub fn new(children: C) -> Self {
         Self {
             children,
@@ -275,6 +320,7 @@ impl<C: View> ZStack<C> {
         }
     }
 
+    /// Where each child sits in the stack.
     #[must_use]
     pub fn alignment(mut self, alignment: Alignment) -> Self {
         self.alignment = alignment;
@@ -303,12 +349,20 @@ pub(super) fn overlay_node(cx: &mut Cx, alignment: Alignment) -> NodeId {
 }
 
 /// Flexible space that takes what is left along a stack.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let toolbar = HStack::new((Text::new("Title"), Spacer::new(), Text::new("Edit")));
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Spacer {
     min: f64,
 }
 
 impl Spacer {
+    /// A spacer with no minimum length.
     pub fn new() -> Self {
         Self::default()
     }
@@ -354,6 +408,13 @@ fn stack_axis(inner: &Inner, parent: NodeId) -> Option<Axis> {
 
 /// A thin line across a stack: horizontal in a vertical stack, vertical
 /// in a horizontal one.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let view = VStack::new((Text::new("Above"), Divider, Text::new("Below")));
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Divider;
 
@@ -415,6 +476,18 @@ impl GridItem {
 }
 
 /// Children in rows across the given columns, filled row by row.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Space;
+/// let view = Grid::new(
+///     vec![GridItem::Fit, GridItem::Flexible { min: 80.0, max: 400.0 }],
+///     (Text::new("Name"), Text::new("Ada"), Text::new("Role"), Text::new("Admin")),
+/// )
+/// .spacing(Space::S2);
+/// ```
 pub struct Grid<C> {
     columns: Vec<GridItem>,
     children: C,
@@ -422,6 +495,7 @@ pub struct Grid<C> {
 }
 
 impl<C: View> Grid<C> {
+    /// A grid of `children` in `columns`.
     pub fn new(columns: Vec<GridItem>, children: C) -> Self {
         Self {
             columns,
@@ -430,6 +504,7 @@ impl<C: View> Grid<C> {
         }
     }
 
+    /// The distance between rows and between columns.
     #[must_use]
     pub fn spacing(mut self, spacing: impl Into<Metric>) -> Self {
         self.spacing = spacing.into();
@@ -460,9 +535,17 @@ fn grid_node(cx: &mut Cx, columns: &[GridItem], spacing: Metric) -> NodeId {
 
 /// Mounts children without a node of its own, so that a modifier can
 /// apply to a group of views.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let view = Group::new((Text::new("One"), Text::new("Two"))).disabled(true);
+/// ```
 pub struct Group<C>(C);
 
 impl<C: View> Group<C> {
+    /// A group of `children`, a view or a tuple of views.
     pub fn new(children: C) -> Self {
         Self(children)
     }
@@ -694,6 +777,15 @@ impl CustomControl for ScrollControl {
 /// control into view. The scroll bar takes its look from the
 /// `ScrollArea` recipe. With `.focusable(true)`, the scroll view takes
 /// focus, and the arrow, page, Home, and End keys scroll it.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let view = ScrollView::new(VStack::new(
+///     (0..100).map(|row| Text::new(format!("Row {row}"))).collect::<Vec<_>>(),
+/// ));
+/// ```
 pub struct ScrollView<C> {
     content: C,
     axis: Axis,

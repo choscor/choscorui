@@ -17,9 +17,20 @@ use choscorui_core::Size;
 /// A row of command buttons on the `area` edge of a window, with one tab
 /// stop and arrow keys between its items. Items that do not fit move to
 /// a chevron menu. A command runs `.on_command`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{CommandId, ToolbarArea, ToolbarItem};
+/// let items = vec![ToolbarItem::command("new", "New", CommandId(1))];
+/// let toolbar = Toolbar::new("Main", ToolbarArea::Top, items)
+///     .on_command(|command| println!("run {command:?}"));
+/// ```
 pub type Toolbar = Configured<controls::HostedToolbar>;
 
 impl Configured<controls::HostedToolbar> {
+    /// A toolbar named `name` on the `area` edge with `items`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         area: ToolbarArea,
@@ -36,9 +47,19 @@ impl Configured<controls::HostedToolbar> {
 
 /// A status bar that shows `message` at the start and `sections` at the
 /// end. It takes no input.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::StatusSection;
+/// let line = StatusSection { key: "line".into(), text: "Ln 12".into(), width: 60.0 };
+/// let bar = StatusBar::new("Ready", vec![line]);
+/// ```
 pub type StatusBar = Configured<controls::StatusBar>;
 
 impl Configured<controls::StatusBar> {
+    /// A status bar with `message` and `sections`.
     pub fn new<M>(
         message: impl IntoLive<TextContent, M>,
         sections: impl Items<StatusSection>,
@@ -58,9 +79,18 @@ impl Configured<controls::StatusBar> {
 /// Dockable panels around a center area, as `layout` arranges them.
 /// Activating a tab reports the panel id through `.on_item`, and closing
 /// a panel runs `.on_dismiss`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::DockLayout;
+/// let dock = Dock::new(|_: &Env| DockLayout::new(28.0));
+/// ```
 pub type Dock = Configured<DockLayout>;
 
 impl Configured<DockLayout> {
+    /// A dock with the layout that `layout` makes.
     pub fn new(layout: impl Fn(&Env) -> DockLayout + 'static) -> Self {
         Configured::custom(ControlKind::Dock, layout)
     }
@@ -69,9 +99,22 @@ impl Configured<DockLayout> {
 /// A grip in the bottom trailing corner that resizes its window. A drag
 /// runs `on_resize` with the new content size, inside `minimum` and
 /// `maximum`. In right-to-left layouts the grip sits at the bottom left.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Size;
+/// let grip = SizeGrip::new(
+///     Size::new(320.0, 240.0),
+///     Size::new(1600.0, 1200.0),
+///     |size| println!("{size:?}"),
+/// );
+/// ```
 pub type SizeGrip = Configured<controls::SizeGrip>;
 
 impl Configured<controls::SizeGrip> {
+    /// A size grip that keeps the size between `minimum` and `maximum`.
     pub fn new(minimum: Size, maximum: Size, on_resize: impl Fn(Size) + 'static) -> Self {
         Configured::custom(ControlKind::SizeGrip, move |_| {
             controls::SizeGrip::new(minimum, maximum, false)

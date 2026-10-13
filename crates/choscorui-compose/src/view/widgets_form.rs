@@ -26,9 +26,17 @@ fn as_number(value: &ControlValue) -> Option<f64> {
 }
 
 /// Static text with the label recipe, for a caption next to a control.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let caption = Label::new("Email");
+/// ```
 pub type Label = Configured<controls::Label>;
 
 impl Configured<controls::Label> {
+    /// A label that shows `content`.
     pub fn new<M>(content: impl IntoLive<TextContent, M>) -> Self {
         let content = label(content);
         Configured::custom(ControlKind::Label, move |env| {
@@ -40,9 +48,27 @@ impl Configured<controls::Label> {
 /// A text input with addons: text, icons, and buttons before, after,
 /// above, or below the text. `value` edits the text. A button addon
 /// reports its index through `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{AddonAlign, InputGroupAddon};
+/// # use choscorui_core::Icon;
+/// struct Search;
+///
+/// impl View for Search {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let query = cx.state(String::new());
+///         let addons = vec![InputGroupAddon::icon(AddonAlign::InlineStart, Icon::Search)];
+///         InputGroup::new("Search", addons, query.binding())
+///     }
+/// }
+/// ```
 pub type InputGroup = Configured<controls::InputGroup>;
 
 impl Configured<controls::InputGroup> {
+    /// An input group named `name` with `addons` that edits `value`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         addons: impl Items<InputGroupAddon>,
@@ -97,9 +123,24 @@ impl Configured<controls::Input> {
 /// A locale-aware decimal field with steppers that edits `value` inside
 /// `bounds`. It shows `fraction_digits` digits after the decimal sign,
 /// and Return commits only a valid value.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Price;
+///
+/// impl View for Price {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let price = cx.state(9.99);
+///         DecimalSpinBox::new("Price", 0.0..=1000.0, 0.01, 2, price.binding())
+///     }
+/// }
+/// ```
 pub type DecimalSpinBox = Configured<controls::DecimalSpinBox>;
 
 impl Configured<controls::DecimalSpinBox> {
+    /// A decimal field named `name` that edits `value` inside `bounds`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         bounds: std::ops::RangeInclusive<f64>,
@@ -170,9 +211,28 @@ fn from_date_time(
 /// in the order of the environment's locale. `value` edits the value; a
 /// date or time editor keeps the other part of it. Use `.with` and
 /// `DateTimeEdit::set_range` to limit the value.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::DateTimeKind;
+/// # use choscorui_core::{CivilDate, CivilDateTime, CivilTime};
+/// struct Meeting;
+///
+/// impl View for Meeting {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let date = CivilDate::new(2026, 10, 13).expect("a valid date");
+///         let time = CivilTime::new(9, 30, 0).expect("a valid time");
+///         let start = cx.state(CivilDateTime { date, time });
+///         DateTimeEdit::new("Start", DateTimeKind::DateTime, start.binding())
+///     }
+/// }
+/// ```
 pub type DateTimeEdit = Configured<controls::DateTimeEdit>;
 
 impl Configured<controls::DateTimeEdit> {
+    /// An editor named `name` for a `kind` value that edits `value`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         kind: DateTimeKind,
@@ -213,9 +273,24 @@ impl Configured<controls::DateTimeEdit> {
 /// A field that records a keyboard shortcut of up to `max_chords` chords.
 /// `sequence` edits it as text, for example `⌘K, ⇧⌘S`; empty text is no
 /// shortcut.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Shortcut;
+///
+/// impl View for Shortcut {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let keys = cx.state(String::new());
+///         KeySequenceEdit::new("Shortcut", 2, keys.binding())
+///     }
+/// }
+/// ```
 pub type KeySequenceEdit = Configured<controls::KeySequenceEdit>;
 
 impl Configured<controls::KeySequenceEdit> {
+    /// A shortcut field named `name` of up to `max_chords` chords that edits `sequence`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         max_chords: usize,
@@ -233,9 +308,24 @@ impl Configured<controls::KeySequenceEdit> {
 /// strips. `hex` edits the color as `#RRGGBB` text, or `#RRGGBBAA` when
 /// the color is not opaque; the picker takes `#RGB` too. Accepting the
 /// color runs `.on_activate`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Accent;
+///
+/// impl View for Accent {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let hex = cx.state("#3366FF".to_owned());
+///         ColorPicker::new("Accent color", hex.binding())
+///     }
+/// }
+/// ```
 pub type ColorPicker = Configured<controls::ColorPicker>;
 
 impl Configured<controls::ColorPicker> {
+    /// A color picker named `name` that edits `hex`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, hex: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::ColorPicker, move |env| {
@@ -267,6 +357,7 @@ impl Configured<controls::ColorPicker> {
 pub type Dial = Configured<controls::HostedDial>;
 
 impl Configured<controls::HostedDial> {
+    /// A dial named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
         let name = label(name);
         let limits = percent();
@@ -291,9 +382,18 @@ impl Configured<controls::HostedDial> {
 
 /// A seven-segment display of `value` in `base`, with `digits` digits.
 /// It takes no input; a value that does not fit shows dashes.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::NumberBase;
+/// let counter = NumericDisplay::new("Counter", 4, NumberBase::Decimal, 42);
+/// ```
 pub type NumericDisplay = Configured<controls::HostedNumericDisplay>;
 
 impl Configured<controls::HostedNumericDisplay> {
+    /// A display named `name` of `value` with `digits` digits in `base`.
     pub fn new<M, N, O>(
         name: impl IntoLive<TextContent, M>,
         digits: usize,

@@ -20,6 +20,50 @@ type Handler = Rc<dyn Fn(&ControlMessage)>;
 /// environment, so catalog strings follow the locale; options from
 /// [`Configured::with`] and [`Configured::with_env`] apply after each
 /// build.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{ControlContext, ControlEvent, ControlKind, CustomControl};
+/// # use choscorui_controls::{MeasureContext, PaintContext};
+/// # use choscorui_core::{Color, EventReply, Measured, SemanticNode, SemanticRole, Size};
+/// # struct Swatch(Color);
+/// # impl CustomControl for Swatch {
+/// #     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+/// #         Measured::new(cx.constraints.constrain(Size::new(24.0, 24.0)))
+/// #     }
+/// #     fn event(&mut self, _: &mut ControlContext<'_>, _: &ControlEvent) -> EventReply {
+/// #         EventReply::Continue
+/// #     }
+/// #     fn paint(&self, cx: &mut PaintContext<'_>) {
+/// #         cx.list.fill_rect(cx.bounds, self.0);
+/// #     }
+/// #     fn semantics(&self) -> SemanticNode {
+/// #         SemanticNode {
+/// #             role: SemanticRole::Image,
+/// #             name: "Swatch".into(),
+/// #             description: String::new(),
+/// #             value: None,
+/// #             state: Default::default(),
+/// #             relations: Vec::new(),
+/// #             actions: Vec::new(),
+/// #             text: None,
+/// #         }
+/// #     }
+/// # }
+/// // `Swatch` is the `CustomControl` of the `ControlView` example.
+/// struct Theme;
+///
+/// impl View for Theme {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let dark = cx.state(false);
+///         Configured::custom(ControlKind::Card, move |_env| {
+///             Swatch(if dark.get() { Color::BLACK } else { Color::WHITE })
+///         })
+///     }
+/// }
+/// ```
 pub struct Configured<C> {
     kind: ControlKind,
     build: Build<C>,

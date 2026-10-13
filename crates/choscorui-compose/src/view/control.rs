@@ -20,6 +20,44 @@ use std::rc::Rc;
 /// The low-level extension point for new controls: a type that measures,
 /// paints, reports semantics, and handles events through the control
 /// protocol. Mount one with [`ControlView::new`].
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{ControlContext, ControlEvent, ControlKind, CustomControl};
+/// # use choscorui_controls::{MeasureContext, PaintContext};
+/// # use choscorui_core::{Color, EventReply, Measured, SemanticNode, SemanticRole, Size};
+/// # struct Swatch(Color);
+/// # impl CustomControl for Swatch {
+/// #     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+/// #         Measured::new(cx.constraints.constrain(Size::new(24.0, 24.0)))
+/// #     }
+/// #     fn event(&mut self, _: &mut ControlContext<'_>, _: &ControlEvent) -> EventReply {
+/// #         EventReply::Continue
+/// #     }
+/// #     fn paint(&self, cx: &mut PaintContext<'_>) {
+/// #         cx.list.fill_rect(cx.bounds, self.0);
+/// #     }
+/// #     fn semantics(&self) -> SemanticNode {
+/// #         SemanticNode {
+/// #             role: SemanticRole::Image,
+/// #             name: "Swatch".into(),
+/// #             description: String::new(),
+/// #             value: None,
+/// #             state: Default::default(),
+/// #             relations: Vec::new(),
+/// #             actions: Vec::new(),
+/// #             text: None,
+/// #         }
+/// #     }
+/// # }
+/// // `Swatch` is the `CustomControl` of the `ControlView` example.
+/// fn mount(control: impl CustomView) -> ControlView {
+///     ControlView::new(control)
+/// }
+/// let view = mount(Swatch(Color::rgb8(0x25, 0x63, 0xeb)));
+/// ```
 pub trait CustomView: CustomControl + 'static {}
 
 impl<T: CustomControl + 'static> CustomView for T {}
@@ -36,6 +74,46 @@ enum Source {
 /// A control mounted as a view. The control keeps its behavior, keyboard
 /// handling, and semantics; the view configures it and connects it to
 /// state.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::{ControlContext, ControlEvent, CustomControl};
+/// # use choscorui_controls::{MeasureContext, PaintContext};
+/// # use choscorui_core::{Color, EventReply, Measured, SemanticNode, SemanticRole, Size};
+/// /// A square of one color.
+/// struct Swatch(Color);
+///
+/// impl CustomControl for Swatch {
+///     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+///         Measured::new(cx.constraints.constrain(Size::new(24.0, 24.0)))
+///     }
+///
+///     fn event(&mut self, _: &mut ControlContext<'_>, _: &ControlEvent) -> EventReply {
+///         EventReply::Continue
+///     }
+///
+///     fn paint(&self, cx: &mut PaintContext<'_>) {
+///         cx.list.fill_rect(cx.bounds, self.0);
+///     }
+///
+///     fn semantics(&self) -> SemanticNode {
+///         SemanticNode {
+///             role: SemanticRole::Image,
+///             name: "Brand color".into(),
+///             description: String::new(),
+///             value: None,
+///             state: Default::default(),
+///             relations: Vec::new(),
+///             actions: Vec::new(),
+///             text: None,
+///         }
+///     }
+/// }
+///
+/// let view = ControlView::new(Swatch(Color::rgb8(0x25, 0x63, 0xeb)));
+/// ```
 pub struct ControlView {
     source: Source,
     kind: Option<ControlKind>,
@@ -49,10 +127,12 @@ pub struct ControlView {
 }
 
 impl ControlView {
+    /// A view that mounts `control`.
     pub fn new(control: impl CustomView) -> Self {
         Self::boxed(Box::new(control))
     }
 
+    /// A view that mounts a boxed `control`.
     pub fn boxed(control: Box<dyn CustomControl>) -> Self {
         Self::with_source(Source::Fixed(control))
     }

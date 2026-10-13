@@ -34,6 +34,26 @@ pub(crate) type LazyHook = Rc<dyn Fn(&mut Inner) -> bool>;
 /// An item that scrolls out of view unmounts, and its state ends; an
 /// item that scrolls in mounts again. The item view runs when the item
 /// mounts, so data that changes belongs in live properties.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Space;
+/// struct Log;
+///
+/// impl View for Log {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let rows = cx.state(10_000_usize);
+///         ScrollView::new(
+///             LazyVStack::new(move || rows.get(), 32.0, |index| {
+///                 Text::new(format!("Row {index}"))
+///             })
+///             .spacing(Space::S1),
+///         )
+///     }
+/// }
+/// ```
 pub struct LazyVStack {
     lazy: Lazy,
     alignment: HorizontalAlignment,
@@ -76,6 +96,17 @@ impl View for LazyVStack {
 /// Items from the leading edge to the trailing edge, mounted only while
 /// they show; mirrored in right-to-left layouts. Every item is
 /// `item_extent` wide. [`LazyVStack`] gives the other rules.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let strip = ScrollView::new(
+///     LazyHStack::new(500_usize, 96.0, |index| Text::new(format!("Photo {index}")))
+///         .alignment(VerticalAlignment::Top),
+/// )
+/// .axis(choscorui_core::Axis::Horizontal);
+/// ```
 pub struct LazyHStack {
     lazy: Lazy,
     alignment: VerticalAlignment,
@@ -94,12 +125,14 @@ impl LazyHStack {
         }
     }
 
+    /// The distance between items.
     #[must_use]
     pub fn spacing(mut self, spacing: impl Into<Metric>) -> Self {
         self.lazy.spacing = spacing.into();
         self
     }
 
+    /// Where items sit across the row.
     #[must_use]
     pub fn alignment(mut self, alignment: VerticalAlignment) -> Self {
         self.alignment = alignment;

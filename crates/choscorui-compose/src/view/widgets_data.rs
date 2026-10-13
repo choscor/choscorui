@@ -138,6 +138,22 @@ impl CustomControl for HeaderLeaf {
 /// column edge, or `+` and `-`, resizes the column and runs `.on_resize`
 /// with the new widths. The header keeps its widths when the columns
 /// are made again, for example for a new locale.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::HeaderColumn;
+/// struct Columns;
+///
+/// impl View for Columns {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let sort = cx.state(None);
+///         let columns = vec![HeaderColumn { title: "Name".into(), width: 160.0, min_width: 60.0 }];
+///         HeaderView::new(columns, sort.binding()).on_resize(|widths| println!("{widths:?}"))
+///     }
+/// }
+/// ```
 pub struct HeaderView {
     columns: Rc<dyn Items<HeaderColumn>>,
     sort: Binding<Sort>,
@@ -145,6 +161,7 @@ pub struct HeaderView {
 }
 
 impl HeaderView {
+    /// A header of `columns`; `sort` edits the sort column and order.
     pub fn new(columns: impl Items<HeaderColumn>, sort: Binding<Sort>) -> Self {
         Self {
             columns: Rc::new(columns),
@@ -196,9 +213,26 @@ impl View for HeaderView {
 /// Columns of a tree model, one level each: Right opens a row's
 /// children, and Left goes back. `path` edits the row chosen in each
 /// column, from the first.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{ItemModel, StringListModel};
+/// struct Files;
+///
+/// impl View for Files {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let path = cx.state(Vec::new());
+///         let model = || Box::new(StringListModel::from_strings(["Documents", "Music"])) as Box<dyn ItemModel>;
+///         ColumnBrowser::new("Files", model, path.binding())
+///     }
+/// }
+/// ```
 pub type ColumnBrowser = Configured<controls::HostedColumnBrowser>;
 
 impl Configured<controls::HostedColumnBrowser> {
+    /// A column browser named `name` of the tree model that `model` makes.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         model: impl Fn() -> Box<dyn ItemModel> + 'static,
@@ -215,9 +249,19 @@ impl Configured<controls::HostedColumnBrowser> {
 /// Rows of items, each with a title and optional media, description,
 /// header, footer, and action. A link row or an action button reports
 /// its tab stop index through `.on_item`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls as controls;
+/// let rows = vec![controls::Item::new("Profile").with_description("Name and photo")];
+/// let group = ItemGroup::new("Settings", rows).on_item(|index| println!("row {index}"));
+/// ```
 pub type ItemGroup = Configured<controls::ItemGroup>;
 
 impl Configured<controls::ItemGroup> {
+    /// An item group named `name` of `items`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<controls::Item>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Item, move |env| {

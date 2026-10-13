@@ -58,6 +58,7 @@ pub(super) fn percent() -> SharedLimits {
 pub type Slider = Configured<controls::Slider>;
 
 impl Configured<controls::Slider> {
+    /// A horizontal slider named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
         Self::oriented(name, value, SliderOrientation::Horizontal)
     }
@@ -105,6 +106,7 @@ impl Configured<controls::Slider> {
 pub type SpinBox = Configured<controls::SpinBox>;
 
 impl Configured<controls::SpinBox> {
+    /// A spin box named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<i32>) -> Self {
         let name = label(name);
         let limits = percent();
@@ -134,6 +136,7 @@ impl Configured<controls::SpinBox> {
 pub type Progress = Configured<controls::Progress>;
 
 impl Configured<controls::Progress> {
+    /// A progress bar named `name` that shows `value`.
     pub fn new<M, N>(name: impl IntoLive<TextContent, M>, value: impl IntoLive<u32, N>) -> Self {
         let name = label(name);
         let limits = percent();
@@ -171,9 +174,24 @@ impl Configured<controls::Progress> {
 
 /// A single-line text field that edits `value`. Enter runs the
 /// `on_activate` action.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Search;
+///
+/// impl View for Search {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let query = cx.state(String::new());
+///         TextField::new("Search", query.binding())
+///     }
+/// }
+/// ```
 pub type TextField = Configured<controls::TextField>;
 
 impl Configured<controls::TextField> {
+    /// A text field named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Input, move |env| {
@@ -185,9 +203,25 @@ impl Configured<controls::TextField> {
 
 /// Radio buttons, one for each option; `selected` edits the chosen
 /// option. An empty list reports a build error.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Size;
+///
+/// impl View for Size {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let size = cx.state(0);
+///         let options = vec!["Small".to_owned(), "Large".to_owned()];
+///         RadioGroup::new("Size", options, size.binding())
+///     }
+/// }
+/// ```
 pub type RadioGroup = Configured<controls::HostedRadioGroup>;
 
 impl Configured<controls::HostedRadioGroup> {
+    /// A radio group named `name` with one button for each option.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         options: impl Items<String>,
@@ -204,9 +238,25 @@ impl Configured<controls::HostedRadioGroup> {
 /// A tab list, one tab for each label; `selected` edits the chosen tab.
 /// Show the chosen tab's content next to it. An empty list reports a
 /// build error.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Pages;
+///
+/// impl View for Pages {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let tab = cx.state(0);
+///         let tabs = vec!["General".to_owned(), "Advanced".to_owned()];
+///         Tabs::new("Settings", tabs, tab.binding())
+///     }
+/// }
+/// ```
 pub type Tabs = Configured<controls::HostedTabs>;
 
 impl Configured<controls::HostedTabs> {
+    /// A tab list named `name` with one tab for each label.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         tabs: impl Items<String>,
@@ -232,9 +282,25 @@ fn combo_items(items: Vec<String>) -> Vec<ComboItem> {
 }
 
 /// A field with a list of suggestions; `selected` edits the chosen item.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Country;
+///
+/// impl View for Country {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let selected = cx.state(None);
+///         let countries = vec!["France".to_owned(), "Japan".to_owned()];
+///         Combobox::new("Country", countries, selected.binding())
+///     }
+/// }
+/// ```
 pub type Combobox = Configured<controls::Combobox>;
 
 impl Configured<controls::Combobox> {
+    /// A combobox named `name` with `items`; `selected` edits the chosen item.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         items: impl Items<String>,
@@ -266,9 +332,24 @@ impl Configured<controls::Combobox> {
 }
 
 /// A multiline plain-text editor that edits `value`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Editor;
+///
+/// impl View for Editor {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let text = cx.state(String::new());
+///         TextEditor::new("Document", text.binding())
+///     }
+/// }
+/// ```
 pub type TextEditor = Configured<controls::TextEditor>;
 
 impl Configured<controls::TextEditor> {
+    /// A text editor named `name` that edits `value`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::TextEditor, move |env| {
@@ -280,9 +361,26 @@ impl Configured<controls::TextEditor> {
 
 /// A month grid in the environment's locale; `selected` edits the chosen
 /// day.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::CivilDate;
+/// struct Agenda;
+///
+/// impl View for Agenda {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let today = CivilDate::new(2026, 10, 13).expect("a valid date");
+///         let day = cx.state(today);
+///         Calendar::new(day.binding())
+///     }
+/// }
+/// ```
 pub type Calendar = Configured<controls::Calendar>;
 
 impl Configured<controls::Calendar> {
+    /// A calendar; `selected` edits the chosen day.
     pub fn new(selected: Binding<CivilDate>) -> Self {
         Configured::try_custom(ControlKind::Calendar, move |env| {
             let day = Runtime::untracked(|| selected.try_get())?;

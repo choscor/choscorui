@@ -40,6 +40,7 @@ pub struct Edges {
 }
 
 impl Edges {
+    /// Padding with a value for each edge.
     pub fn new(
         top: impl Into<Metric>,
         leading: impl Into<Metric>,
@@ -54,6 +55,7 @@ impl Edges {
         }
     }
 
+    /// The same padding on all four edges.
     pub fn all(value: impl Into<Metric>) -> Self {
         let value = value.into();
         Self::new(value, value, value, value)
@@ -117,6 +119,7 @@ impl Default for Frame {
 }
 
 impl Frame {
+    /// A frame without constraints, with the content in the center.
     pub fn new() -> Self {
         Self::default()
     }
@@ -126,24 +129,28 @@ impl Frame {
         Self::new().width(width).height(height)
     }
 
+    /// The fixed width.
     #[must_use]
     pub fn width(mut self, width: f64) -> Self {
         self.width = Some(width);
         self
     }
 
+    /// The fixed height.
     #[must_use]
     pub fn height(mut self, height: f64) -> Self {
         self.height = Some(height);
         self
     }
 
+    /// The smallest width.
     #[must_use]
     pub fn min_width(mut self, width: f64) -> Self {
         self.min.width = width;
         self
     }
 
+    /// The smallest height.
     #[must_use]
     pub fn min_height(mut self, height: f64) -> Self {
         self.min.height = height;
@@ -158,12 +165,14 @@ impl Frame {
         self
     }
 
+    /// The tallest the frame grows.
     #[must_use]
     pub fn max_height(mut self, height: f64) -> Self {
         self.max_height = Some(height);
         self
     }
 
+    /// The alignment of the content in the frame.
     #[must_use]
     pub fn alignment(mut self, alignment: Alignment) -> Self {
         self.alignment = alignment;
@@ -265,12 +274,25 @@ impl Modifier {
 }
 
 /// A view with an ordered list of modifiers.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{ColorRole, Space};
+/// // `padding` makes a `Styled` view, and `background` adds to its list.
+/// let note: Styled<Text> = Text::new("Note")
+///     .padding(Space::S2)
+///     .background(ColorRole::Muted);
+/// ```
 pub struct Styled<V> {
     view: V,
     modifiers: Vec<Modifier>,
 }
 
 impl<V: View> Styled<V> {
+    /// The view without modifiers. The modifiers of [`ViewExt`] make
+    /// a `Styled` view, so an app seldom calls this.
     pub fn new(view: V) -> Self {
         Self {
             view,
@@ -331,116 +353,543 @@ macro_rules! modifiers {
 
 modifiers! {
     /// Space around the view, on all or on logical edges.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Space;
+    /// let note = Text::new("Hello").padding(Space::S4);
+    /// let row = Text::new("Name").padding(Edges::horizontal(Space::S2));
+    /// ```
     fn padding(edges: impl Into<Edges>) => Modifier::Padding(edges.into());
     /// Size constraints, with the content aligned in the frame.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let title = Text::new("Title")
+    ///     .frame(Frame::new().width(200.0).alignment(Alignment::LEADING));
+    /// ```
     fn frame(frame: Frame) => Modifier::Frame(frame);
     /// A share of the leftover space along the parent stack.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let row = HStack::new((
+    ///     Text::new("A long file name").layout_priority(1.0),
+    ///     Text::new("12 KB"),
+    /// ));
+    /// ```
     fn layout_priority(priority: f64) => Modifier::Priority(priority.max(0.0));
     /// Keeps the view at its measured size when the parent overflows.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let status = Text::new("Connected").fixed_size();
+    /// ```
     fn fixed_size() => Modifier::FixedSize;
     /// Keeps width ÷ height at `ratio`, with the width the view gets.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let preview = Text::new("Preview").aspect_ratio(16.0 / 9.0);
+    /// ```
     fn aspect_ratio(ratio: f64) => Modifier::AspectRatio(ratio);
     /// Moves the painted view without changing its layout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Point;
+    /// let badge = Text::new("3").offset(Point::new(4.0, -4.0));
+    /// ```
     fn offset<M>(offset: impl IntoLive<Point, M>) => Modifier::Offset(offset.into_live());
     /// Hides the view but keeps its space.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let saved = Text::new("Saved").hidden(true);
+    /// ```
     fn hidden<M>(hidden: impl IntoLive<bool, M>) => Modifier::Hidden(hidden.into_live());
     /// Paints `fill` behind the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{ColorRole, Space};
+    /// let note = Text::new("Note")
+    ///     .padding(Space::S2)
+    ///     .background(ColorRole::Muted);
+    /// ```
     fn background<M>(fill: impl IntoLive<Fill, M>) => Modifier::Background(fill.into_live());
     /// Strokes the view's edge inside its bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{ColorRole, Space};
+    /// let card = Text::new("Card").padding(Space::S4).border(ColorRole::Border, 1.0);
+    /// ```
     fn border<M>(fill: impl IntoLive<Fill, M>, width: f64) => Modifier::Border(fill.into_live(), width);
     /// Rounds the corners of the view's background, border, and clip.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{ColorRole, RadiusScale};
+    /// let chip = Text::new("Chip")
+    ///     .background(ColorRole::Secondary)
+    ///     .corner_radius(RadiusScale::Md);
+    /// ```
     fn corner_radius<M>(radius: impl IntoLive<Corner, M>) => Modifier::CornerRadius(radius.into_live());
     /// Paints a shadow under the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{ColorRole, ShadowScale};
+    /// let card = Text::new("Card")
+    ///     .background(ColorRole::Card)
+    ///     .shadow(ShadowScale::Sm);
+    /// ```
     fn shadow<M>(shadow: impl IntoLive<Elevation, M>) => Modifier::Shadow(shadow.into_live());
     /// Fades the view and its content.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let hint = Text::new("Optional").opacity(0.5);
+    /// ```
     fn opacity<M>(opacity: impl IntoLive<f64, M>) => Modifier::Opacity(opacity.into_live());
     /// Clips the content to the view's bounds and corner radius.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::RadiusScale;
+    /// let image = Text::new("Photo").corner_radius(RadiusScale::Lg).clip_shape();
+    /// ```
     fn clip_shape() => Modifier::Clip;
     /// Strokes an outline just outside the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::ColorRole;
+    /// let selected = Text::new("Selected").ring(ColorRole::Ring, 2.0);
+    /// ```
     fn ring<M>(fill: impl IntoLive<Fill, M>, width: f64) => Modifier::Ring(fill.into_live(), width);
     /// The color of text in the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::ColorRole;
+    /// let caption = Text::new("Caption").foreground(ColorRole::MutedForeground);
+    /// ```
     fn foreground<M>(fill: impl IntoLive<Fill, M>) => Modifier::Foreground(fill.into_live());
     /// The text preset of text in the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::TextPreset;
+    /// let heading = Text::new("Settings").text_style(TextPreset::H2);
+    /// ```
     fn text_style<M>(preset: impl IntoLive<TextPreset, M>) => Modifier::TextStyle(preset.into_live());
     /// The font weight of text in the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::FontWeight;
+    /// let label = Text::new("Total").font_weight(FontWeight::BOLD);
+    /// ```
     fn font_weight<M>(weight: impl IntoLive<FontWeight, M>) => Modifier::Weight(weight.into_live());
     /// The letter spacing of text in the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Tracking;
+    /// let caps = Text::new("NEW").tracking(Tracking::Wide);
+    /// ```
     fn tracking<M>(tracking: impl IntoLive<Tracking, M>) => Modifier::Tracking(tracking.into_live());
     /// The accent color of controls in the view: the primary role.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Color;
+    /// let form = VStack::new((
+    ///     Button::new("Save", || {}),
+    ///     Button::new("Cancel", || {}),
+    /// ))
+    /// .tint(Color::rgb8(0x25, 0x63, 0xeb));
+    /// ```
     fn tint<M>(fill: impl IntoLive<Fill, M>) => Modifier::Token(ColorRole::Primary, fill.into_live());
     /// The base color and scheme of the view and its descendants.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{BaseColor, ColorScheme};
+    /// let panel = Text::new("Dark panel").theme((BaseColor::Zinc, ColorScheme::Dark));
+    /// ```
     fn theme<M>(theme: impl IntoLive<(BaseColor, ColorScheme), M>) => Modifier::Theme(theme.into_live());
     /// The color scheme of the view and its descendants.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::ColorScheme;
+    /// let panel = Text::new("Dark panel").color_scheme(ColorScheme::Dark);
+    /// ```
     fn color_scheme<M>(scheme: impl IntoLive<ColorScheme, M>) => Modifier::Scheme(scheme.into_live());
     /// Replaces one color token in the view and its descendants.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::{Color, ColorRole};
+    /// let alert = Button::new("Delete", || {})
+    ///     .token(ColorRole::Destructive, Color::rgb8(0xb9, 0x1c, 0x1c));
+    /// ```
     fn token<M>(role: ColorRole, fill: impl IntoLive<Fill, M>) => Modifier::Token(role, fill.into_live());
     /// Paints controls of `kind` in the view with `recipe`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::{ControlKind, DefaultRecipe};
+    /// # use std::rc::Rc;
+    /// let save = Button::new("Save", || {}).recipe(ControlKind::Button, Rc::new(DefaultRecipe));
+    /// ```
     fn recipe(kind: ControlKind, recipe: Rc<dyn Recipe>) => Modifier::Recipe(kind, recipe);
     /// The variant of buttons in the view that have none of their own.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ButtonVariant;
+    /// let toolbar = HStack::new((
+    ///     Button::new("Bold", || {}),
+    ///     Button::new("Italic", || {}),
+    /// ))
+    /// .button_variant(ButtonVariant::Outline);
+    /// ```
     fn button_variant<M>(variant: impl IntoLive<ButtonVariant, M>) => Modifier::Variant(variant.into_live());
     /// The size of controls in the view that have none of their own.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ControlSize;
+    /// let toolbar = HStack::new((
+    ///     Button::new("Cut", || {}),
+    ///     Button::new("Copy", || {}),
+    /// ))
+    /// .control_size(ControlSize::Sm);
+    /// ```
     fn control_size<M>(size: impl IntoLive<ControlSize, M>) => Modifier::Size(size.into_live());
     /// Disables every control in the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let form = VStack::new((
+    ///     Button::new("Save", || {}),
+    ///     Button::new("Revert", || {}),
+    /// ))
+    /// .disabled(true);
+    /// ```
     fn disabled<M>(disabled: impl IntoLive<bool, M>) => Modifier::Disabled(disabled.into_live());
     /// The locale of the view's text, and its layout direction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Locale;
+    /// let locale = Locale::parse("vi").unwrap_or_else(|_| Locale::root());
+    /// let page = Text::new("Hello").locale(locale);
+    /// ```
     fn locale<M>(locale: impl IntoLive<Locale, M>) => Modifier::Locale(locale.into_live());
     /// The layout direction of the view, instead of the locale's.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::LayoutDirection;
+    /// let row = HStack::new((Text::new("A"), Text::new("B")))
+    ///     .layout_direction(LayoutDirection::Rtl);
+    /// ```
     fn layout_direction<M>(direction: impl IntoLive<LayoutDirection, M>) => Modifier::Direction(direction.into_live());
     /// Changes the environment of the view's descendants.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let page = Text::new("Hello").environment(|env| env.set_value(42_u32));
+    /// ```
     fn environment(change: impl Fn(&mut Env) + 'static) => Modifier::Environment(Rc::new(change));
     /// The name that assistive technology reads.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let close = Button::new("X", || {}).accessibility_label("Close");
+    /// ```
     fn accessibility_label<M>(label: impl IntoLive<String, M>) => Modifier::Access(AccessField::Label, label.into_live());
     /// What happens when the view is used, for assistive technology.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let send = Button::new("Send", || {}).accessibility_hint("Sends the message");
+    /// ```
     fn accessibility_hint<M>(hint: impl IntoLive<String, M>) => Modifier::Access(AccessField::Hint, hint.into_live());
     /// The value that assistive technology reads.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let level = Text::new("80%").accessibility_value("80 percent");
+    /// ```
     fn accessibility_value<M>(value: impl IntoLive<String, M>) => Modifier::Access(AccessField::Value, value.into_live());
     /// Hides the view and its descendants from assistive technology.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let divider = Text::new("|").accessibility_hidden(true);
+    /// ```
     fn accessibility_hidden<M>(hidden: impl IntoLive<bool, M>) => Modifier::AccessHidden(hidden.into_live());
     /// Runs `action` for `key` with `modifiers` while focus is in the
     /// view, or anywhere when no closer view declares the same keys.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ShortcutModifiers;
+    /// # use choscorui_core::Key;
+    /// let command = ShortcutModifiers { command: true, ..ShortcutModifiers::default() };
+    /// let editor = Text::new("Document")
+    ///     .keyboard_shortcut(Key::Character('s'), command, || println!("save"));
+    /// ```
     fn keyboard_shortcut(key: Key, modifiers: ShortcutModifiers, action: impl Fn() + 'static) => Modifier::Shortcut(key, modifiers, Rc::new(action));
     /// Runs `action` when the control commits its input, for example
     /// Return in a text input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let query = cx.state(String::new());
+    ///         Input::new("Search", query.binding())
+    ///             .on_submit(move || println!("search for {}", query.get()))
+    ///     }
+    /// }
+    /// ```
     fn on_submit(action: impl Fn() + 'static) => Modifier::OnMessage(Rc::new(move |message: &ControlMessage| {
         if *message == ControlMessage::Activated {
             action();
         }
     }));
     /// Calls `handler` with each message of the view's control.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ControlMessage;
+    /// let save = Button::new("Save", || {}).on_message(|message| {
+    ///     if *message == ControlMessage::Activated {
+    ///         println!("saved");
+    ///     }
+    /// });
+    /// ```
     fn on_message(handler: impl Fn(&ControlMessage) + 'static) => Modifier::OnMessage(Rc::new(handler));
     /// Keeps `focused` true while the view has keyboard focus; setting it
     /// moves focus to the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let editing = cx.state(false);
+    ///         VStack::new((
+    ///             Input::new("Name", cx.state(String::new()).binding()).focused(editing.binding()),
+    ///             Button::new("Edit", move || editing.set(true)),
+    ///         ))
+    ///     }
+    /// }
+    /// ```
     fn focused(focused: Binding<bool>) => Modifier::Focused(focused);
     /// Whether keyboard focus can stop on the view.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let card = Text::new("Card").focusable(true);
+    /// ```
     fn focusable(focusable: bool) => Modifier::Focusable(focusable);
     /// Shows `text` in a tooltip after the pointer rests on the view, or
     /// after keyboard focus moves into it. The text also describes the
     /// view for assistive technology.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let save = Button::new("Save", || {}).tooltip("Save the document");
+    /// ```
     fn tooltip<M>(text: impl IntoLive<TextContent, M>) => tooltip::tooltip(text.into_live());
     /// Shows `content` in a hover card next to the view after the
     /// pointer rests on the view, or after keyboard focus moves into it.
     /// The card closes when the pointer leaves the view and the card, when
     /// focus leaves the view, or on Escape. It takes no focus.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let name = Text::new("@ana").hover_card(|| Text::new("Ana, designer"));
+    /// ```
     fn hover_card<C: View>(content: impl Fn() -> C + 'static) => hover_card::hover_card(content);
     /// Opens a menu of `items` at the pointer on a secondary click or a
     /// Control-click on the view, or for the `ShowMenu` action.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let file = Text::new("report.txt").context_menu(vec![
+    ///     MenuChoice::action("Rename", || {}),
+    ///     MenuChoice::separator(),
+    ///     MenuChoice::action("Delete", || {}).destructive(),
+    /// ]);
+    /// ```
     fn context_menu(items: impl Items<MenuChoice>) => menus::context_menu(items);
     /// Shows a menu of `items` below the view while `presented` is true.
     /// A chosen item or Escape sets `presented` to false.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let open = cx.state(false);
+    ///         Button::new("Options", move || open.set(true)).dropdown_menu(
+    ///             open.binding(),
+    ///             vec![MenuChoice::action("Copy", || {}), MenuChoice::action("Paste", || {})],
+    ///         )
+    ///     }
+    /// }
+    /// ```
     fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoice>) => menus::dropdown_menu(presented, items);
     /// Shows the toasts that descendants post through
     /// [`Env::toasts`], at `position` in the window. `name` names the
     /// stack and `close` names the close buttons.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ToastPosition;
+    /// let page = VStack::new((Text::new("Inbox"),))
+    ///     .toaster(ToastPosition::BottomEnd, "Notifications", "Close");
+    /// ```
     fn toaster<M, N>(position: ToastPosition, name: impl IntoLive<TextContent, M>, close: impl IntoLive<TextContent, N>) => Modifier::Toaster(ToasterSpec::new(position, name.into_live(), close.into_live()));
     /// Posts the toast that `toast` makes when `presented` becomes true,
     /// and sets `presented` back to false. A `toaster` above the view
     /// shows it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::Toast;
+    /// struct Example;
+    ///
+    /// impl View for Example {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let saved = cx.state(false);
+    ///         Button::new("Save", move || saved.set(true))
+    ///             .toast(saved.binding(), |_| Toast::new("Saved"))
+    ///     }
+    /// }
+    /// ```
     fn toast(presented: Binding<bool>, toast: impl Fn(&Env) -> Toast + 'static) => Modifier::Toast(presented, Rc::new(toast));
 
     present {
         /// Shows `content` in a dialog while `presented` is true. Escape
         /// or a press outside the dialog sets `presented` to false.
         /// `title` names the dialog for assistive technology.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # use choscorui_compose::view::*;
+        /// struct Example;
+        ///
+        /// impl View for Example {
+        ///     fn body(&self, cx: &mut Cx) -> impl View {
+        ///         let open = cx.state(false);
+        ///         Button::new("Settings", move || open.set(true))
+        ///             .dialog(open.binding(), "Settings", || Text::new("Preferences"))
+        ///     }
+        /// }
+        /// ```
         fn dialog<M>(title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Dialog,
             variant: Variant::default(),
@@ -450,6 +899,22 @@ modifiers! {
         }, Some(title.into_live()));
         /// Shows `content` in an alert dialog, which asks the user to
         /// confirm or cancel. `title` names it.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # use choscorui_compose::view::*;
+        /// struct Example;
+        ///
+        /// impl View for Example {
+        ///     fn body(&self, cx: &mut Cx) -> impl View {
+        ///         let open = cx.state(false);
+        ///         Button::new("Delete", move || open.set(true)).alert_dialog(open.binding(), "Delete file?", move || {
+        ///             Button::new("Cancel", move || open.set(false))
+        ///         })
+        ///     }
+        /// }
+        /// ```
         fn alert_dialog<M>(title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::AlertDialog,
             variant: Variant::default(),
@@ -459,6 +924,26 @@ modifiers! {
         }, Some(title.into_live()));
         /// Shows `content` in a sheet along the `side` edge. `title`
         /// names it.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # use choscorui_compose::view::*;
+        /// # use choscorui_controls::SheetSide;
+        /// struct Example;
+        ///
+        /// impl View for Example {
+        ///     fn body(&self, cx: &mut Cx) -> impl View {
+        ///         let open = cx.state(false);
+        ///         Button::new("Details", move || open.set(true)).sheet(
+        ///             open.binding(),
+        ///             SheetSide::Right,
+        ///             "Details",
+        ///             || Text::new("Size: 12 KB"),
+        ///         )
+        ///     }
+        /// }
+        /// ```
         fn sheet<M>(side: SheetSide, title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Sheet,
             variant: side.into(),
@@ -469,6 +954,26 @@ modifiers! {
         /// Shows `content` in a drawer along the `side` edge. A pointer
         /// drag toward the edge past a quarter of its size sets
         /// `presented` to false. `title` names it.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # use choscorui_compose::view::*;
+        /// # use choscorui_controls::SheetSide;
+        /// struct Example;
+        ///
+        /// impl View for Example {
+        ///     fn body(&self, cx: &mut Cx) -> impl View {
+        ///         let open = cx.state(false);
+        ///         Button::new("Filters", move || open.set(true)).drawer(
+        ///             open.binding(),
+        ///             SheetSide::Bottom,
+        ///             "Filters",
+        ///             || Text::new("Only unread"),
+        ///         )
+        ///     }
+        /// }
+        /// ```
         fn drawer<M>(side: SheetSide, title: impl IntoLive<TextContent, M>) => (Presentation {
             kind: ControlKind::Drawer,
             variant: side.into(),
@@ -477,6 +982,21 @@ modifiers! {
             modal: true,
         }, Some(title.into_live()));
         /// Shows `content` in a popover next to the view.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// # use choscorui_compose::view::*;
+        /// struct Example;
+        ///
+        /// impl View for Example {
+        ///     fn body(&self, cx: &mut Cx) -> impl View {
+        ///         let open = cx.state(false);
+        ///         Button::new("Info", move || open.set(true))
+        ///             .popover(open.binding(), || Text::new("Version 1.0"))
+        ///     }
+        /// }
+        /// ```
         fn popover() => (Presentation {
             kind: ControlKind::Popover,
             variant: Variant::default(),

@@ -54,6 +54,23 @@ pub(super) fn mount_in(
 /// read changes: `Dynamic::new(move || show.get().then(|| Text::new("Hi")))`.
 /// The closure should read only what decides the structure; the views it
 /// returns update their own live properties.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Details;
+///
+/// impl View for Details {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let show = cx.state(false);
+///         VStack::new((
+///             Button::new("Details", move || show.update(|on| *on = !*on)),
+///             Dynamic::new(move || show.get().then(|| Text::new("More text"))),
+///         ))
+///     }
+/// }
+/// ```
 pub struct Dynamic<F> {
     choose: F,
 }
@@ -63,6 +80,7 @@ where
     F: Fn() -> V + 'static,
     V: View,
 {
+    /// A view that `choose` makes, again after each change that it read.
     pub fn new(choose: F) -> Self {
         Self { choose }
     }
@@ -89,6 +107,26 @@ where
 /// view closure runs only when the key changes, and its view replaces the
 /// old one; while the key stays, the mounted view keeps its nodes, focus,
 /// semantics, and state.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Pages;
+///
+/// impl View for Pages {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let tab = cx.state(0_u8);
+///         VStack::new((
+///             Button::new("Next", move || tab.update(|page| *page = (*page + 1) % 2)),
+///             Branch::new(move || tab.get(), |page| match page {
+///                 0 => Text::new("Home").into_any(),
+///                 _ => Text::new("Settings").into_any(),
+///             }),
+///         ))
+///     }
+/// }
+/// ```
 pub struct Branch<KF, VF> {
     key: KF,
     view: VF,
@@ -101,6 +139,7 @@ where
     KF: Fn() -> K + 'static,
     VF: Fn(&K) -> V + 'static,
 {
+    /// A view that `view` makes from the key that `key` returns.
     pub fn new(key: KF, view: VF) -> Self {
         Self { key, view }
     }
@@ -184,6 +223,24 @@ struct Entry<K, T> {
 /// whose key survives keep their nodes, focus, and semantics; new keys
 /// mount, removed keys unmount, and the nodes follow the new order. An
 /// item whose value changed under the same key mounts again.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Todos;
+///
+/// impl View for Todos {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let items = cx.state(vec![(1_u32, String::from("Write")), (2, String::from("Test"))]);
+///         VStack::new(ForEach::new(
+///             move || items.get(),
+///             |(id, _)| *id,
+///             |(_, title)| Text::new(title.clone()),
+///         ))
+///     }
+/// }
+/// ```
 pub struct ForEach<T, K, V> {
     items: Live<Vec<T>>,
     key: Rc<dyn Fn(&T) -> K>,
@@ -196,6 +253,8 @@ where
     K: Clone + Eq + Hash + std::fmt::Debug + 'static,
     V: View,
 {
+    /// One view for each item of `items`, matched across changes by
+    /// the value that `key` returns.
     pub fn new<M>(
         items: impl IntoLive<Vec<T>, M>,
         key: impl Fn(&T) -> K + 'static,

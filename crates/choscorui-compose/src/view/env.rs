@@ -20,6 +20,7 @@ pub enum Fill {
 }
 
 impl Fill {
+    /// The color in `tokens`.
     pub fn resolve(self, tokens: &DesignTokens) -> Color {
         match self {
             Self::Role(role) => tokens.color(role),
@@ -48,6 +49,7 @@ pub enum Metric {
 }
 
 impl Metric {
+    /// The length in points in `tokens`.
     pub fn resolve(self, tokens: &DesignTokens) -> f64 {
         match self {
             Self::Space(step) => tokens.gap(step),
@@ -108,6 +110,7 @@ pub enum Elevation {
 }
 
 impl Elevation {
+    /// The shadow layers in `tokens`.
     pub fn resolve(self, tokens: &DesignTokens) -> ShadowLayers {
         match self {
             Self::Scale(step) => tokens.shadow(step),

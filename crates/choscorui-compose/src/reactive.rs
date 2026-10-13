@@ -108,16 +108,21 @@ impl Drop for TrackFrame {
     }
 }
 
+/// The reactive graph: typed properties and the connections between
+/// them. Clones share one graph. The views of all windows of an app use
+/// one runtime.
 #[derive(Clone, Default)]
 pub struct Runtime {
     state: Rc<RefCell<State>>,
 }
 
 impl Runtime {
+    /// An empty runtime.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// A new property with the start value `value`.
     pub fn property<T>(&self, value: T) -> Property<T>
     where
         T: Clone + PartialEq + 'static,
@@ -130,6 +135,8 @@ impl Runtime {
         }
     }
 
+    /// Runs `operation` and sends the change notifications once, after
+    /// it returns.
     pub fn batch<R>(&self, operation: impl FnOnce() -> R) -> R {
         self.state.borrow_mut().depth += 1;
         let guard = BatchDepth(self);
@@ -139,6 +146,8 @@ impl Runtime {
         result
     }
 
+    /// A property that `compute` calculates from `source`, again after
+    /// each change of `source`.
     pub fn derive1<A, T>(
         &self,
         source: &Property<A>,
@@ -166,6 +175,8 @@ impl Runtime {
         Ok(output)
     }
 
+    /// A property that `compute` calculates from two sources, again
+    /// after each change of one of them.
     pub fn derive2<A, B, T>(
         &self,
         first: &Property<A>,
@@ -200,6 +211,8 @@ impl Runtime {
         Ok(output)
     }
 
+    /// Writes `map` of `source` into `target` now and after each change
+    /// of `source`.
     pub fn bind<A, T>(
         &self,
         source: &Property<A>,
@@ -406,6 +419,7 @@ impl Runtime {
         self.attach(subscription, reads);
     }
 
+    /// Takes the errors that derived properties and bindings reported.
     pub fn take_errors(&self) -> Vec<ReactiveError> {
         std::mem::take(&mut self.state.borrow_mut().errors)
     }

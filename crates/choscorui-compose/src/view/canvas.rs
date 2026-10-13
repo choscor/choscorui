@@ -213,6 +213,22 @@ impl CustomControl for CanvasLeaf {
 /// The canvas wraps a `CanvasView`. The closure draws in canvas
 /// coordinates, which start at the top-left corner of the node, and
 /// `size` is the size of the node in points.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{Color, Rect};
+/// let bars = Canvas::new(|ctx, size| {
+///     for (index, value) in [0.4, 0.9, 0.6].into_iter().enumerate() {
+///         let height = size.height * value;
+///         let x = index as f64 * 24.0;
+///         let bar = Rect::from_xywh(x, size.height - height, 16.0, height);
+///         ctx.list.fill_rect(bar, Color::rgb8(0x25, 0x63, 0xeb));
+///     }
+/// })
+/// .label("Sales by month");
+/// ```
 pub struct Canvas {
     draw: Draw,
     label: String,
@@ -220,6 +236,7 @@ pub struct Canvas {
 }
 
 impl Canvas {
+    /// A canvas that `draw` paints, again after each change that it read.
     pub fn new(draw: impl Fn(&mut CanvasContext<'_>, Size) + 'static) -> Self {
         Self {
             draw: Rc::new(draw),

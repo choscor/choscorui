@@ -111,6 +111,15 @@ pub trait View: 'static {
 }
 
 /// A view that shows nothing.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// fn badge(count: u32) -> AnyView {
+///     if count == 0 { Empty.into_any() } else { Text::new(count.to_string()).into_any() }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Empty;
 
@@ -121,9 +130,21 @@ impl View for Empty {
 type Mounter = Box<dyn FnOnce(&mut Cx)>;
 
 /// A view of any type.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// let pages: Vec<AnyView> = vec![
+///     AnyView::new(Text::new("Home")),
+///     Button::new("Open", || {}).into_any(),
+/// ];
+/// let view = VStack::new(pages);
+/// ```
 pub struct AnyView(Mounter);
 
 impl AnyView {
+    /// `view` with its type erased.
     pub fn new(view: impl View) -> Self {
         Self(Box::new(move |cx| view.mount(cx)))
     }
@@ -146,6 +167,19 @@ impl std::fmt::Debug for AnyView {
 }
 
 /// One of two views, for a branch whose sides have different types.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// fn status(online: bool) -> Either<Text, Button> {
+///     if online {
+///         Either::Left(Text::new("Online"))
+///     } else {
+///         Either::Right(Button::new("Connect", || {}))
+///     }
+/// }
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub enum Either<A, B> {
     Left(A),

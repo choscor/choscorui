@@ -32,6 +32,26 @@ impl Default for RowLook {
 
 /// Rows of labelled fields. Each row is a [`FormRow`]. Labels sit against
 /// their fields by default, at the trailing edge of the label column.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::Space;
+/// struct Profile;
+///
+/// impl View for Profile {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let name = cx.state(String::new());
+///         let public = cx.state(false);
+///         Form::new((
+///             FormRow::new("Name", TextField::new("Name", name.binding())),
+///             FormRow::new("Public", Switch::new("Public", public.binding())),
+///         ))
+///         .row_spacing(Space::S3)
+///     }
+/// }
+/// ```
 pub struct Form<R> {
     rows: R,
     row_spacing: Option<Metric>,
@@ -111,6 +131,20 @@ fn form_node(cx: &mut Cx, rows: Option<Metric>, columns: Option<Metric>) -> chos
 }
 
 /// One row of a [`Form`]: a field label and the field.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// struct Volume;
+///
+/// impl View for Volume {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let muted = cx.state(false);
+///         Form::new(FormRow::new("Sound", Checkbox::new("Mute", muted.binding())))
+///     }
+/// }
+/// ```
 pub struct FormRow<F> {
     label: super::widgets::Label,
     field: F,

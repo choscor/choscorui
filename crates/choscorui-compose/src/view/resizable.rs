@@ -39,6 +39,22 @@ type Model = Rc<RefCell<HostedResizable>>;
 /// three or more panes, each handle is its own node and focus stop, with
 /// its own slider semantics, in a group node. A horizontal group mirrors
 /// in right-to-left layouts. The group takes the space it is offered.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::SplitOrientation;
+/// struct Split;
+///
+/// impl View for Split {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let sizes = cx.state(vec![240.0]);
+///         let panes = (Text::new("Sidebar"), Text::new("Content"));
+///         Resizable::new("Panes", SplitOrientation::Horizontal, panes, sizes.binding())
+///     }
+/// }
+/// ```
 pub struct Resizable<P> {
     name: Label,
     orientation: SplitOrientation,
