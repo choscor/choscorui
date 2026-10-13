@@ -290,6 +290,30 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `Calendar::dates`
+
+```rust
+pub fn dates(month: CivilDate, mode: CalendarMode, dates: Binding<Vec<CivilDate>>) -> Self
+```
+
+A calendar that chooses several days, or a range with
+`CalendarMode::Range`; `dates` edits them. It first shows
+`month`.
+
+##### Examples
+
+```rust
+struct Trip;
+
+impl View for Trip {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let month = CivilDate::new(2026, 10, 1).expect("a valid date");
+        let days = cx.state(Vec::new());
+        Calendar::dates(month, CalendarMode::Range, days.binding())
+    }
+}
+```
+
 #### `Calendar::new`
 
 ```rust
@@ -532,7 +556,7 @@ struct Files;
 impl View for Files {
     fn body(&self, cx: &mut Cx) -> impl View {
         let path = cx.state(Vec::new());
-        let model = || Box::new(StringListModel::from_strings(["Documents", "Music"])) as Box<dyn ItemModel>;
+        let model = |_: &Env| Box::new(StringListModel::from_strings(["Documents", "Music"])) as Box<dyn ItemModel>;
         ColumnBrowser::new("Files", model, path.binding())
     }
 }
@@ -545,10 +569,11 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 #### `ColumnBrowser::new`
 
 ```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, model: impl Fn() -> Box<dyn ItemModel> + 'static, path: Binding<Vec<usize>>) -> Self
+pub fn new<M>(name: impl IntoLive<TextContent, M>, model: impl Fn(&Env) -> Box<dyn ItemModel> + 'static, path: Binding<Vec<usize>>) -> Self
 ```
 
-A column browser named `name` of the tree model that `model` makes.
+A column browser named `name` of the tree model that `model` makes
+in the view's environment.
 
 ## `Combobox`
 
