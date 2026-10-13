@@ -344,7 +344,7 @@ fn sidebar(cx: &Cx) -> ResolvedStyle {
             style.background = cx.c(ColorRole::Background).into();
             style.shadow = choscorui_core::ShadowLayers::NONE;
             style.min_height = cx.sp(8.0);
-            super::states(&mut style, cx);
+            super::field_states(&mut style, cx);
             style
         }
         Slot::Handle => {

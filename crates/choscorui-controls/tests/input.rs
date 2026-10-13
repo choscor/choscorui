@@ -3,11 +3,13 @@
 mod hosted;
 
 use choscorui_controls::{
-    AddonAlign, ControlMessage, ControlSize, ControlValue, Input, InputGroup, InputGroupAddon,
-    InputOtp, ShortcutModifiers, TextField, Textarea, ValidationState,
+    AddonAlign, Checkbox, ControlMessage, ControlSize, ControlValue, EstimatedText, FocusFrame,
+    Input, InputGroup, InputGroupAddon, InputOtp, PaintContext, ShortcutModifiers, Styles,
+    TextField, Textarea, ValidationState,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, Icon, Key, Point, SemanticAction, SemanticRole,
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, Icon, Key, Point, RadiusScale,
+    SemanticAction, SemanticRole,
 };
 use hosted::{Harness, paints, texts};
 
@@ -197,6 +199,58 @@ fn otp_marks_the_active_slot_with_the_ring_while_focused() {
     h.focus();
     h.text("ab");
     assert!(rings(&h), "the third slot shows the ring border");
+}
+
+#[test]
+fn invalid_otp_rings_its_group_until_it_has_focus() {
+    let tokens = DesignTokens::light();
+    let soft = tokens.color(ColorRole::Destructive).with_alpha(0.2);
+    let edge = tokens.color(ColorRole::Destructive);
+    let mut otp = InputOtp::new("Code", 4);
+    otp.set_invalid(true);
+    let mut h = Harness::new(otp);
+    let ring = |h: &Harness| {
+        h.paint()
+            .commands()
+            .iter()
+            .filter(|command| {
+                matches!(command, DisplayCommand::StrokeRoundedRect { color, .. } if *color == soft)
+            })
+            .count()
+    };
+    assert_eq!(ring(&h), 1, "one ring around the group");
+    assert!(paints(&h.paint(), edge), "the slot edges");
+    h.focus();
+    // Past the ring transition.
+    h.paint();
+    h.set_time(10.0);
+    assert_eq!(ring(&h), 0, "the active slot shows the focus ring");
+    assert!(paints(
+        &h.paint(),
+        tokens.ring_color(tokens.color(ColorRole::Ring))
+    ));
+}
+
+#[test]
+fn focus_frame_draws_the_ring_of_the_focused_control() {
+    let mut h = Harness::new(Checkbox::new("Terms", false).with_invalid(true));
+    h.focus();
+    h.paint();
+    let mut list = DisplayList::new();
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut cx = PaintContext::new(&mut list, h.bounds(), &tokens, &styles, &EstimatedText);
+    FocusFrame.paint(&mut cx, &h.tree, &h.host);
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    // The 4 pt box radius, not the md radius of the theme ring.
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::StrokeRoundedRect { color, radius, .. }
+                if *color == ring && *radius > 4.0 && *radius < tokens.radius(RadiusScale::Md)
+        )),
+        "{:?}",
+        list.commands()
+    );
 }
 
 #[test]

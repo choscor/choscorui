@@ -69,16 +69,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### alert-dialog default sm root
 # rest
 stroke 9.5,9.5 121x37 r14.5 w1 #0a0a0a1a
@@ -140,16 +135,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ## dialog
 sizes default
 slot root: root track range thumb indicator icon label content action trigger value placeholder item item-indicator separator shortcut group group-label handle caption cell row header-cell fallback badge input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
@@ -215,16 +205,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ## sheet
 sizes default
 slot root: root track range thumb indicator icon label content action trigger value placeholder item item-indicator separator shortcut group group-label caption cell row header-cell media fallback badge input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
@@ -298,16 +283,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### sheet top default root
 # rest
 shadow 10,10 120x36 r0 offset 0,10 blur15 spread-3 #0000001a
@@ -371,16 +351,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### sheet bottom default root
 # rest
 shadow 10,10 120x36 r0 offset 0,10 blur15 spread-3 #0000001a
@@ -444,16 +419,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### sheet left default root
 # rest
 shadow 10,10 120x36 r0 offset 0,10 blur15 spread-3 #0000001a
@@ -517,16 +487,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ## drawer
 sizes default
 slot root: root track range thumb indicator icon label content action trigger value placeholder item item-indicator separator shortcut group group-label caption cell row header-cell media fallback badge input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
@@ -598,16 +563,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### drawer top default root
 # rest
 fill-path M10,10 L130,10 L130,32 C130,39.73198649763111 123.73198649763111,46 116,46 L24,46 C16.26801350236889,46 10,39.73198649763111 10,32 L10,10 Z #ffffffff NonZero
@@ -669,16 +629,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### drawer bottom default root
 # rest
 fill-path M24,10 L116,10 C123.73198649763111,10 130,16.26801350236889 130,24 L130,46 L10,46 L10,24 C10,16.26801350236889 16.26801350236889,10 24,10 Z #ffffffff NonZero
@@ -740,16 +695,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### drawer left default root
 # rest
 fill-path M10,10 L116,10 C123.73198649763111,10 130,16.26801350236889 130,24 L130,32 C130,39.73198649763111 123.73198649763111,46 116,46 L10,46 L10,10 Z #ffffffff NonZero
@@ -811,16 +761,11 @@ opacity 0.5 {
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M39.33333333333333,22 L32,29.333333333333332 L28.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ## popover
 sizes default
 slot root: root track range thumb indicator icon label content footer action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress

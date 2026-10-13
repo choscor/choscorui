@@ -4,7 +4,8 @@
 //! Each documents its value, keyboard, and accessibility contract.
 
 use crate::custom::{
-    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
+    ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
+    MeasureContext,
 };
 use crate::hosted;
 use crate::range_controls::paint_stepper_field;
@@ -1593,21 +1594,27 @@ impl FocusFrame {
         tree.bounds(focused)
     }
 
-    /// Draws the theme's focus ring, at radius md, while focus is
-    /// visible.
-    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree) {
+    /// Draws the focus ring while focus is visible. The ring is the one
+    /// that the focused control in `host` painted last, so the frame does
+    /// not cover a field's own ring with another ring. A control that
+    /// painted no ring gets the theme's focus ring at radius md.
+    pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, host: &ControlHost) {
         let Some(rect) = self.rect(tree) else {
             return;
         };
-        if tree
-            .focus()
-            .is_some_and(|focused| tree.focus_visible(focused))
-        {
-            let tokens = cx.tokens;
-            let color = tokens.ring_color(tokens.color(ColorRole::Ring));
-            let radius = tokens.radius(RadiusScale::Md);
-            let _ = cx.list.draw_ring(rect, radius, tokens.ring_width, color);
-        }
+        let Some(focused) = tree.focus().filter(|focused| tree.focus_visible(*focused)) else {
+            return;
+        };
+        let tokens = cx.tokens;
+        let (width, color, radius) = match host.painted_ring(focused) {
+            Some((ring, corners)) => (ring.width, ring.color, corners.top_start),
+            None => (
+                tokens.ring_width,
+                tokens.ring_color(tokens.color(ColorRole::Ring)),
+                tokens.radius(RadiusScale::Md),
+            ),
+        };
+        let _ = cx.list.draw_ring(rect, radius, width, color);
     }
 }
 

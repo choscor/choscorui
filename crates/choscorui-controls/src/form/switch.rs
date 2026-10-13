@@ -18,7 +18,6 @@ pub struct Switch {
     label: String,
     checked: bool,
     size: ControlSize,
-    invalid: bool,
     enabled: bool,
     press: Press,
     /// The thumb slide: `open` is the checked state.
@@ -33,7 +32,6 @@ impl Switch {
             label: label.into(),
             checked,
             size: ControlSize::Default,
-            invalid: false,
             enabled: true,
             press: Press::default(),
             slide: Reveal {
@@ -51,17 +49,6 @@ impl Switch {
         self
     }
 
-    /// The switch with the invalid state from the start.
-    #[must_use]
-    pub fn with_invalid(mut self, invalid: bool) -> Self {
-        self.invalid = invalid;
-        self
-    }
-
-    pub fn set_invalid(&mut self, invalid: bool) {
-        self.invalid = invalid;
-    }
-
     pub fn is_checked(&self) -> bool {
         self.checked
     }
@@ -75,12 +62,12 @@ impl Switch {
         };
     }
 
-    /// The flags the recipe reads: `host` with checked, pressed, and
-    /// invalid.
+    /// The flags the recipe reads: `host` with checked and pressed. A
+    /// switch has no invalid state; a `Field` shows its error message.
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(VisualState::CHECKED, self.checked)
             .set(VisualState::PRESSED, self.press.pressed)
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, false)
     }
 
     fn query(&self, slot: Slot, state: VisualState) -> StyleQuery {
@@ -185,7 +172,6 @@ impl CustomControl for Switch {
         let mut node = hosted::node(SemanticRole::Checkbox, &self.label, actions);
         node.description = "switch".into();
         node.state.checked = Some(self.checked);
-        node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
     }

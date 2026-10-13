@@ -562,10 +562,7 @@ fn questionnaire_matches_its_reference_table() {
             (36.0, c(ColorRole::Input), Cursor::Text)
         );
         let invalid = get(&tokens, query(Slot::Input, VisualState::INVALID));
-        assert_eq!(
-            invalid.border,
-            c(ColorRole::Destructive).with_alpha(pick(&tokens, 1.0, 0.5))
-        );
+        assert_eq!(invalid.border, c(ColorRole::Destructive));
         let error = rest(Slot::Error);
         text(
             &tokens,

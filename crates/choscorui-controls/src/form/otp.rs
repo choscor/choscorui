@@ -4,7 +4,9 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted;
-use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
+use crate::style::{
+    ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
+};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticNode, SemanticRole, Size,
@@ -194,11 +196,31 @@ impl CustomControl for InputOtp {
         let base = VisualState::NONE
             .set(VisualState::INVALID, self.invalid)
             .set(VisualState::DISABLED, host.disabled());
-        let group = cx.style(Self::query(Slot::Group, base));
-        let radius = group.radius.top_start;
         let focused = host.focused();
+        // The active slot shows the focus ring while the control has
+        // focus, so the group ring shows only without focus.
+        let group = cx.style(Self::query(
+            Slot::Group,
+            base.set(VisualState::FOCUS_VISIBLE, focused),
+        ));
+        let radius = group.radius.top_start;
         let active = self.active();
         let mut index = 0;
+        if group.ring.is_some() {
+            let ring = ResolvedStyle {
+                border_width: 0.0,
+                ..group.clone()
+            };
+            let mut first = 0;
+            for size in &self.groups {
+                let slots = self.slots.get(first..first + size);
+                if let Some((start, end)) = slots.and_then(|slots| slots.first().zip(slots.last()))
+                {
+                    cx.slot(start.union(*end), &ring, |_, _| {});
+                }
+                first += size;
+            }
+        }
         for size in &self.groups {
             for position in 0..*size {
                 let Some(rect) = self.slots.get(index).copied() else {

@@ -68,7 +68,6 @@ pub struct Button {
     size: ControlSize,
     leading: Option<Icon>,
     trailing: Option<Icon>,
-    invalid: bool,
     expanded: bool,
 }
 
@@ -86,7 +85,6 @@ impl Button {
             size: ControlSize::Default,
             leading: None,
             trailing: None,
-            invalid: false,
             expanded: false,
         }
     }
@@ -135,11 +133,6 @@ impl Button {
 
     pub fn is_enabled(&self) -> bool {
         self.enabled
-    }
-
-    /// Marks the button invalid, for example in a form with an error.
-    pub fn set_invalid(&mut self, invalid: bool) {
-        self.invalid = invalid;
     }
 
     /// Marks that the button's popup is open; the button keeps its open
@@ -318,7 +311,6 @@ impl Button {
             .set(VisualState::PRESSED, pressed)
             .set(VisualState::FOCUSED, tree.focus() == Some(id))
             .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(id))
-            .set(VisualState::INVALID, self.invalid)
             .set(VisualState::OPEN, self.expanded)
     }
 
@@ -407,7 +399,6 @@ impl crate::CustomControl for Button {
         let state = cx
             .state
             .set(VisualState::PRESSED, pressed)
-            .set(VisualState::INVALID, self.invalid)
             .set(VisualState::OPEN, self.expanded);
         self.paint_state(cx, state);
     }

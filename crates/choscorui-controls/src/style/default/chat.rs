@@ -1,7 +1,7 @@
 //! Chat: messages, bubbles, attachments, markers, the message scroller,
 //! and questionnaires.
 
-use super::{Cx, disabled, field_box, focus, muted_text, states, text};
+use super::{Cx, choice_invalid, disabled, field_box, field_states, focus, muted_text, text};
 use crate::style::{
     AttachmentState, BubbleVariant, ControlKind, ControlSize, Corners, Edges, MarkerVariant,
     ResolvedStyle, Sides, Slot,
@@ -368,6 +368,7 @@ fn questionnaire(cx: &Cx) -> ResolvedStyle {
                 style.background = cx.c(ColorRole::Primary).into();
                 style.border = cx.c(ColorRole::Primary);
             }
+            choice_invalid(&mut style, cx);
             style
         }
         Slot::Shortcut => {
@@ -388,7 +389,7 @@ fn questionnaire(cx: &Cx) -> ResolvedStyle {
         Slot::Input => {
             let mut style = field_box(cx);
             style.cursor = crate::style::Cursor::Text;
-            states(&mut style, cx);
+            field_states(&mut style, cx);
             style
         }
         Slot::Error => text(cx, ColorRole::Destructive, TextSize::Sm, FontWeight::NORMAL),

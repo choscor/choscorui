@@ -17,11 +17,6 @@ PushOpacity(0.5)
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopOpacity
-# button default default invalid
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 # button destructive default rest
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 231, green: 0, blue: 11, alpha: 26 } }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
@@ -41,11 +36,6 @@ PushOpacity(0.5)
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 231, green: 0, blue: 11, alpha: 26 } }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
 PopOpacity
-# button destructive default invalid
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 231, green: 0, blue: 11, alpha: 26 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }
 # button outline default rest
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
@@ -74,12 +64,6 @@ FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { 
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopOpacity
-# button outline default invalid
-DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 # button secondary default rest
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
@@ -99,11 +83,6 @@ PushOpacity(0.5)
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 PopOpacity
-# button secondary default invalid
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 # button ghost default rest
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 # button ghost default hovered
@@ -119,10 +98,6 @@ DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", fon
 PushOpacity(0.5)
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopOpacity
-# button ghost default invalid
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 # button link default rest
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 # button link default hovered
@@ -138,10 +113,6 @@ DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", fon
 PushOpacity(0.5)
 DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 PopOpacity
-# button link default invalid
-StrokeRoundedRect { rect: Rect { origin: Point { x: 8.5, y: 8.5 }, size: Size { width: 123.0, height: 39.0 } }, radius: 9.5, color: Color { red: 231, green: 0, blue: 11, alpha: 51 }, width: 3.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 119.0, height: 35.0 } }, radius: 7.5, color: Color { red: 231, green: 0, blue: 11, alpha: 255 }, width: 1.0 }
-DrawText { baseline: Point { x: 54.599999999999994, y: 32.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 # button default default rest
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 120.0, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 StrokePath { path: Path { elements: [MoveTo(Point { x: 56.93333333333332, y: 24.0 }), LineTo(Point { x: 49.599999999999994, y: 31.333333333333332 }), LineTo(Point { x: 46.26666666666666, y: 28.0 })] }, paint: Solid(Color { red: 250, green: 250, blue: 250, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }

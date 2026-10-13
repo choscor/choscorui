@@ -21,7 +21,6 @@ pub struct Toggle {
     on: bool,
     variant: ToggleVariant,
     size: ControlSize,
-    invalid: bool,
     enabled: bool,
     press: Press,
 }
@@ -34,7 +33,6 @@ impl Toggle {
             on,
             variant: ToggleVariant::Default,
             size: ControlSize::Default,
-            invalid: false,
             enabled: true,
             press: Press::default(),
         }
@@ -60,17 +58,6 @@ impl Toggle {
         self
     }
 
-    /// The toggle with the invalid state from the start.
-    #[must_use]
-    pub fn with_invalid(mut self, invalid: bool) -> Self {
-        self.invalid = invalid;
-        self
-    }
-
-    pub fn set_invalid(&mut self, invalid: bool) {
-        self.invalid = invalid;
-    }
-
     pub fn is_on(&self) -> bool {
         self.on
     }
@@ -79,12 +66,12 @@ impl Toggle {
         self.on = on;
     }
 
-    /// The flags the recipe reads: `host` with on (checked), pressed,
-    /// and invalid.
+    /// The flags the recipe reads: `host` with on (checked) and
+    /// pressed. A toggle has no invalid state.
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(VisualState::CHECKED, self.on)
             .set(VisualState::PRESSED, self.press.pressed)
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, false)
     }
 
     fn query(&self, state: VisualState) -> StyleQuery {
@@ -145,7 +132,6 @@ impl CustomControl for Toggle {
         let mut node = hosted::node(SemanticRole::Button, &self.label, actions);
         node.description = "toggle".into();
         node.state.checked = Some(self.on);
-        node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
     }
@@ -232,7 +218,6 @@ pub struct ToggleGroup {
     pressed: Option<usize>,
     rects: Vec<Rect>,
     rtl: bool,
-    invalid: bool,
     enabled: bool,
 }
 
@@ -253,7 +238,6 @@ impl ToggleGroup {
             pressed: None,
             rects: Vec::new(),
             rtl: false,
-            invalid: false,
             enabled: true,
         }
     }
@@ -281,18 +265,6 @@ impl ToggleGroup {
     pub fn with_orientation(mut self, orientation: Orientation) -> Self {
         self.orientation = orientation;
         self
-    }
-
-    /// The group with the invalid state from the start. Each item shows
-    /// the invalid look.
-    #[must_use]
-    pub fn with_invalid(mut self, invalid: bool) -> Self {
-        self.invalid = invalid;
-        self
-    }
-
-    pub fn set_invalid(&mut self, invalid: bool) {
-        self.invalid = invalid;
     }
 
     /// The indices of the items that are on, in order.
@@ -508,7 +480,6 @@ impl CustomControl for ToggleGroup {
                     host.hovered() && self.hovered == Some(index),
                 )
                 .set(VisualState::PRESSED, self.pressed == Some(index))
-                .set(VisualState::INVALID, self.invalid)
                 .set(
                     VisualState::FOCUS_VISIBLE,
                     host.focus_visible() && self.focused == index,
@@ -554,7 +525,6 @@ impl CustomControl for ToggleGroup {
         if let Some(item) = self.items.get(self.focused) {
             node.description = item.label.clone();
         }
-        node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
     }

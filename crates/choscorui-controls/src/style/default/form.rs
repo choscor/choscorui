@@ -1,8 +1,8 @@
 //! Form controls: buttons, inputs, choices, toggles, and field layout.
 
 use super::{
-    Cx, disabled, field_box, focus, group_label, invalid, list_item, muted_text, rule, states,
-    surface, text,
+    Cx, choice_invalid, disabled, field_box, field_invalid, field_states, focus, group_label,
+    list_item, muted_text, rule, surface, text,
 };
 use crate::style::{
     AddonAlign, ButtonVariant, ControlKind, ControlSize, Corners, Cursor, Edges, FieldOrientation,
@@ -128,12 +128,8 @@ pub(crate) fn button(cx: &Cx, variant: ButtonVariant, size: ControlSize) -> Reso
     focus(&mut style, cx);
     if variant == ButtonVariant::Destructive && s.focus_visible() {
         style.border = cx.a(ColorRole::Destructive, 0.4);
-        style.ring = cx.ring(
-            cx.t.ring_width,
-            cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-        );
+        style.ring = cx.invalid_ring();
     }
-    invalid(&mut style, cx);
     disabled(&mut style, cx);
     style
 }
@@ -188,10 +184,7 @@ fn choice_box(cx: &Cx) -> ResolvedStyle {
         style.border = cx.c(ColorRole::Primary);
     }
     focus(&mut style, cx);
-    invalid(&mut style, cx);
-    if on && s.invalid() {
-        style.border = cx.c(ColorRole::Primary);
-    }
+    choice_invalid(&mut style, cx);
     disabled(&mut style, cx);
     style
 }
@@ -242,7 +235,7 @@ fn input(cx: &Cx) -> ResolvedStyle {
         _ => {
             let mut style = field_box(cx);
             style.cursor = Cursor::Text;
-            states(&mut style, cx);
+            field_states(&mut style, cx);
             style
         }
     }
@@ -278,7 +271,7 @@ fn select(cx: &Cx) -> ResolvedStyle {
             if cx.dark() && s.interactive_hover() {
                 style.background = cx.a(ColorRole::Input, 0.5).into();
             }
-            states(&mut style, cx);
+            field_states(&mut style, cx);
             style
         }
         Slot::Placeholder | Slot::Icon => muted_text(cx, TextSize::Sm),
@@ -378,7 +371,7 @@ fn native_select(cx: &Cx) -> ResolvedStyle {
             if cx.dark() && cx.s().interactive_hover() {
                 style.background = cx.a(ColorRole::Input, 0.5).into();
             }
-            states(&mut style, cx);
+            field_states(&mut style, cx);
             style
         }
     }
@@ -393,8 +386,11 @@ fn date_picker(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Placeholder => muted_text(cx, TextSize::Sm),
         _ => {
+            // The trigger is a field: the button look with the field
+            // invalid look.
             let mut style = button(cx, ButtonVariant::Outline, ControlSize::Default);
             style.gap = cx.sp(2.0);
+            field_invalid(&mut style, cx);
             style
         }
     }
@@ -474,7 +470,8 @@ fn switch(cx: &Cx) -> ResolvedStyle {
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style.shadow = cx.shadow(ShadowScale::Xs);
             (style.min_width, style.min_height) = if small { (24.0, 14.0) } else { (32.0, 18.4) };
-            states(&mut style, cx);
+            focus(&mut style, cx);
+            disabled(&mut style, cx);
             style
         }
     }
@@ -518,13 +515,6 @@ fn toggle(cx: &Cx) -> ResolvedStyle {
         style.background = cx.c(ColorRole::Muted).into();
     }
     focus(&mut style, cx);
-    if s.invalid() {
-        style.ring = cx.ring(
-            cx.t.ring_width,
-            cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-        );
-        style.border = cx.c(ColorRole::Destructive);
-    }
     disabled(&mut style, cx);
     style
 }
@@ -686,7 +676,7 @@ fn input_group(cx: &Cx) -> ResolvedStyle {
         _ => {
             let mut style = field_box(cx);
             style.padding = Edges::ZERO;
-            states(&mut style, cx);
+            field_states(&mut style, cx);
             style
         }
     }
@@ -705,18 +695,14 @@ fn input_otp(cx: &Cx) -> ResolvedStyle {
                 inline_start: false,
                 ..Sides::ALL
             };
+            // The selected slot is the focused slot: it shows the
+            // focus ring, also while invalid.
             if s.selected() {
                 style.border = cx.c(ColorRole::Ring);
                 style.ring = cx.focus_ring();
             }
             if s.invalid() {
                 style.border = cx.c(ColorRole::Destructive);
-                if s.selected() {
-                    style.ring = cx.ring(
-                        cx.t.ring_width,
-                        cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-                    );
-                }
             }
             disabled(&mut style, cx);
             style
@@ -729,14 +715,11 @@ fn input_otp(cx: &Cx) -> ResolvedStyle {
             style
         }
         Slot::Group => {
+            // The ring around the slots: the soft destructive ring
+            // while invalid and the slots do not show focus.
             let mut style = cx.base();
             style.radius = Corners::all(cx.r(RadiusScale::Md));
-            if s.invalid() {
-                style.ring = cx.ring(
-                    cx.t.ring_width,
-                    cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-                );
-            }
+            field_invalid(&mut style, cx);
             style
         }
         Slot::Separator => {
@@ -781,11 +764,15 @@ fn kbd(cx: &Cx) -> ResolvedStyle {
     style
 }
 
-/// A form label: small, medium weight, and tight leading.
+/// A form label: small, medium weight, and tight leading. An invalid
+/// label uses the destructive foreground.
 pub(crate) fn label(cx: &Cx) -> ResolvedStyle {
     let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM);
     style.text.line_height = style.text.size;
     style.gap = cx.sp(2.0);
+    if cx.s().invalid() {
+        style.foreground = cx.c(ColorRole::Destructive);
+    }
     disabled(&mut style, cx);
     style
 }

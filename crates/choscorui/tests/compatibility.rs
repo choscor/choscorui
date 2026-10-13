@@ -355,7 +355,6 @@ fn painted_output() {
             VisualState::FOCUS_VISIBLE.with(VisualState::FOCUSED),
         ),
         ("disabled", VisualState::DISABLED),
-        ("invalid", VisualState::INVALID),
     ];
     let mut paint_button = |button: &Button, state: VisualState, label: String| {
         let mut list = DisplayList::new();

@@ -254,7 +254,7 @@ fn visual_recipe_is_swappable_without_changing_text_behavior() {
 }
 
 #[test]
-fn field_paints_placeholder_text_caret_and_invalid_ring() {
+fn field_paints_placeholder_text_caret_and_invalid_edge_with_focus() {
     let (mut tree, id, field) = setup();
     let mut field = field.with_placeholder("Your name");
     let tokens = DesignTokens::light();
@@ -302,10 +302,14 @@ fn field_paints_placeholder_text_caret_and_invalid_ring() {
         )),
         "the caret shows while focused"
     );
-    assert!(typed.commands().iter().any(|command| matches!(
-        command,
-        DisplayCommand::StrokeRoundedRect { color, .. } if *color == tokens.color(ColorRole::Destructive).with_alpha(0.2)
-    )));
+    // The edge is destructive, and the focus ring stays visible.
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    for color in [tokens.color(ColorRole::Destructive), ring] {
+        assert!(typed.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::StrokeRoundedRect { color: stroke, .. } if *stroke == color
+        )));
+    }
     assert!(typed.is_balanced());
 }
 

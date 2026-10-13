@@ -3009,12 +3009,16 @@ text "Aa" at 50,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 15x15 r3.5 w1 #e5e5e5ff
 stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
 text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+# invalid
+stroke 10.5,10.5 15x15 r3.5 w1 #e7000bff
+stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
 # checked
 fill 10,10 16x16 r4 #171717ff
 stroke 10.5,10.5 15x15 r3.5 w1 #171717ff
 stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
 text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
-= rest: hovered pressed focused focus-visible disabled invalid indeterminate selected open highlighted
+= rest: hovered pressed focused focus-visible disabled indeterminate selected open highlighted
 ### questionnaire default default title
 # rest
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]

@@ -4,7 +4,7 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    ButtonGroup, Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar, Switch,
+    ButtonGroup, Checkbox, Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar,
     Text, VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls::{
@@ -350,7 +350,7 @@ fn command_b_toggles_the_sidebar_view_while_another_view_has_focus() {
 // ---------------------------------------------------------------------------
 // Invalid state
 
-/// A switch whose invalid state follows a state value, and a button that
+/// A checkbox whose invalid state follows a state value, and a button that
 /// clears it.
 struct Consent;
 
@@ -359,8 +359,8 @@ impl View for Consent {
         let on = cx.state(true);
         let invalid = cx.state(true);
         VStack::new((
-            Switch::new("Consent", on.binding())
-                .with(move |switch| switch.with_invalid(invalid.get())),
+            Checkbox::new("Consent", on.binding())
+                .with(move |checkbox| checkbox.with_invalid(invalid.get())),
             choscorui_compose::view::Button::new("Fix", move || invalid.set(false)),
         ))
     }
@@ -369,12 +369,12 @@ impl View for Consent {
 #[test]
 fn a_form_view_shows_the_invalid_state_and_follows_its_change() {
     let mut host = host(Consent);
-    let switch = node(&mut host, "Consent");
-    let semantic = host.semantic(switch).unwrap();
+    let checkbox = node(&mut host, "Consent");
+    let semantic = host.semantic(checkbox).unwrap();
     assert!(semantic.state.invalid);
     assert_eq!(semantic.state.checked, Some(true));
     perform(&mut host, "Fix", SemanticAction::Activate, None);
-    let semantic = host.semantic(switch).unwrap();
+    let semantic = host.semantic(checkbox).unwrap();
     assert!(!semantic.state.invalid);
     assert_eq!(semantic.state.checked, Some(true), "the value stays");
     assert_eq!(host.take_errors(), Vec::new());

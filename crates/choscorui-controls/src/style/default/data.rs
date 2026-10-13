@@ -210,12 +210,8 @@ pub(crate) fn badge(cx: &Cx, variant: BadgeVariant) -> ResolvedStyle {
     }
     focus(&mut style, cx);
     if variant == BadgeVariant::Destructive && s.focus_visible() {
-        style.ring = cx.ring(
-            cx.t.ring_width,
-            cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-        );
+        style.ring = cx.invalid_ring();
     }
-    super::invalid(&mut style, cx);
     style
 }
 
@@ -513,7 +509,9 @@ fn gauge(cx: &Cx) -> ResolvedStyle {
                 style.radius = Corners::all(cx.r(RadiusScale::Lg));
                 style.padding = Edges::all(cx.sp(3.0));
             }
-            super::states(&mut style, cx);
+            // A display and a dial have no invalid state.
+            focus(&mut style, cx);
+            disabled(&mut style, cx);
             style
         }
     }

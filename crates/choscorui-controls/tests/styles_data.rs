@@ -380,8 +380,12 @@ fn badge_matches_its_reference_table() {
                 (c(ColorRole::Ring), ring),
                 "{name} focused"
             );
-            let invalid = look(VisualState::INVALID);
-            assert_eq!(invalid.ring, invalid_ring(&tokens), "{name} invalid");
+            // A badge has no invalid look.
+            assert_eq!(
+                look(VisualState::INVALID),
+                look(VisualState::NONE),
+                "{name}"
+            );
         }
     }
 }

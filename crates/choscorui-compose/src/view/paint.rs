@@ -163,7 +163,7 @@ impl Painter<'_, '_> {
         }
         if self.frames_focus(node) {
             let mut cx = PaintContext::new(self.list, bounds, &tokens, &inner.styles, &*inner.text);
-            FocusFrame.paint(&mut cx, &inner.tree);
+            FocusFrame.paint(&mut cx, &inner.tree, &inner.controls);
         }
         for pop in pushed.into_iter().rev() {
             let _ = match pop {

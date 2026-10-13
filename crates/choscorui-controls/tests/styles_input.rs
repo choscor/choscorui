@@ -65,7 +65,8 @@ fn assert_muted(tokens: &DesignTokens, style: &ResolvedStyle, size: TextSize) {
 
 /// The input box: an `input` edge, a 30% `input` fill in dark, radius md,
 /// and the extra-small shadow. The focus, invalid, and disabled looks
-/// follow the reference states.
+/// follow the reference states. An invalid field has a full destructive
+/// edge in both schemes, and it keeps the focus ring while focus shows.
 fn assert_input_box(tokens: &DesignTokens, query: StyleQuery) {
     let c = |role| tokens.color(role);
     let rest = get(tokens, query);
@@ -98,8 +99,16 @@ fn assert_input_box(tokens: &DesignTokens, query: StyleQuery) {
     let pointer = get(tokens, query.state(VisualState::FOCUSED));
     assert_eq!(pointer.ring, None);
     let invalid = get(tokens, query.state(VisualState::INVALID));
-    let edge = c(ColorRole::Destructive).with_alpha(pick(tokens, 1.0, 0.5));
+    let edge = c(ColorRole::Destructive);
     assert_eq!((invalid.border, invalid.ring), (edge, invalid_ring(tokens)));
+    let focused_invalid = get(
+        tokens,
+        query.state(VisualState::INVALID.with(VisualState::FOCUS_VISIBLE)),
+    );
+    assert_eq!(
+        (focused_invalid.border, focused_invalid.ring),
+        (edge, focus_ring(tokens))
+    );
     let disabled = get(tokens, query.state(VisualState::DISABLED));
     assert_eq!((disabled.opacity, disabled.cursor), (0.5, Cursor::Arrow));
 }
@@ -264,9 +273,10 @@ fn input_otp_matches_its_reference_table() {
             &tokens,
             query(Slot::Item, VisualState::INVALID.with(VisualState::SELECTED)),
         );
+        // The active slot keeps the focus ring while invalid.
         assert_eq!(
             (invalid_active.border, invalid_active.ring),
-            (c(ColorRole::Destructive), invalid_ring(&tokens))
+            (c(ColorRole::Destructive), focus_ring(&tokens))
         );
         let disabled = get(&tokens, query(Slot::Item, VisualState::DISABLED));
         assert_eq!(disabled.opacity, 0.5);
@@ -278,6 +288,9 @@ fn input_otp_matches_its_reference_table() {
         );
         let group = get(&tokens, query(Slot::Group, VisualState::INVALID));
         assert_eq!(group.ring, invalid_ring(&tokens));
+        let focused = VisualState::INVALID.with(VisualState::FOCUS_VISIBLE);
+        let group = get(&tokens, query(Slot::Group, focused));
+        assert_eq!(group.ring, None, "the active slot shows the focus");
 
         let caret = get(&tokens, query(Slot::Indicator, VisualState::NONE));
         assert_eq!(

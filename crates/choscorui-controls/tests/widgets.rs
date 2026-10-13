@@ -1,10 +1,10 @@
 use choscorui_controls::{
     ButtonGroup, ButtonGroupMember, ButtonVariant, Calendar, CalendarFocus, CommandId, CommandLink,
-    CommandRegistry, CommandState, ControlValue, CustomControl, DateTimeEdit, DateTimeField,
-    DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange, KeySequenceChange,
-    KeySequenceEdit, NumberBase, NumericDisplay, Orientation, PaintContext, Progress, ScrollBar,
-    ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles, ToolBox, ToolButton,
-    ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
+    CommandRegistry, CommandState, ControlHost, ControlValue, CustomControl, DateTimeEdit,
+    DateTimeField, DateTimeKind, DecimalSpinBox, Dial, EstimatedText, FocusFrame, IntegerRange,
+    KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, Orientation, PaintContext,
+    Progress, ScrollBar, ScrollBarInput, ScrollOrientation, ShortcutModifiers, SizeGrip, Styles,
+    ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
@@ -564,10 +564,15 @@ fn gauges_and_focus_frame_paint_from_tokens_and_recipes() {
         .unwrap();
     tree.set_focusable(node, true).unwrap();
     tree.focus_by_pointer(node).unwrap();
-    assert!(run(&|cx| FocusFrame.paint(cx, &tree)).commands().is_empty());
+    let host = ControlHost::new();
+    assert!(
+        run(&|cx| FocusFrame.paint(cx, &tree, &host))
+            .commands()
+            .is_empty()
+    );
     tree.set_input_modality(InputModality::Keyboard);
     let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
-    let list = run(&|cx| FocusFrame.paint(cx, &tree));
+    let list = run(&|cx| FocusFrame.paint(cx, &tree, &host));
     assert!(list.commands().iter().any(|command| matches!(
         command,
         DisplayCommand::StrokeRoundedRect { color, .. } if *color == ring

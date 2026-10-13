@@ -670,6 +670,15 @@ impl ControlHost {
             || tree.pointer_capture() == Some(node)
     }
 
+    /// The ring and corners that `node` painted last, from the first of
+    /// its slots with a ring. A node that is not hot has no record.
+    pub fn painted_ring(
+        &self,
+        node: NodeId,
+    ) -> Option<(crate::style::Ring, crate::style::Corners)> {
+        self.transitions.ring(node)
+    }
+
     /// The counters of the transition store.
     pub fn transition_stats(&self) -> TransitionStats {
         self.transitions.stats()

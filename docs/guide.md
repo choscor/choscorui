@@ -98,7 +98,7 @@ A tuple of views is one view, so a stack takes a tuple of its children. To keep 
 
 Some views have more than one constructor. `Select::native` gives the native-select look, `Input::masked` fits the text into an `InputMask`, and `List::table` shows the rows as a table. A bubble is content of a `Message`, and an item is content of an `ItemGroup`.
 
-A control view changes its control with `.with(change)` after each build. For example, `.with(move |switch| switch.with_invalid(invalid.get()))` marks a `Switch` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `RadioGroup`, `Combobox`, and `DatePicker` take `with_invalid`. Use `.with_env(change)` when the change needs the environment, for example a placeholder from the catalog.
+A control view changes its control with `.with(change)` after each build. For example, `.with(move |checkbox| checkbox.with_invalid(invalid.get()))` marks a `Checkbox` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. Only fields take `with_invalid`: `Checkbox`, `RadioGroup`, `Combobox`, and `DatePicker`. A button, a switch, or a toggle has no invalid state. Use `.with_env(change)` when the change needs the environment, for example a placeholder from the catalog.
 
 The range views set their limits with builders, so they need no `IntegerRange`:
 

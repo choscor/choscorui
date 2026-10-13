@@ -273,8 +273,9 @@ output of each kind, variant, size, slot, and key state.
 - `paint` resolves the `Button` recipe for the `visual_state` and paints
   the box, the icons, and the label. A recipe reads only the style query and
   the tokens, so a recipe swap does not change behavior.
-- `set_expanded` keeps the open look while a popup is open. `set_invalid`
-  shows the invalid ring.
+- `set_expanded` keeps the open look while a popup is open.
+- A button is not a field, so it has no invalid state. Put the error of a
+  form on the field.
 - `CommandLink` paints an arrow, a title, and a description in an outline
   item row. A `Button` on the same node gives the behavior.
 - `CommandLink::hosted` puts the link and a `Button` for a command on one
@@ -304,8 +305,7 @@ other sizes.
 | --- | --- |
 | Pressed | 1 pt down, except while open |
 | Open | `Outline` and `Ghost` keep the `muted` fill |
-| Focus visible | `ring` edge and 3 pt ring at 50%; `Destructive`: `destructive` edge at 40% and the invalid ring |
-| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
+| Focus visible | `ring` edge and 3 pt ring at 50%; `Destructive`: `destructive` edge at 40% and a `destructive` ring at 20% (dark 40%) |
 | Disabled | 50% opacity and no hover look |
 
 | Field | `semantics(tree, id).shared()` |
@@ -331,9 +331,10 @@ other sizes.
 - `set_indeterminate(true)` shows the mixed state. The next activation or
   `SetValue` clears it and reports the value, also when the value is the
   same.
-- `set_invalid(true)` shows the invalid ring and sets the invalid
+- `set_invalid(true)` shows the invalid look and sets the invalid
   semantic state. `with_invalid` sets it before the checkbox has a node,
-  for a control host.
+  for a control host. The invalid flag of the host also shows the invalid
+  look.
 - **Look.** `paint` draws the box at the start of the bounds and the label
   after it. In right-to-left layouts, the box is at the right.
 
@@ -343,7 +344,7 @@ other sizes.
 | Checked or mixed | `primary` fill and edge, `primary-foreground` check or minus icon at 14 |
 | Label | small medium text, 8 after the box |
 | Focus ring | `ring` edge and 3 pt ring at 50% |
-| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%); a checked box keeps the `primary` edge |
+| Invalid | `destructive` edge, also on a checked box; no ring and no shadow; the label in `destructive`; the focus ring still shows while focus is visible |
 | Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
@@ -382,9 +383,9 @@ behavior.
   role, the selected label as value, and the `SetValue`, `Increment`,
   `Decrement`, and `Focus` actions.
 - **Invalid radio group.** `HostedRadioGroup::set_invalid(true)` or
-  `with_invalid(true)` gives each option the invalid look. The group node
-  then has the invalid semantic state. `option_state` returns the recipe
-  flags of one option.
+  `with_invalid(true)` gives each option the invalid look of `Checkbox`.
+  The group node then has the invalid semantic state. `option_state`
+  returns the recipe flags of one option.
 - **Radio look.** `paint_option` draws a 16 pt circle with the same edge,
   focus, invalid, and disabled values as `Checkbox`. The selected option
   has a `primary` fill and an 8 pt `primary-foreground` dot.
@@ -403,7 +404,7 @@ behavior.
 | Selected | `RadioGroup` `Root`, checked | `primary` fill and edge |
 | Dot | `RadioGroup` `Indicator` | 8 pt `primary-foreground` circle |
 | Options | `RadioGroup` `Group` | 12 pt gap |
-| Label | `RadioGroup` `Label` | small medium text, 8 pt after the circle |
+| Label | `RadioGroup` `Label` | small medium text, 8 pt after the circle; `destructive` while invalid |
 
 | Tabs part | `Default` | `Line` |
 | --- | --- | --- |
@@ -801,7 +802,7 @@ behavior.
   muted text that shows while the value is empty. A focused field always
   shows the focus ring and the caret. The text scrolls so the caret stays
   visible. The selection has a `primary` fill at 25%, and marked text is
-  underlined. An `Invalid` validation shows the invalid ring.
+  underlined. An `Invalid` validation shows the invalid look.
 - `InputText` paints the same look for other single-line fields.
 
 | Part | Value |
@@ -809,7 +810,7 @@ behavior.
 | Box | height 36, radius md, `input` edge, extra-small shadow, padding 10 by 4; dark: `input` at 30% fill |
 | Text | small text in `foreground`; placeholder in `muted-foreground` |
 | Focus | `ring` edge and 3 pt ring at 50% |
-| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
+| Invalid | `destructive` edge; ring at 20% (dark 40%) while focus does not show, else the focus ring |
 | Disabled | 50% opacity |
 
 | Field | `semantics(tree, id).shared()` |
@@ -917,7 +918,7 @@ behavior.
 | Part | Slot | Value |
 | --- | --- | --- |
 | Trigger | `Trigger` | the input box: `input` border, radius md, shadow xs, 36 pt high; the focus ring while focus is visible |
-| Invalid trigger | `Trigger`, invalid | `destructive` border (dark 50%) and ring at 20% (dark 40%) |
+| Invalid trigger | `Trigger`, invalid | `destructive` edge; ring at 20% (dark 40%) while focus does not show, else the focus ring |
 | Text | `Value` | sm `foreground` text |
 | Placeholder, completion, chevron | `Placeholder` | sm `muted-foreground` text; a 16 pt chevron at the end |
 | Popup | `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, padding 4 pt, 4 pt below the anchor |
@@ -2090,9 +2091,13 @@ makes from the environment. `on_item` receives the id of an activated panel.
 
 - `FocusFrame::rect` returns the bounds of the focused node. It returns
   `None` when nothing has focus or the focused node is hidden.
-- `FocusFrame` paints the theme's focus ring outside the node, at radius
-  md. A container that clips its children still shows focus. The ring
-  shows only while focus is visible.
+- `FocusFrame::paint` paints a focus ring outside the node. A container
+  that clips its children still shows focus. The ring shows only while
+  focus is visible.
+- The ring is the ring that the focused control painted last, with its
+  radius. Thus the frame does not cover the ring of an invalid field with
+  another ring. A control that painted no ring gets the theme's focus ring
+  at radius md.
 - `SizeGrip::press` records the start. `drag` returns a new content size,
   clamped to the minimum and the maximum. `release` ends the drag.
 - In right-to-left layouts, the grip sits at the bottom-left and grows to
@@ -2244,8 +2249,9 @@ behavior and the look.
   `motion.easing` curve. `set_value` and `set_checked` move it at once, and
   reduced motion skips the slide.
 - `with_size` takes `Default` or `Sm`.
-- **Invalid.** `set_invalid(true)` or `with_invalid(true)` shows the
-  invalid look on the track and sets the invalid semantic state.
+- A switch has no invalid state. A `Field` around a required switch shows
+  the error message and a `destructive` label, and the switch stays the
+  same.
 
 | Size | Track | Thumb |
 | --- | --- | --- |
@@ -2256,7 +2262,6 @@ behavior and the look.
 | --- | --- |
 | Off | `input` (80% in dark themes) |
 | On | `primary` |
-| Invalid | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
 | Disabled | 50% opacity on the track and the thumb |
 
 | Part | Value |
@@ -2268,7 +2273,7 @@ behavior and the look.
 | --- | --- |
 | Role | `Checkbox` (AXCheckBox), description "switch" |
 | Name / value | label / - |
-| State | checked, invalid, disabled |
+| State | checked, disabled |
 | Actions | `Activate` and `Focus` while enabled |
 
 From the application, `set_value` takes `Bool`. `set_open` returns false.
@@ -2287,9 +2292,8 @@ From the application, `set_value` takes `Bool`. `set_open` returns false.
   no clicks.
 - `with_spacing(0.0)` joins the items: inner corners are square and the
   borders overlap. Other values leave that gap between items.
-- **Invalid.** `set_invalid(true)` or `with_invalid(true)` shows the
-  invalid look and sets the invalid semantic state. On a group, each item
-  shows the invalid look.
+- A toggle and a toggle group have no invalid state. A `Field` around
+  them shows the error message.
 
 | Size | Height and minimum width |
 | --- | --- |
@@ -2308,7 +2312,6 @@ text.
 | State | Value |
 | --- | --- |
 | Focus visible | `ring` edge and the focus ring |
-| Invalid | `destructive` edge and ring at 20% (dark 40%) |
 | Disabled | 50% opacity and no hover look |
 | Group | radius md; extra-small shadow for `Outline` |
 
@@ -2317,7 +2320,7 @@ text.
 | Role | `Button` (AXButton), description "toggle" | `RadioGroup` for single selection, `Group` for multiple |
 | Name / value | label / - | name / labels of the on items, joined with ", " |
 | Description | "toggle" | label of the focused item |
-| State | checked, invalid, disabled | invalid, disabled |
+| State | checked, disabled | disabled |
 | Actions | `Activate` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
 
 `SetValue` with an item label flips that item. An unknown label returns
@@ -2512,7 +2515,7 @@ returns false.
 | Separator | 16 pt minus icon, 8 pt from each group |
 | Active slot | `ring` border and the focus ring |
 | Caret | 1 × 16 pt `foreground` line |
-| Invalid | `destructive` border; the group and the active slot get the destructive ring |
+| Invalid | `destructive` border on each slot; a `destructive` ring at 20% (dark 40%) around each group while the control does not have focus; the active slot keeps the focus ring |
 
 | Field | `InputOtp::semantics` |
 | --- | --- |
@@ -2605,7 +2608,7 @@ character that the code does not accept. `set_open` returns false.
 | Part | Value |
 | --- | --- |
 | Trigger | outline button, 36 pt high, 8 pt gap after the icon |
-| Invalid trigger | `destructive` edge (dark 50%) and ring at 20% (dark 40%) |
+| Invalid trigger | the field invalid look of `Input`: `destructive` edge; ring at 20% (dark 40%) while focus does not show, else the focus ring |
 | Popover | `popover` fill, `lg` radius, medium shadow, no padding |
 | Calendar | 12 pt padding, 32 pt cells |
 

@@ -314,7 +314,7 @@ fn editor(cx: &Cx) -> ResolvedStyle {
             style.background = cx
                 .pick(Color::TRANSPARENT, cx.a(ColorRole::Input, 0.3))
                 .into();
-            super::states(&mut style, cx);
+            super::field_states(&mut style, cx);
             style
         }
     }

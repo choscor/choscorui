@@ -57,10 +57,9 @@ fn invalid_ring(tokens: &DesignTokens) -> Option<Ring> {
     })
 }
 
-/// The invalid edge: `destructive`, at 50% in the dark scheme.
+/// The invalid edge: `destructive` at full strength in both schemes.
 fn invalid_border(tokens: &DesignTokens) -> Color {
-    let alpha = if dark(tokens) { 0.5 } else { 1.0 };
-    tokens.color(ColorRole::Destructive).with_alpha(alpha)
+    tokens.color(ColorRole::Destructive)
 }
 
 fn button(variant: ButtonVariant, size: ControlSize, state: VisualState) -> StyleQuery {
@@ -268,9 +267,8 @@ fn button_matches_its_reference_table() {
                 assert_eq!(focused.ring, focus_ring(&tokens), "{name} focused");
             }
 
-            let invalid = look(VisualState::INVALID);
-            assert_eq!(invalid.ring, invalid_ring(&tokens), "{name} invalid");
-            assert_eq!(invalid.border, invalid_border(&tokens), "{name} invalid");
+            // A button is not a field: the invalid flag changes nothing.
+            assert_eq!(look(VisualState::INVALID), rest, "{name} invalid");
         }
 
         let outline = get(
@@ -390,19 +388,38 @@ fn assert_choice_box(tokens: &DesignTokens, kind: ControlKind, corner: Corners) 
         (focused.border, focused.ring),
         (c(ColorRole::Ring), focus_ring(tokens))
     );
+    // Invalid: a destructive edge, no ring, and no shadow.
     let invalid = get(tokens, query(VisualState::INVALID));
     assert_eq!(
-        (invalid.border, invalid.ring),
-        (invalid_border(tokens), invalid_ring(tokens))
+        (invalid.border, invalid.ring, invalid.shadow),
+        (invalid_border(tokens), None, ShadowLayers::NONE)
     );
-    // A checked box keeps its `primary` edge while invalid.
-    let checked_invalid = get(
+    // A checked box keeps its `primary` fill and gets the destructive edge.
+    for on in [VisualState::CHECKED, VisualState::INDETERMINATE] {
+        let checked_invalid = get(tokens, query(on.with(VisualState::INVALID)));
+        assert_eq!(
+            (
+                bg(&checked_invalid),
+                checked_invalid.border,
+                checked_invalid.ring,
+                checked_invalid.shadow
+            ),
+            (
+                c(ColorRole::Primary),
+                invalid_border(tokens),
+                None,
+                ShadowLayers::NONE
+            )
+        );
+    }
+    // Focus stays visible on an invalid box.
+    let focused_invalid = get(
         tokens,
-        query(VisualState::CHECKED.with(VisualState::INVALID)),
+        query(VisualState::FOCUS_VISIBLE.with(VisualState::INVALID)),
     );
     assert_eq!(
-        (checked_invalid.border, checked_invalid.ring),
-        (c(ColorRole::Primary), invalid_ring(tokens))
+        (focused_invalid.border, focused_invalid.ring),
+        (invalid_border(tokens), focus_ring(tokens))
     );
     let disabled = get(tokens, query(VisualState::DISABLED));
     assert_eq!(disabled.opacity, 0.5);
@@ -418,6 +435,44 @@ fn assert_label(tokens: &DesignTokens, query: StyleQuery) {
     );
     let disabled = get(tokens, query.state(VisualState::DISABLED));
     assert_eq!(disabled.opacity, 0.5);
+    // An invalid label uses the destructive foreground.
+    let invalid = get(tokens, query.state(VisualState::INVALID));
+    assert_eq!(invalid.foreground, tokens.color(ColorRole::Destructive));
+}
+
+#[test]
+fn date_picker_trigger_keeps_the_field_invalid_look() {
+    for tokens in schemes() {
+        let query = |state| StyleQuery::new(ControlKind::DatePicker, Slot::Root).state(state);
+        let invalid = get(&tokens, query(VisualState::INVALID));
+        assert_eq!(
+            (invalid.border, invalid.ring),
+            (invalid_border(&tokens), invalid_ring(&tokens))
+        );
+        let focused = get(
+            &tokens,
+            query(VisualState::INVALID.with(VisualState::FOCUS_VISIBLE)),
+        );
+        assert_eq!(
+            (focused.border, focused.ring),
+            (invalid_border(&tokens), focus_ring(&tokens))
+        );
+    }
+}
+
+#[test]
+fn switch_has_no_invalid_look() {
+    for tokens in schemes() {
+        for slot in [Slot::Root, Slot::Thumb] {
+            let query = |state| StyleQuery::new(ControlKind::Switch, slot).state(state);
+            assert_eq!(
+                get(&tokens, query(VisualState::INVALID)),
+                get(&tokens, query(VisualState::NONE)),
+                "{}",
+                slot.name()
+            );
+        }
+    }
 }
 
 #[test]
@@ -588,11 +643,8 @@ fn assert_toggle(tokens: &DesignTokens, kind: ControlKind, slot: Slot) {
             (focused.border, focused.ring),
             (c(ColorRole::Ring), focus_ring(tokens))
         );
-        let invalid = look(VisualState::INVALID);
-        assert_eq!(
-            (invalid.border, invalid.ring),
-            (c(ColorRole::Destructive), invalid_ring(tokens))
-        );
+        // A toggle is not a field: the invalid flag changes nothing.
+        assert_eq!(look(VisualState::INVALID), rest);
         let disabled = look(VisualState::HOVERED.with(VisualState::DISABLED));
         assert_eq!((bg(&disabled), disabled.opacity), (Color::TRANSPARENT, 0.5));
     }

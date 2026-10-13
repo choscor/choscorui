@@ -21,7 +21,7 @@ fn readout(text: Localized) -> impl View {
 }
 
 /// Buttons in several variants, one that a checkbox enables, a window
-/// shortcut, an invalid button, and each variant in each size.
+/// shortcut, and each variant in each size.
 struct ButtonPage;
 
 impl View for ButtonPage {
@@ -47,7 +47,6 @@ impl View for ButtonPage {
             Checkbox::new(t!("button.enable_archive"), archive.binding())
                 .frame(Frame::new().width(320.0)),
             readout(t!("button.activations", count = activations)),
-            section(t!("button.invalid"), invalid_button()),
             VStack::new(
                 VARIANTS
                     .into_iter()
@@ -87,16 +86,6 @@ fn sizes(variant: ButtonVariant, action: impl Fn() + Copy + 'static) -> impl Vie
             }
         })
         .collect::<Vec<_>>())
-}
-
-/// An outline button in its invalid look, as in a form with an error.
-fn invalid_button() -> impl View {
-    Configured::custom(ControlKind::Button, |env| {
-        let mut button = controls::Button::new(env.text("button.required", &[]), CommandId(0))
-            .with_variant(ButtonVariant::Outline);
-        button.set_invalid(true);
-        button
-    })
 }
 
 pub fn button(_: &PageCx) -> AnyView {

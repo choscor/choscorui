@@ -288,9 +288,19 @@ that no hosted control paints, with the reason.
 
 The default recipe gives each control the reference values. The focus-visible
 state sets the border to `ring` and adds a 3 pt ring at the ring alpha. The
-invalid state uses a `destructive` ring at 20% (40% in dark) and a
-`destructive` border. The disabled state sets the opacity to 50%. With
-`motion.reduced`, every duration is zero.
+disabled state sets the opacity to 50%. With `motion.reduced`, every duration
+is zero.
+
+Only fields have an invalid state. The recipe has two invalid looks:
+
+| Helper | Controls | Look |
+| --- | --- | --- |
+| `field_invalid` | text and select fields, the `DatePicker` trigger, and the `InputGroup` root | `destructive` border at 100% in both schemes; a 3 pt `destructive` ring at 20% (40% in dark) while focus does not show |
+| `choice_invalid` | `Checkbox` and `RadioGroup` boxes, and the `Questionnaire` indicator | `destructive` border at 100% in both schemes, also when checked; no ring and no shadow |
+
+While focus shows, an invalid control keeps the focus ring and the
+`destructive` border. Thus focus stays visible. The label of an invalid
+checkbox or radio option uses `destructive` text.
 
 `paint_slot` is the general slot painter. It paints the drop shadows, the
 ring, the backdrop blur, the background, the inset shadows, and the border,
@@ -577,7 +587,7 @@ fn validate_amount(
 }
 ```
 
-- An `Invalid` state paints the invalid ring of the `Input` recipe.
+- An `Invalid` state paints the invalid look of the `Input` recipe.
 - The field semantics give an `Invalid` message as `announcement`.
 - `Locale::parse_decimal` accepts the decimal format of the user's locale.
 

@@ -105,6 +105,15 @@ impl Cx<'_> {
         Some(Ring { width, color })
     }
 
+    /// The soft destructive ring of an invalid field, and of a focused
+    /// destructive button or badge.
+    pub fn invalid_ring(&self) -> Option<Ring> {
+        self.ring(
+            self.t.ring_width,
+            self.a(ColorRole::Destructive, self.pick(0.2, 0.4)),
+        )
+    }
+
     /// The standard focus ring: `ring` at the ring alpha.
     pub fn focus_ring(&self) -> Option<Ring> {
         self.ring(
@@ -122,14 +131,29 @@ pub(super) fn focus(style: &mut ResolvedStyle, cx: &Cx) {
     }
 }
 
-/// The invalid look: a destructive ring and border.
-pub(super) fn invalid(style: &mut ResolvedStyle, cx: &Cx) {
+/// The invalid look of a text or select field. The border is destructive
+/// at full strength. The soft destructive ring shows only while focus does
+/// not show, so a focused invalid field keeps the focus ring. Call it after
+/// `focus`.
+pub(super) fn field_invalid(style: &mut ResolvedStyle, cx: &Cx) {
     if cx.s().invalid() {
-        style.ring = cx.ring(
-            cx.t.ring_width,
-            cx.a(ColorRole::Destructive, cx.pick(0.2, 0.4)),
-        );
-        style.border = cx.a(ColorRole::Destructive, cx.pick(1.0, 0.5));
+        style.border = cx.c(ColorRole::Destructive);
+        if !cx.s().focus_visible() {
+            style.ring = cx.invalid_ring();
+        }
+    }
+}
+
+/// The invalid look of a checkbox or radio box: a destructive border,
+/// also when checked, no shadow, and no ring other than the focus ring.
+/// Call it after `focus`.
+pub(super) fn choice_invalid(style: &mut ResolvedStyle, cx: &Cx) {
+    if cx.s().invalid() {
+        style.border = cx.c(ColorRole::Destructive);
+        style.shadow = ShadowLayers::NONE;
+        if !cx.s().focus_visible() {
+            style.ring = None;
+        }
     }
 }
 
@@ -141,10 +165,10 @@ pub(super) fn disabled(style: &mut ResolvedStyle, cx: &Cx) {
     }
 }
 
-/// Focus, invalid, and disabled, in the reference order.
-pub(super) fn states(style: &mut ResolvedStyle, cx: &Cx) {
+/// Focus, invalid, and disabled of a text or select field.
+pub(super) fn field_states(style: &mut ResolvedStyle, cx: &Cx) {
     focus(style, cx);
-    invalid(style, cx);
+    field_invalid(style, cx);
     disabled(style, cx);
 }
 

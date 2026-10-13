@@ -87,7 +87,7 @@ fn expectations() -> Vec<Expect> {
             variants: all(ButtonVariant::ALL),
             sizes: &ControlSize::ALL,
             grid: true,
-            states: &[S::INVALID, S::DISABLED],
+            states: &[S::DISABLED],
             ..expect("button", K::Button)
         },
         Expect {
@@ -113,21 +113,21 @@ fn expectations() -> Vec<Expect> {
         },
         Expect {
             sizes: SMALL,
-            states: &[S::CHECKED, S::INVALID],
+            states: &[S::CHECKED],
             ..expect("switch", K::Switch)
         },
         Expect {
             variants: all(ToggleVariant::ALL),
             sizes: TOGGLE_SIZES,
             grid: true,
-            states: &[S::CHECKED, S::INVALID],
+            states: &[S::CHECKED],
             ..expect("toggle", K::Toggle)
         },
         Expect {
             variants: all(ToggleVariant::ALL),
             sizes: TOGGLE_SIZES,
             grid: true,
-            states: &[S::CHECKED, S::INVALID],
+            states: &[S::CHECKED],
             ..expect("toggle-group", K::ToggleGroup)
         },
         Expect {

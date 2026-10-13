@@ -172,11 +172,6 @@ opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 39x39 r9.5 w3 #e7000b33
-stroke 10.5,10.5 35x35 r7.5 w1 #e7000bff
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 # selected
 shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
 fill 10,10 36x36 r8 #ffffffff
@@ -187,7 +182,7 @@ text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 fill 10,10 36x36 r8 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate highlighted
+= rest: focused invalid checked indeterminate highlighted
 ### pagination default default previous
 # rest
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -209,16 +204,11 @@ opacity 0.5 {
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 40,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 123x39 r9.5 w3 #e7000b33
-stroke 10.5,10.5 119x35 r7.5 w1 #e7000bff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 40,32.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 40,32.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### pagination default default next
 # rest
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -240,16 +230,11 @@ opacity 0.5 {
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 123x39 r9.5 w3 #e7000b33
-stroke 10.5,10.5 119x35 r7.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 120x36 r8 #f5f5f5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ## navigation-menu
 sizes default
 slot root: root track range thumb indicator label header footer action value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis previous next day weekday legend error scrollbar panel bar avatar choice progress
@@ -2193,16 +2178,11 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### toolbar default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
@@ -2248,16 +2228,11 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### status-bar default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
@@ -2311,16 +2286,11 @@ opacity 0.5 {
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke 8.5,8.5 35x35 r9.5 w3 #e7000b33
-stroke 10.5,10.5 31x31 r7.5 w1 #e7000bff
-stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: focused checked indeterminate selected highlighted
+= rest: focused invalid checked indeterminate selected highlighted
 ### dock default default separator
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
