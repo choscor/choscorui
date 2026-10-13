@@ -1,6 +1,6 @@
 //! Foundation classes, messages, and helpers.
 
-use super::class::{AnyClass, ClassType, Obj, objc_class};
+use super::class::{AnyClass, AnyProtocol, ClassType, Obj, ProtocolType, objc_class};
 use super::msg::{Autoreleased, Init, Utf8, messages};
 use super::retained::Retained;
 use crate::Error;
@@ -18,6 +18,7 @@ objc_class!(NSDictionary: NSObject);
 objc_class!(NSArray: NSObject);
 objc_class!(NSData: NSObject);
 objc_class!(NsUrl = "NSURL": NSObject);
+objc_class!(NSBundle: NSObject);
 
 messages! {
     pub(crate) RETAIN: instance NSObject, c"retain", () -> Option<&Obj<NSObject>>;
@@ -25,6 +26,7 @@ messages! {
     pub(crate) ALLOC: class NSObject, c"alloc", () -> Option<Retained<NSObject>>;
     pub(crate) INIT: instance NSObject, c"init", () -> Init<NSObject>;
     IS_KIND_OF_CLASS: instance NSObject, c"isKindOfClass:", (&AnyClass) -> bool;
+    CONFORMS_TO_PROTOCOL: instance NSObject, c"conformsToProtocol:", (&AnyProtocol) -> bool;
     pub(crate) DRAIN: instance NSAutoreleasePool, c"drain", () -> ();
     STRING_WITH_UTF8_STRING: class NSString, c"stringWithUTF8String:",
         (&CStr) -> Autoreleased<NSString>;
@@ -50,6 +52,10 @@ messages! {
     pub(crate) ABSOLUTE_STRING: instance NsUrl, c"absoluteString", () -> Autoreleased<NSString>;
     pub(crate) PATH: instance NsUrl, c"path", () -> Autoreleased<NSString>;
     pub(crate) IS_FILE_URL: instance NsUrl, c"isFileURL", () -> bool;
+    pub(crate) SCHEME: instance NsUrl, c"scheme", () -> Autoreleased<NSString>;
+    pub(crate) MAIN_BUNDLE: class NSBundle, c"mainBundle", () -> Autoreleased<NSBundle>;
+    pub(crate) BUNDLE_IDENTIFIER: instance NSBundle, c"bundleIdentifier",
+        () -> Autoreleased<NSString>;
 }
 
 impl<C> Obj<C> {
@@ -58,6 +64,14 @@ impl<C> Obj<C> {
         let class = D::class().ok()?;
         IS_KIND_OF_CLASS
             .send(self.cast(), (class,))
+            .then(|| self.cast())
+    }
+
+    /// This object as a `P`, when `conformsToProtocol:` says so.
+    pub(crate) fn conforming<P: ProtocolType>(&self) -> Option<&Obj<P>> {
+        let protocol = P::protocol().ok()?;
+        CONFORMS_TO_PROTOCOL
+            .send(self.cast(), (protocol,))
             .then(|| self.cast())
     }
 }

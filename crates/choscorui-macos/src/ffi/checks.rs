@@ -22,10 +22,14 @@ pub(crate) struct MsgInfo {
 
 /// Every registered message descriptor.
 fn all_messages() -> Vec<&'static MsgInfo> {
-    [super::foundation::MESSAGES, super::appkit::MESSAGES]
-        .into_iter()
-        .flatten()
-        .collect()
+    [
+        super::foundation::MESSAGES,
+        super::appkit::MESSAGES,
+        super::user_notifications::MESSAGES,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// Registers every class that this crate defines, so the checks find
@@ -43,6 +47,11 @@ fn runtime_encoding(message: &MsgInfo) -> Result<String, String> {
             let class = lookup_class(message.receiver)
                 .ok_or_else(|| format!("class {:?} is missing", message.receiver))?;
             runtime::method_types(class, selector, instance)
+        }
+        ReceiverKind::Protocol => {
+            let protocol = runtime::get_protocol(message.receiver)
+                .ok_or_else(|| format!("protocol {:?} is missing", message.receiver))?;
+            runtime::protocol_method_types(protocol, selector, instance)
         }
     };
     types.ok_or_else(|| {
@@ -188,6 +197,25 @@ mod tests {
         let report = check_message_ownership([&retained]).unwrap_err();
         assert!(report.contains("not +1"), "{report}");
         assert!(report.contains("Owned"), "{report}");
+    }
+
+    #[test]
+    fn protocol_methods_are_checked() {
+        let protocol = |receiver, encoding: fn() -> String| MsgInfo {
+            receiver,
+            receiver_kind: ReceiverKind::Protocol,
+            ..message(c"draggingSourceOperationMask", encoding)
+        };
+        assert!(check_messages([&protocol(c"NSDraggingInfo", || "Q@:".to_owned())]).is_ok());
+        let wrong = protocol(c"NSDraggingInfo", || "q@:".to_owned());
+        let report = check_messages([&wrong]).unwrap_err();
+        assert!(report.contains("expected q@:"), "{report}");
+        let missing = protocol(c"ChoscoruiNoSuchProtocol", || "Q@:".to_owned());
+        let report = check_messages([&missing]).unwrap_err();
+        assert!(
+            report.contains("protocol \"ChoscoruiNoSuchProtocol\" is missing"),
+            "{report}"
+        );
     }
 
     #[test]

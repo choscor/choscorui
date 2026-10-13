@@ -32,11 +32,19 @@ pub(crate) struct AnyClass {
     _marker: PhantomData<(*mut u8, PhantomPinned)>,
 }
 
+/// A protocol object, the argument of `conformsToProtocol:`.
+#[repr(C)]
+pub(crate) struct AnyProtocol {
+    _opaque: [u8; 0],
+    _marker: PhantomData<(*mut u8, PhantomPinned)>,
+}
+
 /// What a message descriptor names as its receiver.
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ReceiverKind {
     Class,
+    Protocol,
 }
 
 /// A class or protocol marker that can receive messages.
@@ -59,6 +67,14 @@ pub(crate) trait ClassType: Receiver {
 
 /// Implemented for `C` and for each superclass of `C`.
 pub(crate) trait IsA<S: ClassType>: ClassType {}
+
+/// A protocol marker. Objects that conform to it are `Obj<P>`.
+pub(crate) trait ProtocolType: Receiver {
+    /// The protocol object.
+    fn protocol() -> Result<&'static AnyProtocol, Error> {
+        runtime::get_protocol(Self::NAME).ok_or(Error::AppKitUnavailable)
+    }
+}
 
 /// The runtime class with `name`, or `None` when no loaded image defines it.
 pub(crate) fn lookup_class(name: &CStr) -> Option<&'static AnyClass> {
@@ -166,6 +182,39 @@ macro_rules! objc_class {
     };
 }
 pub(crate) use objc_class;
+
+/// Declares a protocol marker, for example `objc_protocol!(NSDraggingInfo)`.
+/// A handle to a conforming object dereferences to `Obj<NSObject>`.
+macro_rules! objc_protocol {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        pub(crate) enum $name {}
+        impl $crate::ffi::class::Receiver for $name {
+            const NAME: &'static ::std::ffi::CStr =
+                match ::std::ffi::CStr::from_bytes_with_nul(concat!(stringify!($name), "\0").as_bytes()) {
+                    Ok(name) => name,
+                    Err(_) => panic!("protocol names contain no NUL"),
+                };
+            #[cfg(test)]
+            const KIND: $crate::ffi::class::ReceiverKind = $crate::ffi::class::ReceiverKind::Protocol;
+        }
+        impl $crate::ffi::class::ProtocolType for $name {}
+        impl ::std::ops::Deref for $crate::ffi::class::Obj<$name> {
+            type Target = $crate::ffi::class::Obj<$crate::ffi::foundation::NSObject>;
+            fn deref(&self) -> &Self::Target {
+                self.cast()
+            }
+        }
+    };
+}
+pub(crate) use objc_protocol;
+
+#[cfg(test)]
+impl Encode for &'static AnyProtocol {
+    fn encode(out: &mut String) {
+        out.push('@');
+    }
+}
 
 #[cfg(test)]
 impl Encode for &'static AnyClass {

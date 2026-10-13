@@ -7,10 +7,12 @@
 //! safe: its one `unsafe` operation casts `objc_msgSend` to the exact
 //! `extern "C-unwind"` function type that the descriptor names.
 
-use super::class::{AnyClass, ClassType, IsA, Obj, Receiver, Sel};
+use super::block::Block;
+use super::class::{AnyClass, AnyProtocol, ClassType, IsA, Obj, Receiver, Sel};
 use super::encode::Bool;
 #[cfg(test)]
 use super::encode::Encode;
+use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 use super::retained::Retained;
 use super::runtime;
 use crate::Error;
@@ -192,7 +194,18 @@ macro_rules! plain_value {
     )*};
 }
 
-plain_value!(isize, usize, i16, u16, f64);
+plain_value!(
+    isize,
+    usize,
+    i16,
+    u16,
+    f64,
+    NSPoint,
+    NSSize,
+    NSRect,
+    NSRange,
+    CGAffineTransform
+);
 
 impl Ret for () {
     type Raw<'a> = ();
@@ -332,6 +345,30 @@ impl<C: Receiver> Encode for Shared<C> {
 impl Arg for &'static AnyClass {
     type In<'a> = &'static AnyClass;
     type Raw<'a> = &'static AnyClass;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
+impl Arg for &'static AnyProtocol {
+    type In<'a> = &'static AnyProtocol;
+    type Raw<'a> = &'static AnyProtocol;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
+impl<B: 'static> Arg for &'static Block<B> {
+    type In<'a> = &'a Block<B>;
+    type Raw<'a> = &'a Block<B>;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
+impl<B: 'static> Arg for Option<&'static Block<B>> {
+    type In<'a> = Option<&'a Block<B>>;
+    type Raw<'a> = Option<&'a Block<B>>;
     fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
         value
     }

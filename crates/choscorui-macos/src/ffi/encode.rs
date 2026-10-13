@@ -22,6 +22,8 @@ macro_rules! encode_as {
         }
     };
 }
+#[cfg(test)]
+pub(crate) use encode_as;
 
 #[cfg(test)]
 encode_as!((), "v");

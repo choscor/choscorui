@@ -4,12 +4,13 @@
 //! The message functions are `C-unwind`: an Objective-C exception that
 //! leaves a message send unwinds through Rust as a defined foreign unwind.
 
-use super::class::{AnyClass, Sel};
+use super::class::{AnyClass, AnyProtocol, Sel};
 use std::ffi::{CStr, c_char};
 
 #[link(name = "objc")]
 unsafe extern "C-unwind" {
     fn objc_getClass(name: *const c_char) -> Option<&'static AnyClass>;
+    fn objc_getProtocol(name: *const c_char) -> Option<&'static AnyProtocol>;
     fn sel_registerName(name: *const c_char) -> Sel;
     pub(crate) fn objc_msgSend();
     #[cfg(target_arch = "x86_64")]
@@ -20,6 +21,13 @@ unsafe extern "C-unwind" {
 pub(super) fn get_class(name: &CStr) -> Option<&'static AnyClass> {
     // SAFETY: `name` is a NUL-terminated string that lives for the call.
     unsafe { objc_getClass(name.as_ptr()) }
+}
+
+/// The runtime protocol with `name`. A protocol exists when a loaded
+/// image uses it.
+pub(super) fn get_protocol(name: &CStr) -> Option<&'static AnyProtocol> {
+    // SAFETY: `name` is a NUL-terminated string that lives for the call.
+    unsafe { objc_getProtocol(name.as_ptr()) }
 }
 
 /// The selector with `name`, registered when it is new.
@@ -53,6 +61,21 @@ unsafe extern "C-unwind" {
     safe fn class_getInstanceMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
     safe fn class_getClassMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
     safe fn method_getTypeEncoding(method: &Method) -> *const c_char;
+    safe fn protocol_getMethodDescription(
+        protocol: &AnyProtocol,
+        name: Sel,
+        required: bool,
+        instance: bool,
+    ) -> MethodDescription;
+}
+
+/// `struct objc_method_description`; both fields are null when the
+/// protocol has no such method.
+#[cfg(test)]
+#[repr(C)]
+struct MethodDescription {
+    name: Option<Sel>,
+    types: *const c_char,
 }
 
 /// Copies a type encoding that the runtime owns.
@@ -76,4 +99,18 @@ pub(super) fn method_types(class: &AnyClass, name: Sel, instance: bool) -> Optio
         class_getClassMethod(class, name)
     }?;
     copy_types(method_getTypeEncoding(method))
+}
+
+/// The type encoding of a required or optional method of `protocol` or of
+/// a protocol that it incorporates.
+#[cfg(test)]
+pub(super) fn protocol_method_types(
+    protocol: &AnyProtocol,
+    name: Sel,
+    instance: bool,
+) -> Option<String> {
+    [true, false].into_iter().find_map(|required| {
+        let description = protocol_getMethodDescription(protocol, name, required, instance);
+        description.name.and_then(|_| copy_types(description.types))
+    })
 }

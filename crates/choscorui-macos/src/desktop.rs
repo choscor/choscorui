@@ -2,17 +2,31 @@
 //! events; menu-bar status items; user notifications; and opening URLs
 //! with the system handler.
 
-use super::window_state::send_id_usize;
 use super::*;
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    APPLICATION_DELEGATE, BUTTON_TITLE, ChoscoruiV2AppDelegate, IS_STATUS_ITEM_VISIBLE,
+    NSApplication, NSStatusItem, OPEN_URLS, REMOVE_STATUS_ITEM, SET_APPLICATION_DELEGATE,
+    SET_BUTTON_TITLE, SET_STATUS_ITEM_MENU, SET_STATUS_ITEM_VISIBLE, SET_TOOL_TIP,
+    SHARED_APPLICATION, SHARED_WORKSPACE, SHOULD_HANDLE_REOPEN, STATUS_ITEM_BUTTON,
+    STATUS_ITEM_WITH_LENGTH, SYSTEM_STATUS_BAR, URL_FOR_APPLICATION_TO_OPEN_URL,
+    WORKSPACE_OPEN_URL,
+};
+use crate::ffi::block::{AuthorizationArgs, AuthorizationBlock, GlobalBlock};
+use crate::ffi::encode::Bool;
+use crate::ffi::foundation::{
+    ABSOLUTE_STRING, BUNDLE_IDENTIFIER, IS_FILE_URL, MAIN_BUNDLE, NSArray, NSObject, NSString,
+    NsUrl, PATH, SCHEME, TextError, URL_WITH_STRING, array_items, string,
+};
+use crate::ffi::retained::{Retained, alloc_init};
+use crate::ffi::user_notifications::{
+    ADD_NOTIFICATION_REQUEST, CURRENT_NOTIFICATION_CENTER, DEFAULT_SOUND, NEW_CONTENT,
+    NOTIFICATION_REQUEST, REQUEST_AUTHORIZATION, REQUEST_IDENTIFIER, REQUEST_WITH_IDENTIFIER,
+    RESPONSE_ACTION_IDENTIFIER, RESPONSE_NOTIFICATION, SET_CENTER_DELEGATE, SET_CONTENT_BODY,
+    SET_CONTENT_SOUND, SET_CONTENT_TITLE, UNNotificationResponse, UNUserNotificationCenter,
+};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
-
-#[link(name = "UserNotifications", kind = "framework")]
-unsafe extern "C" {}
-
-unsafe extern "C" {
-    static _NSConcreteGlobalBlock: c_void;
-}
 
 /// Application-level events, delivered in AppKit callback order.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,57 +99,16 @@ fn push_event(event: AppEvent) {
     }
 }
 
-#[repr(C)]
-struct BlockHeader {
-    isa: *const c_void,
-    flags: i32,
-    reserved: i32,
-    invoke: *const c_void,
-}
-
-/// Calls an Objective-C block taking no arguments.
-unsafe fn call_block(block: Id) {
-    if block.is_null() {
-        return;
-    }
-    unsafe {
-        let invoke: unsafe extern "C" fn(Id) =
-            std::mem::transmute((*(block as *const BlockHeader)).invoke);
-        invoke(block)
-    }
-}
-
-/// Calls an Objective-C block taking one NSUInteger.
-unsafe fn call_block_usize(block: Id, value: usize) {
-    if block.is_null() {
-        return;
-    }
-    unsafe {
-        let invoke: unsafe extern "C" fn(Id, usize) =
-            std::mem::transmute((*(block as *const BlockHeader)).invoke);
-        invoke(block, value)
-    }
-}
-
-unsafe fn urls_from_array(urls: Id) -> (Vec<PathBuf>, Vec<String>) {
+fn urls_from_array(urls: &Obj<NSArray>) -> (Vec<PathBuf>, Vec<String>) {
     let mut files = Vec::new();
     let mut others = Vec::new();
-    if urls.is_null() {
-        return (files, others);
-    }
-    unsafe {
-        for index in 0..send_usize(urls, c"count") {
-            let url = send_id_usize(urls, c"objectAtIndex:", index);
-            if url.is_null() {
-                continue;
+    for url in array_items(urls).filter_map(|url| url.downcast::<NsUrl>()) {
+        if IS_FILE_URL.send(url, ()) {
+            if let Some(path) = PATH.send(url, ()).and_then(|path| string(&path)) {
+                files.push(PathBuf::from(path));
             }
-            if send_bool(url, c"isFileURL") != 0 {
-                if let Some(path) = ffi::legacy::string(send_id(url, c"path")) {
-                    files.push(PathBuf::from(path));
-                }
-            } else if let Some(text) = ffi::legacy::string(send_id(url, c"absoluteString")) {
-                others.push(text);
-            }
+        } else if let Some(text) = ABSOLUTE_STRING.send(url, ()).and_then(|text| string(&text)) {
+            others.push(text);
         }
     }
     (files, others)
@@ -162,7 +135,10 @@ unsafe extern "C" fn app_should_handle_reopen(_: Id, _: Sel, _: Id, visible: i8)
 unsafe extern "C" fn app_open_urls(_: Id, _: Sel, _: Id, urls: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: AppKit passes an NSArray<NSURL *> valid for the call.
-        let (files, others) = unsafe { urls_from_array(urls) };
+        let Some(urls) = (unsafe { ffi::legacy::borrow(urls) }) else {
+            return;
+        };
+        let (files, others) = urls_from_array(urls);
         if !files.is_empty() {
             push_event(AppEvent::OpenFiles(files));
         }
@@ -175,26 +151,41 @@ unsafe extern "C" fn app_open_urls(_: Id, _: Sel, _: Id, urls: Id) {
 unsafe extern "C" fn notification_did_receive(_: Id, _: Sel, _: Id, response: Id, handler: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: response is a live UNNotificationResponse for the call.
-        unsafe {
-            let request = send_id(send_id(response, c"notification"), c"request");
-            let identifier =
-                ffi::legacy::string(send_id(request, c"identifier")).unwrap_or_default();
-            let action =
-                ffi::legacy::string(send_id(response, c"actionIdentifier")).unwrap_or_default();
-            push_event(AppEvent::NotificationActivated { identifier, action });
-        }
+        let Some(response) = (unsafe { ffi::legacy::borrow::<UNNotificationResponse>(response) })
+        else {
+            return;
+        };
+        let identifier = RESPONSE_NOTIFICATION
+            .send(response, ())
+            .and_then(|notification| NOTIFICATION_REQUEST.send(notification, ()))
+            .and_then(|request| REQUEST_IDENTIFIER.send(request, ()))
+            .and_then(|identifier| string(&identifier))
+            .unwrap_or_default();
+        let action = RESPONSE_ACTION_IDENTIFIER
+            .send(response, ())
+            .and_then(|action| string(&action))
+            .unwrap_or_default();
+        push_event(AppEvent::NotificationActivated { identifier, action });
     }));
-    // SAFETY: the completion handler must be called exactly once.
-    unsafe { call_block(handler) };
+    // SAFETY: the completion handler is a block that takes no arguments and
+    // lives for the call; it must be called exactly once.
+    if let Some(handler) = unsafe { ffi::legacy::block::<()>(handler) } {
+        handler.call();
+    }
 }
 
 unsafe extern "C" fn notification_will_present(_: Id, _: Sel, _: Id, _: Id, handler: Id) {
     // Show banners while the app is frontmost too:
     // UNNotificationPresentationOptionSound | List | Banner.
-    unsafe { call_block_usize(handler, (1 << 1) | (1 << 3) | (1 << 4)) };
+    // SAFETY: the completion handler is a block that takes one NSUInteger
+    // and lives for the call.
+    if let Some(handler) = unsafe { ffi::legacy::block::<(usize,)>(handler) } {
+        handler.call((1 << 1) | (1 << 3) | (1 << 4));
+    }
 }
 
-unsafe fn app_delegate_class() -> Result<Id, Error> {
+/// Registers the delegate class on first use.
+pub(crate) unsafe fn app_delegate_class() -> Result<Id, Error> {
     static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
     let result = CLASS.get_or_init(|| unsafe {
         let superclass = class(c"NSObject")?;
@@ -248,27 +239,42 @@ unsafe fn app_delegate_class() -> Result<Id, Error> {
 
 /// The process-wide delegate object. NSApplication and the notification
 /// center hold delegates weakly, so it lives for the whole process.
-fn app_delegate() -> Result<Id, Error> {
-    static DELEGATE: OnceLock<Result<usize, Error>> = OnceLock::new();
-    let result = DELEGATE.get_or_init(|| unsafe {
-        let delegate = send_id(send_id(app_delegate_class()?, c"alloc"), c"init");
-        NonNull::new(delegate)
-            .map(|delegate| delegate.as_ptr() as usize)
-            .ok_or(Error::AppKitUnavailable)
+fn app_delegate() -> Result<&'static Obj<NSObject>, Error> {
+    struct Delegate(Retained<NSObject>);
+    // SAFETY: the delegate is created and used on the main thread only; the
+    // static keeps its reference for the whole process.
+    unsafe impl Send for Delegate {}
+    // SAFETY: as above, no other thread reads it.
+    unsafe impl Sync for Delegate {}
+    static DELEGATE: OnceLock<Result<Delegate, Error>> = OnceLock::new();
+    let result = DELEGATE.get_or_init(|| {
+        // SAFETY: registration runs once on the main thread.
+        unsafe { app_delegate_class() }?;
+        alloc_init::<ChoscoruiV2AppDelegate>()
+            .map(|delegate| Delegate(delegate.upcast::<NSObject>().retain()))
     });
-    result.map(|value| value as Id)
+    match result {
+        Ok(delegate) => Ok(&delegate.0),
+        Err(error) => Err(*error),
+    }
 }
 
 /// Installs the delegate before `finishLaunching`, so open-document
 /// events delivered at launch are not lost.
-pub(super) unsafe fn install_app_delegate(application: Id) -> Result<(), Error> {
+pub(super) fn install_app_delegate(application: &Obj<NSApplication>) -> Result<(), Error> {
     let delegate = app_delegate()?;
-    unsafe {
-        if send_id(application, c"delegate") != delegate {
-            send_void_id(application, c"setDelegate:", delegate);
-        }
+    let installed = APPLICATION_DELEGATE.send(application, ());
+    if installed.is_none_or(|installed| installed.addr() != delegate.addr()) {
+        SET_APPLICATION_DELEGATE.send(application, (Some(delegate),));
     }
     Ok(())
+}
+
+/// The shared `NSApplication`.
+fn shared_application() -> Result<&'static Obj<NSApplication>, Error> {
+    SHARED_APPLICATION
+        .send_class(())?
+        .ok_or(Error::AppKitUnavailable)
 }
 
 impl Application {
@@ -282,22 +288,17 @@ impl Application {
     #[doc(hidden)]
     pub fn simulate_open_urls(&self, urls: &[&str]) -> Result<(), DesktopError> {
         let _pool = Pool::new()?;
-        unsafe {
-            let mut values = Vec::new();
-            for url in urls {
-                values.push(ns_url(url)?);
-            }
-            let array = ns_array(&values)?;
-            let delegate = send_id(self.raw.as_ptr(), c"delegate");
-            let f: unsafe extern "C" fn(Id, Sel, Id, Id) =
-                std::mem::transmute(objc_msgSend as *const ());
-            f(
-                delegate,
-                selector(c"application:openURLs:"),
-                self.raw.as_ptr(),
-                array,
-            );
+        let mut values = Vec::new();
+        for url in urls {
+            values.push(ns_url(url)?);
         }
+        let objects: Vec<&Obj<NSObject>> = values.iter().map(|url| url.upcast()).collect();
+        let array = ffi::foundation::ns_array(&objects)?;
+        let application = shared_application()?;
+        let delegate = APPLICATION_DELEGATE
+            .send(application, ())
+            .ok_or(DesktopError::AppKitUnavailable)?;
+        OPEN_URLS.send(delegate, (application, &array));
         Ok(())
     }
 
@@ -305,44 +306,51 @@ impl Application {
     #[doc(hidden)]
     pub fn simulate_reopen(&self, has_visible_windows: bool) -> bool {
         let _pool = Pool::new();
-        unsafe {
-            let delegate = send_id(self.raw.as_ptr(), c"delegate");
-            let f: unsafe extern "C" fn(Id, Sel, Id, i8) -> i8 =
-                std::mem::transmute(objc_msgSend as *const ());
-            f(
-                delegate,
-                selector(c"applicationShouldHandleReopen:hasVisibleWindows:"),
-                self.raw.as_ptr(),
-                i8::from(has_visible_windows),
-            ) != 0
-        }
+        let Ok(application) = shared_application() else {
+            return false;
+        };
+        APPLICATION_DELEGATE
+            .send(application, ())
+            .is_some_and(|delegate| {
+                SHOULD_HANDLE_REOPEN.send(delegate, (application, has_visible_windows))
+            })
     }
 }
 
-unsafe fn ns_url(url: &str) -> Result<Id, DesktopError> {
+/// An `NSString`, or `InvalidText` when `value` contains a NUL.
+fn ns_string(value: &str) -> Result<Retained<NSString>, DesktopError> {
+    ffi::foundation::ns_string(value).map_err(|error| match error {
+        TextError::InteriorNul => DesktopError::InvalidText,
+        TextError::Unavailable => DesktopError::AppKitUnavailable,
+    })
+}
+
+fn ns_url(url: &str) -> Result<Retained<NsUrl>, DesktopError> {
     let text = ns_string(url).map_err(|_| DesktopError::InvalidUrl)?;
-    unsafe {
-        let url = send_id_id(class(c"NSURL")?, c"URLWithString:", text);
-        if url.is_null() || send_id(url, c"scheme").is_null() {
-            return Err(DesktopError::InvalidUrl);
-        }
-        Ok(url)
+    let url = URL_WITH_STRING
+        .send_class((&text,))?
+        .ok_or(DesktopError::InvalidUrl)?;
+    if SCHEME.send(&url, ()).is_none() {
+        return Err(DesktopError::InvalidUrl);
     }
+    Ok(url)
 }
 
 /// The application that would open `url` (for example Safari for
 /// `https:`), without opening it.
 pub fn url_handler(url: &str) -> Result<Option<PathBuf>, DesktopError> {
     let _pool = Pool::new()?;
-    unsafe {
-        let url = ns_url(url)?;
-        let workspace = send_id(class(c"NSWorkspace")?, c"sharedWorkspace");
-        let app = send_id_id(workspace, c"URLForApplicationToOpenURL:", url);
-        if app.is_null() {
-            return Ok(None);
-        }
-        Ok(ffi::legacy::string(send_id(app, c"path")).map(PathBuf::from))
-    }
+    let url = ns_url(url)?;
+    let workspace = SHARED_WORKSPACE
+        .send_class(())?
+        .ok_or(DesktopError::AppKitUnavailable)?;
+    let Some(app) = URL_FOR_APPLICATION_TO_OPEN_URL.send(workspace, (&url,)) else {
+        return Ok(None);
+    };
+    Ok(PATH
+        .send(&app, ())
+        .and_then(|path| string(&path))
+        .map(PathBuf::from))
 }
 
 /// Opens `url` with the system's default handler (browser, mail client,
@@ -352,19 +360,19 @@ pub fn open_url(url: &str) -> Result<(), DesktopError> {
         return Err(DesktopError::NoHandler);
     }
     let _pool = Pool::new()?;
-    unsafe {
-        let url = ns_url(url)?;
-        let workspace = send_id(class(c"NSWorkspace")?, c"sharedWorkspace");
-        if send_bool_id(workspace, c"openURL:", url) == 0 {
-            return Err(DesktopError::NoHandler);
-        }
+    let url = ns_url(url)?;
+    let workspace = SHARED_WORKSPACE
+        .send_class(())?
+        .ok_or(DesktopError::AppKitUnavailable)?;
+    if !WORKSPACE_OPEN_URL.send(workspace, (&url,)) {
+        return Err(DesktopError::NoHandler);
     }
     Ok(())
 }
 
 /// A menu-bar extra (`NSStatusItem`) with a title, tooltip, and menu.
 pub struct StatusItem {
-    raw: NonNull<c_void>,
+    item: Retained<NSStatusItem>,
     menu: Option<ContextMenu>,
     _main_thread: PhantomData<Rc<()>>,
 }
@@ -374,65 +382,65 @@ impl StatusItem {
     /// `Application::new`.
     pub fn new(title: &str) -> Result<Self, Error> {
         let _pool = Pool::new()?;
-        unsafe {
-            let bar = send_id(class(c"NSStatusBar")?, c"systemStatusBar");
-            // NSVariableStatusItemLength = -1.
-            let item = send_id_f64(bar, c"statusItemWithLength:", -1.0);
-            let raw = NonNull::new(send_id(item, c"retain")).ok_or(Error::AppKitUnavailable)?;
-            let status = Self {
-                raw,
-                menu: None,
-                _main_thread: PhantomData,
-            };
-            status.set_title(title)?;
-            Ok(status)
-        }
-    }
-
-    fn button(&self) -> Id {
-        unsafe { send_id(self.raw.as_ptr(), c"button") }
+        let bar = SYSTEM_STATUS_BAR
+            .send_class(())?
+            .ok_or(Error::AppKitUnavailable)?;
+        // NSVariableStatusItemLength = -1.
+        let item = STATUS_ITEM_WITH_LENGTH
+            .send(bar, (-1.0,))
+            .ok_or(Error::AppKitUnavailable)?;
+        let status = Self {
+            item,
+            menu: None,
+            _main_thread: PhantomData,
+        };
+        status.set_title(title)?;
+        Ok(status)
     }
 
     pub fn set_title(&self, title: &str) -> Result<(), Error> {
         let _pool = Pool::new()?;
-        unsafe { send_void_id(self.button(), c"setTitle:", ns_string(title)?) };
+        let title = ffi::foundation::ns_string(title)?;
+        if let Some(button) = STATUS_ITEM_BUTTON.send(&self.item, ()) {
+            SET_BUTTON_TITLE.send(button, (&title,));
+        }
         Ok(())
     }
 
     pub fn title(&self) -> String {
         let _pool = Pool::new();
-        unsafe { ffi::legacy::string(send_id(self.button(), c"title")).unwrap_or_default() }
+        STATUS_ITEM_BUTTON
+            .send(&self.item, ())
+            .and_then(|button| BUTTON_TITLE.send(button, ()))
+            .and_then(|title| string(&title))
+            .unwrap_or_default()
     }
 
     /// Tooltip, also used as the accessibility help text.
     pub fn set_tooltip(&self, tooltip: &str) -> Result<(), Error> {
         let _pool = Pool::new()?;
-        unsafe { send_void_id(self.button(), c"setToolTip:", ns_string(tooltip)?) };
+        let tooltip = ffi::foundation::ns_string(tooltip)?;
+        if let Some(button) = STATUS_ITEM_BUTTON.send(&self.item, ()) {
+            SET_TOOL_TIP.send(button, (Some(&tooltip),));
+        }
         Ok(())
     }
 
     pub fn set_visible(&self, visible: bool) {
         let _pool = Pool::new();
-        unsafe { send_void_bool(self.raw.as_ptr(), c"setVisible:", i8::from(visible)) }
+        SET_STATUS_ITEM_VISIBLE.send(&self.item, (visible,));
     }
 
     pub fn is_visible(&self) -> bool {
         let _pool = Pool::new();
-        unsafe { send_bool(self.raw.as_ptr(), c"isVisible") != 0 }
+        IS_STATUS_ITEM_VISIBLE.send(&self.item, ())
     }
 
     /// Attaches the menu shown on click. The item owns the menu so its
     /// action target outlives every possible click.
     pub fn set_menu(&mut self, menu: Option<ContextMenu>) {
         let _pool = Pool::new();
-        unsafe {
-            send_void_id(
-                self.raw.as_ptr(),
-                c"setMenu:",
-                menu.as_ref()
-                    .map_or(std::ptr::null_mut(), |menu| ffi::legacy::id(menu.menu())),
-            )
-        };
+        SET_STATUS_ITEM_MENU.send(&self.item, (menu.as_ref().map(ContextMenu::menu),));
         self.menu = menu;
     }
 
@@ -443,13 +451,9 @@ impl StatusItem {
 
 impl Drop for StatusItem {
     fn drop(&mut self) {
-        unsafe {
-            send_void_id(self.raw.as_ptr(), c"setMenu:", std::ptr::null_mut());
-            if let Ok(bar_class) = class(c"NSStatusBar") {
-                let bar = send_id(bar_class, c"systemStatusBar");
-                send_void_id(bar, c"removeStatusItem:", self.raw.as_ptr());
-            }
-            send_void(self.raw.as_ptr(), c"release");
+        SET_STATUS_ITEM_MENU.send(&self.item, (None,));
+        if let Ok(Some(bar)) = SYSTEM_STATUS_BAR.send_class(()) {
+            REMOVE_STATUS_ITEM.send(bar, (&self.item,));
         }
     }
 }
@@ -479,93 +483,38 @@ pub fn has_bundle_identifier() -> bool {
     let Ok(_pool) = Pool::new() else {
         return false;
     };
-    unsafe {
-        let Ok(bundle_class) = class(c"NSBundle") else {
-            return false;
-        };
-        let bundle = send_id(bundle_class, c"mainBundle");
-        !bundle.is_null() && !send_id(bundle, c"bundleIdentifier").is_null()
-    }
+    MAIN_BUNDLE
+        .send_class(())
+        .ok()
+        .flatten()
+        .is_some_and(|bundle| BUNDLE_IDENTIFIER.send(&bundle, ()).is_some())
 }
 
-unsafe fn notification_center() -> Result<Id, DesktopError> {
+fn notification_center() -> Result<&'static Obj<UNUserNotificationCenter>, DesktopError> {
     if !has_bundle_identifier() {
         return Err(DesktopError::RequiresAppBundle);
     }
-    unsafe {
-        let center = send_id(
-            class(c"UNUserNotificationCenter")?,
-            c"currentNotificationCenter",
-        );
-        if center.is_null() {
-            return Err(DesktopError::AppKitUnavailable);
-        }
-        send_void_id(center, c"setDelegate:", app_delegate()?);
-        Ok(center)
-    }
+    let center = CURRENT_NOTIFICATION_CENTER
+        .send_class(())?
+        .ok_or(DesktopError::AppKitUnavailable)?;
+    SET_CENTER_DELEGATE.send(center, (Some(app_delegate()?),));
+    Ok(center)
 }
 
-#[repr(C)]
-struct BlockDescriptor {
-    reserved: usize,
-    size: usize,
-    signature: *const i8,
-}
-
-// SAFETY: the descriptor is immutable and points at a static C string.
-unsafe impl Sync for BlockDescriptor {}
-
-#[repr(C)]
-struct GlobalBlock {
-    isa: *const c_void,
-    flags: i32,
-    reserved: i32,
-    invoke: unsafe extern "C" fn(*const GlobalBlock, i8, Id),
-    descriptor: *const BlockDescriptor,
-}
-
-unsafe extern "C" fn authorization_finished(_: *const GlobalBlock, granted: i8, _: Id) {
-    PERMISSION.store(if granted != 0 { 2 } else { 3 }, Ordering::SeqCst);
+extern "C" fn authorization_finished(_: &AuthorizationBlock, granted: Bool, _: *const c_void) {
+    PERMISSION.store(if granted.get() { 2 } else { 3 }, Ordering::SeqCst);
 }
 
 /// Asks for alert, sound, and badge permission. The answer arrives
 /// asynchronously; poll `notification_permission`.
 pub fn request_notification_permission() -> Result<(), DesktopError> {
-    static DESCRIPTOR: BlockDescriptor = BlockDescriptor {
-        reserved: 0,
-        size: std::mem::size_of::<GlobalBlock>(),
-        signature: c"v@?c@".as_ptr(),
-    };
-    struct SyncBlock(GlobalBlock);
-    // SAFETY: the block is immutable after creation and has no captures.
-    unsafe impl Sync for SyncBlock {}
-    unsafe impl Send for SyncBlock {}
-    static BLOCK: OnceLock<SyncBlock> = OnceLock::new();
-    let block = BLOCK.get_or_init(|| {
-        SyncBlock(GlobalBlock {
-            // Only the symbol's address is taken.
-            isa: &raw const _NSConcreteGlobalBlock,
-            // BLOCK_IS_GLOBAL | BLOCK_HAS_SIGNATURE
-            flags: (1 << 28) | (1 << 30),
-            reserved: 0,
-            invoke: authorization_finished,
-            descriptor: &DESCRIPTOR,
-        })
-    });
+    static BLOCK: OnceLock<GlobalBlock<AuthorizationArgs>> = OnceLock::new();
+    let block = BLOCK.get_or_init(|| GlobalBlock::authorization(authorization_finished));
     let _pool = Pool::new()?;
-    unsafe {
-        let center = notification_center()?;
-        PERMISSION.store(1, Ordering::SeqCst);
-        // UNAuthorizationOptionBadge | Sound | Alert.
-        let f: unsafe extern "C" fn(Id, Sel, usize, *const GlobalBlock) =
-            std::mem::transmute(objc_msgSend as *const ());
-        f(
-            center,
-            selector(c"requestAuthorizationWithOptions:completionHandler:"),
-            (1 << 0) | (1 << 1) | (1 << 2),
-            &block.0,
-        );
-    }
+    let center = notification_center()?;
+    PERMISSION.store(1, Ordering::SeqCst);
+    // UNAuthorizationOptionBadge | Sound | Alert.
+    REQUEST_AUTHORIZATION.send(center, ((1 << 0) | (1 << 1) | (1 << 2), block.as_block()));
     Ok(())
 }
 
@@ -580,45 +529,19 @@ pub fn post_notification(identifier: &str, title: &str, body: &str) -> Result<()
         return Err(DesktopError::PermissionDenied);
     }
     let _pool = Pool::new()?;
-    unsafe {
-        let center = notification_center()?;
-        let content = send_id(class(c"UNMutableNotificationContent")?, c"new");
-        if content.is_null() {
-            return Err(DesktopError::AppKitUnavailable);
-        }
-        let result = (|| {
-            send_void_id(content, c"setTitle:", ns_string(title)?);
-            send_void_id(content, c"setBody:", ns_string(body)?);
-            send_void_id(
-                content,
-                c"setSound:",
-                send_id(class(c"UNNotificationSound")?, c"defaultSound"),
-            );
-            let f: unsafe extern "C" fn(Id, Sel, Id, Id, Id) -> Id =
-                std::mem::transmute(objc_msgSend as *const ());
-            let request = f(
-                class(c"UNNotificationRequest")?,
-                selector(c"requestWithIdentifier:content:trigger:"),
-                ns_string(identifier)?,
-                content,
-                std::ptr::null_mut(),
-            );
-            if request.is_null() {
-                return Err(DesktopError::AppKitUnavailable);
-            }
-            let add: unsafe extern "C" fn(Id, Sel, Id, Id) =
-                std::mem::transmute(objc_msgSend as *const ());
-            add(
-                center,
-                selector(c"addNotificationRequest:withCompletionHandler:"),
-                request,
-                std::ptr::null_mut(),
-            );
-            Ok(())
-        })();
-        send_void(content, c"release");
-        result
-    }
+    let center = notification_center()?;
+    let content = NEW_CONTENT
+        .send_class(())?
+        .ok_or(DesktopError::AppKitUnavailable)?;
+    SET_CONTENT_TITLE.send(&content, (&*ns_string(title)?,));
+    SET_CONTENT_BODY.send(&content, (&*ns_string(body)?,));
+    let sound = DEFAULT_SOUND.send_class(())?;
+    SET_CONTENT_SOUND.send(&content, (sound.as_deref(),));
+    let request = REQUEST_WITH_IDENTIFIER
+        .send_class((&*ns_string(identifier)?, &content, None))?
+        .ok_or(DesktopError::AppKitUnavailable)?;
+    ADD_NOTIFICATION_REQUEST.send(center, (&request, None));
+    Ok(())
 }
 
 /// What this backend provides on the running system. Notifications need

@@ -12,16 +12,19 @@
 )]
 
 pub(crate) mod appkit;
+pub(crate) mod block;
 #[cfg(test)]
 pub(crate) mod checks;
 pub(crate) mod class;
 pub(crate) mod encode;
 pub(crate) mod foundation;
+pub(crate) mod geometry;
 pub(crate) mod legacy;
 pub(crate) mod msg;
 pub(crate) mod retained;
 mod runtime;
 mod thread;
+pub(crate) mod user_notifications;
 
 pub(crate) use class::Obj;
 pub(crate) use retained::Pool;

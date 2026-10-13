@@ -3,6 +3,19 @@
 //! NSDraggingSource that starts drags from Rust payloads.
 
 use super::*;
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    BEGIN_DRAGGING_SESSION, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW, CONVERT_POINT_TO_VIEW,
+    CURRENT_EVENT, ChoscoruiV2SimulatedDraggingInfo, DRAGGING_ENTERED, DRAGGING_EXITED,
+    DRAGGING_LOCATION, DRAGGING_PASTEBOARD, DRAGGING_SOURCE, DRAGGING_SOURCE_OPERATION_MASK,
+    DRAGGING_UPDATED, EVENT_TYPE, EVENT_WINDOW, INIT_WITH_PASTEBOARD_WRITER, MODIFIER_FLAGS,
+    NSDraggingDestination, NSDraggingInfo, NSDraggingItem, NSView, PERFORM_DRAG_OPERATION,
+    PREPARE_FOR_DRAG_OPERATION, REGISTER_FOR_DRAGGED_TYPES, SET_DRAGGING_FRAME, SHARED_APPLICATION,
+    UNREGISTER_DRAGGED_TYPES, VIEW_WINDOW,
+};
+use crate::ffi::class::ProtocolType;
+use crate::ffi::foundation::NSObject;
+use crate::ffi::retained::{alloc, alloc_init};
 use choscorui_core::{
     DragEvent, DragFormat, DragItem, DragOperation, DragOperations, Image, negotiate_drag,
 };
@@ -55,112 +68,118 @@ fn intersect(a: DragOperations, b: DragOperations) -> DragOperations {
     }
 }
 
-unsafe fn lookup(view: Id) -> Option<(PaintHandle, WindowQueue)> {
-    unsafe {
-        let window = send_id(view, c"window");
-        if window.is_null() {
-            return None;
-        }
-        let key = window as usize;
-        let paint = paint_states().lock().unwrap().get(&key).cloned()?;
-        let queue = window_queues().lock().unwrap().get(&key).cloned()?;
-        Some((paint, queue))
-    }
+fn lookup(view: &Obj<NSView>) -> Option<(PaintHandle, WindowQueue)> {
+    let key = VIEW_WINDOW.send(view, ())?.addr();
+    let paint = paint_states().lock().unwrap().get(&key).cloned()?;
+    let queue = window_queues().lock().unwrap().get(&key).cloned()?;
+    Some((paint, queue))
 }
 
-unsafe fn drag_position(view: Id, info: Id) -> Point {
-    unsafe {
-        let location = send_point(info, c"draggingLocation");
-        let point = send_point_point_id(
-            view,
-            c"convertPoint:fromView:",
-            location,
-            std::ptr::null_mut(),
-        );
-        Point::new(point.x, point.y)
-    }
+fn drag_position(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> Point {
+    let location = DRAGGING_LOCATION.send(info, ());
+    let point = CONVERT_POINT_FROM_VIEW.send(view, (location, None));
+    Point::new(point.x, point.y)
 }
 
 /// Formats offered by the drag that the window accepts, plus the chosen
 /// operation, or `None` when the drag is unacceptable.
-unsafe fn evaluate(
+fn evaluate(
     state: &PaintState,
-    info: Id,
+    info: &Obj<NSDraggingInfo>,
 ) -> Option<(Vec<DragFormat>, DragOperations, DragOperation)> {
     if state.drop_formats.is_empty() {
         return None;
     }
-    unsafe {
-        let pasteboard = send_id(info, c"draggingPasteboard");
-        if pasteboard.is_null() {
-            return None;
-        }
-        let formats: Vec<DragFormat> =
-            pasteboard::available_formats(ffi::legacy::borrow(pasteboard)?)
-                .into_iter()
-                .filter(|format| state.drop_formats.contains(format))
-                .collect();
-        if formats.is_empty() {
-            return None;
-        }
-        let source = operations_from_mask(send_usize(info, c"draggingSourceOperationMask"));
-        let allowed = intersect(source, state.drop_operations);
-        let same_application = !send_id(info, c"draggingSource").is_null();
-        let modifiers =
-            Modifiers::from_native(send_usize(class(c"NSEvent").ok()?, c"modifierFlags"));
-        let operation = negotiate_drag(
-            allowed,
-            modifiers.option,
-            modifiers.command,
-            same_application,
-        );
-        (operation != DragOperation::None).then_some((formats, allowed, operation))
+    let pasteboard = DRAGGING_PASTEBOARD.send(info, ())?;
+    let formats: Vec<DragFormat> = pasteboard::available_formats(pasteboard)
+        .into_iter()
+        .filter(|format| state.drop_formats.contains(format))
+        .collect();
+    if formats.is_empty() {
+        return None;
     }
+    let source = operations_from_mask(DRAGGING_SOURCE_OPERATION_MASK.send(info, ()));
+    let allowed = intersect(source, state.drop_operations);
+    let same_application = DRAGGING_SOURCE.send(info, ()).is_some();
+    let modifiers = Modifiers::from_native(MODIFIER_FLAGS.send_class(()).ok()?);
+    let operation = negotiate_drag(
+        allowed,
+        modifiers.option,
+        modifiers.command,
+        same_application,
+    );
+    (operation != DragOperation::None).then_some((formats, allowed, operation))
 }
 
-unsafe fn dragging_moved(view: Id, info: Id) -> usize {
-    let result = catch_unwind(AssertUnwindSafe(|| unsafe {
-        let Some((paint, queue)) = lookup(view) else {
-            return 0;
-        };
-        let mut state = paint.lock().unwrap();
-        let position = drag_position(view, info);
-        let Some((formats, allowed, operation)) = evaluate(&state, info) else {
-            if std::mem::take(&mut state.drag_inside) {
-                queue
-                    .lock()
-                    .unwrap()
-                    .push_back(WindowEvent::Drag(DragEvent::Leave));
-            }
-            return 0;
-        };
-        let event = if state.drag_inside {
-            DragEvent::Over { position, allowed }
-        } else {
-            state.drag_inside = true;
-            DragEvent::Enter {
-                position,
-                formats,
-                allowed,
-            }
-        };
-        drop(state);
-        queue.lock().unwrap().push_back(WindowEvent::Drag(event));
-        mask_from_operation(operation)
-    }));
-    result.unwrap_or(0)
+/// The view and the dragging info of a destination callback.
+///
+/// # Safety
+///
+/// `view` is a live NSView and `info` is nil or a live NSDraggingInfo,
+/// both for `'a`.
+unsafe fn destination<'a>(
+    view: Id,
+    info: Id,
+) -> Option<(&'a Obj<NSView>, &'a Obj<NSDraggingInfo>)> {
+    // SAFETY: the caller guarantees both objects.
+    let view = unsafe { ffi::legacy::borrow::<NSView>(view) }?;
+    // SAFETY: as above.
+    let info = unsafe { ffi::legacy::borrow::<NSDraggingInfo>(info) }?;
+    Some((view, info))
+}
+
+fn dragging_moved(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> usize {
+    let Some((paint, queue)) = lookup(view) else {
+        return 0;
+    };
+    let mut state = paint.lock().unwrap();
+    let position = drag_position(view, info);
+    let Some((formats, allowed, operation)) = evaluate(&state, info) else {
+        if std::mem::take(&mut state.drag_inside) {
+            queue
+                .lock()
+                .unwrap()
+                .push_back(WindowEvent::Drag(DragEvent::Leave));
+        }
+        return 0;
+    };
+    let event = if state.drag_inside {
+        DragEvent::Over { position, allowed }
+    } else {
+        state.drag_inside = true;
+        DragEvent::Enter {
+            position,
+            formats,
+            allowed,
+        }
+    };
+    drop(state);
+    queue.lock().unwrap().push_back(WindowEvent::Drag(event));
+    mask_from_operation(operation)
 }
 
 pub(crate) unsafe extern "C" fn view_dragging_entered(view: Id, _: Sel, info: Id) -> usize {
-    unsafe { dragging_moved(view, info) }
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view and dragging info.
+        unsafe { destination(view, info) }.map_or(0, |(view, info)| dragging_moved(view, info))
+    }))
+    .unwrap_or(0)
 }
 
 pub(crate) unsafe extern "C" fn view_dragging_updated(view: Id, _: Sel, info: Id) -> usize {
-    unsafe { dragging_moved(view, info) }
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view and dragging info.
+        unsafe { destination(view, info) }.map_or(0, |(view, info)| dragging_moved(view, info))
+    }))
+    .unwrap_or(0)
 }
 
 pub(crate) unsafe extern "C" fn view_dragging_exited(view: Id, _: Sel, _: Id) {
-    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view.
+        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
+            return;
+        };
         let Some((paint, queue)) = lookup(view) else {
             return;
         };
@@ -174,48 +193,57 @@ pub(crate) unsafe extern "C" fn view_dragging_exited(view: Id, _: Sel, _: Id) {
 }
 
 pub(crate) unsafe extern "C" fn view_prepare_drag(view: Id, _: Sel, _: Id) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        lookup(view).is_some_and(|(paint, _)| paint.lock().unwrap().drag_inside)
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view.
+        unsafe { ffi::legacy::borrow::<NSView>(view) }
+            .and_then(lookup)
+            .is_some_and(|(paint, _)| paint.lock().unwrap().drag_inside)
     }))
     .map_or(0, i8::from)
 }
 
 pub(crate) unsafe extern "C" fn view_perform_drag(view: Id, _: Sel, info: Id) -> i8 {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        let Some((paint, queue)) = lookup(view) else {
-            return false;
-        };
-        let mut state = paint.lock().unwrap();
-        if !std::mem::take(&mut state.drag_inside) {
-            return false;
-        }
-        let position = drag_position(view, info);
-        let Some((formats, _, operation)) = evaluate(&state, info) else {
-            drop(state);
-            queue
-                .lock()
-                .unwrap()
-                .push_back(WindowEvent::Drag(DragEvent::Leave));
-            return false;
-        };
-        drop(state);
-        let items = ffi::legacy::borrow(send_id(info, c"draggingPasteboard"))
-            .map(|pasteboard| pasteboard::read_items(pasteboard, &formats))
-            .unwrap_or_default();
-        let accepted = !items.is_empty();
-        let event = if accepted {
-            DragEvent::Drop {
-                position,
-                items,
-                operation,
-            }
-        } else {
-            DragEvent::Leave
-        };
-        queue.lock().unwrap().push_back(WindowEvent::Drag(event));
-        accepted
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view and dragging info.
+        unsafe { destination(view, info) }.is_some_and(|(view, info)| perform_drag(view, info))
     }))
     .map_or(0, i8::from)
+}
+
+fn perform_drag(view: &Obj<NSView>, info: &Obj<NSDraggingInfo>) -> bool {
+    let Some((paint, queue)) = lookup(view) else {
+        return false;
+    };
+    let mut state = paint.lock().unwrap();
+    if !std::mem::take(&mut state.drag_inside) {
+        return false;
+    }
+    let position = drag_position(view, info);
+    let Some((formats, _, operation)) = evaluate(&state, info) else {
+        drop(state);
+        queue
+            .lock()
+            .unwrap()
+            .push_back(WindowEvent::Drag(DragEvent::Leave));
+        return false;
+    };
+    drop(state);
+    let items = DRAGGING_PASTEBOARD
+        .send(info, ())
+        .map(|pasteboard| pasteboard::read_items(pasteboard, &formats))
+        .unwrap_or_default();
+    let accepted = !items.is_empty();
+    let event = if accepted {
+        DragEvent::Drop {
+            position,
+            items,
+            operation,
+        }
+    } else {
+        DragEvent::Leave
+    };
+    queue.lock().unwrap().push_back(WindowEvent::Drag(event));
+    accepted
 }
 
 pub(crate) unsafe extern "C" fn view_source_operation_mask(
@@ -224,10 +252,13 @@ pub(crate) unsafe extern "C" fn view_source_operation_mask(
     _: Id,
     _context: isize,
 ) -> usize {
-    catch_unwind(AssertUnwindSafe(|| unsafe {
-        lookup(view).map_or(0, |(paint, _)| {
-            mask_from_operations(paint.lock().unwrap().source_operations)
-        })
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view.
+        unsafe { ffi::legacy::borrow::<NSView>(view) }
+            .and_then(lookup)
+            .map_or(0, |(paint, _)| {
+                mask_from_operations(paint.lock().unwrap().source_operations)
+            })
     }))
     .unwrap_or(0)
 }
@@ -239,7 +270,11 @@ pub(crate) unsafe extern "C" fn view_drag_ended(
     _: NSPoint,
     operation: usize,
 ) {
-    let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: AppKit passes the live view.
+        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
+            return;
+        };
         if let Some((paint, queue)) = lookup(view) {
             paint.lock().unwrap().source_operations = DragOperations::NONE;
             queue
@@ -266,16 +301,14 @@ impl Window {
             return Err(Error::UnsupportedFormat);
         }
         let _pool = Pool::new()?;
-        // SAFETY: The view is owned by the window; the type array is +1 and
-        // retained by AppKit during registration.
-        unsafe {
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            if formats.is_empty() || operations == DragOperations::NONE {
-                send_void(view, c"unregisterDraggedTypes");
-            } else {
-                let types = pasteboard::type_array(formats)?;
-                send_void_id(view, c"registerForDraggedTypes:", ffi::legacy::id(&types));
-            }
+        let view = CONTENT_VIEW
+            .send(self.ns_window(), ())
+            .ok_or(Error::AppKitUnavailable)?;
+        if formats.is_empty() || operations == DragOperations::NONE {
+            UNREGISTER_DRAGGED_TYPES.send(view, ());
+        } else {
+            let types = pasteboard::type_array(formats)?;
+            REGISTER_FOR_DRAGGED_TYPES.send(view, (&types,));
         }
         let mut state = self.paint.lock().unwrap();
         state.drop_formats = formats.to_vec();
@@ -298,76 +331,66 @@ impl Window {
             return Err(Error::UnsupportedFormat);
         }
         let _pool = Pool::new()?;
-        // SAFETY: Every AppKit object is either +1 and owned by CfOwned or
-        // autoreleased into `_pool`; the session retains what it needs.
-        unsafe {
-            let app = send_id(class(c"NSApplication")?, c"sharedApplication");
-            let event = send_id(app, c"currentEvent");
-            let usable = !event.is_null()
-                && matches!(send_usize(event, c"type"), 1 | 6)
-                && send_id(event, c"window") == self.raw.as_ptr();
-            if !usable {
-                return Err(Error::NoDragEvent);
-            }
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            let writers = pasteboard::pasteboard_items(items)?;
-            let image = match preview {
-                Some(image) => Some(imaging::ns_image(image).ok_or(Error::UnsupportedFormat)?),
-                None => None,
-            };
-            let size = preview.map_or(
-                NSSize {
-                    width: 32.0,
-                    height: 32.0,
-                },
-                |image| NSSize {
-                    width: f64::from(image.width()),
-                    height: f64::from(image.height()),
-                },
-            );
-            let frame = NSRect {
-                origin: NSPoint {
-                    x: position.x - size.width / 2.0,
-                    y: position.y - size.height / 2.0,
-                },
-                size,
-            };
-            let item_class = class(c"NSDraggingItem")?;
-            let mut dragging = Vec::new();
-            for writer in &writers {
-                let item = CfOwned::new(send_id_id(
-                    send_id(item_class, c"alloc"),
-                    c"initWithPasteboardWriter:",
-                    ffi::legacy::id(writer),
-                ))
+        let window = self.ns_window();
+        let app = SHARED_APPLICATION
+            .send_class(())?
+            .ok_or(Error::AppKitUnavailable)?;
+        let event = CURRENT_EVENT.send(app, ()).filter(|event| {
+            matches!(EVENT_TYPE.send(event, ()), 1 | 6)
+                && EVENT_WINDOW
+                    .send(event, ())
+                    .is_some_and(|event_window| event_window.addr() == window.addr())
+        });
+        let Some(event) = event else {
+            return Err(Error::NoDragEvent);
+        };
+        let view = CONTENT_VIEW
+            .send(window, ())
+            .ok_or(Error::AppKitUnavailable)?;
+        let writers = pasteboard::pasteboard_items(items)?;
+        let image = match preview {
+            // SAFETY: the NSImage is autoreleased into `_pool`.
+            Some(image) => Some(
+                unsafe {
+                    imaging::ns_image(image).and_then(|raw| ffi::legacy::borrow::<NSObject>(raw))
+                }
+                .ok_or(Error::UnsupportedFormat)?,
+            ),
+            None => None,
+        };
+        let size = preview.map_or(
+            NSSize {
+                width: 32.0,
+                height: 32.0,
+            },
+            |image| NSSize {
+                width: f64::from(image.width()),
+                height: f64::from(image.height()),
+            },
+        );
+        let frame = NSRect {
+            origin: NSPoint {
+                x: position.x - size.width / 2.0,
+                y: position.y - size.height / 2.0,
+            },
+            size,
+        };
+        let mut dragging = Vec::new();
+        for writer in &writers {
+            let item = INIT_WITH_PASTEBOARD_WRITER
+                .init(alloc::<NSDraggingItem>()?, (writer.upcast(),))
                 .ok_or(Error::AppKitUnavailable)?;
-                send_void_rect_id(
-                    item.as_ptr(),
-                    c"setDraggingFrame:contents:",
-                    frame,
-                    image.unwrap_or(std::ptr::null_mut()),
-                );
-                dragging.push(item);
-            }
-            let objects: Vec<&ffi::Obj<ffi::foundation::NSObject>> = dragging
-                .iter()
-                .filter_map(|item| ffi::legacy::borrow(item.as_ptr()))
-                .collect();
-            let array = ffi::foundation::ns_array(&objects)?;
-            self.paint.lock().unwrap().source_operations = allowed;
-            let begin: unsafe extern "C" fn(Id, Sel, Id, Id, Id) -> Id =
-                std::mem::transmute(objc_msgSend as *const ());
-            let session = begin(
-                view,
-                selector(c"beginDraggingSessionWithItems:event:source:"),
-                ffi::legacy::id(&array),
-                event,
-                view,
-            );
-            if session.is_null() {
-                self.paint.lock().unwrap().source_operations = DragOperations::NONE;
-                return Err(Error::AppKitUnavailable);
-            }
+            SET_DRAGGING_FRAME.send(&item, (frame, image));
+            dragging.push(item);
+        }
+        let objects: Vec<&Obj<NSObject>> = dragging.iter().map(|item| item.upcast()).collect();
+        let array = ffi::foundation::ns_array(&objects)?;
+        self.paint.lock().unwrap().source_operations = allowed;
+        // The content view is the dragging source.
+        let session = BEGIN_DRAGGING_SESSION.send(view, (&array, event, view.upcast()));
+        if session.is_none() {
+            self.paint.lock().unwrap().source_operations = DragOperations::NONE;
+            return Err(Error::AppKitUnavailable);
         }
         Ok(())
     }
@@ -385,56 +408,59 @@ impl Window {
         let Ok(_pool) = Pool::new() else {
             return DragOperation::None;
         };
-        // SAFETY: The fake info object lives until this call returns; the
-        // view callbacks read it synchronously.
-        unsafe {
-            let Ok(info_class) = fake_info_class() else {
-                return DragOperation::None;
-            };
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            let window_point = send_point_point_id(
-                view,
-                c"convertPoint:toView:",
+        let Some(view) = CONTENT_VIEW.send(self.ns_window(), ()) else {
+            return DragOperation::None;
+        };
+        let window_point = CONVERT_POINT_TO_VIEW.send(
+            view,
+            (
                 NSPoint {
                     x: position.x,
                     y: position.y,
                 },
-                std::ptr::null_mut(),
+                None,
+            ),
+        );
+        FAKE_INFO.with(|fake| {
+            *fake.borrow_mut() = (
+                ffi::legacy::id(pasteboard.pasteboard()) as usize,
+                window_point,
+                mask_from_operations(source),
             );
-            FAKE_INFO.with(|fake| {
-                *fake.borrow_mut() = (
-                    ffi::legacy::id(pasteboard.pasteboard()) as usize,
-                    window_point,
-                    mask_from_operations(source),
-                );
-            });
-            let Some(info) = CfOwned::new(send_id(send_id(info_class, c"alloc"), c"init")) else {
-                return DragOperation::None;
-            };
-            let send_q: unsafe extern "C" fn(Id, Sel, Id) -> usize =
-                std::mem::transmute(objc_msgSend as *const ());
-            let send_c: unsafe extern "C" fn(Id, Sel, Id) -> i8 =
-                std::mem::transmute(objc_msgSend as *const ());
-            match phase {
-                SimulatedDragPhase::Enter => {
-                    operation_from_mask(send_q(view, selector(c"draggingEntered:"), info.as_ptr()))
-                }
-                SimulatedDragPhase::Update => {
-                    operation_from_mask(send_q(view, selector(c"draggingUpdated:"), info.as_ptr()))
-                }
-                SimulatedDragPhase::Exit => {
-                    send_void_id(view, c"draggingExited:", info.as_ptr());
+        });
+        // The fake info object lives until this call returns; the view
+        // callbacks read it synchronously.
+        // SAFETY: registration runs once on the main thread.
+        if unsafe { fake_info_class() }.is_err() {
+            return DragOperation::None;
+        }
+        let Ok(info) = alloc_init::<ChoscoruiV2SimulatedDraggingInfo>() else {
+            return DragOperation::None;
+        };
+        let (Some(info), Some(destination)) = (
+            info.conforming::<NSDraggingInfo>(),
+            view.conforming::<NSDraggingDestination>(),
+        ) else {
+            return DragOperation::None;
+        };
+        match phase {
+            SimulatedDragPhase::Enter => {
+                operation_from_mask(DRAGGING_ENTERED.send(destination, (info,)))
+            }
+            SimulatedDragPhase::Update => {
+                operation_from_mask(DRAGGING_UPDATED.send(destination, (info,)))
+            }
+            SimulatedDragPhase::Exit => {
+                DRAGGING_EXITED.send(destination, (Some(info),));
+                DragOperation::None
+            }
+            SimulatedDragPhase::Drop => {
+                if PREPARE_FOR_DRAG_OPERATION.send(destination, (info,))
+                    && PERFORM_DRAG_OPERATION.send(destination, (info,))
+                {
+                    DragOperation::Copy
+                } else {
                     DragOperation::None
-                }
-                SimulatedDragPhase::Drop => {
-                    let ready = send_c(view, selector(c"prepareForDragOperation:"), info.as_ptr());
-                    if ready != 0
-                        && send_c(view, selector(c"performDragOperation:"), info.as_ptr()) != 0
-                    {
-                        DragOperation::Copy
-                    } else {
-                        DragOperation::None
-                    }
                 }
             }
         }
@@ -468,7 +494,8 @@ unsafe extern "C" fn fake_source(_: Id, _: Sel) -> Id {
     std::ptr::null_mut()
 }
 
-unsafe fn fake_info_class() -> Result<Id, Error> {
+/// Registers the simulated dragging info class on first use.
+pub(crate) unsafe fn fake_info_class() -> Result<Id, Error> {
     static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
     CLASS
         .get_or_init(|| unsafe {
@@ -478,6 +505,11 @@ unsafe fn fake_info_class() -> Result<Id, Error> {
             if cls.is_null() {
                 return Err(Error::AppKitUnavailable);
             }
+            let Some(protocol) = NSDraggingInfo::protocol().ok() else {
+                objc_disposeClassPair(cls);
+                return Err(Error::AppKitUnavailable);
+            };
+            class_addProtocol(cls, std::ptr::from_ref(protocol).cast_mut().cast());
             for (name, imp, types) in [
                 (
                     c"draggingPasteboard",
@@ -505,10 +537,4 @@ unsafe fn fake_info_class() -> Result<Id, Error> {
             Ok(cls as usize)
         })
         .map(|value| value as Id)
-}
-
-unsafe fn send_void_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect, Id) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect, value) }
 }

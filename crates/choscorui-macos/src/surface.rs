@@ -1,6 +1,15 @@
 //! Cursor shapes, view capture, occlusion, and damage-driven invalidation.
 
 use super::*;
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    ADD_CURSOR_RECT, ARROW_CURSOR, BITMAP_CG_IMAGE, BITMAP_IMAGE_REP_FOR_CACHING, BOUNDS,
+    CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR, I_BEAM_CURSOR,
+    INIT_WITH_IMAGE_HOT_SPOT, INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor,
+    NSImage, NSView, NSWindow, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR,
+    RESIZE_LEFT_RIGHT_CURSOR, RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
+};
+use crate::ffi::retained::{Retained, alloc};
 use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
 
 /// NSWindowOcclusionStateVisible.
@@ -9,7 +18,8 @@ const OCCLUSION_VISIBLE: usize = 1 << 1;
 pub(crate) unsafe extern "C" fn window_did_change_occlusion(_: Id, _: Sel, notification: Id) {
     record_window_event(notification, |window| {
         // SAFETY: notification.object is the live NSWindow.
-        let state = unsafe { send_usize(window, c"occlusionState") };
+        let state = unsafe { ffi::legacy::borrow::<NSWindow>(window) }
+            .map_or(OCCLUSION_VISIBLE, |window| OCCLUSION_STATE.send(window, ()));
         WindowEvent::Occluded(state & OCCLUSION_VISIBLE == 0)
     });
 }
@@ -17,75 +27,70 @@ pub(crate) unsafe extern "C" fn window_did_change_occlusion(_: Id, _: Sel, notif
 pub(crate) unsafe extern "C" fn view_reset_cursor_rects(view: Id, _: Sel) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: AppKit calls resetCursorRects on the main thread for an
-        // attached view; the cursor is retained by the cursor rect.
-        unsafe {
-            let window = send_id(view, c"window");
-            if window.is_null() {
-                return;
-            }
-            let shape = paint_states()
-                .lock()
-                .unwrap()
-                .get(&(window as usize))
-                .map(|paint| paint.lock().unwrap().cursor.clone())
-                .unwrap_or_default();
-            let Some(cursor) = native_cursor(&shape) else {
-                return;
-            };
-            let bounds = send_rect(view, c"bounds");
-            send_void_rect_id(view, c"addCursorRect:cursor:", bounds, cursor);
-        }
+        // attached view.
+        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
+            return;
+        };
+        reset_cursor_rects(view);
     }));
 }
 
-/// Autoreleased NSCursor for `shape`, or `None` when a custom image is
-/// unusable. Requires an autorelease pool.
-unsafe fn native_cursor(shape: &CursorShape) -> Option<Id> {
-    unsafe {
-        let cursor_class = class(c"NSCursor").ok()?;
-        let name = match shape {
-            CursorShape::Arrow => c"arrowCursor",
-            CursorShape::IBeam => c"IBeamCursor",
-            CursorShape::PointingHand => c"pointingHandCursor",
-            CursorShape::ClosedHand => c"closedHandCursor",
-            CursorShape::OpenHand => c"openHandCursor",
-            CursorShape::Crosshair => c"crosshairCursor",
-            CursorShape::NotAllowed => c"operationNotAllowedCursor",
-            CursorShape::ResizeLeftRight => c"resizeLeftRightCursor",
-            CursorShape::ResizeUpDown => c"resizeUpDownCursor",
-            CursorShape::Custom { image, hotspot } => {
-                return custom_cursor(cursor_class, image, *hotspot);
-            }
-        };
-        let cursor = send_id(cursor_class, name);
-        (!cursor.is_null()).then_some(cursor)
-    }
+/// Adds the cursor rect of the window's current cursor shape. The cursor
+/// rect retains the cursor.
+fn reset_cursor_rects(view: &Obj<NSView>) {
+    let Some(window) = VIEW_WINDOW.send(view, ()) else {
+        return;
+    };
+    let shape = paint_states()
+        .lock()
+        .unwrap()
+        .get(&window.addr())
+        .map(|paint| paint.lock().unwrap().cursor.clone())
+        .unwrap_or_default();
+    let Some(cursor) = native_cursor(&shape) else {
+        return;
+    };
+    ADD_CURSOR_RECT.send(view, (BOUNDS.send(view, ()), &cursor));
 }
 
-unsafe fn custom_cursor(cursor_class: Id, image: &Image, hotspot: Point) -> Option<Id> {
+/// NSCursor for `shape`, or `None` when a custom image is unusable.
+/// Requires an autorelease pool.
+fn native_cursor(shape: &CursorShape) -> Option<Retained<NSCursor>> {
+    let cursor = match shape {
+        CursorShape::Arrow => &ARROW_CURSOR,
+        CursorShape::IBeam => &I_BEAM_CURSOR,
+        CursorShape::PointingHand => &POINTING_HAND_CURSOR,
+        CursorShape::ClosedHand => &CLOSED_HAND_CURSOR,
+        CursorShape::OpenHand => &OPEN_HAND_CURSOR,
+        CursorShape::Crosshair => &CROSSHAIR_CURSOR,
+        CursorShape::NotAllowed => &NOT_ALLOWED_CURSOR,
+        CursorShape::ResizeLeftRight => &RESIZE_LEFT_RIGHT_CURSOR,
+        CursorShape::ResizeUpDown => &RESIZE_UP_DOWN_CURSOR,
+        CursorShape::Custom { image, hotspot } => return custom_cursor(image, *hotspot),
+    };
+    cursor.send_class(()).ok().flatten().map(Obj::retain)
+}
+
+fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {
     let width = f64::from(image.width());
     let height = f64::from(image.height());
     let inside = (0.0..width).contains(&hotspot.x) && (0.0..height).contains(&hotspot.y);
     if !inside || width > 256.0 || height > 256.0 {
         return None;
     }
-    unsafe {
-        let ns_image = imaging::ns_image(image)?;
-        let cursor = send_id_id_point(
-            send_id(cursor_class, c"alloc"),
-            c"initWithImage:hotSpot:",
+    // SAFETY: the NSImage is autoreleased into the caller's pool.
+    let ns_image = unsafe { ffi::legacy::borrow::<NSImage>(imaging::ns_image(image)?) }?;
+    let cursor = alloc::<NSCursor>().ok()?;
+    INIT_WITH_IMAGE_HOT_SPOT.init(
+        cursor,
+        (
             ns_image,
             NSPoint {
                 x: hotspot.x,
                 y: hotspot.y,
             },
-        );
-        if cursor.is_null() {
-            return None;
-        }
-        send_id(cursor, c"autorelease");
-        Some(cursor)
-    }
+        ),
+    )
 }
 
 impl Window {
@@ -111,10 +116,8 @@ impl Window {
                 height: (region.origin.y + region.size.height).ceil() + 1.0 - y,
             },
         };
-        // SAFETY: The window owns this NSView until Window::drop.
-        unsafe {
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            send_void_rect(view, c"setNeedsDisplayInRect:", rect);
+        if let Some(view) = CONTENT_VIEW.send(self.ns_window(), ()) {
+            SET_NEEDS_DISPLAY_IN_RECT.send(view, (rect,));
         }
     }
 
@@ -126,21 +129,19 @@ impl Window {
     /// Sets the pointer shape shown over the window's content.
     pub fn set_cursor(&self, shape: CursorShape) -> Result<(), Error> {
         let _pool = Pool::new()?;
-        // SAFETY: Cursor objects are autoreleased into `_pool`; the view is
-        // owned by the window until Window::drop.
-        unsafe {
-            if native_cursor(&shape).is_none() {
-                return Err(Error::InvalidCursor);
+        if native_cursor(&shape).is_none() {
+            return Err(Error::InvalidCursor);
+        }
+        {
+            let mut paint = self.paint.lock().unwrap();
+            if paint.cursor == shape {
+                return Ok(());
             }
-            {
-                let mut paint = self.paint.lock().unwrap();
-                if paint.cursor == shape {
-                    return Ok(());
-                }
-                paint.cursor = shape;
-            }
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            send_void_id(self.raw.as_ptr(), c"invalidateCursorRectsForView:", view);
+            paint.cursor = shape;
+        }
+        let window = self.ns_window();
+        if let Some(view) = CONTENT_VIEW.send(window, ()) {
+            INVALIDATE_CURSOR_RECTS_FOR_VIEW.send(window, (view,));
         }
         Ok(())
     }
@@ -153,45 +154,27 @@ impl Window {
     /// pause animations and timers that only drive drawing.
     pub fn is_occluded(&self) -> bool {
         let _pool = Pool::new();
-        // SAFETY: The window is live until Window::drop.
-        unsafe { send_usize(self.raw.as_ptr(), c"occlusionState") & OCCLUSION_VISIBLE == 0 }
+        OCCLUSION_STATE.send(self.ns_window(), ()) & OCCLUSION_VISIBLE == 0
     }
 
     /// Renders the content view into straight-alpha sRGB pixels at the
     /// backing scale. Capturing runs `drawRect:` and counts as a paint.
     pub fn capture(&self) -> Result<Image, ImageError> {
         let _pool = Pool::new().map_err(|_| ImageError::DecodeFailed)?;
-        // SAFETY: The bitmap rep is autoreleased into `_pool`; its CGImage
-        // is borrowed while copied into an owned Image.
-        unsafe {
-            let view = send_id(self.raw.as_ptr(), c"contentView");
-            let bounds = send_rect(view, c"bounds");
-            let rep = send_id_rect(view, c"bitmapImageRepForCachingDisplayInRect:", bounds);
-            if rep.is_null() {
-                return Err(ImageError::InvalidDimensions);
-            }
-            send_void_rect_id(view, c"cacheDisplayInRect:toBitmapImageRep:", bounds, rep);
-            let cg = send_id(rep, c"CGImage");
-            if cg.is_null() {
-                return Err(ImageError::DecodeFailed);
-            }
-            imaging::image_from_cg(cg)
+        let view = CONTENT_VIEW
+            .send(self.ns_window(), ())
+            .ok_or(ImageError::DecodeFailed)?;
+        let bounds = BOUNDS.send(view, ());
+        let rep = BITMAP_IMAGE_REP_FOR_CACHING
+            .send(view, (bounds,))
+            .ok_or(ImageError::InvalidDimensions)?;
+        CACHE_DISPLAY_IN_RECT.send(view, (bounds, &rep));
+        let cg = BITMAP_CG_IMAGE.send(&rep, ());
+        if cg.is_null() {
+            return Err(ImageError::DecodeFailed);
         }
+        // SAFETY: the CGImage belongs to `rep`, which lives until this
+        // function returns; it is copied into an owned Image.
+        unsafe { imaging::image_from_cg(cg.cast_mut().cast()) }
     }
-}
-
-unsafe fn send_void_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect, Id) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect, value) }
-}
-unsafe fn send_id_rect(receiver: Id, name: &CStr, rect: NSRect) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), rect) }
-}
-unsafe fn send_id_id_point(receiver: Id, name: &CStr, value: Id, point: NSPoint) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, Id, NSPoint) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value, point) }
 }

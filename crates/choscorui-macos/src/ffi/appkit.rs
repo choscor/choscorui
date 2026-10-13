@@ -1,7 +1,9 @@
 //! AppKit classes, messages, constants, and functions.
 
-use super::class::{Obj, Sel, objc_class};
+use super::class::{Obj, Sel, objc_class, objc_protocol};
 use super::foundation::{NSArray, NSData, NSDictionary, NSObject, NSString, NsUrl};
+use super::geometry::CGImage;
+use super::geometry::{NSPoint, NSRect};
 use super::msg::{Autoreleased, Init, Shared, messages};
 
 objc_class!(NSResponder: NSObject);
@@ -18,6 +20,22 @@ objc_class!(NSMenu: NSObject);
 objc_class!(NSMenuItem: NSObject);
 objc_class!(NSPasteboard: NSObject);
 objc_class!(NSPasteboardItem: NSObject);
+objc_class!(NSStatusBarButton: NSButton: NSControl: NSView: NSResponder: NSObject);
+objc_class!(NSStatusBar: NSObject);
+objc_class!(NSStatusItem: NSObject);
+objc_class!(NSWorkspace: NSObject);
+objc_class!(NSAppearance: NSObject);
+objc_class!(NSScreen: NSObject);
+objc_class!(NSEvent: NSObject);
+objc_class!(NSCursor: NSObject);
+objc_class!(NSImage: NSObject);
+objc_class!(NSImageRep: NSObject);
+objc_class!(NSBitmapImageRep: NSImageRep: NSObject);
+objc_class!(NSDraggingItem: NSObject);
+objc_class!(NSDraggingSession: NSObject);
+objc_protocol!(NSDraggingInfo);
+objc_protocol!(NSDraggingDestination);
+objc_protocol!(NSApplicationDelegate);
 objc_class!(
     /// A uniform type identifier, from the UniformTypeIdentifiers framework
     /// that AppKit loads.
@@ -29,6 +47,16 @@ objc_class!(
     ChoscorMenuTarget: NSObject
 );
 
+objc_class!(
+    /// The application and notification delegate, registered by `desktop`.
+    ChoscoruiV2AppDelegate: NSObject
+);
+
+objc_class!(
+    /// The dragging info of simulated drags, registered by `dnd`.
+    ChoscoruiV2SimulatedDraggingInfo: NSObject
+);
+
 messages! {
     pub(crate) SHARED_APPLICATION: class NSApplication, c"sharedApplication",
         () -> Shared<NSApplication>;
@@ -36,7 +64,125 @@ messages! {
         (Option<&Obj<NSMenu>>) -> ();
     pub(crate) MAIN_MENU: instance NSApplication, c"mainMenu", () -> Option<&Obj<NSMenu>>;
 
+    pub(crate) APPLICATION_DELEGATE: instance NSApplication, c"delegate",
+        () -> Option<&Obj<NSApplicationDelegate>>;
+    pub(crate) SET_APPLICATION_DELEGATE: instance NSApplication, c"setDelegate:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) CURRENT_EVENT: instance NSApplication, c"currentEvent", () -> Option<&Obj<NSEvent>>;
+    pub(crate) EFFECTIVE_APPEARANCE: instance NSApplication, c"effectiveAppearance",
+        () -> Autoreleased<NSAppearance>;
+    pub(crate) APPEARANCE_NAME: instance NSAppearance, c"name", () -> Autoreleased<NSString>;
+    pub(crate) OPEN_URLS: instance NSApplicationDelegate, c"application:openURLs:",
+        (&Obj<NSApplication>, &Obj<NSArray>) -> ();
+    pub(crate) SHOULD_HANDLE_REOPEN: instance NSApplicationDelegate,
+        c"applicationShouldHandleReopen:hasVisibleWindows:",
+        (&Obj<NSApplication>, bool) -> bool;
+
+    pub(crate) SHARED_WORKSPACE: class NSWorkspace, c"sharedWorkspace", () -> Shared<NSWorkspace>;
+    pub(crate) URL_FOR_APPLICATION_TO_OPEN_URL: instance NSWorkspace,
+        c"URLForApplicationToOpenURL:", (&Obj<NsUrl>) -> Autoreleased<NsUrl>;
+    pub(crate) WORKSPACE_OPEN_URL: instance NSWorkspace, c"openURL:", (&Obj<NsUrl>) -> bool;
+    pub(crate) SHOULD_INCREASE_CONTRAST: instance NSWorkspace,
+        c"accessibilityDisplayShouldIncreaseContrast", () -> bool;
+    pub(crate) SHOULD_REDUCE_MOTION: instance NSWorkspace,
+        c"accessibilityDisplayShouldReduceMotion", () -> bool;
+
+    pub(crate) SYSTEM_STATUS_BAR: class NSStatusBar, c"systemStatusBar", () -> Shared<NSStatusBar>;
+    pub(crate) STATUS_ITEM_WITH_LENGTH: instance NSStatusBar, c"statusItemWithLength:",
+        (f64) -> Autoreleased<NSStatusItem>;
+    pub(crate) REMOVE_STATUS_ITEM: instance NSStatusBar, c"removeStatusItem:",
+        (&Obj<NSStatusItem>) -> ();
+    pub(crate) STATUS_ITEM_BUTTON: instance NSStatusItem, c"button",
+        () -> Option<&Obj<NSStatusBarButton>>;
+    pub(crate) SET_STATUS_ITEM_VISIBLE: instance NSStatusItem, c"setVisible:", (bool) -> ();
+    pub(crate) IS_STATUS_ITEM_VISIBLE: instance NSStatusItem, c"isVisible", () -> bool;
+    pub(crate) SET_STATUS_ITEM_MENU: instance NSStatusItem, c"setMenu:",
+        (Option<&Obj<NSMenu>>) -> ();
+    pub(crate) SET_BUTTON_TITLE: instance NSButton, c"setTitle:", (&Obj<NSString>) -> ();
+    pub(crate) BUTTON_TITLE: instance NSButton, c"title", () -> Autoreleased<NSString>;
+    pub(crate) SET_TOOL_TIP: instance NSView, c"setToolTip:", (Option<&Obj<NSString>>) -> ();
+
+    pub(crate) SCREENS: class NSScreen, c"screens", () -> Autoreleased<NSArray>;
+    pub(crate) SCREEN_FRAME: instance NSScreen, c"frame", () -> NSRect;
+    pub(crate) SCREEN_VISIBLE_FRAME: instance NSScreen, c"visibleFrame", () -> NSRect;
+
     pub(crate) SET_TITLE: instance NSWindow, c"setTitle:", (&Obj<NSString>) -> ();
+    pub(crate) WINDOW_FRAME: instance NSWindow, c"frame", () -> NSRect;
+    pub(crate) SET_FRAME_DISPLAY: instance NSWindow, c"setFrame:display:", (NSRect, bool) -> ();
+    pub(crate) IS_ZOOMED: instance NSWindow, c"isZoomed", () -> bool;
+    pub(crate) ZOOM: instance NSWindow, c"zoom:", (Option<&Obj<NSObject>>) -> ();
+    pub(crate) TOGGLE_FULL_SCREEN: instance NSWindow, c"toggleFullScreen:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) STYLE_MASK: instance NSWindow, c"styleMask", () -> usize;
+    pub(crate) CONTENT_VIEW: instance NSWindow, c"contentView", () -> Option<&Obj<NSView>>;
+    pub(crate) OCCLUSION_STATE: instance NSWindow, c"occlusionState", () -> usize;
+    pub(crate) INVALIDATE_CURSOR_RECTS_FOR_VIEW: instance NSWindow,
+        c"invalidateCursorRectsForView:", (&Obj<NSView>) -> ();
+
+    pub(crate) VIEW_WINDOW: instance NSView, c"window", () -> Option<&Obj<NSWindow>>;
+    pub(crate) BOUNDS: instance NSView, c"bounds", () -> NSRect;
+    pub(crate) CONVERT_POINT_FROM_VIEW: instance NSView, c"convertPoint:fromView:",
+        (NSPoint, Option<&Obj<NSView>>) -> NSPoint;
+    pub(crate) CONVERT_POINT_TO_VIEW: instance NSView, c"convertPoint:toView:",
+        (NSPoint, Option<&Obj<NSView>>) -> NSPoint;
+    pub(crate) SET_NEEDS_DISPLAY_IN_RECT: instance NSView, c"setNeedsDisplayInRect:",
+        (NSRect) -> ();
+    pub(crate) ADD_CURSOR_RECT: instance NSView, c"addCursorRect:cursor:",
+        (NSRect, &Obj<NSCursor>) -> ();
+    pub(crate) BITMAP_IMAGE_REP_FOR_CACHING: instance NSView,
+        c"bitmapImageRepForCachingDisplayInRect:", (NSRect) -> Autoreleased<NSBitmapImageRep>;
+    pub(crate) CACHE_DISPLAY_IN_RECT: instance NSView, c"cacheDisplayInRect:toBitmapImageRep:",
+        (NSRect, &Obj<NSBitmapImageRep>) -> ();
+    pub(crate) REGISTER_FOR_DRAGGED_TYPES: instance NSView, c"registerForDraggedTypes:",
+        (&Obj<NSArray>) -> ();
+    pub(crate) UNREGISTER_DRAGGED_TYPES: instance NSView, c"unregisterDraggedTypes", () -> ();
+    pub(crate) BEGIN_DRAGGING_SESSION: instance NSView,
+        c"beginDraggingSessionWithItems:event:source:",
+        (&Obj<NSArray>, &Obj<NSEvent>, &Obj<NSObject>) -> Autoreleased<NSDraggingSession>;
+
+    pub(crate) MODIFIER_FLAGS: class NSEvent, c"modifierFlags", () -> usize;
+    pub(crate) EVENT_TYPE: instance NSEvent, c"type", () -> usize;
+    pub(crate) EVENT_WINDOW: instance NSEvent, c"window", () -> Option<&Obj<NSWindow>>;
+
+    pub(crate) INIT_WITH_IMAGE_HOT_SPOT: instance NSCursor, c"initWithImage:hotSpot:",
+        (&Obj<NSImage>, NSPoint) -> Init<NSCursor>;
+    pub(crate) ARROW_CURSOR: class NSCursor, c"arrowCursor", () -> Shared<NSCursor>;
+    pub(crate) I_BEAM_CURSOR: class NSCursor, c"IBeamCursor", () -> Shared<NSCursor>;
+    pub(crate) POINTING_HAND_CURSOR: class NSCursor, c"pointingHandCursor",
+        () -> Shared<NSCursor>;
+    pub(crate) CLOSED_HAND_CURSOR: class NSCursor, c"closedHandCursor", () -> Shared<NSCursor>;
+    pub(crate) OPEN_HAND_CURSOR: class NSCursor, c"openHandCursor", () -> Shared<NSCursor>;
+    pub(crate) CROSSHAIR_CURSOR: class NSCursor, c"crosshairCursor", () -> Shared<NSCursor>;
+    pub(crate) NOT_ALLOWED_CURSOR: class NSCursor, c"operationNotAllowedCursor",
+        () -> Shared<NSCursor>;
+    pub(crate) RESIZE_LEFT_RIGHT_CURSOR: class NSCursor, c"resizeLeftRightCursor",
+        () -> Shared<NSCursor>;
+    pub(crate) RESIZE_UP_DOWN_CURSOR: class NSCursor, c"resizeUpDownCursor",
+        () -> Shared<NSCursor>;
+
+    pub(crate) BITMAP_CG_IMAGE: instance NSBitmapImageRep, c"CGImage", () -> *const CGImage;
+
+    pub(crate) INIT_WITH_PASTEBOARD_WRITER: instance NSDraggingItem,
+        c"initWithPasteboardWriter:", (&Obj<NSObject>) -> Init<NSDraggingItem>;
+    pub(crate) SET_DRAGGING_FRAME: instance NSDraggingItem, c"setDraggingFrame:contents:",
+        (NSRect, Option<&Obj<NSObject>>) -> ();
+    pub(crate) DRAGGING_PASTEBOARD: instance NSDraggingInfo, c"draggingPasteboard",
+        () -> Option<&Obj<NSPasteboard>>;
+    pub(crate) DRAGGING_LOCATION: instance NSDraggingInfo, c"draggingLocation", () -> NSPoint;
+    pub(crate) DRAGGING_SOURCE_OPERATION_MASK: instance NSDraggingInfo,
+        c"draggingSourceOperationMask", () -> usize;
+    pub(crate) DRAGGING_SOURCE: instance NSDraggingInfo, c"draggingSource",
+        () -> Option<&Obj<NSObject>>;
+    pub(crate) DRAGGING_ENTERED: instance NSDraggingDestination, c"draggingEntered:",
+        (&Obj<NSDraggingInfo>) -> usize;
+    pub(crate) DRAGGING_UPDATED: instance NSDraggingDestination, c"draggingUpdated:",
+        (&Obj<NSDraggingInfo>) -> usize;
+    pub(crate) DRAGGING_EXITED: instance NSDraggingDestination, c"draggingExited:",
+        (Option<&Obj<NSDraggingInfo>>) -> ();
+    pub(crate) PREPARE_FOR_DRAG_OPERATION: instance NSDraggingDestination,
+        c"prepareForDragOperation:", (&Obj<NSDraggingInfo>) -> bool;
+    pub(crate) PERFORM_DRAG_OPERATION: instance NSDraggingDestination,
+        c"performDragOperation:", (&Obj<NSDraggingInfo>) -> bool;
 
     pub(crate) SET_MESSAGE_TEXT: instance NSAlert, c"setMessageText:", (&Obj<NSString>) -> ();
     pub(crate) SET_INFORMATIVE_TEXT: instance NSAlert, c"setInformativeText:",
@@ -73,6 +219,8 @@ messages! {
     pub(crate) ADD_ITEM: instance NSMenu, c"addItem:", (&Obj<NSMenuItem>) -> ();
     pub(crate) SET_AUTOENABLES_ITEMS: instance NSMenu, c"setAutoenablesItems:", (bool) -> ();
     pub(crate) NUMBER_OF_ITEMS: instance NSMenu, c"numberOfItems", () -> isize;
+    pub(crate) POP_UP_MENU: instance NSMenu, c"popUpMenuPositioningItem:atLocation:inView:",
+        (Option<&Obj<NSMenuItem>>, NSPoint, Option<&Obj<NSView>>) -> bool;
     pub(crate) SEPARATOR_ITEM: class NSMenuItem, c"separatorItem",
         () -> Autoreleased<NSMenuItem>;
     pub(crate) INIT_WITH_TITLE_ACTION_KEY: instance NSMenuItem,

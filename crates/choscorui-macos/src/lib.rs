@@ -80,40 +80,7 @@ pub use text_layout::{CoreTextShaper, available_font_families};
 type Id = *mut c_void;
 type Sel = *mut c_void;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NSPoint {
-    x: f64,
-    y: f64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NSSize {
-    width: f64,
-    height: f64,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NSRect {
-    origin: NSPoint,
-    size: NSSize,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct NSRange {
-    location: usize,
-    length: usize,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct CGAffineTransform {
-    a: f64,
-    b: f64,
-    c: f64,
-    d: f64,
-    tx: f64,
-    ty: f64,
-}
+use ffi::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {
@@ -192,6 +159,7 @@ unsafe extern "C" {
     fn objc_disposeClassPair(class: Id);
     fn objc_registerClassPair(class: Id);
     fn class_addMethod(class: Id, name: Sel, imp: *const c_void, types: *const i8) -> i8;
+    fn class_addProtocol(class: Id, protocol: Id) -> i8;
     fn object_getClass(object: Id) -> Id;
     fn class_getSuperclass(class: Id) -> Id;
     fn objc_msgSendSuper();
@@ -1294,7 +1262,7 @@ impl Application {
             {
                 return Err(Error::AppKitUnavailable);
             }
-            desktop::install_app_delegate(raw.as_ptr())?;
+            desktop::install_app_delegate(ffi::legacy::borrow_non_null(raw))?;
             static FINISH_LAUNCHING: Once = Once::new();
             FINISH_LAUNCHING.call_once(|| send_void(raw.as_ptr(), c"finishLaunching"));
             let runloop = CFRunLoopGetMain();
@@ -1671,6 +1639,12 @@ pub struct Window {
     _main_thread: PhantomData<Rc<()>>,
 }
 impl Window {
+    /// The native window, borrowed for as long as this handle lives.
+    fn ns_window(&self) -> &ffi::Obj<ffi::appkit::NSWindow> {
+        // SAFETY: `raw` is the +1 NSWindow that this handle owns until Drop.
+        unsafe { ffi::legacy::borrow_non_null(self.raw) }
+    }
+
     pub fn set_text_input_state(&self, state: TextInputState) {
         *self.ime.lock().unwrap() = state;
     }
@@ -2275,11 +2249,6 @@ unsafe fn send_id(receiver: Id, name: &CStr) -> Id {
     let f: unsafe extern "C" fn(Id, Sel) -> Id =
         unsafe { std::mem::transmute(objc_msgSend as *const ()) };
     unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_id_id(receiver: Id, name: &CStr, value: Id) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
 }
 unsafe fn send_id_cstr(receiver: Id, name: &CStr, value: *const i8) -> Id {
     let f: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
