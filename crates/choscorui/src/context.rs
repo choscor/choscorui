@@ -211,6 +211,7 @@ impl AppContext {
             self.runtime.clone(),
             self.text.clone(),
         );
+        host.set_feedback(self.platform.feedback());
         host.mount(root());
         native.show();
         let id = WindowId(self.next_window);

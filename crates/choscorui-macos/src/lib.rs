@@ -45,6 +45,8 @@ use runloop::{PostInner, PostState, TimerAction, TimerInner};
 mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod announce;
+mod feedback;
+pub use feedback::SystemFeedback;
 // All `unsafe` of the crate is in `ffi`: each block is one raw FFI
 // operation with its `SAFETY` comment, and the checks in `ffi::checks`
 // compare every binding with the runtime and the SDK headers.

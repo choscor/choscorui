@@ -118,6 +118,8 @@ mod notify;
 pub use notify::{
     Notification, NotificationQueue, NotifyError, TimerId, WorkError, WorkQueue, WorkSender,
 };
+mod feedback;
+pub use feedback::{Feedback, NoFeedback};
 mod animation;
 pub use animation::{
     AnimationClock, AnimationError, AnimationFrame, AnimationId, AnimationKey, AnimationSpec,

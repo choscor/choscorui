@@ -3842,6 +3842,10 @@ behavior.
   `semantics()` lists that action.
 - `set_modifiers` sets the modifier keys that `ControlContext::modifiers`
   reports with later events.
+- `set_feedback` sets the `Feedback` of the platform. `ControlContext::beep`
+  plays the system alert sound through it. The default `NoFeedback` plays
+  no sound. `ViewHost::set_feedback` sets it for the controls of a view
+  host, and the `App` of the facade sets `SystemFeedback` on macOS.
 - `advance(tree, time)` sets the host time. It sends `Timer` to each
   control whose `deadline` is at or before `time`. `next_deadline` returns
   the earliest deadline, so the frame loop can wait for it.

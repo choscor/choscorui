@@ -4,11 +4,12 @@ use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, DisplayList, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange,
-    SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
+    BackendCapabilities, DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, Rect,
+    SemanticChange, SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
 };
 use choscorui_macos::{
-    Application, CoreTextShaper, Error, MainMenu, Modifiers, NativeServices, Window, WindowEvent,
+    Application, CoreTextShaper, Error, MainMenu, Modifiers, NativeServices, SystemFeedback,
+    Window, WindowEvent,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -80,6 +81,11 @@ impl Platform {
     /// The text measurer of the windows.
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
         Rc::new(ShapedText::new(&SHAPER))
+    }
+
+    /// The alert sound of the controls: the system beep.
+    pub(crate) fn feedback(&self) -> Rc<dyn Feedback> {
+        Rc::new(SystemFeedback)
     }
 
     /// The desktop services.

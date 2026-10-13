@@ -12,11 +12,12 @@ use crate::style::{
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
     CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
-    Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NodeId, Point,
-    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree,
-    ThemeResolver, Tree, TreeError,
+    Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NoFeedback,
+    NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode,
+    SemanticTree, ThemeResolver, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 /// Input delivered to a control.
 #[derive(Clone, Debug, PartialEq)]
@@ -154,6 +155,7 @@ pub struct ControlContext<'a> {
     time: f64,
     modifiers: ShortcutModifiers,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
+    feedback: &'a dyn Feedback,
 }
 
 impl ControlContext<'_> {
@@ -213,6 +215,11 @@ impl ControlContext<'_> {
     /// Reports `message` to the application.
     pub fn emit(&mut self, message: ControlMessage) {
         self.messages.push((self.node, message));
+    }
+    /// Plays the system alert sound through the host's [`Feedback`], for
+    /// example when the control refuses a key or a paste.
+    pub fn beep(&self) {
+        self.feedback.beep();
     }
 }
 
@@ -334,11 +341,28 @@ pub struct ControlHost {
     unarranged: HashSet<NodeId>,
     /// Running state transitions, and the last styles of hot nodes.
     transitions: Transitions,
+    /// The platform signals that controls send, such as the beep.
+    feedback: HostFeedback,
+}
+
+/// The [`Feedback`] of a host: [`NoFeedback`] until the host gets one.
+struct HostFeedback(Rc<dyn Feedback>);
+
+impl Default for HostFeedback {
+    fn default() -> Self {
+        Self(Rc::new(NoFeedback))
+    }
 }
 
 impl ControlHost {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Sends the platform signals of the controls, such as the beep,
+    /// through `feedback`. Until then the host uses [`NoFeedback`].
+    pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>) {
+        self.feedback = HostFeedback(feedback);
     }
 
     /// Creates a child node of `parent` for `control`.
@@ -629,6 +653,7 @@ impl ControlHost {
                     time: self.time,
                     modifiers: self.modifiers,
                     messages: &mut self.messages,
+                    feedback: &*self.feedback.0,
                 };
                 control.event(&mut context, event)
             }
@@ -1189,6 +1214,7 @@ impl ControlHost {
             time: self.time,
             modifiers: self.modifiers,
             messages: &mut self.messages,
+            feedback: &*self.feedback.0,
         };
         control.perform(&mut context, action, value)
     }

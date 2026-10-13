@@ -17,11 +17,11 @@ use choscorui_controls::{
     TextMeasure,
 };
 use choscorui_core::{
-    Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, GridPlacement, InputModality,
-    ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length,
-    Measured, NodeId, Point, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange,
-    SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, ThemeError,
-    ThemeOverride, ThemeResolver, Track, Tree, TreeError,
+    Axis, Constraints, DesignTokens, Dirty, DisplayList, EngineError, Feedback, GridPlacement,
+    InputModality, ItemAlign, Key, KeyEvent, LayoutDirection, LayoutEngine, LayoutKind,
+    LayoutStyle, Length, Measured, NodeId, Point, PointerEvent, RecipeSet, Rect, SemanticAction,
+    SemanticChange, SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size,
+    ThemeError, ThemeOverride, ThemeResolver, Track, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1063,6 +1063,13 @@ impl ViewHost {
     /// the window can schedule a frame.
     pub fn set_waker(&mut self, waker: impl Fn() + 'static) {
         self.inner.waker = Some(Rc::new(waker));
+    }
+
+    /// Sends the platform signals of the controls, such as the beep when
+    /// a field refuses a key, through `feedback`. Until then the host
+    /// sends none.
+    pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>) {
+        self.inner.controls.set_feedback(feedback);
     }
 
     /// Replaces the mounted view with `view`.

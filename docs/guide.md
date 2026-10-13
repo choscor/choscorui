@@ -813,5 +813,6 @@ The `ControlContext` lets the control do these things during `event` and `perfor
 - Capture the pointer for a drag with `capture_pointer(true)`.
 - Read the time with `time`.
 - Report a `ControlMessage` to the view with `emit`.
+- Play the system alert sound with `beep`, for example when the control refuses a key.
 
 [custom.rs](../crates/choscorui-controls/tests/custom.rs) is a complete control. It is a star-rating control that handles pointer, key, and text input, focus, painting, semantics, messages, and the `Increment` and `Decrement` actions.

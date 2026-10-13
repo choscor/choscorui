@@ -148,6 +148,10 @@ To start a drag:
 
 A call to `Window::begin_drag` outside that handler returns `Error::NoDragEvent`.
 
+## Alert sound
+
+`SystemFeedback` implements the `Feedback` trait of core. Its `beep` plays the system alert sound with `NSBeep`. The `App` of the facade gives it to each window's view host. Thus a control that refuses a key or a paste beeps. A view host without it plays no sound.
+
 ## Input methods
 
 The content view implements the `NSTextInputClient` methods, for example `setMarkedText:selectedRange:replacementRange:` and `firstRectForCharacterRange:actualRange:`. Composition arrives as `WindowEvent::Ime` with these `ImeEvent` values:

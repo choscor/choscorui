@@ -7,8 +7,9 @@ use crate::AppError;
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, DisplayList, MenuBarModel, MenuCommandId, MenuError, Point, Rect,
-    SemanticChange, SemanticEntry, Services, Size, Support, WindowGeometry, WindowOptions,
+    BackendCapabilities, DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback,
+    Point, Rect, SemanticChange, SemanticEntry, Services, Size, Support, WindowGeometry,
+    WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -41,6 +42,11 @@ impl Platform {
 
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
         Rc::new(EstimatedText)
+    }
+
+    /// No alert sound.
+    pub(crate) fn feedback(&self) -> Rc<dyn Feedback> {
+        Rc::new(NoFeedback)
     }
 
     pub(crate) fn services(&self) -> Services {

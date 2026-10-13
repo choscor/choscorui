@@ -509,5 +509,8 @@ c_functions! {
             element: &Obj<NSObject>,
             notification: &Obj<NSString>,
         );
+        // SAFETY: `NSBeep` takes no arguments, returns nothing, and has no
+        // preconditions: AppKit plays the alert sound on any thread.
+        pub(crate) safe fn NSBeep();
     }
 }
