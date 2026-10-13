@@ -7,8 +7,8 @@ use choscorui::compose::view::{
     Textarea, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    ButtonVariant, CommandId, CommandRegistry, CommandState, DialogKeys, ShortcutModifiers,
-    parse_mnemonic,
+    ButtonVariant, CommandId, CommandRegistry, CommandState, DialogKeyRoute, DialogKeys,
+    ShortcutModifiers, parse_mnemonic,
 };
 use choscorui::core::{ColorRole, Key, KeyEvent, Space, TextPreset};
 
@@ -143,7 +143,8 @@ const OK: CommandId = CommandId(1);
 const CANCEL: CommandId = CommandId(2);
 
 /// A small form where Return runs the default button and Escape (or
-/// ⌘-period) cancels, except in the multi-line note, which uses Return.
+/// ⌘-period) cancels. The multi-line note uses Return itself, so the
+/// default button does not run there.
 struct DialogKeysPage;
 
 /// The form's state.
@@ -151,14 +152,13 @@ struct DialogKeysPage;
 struct Form {
     name: State<String>,
     note: State<String>,
-    in_note: State<bool>,
     ok_enabled: State<bool>,
     last: State<String>,
 }
 
 impl Form {
-    /// Routes a key as the dialog would: the default or cancel command
-    /// runs, the note takes Return as a line break, and a disabled OK
+    /// Routes a key that the focused control refused, as the dialog
+    /// would: the default or cancel command runs, and a disabled OK
     /// consumes Return. The status is in `env`.
     fn route(self, env: &Env, key: Key, modifiers: ShortcutModifiers) {
         let mut commands = CommandRegistry::new();
@@ -170,15 +170,13 @@ impl Form {
             default: Some(OK),
             cancel: Some(CANCEL),
         };
-        let in_note = self.in_note.get();
         let event = KeyEvent::Down { key, repeat: false };
-        match keys.route(event, modifiers, in_note, &commands) {
-            Some(command) => self.run(env, command),
-            None if key == Key::Enter && in_note => self.note.update(|note| note.push('\n')),
-            None if key == Key::Enter && !self.ok_enabled.get() => {
+        match keys.route(event, modifiers, false, &commands) {
+            DialogKeyRoute::Run(command) => self.run(env, command),
+            DialogKeyRoute::Disabled(_) => {
                 self.last.set(text(env, "dialog-keys.return_ignored"));
             }
-            None => {}
+            DialogKeyRoute::Ignored => {}
         }
     }
 
@@ -222,7 +220,6 @@ impl View for DialogKeysPage {
         let form = Form {
             name: cx.state("Lựu".to_owned()),
             note: cx.state(String::new()),
-            in_note: cx.state(false),
             ok_enabled: cx.state(true),
             last: cx.state(text(&env, "dialog-keys.prompt")),
         };
@@ -235,7 +232,6 @@ impl View for DialogKeysPage {
             labeled(
                 t!("dialog-keys.note_caption"),
                 Textarea::new(t!("dialog-keys.note"), form.note.binding())
-                    .focused(form.in_note.binding())
                     .frame(Frame::size(320.0, 80.0)),
             ),
         );
@@ -362,10 +358,13 @@ mod tests {
         assert!(page.host.find("OK: saved “Lựu”").is_some());
         assert!(press(&mut page, Key::Escape, plain));
         assert!(page.host.find("Cancelled").is_some());
+        // The note uses Return before the shortcut: it breaks the line at
+        // the caret, and the default button does not run.
         page.act("Note", SemanticAction::Focus);
         assert!(page.host.text("Hi"));
+        assert!(press(&mut page, Key::ArrowLeft, plain));
         assert!(press(&mut page, Key::Enter, plain));
-        assert_eq!(page.value("Note").as_deref(), Some("Hi\n"));
+        assert_eq!(page.value("Note").as_deref(), Some("H\ni"));
         assert!(page.host.find("Cancelled").is_some());
         let command = ShortcutModifiers {
             command: true,

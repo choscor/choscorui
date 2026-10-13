@@ -316,7 +316,8 @@ impl CustomControl for Input {
                 if self.commit(cx) && self.validation == ValidationState::Valid {
                     cx.emit(ControlMessage::Activated);
                 }
-                return EventReply::Stop;
+                // Return goes on to the default button.
+                return EventReply::Continue;
             }
             ControlEvent::FocusChanged(false) if checks => {
                 self.commit(cx);

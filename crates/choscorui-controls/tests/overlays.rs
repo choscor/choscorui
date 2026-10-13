@@ -170,9 +170,12 @@ fn a_dialog_traps_focus_and_activates_its_buttons() {
     let node = h.semantics();
     assert_eq!(node.role, SemanticRole::Dialog);
     assert_eq!(node.name, "Edit profile");
-    assert_eq!(node.value.as_deref(), Some("Cancel"));
+    assert_eq!(
+        node.value.as_deref(),
+        Some("Save changes"),
+        "focus starts on the default button"
+    );
     assert!(tab(&mut h), "Tab stays in the dialog");
-    assert!(tab(&mut h));
     assert_eq!(h.semantics().value.as_deref(), Some("Close"));
     assert!(tab(&mut h));
     assert_eq!(h.semantics().value.as_deref(), Some("Cancel"), "it wraps");
@@ -198,6 +201,58 @@ fn a_dialog_traps_focus_and_activates_its_buttons() {
         "focus is back on the trigger"
     );
     assert_eq!(h.host.modal(&h.tree), None);
+}
+
+#[test]
+fn return_runs_the_default_button_and_command_period_cancels() {
+    let mut h = Harness::new(dialog());
+    h.focus();
+    h.key(Key::Enter);
+    h.messages();
+    // Focus moves to Cancel, but Return still runs the default button.
+    assert!(tab(&mut h));
+    assert!(tab(&mut h));
+    assert_eq!(h.semantics().value.as_deref(), Some("Cancel"));
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::ItemActivated(1),
+            ControlMessage::OpenChanged(false)
+        ]
+    );
+    h.key(Key::Enter);
+    h.messages();
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    });
+    h.key(Key::Character('.'));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ]
+    );
+    assert_eq!(h.host.modal(&h.tree), None);
+}
+
+#[test]
+fn return_runs_nothing_without_a_default_button() {
+    let mut h = Harness::new(
+        Dialog::new("Remove", "Remove item", "Remove the item?")
+            .with_action("Remove", ButtonVariant::Destructive),
+    );
+    h.focus();
+    h.key(Key::Enter);
+    h.messages();
+    h.key(Key::Enter);
+    assert!(
+        h.messages().is_empty(),
+        "Return never runs a destructive button"
+    );
+    assert!(h.host.modal(&h.tree).is_some());
 }
 
 #[test]

@@ -9,7 +9,7 @@ use crate::style::{
     ControlKind, Cursor, PaintContext, ResolvedStyle, Slot, StyleQuery, Styles, TextMeasure,
     TransitionStats, Transitions, VisualState,
 };
-use crate::{EditCommand, Shortcut, ShortcutModifiers};
+use crate::{DialogId, DialogStack, EditCommand, Modality, Shortcut, ShortcutModifiers};
 use choscorui_core::{
     CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList, EngineError,
     EventPhase, EventReply, Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure,
@@ -421,6 +421,10 @@ pub struct ControlHost {
     /// The cursor of the hovered part, from the last paint of the hovered
     /// control.
     cursor: Cell<Cursor>,
+    /// The open modal controls, bottom first, with their dialogs in
+    /// `dialogs`, which keep the focus to give back.
+    modal_focus: Vec<(NodeId, DialogId)>,
+    dialogs: DialogStack,
 }
 
 /// The messages of a host: the built-in ones of the root locale until the
@@ -583,7 +587,9 @@ impl ControlHost {
         }
         tree.set_focusable(node, focusable)?;
         tree.invalidate(node, Dirty::PAINT)?;
-        tree.invalidate(node, Dirty::SEMANTICS)
+        tree.invalidate(node, Dirty::SEMANTICS)?;
+        self.sync_modal(tree);
+        Ok(())
     }
 
     pub fn is_enabled(&self, node: NodeId) -> bool {
@@ -909,28 +915,18 @@ impl ControlHost {
     ) {
         self.pointer = details;
         self.pointer_at = Some(event.position());
+        self.route_pointer(tree, event);
+        self.sync_modal(tree);
+    }
+
+    fn route_pointer(&mut self, tree: &mut Tree, event: PointerEvent) {
         let target = self.route(tree, event.position());
         if matches!(event, PointerEvent::Move { .. } | PointerEvent::Down { .. }) {
             self.update_hover(tree, target);
         }
         if let PointerEvent::Down { .. } = event {
             tree.set_input_modality(choscorui_core::InputModality::Pointer);
-            let open: Vec<NodeId> = self
-                .layered(tree)
-                .into_iter()
-                .filter(|node| {
-                    self.controls
-                        .get(node)
-                        .is_some_and(|control| control.overlay().is_some() && !control.modal())
-                })
-                .filter(|node| target.is_none_or(|target| !tree.is_within(target, *node)))
-                .collect();
-            let mut closed = false;
-            for node in open {
-                closed |= self.deliver(tree, node, EventPhase::Target, &ControlEvent::Dismiss)
-                    == EventReply::Stop;
-            }
-            if closed {
+            if self.dismiss_overlays(tree, target).1 {
                 // The press closed a popup: it does not reach the control
                 // under the pointer.
                 return;
@@ -969,30 +965,86 @@ impl ControlHost {
     /// Focus outside an open modal moves into it first.
     /// Returns true when a control stopped the event.
     pub fn dispatch_key(&mut self, tree: &mut Tree, event: KeyEvent) -> bool {
-        if let Some(modal) = self.modal(tree)
-            && !tree
-                .focus()
-                .is_some_and(|focus| tree.is_within(focus, modal))
-        {
-            let next = tree.focus_next_within(modal, false);
-            if next.is_none() {
-                self.move_focus(tree, Some(modal));
-            }
-        }
+        self.sync_modal(tree);
         let mut stopped = false;
         tree.dispatch_key(event, |tree, node, phase, event| {
             let reply = self.deliver(tree, node, phase, &ControlEvent::Key(event));
             stopped |= reply == EventReply::Stop;
             reply
         });
-        if let KeyEvent::Down { key, .. } = event
+        if let KeyEvent::Down { key, repeat } = event
             && !stopped
         {
+            // A held key repeats an edit, such as Undo, but not a
+            // shortcut. An unused Escape closes a tooltip, a hover card,
+            // or a popup wherever the focus is.
             stopped = EditCommand::from_shortcut(key, self.modifiers)
                 .is_some_and(|command| self.dispatch_edit(tree, command))
-                || self.dispatch_shortcut(tree, key);
+                || (!repeat && self.dispatch_shortcut(tree, key))
+                || (key == Key::Escape && self.dismiss_overlays(tree, None).0);
         }
+        self.sync_modal(tree);
         stopped
+    }
+
+    /// Sends `Dismiss` to each open overlay that is not modal and does not
+    /// hold `keep`, such as a popup, a tooltip, or a hover card. Returns
+    /// whether one was open, and whether one of them stopped the event.
+    fn dismiss_overlays(&mut self, tree: &mut Tree, keep: Option<NodeId>) -> (bool, bool) {
+        let open: Vec<NodeId> = self
+            .layered(tree)
+            .into_iter()
+            .filter(|node| {
+                self.controls
+                    .get(node)
+                    .is_some_and(|control| control.overlay().is_some() && !control.modal())
+            })
+            .filter(|node| keep.is_none_or(|keep| !tree.is_within(keep, *node)))
+            .collect();
+        let mut stopped = false;
+        for node in &open {
+            stopped |= self.deliver(tree, *node, EventPhase::Target, &ControlEvent::Dismiss)
+                == EventReply::Stop;
+        }
+        (!open.is_empty(), stopped)
+    }
+
+    /// Moves focus into a control that became modal: to its first
+    /// focusable node, or to the control itself. When the control is no
+    /// longer modal, focus goes back to the node that had it before. A
+    /// [`DialogStack`](crate::DialogStack) keeps the saved focus.
+    fn sync_modal(&mut self, tree: &mut Tree) {
+        let before = tree.focus();
+        while let Some(&(node, id)) = self.modal_focus.last() {
+            if tree.contains(node) && self.controls.get(&node).is_some_and(|c| c.modal()) {
+                break;
+            }
+            self.modal_focus.pop();
+            self.dialogs.close(tree, id);
+        }
+        if let Some(modal) = self.modal(tree)
+            && !self.modal_focus.iter().any(|(node, _)| *node == modal)
+        {
+            // Focus that is already inside stays where it is.
+            let inside = tree.focus().filter(|focus| tree.is_within(*focus, modal));
+            let Ok(id) = self.dialogs.open(tree, modal, Modality::Modal, inside) else {
+                return;
+            };
+            self.modal_focus.push((modal, id));
+        }
+        let modal = self.modal(tree);
+        if let Some(modal) = modal
+            && !tree
+                .focus()
+                .is_some_and(|focus| tree.is_within(focus, modal))
+        {
+            // A modal control without a focusable node takes the focus.
+            let _ = tree.set_focus(Some(modal));
+        }
+        let after = tree.focus();
+        if before != after {
+            self.notify_focus(tree, before, after);
+        }
     }
 
     /// Sends an Edit menu command to the focused control. Returns true
@@ -1335,6 +1387,7 @@ impl ControlHost {
             .is_some_and(|control| control.set_open(open, time));
         if taken {
             Self::mark(tree, node);
+            self.sync_modal(tree);
         }
         taken
     }
@@ -1462,7 +1515,9 @@ impl ControlHost {
             feedback: &*self.feedback.0,
             strings: &self.strings.0,
         };
-        control.perform(&mut context, action, value)
+        let done = control.perform(&mut context, action, value);
+        self.sync_modal(tree);
+        done
     }
 }
 

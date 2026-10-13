@@ -419,11 +419,16 @@ mod tests {
     fn alert_dialog_opens_modally_and_escape_cancels_it() {
         let mut page = Harness::new("alert-dialog");
         assert!(hidden(&mut page, "Unsaved changes"));
+        let trigger = page.node("Close document…");
+        page.host.focus(Some(trigger));
         assert!(page.act("Close document…", SemanticAction::Activate));
         assert!(!hidden(&mut page, "Unsaved changes"));
+        let (alert, focus) = (page.node("Unsaved changes"), page.host.tree().focus());
+        assert!(focus.is_some_and(|focus| page.host.tree().is_within(focus, alert)));
         assert!(press(&mut page, Key::Escape));
         assert!(hidden(&mut page, "Unsaved changes"));
         assert!(page.host.find("Chose “Cancel”").is_some());
+        assert_eq!(page.host.tree().focus(), Some(trigger), "focus goes back");
     }
 
     #[test]

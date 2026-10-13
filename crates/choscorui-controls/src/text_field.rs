@@ -889,13 +889,20 @@ impl TextField {
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) if cx.is_focused() => {
                 // One line of text keeps no Tab: Tab moves the focus.
-                if !matches!(editing_key(*key, modifiers), None | Some(EditingKey::Tab)) {
+                let editing = editing_key(*key, modifiers);
+                if !matches!(editing, None | Some(EditingKey::Tab)) {
                     let event = KeyEvent::Down {
                         key: *key,
                         repeat: *repeat,
                     };
                     self.apply(cx, TextFieldInput::Key { event, modifiers });
-                    EventReply::Stop
+                    // Return commits one line of text and then goes on to
+                    // the default button of the window or dialog.
+                    if matches!(editing, Some(EditingKey::Enter)) {
+                        EventReply::Continue
+                    } else {
+                        EventReply::Stop
+                    }
                 } else if is_typing_key(*key, modifiers) {
                     // The typed text arrives as `Text`.
                     EventReply::Stop

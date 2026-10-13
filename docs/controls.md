@@ -980,6 +980,8 @@ this behavior.
 - **Line breaks.** The field removes `\n` and `\r` from all incoming text.
 - **Commit.** The application sets the validation. Enter (not a repeat) returns
   `Committed` only when the state is `Valid`, else `CommitRejected`.
+  In a control host, Enter then goes on to the default button of a
+  dialog.
 - **IME.** Marked text does not change the value. `CommitMarkedText` is
   one undoable edit. `CancelMarkedText` discards the marked text with no
   edit. `UnmarkMarkedText` keeps the marked text.
@@ -2150,7 +2152,7 @@ its command through `.on_command`. The `dropdown_menu` modifier of
 - **In a view.** The `tooltip` view modifier uses one controller for each
   view host, so the grace time applies between views. Keyboard focus in
   the view starts the delay as a hover does. Escape hides the tooltip and
-  stops there.
+  stops there, wherever the focus is.
   The bubble fades in, zooms from 95%, and slides 8 pt from its anchor,
   in the motion time of the `Tooltip` recipe. It goes out the same way.
   Reduced motion shows and hides it at once. While the bubble shows, a
@@ -2181,17 +2183,24 @@ The node has a `DescribedBy` relation to its target.
 
 ### DialogStack and DialogKeys
 
-- **`DialogStack::open`** saves the focus and focuses `initial`.
+- **`DialogStack::open`** saves the focus and focuses `initial`. Without
+  `initial`, it focuses the first focusable node in `root`. An `initial`
+  that is not in `root` fails with `TreeError::MissingNode`.
 - While a modal dialog is open, `accepts_input` allows only the subtree of
   the topmost modal dialog. `focus_next` cycles in that subtree.
 - A modeless dialog does not restrict input.
-- `close` restores the saved focus if the node still exists.
+- `close` restores the saved focus only for the top dialog, and only when
+  the focus is empty or in the dialog. The saved node must still exist. A
+  dialog above it that saved a focus in the closed dialog takes the saved
+  focus of the closed dialog.
 - **`DialogKeys::route`** acts on key-down only, with no repeats. A key is
-  plain when Command, Control, and Option are up.
+  plain when Command, Control, and Option are up. It returns a
+  `DialogKeyRoute`. `Run` gives the command to run, and `Disabled` gives a
+  disabled command. `Ignored` is a key that is not for the dialog.
 - Plain Enter runs the default command, unless the focused control uses
   Enter (`focus_uses_enter`).
 - Plain Escape and Command+period run the cancel command. A disabled
-  command consumes the key and does not run.
+  command consumes the key (`Disabled`) and does not run.
 
 | Field | `DialogStack::semantics(id, title)` |
 | --- | --- |
@@ -2217,11 +2226,16 @@ behavior.
 - **In a control host.** `hosted` makes a modal `HostedAlertDialog` that
   starts closed. `ControlHost::set_open` opens it over a scrim, centered
   in the window. The node takes no space.
-- Tab moves focus between the buttons, and Space activates the focused
-  button. A button reports `ItemActivated` with its index, then
-  `OpenChanged(false)`.
-- Escape without a `Reject` button, or the `Dismiss` action, reports
-  `OpenChanged(false)` and `Dismissed`. A press outside the panel does
+- The control host moves focus into the alert when it opens, and gives it
+  back to the earlier focus when it closes.
+- Tab moves focus between the buttons in their logical order, also in
+  right-to-left layouts. Space activates the focused button. A button
+  reports `ItemActivated` with its index, then `OpenChanged(false)`.
+- Enter activates the `Accept` button. Without one, Enter activates the
+  focused button, but never a `Destructive` button.
+- Escape or Command+period activates the `Reject` button. Without one,
+  these keys or the `Dismiss` action report `OpenChanged(false)` and
+  `Dismissed`. A press outside the panel does
   nothing.
 - **Look.** `measure` sizes the panel, and `button_rects` places the
   buttons in platform order. The title, the message, and the detail wrap
@@ -3258,13 +3272,16 @@ is disabled. `set_value` returns false.
 
 - The trigger is an outline button. A press, Enter, Space, or `Activate`
   opens the panel. The control is modal while the panel is open.
-- **Focus.** The first footer button has focus when the panel opens. Tab
-  and Shift+Tab cycle through the footer buttons and the close button.
-  Enter or Space activates the focused part. Focus stays on the control,
-  so it returns to the trigger when the panel closes.
+- **Focus.** The default footer button (the last one with the default
+  variant) has focus when the panel opens. Without one, the first footer
+  button has focus. Tab and Shift+Tab cycle through the footer buttons and
+  the close button. Focus stays on the control, so it returns to the
+  trigger when the panel closes.
+- **Keys.** Enter activates only the default footer button. Without one,
+  Enter does nothing. Space activates the focused part.
 - A footer button emits `ItemActivated(index)` and closes the panel. The
-  close button, Escape, a press outside the panel, and `Dismiss` close it
-  and emit `Dismissed`.
+  close button, Escape, Command+period, a press outside the panel, and
+  `Dismiss` close it and emit `Dismissed`.
 - `with_close(label)` shows the close button with `label` as its name. A
   drawer has no close button. The title and the description wrap in the
   panel width. The title lines stop before the close button.
@@ -3290,6 +3307,10 @@ is disabled. `set_value` returns false.
   same way. A closed panel takes no input and publishes no node, and it
   unmounts when its motion ends. Reduced motion shows and removes the
   panel at once.
+- **View keys.** The view host gives each key to the focused control
+  first. When the control does not use Escape or Command+period, the host
+  performs `Dismiss` on the open modal panel. A view panel takes the focus
+  when it opens and gives it back when it closes.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
@@ -4266,7 +4287,14 @@ behavior.
   control.
 - When no control stops a key press, `dispatch_key` sends `Shortcut` to
   the first visible, enabled control that lists the key in its
-  `window_shortcuts`. An open modal limits this to its own controls.
+  `window_shortcuts`. An open modal limits this to its own controls. A
+  repeat runs no shortcut.
+- When nothing uses Escape, `dispatch_key` hides each visible tooltip,
+  hover card, and popup, wherever the focus is.
+- **Modal focus.** When a control becomes modal, the host opens it in a
+  `DialogStack`. Focus moves to the first focusable node in the control,
+  or to the control itself. When the control stops being modal, focus
+  goes back to the node that had it before.
 - `move_focus` sends `FocusChanged` to the old and the new control.
 - The host sends `Hover(true)` and `Hover(false)` to each control on the
   path under the pointer when the path changes.

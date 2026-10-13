@@ -20,9 +20,9 @@ use choscorui_controls::{
     PaintContext, SheetSide, Slot, StyleQuery, Variant, paint_box,
 };
 use choscorui_core::{
-    Axis, Dirty, EventPhase, EventReply, Insets, ItemAlign, Key, KeyEvent, LayoutKind, LayoutStyle,
-    Length, MainAlign, Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticNode,
-    SemanticRole, SemanticState, Size,
+    Axis, Dirty, EventPhase, EventReply, Insets, ItemAlign, LayoutKind, LayoutStyle, Length,
+    MainAlign, Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -133,12 +133,6 @@ impl CustomControl for ModalLayer {
             return EventReply::Continue;
         }
         match event {
-            ControlEvent::Key(KeyEvent::Down {
-                key: Key::Escape, ..
-            }) => {
-                cx.emit(ControlMessage::Dismissed);
-                EventReply::Stop
-            }
             ControlEvent::Pointer(PointerEvent::Down { position, .. })
                 if !self.panel.get().contains(*position) =>
             {
@@ -177,8 +171,27 @@ impl CustomControl for ModalLayer {
         self.motion.closes_at()
     }
 
+    /// `Dismiss` closes the open layer. The view host sends it for Escape
+    /// and Command-period that no control or shortcut used.
     fn semantics(&self) -> SemanticNode {
-        node(SemanticRole::Group, String::new())
+        let mut node = node(SemanticRole::Group, String::new());
+        if self.motion.is_open() {
+            node.actions.push(SemanticAction::Dismiss);
+        }
+        node
+    }
+
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        if action != SemanticAction::Dismiss || !self.motion.is_open() {
+            return false;
+        }
+        cx.emit(ControlMessage::Dismissed);
+        true
     }
 
     fn focusable(&self) -> bool {

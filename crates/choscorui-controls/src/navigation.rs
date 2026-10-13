@@ -709,6 +709,18 @@ pub struct DialogKeys {
     pub cancel: Option<CommandId>,
 }
 
+/// What [`DialogKeys::route`] does with a key.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DialogKeyRoute {
+    /// The key runs this enabled command.
+    Run(CommandId),
+    /// The key belongs to this disabled command. It is consumed and runs
+    /// nothing.
+    Disabled(CommandId),
+    /// The key is not a default or cancel key here.
+    Ignored,
+}
+
 impl DialogKeys {
     /// Routes a key not consumed by the focused control. Pass
     /// `focus_uses_enter` for multiline editors and other controls that
@@ -719,17 +731,21 @@ impl DialogKeys {
         modifiers: ShortcutModifiers,
         focus_uses_enter: bool,
         commands: &CommandRegistry,
-    ) -> Option<CommandId> {
+    ) -> DialogKeyRoute {
         let KeyEvent::Down { key, repeat: false } = event else {
-            return None;
+            return DialogKeyRoute::Ignored;
         };
         let plain = !modifiers.command && !modifiers.control && !modifiers.option;
         let command = match key {
-            Key::Enter if plain && !focus_uses_enter => self.default?,
-            Key::Escape if plain => self.cancel?,
-            Key::Character('.') if modifiers.command && !modifiers.control => self.cancel?,
-            _ => return None,
+            Key::Enter if plain && !focus_uses_enter => self.default,
+            Key::Escape if plain => self.cancel,
+            Key::Character('.') if modifiers.command && !modifiers.control => self.cancel,
+            _ => None,
         };
-        commands.activate(command).ok().flatten()
+        match command.map(|command| (command, commands.activate(command))) {
+            Some((command, Ok(Some(_)))) => DialogKeyRoute::Run(command),
+            Some((command, Ok(None))) => DialogKeyRoute::Disabled(command),
+            Some((_, Err(_))) | None => DialogKeyRoute::Ignored,
+        }
     }
 }

@@ -110,6 +110,41 @@ fn modal_stack_confines_input_and_restores_focus() {
 }
 
 #[test]
+fn modal_stack_picks_the_first_field_and_restores_only_for_the_top() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 400.0));
+    let root = tree.root();
+    let editor = tree.attach(root, rect(0.0, 0.0, 100.0, 100.0)).unwrap();
+    let first = tree.attach(root, rect(100.0, 0.0, 200.0, 100.0)).unwrap();
+    let field = tree.attach(first, rect(110.0, 10.0, 100.0, 20.0)).unwrap();
+    let second = tree.attach(root, rect(100.0, 200.0, 200.0, 100.0)).unwrap();
+    let button = tree.attach(second, rect(110.0, 210.0, 60.0, 20.0)).unwrap();
+    for node in [editor, field, button] {
+        tree.set_focusable(node, true).unwrap();
+    }
+    tree.set_focus(Some(editor)).unwrap();
+    let mut stack = DialogStack::new();
+    // `initial` must be inside the dialog.
+    assert!(
+        stack
+            .open(&mut tree, first, Modality::Modal, Some(button))
+            .is_err()
+    );
+    // Without `initial`, focus goes to the first focusable node.
+    let lower = stack.open(&mut tree, first, Modality::Modal, None).unwrap();
+    assert_eq!(tree.focus(), Some(field));
+    let upper = stack
+        .open(&mut tree, second, Modality::Modal, None)
+        .unwrap();
+    assert_eq!(tree.focus(), Some(button));
+    // Closing the lower dialog keeps focus in the top one.
+    assert!(stack.close(&mut tree, lower));
+    assert_eq!(tree.focus(), Some(button));
+    // The top dialog gives focus back to where it was before both opened.
+    assert!(stack.close(&mut tree, upper));
+    assert_eq!(tree.focus(), Some(editor));
+}
+
+#[test]
 fn color_picker_round_trips_hsv_and_hex() {
     let mut picker = ColorPicker::new(Color::rgba8(30, 144, 255, 255));
     assert_eq!(picker.hex(), "#1E90FF");

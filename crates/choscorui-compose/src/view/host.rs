@@ -1419,17 +1419,36 @@ impl ViewHost {
     pub fn key(&mut self, event: KeyEvent, modifiers: ShortcutModifiers) -> bool {
         self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
-        if let KeyEvent::Down { key, .. } = event
-            && let Some(action) = self.shortcut(key, modifiers)
-        {
-            action();
-            self.after_input();
-            return true;
-        }
+        // The focused control gets the key first; shortcuts run only for a
+        // key that it refuses, and never for a repeat.
         let mut handled = self
             .inner
             .controls
             .dispatch_key(&mut self.inner.tree, event);
+        if !handled
+            && let KeyEvent::Down { key, repeat } = event
+            && let Some(action) = self.shortcut(key, modifiers)
+        {
+            if !repeat {
+                action();
+            }
+            self.inner.needs_paint = true;
+            self.after_input();
+            return true;
+        }
+        if !handled
+            && let KeyEvent::Down { key, .. } = event
+            && cancels(key, modifiers)
+            && let Some(modal) = self.inner.controls.modal(&self.inner.tree)
+        {
+            // Escape and Command-period cancel the open modal.
+            handled = self.inner.controls.perform(
+                &mut self.inner.tree,
+                modal,
+                SemanticAction::Dismiss,
+                None,
+            );
+        }
         if !handled && let KeyEvent::Down { key: Key::Tab, .. } = event {
             self.inner.tree.set_input_modality(InputModality::Keyboard);
             self.inner
@@ -1735,5 +1754,14 @@ impl ViewHost {
     pub fn cancel_interaction(&mut self) {
         let _ = self.inner.tree.set_pointer_capture(None);
         self.inner.needs_paint = true;
+    }
+}
+
+/// True for the keys that cancel a dialog: Escape and Command-period.
+fn cancels(key: Key, modifiers: ShortcutModifiers) -> bool {
+    match key {
+        Key::Escape => !modifiers.command && !modifiers.control && !modifiers.option,
+        Key::Character('.') => modifiers.command && !modifiers.control,
+        _ => false,
     }
 }

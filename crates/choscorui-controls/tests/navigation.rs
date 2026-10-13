@@ -1,6 +1,6 @@
 use choscorui_controls::{
-    CommandId, CommandRegistry, CommandState, DialogKeys, MnemonicTable, ScrollAction, ScrollArea,
-    ScrollAreaInput, ShortcutModifiers, parse_mnemonic,
+    CommandId, CommandRegistry, CommandState, DialogKeyRoute, DialogKeys, MnemonicTable,
+    ScrollAction, ScrollArea, ScrollAreaInput, ShortcutModifiers, parse_mnemonic,
 };
 use choscorui_core::{
     Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, ScrollViewport,
@@ -215,20 +215,23 @@ fn dialog_keys_route_default_and_cancel_through_command_state() {
     };
     assert_eq!(
         keys.route(down(Key::Enter), none, false, &commands),
-        Some(ok)
+        DialogKeyRoute::Run(ok)
     );
-    assert_eq!(keys.route(down(Key::Enter), none, true, &commands), None);
+    assert_eq!(
+        keys.route(down(Key::Enter), none, true, &commands),
+        DialogKeyRoute::Ignored
+    );
     assert_eq!(
         keys.route(down(Key::Escape), none, false, &commands),
-        Some(cancel)
+        DialogKeyRoute::Run(cancel)
     );
     assert_eq!(
         keys.route(down(Key::Character('.')), command, false, &commands),
-        Some(cancel)
+        DialogKeyRoute::Run(cancel)
     );
     assert_eq!(
         keys.route(down(Key::Enter), command, false, &commands),
-        None
+        DialogKeyRoute::Ignored
     );
     assert_eq!(
         keys.route(
@@ -240,8 +243,12 @@ fn dialog_keys_route_default_and_cancel_through_command_state() {
             false,
             &commands
         ),
-        None
+        DialogKeyRoute::Ignored
     );
     commands.set_enabled(ok, false).unwrap();
-    assert_eq!(keys.route(down(Key::Enter), none, false, &commands), None);
+    // A disabled default consumes Return, apart from a key that is not ours.
+    assert_eq!(
+        keys.route(down(Key::Enter), none, false, &commands),
+        DialogKeyRoute::Disabled(ok)
+    );
 }

@@ -186,8 +186,8 @@ pub use style::{
 };
 mod navigation;
 pub use navigation::{
-    DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea, ScrollAreaInput,
-    ScrollbarGeometry, parse_mnemonic,
+    DialogKeyRoute, DialogKeys, MnemonicHit, MnemonicTable, ScrollAction, ScrollArea,
+    ScrollAreaInput, ScrollbarGeometry, parse_mnemonic,
 };
 mod static_controls;
 pub use static_controls::{Label, Separator, SeparatorOrientation};

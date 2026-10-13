@@ -184,8 +184,16 @@ impl Dialog {
         }
     }
 
+    /// The default button: the last button with the `Default` look.
+    fn default_part(&self) -> Option<usize> {
+        self.buttons
+            .buttons
+            .iter()
+            .rposition(|button| button.variant == ButtonVariant::Default)
+    }
+
     /// Opens or closes the dialog at `time` and ends a press or drag.
-    /// Returns true when it changed.
+    /// Focus starts on the default button. Returns true when it changed.
     fn apply_open(&mut self, open: bool, time: f64) -> bool {
         self.drag = None;
         self.parts.clear();
@@ -193,7 +201,7 @@ impl Dialog {
             return false;
         }
         self.reveal.set(open, time);
-        self.focus = 0;
+        self.focus = self.default_part().unwrap_or(0);
         true
     }
 
@@ -245,6 +253,7 @@ impl Dialog {
         let parts = self.parts();
         match key {
             Key::Escape => self.dismiss(cx),
+            Key::Character('.') if cx.modifiers().command => self.dismiss(cx),
             Key::Tab if parts > 0 => {
                 // Focus cycles inside the panel.
                 self.focus = if cx.modifiers().shift {
@@ -255,7 +264,13 @@ impl Dialog {
                 cx.request_paint();
                 cx.request_semantics();
             }
-            Key::Enter | Key::Space if parts > 0 => self.activate(cx, self.focus),
+            // Return runs the default button, never a destructive one.
+            Key::Enter => {
+                if let Some(part) = self.default_part() {
+                    self.activate(cx, part);
+                }
+            }
+            Key::Space if parts > 0 => self.activate(cx, self.focus),
             _ => return EventReply::Continue,
         }
         EventReply::Stop

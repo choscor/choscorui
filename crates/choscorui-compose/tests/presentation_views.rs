@@ -256,6 +256,24 @@ fn tooltip_shows_on_keyboard_focus_and_hides_on_escape() {
     assert_eq!(host.take_errors(), Vec::new());
 }
 
+#[test]
+fn escape_hides_a_hovered_tooltip_while_focus_is_elsewhere() {
+    let mut host = host(toolbar());
+    let wrapper = tip_of(&mut host, "Save");
+    let other = node(&mut host, "Other");
+    host.focus(Some(other));
+    let center = bounds(&mut host, "Save").center();
+    host.advance(10.0);
+    pointer(&mut host, PointerEvent::Move { position: center });
+    host.advance(10.6);
+    host.layout();
+    assert!(tip_shows(&host, wrapper));
+    assert!(press(&mut host, Key::Escape), "Escape closes the tooltip");
+    assert!(!tip_shows(&host, wrapper));
+    assert_eq!(host.tree().focus(), Some(other), "focus stays");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
 // ---------------------------------------------------------------------------
 // Context menu
 
@@ -830,6 +848,25 @@ fn a_closing_dialog_lets_presses_through() {
 }
 
 #[test]
+fn a_dialog_takes_focus_closes_on_command_period_and_gives_focus_back() {
+    let mut host = host_with_catalog(Confirm);
+    let open = node(&mut host, "Open");
+    host.focus(Some(open));
+    activate(&mut host, "Open");
+    let panel = node(&mut host, "Delete file");
+    let focus = host.tree().focus().expect("the dialog takes focus");
+    assert!(host.tree().is_within(focus, panel), "focus moves into it");
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    assert!(press_with(&mut host, Key::Character('.'), command));
+    assert!(shown(&mut host, "open false"), "Command-period dismisses");
+    assert_eq!(host.tree().focus(), Some(open), "focus goes back");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
 fn dialog_shows_and_closes_at_once_with_reduced_motion() {
     let mut host = host_with_catalog(Confirm);
     host.set_accessibility(AccessibilityPreferences {
@@ -1210,6 +1247,19 @@ fn hover_card_opens_on_keyboard_focus_and_closes_on_escape_and_blur() {
     host.advance(32.0);
     host.layout();
     assert!(!shown(&mut host, CARD_TEXT), "it does not open again");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn escape_closes_a_hovered_card_while_focus_is_elsewhere() {
+    let mut host = host(profile());
+    let other = node(&mut host, "Other");
+    host.focus(Some(other));
+    rest_until_open(&mut host, "@nextjs", 10.0);
+    assert!(shown(&mut host, CARD_TEXT));
+    assert!(press(&mut host, Key::Escape), "Escape closes the card");
+    assert!(!shown(&mut host, CARD_TEXT));
+    assert_eq!(host.tree().focus(), Some(other), "focus stays");
     assert_eq!(host.take_errors(), Vec::new());
 }
 

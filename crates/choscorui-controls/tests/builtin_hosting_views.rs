@@ -781,6 +781,62 @@ fn a_hosted_alert_moves_focus_between_its_buttons() {
     assert!(h.messages().is_empty());
 }
 
+#[test]
+fn a_hosted_alert_takes_focus_on_open_and_gives_it_back_on_close() {
+    let mut h = Harness::new(delete_alert().hosted());
+    let root = h.tree.root();
+    let trigger = choscorui_controls::Button::new("Delete…", CommandId(1));
+    let trigger = h.host.mount(&mut h.tree, root, Box::new(trigger)).unwrap();
+    h.host.move_focus(&mut h.tree, Some(trigger));
+    open(&mut h);
+    assert_eq!(h.tree.focus(), Some(h.node), "focus moves into the alert");
+    // Focus starts on the default button, so Space runs Keep.
+    h.key(Key::Space);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::ItemActivated(2),
+            ControlMessage::OpenChanged(false)
+        ]
+    );
+    assert_eq!(
+        h.tree.focus(),
+        Some(trigger),
+        "focus returns to the trigger"
+    );
+    open(&mut h);
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    });
+    h.key(Key::Character('.'));
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::ItemActivated(0),
+            ControlMessage::OpenChanged(false)
+        ],
+        "Command-period runs the cancel button"
+    );
+    assert_eq!(h.tree.focus(), Some(trigger));
+}
+
+#[test]
+fn a_hosted_alert_tabs_in_the_logical_order_in_right_to_left_layouts() {
+    let mut h = Harness::with_direction(delete_alert().hosted(), LayoutDirection::Rtl);
+    open(&mut h);
+    // From Keep, Tab wraps to Cancel as in a left-to-right layout.
+    h.key(Key::Tab);
+    h.key(Key::Space);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::ItemActivated(0),
+            ControlMessage::OpenChanged(false)
+        ]
+    );
+}
+
 fn red_picker() -> ColorPicker {
     ColorPicker::new(Color::rgba8(255, 0, 0, 255)).with_name("Accent")
 }

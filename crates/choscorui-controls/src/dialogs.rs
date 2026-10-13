@@ -127,7 +127,10 @@ impl DialogStack {
     }
 
     /// Registers a dialog whose content is the subtree at `root`, moving
-    /// focus to `initial` (for example the first field or default button).
+    /// focus to `initial` (for example the first field or default button),
+    /// or to the first focusable node of `root` when `initial` is `None`.
+    /// Returns `TreeError::MissingNode` when `root` is not in `tree` or
+    /// `initial` is not in the subtree of `root`.
     pub fn open(
         &mut self,
         tree: &mut Tree,
@@ -135,12 +138,15 @@ impl DialogStack {
         modality: Modality,
         initial: Option<NodeId>,
     ) -> Result<DialogId, TreeError> {
-        if !tree.contains(root) {
+        if !tree.contains(root) || initial.is_some_and(|node| !tree.is_within(node, root)) {
             return Err(TreeError::MissingNode);
         }
         let restore_focus = tree.focus();
-        if let Some(initial) = initial {
-            tree.set_focus(Some(initial))?;
+        match initial {
+            Some(initial) => tree.set_focus(Some(initial))?,
+            None => {
+                tree.focus_next_within(root, false);
+            }
         }
         self.next += 1;
         let id = DialogId(self.next);
@@ -153,13 +159,34 @@ impl DialogStack {
         Ok(id)
     }
 
+    /// Closes a dialog. Only the top dialog gives focus back, and only
+    /// while the focus is still inside it. A dialog above the closed one
+    /// that saved a focus inside it saves the focus of the closed dialog in
+    /// its place.
     pub fn close(&mut self, tree: &mut Tree, id: DialogId) -> bool {
         let Some(index) = self.open.iter().position(|dialog| dialog.id == id) else {
             return false;
         };
         let dialog = self.open.remove(index);
-        if let Some(focus) = dialog.restore_focus.filter(|node| tree.contains(*node)) {
-            let _ = tree.set_focus(Some(focus));
+        if index == self.open.len() {
+            let inside = tree
+                .focus()
+                .is_none_or(|focus| tree.is_within(focus, dialog.root));
+            if let Some(focus) = dialog
+                .restore_focus
+                .filter(|node| inside && tree.contains(*node))
+            {
+                let _ = tree.set_focus(Some(focus));
+            }
+        } else {
+            for above in &mut self.open[index..] {
+                if above
+                    .restore_focus
+                    .is_some_and(|node| tree.is_within(node, dialog.root))
+                {
+                    above.restore_focus = dialog.restore_focus;
+                }
+            }
         }
         true
     }
@@ -173,17 +200,6 @@ impl DialogStack {
             .map(|dialog| dialog.id)
     }
 
-    fn is_descendant(tree: &Tree, node: NodeId, root: NodeId) -> bool {
-        let mut current = Some(node);
-        while let Some(id) = current {
-            if id == root {
-                return true;
-            }
-            current = tree.parent(id);
-        }
-        false
-    }
-
     /// Whether pointer or keyboard input may reach `node`: anything when
     /// no modal is open, otherwise only the top modal's subtree.
     pub fn accepts_input(&self, tree: &Tree, node: NodeId) -> bool {
@@ -193,7 +209,7 @@ impl DialogStack {
             .rev()
             .find(|dialog| dialog.modality == Modality::Modal)
         {
-            Some(modal) => Self::is_descendant(tree, node, modal.root),
+            Some(modal) => tree.is_within(node, modal.root),
             None => true,
         }
     }
@@ -205,17 +221,7 @@ impl DialogStack {
             .iter()
             .rev()
             .find(|dialog| dialog.modality == Modality::Modal)?;
-        let start = tree.focus();
-        for _ in 0..1024 {
-            let next = tree.focus_next(reverse)?;
-            if Self::is_descendant(tree, next, modal.root) {
-                return Some(next);
-            }
-            if Some(next) == start {
-                break;
-            }
-        }
-        None
+        tree.focus_next_within(modal.root, reverse)
     }
 
     /// The semantics of dialog `id`, with the description in the
@@ -1211,10 +1217,11 @@ impl AlertDialog {
 /// centered in the window over a scrim. The node itself takes no space.
 /// Make it with [`AlertDialog::hosted`].
 ///
-/// - Tab and Shift+Tab move focus between the buttons in display order.
+/// - Tab and Shift+Tab move focus between the buttons in logical order.
 ///   Space activates the focused button.
-/// - Enter activates the `Accept` button, or the focused button when
-///   there is none. Escape activates the `Reject` button, or dismisses.
+/// - Enter activates the `Accept` button. Without one, it activates the
+///   focused button unless that button is `Destructive`. Escape and
+///   Command+period activate the `Reject` button, or dismiss.
 /// - A button reports `ItemActivated(index into buttons)` and closes the
 ///   alert. A dismissal reports `Dismissed`. Each close also reports
 ///   `OpenChanged(false)`. A press outside the panel does nothing.
@@ -1297,31 +1304,44 @@ impl HostedAlertDialog {
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) {
+        let command = cx.modifiers().command;
         match key {
             Key::Tab if !self.buttons.is_empty() => {
-                let count = self.buttons.len();
-                let current = self
-                    .buttons
+                // Tab follows the logical order, also in right-to-left
+                // layouts, where the row mirrors.
+                let (order, _) = order_dialog_buttons(&self.alert.buttons, false);
+                let count = order.len();
+                let current = order
                     .iter()
-                    .position(|(index, _)| *index == self.focus)
+                    .position(|index| *index == self.focus)
                     .unwrap_or(0);
                 let next = if cx.modifiers().shift {
                     (current + count - 1) % count
                 } else {
                     (current + 1) % count
                 };
-                self.focus = self.buttons[next].0;
+                self.focus = order[next];
                 cx.request_paint();
             }
             Key::Space => self.activate(cx, self.focus),
+            // Return never runs a destructive button.
             Key::Enter => {
-                let index = self.alert.handle_key(Key::Enter).unwrap_or(self.focus);
-                self.activate(cx, index);
+                let focused = Some(self.focus).filter(|index| {
+                    self.alert
+                        .buttons
+                        .get(*index)
+                        .is_some_and(|button| button.role != DialogButtonRole::Destructive)
+                });
+                if let Some(index) = self.alert.handle_key(Key::Enter).or(focused) {
+                    self.activate(cx, index);
+                }
             }
-            Key::Escape => match self.alert.handle_key(Key::Escape) {
-                Some(index) => self.activate(cx, index),
-                None => self.dismiss(cx),
-            },
+            Key::Escape | Key::Character('.') if key == Key::Escape || command => {
+                match self.alert.handle_key(Key::Escape) {
+                    Some(index) => self.activate(cx, index),
+                    None => self.dismiss(cx),
+                }
+            }
             _ => {}
         }
     }

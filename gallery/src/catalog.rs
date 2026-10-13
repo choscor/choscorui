@@ -302,6 +302,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("MnemonicTable", "mnemonics"),
     ("parse_mnemonic", "mnemonics"),
     ("DialogKeys", "dialog-keys"),
+    ("DialogKeyRoute", "dialog-keys"),
     ("DropdownMenu", "dropdown-menu"),
     ("HostedDropdownMenu", "dropdown-menu"),
     ("MenuItem", "dropdown-menu"),
