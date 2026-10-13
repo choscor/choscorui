@@ -5,9 +5,9 @@
 use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
-    HorizontalAlignment, Input, InputGroup, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea,
-    Toggle, ToggleGroup, VStack, View, ViewExt,
+    AnyView, Cx, DatePicker, Dynamic, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
+    HorizontalAlignment, Input, InputGroup, InputOtp, Kbd, RangeSlider, Select, State, Switch,
+    Text, Textarea, Toggle, ToggleGroup, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, AddonAlign, CalendarMode, ControlSize, FieldOrientation, InputGroupAddon, KbdVariant,
@@ -306,17 +306,15 @@ pub fn input_page(_: &PageCx) -> AnyView {
     })
 }
 
-/// An input group named by the catalog string `key` that starts with
-/// `value`, with the placeholder `placeholder` and `addons` from the
-/// environment.
+/// An input group named by the catalog string `key` that edits `value`,
+/// with the placeholder `placeholder` and `addons` from the environment.
 fn input_group(
-    cx: &mut Cx,
     key: &'static str,
-    value: &str,
+    value: State<String>,
     placeholder: Option<&'static str>,
     addons: impl Fn(&Env) -> Vec<InputGroupAddon> + 'static,
 ) -> InputGroup {
-    InputGroup::new(t!(key), addons, cx.state(value.to_owned()).binding()).with_env(
+    InputGroup::new(t!(key), addons, value.binding()).with_env(
         move |group, env| match placeholder {
             Some(placeholder) => group.with_placeholder(text(env, placeholder)),
             None => group,
@@ -328,16 +326,31 @@ pub fn input_group_page(_: &PageCx) -> AnyView {
     stateful(input_groups)
 }
 
+/// Whether `email` is empty or has a domain with a dot after the `@`.
+fn email_fits(email: &str) -> bool {
+    email.is_empty()
+        || email
+            .split_once('@')
+            .is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.'))
+}
+
 /// Input groups with inline, text, button, and block addons, then an
-/// invalid one.
+/// invalid one in a field. Copy puts the link on the clipboard, Send
+/// sends the message, and Clear empties the email.
 fn input_groups(cx: &mut Cx) -> impl View + use<> {
+    let (search, website) = (cx.state(String::new()), cx.state("example".to_owned()));
+    let link = cx.state("https://choscor.com".to_owned());
+    let (message, email) = (cx.state(String::new()), cx.state("ana@".to_owned()));
+    let status = cx.state(String::new());
+    let env = cx.env().clone();
+    let services = env.services().clone();
+    let copied = env.clone();
     column((
         section(
             t!("input-group.inline"),
             input_group(
-                cx,
                 "input-group.search",
-                "",
+                search,
                 Some("input-group.search_placeholder"),
                 |env| {
                     let results = env.plural("input-group.results", 12, &[("count", "12")]);
@@ -351,13 +364,13 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
         section(
             t!("input-group.text_buttons"),
             row((
-                input_group(cx, "input-group.website", "example", None, |_| {
+                input_group("input-group.website", website, None, |_| {
                     vec![
                         InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
                         InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
                     ]
                 }),
-                input_group(cx, "input-group.link", "https://choscor.com", None, |env| {
+                input_group("input-group.link", link, None, |env| {
                     vec![
                         InputGroupAddon::button(
                             AddonAlign::InlineEnd,
@@ -372,15 +385,24 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
                             ControlSize::Xs,
                         ),
                     ]
+                })
+                .on_item(move |index| {
+                    let key = match index {
+                        0 if services.set_clipboard_text(&link.get()).is_ok() => {
+                            "input-group.copied"
+                        }
+                        0 => "input-group.copy_failed",
+                        _ => "input-group.shared",
+                    };
+                    status.set(text(&copied, key));
                 }),
             )),
         ),
         section(
             t!("input-group.block"),
             input_group(
-                cx,
                 "input-group.message",
-                "",
+                message,
                 Some("input-group.ask"),
                 |env| {
                     vec![
@@ -393,23 +415,37 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
                         ),
                     ]
                 },
-            ),
+            )
+            .on_item(move |_| {
+                let sent = message.get();
+                if !sent.trim().is_empty() {
+                    status.set(env.text("input-group.sent", &[("message", sent.trim())]));
+                    message.set(String::new());
+                }
+            }),
         ),
+        // The result of the last button, once there is one.
+        Dynamic::new(move || {
+            Some(status.get())
+                .filter(|text| !text.is_empty())
+                .map(Text::new)
+        }),
         section(
             t!("select.invalid"),
-            input_group(cx, "input.email", "ana@", None, |env| {
-                vec![InputGroupAddon::button(
-                    AddonAlign::InlineEnd,
-                    text(env, "input-group.clear"),
-                    Some(Icon::X),
-                    ControlSize::IconSm,
-                )]
-            })
-            .with_env(|mut group, env| {
-                group.set_validation(ValidationState::Invalid(
-                    text(env, "input-group.email_error").into(),
-                ));
-                group
+            Field::new(
+                t!("input.email"),
+                input_group("input.email", email, None, |env| {
+                    vec![InputGroupAddon::button(
+                        AddonAlign::InlineEnd,
+                        text(env, "input-group.clear"),
+                        Some(Icon::X),
+                        ControlSize::IconSm,
+                    )]
+                })
+                .on_item(move |_| email.set(String::new())),
+            )
+            .error(t!("input-group.email_error"), move || {
+                !email_fits(&email.get())
             }),
         ),
     ))
@@ -688,6 +724,40 @@ mod tests {
         page.host.layout();
         assert!(page.host.find(ERROR).is_none());
         assert!(!page.host.semantic(input).unwrap().state.invalid);
+    }
+
+    /// Focuses the text field `name`, moves the focus to its first
+    /// button addon, and presses Space.
+    fn press_addon(page: &mut Harness, name: &str) {
+        let (snapshot, _) = page.host.semantics();
+        let field = snapshot
+            .iter()
+            .find(|entry| entry.node.name == name && entry.node.text.is_some())
+            .map(|entry| entry.id)
+            .unwrap_or_else(|| panic!("no text field named {name:?}"));
+        page.host.focus(Some(field));
+        press(page, Key::Tab);
+        press(page, Key::Space);
+    }
+
+    #[test]
+    fn input_group_addon_buttons_send_clear_and_copy() {
+        const ERROR: &str = "Enter a valid email address.";
+        let mut page = Harness::new("input-group");
+        assert!(page.host.find(ERROR).is_some());
+        press_addon(&mut page, "Email");
+        assert!(page.host.find(ERROR).is_none(), "Clear empties the email");
+
+        let message = page.node("Message");
+        page.host.focus(Some(message));
+        assert!(page.host.text("Hi"));
+        press(&mut page, Key::Tab);
+        press(&mut page, Key::Space);
+        assert!(page.host.find("Sent “Hi”.").is_some());
+
+        // The headless host has no clipboard.
+        press_addon(&mut page, "Link");
+        assert!(page.host.find("The clipboard is not available.").is_some());
     }
 
     #[test]

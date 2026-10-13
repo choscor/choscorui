@@ -426,7 +426,7 @@ fn cell_editors_validate_locale_numbers_and_mapper_keeps_pending_text() {
 
     let mut mapper = DataMapper::new(vec![0, 1]);
     mapper.set_current(Some(first));
-    mapper.edit(1, "-4");
+    mapper.edit(&store, 1, "-4");
     mapper.set_current(Some(second));
     assert_eq!(mapper.values(&store)[1].1, "3");
     mapper.set_current(Some(first));
@@ -440,7 +440,7 @@ fn cell_editors_validate_locale_numbers_and_mapper_keeps_pending_text() {
             Ok(Value::Text(text.into()))
         }
     };
-    mapper.edit(0, "Bút chì");
+    mapper.edit(&store, 0, "Bút chì");
     let errors = mapper.submit(&mut store, parse).unwrap_err();
     assert_eq!(errors.len(), 1, "negative quantity rejected by the model");
     assert_eq!(
@@ -451,6 +451,74 @@ fn cell_editors_validate_locale_numbers_and_mapper_keeps_pending_text() {
     store.remove(&[first]).unwrap();
     mapper.retain_existing(&store);
     assert_eq!(mapper.current(), None);
+}
+
+#[test]
+fn mapper_formats_numbers_marks_one_field_and_keeps_errors_with_their_text() {
+    let mut store = ListStore::new(2);
+    let first = store
+        .push(
+            None,
+            Item {
+                name: "Bút".into(),
+                quantity: 1200,
+            },
+        )
+        .unwrap();
+    let second = store
+        .push(
+            None,
+            Item {
+                name: "Vở".into(),
+                quantity: 3,
+            },
+        )
+        .unwrap();
+    let vi = Locale::parse("vi-VN").unwrap();
+    let parse = |column: usize, text: &str| -> Result<Value, ValidationError> {
+        match column {
+            1 => vi
+                .parse_integer(text)
+                .map(Value::Int)
+                .map_err(|_| ValidationError::Number(choscorui_controls::NumberError::NotWhole)),
+            _ => Ok(Value::Text(text.trim().into())),
+        }
+    };
+    let mut mapper = DataMapper::new(vec![0, 1]).with_locale(vi.clone());
+    mapper.set_current(Some(first));
+    assert_eq!(
+        mapper.values(&store)[1].1,
+        "1.200",
+        "locale group separator"
+    );
+    // Text equal to the model value is not pending.
+    mapper.edit(&store, 1, " 1.200 ");
+    assert!(!mapper.is_pending(1));
+    mapper.edit(&store, 1, "x");
+    assert!(
+        mapper.is_pending(1) && !mapper.is_pending(0),
+        "only the edited field"
+    );
+    assert!(mapper.submit(&mut store, parse).is_err());
+    assert!(mapper.error(1).is_some());
+    // The error stays with its text on another row and back.
+    mapper.set_current(Some(second));
+    assert!(mapper.error(1).is_none());
+    mapper.set_current(Some(first));
+    assert!(mapper.error(1).is_some());
+    // An edit keeps the error until a check finds the text valid.
+    mapper.edit(&store, 1, "7");
+    assert!(mapper.error(1).is_some());
+    mapper.check(1, parse);
+    assert!(mapper.error(1).is_none());
+    mapper.submit(&mut store, parse).unwrap();
+    assert_eq!(store.data(first, 1, Role::Edit), Value::Int(7));
+
+    // A cell editor with a minimum of 0 refuses a minus sign.
+    let edit = CellEdit::begin(&store, &DefaultEditorFactory, second, 1, vi)
+        .unwrap()
+        .with_range(Some(0.0), None);
+    assert!(edit.filter().accept("", 0..0, "-4").is_none());
 }
 
 #[test]

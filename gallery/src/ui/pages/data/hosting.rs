@@ -7,7 +7,8 @@ use choscorui::controls::{
 };
 use choscorui::core::{
     EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Localizer, Measured, ModelChange,
-    Rect, Role, SemanticAction, SemanticNode, SortFilterProxy, Value,
+    Point, PointerButton, PointerEvent, Rect, Role, SemanticAction, SemanticNode, SortFilterProxy,
+    Value,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -137,14 +138,20 @@ impl<M: ItemModel> ItemModel for SharedModel<M> {
 
 type KeyAction = Rc<dyn Fn(Key)>;
 
+/// What a primary press does before the control gets it: it gets the
+/// press position and the control bounds.
+type PressAction = Rc<dyn Fn(Point, Rect)>;
+
 /// A mounted control that the page keeps a handle to, so message
 /// handlers can read its state. With keys, the handle also takes those
 /// key presses while the control has focus and gives them to an action
-/// instead of the control.
+/// instead of the control. With a press action, the handle reports each
+/// primary press before the control handles it.
 pub struct Handle<C> {
     control: Rc<RefCell<C>>,
     keys: &'static [Key],
     action: Option<KeyAction>,
+    press: Option<PressAction>,
 }
 
 impl<C: CustomControl> Handle<C> {
@@ -159,16 +166,26 @@ impl<C: CustomControl> Handle<C> {
             control,
             keys: &[],
             action: None,
+            press: None,
         }
     }
 
     /// Mounts `control`, with `keys` going to `action`.
     pub fn keyed(control: C, keys: &'static [Key], action: KeyAction) -> Self {
-        Self {
-            control: Rc::new(RefCell::new(control)),
-            keys,
-            action: Some(action),
-        }
+        Self::new(control).with_keys(keys, action)
+    }
+
+    /// The handle with `keys` going to `action`.
+    pub fn with_keys(mut self, keys: &'static [Key], action: KeyAction) -> Self {
+        self.keys = keys;
+        self.action = Some(action);
+        self
+    }
+
+    /// The handle with each primary press reported to `press` first.
+    pub fn with_press(mut self, press: PressAction) -> Self {
+        self.press = Some(press);
+        self
     }
 }
 
@@ -187,7 +204,19 @@ impl<C: CustomControl> CustomControl for Handle<C> {
             && self.keys.contains(key)
         {
             action(*key);
+            cx.request_paint();
             return EventReply::Stop;
+        }
+        if let (
+            Some(press),
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }),
+        ) = (&self.press, event)
+            && cx.phase() == EventPhase::Target
+        {
+            press(*position, cx.bounds());
         }
         self.control.borrow_mut().event(cx, event)
     }

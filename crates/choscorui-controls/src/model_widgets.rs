@@ -362,6 +362,20 @@ pub struct CellEdit {
     pub kind: EditorKind,
     pub text: String,
     locale: Locale,
+    range: (Option<f64>, Option<f64>),
+}
+
+/// The text that an editor shows for `value`: a number in the locale
+/// format, with `fraction_digits` fraction digits for a decimal, or the
+/// display string of another value.
+fn edit_text(value: &Value, fraction_digits: usize, locale: &Locale) -> String {
+    match value {
+        Value::Int(number) => locale.format_integer(*number),
+        Value::Float(number) => locale
+            .format_decimal(*number, fraction_digits)
+            .unwrap_or_default(),
+        _ => value.to_display_string(),
+    }
 }
 
 impl CellEdit {
@@ -373,21 +387,28 @@ impl CellEdit {
         locale: Locale,
     ) -> Option<Self> {
         let kind = factory.editor_for(model, key, column)?;
-        let value = model.data(key, column, Role::Edit);
-        let text = match (&kind, &value) {
-            (EditorKind::Integer, Value::Int(number)) => locale.format_integer(*number),
-            (EditorKind::Decimal { fraction_digits }, Value::Float(number)) => locale
-                .format_decimal(*number, *fraction_digits)
-                .unwrap_or_default(),
-            _ => value.to_display_string(),
+        let digits = match kind {
+            EditorKind::Decimal { fraction_digits } => fraction_digits,
+            _ => 0,
         };
+        let text = edit_text(&model.data(key, column, Role::Edit), digits, &locale);
         Some(Self {
             key,
             column,
             kind,
             text,
             locale,
+            range: (None, None),
         })
+    }
+
+    /// Limits a number column to `min` and `max`. With a minimum that is
+    /// not negative, the editor refuses a minus sign. A value outside the
+    /// range gets an error that names the bound.
+    #[must_use]
+    pub fn with_range(mut self, min: Option<f64>, max: Option<f64>) -> Self {
+        self.range = (min, max);
+        self
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
@@ -426,6 +447,7 @@ impl CellEdit {
 
     fn number(&self, fraction_digits: usize) -> NumberInput {
         NumberInput::new(self.locale.clone(), fraction_digits)
+            .with_range(self.range.0, self.range.1)
     }
 
     pub fn parse(&self) -> Result<Value, ValidationError> {
@@ -484,20 +506,40 @@ impl From<ModelError> for ValidationError {
 
 /// Binds editor fields to columns of the current model item. Pending
 /// (uncommitted or invalid) text is kept per item, so switching rows and
-/// back restores it.
+/// back restores it. The errors of the last submit stay with their
+/// pending text.
 #[derive(Clone, Debug, Default)]
 pub struct DataMapper {
     current: Option<ItemKey>,
     columns: Vec<usize>,
     pending: HashMap<(ItemKey, usize), String>,
+    errors: HashMap<(ItemKey, usize), ValidationError>,
+    locale: Option<Locale>,
 }
 
 impl DataMapper {
     pub fn new(columns: Vec<usize>) -> Self {
         Self {
-            current: None,
             columns,
-            pending: HashMap::new(),
+            ..Self::default()
+        }
+    }
+
+    /// Formats the numbers of the model in the conventions of `locale`
+    /// when the fields fill: integers with group separators, and decimals
+    /// with two fraction digits.
+    #[must_use]
+    pub fn with_locale(mut self, locale: Locale) -> Self {
+        self.locale = Some(locale);
+        self
+    }
+
+    /// The text of the model value of `column` in item `key`.
+    fn model_text(&self, model: &dyn ItemModel, key: ItemKey, column: usize) -> String {
+        let value = model.data(key, column, Role::Edit);
+        match &self.locale {
+            Some(locale) => edit_text(&value, 2, locale),
+            None => value.to_display_string(),
         }
     }
     pub fn current(&self) -> Option<ItemKey> {
@@ -521,20 +563,61 @@ impl DataMapper {
                     .pending
                     .get(&(key, *column))
                     .cloned()
-                    .unwrap_or_else(|| model.data(key, *column, Role::Edit).to_display_string());
+                    .unwrap_or_else(|| self.model_text(model, key, *column));
                 (*column, text)
             })
             .collect()
     }
-    pub fn edit(&mut self, column: usize, text: impl Into<String>) {
-        if let Some(key) = self.current
-            && self.columns.contains(&column)
-        {
-            self.pending.insert((key, column), text.into());
+    /// Keeps `text` as the pending text of `column` in the current item.
+    /// Text that equals the model value, apart from surrounding spaces,
+    /// is not pending. The field keeps its error until
+    /// [`check`](Self::check) or [`submit`](Self::submit) runs again.
+    pub fn edit(&mut self, model: &dyn ItemModel, column: usize, text: impl Into<String>) {
+        let Some(key) = self.current.filter(|_| self.columns.contains(&column)) else {
+            return;
+        };
+        let text = text.into();
+        if text.trim() == self.model_text(model, key, column).trim() {
+            self.pending.remove(&(key, column));
+            self.errors.remove(&(key, column));
+        } else {
+            self.pending.insert((key, column), text);
         }
     }
+
+    /// Checks the pending text of `column` in the current item again with
+    /// `parse`, when the field has an error. A fix clears the error.
+    pub fn check(
+        &mut self,
+        column: usize,
+        parse: impl Fn(usize, &str) -> Result<Value, ValidationError>,
+    ) {
+        let Some(key) = self.current else {
+            return;
+        };
+        let field = (key, column);
+        if let (Some(text), true) = (self.pending.get(&field), self.errors.contains_key(&field)) {
+            match parse(column, text) {
+                Ok(_) => self.errors.remove(&field),
+                Err(error) => self.errors.insert(field, error),
+            };
+        }
+    }
+
     pub fn has_pending(&self, key: ItemKey) -> bool {
         self.pending.keys().any(|(item, _)| *item == key)
+    }
+
+    /// Whether `column` of the current item has pending text.
+    pub fn is_pending(&self, column: usize) -> bool {
+        self.current
+            .is_some_and(|key| self.pending.contains_key(&(key, column)))
+    }
+
+    /// The error of `column` in the current item, from the last submit
+    /// or check.
+    pub fn error(&self, column: usize) -> Option<&ValidationError> {
+        self.errors.get(&(self.current?, column))
     }
     /// Writes every pending field of the current item that `parse`
     /// accepts. Invalid fields stay pending and are returned with their
@@ -560,8 +643,12 @@ impl DataMapper {
             match result {
                 Ok(()) => {
                     self.pending.remove(&(key, column));
+                    self.errors.remove(&(key, column));
                 }
-                Err(message) => errors.push((column, message)),
+                Err(message) => {
+                    self.errors.insert((key, column), message.clone());
+                    errors.push((column, message));
+                }
             }
         }
         if errors.is_empty() {
@@ -573,6 +660,7 @@ impl DataMapper {
     /// Drops pending text for keys that no longer exist.
     pub fn retain_existing(&mut self, model: &dyn ItemModel) {
         self.pending.retain(|(key, _), _| model.row(*key).is_some());
+        self.errors.retain(|(key, _), _| model.row(*key).is_some());
         if self.current.is_some_and(|key| model.row(key).is_none()) {
             self.current = None;
         }

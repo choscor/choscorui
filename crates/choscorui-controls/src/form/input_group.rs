@@ -4,15 +4,15 @@ use super::input::default_width;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::Parts;
+use crate::hosted::{self, Parts};
 use crate::style::{
     AddonAlign, Content, ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot, StyleQuery,
     TextAlign, VisualState, content_rect,
 };
 use crate::text_field::{TextField, ValidationState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Measured, PointerEvent, Rect, SemanticAction, SemanticNode, Size,
-    TextInputInfo,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo,
 };
 
 /// What an addon shows.
@@ -20,7 +20,9 @@ use choscorui_core::{
 pub enum AddonContent {
     Text(String),
     Icon(Icon),
-    /// A ghost button. A click emits `ItemActivated` with the addon index.
+    /// A ghost button. A click, or Space or Return while the button has
+    /// focus, emits `ItemActivated` with the addon index. Tab moves the
+    /// focus from the text to each button addon in order.
     Button {
         label: String,
         icon: Option<Icon>,
@@ -80,9 +82,13 @@ pub struct InputGroup {
     addons: Vec<InputGroupAddon>,
     /// Each addon's slot rectangle, from the last arrange.
     rects: Vec<Rect>,
+    /// Each button addon's button rectangle, from the last arrange. Other
+    /// addons have an empty rectangle.
+    buttons: Vec<Rect>,
     text: Rect,
-    /// The hovered and pressed addon buttons.
     parts: Parts,
+    /// The button addon that has the focus, or `None` for the text.
+    focus: Option<usize>,
 }
 
 impl InputGroup {
@@ -91,8 +97,10 @@ impl InputGroup {
             editor: field,
             addons,
             rects: Vec::new(),
+            buttons: Vec::new(),
             text: Rect::default(),
             parts: Parts::default(),
+            focus: None,
         }
     }
 
@@ -174,11 +182,95 @@ impl InputGroup {
         )
     }
 
-    fn hit(&self, point: choscorui_core::Point) -> Option<usize> {
-        self.rects
+    /// The button addon under `point`: the button itself, not its slot.
+    fn hit(&self, point: Point) -> Option<usize> {
+        hosted::hit(&self.buttons, point)
+    }
+
+    /// The tab stops: the text (`None`), then each button addon in order.
+    fn stops(&self) -> Vec<Option<usize>> {
+        let buttons = self
+            .addons
             .iter()
-            .position(|rect| rect.contains(point))
-            .filter(|index| matches!(self.addons[*index].content, AddonContent::Button { .. }))
+            .enumerate()
+            .filter(|(_, addon)| matches!(addon.content, AddonContent::Button { .. }))
+            .map(|(index, _)| Some(index));
+        std::iter::once(None).chain(buttons).collect()
+    }
+
+    /// The rectangle of a button of `size` in the slot content `inner` of
+    /// `addon`.
+    fn button_rect(addon: &InputGroupAddon, size: Size, inner: Rect, rtl: bool) -> Rect {
+        let x = match (addon.is_inline(), rtl) {
+            (true, _) => inner.center().x - size.width / 2.0,
+            (false, false) => inner.origin.x,
+            (false, true) => inner.max_x() - size.width,
+        };
+        Rect::from_xywh(
+            x,
+            inner.center().y - size.height / 2.0,
+            size.width,
+            size.height,
+        )
+    }
+
+    /// The label of button addon `index`.
+    fn label(&self, index: usize) -> &str {
+        match &self.addons[index].content {
+            AddonContent::Button { label, .. } => label,
+            _ => "",
+        }
+    }
+
+    /// Handles the keys and focus changes that move the focus among the
+    /// text and the button addons, and the keys of a focused button.
+    /// Returns `None` for an event that the text takes.
+    fn focus_event(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+    ) -> Option<EventReply> {
+        match event {
+            ControlEvent::FocusChanged(true) if self.parts.pressed.is_none() => {
+                // Shift+Tab into the group lands on its last stop.
+                let last = self.stops().last().copied().flatten();
+                self.move_focus(cx, last.filter(|_| cx.modifiers().shift));
+                None
+            }
+            ControlEvent::FocusChanged(false) => {
+                self.move_focus(cx, None);
+                None
+            }
+            ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
+                let stops = self.stops();
+                let current = stops.iter().position(|stop| *stop == self.focus)?;
+                let next = hosted::tab_stop(current, stops.len(), cx.modifiers().shift)?;
+                self.move_focus(cx, stops[next]);
+                Some(EventReply::Stop)
+            }
+            ControlEvent::Key(KeyEvent::Down { key, repeat }) => {
+                let index = self.focus?;
+                if matches!(key, Key::Space | Key::Enter) && !repeat {
+                    cx.emit(ControlMessage::ItemActivated(index));
+                    return Some(EventReply::Stop);
+                }
+                Some(EventReply::Continue)
+            }
+            ControlEvent::Text(_) | ControlEvent::Compose(_) | ControlEvent::Edit(_)
+                if self.focus.is_some() =>
+            {
+                Some(EventReply::Continue)
+            }
+            _ => None,
+        }
+    }
+
+    fn move_focus(&mut self, cx: &mut ControlContext<'_>, focus: Option<usize>) {
+        if self.focus != focus {
+            self.focus = focus;
+            cx.request_paint();
+            cx.request_semantics();
+        }
     }
 }
 
@@ -286,6 +378,20 @@ impl CustomControl for InputGroup {
             row_height,
         );
         self.text = content_rect(row, &input, rtl);
+        self.buttons = self
+            .addons
+            .iter()
+            .zip(&rects)
+            .map(|(addon, rect)| match &addon.content {
+                AddonContent::Button { size, .. } => {
+                    let slot = cx.style(Self::addon_query(addon, VisualState::NONE));
+                    let style = cx.style(Self::button_query(*size, VisualState::NONE));
+                    let natural = Self::content(addon).size(&style, cx.text);
+                    Self::button_rect(addon, natural, content_rect(*rect, &slot, rtl), rtl)
+                }
+                _ => Rect::default(),
+            })
+            .collect();
         self.rects = rects;
     }
 
@@ -298,64 +404,74 @@ impl CustomControl for InputGroup {
         parts.track(cx, event, |point| self.hit(point));
         self.parts = parts;
         match event {
-            ControlEvent::Pointer(PointerEvent::Down { .. }) if self.parts.pressed.is_some() => {
-                return EventReply::Stop;
-            }
+            ControlEvent::Pointer(PointerEvent::Down {
+                button: PointerButton::Primary,
+                ..
+            }) if self.parts.pressed.is_some() => return EventReply::Stop,
             ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
                 if let Some(index) = pressed.filter(|index| self.parts.hovered == Some(*index)) {
                     cx.emit(ControlMessage::ItemActivated(index));
                 }
                 return EventReply::Stop;
             }
+            ControlEvent::Pointer(PointerEvent::Down { .. }) => self.move_focus(cx, None),
             _ => {}
+        }
+        if let Some(reply) = self.focus_event(cx, event) {
+            return reply;
         }
         let text = self.text;
         self.editor.hosted_event(cx, event, text)
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = self.editor.hosted_state(cx.state);
+        // While a button addon has the focus, the text and the box show
+        // no focus, and the button shows the focus ring.
+        let host = match self.focus {
+            Some(_) => cx
+                .state
+                .set(VisualState::FOCUSED, false)
+                .set(VisualState::FOCUS_VISIBLE, false),
+            None => cx.state,
+        };
+        let state = self.editor.hosted_state(host);
         let root = cx.style(Self::query(Slot::Root).state(state));
         let bounds = cx.bounds;
         cx.slot(bounds, &root, |_, _| {});
         let disabled = VisualState::NONE.set(VisualState::DISABLED, state.disabled());
-        for (index, (addon, rect)) in self.addons.iter().zip(&self.rects).enumerate() {
-            let slot = cx.style(Self::addon_query(addon, disabled));
+        let addons = self.addons.iter().zip(&self.rects).zip(&self.buttons);
+        for (index, ((addon, rect), button)) in addons.enumerate() {
             let content = Self::content(addon);
-            let inner = content_rect(*rect, &slot, cx.rtl);
+            if let AddonContent::Button { size, .. } = &addon.content {
+                let focused = self.focus == Some(index) && cx.state.focused();
+                let button_state = self
+                    .parts
+                    .state(index, disabled)
+                    .set(VisualState::FOCUSED, focused)
+                    .set(VisualState::FOCUS_VISIBLE, focused);
+                let style = cx.style(Self::button_query(*size, button_state));
+                cx.slot(*button, &style, |cx, inner| {
+                    content.draw(cx, inner, &style, TextAlign::Center);
+                });
+                continue;
+            }
+            let slot = cx.style(Self::addon_query(addon, disabled));
             let align = if addon.is_inline() {
                 TextAlign::Center
             } else {
                 TextAlign::Start
             };
-            match &addon.content {
-                AddonContent::Button { size, .. } => {
-                    let button_state = self.parts.state(index, disabled);
-                    let style = cx.style(Self::button_query(*size, button_state));
-                    let natural = content.size(&style, cx.text);
-                    let x = match (addon.is_inline(), cx.rtl) {
-                        (true, _) => inner.center().x - natural.width / 2.0,
-                        (false, false) => inner.origin.x,
-                        (false, true) => inner.max_x() - natural.width,
-                    };
-                    let button = Rect::from_xywh(
-                        x,
-                        inner.center().y - natural.height / 2.0,
-                        natural.width,
-                        natural.height,
-                    );
-                    cx.slot(button, &style, |cx, inner| {
-                        content.draw(cx, inner, &style, TextAlign::Center);
-                    });
-                }
-                _ => content.draw(cx, inner, &slot, align),
-            }
+            let inner = content_rect(*rect, &slot, cx.rtl);
+            content.draw(cx, inner, &slot, align);
         }
         self.editor.paint_hosted_text(cx, self.text, state);
     }
 
     fn text_input(&self) -> Option<TextInputInfo> {
-        self.editor.hosted_text_input()
+        match self.focus {
+            Some(_) => None,
+            None => self.editor.hosted_text_input(),
+        }
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -363,17 +479,24 @@ impl CustomControl for InputGroup {
     }
 
     fn semantics_in(&self, strings: &choscorui_core::Localizer) -> SemanticNode {
+        // A focused button addon is the node, so assistive technology
+        // reads it as a button.
+        if let Some(index) = self.focus {
+            let actions = vec![SemanticAction::Activate, SemanticAction::Focus];
+            return hosted::node(SemanticRole::Button, self.label(index), actions);
+        }
         let mut node = self.editor.hosted_semantics(strings);
         // Addon text describes the value, for example a unit or a domain.
-        node.description = self
-            .addons
-            .iter()
-            .filter_map(|addon| match &addon.content {
-                AddonContent::Text(text) => Some(text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(" ");
+        // It follows the validation message, which stays.
+        let addons = self.addons.iter().filter_map(|addon| match &addon.content {
+            AddonContent::Text(text) => Some(text.as_str()),
+            _ => None,
+        });
+        let parts: Vec<&str> = std::iter::once(node.description.as_str())
+            .filter(|text| !text.is_empty())
+            .chain(addons)
+            .collect();
+        node.description = parts.join(" ");
         node
     }
 
@@ -384,6 +507,13 @@ impl CustomControl for InputGroup {
         value: Option<&str>,
     ) -> bool {
         match action {
+            SemanticAction::Activate => match self.focus {
+                Some(index) => {
+                    cx.emit(ControlMessage::ItemActivated(index));
+                    true
+                }
+                None => false,
+            },
             SemanticAction::SetValue => self.editor.hosted_set_value(cx, value.unwrap_or_default()),
             SemanticAction::Focus => {
                 cx.request_focus();

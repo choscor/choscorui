@@ -1835,14 +1835,23 @@ pin this behavior.
   error, the edit stays open.
 - `filter` gives the `InputFilter` of the editor text: the number rule for
   a number column and the date rule for a date column.
+- `with_range` limits a number column. With a minimum that is not
+  negative, the editor refuses a minus sign. A value out of range gets a
+  message that names the limit.
 - A bool column edits with a checkbox and takes no typed text. `checked`
   and `set_checked` read and set its value. Space toggles the checkbox.
 - `DataMapper` binds form fields to columns of the current item. `edit`
-  keeps pending text for each item and column.
-- `values` returns the pending text, or the model value. `submit` writes
-  the valid fields and keeps the invalid fields pending with their
-  `ValidationError` values.
-- `retain_existing` drops pending text for items that the model removed.
+  keeps pending text for each item and column. Text that is equal to the
+  model value, apart from the spaces around it, is not pending.
+- `values` returns the pending text, or the model value. With
+  `with_locale`, the model numbers use the number format of that locale.
+- `is_pending` tells which field of the current item has pending text.
+- `submit` writes the valid fields. It keeps the invalid fields pending,
+  and `error` returns the `ValidationError` of each one. An error stays
+  with its pending text when the current item changes. `check` parses a
+  field with an error again, and a valid text clears the error.
+- `retain_existing` drops pending text and errors for items that the model
+  removed.
 
 These types have no semantic node. The form fields publish their own
 semantics.
@@ -2738,10 +2747,14 @@ and closes the list, but not while the select is disabled.
   order. Inline addons do not change the 36 pt height.
 - Block-start addons sit above the text row and block-end addons below it.
   Each adds its own height.
-- A button addon is a ghost button. A click on it emits
-  `ItemActivated(index)` with the addon index. A press anywhere else
-  focuses the text. Button addons take no keyboard focus. Give each one a
-  keyboard path too, such as a command shortcut.
+- A button addon is a ghost button. A click on the button emits
+  `ItemActivated(index)` with the addon index. A press anywhere else,
+  also on the slot around the button, focuses the text.
+- **Button addon focus.** Tab moves the focus from the text to each button
+  addon in order, and Shift+Tab moves it back. Tab after the last stop
+  leaves the group. Space or Return on a focused button addon emits
+  `ItemActivated(index)`. The focused button shows the focus ring, and the
+  box shows no ring.
 
 | Part | Value |
 | --- | --- |
@@ -2755,9 +2768,13 @@ and closes the list, but not while the select is disabled.
 | --- | --- | --- |
 | Role | `TextField` (AXTextField), or `PasswordField` | as `Input` |
 | Name / value | name / value (bullets for a password) | name / value |
-| Description | validation message | text of the text addons |
+| Description | validation message | validation message, then the text of the text addons |
 | State | invalid, disabled | invalid, disabled |
 | Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
+
+While a button addon has the focus, the `InputGroup` node is that button.
+It has the role `Button`, the addon label as the name, and the `Activate`
+and `Focus` actions. `Activate` emits `ItemActivated(index)`.
 
 `set_value` takes `Text`, also while the input is disabled, and drops line
 breaks. `set_open` returns false.

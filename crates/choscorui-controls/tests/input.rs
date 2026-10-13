@@ -144,6 +144,41 @@ fn input_group_lays_out_addons_and_activates_buttons() {
 }
 
 #[test]
+fn input_group_button_addons_take_focus_and_keep_the_validation_message() {
+    let mut group = search();
+    group.set_validation(ValidationState::Invalid("Too long".into()));
+    let mut h = Harness::new(group);
+    // The addon text follows the validation message.
+    assert_eq!(h.semantics().description, "Too long 12 results");
+    // The slot around the button is not a hit target: only the button is.
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.max_x() - 12.0, bounds.origin.y + 2.0));
+    assert!(
+        !h.messages().contains(&ControlMessage::ItemActivated(2)),
+        "a press above the button does not activate it"
+    );
+    h.focus();
+    h.key(Key::Tab);
+    let node = h.semantics();
+    assert_eq!(
+        (node.role, node.name.as_str()),
+        (SemanticRole::Button, "Clear")
+    );
+    h.text("x");
+    h.key(Key::Space);
+    assert_eq!(h.messages(), [ControlMessage::ItemActivated(2)]);
+    h.modifiers(ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    });
+    h.key(Key::Tab);
+    h.modifiers(ShortcutModifiers::default());
+    assert_eq!(h.semantics().name, "Search");
+    h.text("x");
+    assert_eq!(h.messages(), [typed("x")]);
+}
+
+#[test]
 fn block_addons_stack_above_and_below_the_text() {
     let group = InputGroup::new(
         TextField::new("Message", ""),
