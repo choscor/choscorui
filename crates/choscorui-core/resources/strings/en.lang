@@ -36,6 +36,7 @@ choscorui.range = Range {min} to {max}
 choscorui.zoom = Zoom {percent}%
 choscorui.overflow = Value too large to display
 choscorui.shortcut.recording = Recording shortcut; press Escape to cancel
+choscorui.shortcut.prompt = Type a shortcut
 choscorui.column.ascending = ascending
 choscorui.column.descending = descending
 choscorui.column.width = {width} points wide
@@ -50,6 +51,7 @@ choscorui.field.year = Year field
 choscorui.field.hour = Hour field
 choscorui.field.minute = Minute field
 choscorui.field.second = Second field
+choscorui.field.meridiem = AM/PM field
 
 # Conditions of the backend capabilities.
 choscorui.condition.app_bundle = Needs an app bundle with a bundle identifier

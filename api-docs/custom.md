@@ -623,6 +623,15 @@ Records the geometry of the control's parts for `bounds`, so event
 handling hits the same parts that paint draws. Called by
 `ControlHost::arrange` after layout and theme changes.
 
+#### `CustomControl::captures_keys`
+
+```rust
+fn captures_keys(&self) -> bool
+```
+
+True while the focused control takes every key, before the menu
+shortcuts of the window, for example while it records a shortcut.
+
 #### `CustomControl::deadline`
 
 ```rust

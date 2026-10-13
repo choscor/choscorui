@@ -1557,6 +1557,16 @@ pub fn cancel_interaction(&mut self)
 Ends pointer capture and hover, for example when the window loses
 focus.
 
+#### `ViewHost::captures_keys`
+
+```rust
+pub fn captures_keys(&self) -> bool
+```
+
+True while the focused control takes every key, before the menu
+shortcuts of the window, for example while a `KeySequenceEdit`
+records.
+
 #### `ViewHost::composition`
 
 ```rust

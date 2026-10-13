@@ -504,6 +504,76 @@ fn a_hosted_time_edit_reports_iso_text() {
     );
 }
 
+/// Presses `key` on the focused editor and returns whether it took it.
+fn key_taken(h: &mut Harness, key: Key) -> bool {
+    let down = choscorui_core::KeyEvent::Down { key, repeat: false };
+    h.host.dispatch_key(&mut h.tree, down)
+}
+
+#[test]
+fn a_hosted_date_time_edit_types_reverts_commits_and_stops_at_the_range() {
+    let mut edit = DateTimeEdit::new(
+        "Meeting",
+        en(),
+        DateTimeKind::Time,
+        datetime(2024, 5, 15, 9, 30),
+    );
+    edit.set_range(
+        Some(datetime(2024, 5, 15, 9, 0)),
+        Some(datetime(2024, 5, 15, 17, 0)),
+    );
+    let mut h = Harness::new(edit);
+    // A 12-hour locale has an AM/PM section.
+    assert_eq!(texts(&h.paint()), vec!["9:30 AM"]);
+    h.focus();
+    let primary = choscorui_core::DesignTokens::light()
+        .color(choscorui_core::ColorRole::Primary)
+        .with_alpha(0.25);
+    assert!(
+        hosted::fills(&h.paint(), primary),
+        "the focused section shows"
+    );
+    // Enter with nothing to commit goes on to the window.
+    assert!(!key_taken(&mut h, Key::Enter));
+    // Stepping stops at the range: 9 AM steps down to 9:00, not 8:30.
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().value.as_deref(), Some("9:00 AM"));
+    // The meridiem steps to PM and stops at 5 PM.
+    h.key(Key::ArrowRight);
+    h.key(Key::ArrowRight);
+    assert_eq!(h.semantics().description, "AM/PM field");
+    h.key(Key::ArrowUp);
+    assert_eq!(h.semantics().value.as_deref(), Some("5:00 PM"));
+    // A click picks the hour section; typed digits show while pending.
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.origin.x + 14.0, bounds.center().y));
+    assert_eq!(h.semantics().description, "Hour field");
+    h.key(Key::Backspace);
+    assert_eq!(texts(&h.paint()), vec!["--:00 PM"]);
+    assert!(h.text("1"));
+    assert_eq!(texts(&h.paint()), vec!["1:00 PM"]);
+    // Escape drops the digits and restores the value from before the
+    // first change.
+    let _ = h.messages();
+    assert!(key_taken(&mut h, Key::Escape));
+    assert_eq!(h.semantics().value.as_deref(), Some("9:30 AM"));
+    assert!(!key_taken(&mut h, Key::Escape), "nothing left to revert");
+    // A typed hour outside the range is committed and clamped on blur.
+    h.key(Key::ArrowLeft);
+    h.key(Key::ArrowLeft);
+    assert!(h.text("8"));
+    assert!(h.semantics().state.invalid);
+    h.host.move_focus(&mut h.tree, None);
+    assert_eq!(h.semantics().value.as_deref(), Some("9:00 AM"));
+    assert!(!h.semantics().state.invalid);
+    assert_eq!(
+        h.messages().last(),
+        Some(&ControlMessage::Changed(ControlValue::Text(
+            "09:00:00".into()
+        )))
+    );
+}
+
 const COPY: CommandId = CommandId(1);
 const PASTE: CommandId = CommandId(2);
 const SHARE: CommandId = CommandId(3);

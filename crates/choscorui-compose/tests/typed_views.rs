@@ -218,7 +218,10 @@ fn a_key_sequence_edit_binds_both_ways() {
     });
     let node = host.find("Shortcut").unwrap();
     host.focus(Some(node));
+    assert!(!host.captures_keys());
     host.perform(node, SemanticAction::Activate, None);
+    // While it records, the window gives it the menu key equivalents.
+    assert!(host.captures_keys());
     let command = ShortcutModifiers {
         command: true,
         ..ShortcutModifiers::default()
@@ -231,6 +234,7 @@ fn a_key_sequence_edit_binds_both_ways() {
         command,
     );
     host.flush();
+    assert!(!host.captures_keys());
     let recorded = take(&sequence).get();
     assert!(recorded.contains('K'), "{recorded}");
     take(&sequence).set("⇧⌘S".to_owned());

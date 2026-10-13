@@ -11,10 +11,12 @@ use choscorui_controls::{
     SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
 };
 use choscorui_core::{
-    ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent, SemanticAction,
-    SemanticRole, Size,
+    Feedback, ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent,
+    SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, fills, texts};
+use std::cell::Cell;
+use std::rc::Rc;
 
 fn press(h: &mut Harness, at: Point) {
     let event = PointerEvent::Down {
@@ -715,13 +717,13 @@ fn a_hosted_key_sequence_edit_records_a_sequence() {
     h.key(Key::Character('s'));
     h.modifiers(ShortcutModifiers::default());
     assert!(h.perform(SemanticAction::Activate, None));
-    h.key(Key::Character('a'));
+    h.key(Key::F(5));
     h.host.move_focus(&mut h.tree, None);
     assert_eq!(
         h.messages(),
         vec![
             changed(ControlValue::Text("⌘K, ⇧⌘S".into())),
-            changed(ControlValue::Text("A".into())),
+            changed(ControlValue::Text("F5".into())),
         ]
     );
     assert!(set_value(&mut h, ControlValue::Text("⌃↩, ⌘,".into())));
@@ -733,6 +735,69 @@ fn a_hosted_key_sequence_edit_records_a_sequence() {
     h.key(Key::Enter);
     assert!(h.semantics().description.is_empty());
     assert!(!h.perform(SemanticAction::Activate, None));
+}
+
+/// Counts the beeps of a host.
+#[derive(Default)]
+struct Beeps(Cell<usize>);
+
+impl Feedback for Beeps {
+    fn beep(&self) {
+        self.0.set(self.0.get() + 1);
+    }
+}
+
+#[test]
+fn a_recording_needs_a_modifier_first_and_commits_on_return_or_a_pause() {
+    let mut h = Harness::new(KeySequenceEdit::new(3).with_clear_button(true));
+    let beeps = Rc::new(Beeps::default());
+    h.host.set_feedback(beeps.clone());
+    h.focus();
+    h.key(Key::Enter);
+    // A prompt shows until the first chord.
+    assert_eq!(texts(&h.paint()), vec!["Type a shortcut"]);
+    // A plain key, a shifted key, and Return cannot start a chord.
+    h.key(Key::Character('a'));
+    h.chord(
+        ShortcutModifiers {
+            shift: true,
+            ..ShortcutModifiers::default()
+        },
+        Key::Character('b'),
+    );
+    h.key(Key::Enter);
+    assert_eq!(beeps.0.get(), 2);
+    let option = ShortcutModifiers {
+        option: true,
+        ..ShortcutModifiers::default()
+    };
+    h.chord(option, Key::Character('a'));
+    // Return commits a shorter sequence.
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), vec![changed(ControlValue::Text("⌥A".into()))]);
+    // A pause commits too, and a second chord needs no modifier.
+    h.key(Key::Space);
+    h.chord(option, Key::Character('k'));
+    h.key(Key::Character('s'));
+    assert!(h.host.next_deadline(&h.tree).is_some());
+    h.set_time(5.0);
+    assert!(h.host.advance(&mut h.tree, 5.0));
+    assert_eq!(
+        h.messages(),
+        vec![changed(ControlValue::Text("⌥K, S".into()))]
+    );
+    // Tab ends a recording and moves on; it is not a chord.
+    h.key(Key::Space);
+    h.key(Key::Tab);
+    assert!(h.messages().is_empty());
+    assert_eq!(h.semantics().value.as_deref(), Some("⌥K, S"));
+    // The clear button clears the sequence.
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.max_x() - 4.0, bounds.center().y));
+    assert_eq!(
+        h.messages(),
+        vec![changed(ControlValue::Text(String::new()))]
+    );
 }
 
 #[test]

@@ -238,23 +238,22 @@ mod tests {
             }
             press(&mut page, Key::ArrowRight);
         }
-        // End and Home jump to 23 and 0, outside the range; Return clamps.
-        press(&mut page, Key::End);
+        // Stepping stops at the start of office hours.
+        press(&mut page, Key::ArrowDown);
+        press(&mut page, Key::ArrowDown);
+        assert_eq!(page.value(LIMITED), reads(9));
+        assert!(!invalid(&mut page));
+        assert!(page.act(LIMITED, SemanticAction::Decrement));
+        assert_eq!(page.value(LIMITED), reads(9));
+        // A typed hour outside the range is invalid until Return clamps it.
+        assert!(page.host.text("8"));
+        page.host.layout();
         assert!(invalid(&mut page));
         assert!(page.host.find(message).is_some());
         press(&mut page, Key::Enter);
-        assert_eq!(page.value(LIMITED), reads(17));
+        assert_eq!(page.value(LIMITED), reads(9));
         assert!(!invalid(&mut page));
         assert!(page.host.find(message).is_none());
-        press(&mut page, Key::Home);
-        press(&mut page, Key::Enter);
-        assert_eq!(page.value(LIMITED), reads(9));
-        // Stepping below the range by an assistive action clamps the same
-        // way.
-        assert!(page.act(LIMITED, SemanticAction::Decrement));
-        assert!(invalid(&mut page));
-        press(&mut page, Key::Enter);
-        assert_eq!(page.value(LIMITED), reads(9));
     }
 
     #[test]

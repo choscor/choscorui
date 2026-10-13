@@ -1518,6 +1518,13 @@ impl ViewHost {
         self.inner.controls.text_input(&self.inner.tree)
     }
 
+    /// True while the focused control takes every key, before the menu
+    /// shortcuts of the window, for example while a `KeySequenceEdit`
+    /// records.
+    pub fn captures_keys(&self) -> bool {
+        self.inner.controls.captures_keys(&self.inner.tree)
+    }
+
     /// Performs an assistive action on `node`.
     pub fn perform(&mut self, node: NodeId, action: SemanticAction, value: Option<&str>) -> bool {
         let opener = self

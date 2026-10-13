@@ -7,15 +7,22 @@ use crate::form::input::default_width;
 use crate::style::{Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
+
+/// The pause after a chord, in seconds, that commits a shorter sequence
+/// in a control host.
+const PAUSE: f64 = 1.0;
 
 /// Records up to `max_chords` shortcuts. Presses of keys without a
 /// `Key` mapping (`Key::Other`, which includes modifier-only presses) are
-/// ignored; Backspace with no modifiers clears; Escape cancels and keeps
-/// the previous sequence; recording finishes when full or on
-/// [`KeySequenceEdit::finish`] (for example after a pause or focus loss).
+/// ignored. The first chord needs Command, Control, or Option, except a
+/// function key. Plain Return commits the chords so far, and Tab ends the
+/// recording; neither is a chord. Backspace with no modifiers clears;
+/// Escape cancels and keeps the previous sequence; recording finishes
+/// when full or on [`KeySequenceEdit::finish`] (for example after a pause
+/// or focus loss).
 #[derive(Clone, Debug, PartialEq)]
 pub struct KeySequenceEdit {
     committed: Vec<Shortcut>,
@@ -24,6 +31,12 @@ pub struct KeySequenceEdit {
     /// The name and the placeholder in a control host.
     name: String,
     placeholder: String,
+    /// The host time at which a pause commits the recording.
+    deadline: Option<f64>,
+    /// Shows a clear button while a sequence is set.
+    clear_button: bool,
+    /// The layout direction of a hosted field, from `arrange`.
+    rtl: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,6 +46,9 @@ pub enum KeySequenceChange {
     Committed,
     Cancelled,
     Cleared,
+    /// The key cannot start a chord: it has no Command, Control, or
+    /// Option, and it is not a function key.
+    Rejected,
 }
 
 impl KeySequenceEdit {
@@ -43,6 +59,9 @@ impl KeySequenceEdit {
             max_chords: max_chords.clamp(1, 4),
             name: String::new(),
             placeholder: String::new(),
+            deadline: None,
+            clear_button: false,
+            rtl: false,
         }
     }
 
@@ -59,6 +78,14 @@ impl KeySequenceEdit {
         self.placeholder = placeholder.into();
         self
     }
+
+    /// Shows a clear button at the end of a hosted field while a sequence
+    /// is set. A click on it clears the sequence.
+    #[must_use]
+    pub fn with_clear_button(mut self, clear_button: bool) -> Self {
+        self.clear_button = clear_button;
+        self
+    }
     pub fn sequence(&self) -> &[Shortcut] {
         &self.committed
     }
@@ -73,27 +100,43 @@ impl KeySequenceEdit {
             return KeySequenceChange::None;
         };
         let plain = modifiers == ShortcutModifiers::default();
+        // Shift alone does not make a shortcut: Shift+A types "A".
+        let unmodified = !(modifiers.command || modifiers.control || modifiers.option);
         match key {
             Key::Escape if plain => {
                 self.recording = None;
                 KeySequenceChange::Cancelled
             }
-            Key::Backspace | Key::Delete if plain && recording.is_empty() => {
-                self.committed.clear();
-                self.recording = None;
-                KeySequenceChange::Cleared
-            }
+            Key::Backspace | Key::Delete if plain && recording.is_empty() => self.clear(),
+            Key::Enter if plain && recording.is_empty() => KeySequenceChange::None,
+            Key::Enter if plain => self.finish(),
+            Key::Tab if unmodified => self.finish(),
             Key::Other(_) => KeySequenceChange::None,
-            _ => {
-                recording.push(Shortcut { key, modifiers });
-                if recording.len() >= self.max_chords {
-                    self.finish()
-                } else {
-                    KeySequenceChange::Recording
-                }
-            }
+            Key::F(_) => self.push(Shortcut { key, modifiers }),
+            _ if unmodified && recording.is_empty() => KeySequenceChange::Rejected,
+            _ => self.push(Shortcut { key, modifiers }),
         }
     }
+
+    /// Adds `chord` to the recording, and finishes when it is full.
+    fn push(&mut self, chord: Shortcut) -> KeySequenceChange {
+        let Some(recording) = &mut self.recording else {
+            return KeySequenceChange::None;
+        };
+        recording.push(chord);
+        if recording.len() >= self.max_chords {
+            self.finish()
+        } else {
+            KeySequenceChange::Recording
+        }
+    }
+
+    fn clear(&mut self) -> KeySequenceChange {
+        self.committed.clear();
+        self.recording = None;
+        KeySequenceChange::Cleared
+    }
+
     pub fn finish(&mut self) -> KeySequenceChange {
         match self.recording.take() {
             Some(recording) if !recording.is_empty() => {
@@ -136,7 +179,8 @@ impl KeySequenceEdit {
 
     /// Paints the input box with one `Kbd` key cap per chord, or
     /// `placeholder` when the sequence is empty. While recording, the
-    /// chords so far show. `host` carries focus flags.
+    /// chords so far show, or a prompt to type a shortcut. `host` carries
+    /// focus flags.
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState, placeholder: &str) {
         let input = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(host));
         let muted = cx.style(StyleQuery::new(ControlKind::Input, Slot::Placeholder));
@@ -144,9 +188,15 @@ impl KeySequenceEdit {
         let group = cx.style(StyleQuery::new(ControlKind::Kbd, Slot::Group));
         let chords = self.recording.as_ref().unwrap_or(&self.committed);
         let bounds = cx.bounds;
+        let prompt = cx.strings.message("choscorui.shortcut.prompt", &[]);
         cx.slot(bounds, &input, |cx, inner| {
             if chords.is_empty() {
-                cx.label(inner, placeholder, &muted, TextAlign::Start);
+                let text = if self.is_recording() {
+                    &prompt
+                } else {
+                    placeholder
+                };
+                cx.label(inner, text, &muted, TextAlign::Start);
                 return;
             }
             let mut x = if cx.rtl {
@@ -175,14 +225,17 @@ impl KeySequenceEdit {
 }
 
 impl KeySequenceEdit {
-    /// Reports a committed or cleared sequence in a host.
-    fn report(&self, cx: &mut ControlContext<'_>, change: KeySequenceChange) {
-        if matches!(
-            change,
-            KeySequenceChange::Committed | KeySequenceChange::Cleared
-        ) {
-            cx.emit(ControlMessage::Changed(ControlValue::Text(self.text())));
+    /// Reports a committed or cleared sequence in a host, and beeps for a
+    /// rejected key. A new chord starts the pause that commits.
+    fn report(&mut self, cx: &mut ControlContext<'_>, change: KeySequenceChange) {
+        match change {
+            KeySequenceChange::Committed | KeySequenceChange::Cleared => {
+                cx.emit(ControlMessage::Changed(ControlValue::Text(self.text())));
+            }
+            KeySequenceChange::Rejected => cx.beep(),
+            _ => {}
         }
+        self.deadline = (change == KeySequenceChange::Recording).then(|| cx.time() + PAUSE);
         cx.request_paint();
         cx.request_semantics();
     }
@@ -194,16 +247,41 @@ impl KeySequenceEdit {
             cx.request_semantics();
         }
     }
+
+    /// The clear button at the end of `bounds`, while it shows.
+    fn clear_rect(&self, bounds: Rect) -> Option<Rect> {
+        if !self.clear_button || self.is_recording() || self.committed.is_empty() {
+            return None;
+        }
+        let side = bounds.size.height.min(bounds.size.width);
+        let x = if self.rtl {
+            bounds.origin.x
+        } else {
+            bounds.max_x() - side
+        };
+        Some(Rect::from_xywh(
+            x,
+            bounds.origin.y,
+            side,
+            bounds.size.height,
+        ))
+    }
 }
 
 /// A click, Space, Enter, or `Activate` starts the recording. While it
-/// records, the control takes every key. A loss of focus finishes the
-/// recording. It reports `Changed(Text)` with the sequence text.
+/// records, the control takes every key but Tab, and a pause commits the
+/// chords so far. A loss of focus finishes the recording. Plain Backspace
+/// or Delete clears a set sequence. It reports `Changed(Text)` with the
+/// sequence text.
 impl CustomControl for KeySequenceEdit {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
         let height = (style.text.line_height + style.padding.vertical()).max(style.min_height);
         Measured::new(Size::new(default_width(cx, &style), height))
+    }
+
+    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+        self.rtl = cx.rtl();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -215,19 +293,45 @@ impl CustomControl for KeySequenceEdit {
                 position,
                 button: PointerButton::Primary,
             }) if cx.bounds().contains(*position) => {
-                self.start_recording(cx);
+                if self
+                    .clear_rect(cx.bounds())
+                    .is_some_and(|clear| clear.contains(*position))
+                {
+                    let change = self.clear();
+                    self.report(cx, change);
+                } else {
+                    self.start_recording(cx);
+                }
                 EventReply::Stop
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat: false }) if self.is_recording() => {
                 let change = self.press(*key, cx.modifiers());
                 self.report(cx, change);
-                EventReply::Stop
+                // Tab ends the recording and moves the focus.
+                if *key == Key::Tab && !self.is_recording() {
+                    EventReply::Continue
+                } else {
+                    EventReply::Stop
+                }
             }
             ControlEvent::Key(KeyEvent::Down {
                 key: Key::Space | Key::Enter,
                 repeat: false,
             }) => {
                 self.start_recording(cx);
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Backspace | Key::Delete,
+                ..
+            }) if !self.committed.is_empty() && cx.modifiers() == ShortcutModifiers::default() => {
+                let change = self.clear();
+                self.report(cx, change);
+                EventReply::Stop
+            }
+            ControlEvent::Timer => {
+                let change = self.finish();
+                self.report(cx, change);
                 EventReply::Stop
             }
             ControlEvent::FocusChanged(false) => {
@@ -242,6 +346,10 @@ impl CustomControl for KeySequenceEdit {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
         KeySequenceEdit::paint(self, cx, host, &self.placeholder);
+        if let Some(clear) = self.clear_rect(cx.bounds) {
+            let icon = cx.style(StyleQuery::new(ControlKind::Input, Slot::Icon).state(host));
+            cx.icon(clear, Icon::X, &icon);
+        }
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -250,6 +358,16 @@ impl CustomControl for KeySequenceEdit {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         KeySequenceEdit::semantics(self, &self.name, strings)
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.deadline.filter(|_| self.is_recording())
+    }
+
+    /// True while it records: the window gives it the keys of menu
+    /// shortcuts first.
+    fn captures_keys(&self) -> bool {
+        self.is_recording()
     }
 
     fn perform(

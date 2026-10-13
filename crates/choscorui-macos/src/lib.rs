@@ -659,6 +659,7 @@ impl Application {
             selected_utf16: 0..0,
             marked_utf16: None,
             caret: Rect::new(Point::new(0.0, 0.0), Size::new(1.0, 1.0)),
+            captures_keys: false,
         }));
         window_queues()
             .lock()

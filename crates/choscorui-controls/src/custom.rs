@@ -365,6 +365,12 @@ pub trait CustomControl {
         None
     }
 
+    /// True while the focused control takes every key, before the menu
+    /// shortcuts of the window, for example while it records a shortcut.
+    fn captures_keys(&self) -> bool {
+        false
+    }
+
     /// Takes a value from the application, of the kind that the control
     /// reports in [`ControlMessage::Changed`]. Returns false when the
     /// control has no such value or the value does not fit. The control
@@ -1030,6 +1036,14 @@ impl ControlHost {
             return None;
         }
         self.controls.get(&focus)?.text_input()
+    }
+
+    /// True while the focused control takes every key, before the menu
+    /// shortcuts of the window. See [`CustomControl::captures_keys`].
+    pub fn captures_keys(&self, tree: &Tree) -> bool {
+        tree.focus()
+            .and_then(|focus| self.controls.get(&focus))
+            .is_some_and(|control| control.captures_keys())
     }
 
     /// Gives the controls the desktop services of the backend. Text

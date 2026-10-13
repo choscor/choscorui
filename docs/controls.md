@@ -785,6 +785,13 @@ divides by 10. Each change saturates at the `i64` bounds and emits
 - Recording starts only after `start`. Each `press` adds one chord.
 - Recording finishes at `max_chords` (1 to 4), or on `finish`. Call
   `finish` after a pause or on focus loss.
+- The first chord must have Command, Control, or Option. A function key
+  is the exception. Shift alone is not sufficient. `press` returns
+  `Rejected` for a key that cannot start a chord. The next chords can have
+  no modifier.
+- Plain Return commits the chords so far. Plain Return with no chord does
+  nothing. Tab with no modifier or with Shift only finishes the recording.
+  Return and Tab are never chords in these cases.
 - Plain Escape cancels and keeps the old sequence.
 - Plain Backspace or Delete as the first key clears the sequence.
 - `finish` with nothing recorded cancels.
@@ -793,23 +800,32 @@ divides by 10. Each change saturates at the `i64` bounds and emits
 - A function key shows as `F1` to `F24`, and the Menu key shows as `Menu`.
   `set_value` reads these names.
 - **Look.** `paint` draws the `Input` box with one `Kbd` key cap per
-  chord. While it records, the chords so far show. An empty sequence
-  shows the placeholder in the `Input` placeholder style.
+  chord. While it records, the chords so far show. A recording with no
+  chord shows the `choscorui.shortcut.prompt` message ("Type a shortcut").
+  An empty sequence shows the placeholder in the `Input` placeholder style.
 - **In a control host.** A click, Space, Enter, or `Activate` starts the
-  recording. While it records, the control takes every key. A loss of
-  focus calls `finish`. `with_name` and `with_placeholder` set the name
-  and the placeholder.
+  recording. While it records, the control takes every key except a Tab
+  that finishes. A pause of 1 s after a chord commits the chords so far.
+  A loss of focus calls `finish`. A rejected key beeps.
+- While it records, `captures_keys` is true. The window then gives it the
+  key equivalents of the menus, so a shortcut such as ⌘S does not run a
+  menu command.
+- Plain Backspace or Delete clears a set sequence when it does not record.
+- `with_name` and `with_placeholder` set the name and the placeholder.
+  `with_clear_button(true)` shows an `X` icon at the end of a set
+  sequence. A click on it clears the sequence.
 
 | Field | `KeySequenceEdit::semantics` |
 | --- | --- |
 | Role | `TextField` (AXTextField) |
 | Name / value | name / the sequence, for example `⌘K, ⇧⌘S` |
-| State | read-only; a description while it records |
+| State | read-only; the `choscorui.shortcut.recording` description while it records |
 | Actions | `Activate`, `Focus` |
 
 **As a view.** `KeySequenceEdit::new(name, max_chords, sequence)` edits a
 `Binding<String>` through the `Text` value in both directions, for example
-`⌘K, ⇧⌘S`.
+`⌘K, ⇧⌘S`. `.placeholder(text)` sets the placeholder from a catalog
+string, and `.clear_button()` shows the clear button.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
@@ -941,6 +957,9 @@ them. The value fields use the Edit commands as this section tells.
 - `ControlHost::text_input` gives the selection, the marked range, and the
   caret rectangle of the focused text control. The window gives them to
   the input method, which places its candidate window at the caret.
+- `ControlHost::captures_keys` is true while the focused control's
+  `captures_keys` is true. The window then sends the key equivalents of
+  the menus to the control as keys, before the menus.
 
 [text_editing.rs](../crates/choscorui-controls/tests/text_editing.rs) pins
 this behavior.
@@ -1632,22 +1651,41 @@ behavior.
 **DateTimeEdit:**
 
 - The locale sets the order of the date sections. A time has an hour and a
-  minute section.
+  minute section. In a 12-hour locale, the hour goes from 1 to 12 and an
+  AM/PM section follows the minute.
 - ArrowLeft and ArrowRight move between sections and stop at the ends.
 - The locale's date separator and the characters `/ . - :` and space go to
   the next section.
 - ArrowUp and ArrowDown step by 1, and PageUp and PageDown step by 10.
-  Each field wraps, but the year clamps to 1..9999.
-- Home and End set the field to its bounds.
+  Each field wraps, but the year clamps to 1..9999. A step stops at the
+  minimum and the maximum of the range.
+- Home and End set the field to its bounds, clamped into the range.
+- In the AM/PM section, the steps toggle AM and PM, and `a` and `p` set
+  them.
 - Digits type into the section. The section advances when it is full, or
-  when no more digits can fit. A year applies after four digits.
+  when no more digits can fit. A year applies after four digits, or when
+  the section loses focus. A number below the lowest value of the field
+  waits for the next digit.
+- Backspace removes the last typed digit. With no typed digit, it clears
+  the section, which shows dashes. A cleared section keeps its value.
 - The day clamps to the month, so the value is always a real date.
-- A value outside the range is `Intermediate`. Enter (or `commit`) clamps
-  it into the range.
+- A typed value outside the range is `Intermediate`. Enter (or `commit`)
+  applies the typed digits and clamps the value into the range.
 - `set_locale` keeps the focused field.
 - **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
   start and the steppers at the end. A value out of range sets the
-  `invalid` flag.
+  `invalid` flag. While focused, the focused section has the selection
+  color of the text fields, and it shows its typed digits.
+- **In a control host.** A click on the text focuses the section under
+  the pointer. A click on the steppers steps the focused section.
+- A loss of focus commits and clamps the value. Enter commits. When Enter
+  changes nothing, it goes on to the window, for example to a default
+  button.
+- Escape drops the typed digits and restores the value from before the
+  first change since focus or the last commit. When there is nothing to
+  restore, Escape goes on to the window.
+- The description is the focused section, from the built-in
+  `choscorui.field.*` messages, for example "Hour field".
 
 **Calendar:**
 

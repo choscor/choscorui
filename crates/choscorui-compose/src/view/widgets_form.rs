@@ -305,6 +305,21 @@ impl Configured<controls::KeySequenceEdit> {
         })
         .bind(sequence, ControlValue::Text, as_text)
     }
+
+    /// The text that an empty field shows, for example
+    /// `t!("shortcut.placeholder")`.
+    #[must_use]
+    pub fn placeholder<M>(self, placeholder: impl IntoLive<TextContent, M>) -> Self {
+        let placeholder = label(placeholder);
+        self.with_env(move |edit, env| edit.with_placeholder(text(&placeholder, env)))
+    }
+
+    /// Shows a clear button at the end of the field while a shortcut is
+    /// set.
+    #[must_use]
+    pub fn clear_button(self) -> Self {
+        self.with(|edit| edit.with_clear_button(true))
+    }
 }
 
 /// A color picker: a swatch and hue, saturation, value, and alpha

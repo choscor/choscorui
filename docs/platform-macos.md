@@ -160,7 +160,7 @@ The content view implements the `NSTextInputClient` methods, for example `setMar
 - `CommitText` gives the final text and an optional replacement range.
 - `Unmark` ends the composition.
 
-Ranges are in UTF-16 units. After each edit, call `Window::set_text_input_state` with the selection, the marked range, and the caret rectangle. The input method uses the caret rectangle to place its candidate window. [text.md](text.md) describes the marked-text flow in the text controls.
+Ranges are in UTF-16 units. After each edit, call `Window::set_text_input_state` with the selection, the marked range, and the caret rectangle. The input method uses the caret rectangle to place its candidate window. Set `captures_keys` while the focused control records keys. Then the content view takes each key equivalent in `performKeyEquivalent:` and sends it as `WindowEvent::Key`, so no menu item takes it. [text.md](text.md) describes the marked-text flow in the text controls.
 
 ## Desktop integration
 

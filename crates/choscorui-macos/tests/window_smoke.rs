@@ -4,7 +4,7 @@ use choscorui_core::{
     SemanticChange, SemanticNode, SemanticRole, SemanticState, SemanticTree, Size, Tree, WheelUnit,
 };
 #[cfg(target_os = "macos")]
-use choscorui_macos::{Application, Error, ImeEvent, WindowEvent, WindowOptions};
+use choscorui_macos::{Application, Error, ImeEvent, TextInputState, WindowEvent, WindowOptions};
 #[cfg(target_os = "macos")]
 use std::sync::{Arc, Mutex};
 #[cfg(target_os = "macos")]
@@ -246,6 +246,23 @@ fn main() {
             .iter()
             .any(|event| matches!(event, WindowEvent::Text { .. } | WindowEvent::Ime(_)))
     );
+    // A key equivalent goes to the menus, unless the focused control
+    // captures keys, for example while it records a shortcut.
+    assert!(!perform_native_key_equivalent(0x01, 1 << 20, "s"));
+    assert!(window.take_events().is_empty());
+    let capture = |captures_keys| TextInputState {
+        selected_utf16: 0..0,
+        marked_utf16: None,
+        caret: Rect::new(Point::new(0.0, 0.0), Size::new(1.0, 1.0)),
+        captures_keys,
+    };
+    window.set_text_input_state(capture(true));
+    assert!(perform_native_key_equivalent(0x01, 1 << 20, "s"));
+    assert!(window.take_events().iter().any(|event| matches!(event,
+        WindowEvent::Key { event: KeyEvent::Down { key: Key::Character('s'), .. }, modifiers }
+            if modifiers.command
+    )));
+    window.set_text_input_state(capture(false));
     send_native_mouse_event(window.content_size().height, 5, c"mouseMoved:", 0);
     assert!(window.take_events().iter().any(|event| matches!(event,
         WindowEvent::Pointer { event: PointerEvent::Move { position }, .. }
@@ -1137,20 +1154,11 @@ fn send_native_key_event(
     send_native_key_event_text(kind, method, code, flags, repeat, via_window, "\t");
 }
 
+/// A native key event of `kind` for the first window.
 #[cfg(target_os = "macos")]
-fn send_native_key_event_text(
-    kind: usize,
-    method: &std::ffi::CStr,
-    code: u16,
-    flags: usize,
-    repeat: bool,
-    via_window: bool,
-    text: &str,
-) {
+fn native_key_event(kind: usize, code: u16, flags: usize, repeat: bool, text: &str) -> native::Id {
     use native::{Id, NativePoint};
-    let window = native::first_window();
-    let view = native::content_view();
-    let number: isize = native::send(window, c"windowNumber", ());
+    let number: isize = native::send(native::first_window(), c"windowNumber", ());
     let characters = native::ns_string(text);
     let event: Id = native::send(
         native::class(c"NSEvent"),
@@ -1169,6 +1177,30 @@ fn send_native_key_event_text(
         ),
     );
     assert!(!event.is_null());
+    event
+}
+
+/// Offers a key-down event of `text` with `flags` to the content view as a
+/// key equivalent, and returns whether the view took it.
+#[cfg(target_os = "macos")]
+fn perform_native_key_equivalent(code: u16, flags: usize, text: &str) -> bool {
+    let event = native_key_event(10, code, flags, false, text);
+    native::send::<_, i8>(native::content_view(), c"performKeyEquivalent:", (event,)) != 0
+}
+
+#[cfg(target_os = "macos")]
+fn send_native_key_event_text(
+    kind: usize,
+    method: &std::ffi::CStr,
+    code: u16,
+    flags: usize,
+    repeat: bool,
+    via_window: bool,
+    text: &str,
+) {
+    let window = native::first_window();
+    let view = native::content_view();
+    let event = native_key_event(kind, code, flags, repeat, text);
     if via_window {
         native::send::<_, ()>(window, c"sendEvent:", (event,));
     } else {

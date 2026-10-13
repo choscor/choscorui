@@ -28,6 +28,9 @@ pub struct TextInputState {
     pub selected_utf16: Range<usize>,
     pub marked_utf16: Option<Range<usize>>,
     pub caret: Rect,
+    /// The focused control takes every key, before the key equivalents
+    /// of the menus, for example while it records a shortcut.
+    pub captures_keys: bool,
 }
 
 pub(super) type ImeHandle = Arc<Mutex<TextInputState>>;
@@ -69,6 +72,20 @@ fn native_range(range: Option<Range<usize>>) -> NSRange {
         location: range.start,
         length: range.end.saturating_sub(range.start),
     })
+}
+
+/// Sends a key equivalent to the focused control as a key event while
+/// the control captures keys, so no menu item takes it.
+pub(super) fn view_perform_key_equivalent(
+    view: &Obj<ChoscoruiV2ContentView>,
+    event: Option<&Obj<NSEvent>>,
+) -> bool {
+    let capturing =
+        view_window_state(view).is_some_and(|(_, _, state)| state.lock().unwrap().captures_keys);
+    if capturing && event.is_some_and(|event| EVENT_TYPE.send(event, ()) == EVENT_KEY_DOWN) {
+        crate::view_key_event(view, event);
+    }
+    capturing
 }
 
 pub(super) fn view_has_marked_text(view: &Obj<ChoscoruiV2ContentView>) -> bool {

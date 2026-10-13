@@ -59,6 +59,8 @@ define_classes! {
             => crate::view_key_event;
         Super(NSResponder) c"keyUp:" (event: Option<&Obj<NSEvent>>)
             => crate::view_key_event;
+        Super(NSView) c"performKeyEquivalent:" (event: Option<&Obj<NSEvent>>) -> bool = false
+            => ime::view_perform_key_equivalent;
         Protocol(NSTextInputClient) c"hasMarkedText" () -> bool = false
             => ime::view_has_marked_text;
         Protocol(NSTextInputClient) c"markedRange" () -> NSRange = NSRange::NONE

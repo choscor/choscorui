@@ -363,9 +363,8 @@ impl View for KeySequencePage {
         let sequence = cx.state(String::new());
         column((
             KeySequenceEdit::new(t!("key-sequence.shortcut"), 2, sequence.binding())
-                .with_env(|edit, env| {
-                    edit.with_placeholder(env.text("key-sequence.placeholder", &[]))
-                })
+                .placeholder(t!("key-sequence.placeholder"))
+                .clear_button()
                 .on_message(move |message| {
                     if let ControlMessage::Changed(ControlValue::Text(text)) = message {
                         let key = if text.is_empty() {

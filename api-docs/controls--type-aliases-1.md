@@ -1365,6 +1365,15 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `KeySequenceEdit::clear_button`
+
+```rust
+pub fn clear_button(self) -> Self
+```
+
+Shows a clear button at the end of the field while a shortcut is
+set.
+
 #### `KeySequenceEdit::new`
 
 ```rust
@@ -1372,6 +1381,15 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, max_chords: usize, sequence: 
 ```
 
 A shortcut field named `name` of up to `max_chords` chords that edits `sequence`.
+
+#### `KeySequenceEdit::placeholder`
+
+```rust
+pub fn placeholder<M>(self, placeholder: impl IntoLive<TextContent, M>) -> Self
+```
+
+The text that an empty field shows, for example
+`t!("shortcut.placeholder")`.
 
 ## `Label`
 

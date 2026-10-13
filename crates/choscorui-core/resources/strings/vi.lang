@@ -35,6 +35,7 @@ choscorui.range = Khoảng từ {min} đến {max}
 choscorui.zoom = Thu phóng {percent}%
 choscorui.overflow = Giá trị quá lớn để hiển thị
 choscorui.shortcut.recording = Đang ghi phím tắt; nhấn Escape để hủy
+choscorui.shortcut.prompt = Nhấn phím tắt
 choscorui.column.ascending = tăng dần
 choscorui.column.descending = giảm dần
 choscorui.column.width = rộng {width} điểm
@@ -49,6 +50,7 @@ choscorui.field.year = Ô năm
 choscorui.field.hour = Ô giờ
 choscorui.field.minute = Ô phút
 choscorui.field.second = Ô giây
+choscorui.field.meridiem = Ô SA/CH
 
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói

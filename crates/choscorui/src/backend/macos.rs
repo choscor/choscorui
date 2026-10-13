@@ -192,7 +192,7 @@ impl NativeWindow {
                     host.pointer_with(event, shortcut_modifiers(modifiers), details);
                 }
                 // A Command-key combination arrives here only when no menu
-                // item took it.
+                // item took it, or while the focused control captures keys.
                 WindowEvent::Key { event, modifiers } => {
                     host.key(event, shortcut_modifiers(modifiers));
                 }
@@ -213,6 +213,7 @@ impl NativeWindow {
             selected_utf16: input.selected_utf16,
             marked_utf16: input.marked_utf16,
             caret: input.caret,
+            captures_keys: host.captures_keys(),
         });
         (closing, focus)
     }

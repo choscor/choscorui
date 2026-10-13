@@ -3,8 +3,8 @@
 //! The editor never holds an invalid date: each section edits one field,
 //! Up/Down step it (wrapping within its field, days clamped to the month),
 //! digits type into it, and Left/Right or the locale separator move between
-//! sections. Values outside the minimum/maximum are reported as
-//! `Intermediate` while typing and clamped on commit.
+//! sections. Steps stop at the minimum/maximum. A typed value outside
+//! them is reported as `Intermediate` and clamped on commit.
 
 use crate::calendar_caption::{CaptionContext, CaptionDropdowns, CaptionPart, CaptionReply};
 use crate::custom::{
@@ -12,7 +12,8 @@ use crate::custom::{
 };
 use crate::editing::{ValueEdit, value_edit};
 use crate::hosted::Parts;
-use crate::range_controls::paint_stepper_field;
+use crate::input_text::InputText;
+use crate::range_controls::paint_stepper_box;
 use crate::style::{
     CalendarDay, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
     content_rect,
@@ -24,6 +25,7 @@ use choscorui_core::{
     PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
     days_in_month, month_grid, month_name, weekday_short_name,
 };
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DateTimeField {
@@ -33,6 +35,23 @@ pub enum DateTimeField {
     Hour,
     Minute,
     Second,
+    /// AM or PM, the last time section in a 12-hour locale.
+    Meridiem,
+}
+
+impl DateTimeField {
+    /// The built-in message id of the section's accessible description.
+    fn message_id(self) -> &'static str {
+        match self {
+            Self::Day => "choscorui.field.day",
+            Self::Month => "choscorui.field.month",
+            Self::Year => "choscorui.field.year",
+            Self::Hour => "choscorui.field.hour",
+            Self::Minute => "choscorui.field.minute",
+            Self::Second => "choscorui.field.second",
+            Self::Meridiem => "choscorui.field.meridiem",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,9 +71,18 @@ pub struct DateTimeEdit {
     maximum: Option<CivilDateTime>,
     fields: Vec<DateTimeField>,
     focused: usize,
-    typed: String,
+    /// The digits typed into the focused section so far. An empty text
+    /// is a section that Backspace cleared. `None` shows the value.
+    typed: Option<String>,
+    /// The value before the first change since focus or the last commit,
+    /// which Escape restores in a host.
+    before: Option<CivilDateTime>,
     /// The layout direction of a hosted editor, from `arrange`.
     rtl: bool,
+    /// The text box relative to the bounds origin, and the end offset of
+    /// each section in it, from `arrange`. A click picks a section by them.
+    text_box: Rect,
+    edges: Vec<f64>,
 }
 
 impl DateTimeEdit {
@@ -73,11 +101,19 @@ impl DateTimeEdit {
             maximum: None,
             fields: Vec::new(),
             focused: 0,
-            typed: String::new(),
+            typed: None,
+            before: None,
             rtl: false,
+            text_box: Rect::default(),
+            edges: Vec::new(),
         };
         edit.fields = edit.field_order();
         edit
+    }
+
+    /// True when the locale shows the hour from 1 to 12 with AM or PM.
+    fn hour12(&self) -> bool {
+        !self.locale.data().hour_cycle_24
     }
 
     fn field_order(&self) -> Vec<DateTimeField> {
@@ -98,10 +134,13 @@ impl DateTimeEdit {
                 DateTimeField::Day,
             ],
         };
-        let time = [DateTimeField::Hour, DateTimeField::Minute];
+        let mut time = vec![DateTimeField::Hour, DateTimeField::Minute];
+        if self.hour12() {
+            time.push(DateTimeField::Meridiem);
+        }
         match self.kind {
             DateTimeKind::Date => date.to_vec(),
-            DateTimeKind::Time => time.to_vec(),
+            DateTimeKind::Time => time,
             DateTimeKind::DateTime => date.into_iter().chain(time).collect(),
         }
     }
@@ -124,6 +163,7 @@ impl DateTimeEdit {
         let field = self.focused_field();
         self.locale = locale;
         self.fields = self.field_order();
+        self.typed = None;
         self.focused = self.fields.iter().position(|f| *f == field).unwrap_or(0);
     }
 
@@ -139,79 +179,54 @@ impl DateTimeEdit {
     }
 
     pub fn validation(&self) -> ValidationState {
-        let below = self.minimum.is_some_and(|minimum| self.value < minimum);
-        let above = self.maximum.is_some_and(|maximum| self.value > maximum);
-        if below || above {
+        if self.clamped(self.value) != self.value {
             ValidationState::Intermediate
         } else {
             ValidationState::Valid
         }
     }
 
+    /// The number a section shows: the hour from 1 to 12 in a 12-hour
+    /// locale, and 0 (AM) or 1 (PM) for the meridiem.
     fn field_value(&self, field: DateTimeField) -> i64 {
         let date = self.value.date;
-        let time = self.value.time;
+        let hour = i64::from(self.value.time.hour());
         match field {
             DateTimeField::Day => i64::from(date.day()),
             DateTimeField::Month => i64::from(date.month()),
             DateTimeField::Year => i64::from(date.year()),
-            DateTimeField::Hour => i64::from(time.hour()),
-            DateTimeField::Minute => i64::from(time.minute()),
-            DateTimeField::Second => i64::from(time.second()),
+            DateTimeField::Hour if self.hour12() => (hour + 11) % 12 + 1,
+            DateTimeField::Hour => hour,
+            DateTimeField::Minute => i64::from(self.value.time.minute()),
+            DateTimeField::Second => i64::from(self.value.time.second()),
+            DateTimeField::Meridiem => hour / 12,
         }
     }
 
+    /// The value with `field` set to `value` (clamped to the field), and
+    /// the day clamped to the month.
     fn with_field(&self, field: DateTimeField, value: i64) -> Option<CivilDateTime> {
         let date = self.value.date;
         let time = self.value.time;
-        let clamp_day = |year: i32, month: u8, day: u8| day.min(days_in_month(year, month));
-        let result = match field {
-            DateTimeField::Day => {
-                let day = value.clamp(1, i64::from(days_in_month(date.year(), date.month())));
-                CivilDateTime {
-                    date: CivilDate::new(date.year(), date.month(), day as u8).ok()?,
-                    time,
-                }
-            }
-            DateTimeField::Month => {
-                let month = value.clamp(1, 12) as u8;
-                CivilDateTime {
-                    date: CivilDate::new(
-                        date.year(),
-                        month,
-                        clamp_day(date.year(), month, date.day()),
-                    )
-                    .ok()?,
-                    time,
-                }
-            }
-            DateTimeField::Year => {
-                let year = value.clamp(1, 9999) as i32;
-                CivilDateTime {
-                    date: CivilDate::new(
-                        year,
-                        date.month(),
-                        clamp_day(year, date.month(), date.day()),
-                    )
-                    .ok()?,
-                    time,
-                }
-            }
-            DateTimeField::Hour => CivilDateTime {
-                date,
-                time: CivilTime::new(value.clamp(0, 23) as u8, time.minute(), time.second())
-                    .ok()?,
-            },
-            DateTimeField::Minute => CivilDateTime {
-                date,
-                time: CivilTime::new(time.hour(), value.clamp(0, 59) as u8, time.second()).ok()?,
-            },
-            DateTimeField::Second => CivilDateTime {
-                date,
-                time: CivilTime::new(time.hour(), time.minute(), value.clamp(0, 59) as u8).ok()?,
-            },
-        };
-        Some(result)
+        let (low, high) = self.field_bounds(field);
+        let value = value.clamp(low, high);
+        let (mut year, mut month, mut day) = (date.year(), date.month(), date.day());
+        let (mut hour, mut minute, mut second) = (time.hour(), time.minute(), time.second());
+        let small = value as u8;
+        match field {
+            DateTimeField::Day => day = small,
+            DateTimeField::Month => month = small,
+            DateTimeField::Year => year = value as i32,
+            DateTimeField::Hour if self.hour12() => hour = small % 12 + hour / 12 * 12,
+            DateTimeField::Hour => hour = small,
+            DateTimeField::Minute => minute = small,
+            DateTimeField::Second => second = small,
+            DateTimeField::Meridiem => hour = hour % 12 + small * 12,
+        }
+        Some(CivilDateTime {
+            date: CivilDate::new(year, month, day.min(days_in_month(year, month))).ok()?,
+            time: CivilTime::new(hour, minute, second).ok()?,
+        })
     }
 
     fn field_bounds(&self, field: DateTimeField) -> (i64, i64) {
@@ -225,11 +240,15 @@ impl DateTimeEdit {
             ),
             DateTimeField::Month => (1, 12),
             DateTimeField::Year => (1, 9999),
+            DateTimeField::Hour if self.hour12() => (1, 12),
             DateTimeField::Hour => (0, 23),
             DateTimeField::Minute | DateTimeField::Second => (0, 59),
+            DateTimeField::Meridiem => (0, 1),
         }
     }
 
+    /// Steps the focused section. It wraps inside its field, the year
+    /// clamps, and the value stops at the minimum and the maximum.
     fn step(&mut self, delta: i64) -> bool {
         let field = self.focused_field();
         let (low, high) = self.field_bounds(field);
@@ -240,37 +259,63 @@ impl DateTimeEdit {
         } else {
             low + (current - low + delta).rem_euclid(span)
         };
-        self.typed.clear();
-        self.set(field, next)
+        self.typed = None;
+        self.set(field, next, true)
     }
 
-    fn set(&mut self, field: DateTimeField, value: i64) -> bool {
-        match self.with_field(field, value) {
-            Some(next) if next != self.value => {
-                self.value = next;
-                true
-            }
+    /// Sets `field` to `value`, clamped into the range when `limit`.
+    fn set(&mut self, field: DateTimeField, value: i64, limit: bool) -> bool {
+        let Some(next) = self.with_field(field, value) else {
+            return false;
+        };
+        let next = if limit { self.clamped(next) } else { next };
+        let changed = next != self.value;
+        self.value = next;
+        changed
+    }
+
+    /// Applies the typed digits of the focused section, then focuses
+    /// section `index`.
+    fn move_to(&mut self, index: usize) -> bool {
+        let changed = self.apply_typed();
+        self.focused = index.min(self.fields.len() - 1);
+        changed
+    }
+
+    /// Applies the pending digits, so a year with fewer than four digits
+    /// takes effect too. A cleared section keeps its value.
+    fn apply_typed(&mut self) -> bool {
+        let field = self.focused_field();
+        match self
+            .typed
+            .take()
+            .and_then(|typed| typed.parse::<i64>().ok())
+        {
+            Some(number) if number >= self.field_bounds(field).0 => self.set(field, number, false),
             _ => false,
         }
     }
 
     fn type_digit(&mut self, digit: char) -> bool {
         let field = self.focused_field();
+        if field == DateTimeField::Meridiem {
+            return false;
+        }
         let width = if field == DateTimeField::Year { 4 } else { 2 };
-        self.typed.push(digit);
-        let typed: i64 = self.typed.parse().unwrap_or(0);
-        let (_, high) = self.field_bounds(field);
-        let changed = if field == DateTimeField::Year && self.typed.len() < width {
+        let typed = self.typed.get_or_insert_with(String::new);
+        typed.push(digit);
+        let length = typed.len();
+        let number: i64 = typed.parse().unwrap_or(0);
+        let (low, high) = self.field_bounds(field);
+        // A number below the lowest value of the field waits for a digit.
+        let changed = if (field == DateTimeField::Year && length < width) || number < low {
             false
         } else {
-            self.set(
-                field,
-                typed.max(if field == DateTimeField::Year { 1 } else { 0 }),
-            )
+            self.set(field, number, false)
         };
         // Advance when the section is full or no further digit can fit.
-        if self.typed.len() >= width || typed * 10 > high {
-            self.typed.clear();
+        if length >= width || number * 10 > high {
+            self.typed = None;
             if self.focused + 1 < self.fields.len() {
                 self.focused += 1;
             }
@@ -278,64 +323,102 @@ impl DateTimeEdit {
         changed
     }
 
+    /// Backspace removes the last typed digit, or clears the section.
+    fn backspace(&mut self) {
+        match &mut self.typed {
+            Some(typed) if !typed.is_empty() => {
+                typed.pop();
+            }
+            _ => self.typed = Some(String::new()),
+        }
+    }
+
     /// Returns true when the value changed.
     pub fn handle_key(&mut self, key: Key) -> bool {
+        let field = self.focused_field();
         match key {
             Key::ArrowUp => self.step(1),
             Key::ArrowDown => self.step(-1),
             Key::PageUp => self.step(10),
             Key::PageDown => self.step(-10),
-            Key::ArrowLeft => {
-                self.typed.clear();
-                self.focused = self.focused.saturating_sub(1);
+            Key::ArrowLeft => self.move_to(self.focused.saturating_sub(1)),
+            Key::ArrowRight => self.move_to(self.focused + 1),
+            Key::Home | Key::End => {
+                self.typed = None;
+                let (low, high) = self.field_bounds(field);
+                self.set(field, if key == Key::Home { low } else { high }, true)
+            }
+            Key::Backspace | Key::Delete => {
+                self.backspace();
                 false
-            }
-            Key::ArrowRight => {
-                self.typed.clear();
-                self.focused = (self.focused + 1).min(self.fields.len() - 1);
-                false
-            }
-            Key::Home => {
-                let field = self.focused_field();
-                let low = self.field_bounds(field).0;
-                self.set(field, low)
-            }
-            Key::End => {
-                let field = self.focused_field();
-                let high = self.field_bounds(field).1;
-                self.set(field, high)
             }
             Key::Character(character) if character.is_ascii_digit() => self.type_digit(character),
+            Key::Character(character @ ('a' | 'A' | 'p' | 'P'))
+                if field == DateTimeField::Meridiem =>
+            {
+                self.typed = None;
+                let pm = character.eq_ignore_ascii_case(&'p');
+                self.set(field, i64::from(pm), false)
+            }
             Key::Character(character)
                 if character == self.locale.data().date_separator
                     || matches!(character, '/' | '.' | '-' | ':' | ' ') =>
             {
-                self.typed.clear();
-                self.focused = (self.focused + 1).min(self.fields.len() - 1);
-                false
+                self.move_to(self.focused + 1)
             }
             Key::Enter => self.commit(),
             _ => false,
         }
     }
 
-    /// Clamps an out-of-range value into the allowed range.
+    /// Applies the typed digits and clamps an out-of-range value into the
+    /// allowed range.
     pub fn commit(&mut self) -> bool {
-        self.typed.clear();
+        let typed = self.apply_typed();
         let clamped = self.clamped(self.value);
-        let changed = clamped != self.value;
+        let changed = typed || clamped != self.value;
         self.value = clamped;
         changed
     }
 
-    pub fn text(&self) -> String {
-        let date = self.value.date.format_short(&self.locale);
-        let time = self.value.time.format_short(&self.locale);
-        match self.kind {
-            DateTimeKind::Date => date,
-            DateTimeKind::Time => time,
-            DateTimeKind::DateTime => format!("{date} {time}"),
+    /// The text of the value and the character range of each section.
+    /// With `pending`, the focused section shows its typed digits, and a
+    /// cleared section shows dashes.
+    fn sections(&self, pending: bool) -> (String, Vec<Range<usize>>) {
+        let separator = self.locale.data().date_separator;
+        let mut text = String::new();
+        let mut ranges = Vec::with_capacity(self.fields.len());
+        for (index, field) in self.fields.iter().enumerate() {
+            if index > 0 {
+                text.push(match field {
+                    DateTimeField::Day | DateTimeField::Month | DateTimeField::Year => separator,
+                    DateTimeField::Minute | DateTimeField::Second => ':',
+                    DateTimeField::Hour | DateTimeField::Meridiem => ' ',
+                });
+            }
+            let start = text.chars().count();
+            let value = self.field_value(*field);
+            let typed = (pending && index == self.focused)
+                .then_some(self.typed.as_deref())
+                .flatten();
+            match (typed, field) {
+                (Some(""), DateTimeField::Year) => text.push_str("----"),
+                (Some(""), _) => text.push_str("--"),
+                (Some(digits), _) => text.push_str(digits),
+                (None, DateTimeField::Year) => text.push_str(&format!("{value:04}")),
+                (None, DateTimeField::Meridiem) => {
+                    text.push_str(if value == 0 { "AM" } else { "PM" });
+                }
+                (None, DateTimeField::Hour) if self.hour12() => text.push_str(&value.to_string()),
+                (None, _) => text.push_str(&format!("{value:02}")),
+            }
+            ranges.push(start..text.chars().count());
         }
+        (text, ranges)
+    }
+
+    pub fn text(&self) -> String {
+        self.sections(false).0
     }
 
     /// The flags the input recipe reads: the host's focus flags in
@@ -348,34 +431,32 @@ impl DateTimeEdit {
     }
 
     /// Paints the `Input` box with the text and the steppers, like
-    /// [`crate::SpinBox::paint`]. `host` carries focus flags.
+    /// [`crate::SpinBox::paint`]. `host` carries focus flags. While
+    /// focused, the focused section shows the selection color and its
+    /// typed digits.
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
-        let bounds = cx.bounds;
-        let width = STEPPER_WIDTH.min(bounds.size.width);
-        let x = if cx.rtl {
-            bounds.origin.x
-        } else {
-            bounds.max_x() - width
-        };
-        let steppers = Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height);
-        paint_stepper_field(cx, &self.text(), self.visual_state(host), steppers);
+        let steppers = Self::steppers(cx.bounds, cx.rtl);
+        let state = self.visual_state(host);
+        let (text, ranges) = self.sections(true);
+        let selection = ranges[self.focused].clone();
+        let arrow = VisualState::NONE.set(VisualState::DISABLED, state.disabled());
+        paint_stepper_box(cx, state, steppers, [arrow; 2], |cx, rect| {
+            let line = InputText {
+                text: &text,
+                selection,
+                ..InputText::default()
+            };
+            line.paint_text(cx, rect, state);
+        });
     }
 
     /// The semantics, with the focused field in the language of
     /// `strings`.
     pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
-        let field = match self.focused_field() {
-            DateTimeField::Day => "choscorui.field.day",
-            DateTimeField::Month => "choscorui.field.month",
-            DateTimeField::Year => "choscorui.field.year",
-            DateTimeField::Hour => "choscorui.field.hour",
-            DateTimeField::Minute => "choscorui.field.minute",
-            DateTimeField::Second => "choscorui.field.second",
-        };
         SemanticNode {
             role: SemanticRole::SpinButton,
             name: self.name.clone(),
-            description: strings.message(field, &[]),
+            description: strings.message(self.focused_field().message_id(), &[]),
             value: Some(match self.kind {
                 DateTimeKind::Time => self.text(),
                 _ => {
@@ -948,17 +1029,71 @@ impl DateTimeEdit {
         }
     }
 
-    /// Runs `keys` and reports one change when the value changed.
-    fn hosted_keys(&mut self, cx: &mut ControlContext<'_>, keys: impl IntoIterator<Item = Key>) {
+    /// Runs `keys` and reports one change when the value changed. The
+    /// value before the first change waits for Escape.
+    fn hosted_keys(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        keys: impl IntoIterator<Item = Key>,
+    ) -> bool {
+        let old = self.value;
         let mut changed = false;
         for key in keys {
             changed |= self.handle_key(key);
         }
+        self.report(cx, old, changed);
+        changed
+    }
+
+    /// Reports a change from `old`, and requests paint and semantics.
+    fn report(&mut self, cx: &mut ControlContext<'_>, old: CivilDateTime, changed: bool) {
         if changed {
+            self.before.get_or_insert(old);
             cx.emit(ControlMessage::Changed(self.hosted_value()));
+            // The text width and the section edges follow the value.
+            cx.request_layout();
         }
         cx.request_paint();
         cx.request_semantics();
+    }
+
+    /// Commits the typed digits and the range. Nothing waits for Escape
+    /// after it. Returns true when the value or the shown text changed.
+    fn hosted_commit(&mut self, cx: &mut ControlContext<'_>) -> bool {
+        let pending = self.typed.is_some();
+        let changed = self.hosted_keys(cx, [Key::Enter]);
+        self.before = None;
+        changed || pending
+    }
+
+    /// Escape: drops the typed digits and restores the value from before
+    /// the first change. Returns false when there is nothing to revert.
+    fn revert(&mut self, cx: &mut ControlContext<'_>) -> bool {
+        let pending = self.typed.take().is_some();
+        let Some(before) = self.before.take() else {
+            cx.request_paint();
+            return pending;
+        };
+        let changed = before != self.value;
+        let old = self.value;
+        self.value = before;
+        self.report(cx, old, changed);
+        self.before = None;
+        true
+    }
+
+    /// The section under `position`: the nearest one by its text.
+    fn section_at(&self, bounds: Rect, position: Point) -> usize {
+        let start = bounds.origin.x + self.text_box.origin.x;
+        let offset = if self.rtl {
+            start + self.text_box.size.width - position.x
+        } else {
+            position.x - start
+        };
+        self.edges
+            .iter()
+            .position(|edge| offset < *edge)
+            .unwrap_or(self.fields.len() - 1)
     }
 
     /// The stepper rectangle at the end of `bounds`.
@@ -973,6 +1108,8 @@ impl DateTimeEdit {
     }
 }
 
+/// A click on a section focuses it, and a click on the steppers steps the
+/// focused section. Enter and a loss of focus commit; Escape reverts.
 impl CustomControl for DateTimeEdit {
     /// The text, the padding, and the steppers, at least the `Input`
     /// height.
@@ -986,8 +1123,23 @@ impl CustomControl for DateTimeEdit {
         Measured::new(cx.constraints.constrain(Size::new(width, height)))
     }
 
-    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+    /// Records the direction, the text box, and the end of each section.
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.rtl = cx.rtl();
+        let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
+        let inner = content_rect(bounds, &style, self.rtl);
+        self.text_box = inner.translate(-bounds.origin.x, -bounds.origin.y);
+        let (text, ranges) = self.sections(false);
+        self.edges = ranges
+            .iter()
+            .map(|range| {
+                let end = text
+                    .char_indices()
+                    .nth(range.end)
+                    .map_or(text.len(), |(at, _)| at);
+                cx.text.width(&text[..end], &style.text)
+            })
+            .collect();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -1008,8 +1160,30 @@ impl CustomControl for DateTimeEdit {
                         Key::ArrowDown
                     };
                     self.hosted_keys(cx, [key]);
+                } else {
+                    let old = self.value;
+                    let changed = self.move_to(self.section_at(cx.bounds(), *position));
+                    self.report(cx, old, changed);
                 }
                 EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Escape, ..
+            }) => {
+                if self.revert(cx) {
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
+                }
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Enter, ..
+            }) => {
+                if self.hosted_commit(cx) {
+                    EventReply::Stop
+                } else {
+                    EventReply::Continue
+                }
             }
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if matches!(
@@ -1022,7 +1196,8 @@ impl CustomControl for DateTimeEdit {
                         | Key::PageDown
                         | Key::Home
                         | Key::End
-                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Delete
                 ) =>
             {
                 self.hosted_keys(cx, [*key]);
@@ -1040,7 +1215,11 @@ impl CustomControl for DateTimeEdit {
                 }
                 EventReply::Stop
             }
-            ControlEvent::FocusChanged(_) => {
+            ControlEvent::FocusChanged(focused) => {
+                if !focused {
+                    self.hosted_commit(cx);
+                }
+                self.before = None;
                 cx.request_paint();
                 EventReply::Continue
             }
@@ -1111,7 +1290,13 @@ impl CustomControl for DateTimeEdit {
             }
             _ => return false,
         };
-        self.typed.clear();
+        // The bound value comes back after each change; it keeps the
+        // typed digits and the value for Escape.
+        if next == self.value {
+            return true;
+        }
+        self.typed = None;
+        self.before = None;
         self.value = next;
         true
     }
