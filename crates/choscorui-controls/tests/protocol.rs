@@ -107,7 +107,11 @@ fn select_takes_an_option_index_and_opens() {
     assert!(!take(&mut h, ControlValue::Text("Apple".into())));
     assert_eq!(value(&h).as_deref(), Some("Banana"));
     assert!(take(&mut h, ControlValue::Index(None)));
-    assert_eq!(value(&h).as_deref(), Some("Select a fruit"));
+    assert_eq!(
+        value(&h).as_deref(),
+        Some(""),
+        "no choice has an empty value"
+    );
 
     assert!(open(&mut h, true));
     assert_eq!(expanded(&h), Some(true));

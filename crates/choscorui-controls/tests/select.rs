@@ -5,7 +5,8 @@ mod hosted;
 
 use choscorui_controls::{ControlMessage, ControlSize, ControlValue, ListEntry, Select};
 use choscorui_core::{
-    DesignTokens, DisplayCommand, Key, Point, SemanticAction, SemanticRole, ThemeResolver,
+    DesignTokens, DisplayCommand, Key, Point, PointerButton, PointerEvent, SemanticAction,
+    SemanticRole, ThemeResolver,
 };
 use hosted::{Harness, texts};
 
@@ -319,7 +320,12 @@ fn semantics_name_the_choice_and_assistive_actions_choose() {
     let mut h = Harness::new(fruit());
     let node = h.semantics();
     assert_eq!(node.role, SemanticRole::ComboBox);
-    assert_eq!(node.value.as_deref(), Some("Select a fruit"));
+    assert_eq!(
+        node.value.as_deref(),
+        Some(""),
+        "no choice is an empty value"
+    );
+    assert_eq!(node.description, "Select a fruit");
     assert!(node.actions.contains(&SemanticAction::Expand));
     assert!(h.perform(SemanticAction::SetValue, Some("Carrot")));
     assert!(
@@ -408,4 +414,48 @@ fn an_outside_press_or_disabling_closes_the_list_with_dismissed() {
         ]
     );
     assert_eq!(overlay(&h), None);
+}
+
+#[test]
+fn only_a_primary_button_release_chooses_an_option() {
+    let mut h = Harness::new(fruit());
+    h.click(h.bounds().center());
+    h.set_time(1.0);
+    h.messages();
+    let frame = overlay(&h).unwrap();
+    let banana = Point::new(frame.center().x, frame.origin.y + 4.0 + 28.0 + 32.0 + 16.0);
+    let release = PointerEvent::Up {
+        position: banana,
+        button: PointerButton::Secondary,
+    };
+    h.host.dispatch_pointer(&mut h.tree, release);
+    assert!(
+        h.messages().is_empty(),
+        "a secondary release chooses nothing"
+    );
+    assert!(overlay(&h).is_some());
+}
+
+#[test]
+fn type_ahead_on_the_closed_trigger_starts_at_the_choice() {
+    let mut h = Harness::new(fruit());
+    h.focus();
+    assert!(
+        h.host
+            .set_value(&mut h.tree, h.node, &ControlValue::Index(Some(2)))
+    );
+    h.text("b");
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Index(Some(3)))],
+        "the search goes on after Banana to Blueberry"
+    );
+}
+
+#[test]
+fn a_native_select_is_a_pop_up_button_with_an_empty_value() {
+    let h = Harness::new(Select::native("Status", vec![ListEntry::option("Open")]));
+    let node = h.semantics();
+    assert_eq!(node.role, SemanticRole::PopUpButton);
+    assert_eq!(node.value.as_deref(), Some(""));
 }

@@ -499,6 +499,7 @@ c_functions! {
         pub(crate) safe static NSAccessibilityMenuRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityMenuItemRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityComboBoxRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityPopUpButtonRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityHelpTagRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityToolbarRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityImageRole: &'static Obj<NSString>;

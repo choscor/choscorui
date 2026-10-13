@@ -291,6 +291,10 @@ impl CustomControl for Select {
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::Text(text) => {
+                // A search on the closed trigger starts at the choice.
+                if !self.reveal.open {
+                    self.list.highlighted = self.selected;
+                }
                 let Some(index) = self.list.type_ahead(text, cx.time()) else {
                     return EventReply::Stop;
                 };
@@ -404,13 +408,20 @@ impl CustomControl for Select {
         } else {
             Vec::new()
         };
-        let mut node = hosted::node(SemanticRole::ComboBox, &self.name, actions);
-        node.value = Some(self.value().unwrap_or(&self.placeholder).to_string());
-        if self.reveal.open
-            && let Some(index) = self.list.highlighted
-        {
-            node.description = self.list.entries[index].label().to_string();
-        }
+        // The native look reads as a pop-up button.
+        let role = if self.native {
+            SemanticRole::PopUpButton
+        } else {
+            SemanticRole::ComboBox
+        };
+        let mut node = hosted::node(role, &self.name, actions);
+        // No choice gives an empty value; the placeholder is a hint.
+        node.value = Some(self.value().unwrap_or_default().to_string());
+        node.description = match self.list.highlighted {
+            Some(index) if self.reveal.open => self.list.entries[index].label().to_string(),
+            _ if self.selected.is_none() => self.placeholder.clone(),
+            _ => String::new(),
+        };
         node.state.expanded = Some(self.reveal.open);
         node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;

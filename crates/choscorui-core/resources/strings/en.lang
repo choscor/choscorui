@@ -31,6 +31,7 @@ choscorui.cancel = Cancel
 choscorui.status = Status
 choscorui.font = Font
 choscorui.font.fallback = Not installed; using {font}
+choscorui.combobox.no_results = No results
 choscorui.color.channels = Red {red}, Green {green}, Blue {blue}, Opacity {opacity}%
 choscorui.range = Range {min} to {max}
 choscorui.zoom = Zoom {percent}%

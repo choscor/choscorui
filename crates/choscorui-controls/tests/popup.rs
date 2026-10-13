@@ -360,7 +360,11 @@ fn editable_combo_completes_and_keeps_highlight_through_async_updates() {
         key: Key::Escape,
         alt: false,
     });
-    assert_eq!(combo.text(), "giang");
+    assert_eq!(
+        combo.text(),
+        "Đà",
+        "Escape restores the last committed text"
+    );
     assert_eq!(combo.semantics().state.expanded, Some(false));
 }
 

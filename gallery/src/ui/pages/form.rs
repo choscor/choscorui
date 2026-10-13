@@ -687,7 +687,7 @@ pub fn page(id: &str) -> Option<Build> {
 mod tests {
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, SemanticAction, SemanticRole};
 
     fn checked(page: &mut Harness, name: &str) -> Option<bool> {
         let node = page.node(name);
@@ -794,11 +794,11 @@ mod tests {
 
         let mut page = Harness::new("native-select");
         for name in ["Status", "Small status"] {
-            assert_eq!(
-                page.value(name).as_deref(),
-                Some("Select a status"),
-                "{name}"
-            );
+            let node = page.node(name);
+            let node = page.host.semantic(node).unwrap();
+            assert_eq!(node.value.as_deref(), Some(""), "{name}");
+            assert_eq!(node.description, "Select a status", "{name}");
+            assert_eq!(node.role, SemanticRole::PopUpButton, "{name}");
         }
         let required = page.node("Required status");
         assert!(page.host.semantic(required).unwrap().state.invalid);

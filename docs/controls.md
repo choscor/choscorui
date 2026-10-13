@@ -1076,25 +1076,38 @@ behavior.
 ### Combobox and FontChooser
 
 - **Press** toggles the popup. **`Choose(index)`** commits that
-  suggestion.
+  suggestion. A press on the text of an editable combobox places the caret.
+  Only the chevron toggles its popup.
+- **Editable text.** The text uses the `TextField` editing model: the
+  caret, the selection, the editing keys, Command+A, the clipboard, and
+  input methods.
 - **Closed, not editable.** ArrowUp and ArrowDown select and commit the
   previous or the next item. Space or Alt+ArrowDown opens the popup.
 - **Closed, editable.** ArrowDown opens the popup. Enter commits the typed
   text and selects the item with the same text, or no item.
 - **Open.** ArrowUp and ArrowDown move the highlight and stop at the ends.
-  PageUp and Home go to the first suggestion. PageDown and End go to the
-  last suggestion.
+  PageUp and PageDown move the highlight by one page of rows. Home and End
+  go to the first and the last suggestion when the combobox is not
+  editable. In editable text, they move the caret.
 - When open, Enter commits the highlight. Space also commits it when the
   combobox is not editable.
 - **Typing** (editable) filters the items by prefix or by substring
   (`CompletionMode`). Matches ignore case and diacritics.
-- Typing opens the popup when an item matches, and closes it when no item
-  matches. **Tab** accepts the inline completion in `Prefix` mode.
-- **Escape** (open) closes the popup and restores the text from when the
-  popup opened.
+- Typing clears the selection until the user commits a match. Typing
+  opens the popup. When no item matches, the popup shows one muted
+  "No results" row (`choscorui.combobox.no_results`).
+- **Tab** (open) accepts the highlighted row, and the focus moves on.
+- **Escape** closes the popup. An editable combobox also restores the text
+  and the selection of the last commit, from before the first typed
+  character.
 - **`Dismiss`** (an outside press or window deactivation) closes the popup.
-  It keeps the edited text and commits nothing. A focus loss does the
-  same, and `set_enabled(false)` closes the popup through `Dismiss`.
+  It keeps the edited text and commits nothing. `set_enabled(false)`
+  closes the popup through `Dismiss`.
+- **`Blur`** (focus loss) closes the popup. An editable combobox commits
+  the item whose text matches. Empty text commits no item. Other text goes
+  back to the last commit.
+- **Placeholder.** `with_placeholder` or `set_placeholder` gives the muted
+  text that shows while the text is empty.
 - **Semantic actions.** `ShowMenu` and `Expand` open the popup.
   `Collapse` and `Dismiss` close it.
 - Semantic `SetValue` commits the item with the same text. Only an
@@ -1110,12 +1123,18 @@ behavior.
   into view.
 - `place_popup` keeps the popup in the window. Near the bottom edge it
   opens above the trigger, and in a short window it shows fewer rows.
-- A click on a suggestion commits it. Backspace deletes the last
-  character of an editable combobox.
+- A click on a suggestion commits it.
+- `measure` measures the items one time for each item list and text
+  style, so a long family list does not slow each layout.
 - Escape, an outside press, focus loss, and disabling close the popup
   without a choice and report `Dismissed`.
-- **`FontChooser`** is an editable combobox named "Font". A family that
-  the system does not have resolves to the fallback family.
+- **`FontChooser`** is an editable combobox named "Font"
+  (`choscorui.font`). A committed family that the system does not have
+  resolves to the fallback family. Empty committed text means the
+  fallback, and is not missing. Typed text that is not committed does not
+  change the resolved family.
+- `set_value(Index(None))` clears the text. The host's invalid flag adds
+  to the missing-family state.
 - `ComboBox` is a deprecated alias of `Combobox`.
 - **Look.** `paint` draws the trigger and `paint_popup` draws the open
   list. `popup_rect` places the list with `place_popup`, below the anchor
@@ -1145,9 +1164,11 @@ behavior.
 | Actions | `ShowMenu`, `SetValue`, `Focus` while enabled | `Activate` |
 
 For a missing family, `FontChooser::semantics` adds the invalid state and
-the description "Not installed; using" with the fallback name.
+the description `choscorui.font.fallback` with the fallback name.
 
-[popup.rs](../crates/choscorui-controls/tests/popup.rs) pins this behavior.
+[popup.rs](../crates/choscorui-controls/tests/popup.rs) and
+[combobox.rs](../crates/choscorui-controls/tests/combobox.rs) pin this
+behavior.
 
 **As a view.** `Combobox::new(name, items, selected)` edits the chosen
 index, and `Combobox::editable` edits the text.
@@ -2806,8 +2827,8 @@ shows the caps of a combination.
 
 - A `ListEntry` is an option, a disabled option, a group caption, or a
   separator.
-- A primary press on the trigger opens or closes the list. A release on an
-  enabled option chooses it and closes the list.
+- A primary press on the trigger opens or closes the list. A primary-button
+  release on an enabled option chooses it and closes the list.
 - The list opens 4 pt below the trigger, aligned with its leading edge. It
   is at least as wide as the trigger. Past eight options it scrolls.
 - `place_popup` keeps the list in the window. Near the bottom edge it opens
@@ -2822,6 +2843,7 @@ shows the caps of a combination.
 - Each close without a choice emits `Dismissed`: Escape, Tab, a press
   outside, a press on the trigger, focus loss, and disabling.
 - Typed text highlights the first matching option after the highlight.
+  On the closed trigger, the search starts at the chosen option.
   Characters typed within 1 second build one search. A repeated character
   cycles through the options that start with it.
 - The highlight scrolls into view. The wheel and the scroll buttons at the
@@ -2849,17 +2871,18 @@ shows the caps of a combination.
 
 | Field | `Select::semantics` |
 | --- | --- |
-| Role | `ComboBox` (AXComboBox) |
-| Name / value | name / chosen label, or the placeholder |
-| Description | highlighted label while open |
+| Role | `ComboBox` (AXComboBox); `PopUpButton` (AXPopUpButton) for `Select::native` |
+| Name / value | name / chosen label, or empty with no choice |
+| Description | highlighted label while open; the placeholder while nothing is chosen |
 | State | expanded, invalid, disabled |
 | Actions | `ShowMenu`, `Expand` or `Collapse`, `SetValue`, and `Focus` while enabled |
 
 `SetValue` with the label of an enabled option chooses it.
 
-`Select::native` gives the trigger the native-select look: a plain input
-box with the chevron 10 pt inside its 32 pt end padding. Its behavior and
-list are the same.
+`Select::native` is the toolkit list with a native-style trigger: a plain
+input box with the chevron 10 pt inside its 32 pt end padding. It is not
+the system pop-up menu. Its behavior and list are the same, and its
+semantic role is `PopUpButton`.
 
 `set_value` takes `Index` of an enabled option, or `None`. `set_open` opens
 and closes the list, but not while the select is disabled.

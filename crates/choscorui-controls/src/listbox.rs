@@ -257,7 +257,7 @@ impl ListPopup {
     /// Handles a pointer event at `time` while the list is open: a press
     /// on a scroll button scrolls one row, resting on a scroll button
     /// scrolls on, a move highlights the option under the pointer, the
-    /// wheel scrolls, and a release on an option chooses it.
+    /// wheel scrolls, and a primary-button release on an option chooses it.
     pub fn pointer(&mut self, event: &PointerEvent, time: f64) -> ListPointer {
         match *event {
             PointerEvent::Down {
@@ -272,7 +272,10 @@ impl ListPopup {
                     paint: direction.is_some(),
                 }
             }
-            PointerEvent::Up { position, .. } => self
+            PointerEvent::Up {
+                position,
+                button: PointerButton::Primary,
+            } => self
                 .hit(position)
                 .map_or(ListPointer::Ignored, ListPointer::Chosen),
             PointerEvent::Move { position } => {

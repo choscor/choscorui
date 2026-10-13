@@ -173,8 +173,10 @@ fn a_hosted_editable_combobox_reports_typed_text_and_the_choice() {
         h.messages(),
         vec![
             changed(ControlValue::Text("Banan".into())),
+            changed(ControlValue::Index(None)),
             ControlMessage::OpenChanged(true),
-        ]
+        ],
+        "typing clears the choice until a match is chosen"
     );
     assert!(set_value(&mut h, ControlValue::Text("Kiwi".into())));
     assert_eq!(h.semantics().value.as_deref(), Some("Kiwi"));
@@ -194,7 +196,11 @@ fn a_hosted_font_chooser_marks_a_missing_family() {
     h.text("o");
     assert_eq!(
         h.messages(),
-        vec![changed(ControlValue::Text("Comico".into()))]
+        vec![
+            changed(ControlValue::Text("Comico".into())),
+            ControlMessage::OpenChanged(true),
+        ],
+        "the popup opens on its no-results row"
     );
 }
 

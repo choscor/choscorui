@@ -34,6 +34,8 @@ pub enum SemanticRole {
     Menu,
     MenuItem,
     ComboBox,
+    /// A button that opens a list of choices and shows the chosen one.
+    PopUpButton,
     Tooltip,
     Dialog,
     Toolbar,

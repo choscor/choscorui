@@ -7,16 +7,17 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::editing::{ValueEdit, value_edit};
 use crate::hosted::Reveal;
 use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
-    ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
+    ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, Styles, TextAlign, VisualState,
+    content_rect,
 };
+use crate::text_field::TextField;
 use choscorui_core::{
     DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, LayoutDirection, Localizer,
     Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size, WheelUnit, fold_for_search, grapheme_boundaries,
+    SemanticState, Size, TextInputInfo, TypeSpec, WheelUnit, fold_for_search, grapheme_boundaries,
 };
 
 /// The most suggestions that the hosted popup shows.
@@ -53,6 +54,9 @@ pub enum ComboInput {
     Semantic(SemanticAction, Option<String>),
     /// Outside press or window deactivation.
     Dismiss,
+    /// Focus loss: closes the popup. An editable combo commits the item
+    /// that matches its text, or else restores the last committed text.
+    Blur,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,19 +91,24 @@ impl ComboMetrics {
 }
 
 /// A text field or a button with a filterable list of suggestions in a
-/// popover.
+/// popover. The editable text uses the editing model of [`TextField`]:
+/// caret, selection, editing keys, the clipboard, and input methods.
 pub struct Combobox {
     name: String,
     editable: bool,
     mode: CompletionMode,
     items: Vec<ComboItem>,
     selected: Option<ItemKey>,
-    text: String,
+    /// The text, its caret, and its selection.
+    editor: TextField,
+    placeholder: String,
     open: bool,
     /// Indexes into `items` shown in the popup.
     matches: Vec<usize>,
     highlighted: Option<ItemKey>,
-    text_before_open: String,
+    /// The text and the selection of the last commit. Escape and a blur
+    /// without a match restore them.
+    committed: (String, Option<ItemKey>),
     invalid: bool,
     enabled: bool,
     metrics: ComboMetrics,
@@ -108,6 +117,9 @@ pub struct Combobox {
     reveal: Reveal,
     motion_ms: u32,
     anchor: Rect,
+    /// The text area and the chevron of the hosted trigger.
+    text_rect: Rect,
+    chevron: Rect,
     /// The area that the hosted popup fits in.
     bounds: Rect,
     /// The index in `matches` of the first suggestion that the popup
@@ -116,25 +128,48 @@ pub struct Combobox {
     page: usize,
     /// The popup width that shows the widest suggestion whole.
     list_width: f64,
+    /// The width of the widest item in each text style, measured once
+    /// for each item list.
+    widest: Vec<(TypeSpec, f64)>,
 }
 
 /// Deprecated name of [`Combobox`].
 #[deprecated(since = "0.1.0", note = "renamed to `Combobox`")]
 pub type ComboBox = Combobox;
 
+/// The text area and the chevron inside a trigger at `bounds`.
+fn trigger_parts(bounds: Rect, trigger: &ResolvedStyle, rtl: bool) -> (Rect, Rect) {
+    let inner = content_rect(bounds, trigger, rtl);
+    let icon_width = trigger.icon_size.min(inner.size.width);
+    let icon_x = if rtl {
+        inner.origin.x
+    } else {
+        inner.max_x() - icon_width
+    };
+    let icon = Rect::from_xywh(icon_x, inner.origin.y, icon_width, inner.size.height);
+    let mut text = inner;
+    text.size.width = (inner.size.width - icon_width - trigger.gap).max(0.0);
+    if rtl {
+        text.origin.x = inner.max_x() - text.size.width;
+    }
+    (text, icon)
+}
+
 impl Combobox {
     pub fn new(name: impl Into<String>, editable: bool) -> Self {
+        let name = name.into();
         Self {
-            name: name.into(),
+            editor: TextField::new(name.clone(), "").quiet(),
+            name,
             editable,
             mode: CompletionMode::Prefix,
             items: Vec::new(),
             selected: None,
-            text: String::new(),
+            placeholder: String::new(),
             open: false,
             matches: Vec::new(),
             highlighted: None,
-            text_before_open: String::new(),
+            committed: (String::new(), None),
             invalid: false,
             enabled: true,
             metrics: ComboMetrics::resolve(&Styles::new(), &DesignTokens::light()),
@@ -142,10 +177,29 @@ impl Combobox {
             motion_ms: 0,
             anchor: Rect::default(),
             list_width: 0.0,
+            text_rect: Rect::default(),
+            chevron: Rect::default(),
             bounds: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
             first: 0,
             page: POPUP_ROWS,
+            widest: Vec::new(),
         }
+    }
+
+    /// The text the trigger shows in muted color while the text is empty.
+    #[must_use]
+    pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.set_placeholder(placeholder);
+        self
+    }
+
+    pub fn set_placeholder(&mut self, placeholder: impl Into<String>) {
+        self.placeholder = placeholder.into();
+        self.editor.set_placeholder(self.placeholder.clone());
+    }
+
+    pub fn placeholder(&self) -> &str {
+        &self.placeholder
     }
 
     /// Reads the suggestion row height and the popup inset from `styles`.
@@ -158,6 +212,7 @@ impl Combobox {
     }
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        self.editor.set_enabled_state(enabled);
         if !enabled {
             self.open = false;
         }
@@ -181,7 +236,7 @@ impl Combobox {
         self.selected
     }
     pub fn text(&self) -> &str {
-        &self.text
+        self.editor.value()
     }
     pub fn is_open(&self) -> bool {
         self.open
@@ -199,11 +254,11 @@ impl Combobox {
 
     /// Inline completion: the rest of the first prefix suggestion.
     pub fn completion_suffix(&self) -> Option<&str> {
-        if !self.editable || self.mode != CompletionMode::Prefix || self.text.is_empty() {
+        if !self.editable || self.mode != CompletionMode::Prefix || self.text().is_empty() {
             return None;
         }
         let item = &self.items[*self.matches.first()?];
-        let typed = self.text.chars().count();
+        let typed = self.text().chars().count();
         let boundary = item.text.char_indices().nth(typed).map(|(byte, _)| byte)?;
         Some(&item.text[boundary..])
     }
@@ -211,30 +266,32 @@ impl Combobox {
     /// Replaces the item list, keeping selection and highlight by key.
     pub fn set_items(&mut self, items: Vec<ComboItem>) {
         self.items = items;
-        if self
-            .selected
-            .is_some_and(|key| !self.items.iter().any(|item| item.key == key))
-        {
-            self.selected = None;
-        }
+        self.widest.clear();
+        let known = |key: Option<ItemKey>, items: &[ComboItem]| {
+            key.filter(|key| items.iter().any(|item| item.key == *key))
+        };
+        self.selected = known(self.selected, &self.items);
+        self.committed.1 = known(self.committed.1, &self.items);
         if !self.editable {
-            self.text = self
-                .selected
-                .and_then(|key| self.items.iter().find(|item| item.key == key))
+            let text = self
+                .selected_item()
                 .map(|item| item.text.clone())
                 .unwrap_or_default();
+            self.set_text(&text);
+            self.committed = (text, self.selected);
         }
         self.refilter();
     }
 
-    /// Selects `key` without opening the popup.
+    /// Selects `key` without opening the popup. `None` clears the text.
     pub fn select(&mut self, key: Option<ItemKey>) {
         self.selected = key.filter(|key| self.items.iter().any(|item| item.key == *key));
-        if let Some(item) = self.selected_item() {
-            self.text = item.text.clone();
-        } else if !self.editable {
-            self.text.clear();
-        }
+        let text = self
+            .selected_item()
+            .map(|item| item.text.clone())
+            .unwrap_or_default();
+        self.set_text(&text);
+        self.committed = (text, self.selected);
         self.refilter();
     }
 
@@ -243,8 +300,21 @@ impl Combobox {
         self.items.iter().find(|item| item.key == key)
     }
 
+    fn set_text(&mut self, text: &str) {
+        self.editor.replace_value(text);
+    }
+
+    /// The item whose text matches `text`, ignoring case and accents.
+    fn find_text(&self, text: &str) -> Option<ItemKey> {
+        let folded = fold_for_search(text);
+        self.items
+            .iter()
+            .find(|item| fold_for_search(&item.text) == folded)
+            .map(|item| item.key)
+    }
+
     fn refilter(&mut self) {
-        let needle = fold_for_search(&self.text);
+        let needle = fold_for_search(self.text());
         let filtering = self.editable && !needle.is_empty();
         self.matches = self
             .items
@@ -272,9 +342,6 @@ impl Combobox {
                 .selected
                 .filter(|key| visible(*key))
                 .or_else(|| self.matches.first().map(|index| self.items[*index].key));
-        }
-        if self.open && self.matches.is_empty() && self.editable {
-            self.open = false;
         }
         self.reveal_highlight();
     }
@@ -317,7 +384,6 @@ impl Combobox {
         if self.open || !self.enabled {
             return ComboChange::None;
         }
-        self.text_before_open = self.text.clone();
         self.open = true;
         if !self.editable {
             self.highlighted = self
@@ -325,11 +391,7 @@ impl Combobox {
                 .or_else(|| self.items.first().map(|item| item.key));
         }
         self.refilter();
-        if self.open {
-            ComboChange::Opened
-        } else {
-            ComboChange::None
-        }
+        ComboChange::Opened
     }
 
     fn close(&mut self) -> ComboChange {
@@ -365,25 +427,52 @@ impl Combobox {
         ComboChange::Highlighted
     }
 
+    /// Commits the item `key`. Without a key, an editable combo commits
+    /// its text and the item that matches it, if any.
     fn commit_key(&mut self, key: Option<ItemKey>) -> ComboChange {
         self.open = false;
         match key.and_then(|key| self.items.iter().find(|item| item.key == key)) {
             Some(item) => {
                 self.selected = Some(item.key);
-                self.text = item.text.clone();
+                let text = item.text.clone();
+                self.set_text(&text);
             }
-            None if self.editable => {
-                let folded = fold_for_search(&self.text);
-                self.selected = self
-                    .items
-                    .iter()
-                    .find(|item| fold_for_search(&item.text) == folded)
-                    .map(|item| item.key);
-            }
+            None if self.editable => self.selected = self.find_text(self.text()),
             None => return ComboChange::Closed,
         }
+        self.committed = (self.text().to_owned(), self.selected);
         self.refilter();
         ComboChange::Committed(self.selected)
+    }
+
+    /// Restores the text and the selection of the last commit, and closes
+    /// the popup.
+    fn revert(&mut self) -> ComboChange {
+        let (text, selected) = self.committed.clone();
+        let edited = text != self.text() || selected != self.selected;
+        self.set_text(&text);
+        self.selected = selected;
+        self.refilter();
+        match self.close() {
+            ComboChange::None if edited => ComboChange::TextChanged,
+            change => change,
+        }
+    }
+
+    /// A blur commits the matching item of an editable combo, and else
+    /// restores the last commit. Empty text commits no item.
+    fn blur(&mut self) -> ComboChange {
+        if !self.editable {
+            return self.close();
+        }
+        if self.text() == self.committed.0 {
+            return self.revert();
+        }
+        match self.find_text(self.text()) {
+            Some(key) => self.commit_key(Some(key)),
+            None if self.text().is_empty() => self.commit_key(None),
+            None => self.revert(),
+        }
     }
 
     pub fn handle(&mut self, input: ComboInput) -> ComboChange {
@@ -399,6 +488,7 @@ impl Combobox {
                 }
             }
             ComboInput::Dismiss => self.close(),
+            ComboInput::Blur => self.blur(),
             ComboInput::Choose(index) => match self.matches.get(index) {
                 Some(index) => {
                     let key = self.items[*index].key;
@@ -407,11 +497,12 @@ impl Combobox {
                 None => ComboChange::None,
             },
             ComboInput::Text(text) if self.editable => {
-                self.text.push_str(&text);
+                let text = format!("{}{text}", self.text());
+                self.set_text(&text);
                 self.after_edit()
             }
             ComboInput::SetText(text) if self.editable => {
-                self.text = text;
+                self.set_text(&text);
                 self.after_edit()
             }
             ComboInput::Text(_) | ComboInput::SetText(_) => ComboChange::None,
@@ -423,14 +514,9 @@ impl Combobox {
                     let Some(value) = value else {
                         return ComboChange::None;
                     };
-                    let folded = fold_for_search(&value);
-                    let key = self
-                        .items
-                        .iter()
-                        .find(|item| fold_for_search(&item.text) == folded)
-                        .map(|item| item.key);
+                    let key = self.find_text(&value);
                     if key.is_none() && self.editable {
-                        self.text = value;
+                        self.set_text(&value);
                     }
                     if key.is_some() || self.editable {
                         self.commit_key(key)
@@ -443,17 +529,22 @@ impl Combobox {
         }
     }
 
+    /// After a text edit: the selection clears until the user commits a
+    /// match, and the popup opens on the suggestions, or on its "No
+    /// results" row.
     fn after_edit(&mut self) -> ComboChange {
         self.highlighted = None;
+        self.selected = None;
         self.refilter();
-        if !self.text.is_empty() && !self.matches.is_empty() && !self.open {
-            self.text_before_open = self.text.clone();
+        if !self.text().is_empty() {
             self.open = true;
         }
         ComboChange::TextChanged
     }
 
     fn handle_key(&mut self, key: Key, alt: bool) -> ComboChange {
+        // In editable text, Home and End move the caret.
+        let edge = !self.editable && matches!(key, Key::Home | Key::End);
         match (key, self.open) {
             (Key::ArrowDown, false) if alt || self.editable => self.open_popup(),
             (Key::ArrowDown | Key::ArrowUp, false) => {
@@ -468,21 +559,18 @@ impl Combobox {
             (Key::Space, false) if !self.editable => self.open_popup(),
             (Key::ArrowDown, true) => self.move_highlight(1),
             (Key::ArrowUp, true) => self.move_highlight(-1),
-            (Key::PageDown | Key::End, true) => self.move_highlight(isize::MAX / 2),
-            (Key::PageUp | Key::Home, true) => self.move_highlight(-(isize::MAX / 2)),
+            (Key::PageDown, true) => self.move_highlight(self.page.max(1) as isize),
+            (Key::PageUp, true) => self.move_highlight(-(self.page.max(1) as isize)),
+            (Key::End, true) if edge => self.move_highlight(isize::MAX / 2),
+            (Key::Home, true) if edge => self.move_highlight(-(isize::MAX / 2)),
             (Key::Enter, true) | (Key::Space, true) if !self.editable || key == Key::Enter => {
                 self.commit_key(self.highlighted)
             }
             (Key::Enter, false) if self.editable => self.commit_key(None),
-            (Key::Tab, _) if self.editable && self.completion_suffix().is_some() => {
-                let key = self.matches.first().map(|index| self.items[*index].key);
-                self.commit_key(key)
-            }
-            (Key::Escape, true) => {
-                self.text = self.text_before_open.clone();
-                self.refilter();
-                self.close()
-            }
+            // Tab accepts the highlighted row, and the focus moves on.
+            (Key::Tab, true) if self.highlighted.is_some() => self.commit_key(self.highlighted),
+            (Key::Escape, _) if self.editable => self.revert(),
+            (Key::Escape, true) => self.close(),
             _ => ComboChange::None,
         }
     }
@@ -498,6 +586,7 @@ impl Combobox {
 
     /// Paints the trigger in the context's bounds: the field box, the text
     /// or `placeholder`, the inline completion while focused, and a chevron.
+    /// Editable text shows its caret and selection while focused.
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState, placeholder: &str) {
         let state = self.visual_state(host);
         let query = |slot| StyleQuery::new(ControlKind::Combobox, slot).state(state);
@@ -507,53 +596,63 @@ impl Combobox {
             cx.style(query(Slot::Placeholder)),
         );
         let bounds = cx.bounds;
-        cx.slot(bounds, &trigger, |cx, inner| {
-            let icon_width = trigger.icon_size.min(inner.size.width);
-            let icon_x = if cx.rtl {
-                inner.origin.x
+        cx.slot(bounds, &trigger, |_, _| {});
+        let (text, icon) = trigger_parts(bounds, &trigger, cx.rtl);
+        cx.icon(icon, Icon::ChevronDown, &muted);
+        let placeholder = if placeholder.is_empty() {
+            &self.placeholder
+        } else {
+            placeholder
+        };
+        if self.text().is_empty() && !(self.editable && state.focused()) {
+            cx.label(text, placeholder, &muted, TextAlign::Start);
+            return;
+        }
+        let typed = if self.editable {
+            self.editor.paint_hosted_text(cx, text, state);
+            let width = cx.measure(self.text(), &value).min(text.size.width);
+            let x = if cx.rtl {
+                text.max_x() - width
             } else {
-                inner.max_x() - icon_width
+                text.origin.x
             };
-            let icon = Rect::from_xywh(icon_x, inner.origin.y, icon_width, inner.size.height);
-            cx.icon(icon, Icon::ChevronDown, &muted);
-            let mut text = inner;
-            text.size.width = (inner.size.width - icon_width - trigger.gap).max(0.0);
-            if cx.rtl {
-                text.origin.x = inner.max_x() - text.size.width;
-            }
-            if self.text.is_empty() {
-                cx.label(text, placeholder, &muted, TextAlign::Start);
-                return;
-            }
-            let typed = cx.label(text, &self.text, &value, TextAlign::Start);
-            if let Some(suffix) = self.completion_suffix().filter(|_| state.focused()) {
-                let rest = if cx.rtl {
-                    Rect::from_xywh(
-                        text.origin.x,
-                        text.origin.y,
-                        (typed.origin.x - text.origin.x).max(0.0),
-                        text.size.height,
-                    )
-                } else {
-                    Rect::from_xywh(
-                        typed.max_x(),
-                        text.origin.y,
-                        (text.max_x() - typed.max_x()).max(0.0),
-                        text.size.height,
-                    )
-                };
-                cx.label(rest, suffix, &muted, TextAlign::Start);
-            }
-        });
+            Rect::from_xywh(x, text.origin.y, width, text.size.height)
+        } else {
+            cx.label(text, self.text(), &value, TextAlign::Start)
+        };
+        let at_end = self.editor.selection().is_empty()
+            && self.editor.caret() + 1 >= grapheme_boundaries(self.text()).len();
+        if let Some(suffix) = self
+            .completion_suffix()
+            .filter(|_| state.focused() && at_end)
+        {
+            let rest = if cx.rtl {
+                Rect::from_xywh(
+                    text.origin.x,
+                    text.origin.y,
+                    (typed.origin.x - text.origin.x).max(0.0),
+                    text.size.height,
+                )
+            } else {
+                Rect::from_xywh(
+                    typed.max_x(),
+                    text.origin.y,
+                    (text.max_x() - typed.max_x()).max(0.0),
+                    text.size.height,
+                )
+            };
+            cx.label(rest, suffix, &muted, TextAlign::Start);
+        }
     }
 
     /// The popup below `anchor`, as wide as the anchor or as the widest
-    /// suggestion when that is wider, showing at most
-    /// `max_rows` suggestions. [`place_popup`] keeps it inside `bounds`
-    /// (from [`crate::popup_bounds`]): it opens above the anchor when only
-    /// that side fits, and else it shrinks and its rows scroll.
+    /// suggestion when that is wider, showing at most `max_rows`
+    /// suggestions, or one "No results" row. [`place_popup`] keeps it
+    /// inside `bounds` (from [`crate::popup_bounds`]): it opens above the
+    /// anchor when only that side fits, and else it shrinks and its rows
+    /// scroll.
     pub fn popup_rect(&self, anchor: Rect, max_rows: usize, bounds: Rect) -> Rect {
-        let rows = self.matches.len().min(max_rows) as f64;
+        let rows = self.matches.len().clamp(1, max_rows.max(1)) as f64;
         let size = Size::new(
             anchor.size.width.max(self.list_width),
             rows * self.metrics.row + 2.0 * self.metrics.inset,
@@ -585,13 +684,31 @@ impl Combobox {
         }
     }
 
-    /// Paints the popup box and its rows in the context's bounds.
+    /// Paints the popup box and its rows in the context's bounds. With no
+    /// suggestion, the popup shows one muted "No results" row.
     fn paint_rows(&self, cx: &mut PaintContext<'_>) {
         let popup = cx.bounds;
         let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
         let content = cx.style(query(Slot::Content));
         cx.slot(popup, &content, |_, _| {});
         let inner = content_rect(popup, &content, cx.rtl);
+        let row_at = |index: usize| {
+            Rect::from_xywh(
+                inner.origin.x,
+                inner.origin.y + index as f64 * self.metrics.row,
+                inner.size.width,
+                self.metrics.row,
+            )
+        };
+        if self.matches.is_empty() {
+            let style = cx.style(query(Slot::Item));
+            let muted = cx.style(query(Slot::Placeholder));
+            let empty = cx.strings.message("choscorui.combobox.no_results", &[]);
+            cx.slot(row_at(0), &style, |cx, text| {
+                cx.label(text, &empty, &muted, TextAlign::Start);
+            });
+            return;
+        }
         let rows = self.rows_in(popup);
         let shown = self.suggestions().into_iter().skip(self.first).take(rows);
         for (index, item) in shown.enumerate() {
@@ -600,12 +717,7 @@ impl Combobox {
                 .set(VisualState::SELECTED, self.selected == Some(item.key));
             let style = cx.style(query(Slot::Item).state(state));
             let indicator = cx.style(query(Slot::ItemIndicator).state(state));
-            let row = Rect::from_xywh(
-                inner.origin.x,
-                inner.origin.y + index as f64 * self.metrics.row,
-                inner.size.width,
-                self.metrics.row,
-            );
+            let row = row_at(index);
             cx.slot(row, &style, |cx, text| {
                 cx.label(text, &item.text, &style, TextAlign::Start);
             });
@@ -634,7 +746,7 @@ impl Combobox {
             role: SemanticRole::ComboBox,
             name: self.name.clone(),
             description: String::new(),
-            value: Some(self.text.clone()),
+            value: Some(self.text().to_owned()),
             state: SemanticState {
                 disabled: !self.enabled,
                 expanded: Some(self.open),
@@ -681,7 +793,9 @@ pub fn text_key(text: &str) -> ItemKey {
 
 /// Font family chooser. Families come from the platform (for example
 /// `choscorui_macos::available_font_families`); a typed family that is not
-/// installed resolves to the fallback and is reported as missing.
+/// installed resolves to the fallback and is reported as missing. Empty
+/// text means the fallback, and is not missing. The resolved family
+/// follows only committed text, so typing does not change it.
 pub struct FontChooser {
     combo: Combobox,
     fallback: String,
@@ -700,11 +814,8 @@ impl FontChooser {
                 })
                 .collect(),
         );
-        combo.handle(ComboInput::SetText(current.into()));
-        combo.handle(ComboInput::Key {
-            key: Key::Enter,
-            alt: false,
-        });
+        combo.set_text(current);
+        combo.commit_key(None);
         Self {
             combo,
             fallback: fallback.into(),
@@ -722,21 +833,19 @@ impl FontChooser {
     pub fn handle(&mut self, input: ComboInput) -> ComboChange {
         self.combo.handle(input)
     }
+    /// True when the committed text names a family that is not installed.
     pub fn is_missing(&self) -> bool {
-        self.combo.selected().is_none()
+        let (text, key) = &self.combo.committed;
+        key.is_none() && !text.trim().is_empty()
     }
-    /// The family to render with: the chosen installed family, or the
-    /// fallback when the typed family is missing.
+    /// The family to render with: the committed installed family, or the
+    /// fallback when the committed family is missing or empty.
     pub fn resolved_family(&self) -> &str {
-        match self.combo.selected() {
-            Some(key) => self
-                .combo
-                .items()
-                .iter()
-                .find(|item| item.key == key)
-                .map_or(self.fallback.as_str(), |item| item.text.as_str()),
-            None => &self.fallback,
-        }
+        self.combo
+            .committed
+            .1
+            .and_then(|key| self.combo.items().iter().find(|item| item.key == key))
+            .map_or(self.fallback.as_str(), |item| item.text.as_str())
     }
     /// The semantics, named and described in the language of `strings`.
     pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
@@ -760,13 +869,6 @@ impl Combobox {
         self.items.iter().position(|item| item.key == key)
     }
 
-    /// The text without its last grapheme, for Backspace in a host.
-    fn without_last_grapheme(&self) -> String {
-        let boundaries = grapheme_boundaries(&self.text);
-        let end = boundaries.iter().rev().nth(1).copied().unwrap_or(0);
-        self.text[..end].to_string()
-    }
-
     /// The hosted popup below the trigger.
     fn hosted_popup(&self) -> Rect {
         self.popup_rect(self.anchor, POPUP_ROWS, self.bounds)
@@ -776,9 +878,9 @@ impl Combobox {
     /// open state to the host.
     fn report(&mut self, cx: &mut ControlContext<'_>, before: (String, Option<ItemKey>)) {
         let (text, selected) = before;
-        if self.editable && self.text != text {
+        if self.editable && self.text() != text {
             cx.emit(ControlMessage::Changed(ControlValue::Text(
-                self.text.clone(),
+                self.text().to_owned(),
             )));
         }
         if self.selected != selected {
@@ -794,7 +896,8 @@ impl Combobox {
         cx.request_semantics();
     }
 
-    /// Maps a pointer event to an input, and replies.
+    /// Maps a pointer event to an input, and replies. A press in editable
+    /// text goes to the editing model; only the chevron toggles the popup.
     fn pointer_input(
         &mut self,
         cx: &mut ControlContext<'_>,
@@ -808,6 +911,8 @@ impl Combobox {
             } => {
                 if self.open && popup.contains(position) {
                     (None, EventReply::Stop)
+                } else if self.editable && !self.chevron.contains(position) {
+                    (None, EventReply::Continue)
                 } else if cx.bounds().contains(position) {
                     cx.request_focus();
                     (Some(ComboInput::Press), EventReply::Stop)
@@ -848,17 +953,46 @@ impl Combobox {
             _ => (None, EventReply::Continue),
         }
     }
+
+    /// Gives `event` to the editing model of editable text, and reports
+    /// a text change as an edit.
+    fn edit_event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if !self.editable || !self.enabled {
+            return EventReply::Continue;
+        }
+        let before = (self.text().to_owned(), self.selected);
+        let reply = self.editor.hosted_event(cx, event, self.text_rect);
+        if self.text() != before.0 {
+            self.after_edit();
+            self.report(cx, before);
+        }
+        reply
+    }
+
+    /// The width of the widest item in `spec`, measured once for each
+    /// item list and text style.
+    fn widest_item(&mut self, cx: &MeasureContext<'_>, spec: TypeSpec) -> f64 {
+        if let Some((_, width)) = self.widest.iter().find(|(known, _)| *known == spec) {
+            return *width;
+        }
+        let width = self
+            .items
+            .iter()
+            .map(|item| cx.text.width(&item.text, &spec))
+            .fold(0.0, f64::max);
+        self.widest.push((spec, width));
+        width
+    }
 }
 
 impl CustomControl for Combobox {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
         let (trigger, value) = (cx.style(query(Slot::Trigger)), cx.style(query(Slot::Value)));
-        let widest = self
-            .items
-            .iter()
-            .map(|item| cx.text.width(&item.text, &value.text))
-            .fold(cx.text.width(&self.text, &value.text), f64::max);
+        let widest = self.widest_item(cx, value.text);
+        let widest = widest
+            .max(cx.text.width(self.text(), &value.text))
+            .max(cx.text.width(&self.placeholder, &value.text));
         let width = trigger.padding.horizontal() + widest + trigger.gap + trigger.icon_size;
         let height = (value.text.line_height + trigger.padding.vertical()).max(trigger.min_height);
         Measured::new(Size::new(width.max(trigger.min_width), height))
@@ -870,12 +1004,10 @@ impl CustomControl for Combobox {
         self.bounds = cx.popup_bounds();
         let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
         let (content, item) = (cx.style(query(Slot::Content)), cx.style(query(Slot::Item)));
-        let widest = self
-            .items
-            .iter()
-            .map(|entry| cx.text.width(&entry.text, &item.text))
-            .fold(0.0, f64::max);
+        let widest = self.widest_item(cx, item.text);
         self.list_width = widest + item.padding.horizontal() + content.padding.horizontal();
+        let trigger = cx.style(query(Slot::Trigger));
+        (self.text_rect, self.chevron) = trigger_parts(bounds, &trigger, cx.rtl());
         // The rows that fit when the popup has all of its rows.
         let full = place_popup(
             gap_anchor(bounds, self.metrics.inset, None),
@@ -898,16 +1030,8 @@ impl CustomControl for Combobox {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        let before = (self.text.clone(), self.selected);
         let (input, reply) = match event {
             ControlEvent::Pointer(pointer) => self.pointer_input(cx, pointer),
-            ControlEvent::Key(KeyEvent::Down {
-                key: Key::Backspace,
-                ..
-            }) if self.editable => (
-                Some(ComboInput::SetText(self.without_last_grapheme())),
-                EventReply::Stop,
-            ),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                 let input = ComboInput::Key {
                     key: *key,
@@ -915,43 +1039,50 @@ impl CustomControl for Combobox {
                 };
                 (Some(input), EventReply::Continue)
             }
-            ControlEvent::Text(text) if self.editable => {
-                (Some(ComboInput::Text(text.clone())), EventReply::Stop)
-            }
-            ControlEvent::Edit(command) if self.editable => {
-                let input = match value_edit(cx, *command, &self.text, true) {
-                    Some(ValueEdit::Cut) => Some(ComboInput::SetText(String::new())),
-                    Some(ValueEdit::Paste(text)) => Some(ComboInput::Text(text)),
-                    None => None,
-                };
-                (input, EventReply::Stop)
-            }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
-                (Some(ComboInput::Dismiss), EventReply::Continue)
+                // The editing model ends a composition and a drag first.
+                self.edit_event(cx, event);
+                let input = if matches!(event, ControlEvent::Dismiss) {
+                    ComboInput::Dismiss
+                } else {
+                    ComboInput::Blur
+                };
+                (Some(input), EventReply::Continue)
             }
             _ => (None, EventReply::Continue),
         };
-        let Some(input) = input else {
-            return reply;
-        };
-        // Escape, an outside press, and focus loss close without a choice.
-        let dismiss = matches!(
-            input,
-            ComboInput::Dismiss
-                | ComboInput::Key {
-                    key: Key::Escape,
-                    ..
+        if let Some(input) = input {
+            let before = (self.text().to_owned(), self.selected);
+            let tab = matches!(input, ComboInput::Key { key: Key::Tab, .. });
+            // Escape, an outside press, and focus loss close without a
+            // choice.
+            let dismiss = matches!(
+                input,
+                ComboInput::Dismiss
+                    | ComboInput::Blur
+                    | ComboInput::Key {
+                        key: Key::Escape,
+                        ..
+                    }
+            );
+            let change = self.handle(input);
+            if change != ComboChange::None {
+                self.report(cx, before);
+                if dismiss && change == ComboChange::Closed {
+                    cx.emit(ControlMessage::Dismissed);
                 }
-        );
-        let change = self.handle(input);
-        if change == ComboChange::None {
+                // Tab commits and still moves the focus.
+                return if tab {
+                    EventReply::Continue
+                } else {
+                    EventReply::Stop
+                };
+            }
+        }
+        if reply == EventReply::Stop || matches!(event, ControlEvent::FocusChanged(false)) {
             return reply;
         }
-        self.report(cx, before);
-        if dismiss {
-            cx.emit(ControlMessage::Dismissed);
-        }
-        EventReply::Stop
+        self.edit_event(cx, event)
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
@@ -984,6 +1115,12 @@ impl CustomControl for Combobox {
         Combobox::semantics(self)
     }
 
+    fn text_input(&self) -> Option<TextInputInfo> {
+        self.editable
+            .then(|| self.editor.hosted_text_input())
+            .flatten()
+    }
+
     fn perform(
         &mut self,
         cx: &mut ControlContext<'_>,
@@ -994,7 +1131,7 @@ impl CustomControl for Combobox {
             cx.request_focus();
             return true;
         }
-        let before = (self.text.clone(), self.selected);
+        let before = (self.text().to_owned(), self.selected);
         let change = self.handle(ComboInput::Semantic(action, value.map(str::to_string)));
         if change == ComboChange::None {
             return false;
@@ -1023,17 +1160,13 @@ impl CustomControl for Combobox {
                 true
             }
             ControlValue::Text(text) => {
-                let folded = fold_for_search(text);
-                let key = self
-                    .items
-                    .iter()
-                    .find(|item| fold_for_search(&item.text) == folded)
-                    .map(|item| item.key);
+                let key = self.find_text(text);
                 if key.is_none() && !self.editable {
                     return false;
                 }
                 self.select(key);
-                self.text.clone_from(text);
+                self.set_text(text);
+                self.committed.0.clone_from(text);
                 self.refilter();
                 true
             }
@@ -1092,6 +1225,10 @@ impl CustomControl for FontChooser {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         FontChooser::semantics(self, strings)
+    }
+
+    fn text_input(&self) -> Option<TextInputInfo> {
+        self.combo.text_input()
     }
 
     fn perform(

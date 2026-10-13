@@ -179,6 +179,13 @@ fn an_editable_combobox_copies_cuts_and_pastes_its_text() {
     assert_eq!(value(&h), "Ban");
     *clipboard.text.borrow_mut() = None;
     h.chord(COMMAND, Key::Character('x'));
+    assert_eq!(
+        clipboard.get(),
+        None,
+        "Cut with no selection copies nothing"
+    );
+    h.chord(COMMAND, Key::Character('a'));
+    h.chord(COMMAND, Key::Character('x'));
     assert_eq!(clipboard.get().as_deref(), Some("Ban"));
     assert_eq!(value(&h), "");
 }

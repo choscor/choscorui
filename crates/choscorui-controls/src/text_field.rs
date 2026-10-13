@@ -213,6 +213,11 @@ impl TextField {
         &self.placeholder
     }
 
+    /// Sets the placeholder without a builder, for hosted fields.
+    pub(crate) fn set_placeholder(&mut self, placeholder: String) {
+        self.placeholder = placeholder;
+    }
+
     pub fn password(name: impl Into<String>, value: impl Into<String>) -> Self {
         let mut field = Self::new(name, value);
         field.secure = true;
