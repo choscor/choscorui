@@ -122,8 +122,36 @@ pub struct ControlView {
     handlers: Vec<Handler>,
     /// The bounds that clamp the value of a range view.
     pub(super) limits: Option<SharedLimits>,
-    /// Invalid options that the view clamped, reported at mount.
-    pub(super) notes: Vec<String>,
+    /// Invalid options that the view clamped or skipped.
+    pub(super) notes: SharedNotes,
+}
+
+/// Invalid options of a control view that it clamped or skipped. The
+/// view reports each one once, as [`ViewError::Clamped`].
+#[derive(Default)]
+pub(super) struct Notes {
+    fresh: Vec<String>,
+    reported: Vec<String>,
+}
+
+/// The notes of a view, which its build can add to.
+pub(super) type SharedNotes = Rc<RefCell<Notes>>;
+
+impl Notes {
+    /// Adds `note`, which the view reports unless it reported it before.
+    pub(super) fn push(&mut self, note: String) {
+        self.fresh.push(note);
+    }
+
+    /// Reports each new note once.
+    fn report(&mut self, inner: &mut Inner) {
+        for note in std::mem::take(&mut self.fresh) {
+            if !self.reported.contains(&note) {
+                inner.report(ViewError::Clamped(note.clone()));
+                self.reported.push(note);
+            }
+        }
+    }
 }
 
 impl ControlView {
@@ -172,7 +200,7 @@ impl ControlView {
             open,
             handlers,
             limits: None,
-            notes: Vec::new(),
+            notes: SharedNotes::default(),
         }
     }
 
@@ -184,7 +212,7 @@ impl ControlView {
             open: None,
             handlers: Vec::new(),
             limits: None,
-            notes: Vec::new(),
+            notes: SharedNotes::default(),
         }
     }
 
@@ -242,13 +270,11 @@ impl View for ControlView {
     // Out of line, so that each `Configured<C>` adds only its build.
     #[inline(never)]
     fn mount(self, cx: &mut Cx) {
-        for note in self.notes {
-            cx.inner.report(ViewError::Clamped(note));
-        }
+        self.notes.borrow_mut().report(cx.inner);
         let current: Rc<Current> = Rc::default();
         let node = match self.source {
             Source::Fixed(control) => cx.control(control),
-            Source::Built(build) => mount_built(cx, build, current.clone()),
+            Source::Built(build) => mount_built(cx, build, current.clone(), self.notes),
         };
         {
             let recorder = current.clone();
@@ -298,14 +324,16 @@ impl View for ControlView {
 
 /// Mounts the control that `build` makes, and builds it again on the same
 /// node when what `build` read changes.
-fn mount_built(cx: &mut Cx, build: Build, current: Rc<Current>) -> NodeId {
+fn mount_built(cx: &mut Cx, build: Build, current: Rc<Current>, notes: SharedNotes) -> NodeId {
     let env = cx.env.clone();
     let first: Rc<RefCell<Option<Box<dyn CustomControl>>>> = Rc::default();
     let mounted: Rc<Cell<Option<NodeId>>> = Rc::default();
     {
         let (first, mounted) = (first.clone(), mounted.clone());
         cx.react(move |inner| {
-            let mut control = match build(&env) {
+            let built = build(&env);
+            notes.borrow_mut().report(inner);
+            let mut control = match built {
                 Ok(control) => control,
                 Err(error) => {
                     inner.report(ViewError::Control(error));

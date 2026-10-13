@@ -319,6 +319,12 @@ impl HostedRadioGroup {
         Ok(self)
     }
 
+    /// Disables the option at `index` in place. Fails for an index out of
+    /// range or the selected option, and then changes nothing.
+    pub fn disable(&mut self, index: usize) -> Result<(), SelectionError> {
+        self.choices.disable(index)
+    }
+
     fn sizes(&self, cx: &MeasureContext<'_>) -> Vec<Size> {
         self.choices
             .items
@@ -449,6 +455,12 @@ impl HostedTabs {
     pub fn with_disabled(mut self, index: usize) -> Result<Self, SelectionError> {
         self.choices.disable(index)?;
         Ok(self)
+    }
+
+    /// Disables the tab at `index` in place. Fails for an index out of
+    /// range or the selected tab, and then changes nothing.
+    pub fn disable(&mut self, index: usize) -> Result<(), SelectionError> {
+        self.choices.disable(index)
     }
 
     fn sizes(&self, cx: &MeasureContext<'_>) -> Vec<Size> {

@@ -391,6 +391,10 @@ the `Mixed` value, where `None` is the mixed state. A press sets
   one-node form that names each option by its index. Its node has the group
   role, the selected label as value, and the `SetValue`, `Increment`,
   `Decrement`, and `Focus` actions.
+- **Disabled options.** `with_disabled` and `disable` reject an index out
+  of range and the selected option. As a view,
+  `RadioGroup::disabled_option` and `Tabs::disabled_tab` keep the option
+  enabled for such an index and report one `ViewError::Clamped`.
 - **Invalid radio group.** `HostedRadioGroup::set_invalid(true)` or
   `with_invalid(true)` gives each option the invalid look of `Checkbox`.
   The group node then has the invalid semantic state. `option_state`

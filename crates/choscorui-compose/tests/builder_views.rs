@@ -1,11 +1,12 @@
-//! Headless tests of the range view builders: `.range`, `.step`, `.page`,
-//! and `.maximum` set the limits, and an invalid option or value clamps
-//! to the nearest valid value and reports one `ViewError::Clamped`.
+//! Headless tests of the view builders: `.range`, `.step`, `.page`, and
+//! `.maximum` set the limits, and an invalid option or value clamps to the
+//! nearest valid value and reports one `ViewError::Clamped`. A disabled
+//! option that cannot apply stays enabled and reports one too.
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    AnyView, Cx, Dial, Env, Progress, RangeSlider, Slider, SpinBox, State, View, ViewError,
-    ViewHost,
+    AnyView, Cx, Dial, Env, Progress, RadioGroup, RangeSlider, Slider, SpinBox, State, Tabs, View,
+    ViewError, ViewHost,
 };
 use choscorui_controls::{EstimatedText, ShortcutModifiers};
 use choscorui_core::{
@@ -219,4 +220,65 @@ fn valid_builders_report_nothing() {
     assert_eq!(host.take_errors(), Vec::new());
     let (_, semantics) = node(&mut host, "Upload");
     assert_eq!(semantics.value.as_deref(), Some("30%"));
+}
+
+fn strings(items: &[&str]) -> Vec<String> {
+    items.iter().map(|item| (*item).to_owned()).collect()
+}
+
+#[test]
+fn disabling_the_selected_tab_reports_once_and_keeps_every_tab() {
+    let tab = slot();
+    let shared = tab.clone();
+    let mut host = host(move |cx| {
+        let selected = cx.state(0_usize);
+        shared.set(Some(selected));
+        Tabs::new(
+            "Settings",
+            strings(&["General", "Advanced"]),
+            selected.binding(),
+        )
+        .disabled_tab(0)
+        .disabled_tab(5)
+        .into_any()
+    });
+    let errors = host.take_errors();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    take(&tab).set(1);
+    host.flush();
+    assert_eq!(
+        host.take_errors(),
+        Vec::new(),
+        "a rebuild reports nothing new"
+    );
+    assert!(host.find("Settings").is_some());
+}
+
+#[test]
+fn a_disabled_option_is_skipped_by_the_arrow_keys() {
+    let size = slot();
+    let shared = size.clone();
+    let mut host = host(move |cx| {
+        let selected = cx.state(0_usize);
+        shared.set(Some(selected));
+        RadioGroup::new(
+            "Size",
+            strings(&["Small", "Medium", "Large"]),
+            selected.binding(),
+        )
+        .disabled_option(1)
+        .into_any()
+    });
+    assert_eq!(host.take_errors(), Vec::new());
+    let (group, _) = node(&mut host, "Size");
+    host.focus(Some(group));
+    host.key(
+        KeyEvent::Down {
+            key: Key::ArrowDown,
+            repeat: false,
+        },
+        ShortcutModifiers::default(),
+    );
+    host.flush();
+    assert_eq!(take(&size).get(), 2);
 }

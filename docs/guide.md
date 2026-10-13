@@ -106,7 +106,7 @@ The range views set their limits with builders, so they need no `IntegerRange`:
 - `RangeSlider` takes `.range(0.0..=100.0)` and `.step(1.0)`.
 - `Progress` takes `.maximum(100)`.
 
-A builder never panics. An invalid option, such as a reversed range or a zero step, becomes the nearest valid value. A bound value outside the range shows the nearest bound. The view reports each of these as `ViewError::Clamped`, through `ViewHost::take_errors` and `App::on_error`. The fallible constructors, such as `IntegerRange::new`, stay for code that wants the `Result`.
+A builder never panics. An invalid option, such as a reversed range or a zero step, becomes the nearest valid value. A bound value outside the range shows the nearest bound. A `.disabled_option` or `.disabled_tab` that cannot apply keeps the option enabled. The view reports each of these as `ViewError::Clamped`, through `ViewHost::take_errors` and `App::on_error`. The fallible constructors, such as `IntegerRange::new`, stay for code that wants the `Result`.
 
 ## State and bindings
 

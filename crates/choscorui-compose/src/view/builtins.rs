@@ -234,6 +234,21 @@ impl Configured<controls::HostedRadioGroup> {
         })
         .bind(selected, to_position, as_position)
     }
+
+    /// Disables the option at `index`. An index out of range, or the
+    /// selected option, reports [`ViewError::Clamped`] and leaves every
+    /// option enabled.
+    ///
+    /// [`ViewError::Clamped`]: super::ViewError::Clamped
+    #[must_use]
+    pub fn disabled_option(self, index: usize) -> Self {
+        self.with_check(move |group| {
+            group
+                .disable(index)
+                .err()
+                .map(|error| format!("option {index} stays enabled: {error}"))
+        })
+    }
 }
 
 /// A tab list, one tab for each label; `selected` edits the chosen tab.
@@ -268,6 +283,19 @@ impl Configured<controls::HostedTabs> {
             controls::Tabs::hosted(text(&name, env), tabs.items(env), 0)
         })
         .bind(selected, to_position, as_position)
+    }
+
+    /// Disables the tab at `index`. An index out of range, or the selected
+    /// tab, reports [`ViewError::Clamped`] and leaves every tab enabled.
+    ///
+    /// [`ViewError::Clamped`]: super::ViewError::Clamped
+    #[must_use]
+    pub fn disabled_tab(self, index: usize) -> Self {
+        self.with_check(move |tabs| {
+            tabs.disable(index)
+                .err()
+                .map(|error| format!("tab {index} stays enabled: {error}"))
+        })
     }
 }
 

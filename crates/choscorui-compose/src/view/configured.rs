@@ -4,7 +4,7 @@
 //! `CustomControl` mounts through [`Configured::custom`].
 
 use super::View;
-use super::control::ControlView;
+use super::control::{ControlView, SharedNotes};
 use super::env::Env;
 use super::host::Cx;
 use super::limits::{Limits, SharedLimits};
@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
 type Change<C> = Rc<dyn Fn(C, &Env) -> C>;
+type Check<C> = Rc<dyn Fn(&mut C) -> Option<String>>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
 
 /// A control of type `C` as a view. The view builds the control from the
@@ -73,8 +74,11 @@ pub struct Configured<C> {
     handlers: Vec<Handler>,
     /// The bounds of a range view, which clamp the value.
     limits: Option<SharedLimits>,
-    /// Invalid options that the view clamped, reported at mount.
-    notes: Vec<String>,
+    /// Options that apply after the changes and can skip an invalid
+    /// value.
+    checks: Vec<Check<C>>,
+    /// Invalid options that the view clamped or skipped.
+    notes: SharedNotes,
 }
 
 impl<C: CustomControl + 'static> Configured<C> {
@@ -104,7 +108,8 @@ impl<C: CustomControl + 'static> Configured<C> {
             open: None,
             handlers: Vec::new(),
             limits: None,
-            notes: Vec::new(),
+            checks: Vec::new(),
+            notes: SharedNotes::default(),
         }
     }
 
@@ -135,17 +140,24 @@ impl<C: CustomControl + 'static> Configured<C> {
 
     /// Changes the limits of a range view. `change` returns a note when
     /// it clamped an invalid option.
-    pub(super) fn change_limits(
-        mut self,
-        change: impl FnOnce(&mut Limits) -> Option<String>,
-    ) -> Self {
+    pub(super) fn change_limits(self, change: impl FnOnce(&mut Limits) -> Option<String>) -> Self {
         if let Some(limits) = &self.limits {
             let mut next = limits.get();
             if let Some(note) = change(&mut next) {
-                self.notes.push(note);
+                self.notes.borrow_mut().push(note);
             }
             limits.set(next);
         }
+        self
+    }
+
+    /// Changes the control after each build. `check` returns a note when
+    /// it skipped an invalid option; the view reports the note once as
+    /// [`ViewError::Clamped`] and keeps the rest of the control.
+    ///
+    /// [`ViewError::Clamped`]: super::ViewError::Clamped
+    pub(super) fn with_check(mut self, check: impl Fn(&mut C) -> Option<String> + 'static) -> Self {
+        self.checks.push(Rc::new(check));
         self
     }
 
@@ -267,13 +279,20 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             open,
             handlers,
             limits,
+            checks,
             notes,
         } = self;
+        let found = notes.clone();
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
-            let control = changes
+            let mut control = changes
                 .iter()
                 .fold(control, |control, change| change(control, env));
+            for check in &checks {
+                if let Some(note) = check(&mut control) {
+                    found.borrow_mut().push(note);
+                }
+            }
             Ok(Box::new(control))
         });
         let mut view = ControlView::configured(build, kind, value, open, handlers);
