@@ -172,19 +172,43 @@ fn otp_fills_slots_in_order_and_completes() {
     assert_eq!(h.measure().width, 6.0 * 36.0 + 16.0 + 16.0);
     h.click(h.bounds().center());
     h.text("12a3");
+    assert_eq!(
+        h.semantics().value.as_deref(),
+        Some(""),
+        "a paste with a letter is rejected as a whole"
+    );
+    h.text("1");
+    h.text("2");
+    h.text("a");
+    h.text("3");
     assert_eq!(h.semantics().value.as_deref(), Some("123"), "digits only");
     h.key(Key::Backspace);
-    h.text("4567890");
+    h.text("4");
+    // A paste replaces the slots from the first slot, and full-width
+    // digits become ASCII digits.
+    h.text("９87654321");
     assert_eq!(
         h.messages(),
         [
+            typed("1"),
+            typed("12"),
             typed("123"),
             typed("12"),
-            typed("124567"),
+            typed("124"),
+            typed("987654"),
             ControlMessage::Activated,
         ]
     );
-    assert_eq!(texts(&h.paint()), ["1", "2", "4", "5", "6", "7"]);
+    assert_eq!(texts(&h.paint()), ["9", "8", "7", "6", "5", "4"]);
+    let mut letters = Harness::new(InputOtp::new("Code", 4).alphanumeric());
+    letters.focus();
+    letters.text("aé");
+    letters.text("b1");
+    assert_eq!(
+        letters.semantics().value.as_deref(),
+        Some("b1"),
+        "the alphanumeric kind takes ASCII only"
+    );
     assert!(h.perform(SemanticAction::SetValue, Some("9 8 7")));
     assert_eq!(h.semantics().value.as_deref(), Some("987"));
     assert_eq!(h.semantics().role, SemanticRole::TextField);

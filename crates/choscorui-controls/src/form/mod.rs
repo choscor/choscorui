@@ -10,13 +10,14 @@ pub(crate) mod measured;
 mod otp;
 mod range_slider;
 mod select;
+pub(crate) mod step_text;
 mod switch;
 mod textarea;
 mod toggle;
 
 pub use date_picker::DatePicker;
 pub use field::{Field, FieldGap, FieldLayout, FieldPart, FieldText};
-pub use input::Input;
+pub use input::{Input, InputType};
 pub use input_group::{AddonContent, InputGroup, InputGroupAddon};
 pub use kbd::Kbd;
 pub use otp::InputOtp;

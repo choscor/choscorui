@@ -155,7 +155,8 @@ fn indeterminate_progress_animates_only_while_visible() {
 #[test]
 fn decimal_spin_box_keeps_value_across_locale_switch() {
     let vi = Locale::parse("vi-VN").unwrap();
-    let mut spin = DecimalSpinBox::new("Giá", vi, (0.0, 1000.0), 0.5, 2, 12.5);
+    let mut spin =
+        DecimalSpinBox::new("Giá", vi, (0.0, 1000.0), 0.5, 2, 12.5).expect("a valid range");
     assert_eq!(spin.text(), "12,50");
     assert!(spin.handle_key(Key::ArrowUp));
     assert_eq!(spin.value(), 13.0);
@@ -752,7 +753,8 @@ fn tool_and_editor_widgets_paint_from_recipes() {
         0.5,
         2,
         12.5,
-    );
+    )
+    .expect("a valid range");
     let steppers = DecimalSpinBox::stepper_rect(rect(0.0, 0.0, 200.0, 36.0), false);
     assert_eq!(steppers.max_x(), 200.0);
     let rtl = DecimalSpinBox::stepper_rect(rect(0.0, 0.0, 200.0, 36.0), true);

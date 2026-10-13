@@ -196,7 +196,7 @@ fn the_input_dialog_accepts_only_valid_values() {
     assert!(!disabled(&mut host, "OK"));
     perform(&mut host, "Line", SemanticAction::SetValue, Some("501"));
     assert!(disabled(&mut host, "OK"), "out of range");
-    assert!(host.find("Enter a number from 1 to 500").is_some());
+    assert!(host.find("Must be at most 500").is_some());
     let field = node(&mut host, "Line");
     host.focus(Some(field));
     press(&mut host, Key::Enter);
@@ -209,7 +209,7 @@ fn the_input_dialog_accepts_only_valid_values() {
     assert!(disabled(&mut host, "OK"));
     perform(&mut host, "Line", SemanticAction::SetValue, Some("7"));
     assert!(!disabled(&mut host, "OK"));
-    assert!(host.find("Enter a number from 1 to 500").is_none());
+    assert!(host.find("Must be at most 500").is_none());
     press(&mut host, Key::Enter);
     assert_eq!(*accepted.borrow(), vec![InputValue::Integer(7)]);
     perform(&mut host, "OK", SemanticAction::Activate, None);

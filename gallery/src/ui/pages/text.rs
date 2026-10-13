@@ -120,7 +120,7 @@ fn sample_field(cx: &mut Cx, sample: Sample) -> AnyView {
     }
     .with(move |mut input| {
         input.set_validation(match error.get() {
-            Some(message) => ValidationState::Invalid(message),
+            Some(message) => ValidationState::Invalid(message.into()),
             None => ValidationState::Valid,
         });
         input
@@ -166,9 +166,12 @@ pub fn text_editor(_: &PageCx) -> AnyView {
     TextEditorPage.into_any()
 }
 
-/// How a structured field turns raw text into what it shows and whether
-/// it is valid.
-type Rule = Rc<dyn Fn(&str) -> (String, ValidationState)>;
+/// How a structured field checks its text.
+type Rule = Rc<dyn Fn(&str) -> ValidationState>;
+
+/// What a structured field gives its input: a filter, and the check and
+/// format of Return and blur.
+type Make = Rc<dyn Fn(controls::Input) -> controls::Input>;
 
 /// One structured-input field.
 #[derive(Clone)]
@@ -177,6 +180,7 @@ struct RuleField {
     raw: String,
     placeholder: String,
     rule: Rule,
+    make: Make,
 }
 
 /// The line under a field: whether its value is valid, or why not.
@@ -184,12 +188,12 @@ fn verdict(env: &Env, validation: &ValidationState) -> String {
     match validation {
         ValidationState::Valid => env.text("number-input.valid", &[]),
         ValidationState::Intermediate => env.text("number-input.incomplete", &[]),
-        ValidationState::Invalid(message) => message.clone(),
+        ValidationState::Invalid(error) => error.message(&env.localizer()),
     }
 }
 
-/// Structured fields, each validated as the user types. The field shows
-/// what its rule makes of the raw text, is invalid with the rule's
+/// Structured fields, each validated as the user types. The field takes
+/// only the keys that its rule allows, is invalid with the rule's
 /// message, and describes its verdict to assistive technology.
 struct RuleFields(Vec<RuleField>);
 
@@ -206,61 +210,18 @@ impl View for RuleFields {
     }
 }
 
-fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
-    let RuleField {
-        label,
-        raw,
-        placeholder,
-        rule,
-    } = field;
-    let env = cx.env().clone();
-    let raw = cx.state(raw);
-    let checked = {
-        let rule = rule.clone();
-        move || rule(&raw.get())
-    };
-    let shown = {
-        let checked = checked.clone();
-        move || checked().0
-    };
-    let validated = {
-        let checked = checked.clone();
-        move |input: controls::Input| {
-            let mut input = input.with_placeholder(&placeholder);
-            input.set_validation(checked().1);
-            input
-        }
-    };
-    let typed = {
-        let shown = shown.clone();
-        move |text: String| {
-            let before = shown();
-            if text.len() < before.len() && before.starts_with(text.as_str()) {
-                // A deletion at the end removes raw characters until the
-                // shown text is no longer than what is left, so a mask
-                // does not put a deleted literal back.
-                raw.update(
-                    |raw| {
-                        while rule(raw).0.len() > text.len() && raw.pop().is_some() {}
-                    },
-                );
-            } else {
-                raw.set(text);
-            }
-        }
-    };
-    let input = Input::new(label.clone(), Binding::new(shown, typed))
-        .with(validated)
-        .accessibility_hint({
-            let (checked, env) = (checked.clone(), env.clone());
-            move || verdict(&env, &checked().1)
-        })
-        .frame(Frame::new().width(300.0));
+/// The caption, the field, and the verdict line of a structured field.
+fn verdict_column(
+    env: Env,
+    label: String,
+    input: impl View,
+    checked: impl Fn() -> ValidationState + Clone + 'static,
+) -> AnyView {
     let invalid = {
         let checked = checked.clone();
-        move || matches!(checked().1, ValidationState::Invalid(_))
+        move || matches!(checked(), ValidationState::Invalid(_))
     };
-    let message = Text::new(move || verdict(&env, &checked().1))
+    let message = Text::new(move || verdict(&env, &checked()))
         .text_style(TextPreset::Small)
         .foreground(move || {
             if invalid() {
@@ -274,6 +235,35 @@ fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S1)
         .into_any()
+}
+
+fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
+    let RuleField {
+        label,
+        raw,
+        placeholder,
+        rule,
+        make,
+    } = field;
+    let env = cx.env().clone();
+    let raw = cx.state(raw);
+    let checked = move || rule(&raw.get());
+    let validated = {
+        let checked = checked.clone();
+        move |input: controls::Input| {
+            let mut input = make(input.with_placeholder(&placeholder));
+            input.set_validation(checked());
+            input
+        }
+    };
+    let input = Input::new(label.clone(), raw.binding())
+        .with(validated)
+        .accessibility_hint({
+            let (checked, env) = (checked.clone(), env.clone());
+            move || verdict(&env, &checked())
+        })
+        .frame(Frame::new().width(300.0));
+    verdict_column(env, label, input, checked)
 }
 
 /// A page of structured fields that `fields` makes for the environment's
@@ -295,41 +285,30 @@ fn number_fields(env: &Env) -> Vec<RuleField> {
     let sample = locale
         .format_decimal(1234.5, 2)
         .unwrap_or_else(|_| "1234.50".into());
-    vec![
+    let field = |label: String, raw: String, placeholder: String, input: NumberInput| {
+        let make = input.clone();
         RuleField {
-            label: env.text("number-input.amount", &[("locale", &locale.tag())]),
-            raw: sample.clone(),
-            placeholder: sample,
-            rule: Rc::new(move |text| (text.to_owned(), amount.validate(text).0)),
-        },
-        RuleField {
-            label: env.text("number-input.quantity", &[]),
-            raw: "12".into(),
-            placeholder: "12".into(),
-            rule: Rc::new(move |text| (text.to_owned(), quantity.validate(text).0)),
-        },
-    ]
-}
-
-/// The masked fields. A pattern that does not parse leaves its field
-/// out.
-fn mask_fields(env: &Env) -> Vec<RuleField> {
-    let masked = |key: &str, raw: &str, pattern: &str| {
-        let mask = InputMask::parse(pattern).ok()?;
-        Some(RuleField {
-            label: env.text(key, &[("mask", pattern)]),
-            raw: raw.into(),
-            placeholder: mask.placeholder('_'),
-            rule: Rc::new(move |raw| (mask.apply(raw).display, mask.validate(raw))),
-        })
+            label,
+            raw,
+            placeholder,
+            rule: Rc::new(move |text| input.validate(text).0),
+            make: Rc::new(move |field| field.with_number(make.clone())),
+        }
     };
-    [
-        masked("input-mask.phone", "0905", "(999) 999-9999"),
-        masked("input-mask.plate", "", ">AA-99999"),
+    vec![
+        field(
+            env.text("number-input.amount", &[("locale", &locale.tag())]),
+            sample.clone(),
+            sample,
+            amount,
+        ),
+        field(
+            env.text("number-input.quantity", &[]),
+            "12".into(),
+            "12".into(),
+            quantity,
+        ),
     ]
-    .into_iter()
-    .flatten()
-    .collect()
 }
 
 fn date_fields(env: &Env) -> Vec<RuleField> {
@@ -342,20 +321,70 @@ fn date_fields(env: &Env) -> Vec<RuleField> {
     );
     let today = CivilDate::clamped(2026, 10, 12);
     let sample = any.format(today);
-    vec![
+    let field = |label: String, raw: String, input: DateInput| {
+        let make = input.clone();
         RuleField {
-            label: env.text("date-input.any", &[("format", &placeholder)]),
-            raw: sample,
+            label,
+            raw,
             placeholder: placeholder.clone(),
-            rule: Rc::new(move |text| (text.to_owned(), any.validate(text).0)),
-        },
-        RuleField {
-            label: env.text("date-input.in_year", &[("year", "2026")]),
-            raw: String::new(),
-            placeholder,
-            rule: Rc::new(move |text| (text.to_owned(), ranged.validate(text).0)),
-        },
+            rule: Rc::new(move |text| input.validate(text).0),
+            make: Rc::new(move |field| field.with_date(make.clone())),
+        }
+    };
+    vec![
+        field(
+            env.text("date-input.any", &[("format", &placeholder)]),
+            sample,
+            any,
+        ),
+        field(
+            env.text("date-input.in_year", &[("year", "2026")]),
+            String::new(),
+            ranged,
+        ),
     ]
+}
+
+/// The masked fields: a required phone number and an uppercased licence
+/// plate. Each stores its value with the mask's literals. A pattern that
+/// does not parse leaves its field out.
+struct MaskPage;
+
+impl View for MaskPage {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let env = cx.env().clone();
+        let fields = [
+            ("input-mask.phone", "0905", "(000) 000-0000"),
+            ("input-mask.plate", "", ">AA-99999"),
+        ];
+        column(
+            VStack::new(
+                fields
+                    .into_iter()
+                    .filter_map(|(key, raw, pattern)| mask_field(cx, &env, key, raw, pattern))
+                    .collect::<Vec<_>>(),
+            )
+            .alignment(HorizontalAlignment::Leading)
+            .spacing(Space::S4),
+        )
+    }
+}
+
+fn mask_field(cx: &mut Cx, env: &Env, key: &str, raw: &str, pattern: &str) -> Option<AnyView> {
+    let mask = InputMask::parse(pattern).ok()?;
+    let label = env.text(key, &[("mask", pattern)]);
+    let value = cx.state(mask.apply(raw).display);
+    let checked = {
+        let mask = mask.clone();
+        move || mask.validate(&value.get())
+    };
+    let input = Input::masked(label.clone(), mask, value.binding())
+        .accessibility_hint({
+            let (checked, env) = (checked.clone(), env.clone());
+            move || verdict(&env, &checked())
+        })
+        .frame(Frame::new().width(300.0));
+    Some(verdict_column(env.clone(), label, input, checked))
 }
 
 pub fn number_input(_: &PageCx) -> AnyView {
@@ -363,7 +392,7 @@ pub fn number_input(_: &PageCx) -> AnyView {
 }
 
 pub fn input_mask(_: &PageCx) -> AnyView {
-    RulePage(mask_fields).into_any()
+    MaskPage.into_any()
 }
 
 pub fn date_input(_: &PageCx) -> AnyView {
@@ -389,6 +418,7 @@ mod tests {
 
     const AMOUNT: &str = "Amount (0 – 1,000,000,000; 2 decimals, locale en)";
     const QUANTITY: &str = "Quantity (1 – 10,000; whole numbers)";
+    const PHONE: &str = "Phone, mask (000) 000-0000";
     const PLATE: &str = "Licence plate, mask >AA-99999 (uppercased)";
     const ANY_DATE: &str = "Any date (mm/dd/yyyy)";
     const DATE_2026: &str = "A date in 2026";
@@ -410,6 +440,27 @@ mod tests {
         semantic(page, name)
     }
 
+    /// Sets the field's value as assistive technology would, expects the
+    /// field's filter to refuse it, and returns the semantics.
+    fn refuse(page: &mut Harness, name: &str, text: &str) -> SemanticNode {
+        let before = semantic(page, name).value;
+        let node = page.node(name);
+        page.host
+            .perform(node, SemanticAction::SetValue, Some(text));
+        page.host.layout();
+        let field = semantic(page, name);
+        assert_eq!(field.value, before, "a refused value changes nothing");
+        field
+    }
+
+    /// Types `text` one character at a time into the focused field.
+    fn type_text(page: &mut Harness, text: &str) {
+        for ch in text.chars() {
+            page.host.text(&ch.to_string());
+            page.host.layout();
+        }
+    }
+
     /// Rejected: the field is invalid, or its verdict is not "Valid".
     fn rejected(node: &SemanticNode) -> bool {
         node.state.invalid || node.description != "Valid"
@@ -425,7 +476,7 @@ mod tests {
     fn structured_input_pages_hold_two_fields_each() {
         for (id, names) in [
             ("number-input", [AMOUNT, QUANTITY]),
-            ("input-mask", ["Phone, mask (999) 999-9999", PLATE]),
+            ("input-mask", [PHONE, PLATE]),
             ("date-input", [ANY_DATE, DATE_2026]),
         ] {
             let mut page = Harness::new(id);
@@ -443,9 +494,15 @@ mod tests {
             semantic(&mut page, AMOUNT).value.as_deref(),
             Some("1,234.50")
         );
-        let letters = enter(&mut page, AMOUNT, "12abc");
-        assert!(letters.state.invalid, "{letters:?}");
-        assert_eq!(letters.description, "Enter a number");
+        // The field refuses each letter, so typing `12abc` leaves `12`.
+        enter(&mut page, AMOUNT, "");
+        page.act(AMOUNT, SemanticAction::Focus);
+        type_text(&mut page, "12abc");
+        let letters = semantic(&mut page, AMOUNT);
+        assert_eq!(letters.value.as_deref(), Some("12"));
+        assert!(!letters.state.invalid, "{letters:?}");
+        refuse(&mut page, AMOUNT, "1-2");
+        refuse(&mut page, AMOUNT, "1.2.3");
         // Zero is below the minimum of one; more digits could still reach
         // it, so the field reports it incomplete rather than invalid.
         let low = enter(&mut page, QUANTITY, "0");
@@ -462,23 +519,23 @@ mod tests {
     #[test]
     fn input_mask_rejects_characters_its_format_forbids() {
         let mut page = Harness::new("input-mask");
-        let digits = enter(&mut page, PLATE, "12");
-        assert!(digits.state.invalid, "{digits:?}");
-        // The plate needs letters first, so the digits never show.
+        // The plate needs letters first, so no digit fits and the field
+        // refuses them.
+        let digits = refuse(&mut page, PLATE, "12");
         assert_eq!(digits.value.as_deref(), Some(""));
         let partial = enter(&mut page, PLATE, "a");
         assert!(rejected(&partial) && !partial.state.invalid, "{partial:?}");
         assert_eq!(partial.description, "Incomplete");
-        assert_eq!(partial.value.as_deref(), Some(">a"));
+        assert_eq!(partial.value.as_deref(), Some("A"), "`>` uppercases");
         let full = enter(&mut page, PLATE, "ab12345");
         assert!(!rejected(&full), "{full:?}");
-        assert_eq!(full.value.as_deref(), Some(">ab-12345"));
+        assert_eq!(full.value.as_deref(), Some("AB-12345"));
     }
 
     #[test]
     fn typing_into_a_mask_fills_it_and_backspace_removes_input() {
         let mut page = Harness::new("input-mask");
-        let phone = "Phone, mask (999) 999-9999";
+        let phone = PHONE;
         assert_eq!(semantic(&mut page, phone).value.as_deref(), Some("(090) 5"));
         page.act(phone, SemanticAction::Focus);
         assert!(page.host.text("1"));
@@ -501,7 +558,9 @@ mod tests {
             semantic(&mut page, ANY_DATE).value.as_deref(),
             Some("10/12/2026")
         );
-        let text = enter(&mut page, ANY_DATE, "not a date");
+        refuse(&mut page, ANY_DATE, "not a date");
+        refuse(&mut page, ANY_DATE, "13/");
+        let text = enter(&mut page, ANY_DATE, "2/30/2026");
         assert!(text.state.invalid, "{text:?}");
         assert_eq!(text.description, "Enter a valid date");
         let outside = enter(&mut page, DATE_2026, "1/1/2025");

@@ -151,12 +151,12 @@ fn a_masked_input_keeps_typed_characters_and_shows_literals() {
     let node = host.find("Phone").unwrap();
     assert!(host.perform(node, SemanticAction::SetValue, Some("0905")));
     host.flush();
-    assert_eq!(take(&raw).get(), "0905");
+    assert_eq!(take(&raw).get(), "(090) 5", "the value keeps the literals");
     assert_eq!(value(&mut host, node).as_deref(), Some("(090) 5"));
     // Deleting the shown literal removes the typed digit before it.
     assert!(host.perform(node, SemanticAction::SetValue, Some("(090) ")));
     host.flush();
-    assert_eq!(take(&raw).get(), "090");
+    assert_eq!(take(&raw).get(), "(090) ");
     take(&raw).set("1234567890".to_owned());
     host.flush();
     assert_eq!(value(&mut host, node).as_deref(), Some("(123) 456-7890"));

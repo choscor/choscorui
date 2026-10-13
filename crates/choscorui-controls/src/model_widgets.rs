@@ -2,13 +2,14 @@
 //! per-cell editors chosen by a factory, a data-widget mapper, a column
 //! (Miller) browser, and undo-history rows.
 
-use crate::ValidationState;
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::Routed;
 use crate::item_view::list_row_height;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
+use crate::validation::{DateError, NumberError, ValidationError};
+use crate::{DateInput, InputFilter, NumberInput, ValidationState};
 use choscorui_core::{
     CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Locale,
     Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role, SemanticAction,
@@ -345,55 +346,91 @@ impl CellEdit {
         self.text = text.into();
     }
 
-    pub fn parse(&self) -> Result<Value, String> {
+    /// The filter of the editor's text: the number rule for a number
+    /// column, and the date rule for a date column. A bool column takes
+    /// no typed text: its editor is a checkbox.
+    pub fn filter(&self) -> InputFilter {
+        match &self.kind {
+            EditorKind::Text => InputFilter::new(),
+            EditorKind::Integer => self.number(0).filter(),
+            EditorKind::Decimal { fraction_digits } => self.number(*fraction_digits).filter(),
+            EditorKind::Bool => InputFilter::new().rule(|_| false),
+            EditorKind::Date => DateInput::new(self.locale.clone()).filter(),
+        }
+    }
+
+    /// The value of a bool column's checkbox, or `None` for another
+    /// column.
+    pub fn checked(&self) -> Option<bool> {
+        match (&self.kind, self.parse()) {
+            (EditorKind::Bool, Ok(Value::Bool(checked))) => Some(checked),
+            (EditorKind::Bool, _) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Sets the value of a bool column's checkbox. Space toggles it.
+    pub fn set_checked(&mut self, checked: bool) {
+        if self.kind == EditorKind::Bool {
+            self.text = checked.to_string();
+        }
+    }
+
+    fn number(&self, fraction_digits: usize) -> NumberInput {
+        NumberInput::new(self.locale.clone(), fraction_digits)
+    }
+
+    pub fn parse(&self) -> Result<Value, ValidationError> {
         let text = self.text.trim();
+        let number = |fraction_digits| match self.number(fraction_digits).commit(text) {
+            (_, Some(value)) => Ok(value),
+            (ValidationState::Invalid(error), None) => Err(error),
+            _ => Err(NumberError::NotANumber.into()),
+        };
         match &self.kind {
             EditorKind::Text => Ok(Value::Text(self.text.clone())),
-            EditorKind::Integer => self
-                .locale
-                .parse_integer(text)
-                .map(Value::Int)
-                .map_err(|_| "Enter a whole number".into()),
-            EditorKind::Decimal { fraction_digits } => {
-                let digits = text
-                    .rsplit_once(self.locale.data().decimal)
-                    .map_or(0, |(_, fraction)| fraction.len());
-                if digits > *fraction_digits {
-                    return Err(format!("Use at most {fraction_digits} decimal places"));
-                }
+            EditorKind::Integer => {
+                number(0)?;
                 self.locale
-                    .parse_decimal(text)
-                    .map(Value::Float)
-                    .map_err(|_| "Enter a number".into())
+                    .parse_integer(text)
+                    .map(Value::Int)
+                    .map_err(|_| NumberError::NotANumber.into())
             }
+            EditorKind::Decimal { fraction_digits } => number(*fraction_digits).map(Value::Float),
             EditorKind::Bool => match text.to_lowercase().as_str() {
                 "true" | "yes" | "1" | "on" => Ok(Value::Bool(true)),
                 "false" | "no" | "0" | "off" => Ok(Value::Bool(false)),
-                _ => Err("Enter yes or no".into()),
+                _ => Err(ValidationError::YesNo),
             },
             EditorKind::Date => CivilDate::parse_short(text, &self.locale)
                 .map(|date| Value::Text(date.format_short(&self.locale)))
-                .map_err(|_| "Enter a valid date".into()),
+                .map_err(|_| DateError::NotADate.into()),
         }
     }
 
     pub fn validation(&self) -> ValidationState {
         match self.parse() {
             Ok(_) => ValidationState::Valid,
-            Err(message) => ValidationState::Invalid(message),
+            Err(error) => ValidationState::Invalid(error),
         }
     }
 
     /// Writes the parsed value; on error the edit stays open unchanged.
-    pub fn commit(&self, model: &mut dyn EditableModel) -> Result<(), String> {
+    pub fn commit(&self, model: &mut dyn EditableModel) -> Result<(), ValidationError> {
         let value = self.parse()?;
         model
             .set_data(self.key, self.column, Role::Edit, value)
-            .map_err(|error| match error {
-                ModelError::ReadOnly => "This cell is read-only".into(),
-                ModelError::MissingItem => "The row no longer exists".into(),
-                _ => "The value was rejected".into(),
-            })
+            .map_err(ValidationError::from)
+    }
+}
+
+impl From<ModelError> for ValidationError {
+    fn from(error: ModelError) -> Self {
+        match error {
+            ModelError::ReadOnly => Self::ReadOnly,
+            ModelError::MissingItem => Self::MissingRow,
+            _ => Self::Rejected,
+        }
     }
 }
 
@@ -453,12 +490,12 @@ impl DataMapper {
     }
     /// Writes every pending field of the current item that `parse`
     /// accepts. Invalid fields stay pending and are returned with their
-    /// messages.
+    /// errors, as are the fields that the model refuses.
     pub fn submit(
         &mut self,
         model: &mut dyn EditableModel,
-        parse: impl Fn(usize, &str) -> Result<Value, String>,
-    ) -> Result<(), Vec<(usize, String)>> {
+        parse: impl Fn(usize, &str) -> Result<Value, ValidationError>,
+    ) -> Result<(), Vec<(usize, ValidationError)>> {
         let Some(key) = self.current else {
             return Ok(());
         };
@@ -470,7 +507,7 @@ impl DataMapper {
             let result = parse(column, &text).and_then(|value| {
                 model
                     .set_data(key, column, Role::Edit, value)
-                    .map_err(|error| format!("{error:?}"))
+                    .map_err(ValidationError::from)
             });
             match result {
                 Ok(()) => {

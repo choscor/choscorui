@@ -265,14 +265,10 @@ pub fn builtins() -> Vec<(&'static str, TreeFactory)> {
             Box::new(picker.with_name("Accent"))
         }),
         ("decimal-spin-box", |_| {
-            Box::new(DecimalSpinBox::new(
-                "Amount",
-                en(),
-                (0.0, 10.0),
-                0.5,
-                1,
-                2.0,
-            ))
+            Box::new(
+                DecimalSpinBox::new("Amount", en(), (0.0, 10.0), 0.5, 1, 2.0)
+                    .expect("a valid range"),
+            )
         }),
         ("scroll-bar", scroll_bar),
         ("size-grip", |_| {

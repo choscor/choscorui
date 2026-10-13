@@ -1,7 +1,7 @@
 use choscorui_controls::{
     CellEdit, ColumnBrowser, DataMapper, DefaultEditorFactory, EditorKind, HeaderColumn,
     HeaderInput, HeaderView, ItemModifiers, ItemView, ItemViewInput, TextItemDelegate,
-    ValidationState, ViewLayout, undo_history, undo_steps_to,
+    ValidationError, ValidationState, ViewLayout, undo_history, undo_steps_to,
 };
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
@@ -430,11 +430,11 @@ fn cell_editors_validate_locale_numbers_and_mapper_keeps_pending_text() {
     assert_eq!(mapper.values(&store)[1].1, "3");
     mapper.set_current(Some(first));
     assert_eq!(mapper.values(&store)[1].1, "-4", "pending text survives");
-    let parse = |column: usize, text: &str| -> Result<Value, String> {
+    let parse = |column: usize, text: &str| -> Result<Value, ValidationError> {
         if column == 1 {
             text.parse::<i64>()
                 .map(Value::Int)
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string().into())
         } else {
             Ok(Value::Text(text.into()))
         }

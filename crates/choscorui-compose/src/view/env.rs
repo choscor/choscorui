@@ -5,8 +5,8 @@ use super::state::{IntoLive, Live};
 use super::storage::Storage;
 use choscorui_controls::{ButtonVariant, ControlSize};
 use choscorui_core::{
-    Catalog, Color, ColorRole, DesignTokens, FontWeight, LayoutDirection, Locale, RadiusScale,
-    Rect, Services, ShadowLayers, ShadowScale, Space, TextPreset, Tracking,
+    Catalog, Color, ColorRole, DesignTokens, FontWeight, LayoutDirection, Locale, Localizer,
+    RadiusScale, Rect, Services, ShadowLayers, ShadowScale, Space, TextPreset, Tracking,
 };
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -219,21 +219,25 @@ impl Env {
         &self.text
     }
 
-    /// The translation of `id` with `args`, or `id` itself when the
-    /// catalog has no entry. Inside a live property, the locale read is
+    /// The catalog and the locale as a [`Localizer`]. Controls take it
+    /// for their built-in messages. Inside a live property, the locale
+    /// read is recorded.
+    pub fn localizer(&self) -> Localizer {
+        Localizer::new(self.locale.get(), Catalog::clone(&self.catalog))
+    }
+
+    /// The translation of `id` with `args`, or `id` itself when no catalog
+    /// has it. An id that the catalog does not define comes from the
+    /// built-in catalog. Inside a live property, the locale read is
     /// recorded.
     pub fn text(&self, id: &str, args: &[(&str, &str)]) -> String {
-        let locale = self.locale.get();
-        self.catalog
-            .text(&locale, id, args)
-            .unwrap_or_else(|_| id.to_owned())
+        self.localizer().message(id, args)
     }
 
     /// The plural translation of `id` for `count`, or `id` itself.
     pub fn plural(&self, id: &str, count: u64, args: &[(&str, &str)]) -> String {
-        let locale = self.locale.get();
-        self.catalog
-            .plural(&locale, id, count, args)
+        self.localizer()
+            .plural(id, count, args)
             .unwrap_or_else(|_| id.to_owned())
     }
 

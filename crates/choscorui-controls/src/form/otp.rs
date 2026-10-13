@@ -13,7 +13,9 @@ use choscorui_core::{
 };
 
 /// A one-time code input. Typing fills the slots in order, Backspace
-/// clears the last one, and pasted text fills as many slots as it can.
+/// clears the last one, and pasted text replaces the code from the first
+/// slot. Full-width digits become ASCII digits. A key or a paste with a
+/// character that the code does not accept changes nothing and beeps.
 /// The caret is always after the last character.
 #[derive(Clone, Debug)]
 pub struct InputOtp {
@@ -53,7 +55,7 @@ impl InputOtp {
         self
     }
 
-    /// Accepts letters as well as digits.
+    /// Accepts ASCII letters as well as digits.
     #[must_use]
     pub fn alphanumeric(mut self) -> Self {
         self.digits_only = false;
@@ -76,8 +78,23 @@ impl InputOtp {
         if self.digits_only {
             c.is_ascii_digit()
         } else {
-            c.is_alphanumeric()
+            c.is_ascii_alphanumeric()
         }
+    }
+
+    /// The characters of `text` with full-width digits as ASCII digits,
+    /// or `None` when one of them is not accepted. White space between
+    /// the groups of a pasted code is skipped. The code keeps at most its
+    /// length.
+    fn code(&self, text: &str) -> Option<Vec<char>> {
+        let code: Vec<char> = text
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .map(ascii_digit)
+            .collect();
+        code.iter()
+            .all(|c| self.accepts(*c))
+            .then(|| code.into_iter().take(self.length()).collect())
     }
 
     fn query(slot: Slot, state: VisualState) -> StyleQuery {
@@ -100,11 +117,19 @@ impl InputOtp {
         true
     }
 
-    fn typed(&self, text: &str) -> Vec<char> {
-        let room = self.length().saturating_sub(self.value.len());
+    /// The value after `text`: one typed character fills the next slot,
+    /// and a paste replaces the code. `None` when the code refuses it.
+    fn typed(&self, text: &str) -> Option<Vec<char>> {
+        let code = self.code(text)?;
+        if text.chars().count() > 1 {
+            return Some(code);
+        }
         let mut value = self.value.clone();
-        value.extend(text.chars().filter(|c| self.accepts(*c)).take(room));
-        value
+        if value.len() >= self.length() {
+            return None;
+        }
+        value.extend(code);
+        Some(value)
     }
 
     /// The slot that shows the caret: the first empty one, or the last.
@@ -170,8 +195,12 @@ impl CustomControl for InputOtp {
                 EventReply::Stop
             }
             ControlEvent::Text(text) => {
-                let value = self.typed(text);
-                self.replace(cx, value);
+                match self.typed(text) {
+                    Some(value) => {
+                        self.replace(cx, value);
+                    }
+                    None => cx.beep(),
+                }
                 EventReply::Stop
             }
             ControlEvent::Key(KeyEvent::Down {
@@ -280,16 +309,13 @@ impl CustomControl for InputOtp {
         value: Option<&str>,
     ) -> bool {
         match action {
-            SemanticAction::SetValue => {
-                let value = value
-                    .unwrap_or_default()
-                    .chars()
-                    .filter(|c| self.accepts(*c))
-                    .take(self.length())
-                    .collect();
-                self.replace(cx, value);
-                true
-            }
+            SemanticAction::SetValue => match self.code(value.unwrap_or_default()) {
+                Some(code) => {
+                    self.replace(cx, code);
+                    true
+                }
+                None => false,
+            },
             SemanticAction::Focus => {
                 cx.request_focus();
                 true
@@ -314,5 +340,13 @@ impl CustomControl for InputOtp {
             self.value = value;
         }
         fits
+    }
+}
+
+/// `c`, or the ASCII digit of a full-width digit.
+fn ascii_digit(c: char) -> char {
+    match c {
+        '\u{FF10}'..='\u{FF19}' => char::from(b'0' + (c as u32 - 0xFF10) as u8),
+        _ => c,
     }
 }

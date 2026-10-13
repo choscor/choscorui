@@ -1,12 +1,14 @@
 //! Input masks and locale-aware numeric and date input contracts. Each
 //! validator maps raw text to a [`ValidationState`]: `Intermediate` while
 //! the user may still be typing toward a valid value, `Invalid` with a
-//! message once no continuation can be valid, and `Valid` with a parsed
-//! value. Commit behavior stays with the field (Return commits only when
-//! the state is `Valid`).
+//! typed error once no continuation can be valid, and `Valid` with a
+//! parsed value. Each rule also gives the [`InputFilter`] that rejects
+//! impossible text at once, and a `commit` check for Return and blur.
 
 use super::ValidationState;
-use choscorui_core::{CivilDate, Locale};
+use crate::InputFilter;
+use crate::validation::{DateError, NumberError, ValidationError};
+use choscorui_core::{CivilDate, DateOrder, Locale};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SlotKind {
@@ -16,9 +18,21 @@ enum SlotKind {
     Any,
 }
 
+/// The case that a mask gives the letters of a slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Case {
+    Keep,
+    Upper,
+    Lower,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Slot {
-    Input { kind: SlotKind, required: bool },
+    Input {
+        kind: SlotKind,
+        required: bool,
+        case: Case,
+    },
     Literal(char),
 }
 
@@ -47,6 +61,8 @@ impl std::error::Error for MaskError {}
 /// | `A` / `a` | letter | yes / no |
 /// | `N` / `n` | letter or digit | yes / no |
 /// | `X` / `x` | any character | yes / no |
+/// | `>` | uppercases the letters of the slots after it | — |
+/// | `<` | lowercases the letters of the slots after it | — |
 /// | `\c` | the literal `c` | — |
 ///
 /// Any other character is a literal that is inserted automatically.
@@ -72,7 +88,13 @@ impl InputMask {
     pub fn parse(pattern: &str) -> Result<Self, MaskError> {
         let mut slots = Vec::new();
         let mut chars = pattern.chars();
+        let mut case = Case::Keep;
         while let Some(ch) = chars.next() {
+            let input = |kind, required| Slot::Input {
+                kind,
+                required,
+                case,
+            };
             let slot = match ch {
                 '0' => input(SlotKind::Digit, true),
                 '9' => input(SlotKind::Digit, false),
@@ -82,6 +104,14 @@ impl InputMask {
                 'n' => input(SlotKind::Alphanumeric, false),
                 'X' => input(SlotKind::Any, true),
                 'x' => input(SlotKind::Any, false),
+                '>' => {
+                    case = Case::Upper;
+                    continue;
+                }
+                '<' => {
+                    case = Case::Lower;
+                    continue;
+                }
                 '\\' => Slot::Literal(chars.next().ok_or(MaskError::TrailingEscape)?),
                 other => Slot::Literal(other),
             };
@@ -122,7 +152,7 @@ impl InputMask {
                         literals.push(*literal);
                         probe += 1;
                     }
-                    Some(Slot::Input { kind, required }) => {
+                    Some(Slot::Input { kind, required, .. }) => {
                         if accepts(*kind, ch) {
                             break Some(probe);
                         }
@@ -138,8 +168,14 @@ impl InputMask {
                     display.push_str(&pending_literals);
                     pending_literals.clear();
                     display.push_str(&literals);
-                    display.push(ch);
-                    value.push(ch);
+                    let case = match self.slots[index] {
+                        Slot::Input { case, .. } => case,
+                        Slot::Literal(_) => Case::Keep,
+                    };
+                    for ch in cased(ch, case) {
+                        display.push(ch);
+                        value.push(ch);
+                    }
                     slot = index + 1;
                 }
                 None => rejected += 1,
@@ -176,10 +212,13 @@ impl InputMask {
             .collect()
     }
 
+    /// Valid when the text fills every required slot, Intermediate while
+    /// it does not, and Invalid with [`ValidationError::Format`] when it
+    /// has characters that fit no slot.
     pub fn validate(&self, raw: &str) -> ValidationState {
         let masked = self.apply(raw);
         if masked.rejected > 0 {
-            ValidationState::Invalid("Contains characters this format does not allow".into())
+            ValidationState::Invalid(ValidationError::Format)
         } else if masked.complete {
             ValidationState::Valid
         } else {
@@ -188,8 +227,13 @@ impl InputMask {
     }
 }
 
-fn input(kind: SlotKind, required: bool) -> Slot {
-    Slot::Input { kind, required }
+/// `ch` in the case of its slot.
+fn cased(ch: char, case: Case) -> Vec<char> {
+    match case {
+        Case::Keep => vec![ch],
+        Case::Upper => ch.to_uppercase().collect(),
+        Case::Lower => ch.to_lowercase().collect(),
+    }
 }
 
 fn accepts(kind: SlotKind, ch: char) -> bool {
@@ -202,6 +246,10 @@ fn accepts(kind: SlotKind, ch: char) -> bool {
 }
 
 /// Locale-aware decimal input with optional bounds and precision.
+///
+/// The text has digits, the locale's group separator in the whole part,
+/// at most one decimal sign when fractions are allowed, and one leading
+/// minus when the minimum is negative or absent.
 #[derive(Clone, Debug)]
 pub struct NumberInput {
     locale: Locale,
@@ -225,61 +273,98 @@ impl NumberInput {
         self
     }
 
-    /// Validation state and, when valid, the parsed value.
-    pub fn validate(&self, text: &str) -> (ValidationState, Option<f64>) {
+    /// True when `text` can still become a valid number of this input, so
+    /// the field lets the user type it. It rejects `1-2`, `1.2.3`, `--`,
+    /// letters, a minus when the minimum is not negative, and more
+    /// fraction digits than the input allows.
+    pub fn accepts(&self, text: &str) -> bool {
+        let negative = self.min.is_none_or(|min| min < 0.0);
+        self.shape(text, self.fraction_digits, negative)
+    }
+
+    /// True when `text` has the shape of a number with at most
+    /// `fraction_digits` fraction digits, and a leading minus only when
+    /// `negative` is true.
+    fn shape(&self, text: &str, fraction_digits: usize, negative: bool) -> bool {
         let data = self.locale.data();
-        let trimmed = text.trim();
-        let partial = trimmed.is_empty()
-            || trimmed.chars().all(|c| {
-                c.is_ascii_digit()
-                    || c == data.decimal
-                    || Some(c) == data.group
-                    || c == '-'
-                    || c == '.'
-            });
-        let Ok(value) = self.locale.parse_decimal(trimmed) else {
-            return if partial {
-                (ValidationState::Intermediate, None)
-            } else {
-                (ValidationState::Invalid("Enter a number".into()), None)
-            };
-        };
-        let digits = trimmed
-            .rsplit_once(data.decimal)
-            .map_or(0, |(_, fraction)| {
-                fraction.chars().filter(char::is_ascii_digit).count()
-            });
-        // The parser also accepts `.` where the locale's separator is `,`, so
-        // check the value itself: it must survive formatting at this
-        // precision unchanged.
-        let representable = value.fract() == 0.0
-            || self.locale.parse_decimal(&self.format(value)).ok() == Some(value);
-        if digits > self.fraction_digits || !representable {
-            let message = format!("Use at most {} decimal places", self.fraction_digits);
-            return (ValidationState::Invalid(message), None);
+        let mut decimal = false;
+        let mut fraction = 0;
+        for (index, ch) in text.chars().enumerate() {
+            if ch.is_ascii_digit() {
+                fraction += usize::from(decimal);
+                if fraction > fraction_digits {
+                    return false;
+                }
+            } else if ch == '-' {
+                if index != 0 || !negative {
+                    return false;
+                }
+            } else if ch == data.decimal && fraction_digits > 0 && !decimal {
+                decimal = true;
+            } else if Some(ch) != data.group || decimal {
+                return false;
+            }
         }
-        if let Some(min) = self.min
-            && value < min
-        {
-            let bound = self.format(min);
-            // Typing "1" toward a minimum of 10 is still in progress: more
-            // whole digits can still reach the bound.
-            let state = if value >= 0.0 && min > 0.0 && !trimmed.contains(data.decimal) {
-                ValidationState::Intermediate
+        true
+    }
+
+    /// The filter that lets the user type only what [`accepts`] allows.
+    ///
+    /// [`accepts`]: Self::accepts
+    pub fn filter(&self) -> InputFilter {
+        let input = self.clone();
+        InputFilter::new().rule(move |text| input.accepts(text))
+    }
+
+    /// Validation state while the user types and, when valid, the parsed
+    /// value. A value below the minimum is Intermediate, because more
+    /// digits can still reach it. [`commit`](Self::commit) makes it
+    /// Invalid.
+    pub fn validate(&self, text: &str) -> (ValidationState, Option<f64>) {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return (ValidationState::Intermediate, None);
+        }
+        // A negative number below a minimum that is not negative is
+        // below the minimum, not malformed.
+        if !self.shape(trimmed, self.fraction_digits, true) {
+            let error = if !self.shape(trimmed, 15, true) {
+                NumberError::NotANumber
+            } else if self.fraction_digits == 0 {
+                NumberError::NotWhole
             } else {
-                ValidationState::Invalid(format!("Must be at least {bound}"))
+                NumberError::TooManyDecimals(self.fraction_digits)
             };
-            return (state, None);
+            return (ValidationState::Invalid(error.into()), None);
+        }
+        let Ok(value) = self.locale.parse_decimal(trimmed) else {
+            return (ValidationState::Intermediate, None);
+        };
+        if self.min.is_some_and(|min| value < min) {
+            return (ValidationState::Intermediate, None);
         }
         if let Some(max) = self.max
             && value > max
         {
-            return (
-                ValidationState::Invalid(format!("Must be at most {}", self.format(max))),
-                None,
-            );
+            let error = NumberError::AboveMaximum(max);
+            return (ValidationState::Invalid(error.into()), None);
         }
         (ValidationState::Valid, Some(value))
+    }
+
+    /// Validation state when the user commits the text with Return or
+    /// blur: as [`validate`](Self::validate), but a value below the
+    /// minimum is Invalid.
+    pub fn commit(&self, text: &str) -> (ValidationState, Option<f64>) {
+        let (state, value) = self.validate(text);
+        if state == ValidationState::Intermediate
+            && let (Some(min), Ok(value)) = (self.min, self.locale.parse_decimal(text.trim()))
+            && value < min
+        {
+            let error = NumberError::BelowMinimum(min);
+            return (ValidationState::Invalid(error.into()), None);
+        }
+        (state, value)
     }
 
     /// Locale formatting used when committing a value back to the field.
@@ -313,30 +398,79 @@ impl DateInput {
         self
     }
 
-    pub fn validate(&self, text: &str) -> (ValidationState, Option<CivilDate>) {
+    /// The fields of the short format, in the locale's order.
+    fn fields(&self) -> [DateField; 3] {
+        match self.locale.data().date_order {
+            DateOrder::DayMonthYear => [DateField::Day, DateField::Month, DateField::Year],
+            DateOrder::MonthDayYear => [DateField::Month, DateField::Day, DateField::Year],
+            DateOrder::YearMonthDay => [DateField::Year, DateField::Month, DateField::Day],
+        }
+    }
+
+    /// True when `text` can still become a date of the locale's short
+    /// format, so the field lets the user type it. It allows digits and
+    /// the locale's date separator, at most the length of each field, and
+    /// rejects a field that no date has, such as month `13` or the year
+    /// `1234/` where the day comes first.
+    pub fn accepts(&self, text: &str) -> bool {
         let separator = self.locale.data().date_separator;
+        if !text
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || ch == separator)
+        {
+            return false;
+        }
+        let parts: Vec<&str> = text.split(separator).collect();
+        if parts.len() > 3 {
+            return false;
+        }
+        let last = parts.len() - 1;
+        parts
+            .iter()
+            .zip(self.fields())
+            .enumerate()
+            .all(|(index, (part, field))| field.allows(part, index < last))
+    }
+
+    /// The filter that lets the user type only what [`accepts`] allows.
+    ///
+    /// [`accepts`]: Self::accepts
+    pub fn filter(&self) -> InputFilter {
+        let input = self.clone();
+        InputFilter::new().rule(move |text| input.accepts(text))
+    }
+
+    /// Validation state and, when valid, the date. Text that can still
+    /// become a date is Intermediate.
+    pub fn validate(&self, text: &str) -> (ValidationState, Option<CivilDate>) {
         let trimmed = text.trim();
-        if let Ok(date) = CivilDate::parse_short(trimmed, &self.locale) {
+        let possible = self.accepts(trimmed);
+        if possible && let Ok(date) = CivilDate::parse_short(trimmed, &self.locale) {
             if self.min.is_some_and(|min| date < min) || self.max.is_some_and(|max| date > max) {
-                return (
-                    ValidationState::Invalid("Date is outside the allowed range".into()),
-                    None,
-                );
+                let error = ValidationError::Date(DateError::OutOfRange);
+                return (ValidationState::Invalid(error), None);
             }
             return (ValidationState::Valid, Some(date));
         }
-        let fields: Vec<&str> = trimmed.split([separator, '/', '.', '-']).collect();
-        let shaped_like_date = trimmed
-            .chars()
-            .all(|c| c.is_ascii_digit() || c == separator || matches!(c, '/' | '.' | '-'))
-            && fields.len() <= 3
-            && fields.iter().all(|field| field.len() <= 4);
-        let incomplete = fields.len() < 3 || fields.last().is_some_and(|year| year.len() < 4);
-        if trimmed.is_empty() || (shaped_like_date && incomplete) {
+        let separator = self.locale.data().date_separator;
+        let parts: Vec<&str> = trimmed.split(separator).collect();
+        let complete = parts.len() == 3
+            && parts
+                .last()
+                .is_some_and(|last| last.len() == self.fields()[2].length());
+        if possible && !complete {
             (ValidationState::Intermediate, None)
         } else {
-            (ValidationState::Invalid("Enter a valid date".into()), None)
+            let error = ValidationError::Date(DateError::NotADate);
+            (ValidationState::Invalid(error), None)
         }
+    }
+
+    /// The date and its text in the locale's short format, when the user
+    /// commits `text` with Return or blur and it is a valid date.
+    pub fn commit(&self, text: &str) -> (ValidationState, Option<(CivilDate, String)>) {
+        let (state, date) = self.validate(text);
+        (state, date.map(|date| (date, self.format(date))))
     }
 
     pub fn format(&self, date: CivilDate) -> String {
@@ -351,6 +485,45 @@ impl DateInput {
             choscorui_core::DateOrder::DayMonthYear => format!("dd{s}mm{s}yyyy"),
             choscorui_core::DateOrder::MonthDayYear => format!("mm{s}dd{s}yyyy"),
             choscorui_core::DateOrder::YearMonthDay => format!("yyyy{s}mm{s}dd"),
+        }
+    }
+}
+
+/// A field of a short date.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DateField {
+    Day,
+    Month,
+    Year,
+}
+
+impl DateField {
+    /// The number of digits of the field.
+    fn length(self) -> usize {
+        match self {
+            Self::Day | Self::Month => 2,
+            Self::Year => 4,
+        }
+    }
+
+    /// True when `part` can be this field. A field that a separator ends
+    /// is `done`: it needs a value that a date has.
+    fn allows(self, part: &str, done: bool) -> bool {
+        if part.len() > self.length() || (done && part.is_empty()) {
+            return false;
+        }
+        let value: u32 = part.parse().unwrap_or(0);
+        let range = match self {
+            Self::Day => 1..=31,
+            Self::Month => 1..=12,
+            Self::Year => return !done || part.len() == 4,
+        };
+        // A full or ended field must be in range. A started one must be
+        // able to reach the range with one more digit.
+        if done || part.len() == self.length() {
+            range.contains(&value)
+        } else {
+            part.is_empty() || value * 10 <= *range.end()
         }
     }
 }

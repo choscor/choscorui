@@ -240,6 +240,7 @@ impl View for ColorPickerPage {
         let hex_state = cx.state(ValidationState::Valid);
         // The state reads as valid after the page unmounts.
         let checked = move || hex_state.try_get().unwrap_or(ValidationState::Valid);
+        let message_env = cx.env().clone();
         let recent = cx.memo(move || {
             model
                 .with(|picker| picker.recent().to_vec())
@@ -305,8 +306,8 @@ impl View for ColorPickerPage {
                     .spacing(Space::S1)
             }),
             Dynamic::new(move || match checked() {
-                ValidationState::Invalid(message) => Some(
-                    Text::new(message)
+                ValidationState::Invalid(error) => Some(
+                    Text::new(error.message(&message_env.localizer()))
                         .text_style(TextPreset::Small)
                         .foreground(ColorRole::Destructive),
                 ),

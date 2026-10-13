@@ -32,7 +32,10 @@ use std::rc::Rc;
 /// message. The button is enabled only while the value is valid, and
 /// Return in the field accepts only a valid value. Both run `on_accept`
 /// with the value. `controls::InputDialog` validates the text for `kind`
-/// in the locale of the environment.
+/// in the locale of the environment. An Integer or Decimal field rejects
+/// keys that cannot make a number. A number below the minimum is
+/// incomplete while the user types, and invalid when the user accepts
+/// it. An accepted number gets the locale format.
 ///
 /// # Examples
 ///
@@ -93,6 +96,8 @@ impl View for InputDialog {
         } = self;
         let env = cx.env().clone();
         let label_env = env.clone();
+        let message_env = env.clone();
+        let value_text = value;
         let model = {
             let (title, prompt) = (title.clone(), prompt.clone());
             Rc::new(move || {
@@ -109,28 +114,57 @@ impl View for InputDialog {
             let model = model.clone();
             cx.memo(move || model().validate().0)
         };
+        // The validation of the last accept that failed, until an edit.
+        let refused = cx.state(None::<ValidationState>);
         // A memo reads as incomplete after the view unmounts.
-        let current = move || {
-            validation
+        let current = move || match refused.try_get().ok().flatten() {
+            Some(state) => state,
+            None => validation
                 .try_get()
-                .unwrap_or(ValidationState::Intermediate)
+                .unwrap_or(ValidationState::Intermediate),
         };
-        let submit = move || {
-            if let Some(Ok(value)) = model().handle_key(Key::Enter) {
-                on_accept(value);
+        let submit = {
+            let model = model.clone();
+            move || {
+                let model = model();
+                match model.commit() {
+                    (_, Some(value)) => {
+                        let formatted = match value {
+                            InputValue::Integer(number) => {
+                                model.number().map(|rule| rule.format(number as f64))
+                            }
+                            InputValue::Decimal(number) => {
+                                model.number().map(|rule| rule.format(number))
+                            }
+                            _ => None,
+                        };
+                        if let Some(formatted) = formatted {
+                            value_text.set(formatted);
+                        }
+                        on_accept(value);
+                    }
+                    (state, None) => refused.set(Some(state)),
+                }
             }
         };
+        let filter = model.clone();
         let field = Input::new(prompt.clone(), value)
-            .with(move |mut input| {
+            .with(move |input| {
+                let mut input = input.with_filter(filter().filter());
                 input.set_validation(current());
                 input
+            })
+            .on_message(move |message| {
+                if let ControlMessage::Changed(_) = message {
+                    refused.set(None);
+                }
             })
             .on_activate(submit.clone());
         let button =
             Button::new(accept, submit).disabled(move || current() != ValidationState::Valid);
         let message = Dynamic::new(move || match current() {
-            ValidationState::Invalid(message) => Some(
-                Text::new(message)
+            ValidationState::Invalid(error) => Some(
+                Text::new(error.message(&message_env.localizer()))
                     .text_style(TextPreset::Small)
                     .foreground(Fill::Role(ColorRole::Destructive)),
             ),

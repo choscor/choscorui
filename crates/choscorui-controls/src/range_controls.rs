@@ -1,10 +1,12 @@
+use crate::form::step_text::StepText;
 use crate::style::fill_area;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState, fill_shape,
 };
+use crate::{InputFilter, NumberInput};
 use choscorui_core::{
-    Dirty, Icon, Key, KeyEvent, LayoutDirection, NodeId, Path, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Tree, TreeError,
+    Dirty, Icon, Key, KeyEvent, LayoutDirection, Locale, NodeId, Path, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,6 +15,8 @@ pub enum RangeError {
     ZeroStep,
     InvalidMaximum,
     MissingNode,
+    /// A bound is NaN.
+    NotANumber,
 }
 
 impl std::fmt::Display for RangeError {
@@ -22,6 +26,7 @@ impl std::fmt::Display for RangeError {
             Self::ZeroStep => f.write_str("the step must be positive"),
             Self::InvalidMaximum => f.write_str("the maximum must be greater than zero"),
             Self::MissingNode => f.write_str("the control's node is not in the tree"),
+            Self::NotANumber => f.write_str("a bound is not a number"),
         }
     }
 }
@@ -426,21 +431,27 @@ pub enum SpinBoxInput {
 /// The width of the stepper column at the end of a spin box.
 pub const STEPPER_WIDTH: f64 = 24.0;
 
-/// An integer field with up and down steppers at its end.
+/// An integer field with up and down steppers at its end. In a control
+/// host, its text edits like an input.
 pub struct SpinBox {
     label: String,
     range: IntegerRange,
     enabled: bool,
     direction: LayoutDirection,
+    /// The editable text in a control host.
+    text: StepText,
 }
 
 impl SpinBox {
     pub fn new(label: impl Into<String>, range: IntegerRange) -> Self {
+        let label = label.into();
+        let text = StepText::new(&label, &range.value().to_string(), integer_filter(range));
         Self {
-            label: label.into(),
+            label,
             range,
             enabled: true,
             direction: LayoutDirection::Ltr,
+            text,
         }
     }
 
@@ -573,6 +584,20 @@ pub(crate) fn paint_stepper_field(
     steppers: Rect,
 ) {
     let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
+    paint_stepper_box(cx, state, steppers, |cx, rect| {
+        cx.label(rect, text, &style, TextAlign::Start);
+    });
+}
+
+/// Paints an input box with a stepper column with up and down chevrons
+/// at `steppers`. `text` paints the text in the rest of the box.
+pub(crate) fn paint_stepper_box(
+    cx: &mut PaintContext<'_>,
+    state: VisualState,
+    steppers: Rect,
+    text: impl FnOnce(&mut PaintContext<'_>, Rect),
+) {
+    let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root).state(state));
     let icon = cx.style(StyleQuery::new(ControlKind::Input, Slot::Icon).state(state));
     let bounds = cx.bounds;
     cx.slot(bounds, &style, |cx, rect| {
@@ -582,8 +607,10 @@ pub(crate) fn paint_stepper_field(
         } else {
             rect.origin.x
         };
-        let text_rect = Rect::from_xywh(x, rect.origin.y, width, rect.size.height);
-        cx.label(text_rect, text, &style, TextAlign::Start);
+        text(
+            cx,
+            Rect::from_xywh(x, rect.origin.y, width, rect.size.height),
+        );
         let half = steppers.size.height / 2.0;
         let up = Rect::from_xywh(
             steppers.origin.x,
@@ -902,7 +929,69 @@ impl crate::CustomControl for Slider {
     }
 }
 
+/// The filter of a spin box's text: whole numbers, with a minus when the
+/// range has negative values.
+fn integer_filter(range: IntegerRange) -> InputFilter {
+    NumberInput::new(Locale::root(), 0)
+        .with_range(
+            Some(f64::from(range.minimum())),
+            Some(f64::from(range.maximum())),
+        )
+        .filter()
+}
+
 impl SpinBox {
+    /// The value of the edited text, clamped to the range, or `None`
+    /// when the text is no number.
+    fn pending(&self) -> Option<i32> {
+        let value = Locale::root().parse_integer(self.text.text().trim()).ok()?;
+        let value = value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        Some(value.clamp(self.range.minimum(), self.range.maximum()))
+    }
+
+    /// Sets the value from the edited text, clamped to the range, and
+    /// formats the text. Text that is no number gives way to the value.
+    fn commit(&mut self, cx: &mut crate::ControlContext<'_>) {
+        if let Some(value) = self.pending()
+            && value != self.range.value()
+        {
+            self.range.set_value(value);
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+                f64::from(value),
+            )));
+        }
+        self.text.set(&self.range.value().to_string());
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
+    /// Takes the pending text and then steps with `key`. A step past the
+    /// end of the range beeps.
+    fn step(&mut self, cx: &mut crate::ControlContext<'_>, key: Key) {
+        let before = self.range.value();
+        if let Some(value) = self.pending() {
+            self.range.set_value(value);
+        }
+        let pending = self.range.value();
+        match key {
+            Key::ArrowUp => self.range.increment(),
+            Key::ArrowDown => self.range.decrement(),
+            Key::Home => self.range.set_value(self.range.minimum()),
+            _ => self.range.set_value(self.range.maximum()),
+        };
+        if self.range.value() == pending {
+            cx.beep();
+        }
+        if self.range.value() != before {
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+                f64::from(self.range.value()),
+            )));
+        }
+        self.text.set(&self.range.value().to_string());
+        cx.request_paint();
+        cx.request_semantics();
+    }
+
     /// The stepper column inside `bounds` for the reading direction.
     fn steppers(bounds: Rect, rtl: bool) -> Rect {
         let width = STEPPER_WIDTH.min(bounds.size.width);
@@ -935,25 +1024,71 @@ impl crate::CustomControl for SpinBox {
         self.direction = cx.direction;
     }
 
+    /// The text edits like an input, through the integer filter. Focus
+    /// selects the whole text. Arrows, Home, End, and the steppers take
+    /// the pending text and then step; a step past the end of the range
+    /// beeps. Return and a loss of focus commit the text, clamped to the
+    /// range.
     fn event(
         &mut self,
         cx: &mut crate::ControlContext<'_>,
         event: &crate::ControlEvent,
     ) -> choscorui_core::EventReply {
-        let Some(routed) = crate::hosted::route(cx, event) else {
-            return choscorui_core::EventReply::Continue;
-        };
-        let input = match routed {
-            crate::hosted::Routed::Pointer(event) => SpinBoxInput::Pointer(event),
-            crate::hosted::Routed::Key(event) => SpinBoxInput::Key(event),
-            // A spin box has no press to cancel.
-            crate::hosted::Routed::Cancel => return choscorui_core::EventReply::Continue,
-        };
-        let node = cx.node();
-        let changed = self.handle(cx.tree_mut(), node, input);
-        emit_number(cx, changed);
-        cx.request_paint();
-        range_reply(routed)
+        use crate::ControlEvent;
+        use choscorui_core::EventReply;
+        if cx.phase() != choscorui_core::EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let rtl = self.direction == LayoutDirection::Rtl;
+        let steppers = Self::steppers(cx.bounds(), rtl);
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if steppers.contains(*position) => {
+                let up = position.y < steppers.center().y;
+                self.step(cx, if up { Key::ArrowUp } else { Key::ArrowDown });
+                cx.request_focus();
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. })
+                if cx.is_focused()
+                    && matches!(key, Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End) =>
+            {
+                self.step(cx, *key);
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Enter, ..
+            }) if cx.is_focused() => {
+                self.commit(cx);
+                EventReply::Stop
+            }
+            ControlEvent::Key(KeyEvent::Down {
+                key: Key::Escape, ..
+            }) if cx.is_focused() => {
+                self.text.set(&self.range.value().to_string());
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::FocusChanged(true) => {
+                self.text.select_all();
+                cx.request_paint();
+                EventReply::Continue
+            }
+            ControlEvent::FocusChanged(false) => {
+                self.commit(cx);
+                EventReply::Continue
+            }
+            _ => {
+                let rect = crate::form::step_text::text_rect(cx.bounds(), steppers);
+                let (reply, edited) = self.text.event(cx, event, rect);
+                if edited {
+                    cx.request_semantics();
+                }
+                reply
+            }
+        }
     }
 
     /// The input look: a focused spin box always shows the focus ring.
@@ -963,7 +1098,7 @@ impl crate::CustomControl for SpinBox {
             .set(VisualState::FOCUS_VISIBLE, cx.state.focused())
             .set(VisualState::DISABLED, cx.state.disabled() || !self.enabled);
         let steppers = Self::steppers(cx.bounds, cx.rtl);
-        paint_stepper_field(cx, &self.range.value().to_string(), state, steppers);
+        self.text.paint(cx, self.text.state(state), steppers);
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -996,6 +1131,7 @@ impl crate::CustomControl for SpinBox {
         };
         let node = cx.node();
         let changed = self.handle(cx.tree_mut(), node, SpinBoxInput::Semantic(semantic));
+        self.text.set(&self.range.value().to_string());
         emit_number(cx, changed);
         cx.request_paint();
         true
@@ -1003,12 +1139,14 @@ impl crate::CustomControl for SpinBox {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        self.text.set_enabled(enabled);
     }
 
     fn set_value(&mut self, value: &crate::ControlValue) -> bool {
         match value {
             crate::ControlValue::Number(value) => integer(*value).is_some_and(|value| {
                 self.range.set_value(value);
+                self.text.set(&self.range.value().to_string());
                 true
             }),
             _ => false,

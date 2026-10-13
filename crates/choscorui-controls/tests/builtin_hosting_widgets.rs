@@ -264,7 +264,8 @@ fn a_hosted_scroll_bar_pages_drags_and_steps() {
 #[test]
 fn a_hosted_decimal_spin_box_steps_types_and_commits() {
     let locale = Locale::parse("en-US").unwrap();
-    let spin = DecimalSpinBox::new("Amount", locale, (0.0, 10.0), 0.5, 1, 2.0);
+    let spin =
+        DecimalSpinBox::new("Amount", locale, (0.0, 10.0), 0.5, 1, 2.0).expect("a valid range");
     let mut h = Harness::new(spin);
     assert_eq!(h.semantics().role, SemanticRole::SpinButton);
     h.focus();

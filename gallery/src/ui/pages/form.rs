@@ -276,7 +276,7 @@ pub fn native_select_page(_: &PageCx) -> AnyView {
 fn invalid_username(cx: &mut Cx) -> impl View {
     let error = text(cx.env(), "input.username_error");
     Input::new(t!("input.username"), cx.state("a".to_owned()).binding()).with(move |mut input| {
-        input.set_validation(ValidationState::Invalid(error.clone()));
+        input.set_validation(ValidationState::Invalid(error.clone().into()));
         input
     })
 }
@@ -406,10 +406,9 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
                 )]
             })
             .with_env(|mut group, env| {
-                group.set_validation(ValidationState::Invalid(text(
-                    env,
-                    "input-group.email_error",
-                )));
+                group.set_validation(ValidationState::Invalid(
+                    text(env, "input-group.email_error").into(),
+                ));
                 group
             }),
         ),

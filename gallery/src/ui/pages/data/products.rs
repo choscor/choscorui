@@ -11,7 +11,7 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::{
     self, CellEdit, ControlKind, ControlMessage, ControlValue, DataMapper, DefaultEditorFactory,
-    HeaderColumn, HeaderView, TextItemDelegate, ValidationState,
+    HeaderColumn, HeaderView, TextItemDelegate, ValidationError, ValidationState,
 };
 use choscorui::core::{
     ColorRole, ItemData, ItemModel, Key, LayoutDirection, ModelError, Role, SemanticRole, Space,
@@ -222,7 +222,7 @@ impl View for CellEditPage {
         let selected = cx.state(Vec::new());
         let column = cx.state(1_usize);
         let edit = cx.state(None::<CellEdit>);
-        let error = cx.state(None::<String>);
+        let error = cx.state(None::<ValidationError>);
         let table_focused = cx.state(false);
         let edit_focused = cx.state(false);
         let env = cx.env().clone();
@@ -308,6 +308,7 @@ impl View for CellEditPage {
             validation,
             table_focused,
             edit_focused,
+            env: cx.env().clone(),
         };
         VStack::new((
             bar,
@@ -339,10 +340,11 @@ impl View for CellEditPage {
 struct Editor {
     model: SharedModel<TreeStore<Product>>,
     edit: State<Option<CellEdit>>,
-    error: State<Option<String>>,
+    error: State<Option<ValidationError>>,
     validation: choscorui::compose::view::Memo<ValidationState>,
     table_focused: State<bool>,
     edit_focused: State<bool>,
+    env: Env,
 }
 
 impl Editor {
@@ -360,7 +362,7 @@ impl Editor {
         };
         match edit.commit(&mut *self.model.model.borrow_mut()) {
             Ok(()) => self.close(),
-            Err(message) => self.error.set(Some(message)),
+            Err(error) => self.error.set(Some(error)),
         }
     }
 
@@ -371,16 +373,38 @@ impl Editor {
     }
 
     /// The field for the open edit, named after its column, with the
-    /// validation message under it.
+    /// validation message under it. A bool column edits with a checkbox
+    /// that Space toggles.
     fn field(self) -> impl View {
-        let column = self
-            .edit
-            .get_untracked()
-            .ok()
-            .flatten()
-            .map_or(0, |edit| edit.column);
-        let (built, cancel, shown, typed, committed, message) = (
-            self.clone(),
+        let edit = self.edit.get_untracked().ok().flatten();
+        let column = edit.as_ref().map_or(0, |edit| edit.column);
+        let boolean = edit.is_some_and(|edit| edit.checked().is_some());
+        let message = self.clone();
+        let focused = self.edit_focused.binding();
+        let editor = if boolean {
+            Either::Left(self.checkbox(column))
+        } else {
+            Either::Right(self.input(column))
+        };
+        VStack::new((
+            editor.focused(focused).frame(Frame::new().width(260.0)),
+            Dynamic::new(move || match message.validation() {
+                ValidationState::Invalid(error) => {
+                    let env = message.env.clone();
+                    Some(problem(error.message(&env.localizer())))
+                }
+                _ => None,
+            }),
+        ))
+        .alignment(HorizontalAlignment::Leading)
+        .spacing(Space::S1)
+        .padding(Space::S2)
+    }
+
+    /// The text field of a text or number column. A number column takes
+    /// only the keys that can make a number.
+    fn input(self, column: usize) -> impl View {
+        let (built, cancel, shown, typed, committed) = (
             self.clone(),
             self.clone(),
             self.clone(),
@@ -388,10 +412,17 @@ impl Editor {
             self.clone(),
         );
         let cancel: Rc<dyn Fn(Key)> = Rc::new(move |_| cancel.close());
-        let field = Configured::custom(ControlKind::Input, move |env| {
+        Configured::custom(ControlKind::Input, move |env| {
             let title = column_title(env, column);
             let name = env.text("cell-edit.editing", &[("column", &title)]);
-            let mut input = controls::Input::new(name, "");
+            let filter = built
+                .edit
+                .get_untracked()
+                .ok()
+                .flatten()
+                .map(|edit| edit.filter())
+                .unwrap_or_default();
+            let mut input = controls::Input::new(name, "").with_filter(filter);
             input.set_validation(built.validation());
             Handle::keyed(input, &[Key::Escape], cancel.clone())
         })
@@ -409,17 +440,42 @@ impl Editor {
             }
         })
         .on_activate(move || committed.commit())
-        .focused(self.edit_focused.binding());
-        VStack::new((
-            field.frame(Frame::new().width(260.0)),
-            Dynamic::new(move || match message.validation() {
-                ValidationState::Invalid(text) => Some(problem(text)),
-                _ => None,
-            }),
-        ))
-        .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S1)
-        .padding(Space::S2)
+    }
+
+    /// The checkbox of a bool column: Space toggles, Return commits, and
+    /// Escape cancels.
+    fn checkbox(self, column: usize) -> impl View {
+        let (keys, shown, toggled) = (self.clone(), self.clone(), self.clone());
+        let keys: Rc<dyn Fn(Key)> = Rc::new(move |key| {
+            if key == Key::Enter {
+                keys.commit();
+            } else {
+                keys.close();
+            }
+        });
+        Configured::custom(ControlKind::Checkbox, move |env| {
+            let title = column_title(env, column);
+            let name = env.text("cell-edit.editing", &[("column", &title)]);
+            Handle::keyed(
+                controls::Checkbox::new(name, false),
+                &[Key::Escape, Key::Enter],
+                keys.clone(),
+            )
+        })
+        .value(move || {
+            let checked = shown.edit.get().and_then(|edit| edit.checked());
+            ControlValue::Bool(checked.unwrap_or(false))
+        })
+        .on_message(move |message| {
+            if let ControlMessage::Changed(ControlValue::Bool(checked)) = message {
+                toggled.edit.update(|edit| {
+                    if let Some(edit) = edit {
+                        edit.set_checked(*checked);
+                    }
+                });
+                toggled.error.set(None);
+            }
+        })
     }
 }
 
@@ -441,18 +497,19 @@ pub fn cell_edit(_: &PageCx) -> AnyView {
 const MAPPED: [usize; 3] = [0, 1, 2];
 
 /// Parses the text of mapped column `column` in `env`'s locale.
-fn parse_mapped(env: &Env, column: usize, text: &str) -> Result<Value, String> {
+fn parse_mapped(env: &Env, column: usize, text: &str) -> Result<Value, ValidationError> {
     let locale = env.locale();
+    let message = |id: &str| ValidationError::Message(env.text(id, &[]));
     match column {
         1 => locale
             .parse_integer(text.trim())
             .map(Value::Int)
-            .map_err(|_| env.text("data-mapper.whole_number", &[])),
+            .map_err(|_| message("data-mapper.whole_number")),
         2 => locale
             .parse_decimal(text.trim())
             .map(Value::Float)
-            .map_err(|_| env.text("data-mapper.price", &[])),
-        _ if text.trim().is_empty() => Err(env.text("data-mapper.name_required", &[])),
+            .map_err(|_| message("data-mapper.price")),
+        _ if text.trim().is_empty() => Err(message("data-mapper.name_required")),
         _ => Ok(Value::Text(text.to_owned())),
     }
 }
@@ -464,7 +521,7 @@ struct Form {
     model: SharedModel<TreeStore<Product>>,
     mapper: Rc<RefCell<DataMapper>>,
     version: State<u64>,
-    errors: State<Vec<(usize, String)>>,
+    errors: State<Vec<(usize, ValidationError)>>,
     env: Env,
 }
 
@@ -497,12 +554,12 @@ impl Form {
         mapper.current().is_some_and(|key| mapper.has_pending(key))
     }
 
-    fn error(&self, column: usize) -> Option<String> {
+    fn error(&self, column: usize) -> Option<ValidationError> {
         self.errors
             .get()
             .into_iter()
             .find(|(mapped, _)| *mapped == column)
-            .map(|(_, message)| message)
+            .map(|(_, error)| error)
     }
 
     /// Writes the pending fields; invalid ones keep their messages.
@@ -556,14 +613,18 @@ impl Form {
                 ),
             )
             .with(move |mut input| {
-                if let Some(message) = built.error(column) {
-                    input.set_validation(ValidationState::Invalid(message));
+                if let Some(error) = built.error(column) {
+                    input.set_validation(ValidationState::Invalid(error));
                 }
                 input
             })
             .on_activate(move || submitted.submit())
             .frame(Frame::new().width(260.0)),
-            Dynamic::new(move || checked.error(column).map(problem)),
+            Dynamic::new(move || {
+                checked
+                    .error(column)
+                    .map(|error| problem(error.message(&checked.env.localizer())))
+            }),
         ))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S1)
@@ -676,14 +737,17 @@ mod tests {
         press_key(&mut page, Key::ArrowDown);
         press_key(&mut page, Key::Enter);
         assert_eq!(page.value("Editing Quantity").as_deref(), Some("0"));
+        // The number column refuses letters.
         set_value(&mut page, "Editing Quantity", "many");
+        assert_eq!(page.value("Editing Quantity").as_deref(), Some("0"));
+        set_value(&mut page, "Editing Quantity", "");
         press_key(&mut page, Key::Enter);
-        assert!(page.host.find("Enter a whole number").is_some());
+        assert!(page.host.find("Enter a number").is_some());
         let field = page.node("Editing Quantity");
         assert!(page.host.semantic(field).unwrap().state.invalid);
         assert_eq!(
             page.value("Editable products").as_deref(),
-            Some("Editing Quantity: many")
+            Some("Editing Quantity: ")
         );
         set_value(&mut page, "Editing Quantity", "12");
         press_key(&mut page, Key::Enter);

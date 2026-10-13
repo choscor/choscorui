@@ -6,7 +6,7 @@ use choscorui_controls::{
 use choscorui_controls::{ButtonVariant, EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Key,
-    Locale, Point, Rect, SemanticRole, Size, TextStyle, Tree,
+    Locale, Localizer, Point, Rect, SemanticRole, Size, TextStyle, Tree,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -190,7 +190,8 @@ fn input_dialog_validates_each_kind() {
     );
     assert_eq!(line.validate().1, Some(InputValue::Integer(1200)));
     line.set_text("99999");
-    assert!(matches!(line.validate().0, ValidationState::Invalid(m) if m.contains("12,000")));
+    assert!(matches!(line.validate().0, ValidationState::Invalid(m)
+            if m.message(Localizer::builtin()).contains("12,000")));
     line.set_text("-");
     assert_eq!(line.validate().0, ValidationState::Intermediate);
 

@@ -85,38 +85,41 @@ impl Configured<controls::InputGroup> {
 
 impl Configured<controls::Input> {
     /// An input that fits what the user types into `mask` and shows its
-    /// literals. `raw` edits the characters that the user typed, without
-    /// the literals. A deletion at the end removes typed characters until
-    /// the shown text is no longer than what is left, so a mask does not
-    /// put a deleted literal back. Check the value with
+    /// literals. `value` edits the text with the literals, for example
+    /// `(090) 512-3456`. A key that fits no slot changes nothing and
+    /// beeps. A paste keeps the characters that fit. The caret keeps its
+    /// place among the typed characters, and a deletion of a literal
+    /// deletes the typed character before it. Check the value with
     /// [`InputMask::validate`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::InputMask;
+    /// struct Phone;
+    ///
+    /// impl View for Phone {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let phone = cx.state(String::new());
+    ///         let mask = InputMask::parse("(000) 000-0000").expect("a valid mask");
+    ///         Input::masked("Phone", mask, phone.binding())
+    ///     }
+    /// }
+    /// ```
     pub fn masked<M>(
         name: impl IntoLive<TextContent, M>,
         mask: InputMask,
-        raw: Binding<String>,
+        value: Binding<String>,
     ) -> Self {
         let name = label(name);
         let placeholder = mask.placeholder('_');
-        let shown = mask.clone();
         Configured::custom(ControlKind::Input, move |env| {
-            controls::Input::new(text(&name, env), "").with_placeholder(placeholder.clone())
+            controls::Input::new(text(&name, env), "")
+                .with_placeholder(placeholder.clone())
+                .masked(mask.clone())
         })
-        .value(move || ControlValue::Text(shown.apply(&raw.get()).display))
-        .on_message(move |message| {
-            let ControlMessage::Changed(ControlValue::Text(typed)) = message else {
-                return;
-            };
-            let Ok(mut next) = raw.try_get() else {
-                return;
-            };
-            let before = mask.apply(&next).display;
-            if typed.len() < before.len() && before.starts_with(typed.as_str()) {
-                while mask.apply(&next).display.len() > typed.len() && next.pop().is_some() {}
-            } else {
-                next = mask.apply(typed).value;
-            }
-            raw.set(next);
-        })
+        .bind(value, ControlValue::Text, as_text)
     }
 }
 
@@ -150,7 +153,7 @@ impl Configured<controls::DecimalSpinBox> {
     ) -> Self {
         let name = label(name);
         let limits = (*bounds.start(), *bounds.end());
-        Configured::custom(ControlKind::Input, move |env| {
+        Configured::try_custom(ControlKind::Input, move |env| {
             let start = limits.0;
             controls::DecimalSpinBox::new(
                 text(&name, env),

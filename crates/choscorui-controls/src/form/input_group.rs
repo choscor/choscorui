@@ -373,7 +373,11 @@ impl CustomControl for InputGroup {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let mut node = self.editor.semantics();
+        self.semantics_in(choscorui_core::Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &choscorui_core::Localizer) -> SemanticNode {
+        let mut node = self.editor.semantics(strings);
         // Addon text describes the value, for example a unit or a domain.
         node.description = self
             .addons

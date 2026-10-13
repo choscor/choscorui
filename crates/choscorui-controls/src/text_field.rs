@@ -1,5 +1,6 @@
-use crate::InputText;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
+use crate::{Accepted, InputFilter, InputText, ValidationError};
+use choscorui_core::Localizer;
 use choscorui_core::{
     Dirty, Key, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, SemanticText,
@@ -8,7 +9,7 @@ use choscorui_core::{
 use std::cell::RefCell;
 use std::ops::Range;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TextFieldInput {
     Text(String),
     SetMarkedText {
@@ -48,6 +49,8 @@ pub enum TextFieldChange {
     CommitRejected,
     ValidationChanged,
     Composition,
+    /// The filter rejected the edit. Nothing changed.
+    Rejected,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,11 +67,11 @@ pub enum ValidationKind {
     Invalid,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValidationState {
     Valid,
     Intermediate,
-    Invalid(String),
+    Invalid(ValidationError),
 }
 
 impl ValidationState {
@@ -143,6 +146,8 @@ pub struct TextField {
     composition: Option<TextComposition>,
     secure: bool,
     placeholder: String,
+    /// What the user may type, paste, or set.
+    filter: InputFilter,
     /// Caret placement by pointer in a control host.
     pointer: HostedPointer,
 }
@@ -162,8 +167,25 @@ impl TextField {
             composition: None,
             secure: false,
             placeholder: String::new(),
+            filter: InputFilter::new(),
             pointer: HostedPointer::default(),
         }
+    }
+
+    /// Lets the user type, paste, and set only what `filter` accepts.
+    #[must_use]
+    pub fn with_filter(mut self, filter: InputFilter) -> Self {
+        self.filter = filter;
+        self
+    }
+
+    /// Sets the filter of later edits. The current text stays.
+    pub fn set_filter(&mut self, filter: InputFilter) {
+        self.filter = filter;
+    }
+
+    pub fn filter(&self) -> &InputFilter {
+        &self.filter
     }
 
     /// Text shown in muted color while the value is empty.
@@ -282,6 +304,12 @@ impl TextField {
         }
     }
 
+    /// Selects the whole text, without a tree, for hosted fields.
+    pub(crate) fn select_all_text(&mut self) {
+        let count = self.buffer.grapheme_count();
+        let _ = self.buffer.set_selection(0, count);
+    }
+
     /// Sets the validation state without a tree, for hosted inputs.
     pub(crate) fn set_validation_state(&mut self, validation: ValidationState) {
         self.validation = validation;
@@ -343,11 +371,12 @@ impl TextField {
         let before_composition = self.composition.clone();
         let mut committed = false;
         let mut commit_rejected = false;
+        let mut rejected = false;
         match input {
             TextFieldInput::Text(text) => {
                 self.composition = None;
-                self.buffer
-                    .replace_selection(&text.replace(['\n', '\r'], ""));
+                let range = self.buffer.selection();
+                rejected = !self.edit(range, &text.replace(['\n', '\r'], ""));
             }
             TextFieldInput::SetMarkedText {
                 text,
@@ -371,26 +400,23 @@ impl TextField {
                 replacement_utf16,
             } => {
                 self.composition = None;
-                if let Some(range) =
-                    replacement_utf16.and_then(|range| self.utf16_range_to_graphemes(range))
-                {
-                    self.buffer
-                        .set_selection(range.start, range.end)
-                        .expect("converted UTF-16 range is on grapheme boundaries");
-                }
-                self.buffer
-                    .replace_selection(&text.replace(['\n', '\r'], ""));
+                let range = replacement_utf16
+                    .and_then(|range| self.utf16_range_to_graphemes(range))
+                    .unwrap_or_else(|| self.buffer.selection());
+                rejected = !self.edit(range, &text.replace(['\n', '\r'], ""));
             }
             TextFieldInput::UnmarkMarkedText => {
                 if let Some(composition) = self.composition.take() {
-                    self.buffer
-                        .set_selection(composition.replacement.start, composition.replacement.end)
-                        .expect("composition replacement remains valid");
-                    self.buffer.replace_selection(&composition.text);
+                    rejected = !self.edit(composition.replacement, &composition.text);
                 }
             }
             TextFieldInput::CancelMarkedText => self.composition = None,
-            TextFieldInput::SetValue(text) => self.replace_value(&text),
+            TextFieldInput::SetValue(text) => {
+                self.composition = None;
+                let all = 0..self.buffer.grapheme_count();
+                let text = text.replace(['\n', '\r'], "");
+                rejected = text != self.buffer.as_str() && !self.edit(all, &text);
+            }
             TextFieldInput::Undo => {
                 self.buffer.undo();
             }
@@ -404,8 +430,13 @@ impl TextField {
                     .expect("buffer range is valid");
             }
             TextFieldInput::Cut => {
-                if !self.secure {
-                    self.buffer.cut_selection();
+                let range = self.buffer.selection();
+                if !self.secure && !range.is_empty() {
+                    if self.filter.mask().is_some() {
+                        self.edit(range, "");
+                    } else {
+                        self.buffer.cut_selection();
+                    }
                 }
             }
             TextFieldInput::SetCaret { caret, extend } => {
@@ -419,6 +450,20 @@ impl TextField {
                 extend,
                 word,
             } => match key {
+                Key::Backspace | Key::Delete if self.filter.mask().is_some() => {
+                    let selection = self.buffer.selection();
+                    let (caret, count) = (self.buffer.caret(), self.buffer.grapheme_count());
+                    let range = if !selection.is_empty() {
+                        selection
+                    } else if key == Key::Backspace {
+                        caret.saturating_sub(1)..caret
+                    } else {
+                        caret..(caret + 1).min(count)
+                    };
+                    if !range.is_empty() {
+                        self.edit(range, "");
+                    }
+                }
                 Key::Backspace => self.buffer.delete_backward(),
                 Key::Delete => self.buffer.delete_forward(),
                 Key::ArrowLeft => {
@@ -462,7 +507,9 @@ impl TextField {
         let selection_changed = self.buffer.selection() != before_selection;
         let validation_changed = self.validation != before_validation;
         let composition_changed = self.composition != before_composition;
-        if edited {
+        if rejected {
+            Ok(TextFieldChange::Rejected)
+        } else if edited {
             tree.invalidate(id, Dirty::PAINT)?;
             tree.invalidate(id, Dirty::SEMANTICS)?;
             Ok(TextFieldChange::Edited)
@@ -489,12 +536,14 @@ impl TextField {
         }
     }
 
+    /// The semantics, with the built-in English messages.
     pub fn semantics(&self, tree: &Tree, id: NodeId) -> TextFieldSemantics {
-        self.semantics_for(tree.focus() == Some(id))
+        self.semantics_for(tree.focus() == Some(id), Localizer::builtin())
     }
 
-    /// The semantics with focus given directly.
-    pub(crate) fn semantics_for(&self, focused: bool) -> TextFieldSemantics {
+    /// The semantics with focus given directly, and the validation
+    /// message in the locale of `strings`.
+    pub(crate) fn semantics_for(&self, focused: bool, strings: &Localizer) -> TextFieldSemantics {
         const ACTIONS: &[TextFieldSemanticAction] = &[TextFieldSemanticAction::SetValue];
         TextFieldSemantics {
             role: if self.secure {
@@ -512,7 +561,7 @@ impl TextField {
             focused,
             validation: self.validation.kind(),
             announcement: match &self.validation {
-                ValidationState::Invalid(message) => Some(message.clone()),
+                ValidationState::Invalid(error) => Some(error.message(strings)),
                 _ => None,
             },
             actions: if self.enabled { ACTIONS } else { &[] },
@@ -535,9 +584,43 @@ impl TextField {
         }
     }
 
+    /// Puts `insert` in place of the grapheme `range` when the filter
+    /// accepts it, as one undoable edit. Returns false when the filter
+    /// rejects it: then nothing changes.
+    fn edit(&mut self, range: Range<usize>, insert: &str) -> bool {
+        match self
+            .filter
+            .accept(self.buffer.as_str(), range.clone(), insert)
+        {
+            None => false,
+            Some(Accepted::Insert(text)) => {
+                self.buffer
+                    .set_selection(range.start, range.end)
+                    .expect("the edited range is on grapheme boundaries");
+                self.buffer.replace_selection(&text);
+                true
+            }
+            Some(Accepted::Value { text, caret }) => {
+                if text != self.buffer.as_str() {
+                    let count = self.buffer.grapheme_count();
+                    self.buffer
+                        .set_selection(0, count)
+                        .expect("buffer range is valid");
+                    self.buffer.replace_selection(&text);
+                }
+                let _ = self.buffer.set_caret(caret, false);
+                true
+            }
+        }
+    }
+
     /// Replaces the whole value with `text` without line breaks, as one
-    /// undoable edit, and drops marked text.
-    fn replace_value(&mut self, text: &str) {
+    /// undoable edit, and drops marked text. The value comes from the
+    /// application, so the filter does not check it, but a mask formats
+    /// it.
+    pub(crate) fn replace_value(&mut self, text: &str) {
+        let masked = self.filter.mask().map(|mask| mask.apply(text).display);
+        let text = masked.as_deref().unwrap_or(text);
         self.composition = None;
         let text = text.replace(['\n', '\r'], "");
         if text != self.buffer.as_str() {
@@ -609,6 +692,10 @@ impl TextField {
             .unwrap_or(TextFieldChange::None);
         match change {
             TextFieldChange::None => return,
+            TextFieldChange::Rejected => {
+                cx.beep();
+                return;
+            }
             TextFieldChange::Edited => cx.emit(crate::ControlMessage::Changed(
                 crate::ControlValue::Text(self.value().to_owned()),
             )),
@@ -741,7 +828,11 @@ impl crate::CustomControl for TextField {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.semantics_for(false).shared()
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.semantics_for(false, strings).shared()
     }
 
     fn perform(

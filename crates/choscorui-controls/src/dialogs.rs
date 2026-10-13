@@ -15,7 +15,10 @@ use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
     TextMeasure, VisualState,
 };
-use crate::{ComboChange, ComboInput, FontChooser, NumberInput, ValidationState};
+use crate::{
+    ComboChange, ComboInput, FontChooser, InputFilter, NumberError, NumberInput, ValidationError,
+    ValidationState,
+};
 use choscorui_core::{
     Color, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent, Locale,
     Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
@@ -453,7 +456,7 @@ impl ColorPicker {
                 self.set_color(color);
                 ValidationState::Valid
             }
-            None => ValidationState::Invalid("Enter a hex color such as #1E90FF".into()),
+            None => ValidationState::Invalid(ValidationError::Color),
         }
     }
 
@@ -777,7 +780,10 @@ impl FontDialog {
             self.size = size;
             ValidationState::Valid
         } else {
-            ValidationState::Invalid("Size must be between 1 and 4096 points".into())
+            ValidationState::Invalid(ValidationError::Number(NumberError::OutOfRange {
+                min: 1.0,
+                max: 4096.0,
+            }))
         }
     }
     pub fn set_weight(&mut self, weight: FontWeight) {
@@ -852,66 +858,82 @@ impl InputDialog {
     pub fn set_text(&mut self, text: impl Into<String>) {
         self.text = text.into();
     }
-    pub fn validate(&self) -> (ValidationState, Option<InputValue>) {
-        let trimmed = self.text.trim();
-        match &self.kind {
-            InputKind::Text { allow_empty } => {
-                if trimmed.is_empty() && !allow_empty {
-                    (ValidationState::Intermediate, None)
-                } else {
-                    (
-                        ValidationState::Valid,
-                        Some(InputValue::Text(self.text.clone())),
-                    )
-                }
-            }
-            InputKind::Integer { minimum, maximum } => match self.locale.parse_integer(trimmed) {
-                Ok(value) if (*minimum..=*maximum).contains(&value) => {
-                    (ValidationState::Valid, Some(InputValue::Integer(value)))
-                }
-                Ok(_) => (
-                    ValidationState::Invalid(format!(
-                        "Enter a number from {} to {}",
-                        self.locale.format_integer(*minimum),
-                        self.locale.format_integer(*maximum)
-                    )),
-                    None,
-                ),
-                Err(_) if trimmed.is_empty() || trimmed == "-" => {
-                    (ValidationState::Intermediate, None)
-                }
-                Err(_) => (
-                    ValidationState::Invalid("Enter a whole number".into()),
-                    None,
-                ),
-            },
+    /// The number rule of an Integer or Decimal dialog. Both use the same
+    /// rule, so they reject the same text with the same messages.
+    pub fn number(&self) -> Option<NumberInput> {
+        let (minimum, maximum, fraction_digits) = match &self.kind {
+            InputKind::Integer { minimum, maximum } => (*minimum as f64, *maximum as f64, 0),
             InputKind::Decimal {
                 minimum,
                 maximum,
                 fraction_digits,
-            } => {
-                let (state, value) = NumberInput::new(self.locale.clone(), *fraction_digits)
-                    .with_range(Some(*minimum), Some(*maximum))
-                    .validate(trimmed);
-                (state, value.map(InputValue::Decimal))
-            }
+            } => (*minimum, *maximum, *fraction_digits),
+            InputKind::Text { .. } | InputKind::Choice(_) => return None,
+        };
+        Some(
+            NumberInput::new(self.locale.clone(), fraction_digits)
+                .with_range(Some(minimum), Some(maximum)),
+        )
+    }
+
+    /// The filter of the text field: the number rule for an Integer or
+    /// Decimal dialog.
+    pub fn filter(&self) -> InputFilter {
+        self.number()
+            .map_or_else(InputFilter::new, |number| number.filter())
+    }
+
+    /// The validation while the user types, and the value when valid. A
+    /// number below the minimum is Intermediate.
+    pub fn validate(&self) -> (ValidationState, Option<InputValue>) {
+        self.check(false)
+    }
+
+    /// The validation when the user accepts the text, and the value when
+    /// valid. A number outside the range is Invalid.
+    pub fn commit(&self) -> (ValidationState, Option<InputValue>) {
+        self.check(true)
+    }
+
+    fn check(&self, commit: bool) -> (ValidationState, Option<InputValue>) {
+        let trimmed = self.text.trim();
+        if let Some(number) = self.number() {
+            let (state, value) = if commit {
+                number.commit(trimmed)
+            } else {
+                number.validate(trimmed)
+            };
+            let value = match self.kind {
+                InputKind::Integer { .. } => value
+                    .and_then(|_| self.locale.parse_integer(trimmed).ok())
+                    .map(InputValue::Integer),
+                _ => value.map(InputValue::Decimal),
+            };
+            return (state, value);
+        }
+        match &self.kind {
             InputKind::Choice(options) => match options.iter().position(|option| option == trimmed)
             {
                 Some(index) => (ValidationState::Valid, Some(InputValue::Choice(index))),
-                None => (
-                    ValidationState::Invalid("Choose one of the options".into()),
-                    None,
-                ),
+                None => (ValidationState::Invalid(ValidationError::Choice), None),
             },
+            InputKind::Text { allow_empty } if trimmed.is_empty() && !allow_empty => {
+                (ValidationState::Intermediate, None)
+            }
+            _ => (
+                ValidationState::Valid,
+                Some(InputValue::Text(self.text.clone())),
+            ),
         }
     }
+
     pub fn can_accept(&self) -> bool {
         self.validate().0 == ValidationState::Valid
     }
     /// Return: the value when valid; Escape: `Err(())` (cancelled).
     pub fn handle_key(&self, key: Key) -> Option<Result<InputValue, ()>> {
         match key {
-            Key::Enter => self.validate().1.map(Ok),
+            Key::Enter => self.commit().1.map(Ok),
             Key::Escape => Some(Err(())),
             _ => None,
         }

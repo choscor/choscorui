@@ -3,8 +3,8 @@
 mod hosted;
 
 use choscorui_controls::{
-    ControlKind, DateInput, DecimalSpinBox, Input, InputMask, MaskError, NumberInput, Slot,
-    StyleQuery, Styles, ValidationState, VisualState,
+    ControlKind, DateInput, DecimalSpinBox, Input, InputMask, MaskError, NumberError, NumberInput,
+    Slot, StyleQuery, Styles, ValidationState, VisualState,
 };
 use choscorui_core::{CivilDate, DesignTokens, DisplayCommand, DisplayList, Locale, Paint};
 use hosted::Harness;
@@ -56,7 +56,27 @@ fn numbers_follow_locale_separators_bounds_and_precision() {
         ValidationState::Intermediate,
         "may reach 10"
     );
-    assert!(matches!(vi.validate("1,5").0, ValidationState::Invalid(_)));
+    assert_eq!(
+        vi.validate("1,5").0,
+        ValidationState::Intermediate,
+        "below the minimum while the user types"
+    );
+    assert_eq!(
+        vi.commit("1,5").0,
+        ValidationState::Invalid(NumberError::BelowMinimum(10.0).into()),
+        "below the minimum when the user commits"
+    );
+    assert_eq!(
+        vi.validate("-").0,
+        ValidationState::Intermediate,
+        "a minus that the filter rejects is not malformed"
+    );
+    assert!(!vi.accepts("-"), "the minimum is not negative");
+    assert!(!vi.accepts("1-2"));
+    assert!(!vi.accepts("1,2,3"));
+    assert!(!vi.accepts("--"));
+    assert!(!vi.accepts("1,234"), "3 decimals");
+    assert!(vi.accepts("1.234,5"));
     assert!(
         matches!(vi.validate("1,234").0, ValidationState::Invalid(_)),
         "3 decimals"
@@ -163,7 +183,8 @@ fn an_input_gives_the_mask_and_date_rules_the_input_look() {
 
 #[test]
 fn a_decimal_spin_box_gives_the_number_rule_the_input_look_with_steppers() {
-    let spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5);
+    let spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5)
+        .expect("a valid range");
     let h = Harness::new(spin);
     let list = h.paint();
     assert!(strokes_input_box(&list, VisualState::NONE));
@@ -175,7 +196,8 @@ fn a_decimal_spin_box_gives_the_number_rule_the_input_look_with_steppers() {
         rule.validate("120").0,
         ValidationState::Invalid(_)
     ));
-    let mut spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5);
+    let mut spin = DecimalSpinBox::new("Amount", locale("en"), (0.0, 100.0), 0.5, 2, 12.5)
+        .expect("a valid range");
     spin.set_text("120");
     let h = Harness::new(spin);
     assert!(h.semantics().state.invalid);

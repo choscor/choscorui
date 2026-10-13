@@ -12,9 +12,9 @@ use crate::style::{
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
     CivilDate, Constraints, DesignTokens, Dirty, DisplayList, EngineError, EventPhase, EventReply,
-    Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Measured, NoFeedback,
-    NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode,
-    SemanticTree, ThemeResolver, Tree, TreeError,
+    Feedback, Key, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured,
+    NoFeedback, NodeId, Point, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError,
+    SemanticNode, SemanticTree, ThemeResolver, Tree, TreeError,
 };
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -156,6 +156,7 @@ pub struct ControlContext<'a> {
     modifiers: ShortcutModifiers,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
     feedback: &'a dyn Feedback,
+    strings: &'a Localizer,
 }
 
 impl ControlContext<'_> {
@@ -216,6 +217,11 @@ impl ControlContext<'_> {
     pub fn emit(&mut self, message: ControlMessage) {
         self.messages.push((self.node, message));
     }
+    /// The messages of the window locale, for the built-in text of a
+    /// message or a description.
+    pub fn strings(&self) -> &Localizer {
+        self.strings
+    }
     /// Plays the system alert sound through the host's [`Feedback`], for
     /// example when the control refuses a key or a paste.
     pub fn beep(&self) {
@@ -261,8 +267,18 @@ pub trait CustomControl {
         false
     }
 
-    /// Accessible role, name, value, state, and supported actions.
+    /// Accessible role, name, value, state, and supported actions, with
+    /// the built-in English messages.
     fn semantics(&self) -> SemanticNode;
+
+    /// The semantics with the messages of the window locale. The host
+    /// publishes this. A control with built-in text in its name or
+    /// description overrides it; the default returns
+    /// [`semantics`](Self::semantics).
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        let _ = strings;
+        self.semantics()
+    }
 
     /// Performs an assistive action listed in `semantics().actions`.
     fn perform(
@@ -343,6 +359,21 @@ pub struct ControlHost {
     transitions: Transitions,
     /// The platform signals that controls send, such as the beep.
     feedback: HostFeedback,
+    /// The messages of the window locale.
+    strings: HostStrings,
+}
+
+/// The messages of a host: the built-in ones of the root locale until the
+/// host gets a [`Localizer`].
+struct HostStrings(Rc<Localizer>);
+
+impl Default for HostStrings {
+    fn default() -> Self {
+        Self(Rc::new(Localizer::new(
+            choscorui_core::Locale::root(),
+            choscorui_core::Catalog::new(),
+        )))
+    }
 }
 
 /// The [`Feedback`] of a host: [`NoFeedback`] until the host gets one.
@@ -363,6 +394,22 @@ impl ControlHost {
     /// through `feedback`. Until then the host uses [`NoFeedback`].
     pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>) {
         self.feedback = HostFeedback(feedback);
+    }
+
+    /// Gives the controls the messages of the window locale: the
+    /// application catalog, with the built-in messages for the ids that it
+    /// does not define. The host paints and publishes every control again.
+    pub fn set_strings(&mut self, tree: &mut Tree, strings: Rc<Localizer>) {
+        self.strings = HostStrings(strings);
+        for node in self.controls.keys() {
+            let _ = tree.invalidate(*node, Dirty::PAINT);
+            let _ = tree.invalidate(*node, Dirty::SEMANTICS);
+        }
+    }
+
+    /// The messages of the window locale.
+    pub fn strings(&self) -> &Localizer {
+        &self.strings.0
     }
 
     /// Creates a child node of `parent` for `control`.
@@ -654,6 +701,7 @@ impl ControlHost {
                     modifiers: self.modifiers,
                     messages: &mut self.messages,
                     feedback: &*self.feedback.0,
+                    strings: &self.strings.0,
                 };
                 control.event(&mut context, event)
             }
@@ -1033,7 +1081,8 @@ impl ControlHost {
         let mut cx = PaintContext::new(list, bounds, tokens, env.styles, env.text)
             .rtl(env.direction == LayoutDirection::Rtl)
             .state(state)
-            .time(env.time);
+            .time(env.time)
+            .strings(&self.strings.0);
         let eased = self.transitions.begin(node, hot, state, env.time);
         if eased {
             cx = cx.transitions(&self.transitions);
@@ -1063,7 +1112,8 @@ impl ControlHost {
             let mut cx = PaintContext::new(list, bounds, &tokens, env.styles, env.text)
                 .rtl(rtl)
                 .state(self.visual_state(tree, node))
-                .time(env.time);
+                .time(env.time)
+                .strings(&self.strings.0);
             control.paint_overlay(&mut cx);
         }
     }
@@ -1167,7 +1217,7 @@ impl ControlHost {
         for (node, control) in &self.controls {
             let dirty = tree.take_dirty(*node).unwrap_or(Dirty::NONE);
             if force || dirty.contains(Dirty::SEMANTICS) {
-                let mut semantic = control.semantics();
+                let mut semantic = control.semantics_in(&self.strings.0);
                 if self.disabled.contains(node) {
                     semantic.state.disabled = true;
                     semantic.actions.clear();
@@ -1215,6 +1265,7 @@ impl ControlHost {
             modifiers: self.modifiers,
             messages: &mut self.messages,
             feedback: &*self.feedback.0,
+            strings: &self.strings.0,
         };
         control.perform(&mut context, action, value)
     }

@@ -7,17 +7,20 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     MeasureContext,
 };
+use crate::form::step_text::{StepText, text_rect};
 use crate::hosted;
-use crate::range_controls::paint_stepper_field;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
     fill_shape, paint_in,
 };
-use crate::{IntegerRange, NumberInput, STEPPER_WIDTH, ValidationState};
+use crate::{
+    IntegerRange, NumberError, NumberInput, RangeError, STEPPER_WIDTH, ValidationError,
+    ValidationState,
+};
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, FillRule, Icon, Key, KeyEvent,
-    Locale, Measured, Paint, Path, Point, PointerButton, PointerEvent, RadiusScale, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree, grapheme_boundaries,
+    Locale, Localizer, Measured, Paint, Path, Point, PointerButton, PointerEvent, RadiusScale,
+    Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -392,9 +395,9 @@ impl CustomControl for ScrollBar {
 
 // ----------------------------------------------------------- DecimalSpinBox
 
-/// Locale-aware decimal spin box: text editing with validation, arrows
-/// step, Page keys step ten times, and Return commits only a valid value.
-#[derive(Clone, Debug)]
+/// Locale-aware decimal spin box: text editing with a caret, a selection,
+/// and the number filter; arrows step, Page keys step ten times, and
+/// Return commits only a valid value.
 pub struct DecimalSpinBox {
     name: String,
     input: NumberInput,
@@ -402,15 +405,20 @@ pub struct DecimalSpinBox {
     maximum: f64,
     step: f64,
     value: f64,
-    text: String,
     fraction_digits: usize,
-    /// In a control host: the direction, and true while typed text
-    /// replaces the text instead of appending to it.
+    text: StepText,
+    /// The error of the last commit, until the next edit.
+    error: Option<ValidationError>,
+    /// In a control host: the direction.
     rtl: bool,
-    fresh: bool,
 }
 
 impl DecimalSpinBox {
+    /// A spin box from `minimum` to `maximum` that steps by `step` and
+    /// shows `fraction_digits` digits after the decimal sign. `value` is
+    /// rounded and then clamped to the range. A NaN bound, a minimum
+    /// greater than the maximum, or a step that is not positive is an
+    /// error.
     pub fn new(
         name: impl Into<String>,
         locale: Locale,
@@ -418,89 +426,165 @@ impl DecimalSpinBox {
         step: f64,
         fraction_digits: usize,
         value: f64,
-    ) -> Self {
+    ) -> Result<Self, RangeError> {
+        if minimum.is_nan() || maximum.is_nan() {
+            return Err(RangeError::NotANumber);
+        }
+        if minimum > maximum {
+            return Err(RangeError::Reversed);
+        }
+        if step.is_nan() || step <= 0.0 {
+            return Err(RangeError::ZeroStep);
+        }
+        let name = name.into();
         let input =
             NumberInput::new(locale, fraction_digits).with_range(Some(minimum), Some(maximum));
-        let value = value.clamp(minimum, maximum);
-        let text = input.format(value);
-        Self {
-            name: name.into(),
+        let text = StepText::new(&name, "", input.filter());
+        let mut spin = Self {
+            name,
             input,
             minimum,
             maximum,
             step,
-            value,
-            text,
+            value: minimum,
             fraction_digits,
+            text,
+            error: None,
             rtl: false,
-            fresh: true,
-        }
+        };
+        let value = if value.is_nan() { minimum } else { value };
+        spin.set_value(value);
+        Ok(spin)
     }
     pub fn value(&self) -> f64 {
         self.value
     }
     pub fn text(&self) -> &str {
-        &self.text
+        self.text.text()
     }
+    /// The validation of the text: the error of a failed commit until
+    /// the next edit, and else the state while typing.
     pub fn validation(&self) -> ValidationState {
-        self.input.validate(&self.text).0
+        match &self.error {
+            Some(error) => ValidationState::Invalid(error.clone()),
+            None => self.input.validate(self.text()).0,
+        }
     }
     /// Replaces the edited text (validation is reported, value unchanged).
     pub fn set_text(&mut self, text: impl Into<String>) {
-        self.text = text.into();
+        self.text.set(&text.into());
+        self.edited();
     }
-    fn round(&self, value: f64) -> f64 {
+    /// Rounds `value` to the fraction digits, and then clamps it to the
+    /// range.
+    fn settle(&self, value: f64) -> f64 {
         let scale = 10f64.powi(self.fraction_digits as i32);
-        (value * scale).round() / scale
+        ((value * scale).round() / scale).clamp(self.minimum, self.maximum)
     }
     fn set_value(&mut self, value: f64) -> bool {
-        let value = self.round(value.clamp(self.minimum, self.maximum));
+        let value = self.settle(value);
         let changed = value != self.value;
         self.value = value;
-        self.text = self.input.format(value);
+        self.text.set(&self.input.format(value));
+        self.edited();
         changed
+    }
+    /// Clears the commit error after the text changes.
+    fn edited(&mut self) {
+        self.error = None;
+        let validation = self.validation();
+        self.text.set_validation(validation);
+    }
+    /// Takes valid pending text as the value before a step.
+    fn take_pending(&mut self) {
+        if let (ValidationState::Valid, Some(value)) = self.input.validate(self.text()) {
+            self.value = self.settle(value);
+        }
+    }
+    /// Steps by `steps` steps from the value, after the pending text.
+    fn step_by(&mut self, steps: f64) -> bool {
+        let before = self.value;
+        self.take_pending();
+        self.set_value(self.value + self.step * steps);
+        self.value != before
+    }
+    /// True when `key` steps past the end of the range, so the spin box
+    /// refuses it.
+    fn at_bound(&self, key: Key) -> bool {
+        match key {
+            Key::ArrowUp | Key::PageUp | Key::End => self.value >= self.maximum,
+            Key::ArrowDown | Key::PageDown | Key::Home => self.value <= self.minimum,
+            _ => false,
+        }
     }
     /// Returns true when the value changed.
     pub fn handle_key(&mut self, key: Key) -> bool {
         match key {
-            Key::ArrowUp => self.set_value(self.value + self.step),
-            Key::ArrowDown => self.set_value(self.value - self.step),
-            Key::PageUp => self.set_value(self.value + self.step * 10.0),
-            Key::PageDown => self.set_value(self.value - self.step * 10.0),
+            Key::ArrowUp => self.step_by(1.0),
+            Key::ArrowDown => self.step_by(-1.0),
+            Key::PageUp => self.step_by(10.0),
+            Key::PageDown => self.step_by(-10.0),
             Key::Home => self.set_value(self.minimum),
             Key::End => self.set_value(self.maximum),
             Key::Enter => self.commit(),
             Key::Escape => {
-                self.text = self.input.format(self.value);
+                self.set_value(self.value);
                 false
             }
             _ => false,
         }
     }
-    /// Commits valid text; invalid text stays for correction.
+    /// Commits valid text and formats it; invalid text stays for
+    /// correction with its error.
     pub fn commit(&mut self) -> bool {
-        match self.input.validate(&self.text) {
+        match self.input.commit(self.text()) {
             (ValidationState::Valid, Some(value)) => self.set_value(value),
-            _ => false,
+            (state, _) => {
+                self.error = Some(match state {
+                    ValidationState::Invalid(error) => error,
+                    _ => NumberError::NotANumber.into(),
+                });
+                let validation = self.validation();
+                self.text.set_validation(validation);
+                false
+            }
         }
+    }
+    /// Commits valid text when focus leaves; invalid text gives way to
+    /// the last committed value.
+    fn blur(&mut self) -> bool {
+        let changed = self.commit();
+        if self.error.is_some() {
+            self.set_value(self.value);
+        }
+        changed
     }
     /// Re-formats for a new locale without changing the value.
     pub fn set_locale(&mut self, locale: Locale) {
         self.input = NumberInput::new(locale, self.fraction_digits)
             .with_range(Some(self.minimum), Some(self.maximum));
-        self.text = self.input.format(self.value);
+        self.text.set_filter(self.input.filter());
+        self.set_value(self.value);
     }
+    /// The semantics, with the built-in English messages.
     pub fn semantics(&self) -> SemanticNode {
+        self.semantics_with(Localizer::builtin())
+    }
+    /// The semantics, with the validation message in the locale of
+    /// `strings`.
+    pub fn semantics_with(&self, strings: &Localizer) -> SemanticNode {
+        let validation = self.validation();
+        let text = self.text.semantics(strings).text;
         SemanticNode {
             role: SemanticRole::SpinButton,
             name: self.name.clone(),
-            description: match self.validation() {
-                ValidationState::Invalid(message) => message,
+            description: match &validation {
+                ValidationState::Invalid(error) => error.message(strings),
                 _ => String::new(),
             },
-            value: Some(self.text.clone()),
+            value: Some(self.text().to_owned()),
             state: SemanticState {
-                invalid: matches!(self.validation(), ValidationState::Invalid(_)),
+                invalid: matches!(validation, ValidationState::Invalid(_)),
                 ..SemanticState::default()
             },
             relations: Vec::new(),
@@ -510,7 +594,7 @@ impl DecimalSpinBox {
                 SemanticAction::SetValue,
                 SemanticAction::Focus,
             ],
-            text: None,
+            text,
         }
     }
     pub fn handle_semantic(&mut self, action: SemanticAction, value: Option<&str>) -> bool {
@@ -519,7 +603,10 @@ impl DecimalSpinBox {
             SemanticAction::Decrement => self.handle_key(Key::ArrowDown),
             SemanticAction::SetValue => {
                 if let Some(value) = value {
-                    self.text = value.to_owned();
+                    if !self.input.accepts(value.trim()) {
+                        return false;
+                    }
+                    self.set_text(value);
                 }
                 self.commit()
             }
@@ -547,70 +634,41 @@ impl DecimalSpinBox {
         Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height)
     }
 
-    /// Paints the input box, the edited text, and the steppers, like
-    /// [`crate::SpinBox::paint`].
+    /// Paints the input box, the edited text with its caret and
+    /// selection, and the steppers, like [`crate::SpinBox::paint`].
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
         let steppers = Self::stepper_rect(cx.bounds, cx.rtl);
-        paint_stepper_field(cx, &self.text, self.visual_state(host), steppers);
+        let state = self.text.state(self.visual_state(host));
+        self.text.paint(cx, state, steppers);
     }
 
-    /// Replaces the edited text in a host and repaints.
-    fn edit(&mut self, cx: &mut ControlContext<'_>, text: String) {
-        self.text = text;
-        self.fresh = false;
-        cx.request_paint();
-        cx.request_semantics();
-    }
-
-    /// Reports a value change in a host. The next typed text replaces
-    /// the formatted value.
+    /// Reports a value change in a host.
     fn report(&mut self, cx: &mut ControlContext<'_>, changed: bool) {
         if changed {
             cx.emit(ControlMessage::Changed(ControlValue::Number(self.value)));
-            self.fresh = true;
         }
         cx.request_paint();
         cx.request_semantics();
     }
 
-    /// Handles a key-down in a host.
-    fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
-        if key == Key::Backspace {
-            let end = if self.fresh {
-                0
-            } else {
-                let boundaries = grapheme_boundaries(&self.text);
-                boundaries.iter().rev().nth(1).copied().unwrap_or(0)
-            };
-            let text = self.text[..end].to_string();
-            self.edit(cx, text);
-            return EventReply::Stop;
-        }
-        let before = self.text.clone();
+    /// Runs a step or commit key in a host. A step past the end of the
+    /// range beeps.
+    fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) {
+        let refused = self.at_bound(key);
         let changed = self.handle_key(key);
-        let handled = changed
-            || self.text != before
-            || matches!(
-                key,
-                Key::ArrowUp
-                    | Key::ArrowDown
-                    | Key::PageUp
-                    | Key::PageDown
-                    | Key::Home
-                    | Key::End
-                    | Key::Enter
-            );
-        if !handled {
-            return EventReply::Continue;
+        if refused && !changed {
+            cx.beep();
         }
         self.report(cx, changed);
-        EventReply::Stop
     }
 }
 
-/// Typed text replaces the text after focus or a step, and then appends.
-/// Backspace deletes the last character. A loss of focus commits valid
-/// text.
+/// The text edits like an input: a press places the caret, typed text
+/// replaces the selection, and the number filter rejects text that cannot
+/// become a number. Focus selects the whole text. Arrows, Page keys, Home,
+/// End, and the steppers take valid pending text first and then step.
+/// Return commits; a loss of focus commits valid text and restores the
+/// value after invalid text.
 impl CustomControl for DecimalSpinBox {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
@@ -631,36 +689,53 @@ impl CustomControl for DecimalSpinBox {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let steppers = Self::stepper_rect(cx.bounds(), self.rtl);
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
-            }) if cx.bounds().contains(*position) => {
-                let steppers = Self::stepper_rect(cx.bounds(), self.rtl);
-                if steppers.contains(*position) {
-                    let up = position.y < steppers.center().y;
-                    let changed = self.handle_key(if up { Key::ArrowUp } else { Key::ArrowDown });
-                    self.report(cx, changed);
-                }
+            }) if steppers.contains(*position) => {
+                cx.request_focus();
+                let up = position.y < steppers.center().y;
+                self.hosted_key(cx, if up { Key::ArrowUp } else { Key::ArrowDown });
                 EventReply::Stop
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.hosted_key(cx, *key),
-            ControlEvent::Text(text) => {
-                let text = if self.fresh {
-                    text.clone()
-                } else {
-                    format!("{}{text}", self.text)
-                };
-                self.edit(cx, text);
+            ControlEvent::Key(KeyEvent::Down { key, .. })
+                if cx.is_focused()
+                    && matches!(
+                        key,
+                        Key::ArrowUp
+                            | Key::ArrowDown
+                            | Key::PageUp
+                            | Key::PageDown
+                            | Key::Home
+                            | Key::End
+                            | Key::Enter
+                            | Key::Escape
+                    ) =>
+            {
+                self.hosted_key(cx, *key);
                 EventReply::Stop
             }
-            ControlEvent::FocusChanged(focused) => {
-                let changed = !focused && self.commit();
-                self.report(cx, changed);
-                self.fresh = true;
+            ControlEvent::FocusChanged(true) => {
+                self.text.select_all();
+                cx.request_paint();
                 EventReply::Continue
             }
-            _ => EventReply::Continue,
+            ControlEvent::FocusChanged(false) => {
+                let changed = self.blur();
+                self.report(cx, changed);
+                EventReply::Continue
+            }
+            _ => {
+                let rect = text_rect(cx.bounds(), steppers);
+                let (reply, edited) = self.text.event(cx, event, rect);
+                if edited {
+                    self.edited();
+                    cx.request_semantics();
+                }
+                reply
+            }
         }
     }
 
@@ -671,6 +746,10 @@ impl CustomControl for DecimalSpinBox {
 
     fn semantics(&self) -> SemanticNode {
         DecimalSpinBox::semantics(self)
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.semantics_with(strings)
     }
 
     fn perform(
@@ -690,11 +769,14 @@ impl CustomControl for DecimalSpinBox {
         true
     }
 
+    fn set_enabled(&mut self, enabled: bool) {
+        self.text.set_enabled(enabled);
+    }
+
     fn set_value(&mut self, value: &ControlValue) -> bool {
         match value {
             ControlValue::Number(value) if value.is_finite() => {
                 DecimalSpinBox::set_value(self, *value);
-                self.fresh = true;
                 true
             }
             _ => false,

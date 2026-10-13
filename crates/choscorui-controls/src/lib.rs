@@ -45,6 +45,10 @@ pub use containers::{
 pub use containers::{Splitter, SplitterInput};
 mod input_rules;
 pub use input_rules::{DateInput, InputMask, MaskError, MaskedText, NumberInput};
+mod input_filter;
+pub use input_filter::{Accepted, CharClass, InputFilter};
+mod validation;
+pub use validation::{DateError, NumberError, ValidationError};
 mod text_editor;
 pub use text_editor::{TextEditor, TextEditorChange, TextEditorInput};
 mod item_view;
@@ -141,8 +145,8 @@ pub use feedback::{
 };
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldLayout, FieldPart, FieldText, Input,
-    InputGroup, InputGroupAddon, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle,
-    ToggleGroup, ToggleItem,
+    InputGroup, InputGroupAddon, InputOtp, InputType, Kbd, RangeSlider, Select, Switch, Textarea,
+    Toggle, ToggleGroup, ToggleItem,
 };
 pub use layout::{Accordion, AspectRatio, Collapsible, Item, ItemGroup, ItemMedia};
 pub use listbox::ListEntry;

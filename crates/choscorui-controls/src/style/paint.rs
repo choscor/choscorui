@@ -5,8 +5,8 @@ use super::{
     VisualState,
 };
 use choscorui_core::{
-    Color, DesignTokens, DisplayList, FillRule, Icon, Paint, Path, Point, Rect, Shadow, Size,
-    StrokeStyle, TextRun, TextShaper, TypeSpec,
+    Color, DesignTokens, DisplayList, FillRule, Icon, Localizer, Paint, Path, Point, Rect, Shadow,
+    Size, StrokeStyle, TextRun, TextShaper, TypeSpec,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -399,7 +399,8 @@ pub fn draw_icon(list: &mut DisplayList, rect: Rect, icon: Icon, size: f64, colo
 
 /// Everything a control needs to paint one node: the display list, the
 /// node's bounds, the tokens, the style cache, text measurement, the
-/// layout direction, and the host's view of the node's state.
+/// layout direction, the messages, and the host's view of the node's
+/// state.
 pub struct PaintContext<'a> {
     pub list: &'a mut DisplayList,
     pub bounds: Rect,
@@ -411,6 +412,9 @@ pub struct PaintContext<'a> {
     pub state: VisualState,
     /// Monotonic time in seconds, for running animations.
     pub time: f64,
+    /// The messages of the window locale, for the built-in text that a
+    /// control paints.
+    pub strings: &'a Localizer,
     key: u64,
     /// The host's transition store, when the host eases state changes.
     transitions: Option<&'a Transitions>,
@@ -418,7 +422,8 @@ pub struct PaintContext<'a> {
 
 impl<'a> PaintContext<'a> {
     /// A context that paints into `list` inside `bounds`, left-to-right,
-    /// with no visual state, at time zero.
+    /// with no visual state, at time zero, with the built-in English
+    /// messages.
     pub fn new(
         list: &'a mut DisplayList,
         bounds: Rect,
@@ -435,6 +440,7 @@ impl<'a> PaintContext<'a> {
             rtl: false,
             state: VisualState::NONE,
             time: 0.0,
+            strings: Localizer::builtin(),
             key: tokens.fingerprint(),
             transitions: None,
         }
@@ -461,6 +467,13 @@ impl<'a> PaintContext<'a> {
         self
     }
 
+    /// Sets the messages of the window locale.
+    #[must_use]
+    pub fn strings(mut self, strings: &'a Localizer) -> Self {
+        self.strings = strings;
+        self
+    }
+
     /// Eases the styles that [`PaintContext::style`] returns through the
     /// host's transition store.
     #[must_use]
@@ -480,6 +493,7 @@ impl<'a> PaintContext<'a> {
             rtl: self.rtl,
             state: self.state,
             time: self.time,
+            strings: self.strings,
             key: self.key,
             transitions: self.transitions,
         }

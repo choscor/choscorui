@@ -16,9 +16,9 @@ use super::state::{Binding, IntoLive, Live};
 use super::text::TextContent;
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ButtonVariant, CalendarMode, ChartKind, ChartSeries, CommandId, CommandItem, ControlKind,
-    ControlMessage, ControlSize, ControlValue, ListEntry, MenuItem, NavigationLink, SheetSide,
-    SidebarItem, ToggleItem,
+    ButtonVariant, CalendarMode, CharClass, ChartKind, ChartSeries, CommandId, CommandItem,
+    ControlKind, ControlMessage, ControlSize, ControlValue, InputType, ListEntry, MenuItem,
+    NavigationLink, SheetSide, SidebarItem, ToggleItem,
 };
 use choscorui_core::{CivilDate, Icon, ItemModel, SelectionMode, SemanticRole};
 use std::rc::Rc;
@@ -517,13 +517,69 @@ impl Configured<controls::Input> {
         .bind(value, ControlValue::Text, as_text)
     }
 
-    /// An input that hides what the user types.
+    /// An input that hides what the user types. Cut and copy do nothing
+    /// in it.
     pub fn password<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Input, move |env| {
             controls::Input::password(text(&name, env), "")
         })
         .bind(value, ControlValue::Text, as_text)
+    }
+
+    /// An input for an email address. Return and blur mark text that is
+    /// no email address invalid.
+    pub fn email<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
+        Self::of_type(name, InputType::Email, value)
+    }
+
+    /// An input for a web address, such as `https://example.com`. Return
+    /// and blur mark other text invalid.
+    pub fn url<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
+        Self::of_type(name, InputType::Url, value)
+    }
+
+    /// An input for a phone number. It takes digits, spaces, and
+    /// `+ - ( ) .` only.
+    pub fn tel<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
+        Self::of_type(name, InputType::Tel, value)
+    }
+
+    /// An input for a search query.
+    pub fn search<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
+        Self::of_type(name, InputType::Search, value)
+    }
+
+    /// An input for a number. It takes digits, one leading minus, and one
+    /// `.` only.
+    pub fn number<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Self {
+        Self::of_type(name, InputType::Number, value)
+    }
+
+    fn of_type<M>(
+        name: impl IntoLive<TextContent, M>,
+        kind: InputType,
+        value: Binding<String>,
+    ) -> Self {
+        let name = label(name);
+        Configured::custom(ControlKind::Input, move |env| {
+            controls::Input::new(text(&name, env), "").with_type(kind)
+        })
+        .bind(value, ControlValue::Text, as_text)
+    }
+
+    /// Allows at most `length` grapheme clusters. A paste longer than the
+    /// room left is cut to the room, and a key with no room beeps.
+    #[must_use]
+    pub fn max_length(self, length: usize) -> Self {
+        self.with(move |input| input.max_length(length))
+    }
+
+    /// Allows only the characters of `class`. A key or a paste with
+    /// another character changes nothing and beeps.
+    #[must_use]
+    pub fn filter(self, class: CharClass) -> Self {
+        self.with(move |input| input.filter(class.clone()))
     }
 }
 

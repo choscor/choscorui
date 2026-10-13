@@ -1101,6 +1101,14 @@ impl ViewHost {
             style.direction = Some(direction);
             let _ = inner.engine.set_style(&inner.tree, root, style);
         });
+        // The controls show the messages of the environment's locale.
+        let strings_env = env.clone();
+        self.inner.react(scope, move |inner| {
+            let strings = Rc::new(strings_env.localizer());
+            inner.controls.set_strings(&mut inner.tree, strings);
+            inner.needs_paint = true;
+            inner.semantic_all = true;
+        });
         let fragment = self.inner.fragments.root_of(root);
         let owned = self.inner.owned(scope);
         let _owner = scope::enter(owned);
@@ -1578,7 +1586,7 @@ impl ViewHost {
         }
         let mut semantic = match self.inner.controls.get(node) {
             Some(control) => {
-                let mut semantic = control.semantics();
+                let mut semantic = control.semantics_in(self.inner.controls.strings());
                 if !self.inner.controls.is_enabled(node) {
                     semantic.state.disabled = true;
                     semantic.actions.clear();

@@ -30,8 +30,8 @@ const OWN: [(&str, usize, &str); 7] = [
     ),
     (
         "pages/data/products.rs",
-        2,
-        "Handle shares a header view and forwards keys of a cell editor",
+        3,
+        "Handle shares a header view and forwards keys of the text and checkbox cell editors",
     ),
     (
         "pages/popups.rs",
