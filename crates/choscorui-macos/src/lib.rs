@@ -44,14 +44,31 @@ mod clipboard;
 pub use clipboard::Clipboard;
 mod runloop;
 pub use runloop::{PostError, Poster, Timer};
-use runloop::{
-    PostInner, PostState, TimerAction, TimerContext, TimerInner, fire_timer, perform_posted,
-};
+use runloop::{PostInner, PostState, TimerAction, TimerInner};
 mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod announce;
 mod ffi;
-use ffi::{Pool, objc_msgSend};
+use ffi::Obj;
+use ffi::Pool;
+use ffi::appkit::{
+    ACTIVATE, ACTIVATION_POLICY, APPLICATION_WINDOWS, BACKING_SCALE_FACTOR, BUTTON_NUMBER,
+    CHARACTERS, CHARACTERS_IGNORING_MODIFIERS, CLOSE, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW,
+    CURRENT_GRAPHICS_CONTEXT, ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate,
+    EVENT_MODIFIER_FLAGS, EVENT_TYPE, FINISH_LAUNCHING, GRAPHICS_CG_CONTEXT,
+    HAS_PRECISE_SCROLLING_DELTAS, INIT_WITH_CONTENT_RECT, INIT_WITH_FRAME, INTERPRET_KEY_EVENTS,
+    IS_A_REPEAT, IS_WINDOW_VISIBLE, KEY_CODE, LOCATION_IN_WINDOW, MAKE_KEY_AND_ORDER_FRONT,
+    NEXT_EVENT, NSApplication, NSEvent, NSView, NSWindow, RUN, SCROLLING_DELTA_X,
+    SCROLLING_DELTA_Y, SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS, SET_ACTIVATION_POLICY,
+    SET_CONTENT_SIZE, SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE, SET_WINDOW_DELEGATE,
+    SHARED_APPLICATION, VIEW_FRAME, VIEW_WINDOW, WINDOW_TITLE,
+};
+use ffi::foundation::{
+    COUNT, DATE_WITH_TIME_INTERVAL_SINCE_NOW, NOTIFICATION_OBJECT, NSDefaultRunLoopMode, ns_array,
+    ns_string, string,
+};
+use ffi::retained::{Retained, alloc, alloc_init};
+use ffi::runloop::{MainRunLoop, RunLoopSource, RunLoopTimer};
 mod dnd;
 mod pasteboard;
 mod preferences;
@@ -69,11 +86,10 @@ use shaping::draw_text_run;
 pub use shaping::*;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ffi::{CStr, CString, c_void};
+use std::ffi::{CStr, c_void};
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::ptr::NonNull;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::Duration;
@@ -84,10 +100,6 @@ type Sel = *mut c_void;
 
 use ffi::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 
-#[link(name = "Foundation", kind = "framework")]
-unsafe extern "C" {
-    static NSDefaultRunLoopMode: Id;
-}
 #[link(name = "objc")]
 unsafe extern "C" {
     fn objc_allocateClassPair(superclass: Id, name: *const i8, extra_bytes: usize) -> Id;
@@ -95,60 +107,6 @@ unsafe extern "C" {
     fn objc_registerClassPair(class: Id);
     fn class_addMethod(class: Id, name: Sel, imp: *const c_void, types: *const i8) -> i8;
     fn class_addProtocol(class: Id, protocol: Id) -> i8;
-}
-
-#[repr(C)]
-struct CFRunLoopSourceContext {
-    version: isize,
-    info: *mut c_void,
-    retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    release: Option<unsafe extern "C" fn(*const c_void)>,
-    copy_description: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    equal: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> u8>,
-    hash: Option<unsafe extern "C" fn(*const c_void) -> usize>,
-    schedule: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
-    cancel: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
-    perform: Option<unsafe extern "C" fn(*mut c_void)>,
-}
-
-#[repr(C)]
-struct CFRunLoopTimerContext {
-    version: isize,
-    info: *mut c_void,
-    retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    release: Option<unsafe extern "C" fn(*const c_void)>,
-    copy_description: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-}
-
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    static kCFRunLoopDefaultMode: *const c_void;
-    static kCFRunLoopCommonModes: *const c_void;
-    fn CFRunLoopGetMain() -> *mut c_void;
-    fn CFRunLoopSourceCreate(
-        allocator: *const c_void,
-        order: isize,
-        context: *mut CFRunLoopSourceContext,
-    ) -> *mut c_void;
-    fn CFRunLoopAddSource(runloop: *mut c_void, source: *mut c_void, mode: *const c_void);
-    fn CFRunLoopRemoveSource(runloop: *mut c_void, source: *mut c_void, mode: *const c_void);
-    fn CFRunLoopSourceSignal(source: *mut c_void);
-    fn CFRunLoopSourceInvalidate(source: *mut c_void);
-    fn CFRunLoopAddTimer(runloop: *mut c_void, timer: *mut c_void, mode: *const c_void);
-    fn CFRunLoopRemoveTimer(runloop: *mut c_void, timer: *mut c_void, mode: *const c_void);
-    fn CFRunLoopTimerCreate(
-        allocator: *const c_void,
-        fire_date: f64,
-        interval: f64,
-        flags: usize,
-        order: isize,
-        callback: unsafe extern "C" fn(*mut c_void, *mut c_void),
-        context: *mut CFRunLoopTimerContext,
-    ) -> *mut c_void;
-    fn CFRunLoopTimerInvalidate(timer: *mut c_void);
-    fn CFRunLoopWakeUp(runloop: *mut c_void);
-    fn CFRunLoopRunInMode(mode: *const c_void, seconds: f64, return_after_source: u8) -> i32;
-    fn CFAbsoluteTimeGetCurrent() -> f64;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -280,41 +238,35 @@ fn paint_states() -> &'static Mutex<HashMap<usize, PaintHandle>> {
 
 unsafe extern "C" fn view_draw_rect(view: Id, _: Sel, dirty: NSRect) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: drawRect: runs with a current NSGraphicsContext. The CGContext
-        // is borrowed only during this callback and is never exposed publicly.
-        unsafe {
-            let window = send_id(view, c"window");
-            if window.is_null() {
-                return;
-            }
-            let paint = paint_states()
-                .lock()
-                .unwrap()
-                .get(&(window as usize))
-                .cloned();
-            let Some(paint) = paint else {
-                return;
-            };
-            let started = std::time::Instant::now();
-            let list = Arc::clone(&paint.lock().unwrap().list);
-            let graphics = send_id(class(c"NSGraphicsContext").unwrap(), c"currentContext");
-            if graphics.is_null() {
-                return;
-            }
-            let Some(context) =
-                ffi::legacy::cf::<ffi::graphics::CGContext>(send_id(graphics, c"CGContext"))
-            else {
-                return;
-            };
-            if paint::paint_commands(context, dirty, &list) {
-                let finished = std::time::Instant::now();
-                let mut paint = paint.lock().unwrap();
-                paint.count += 1;
-                paint.last_paint = Some(PaintTiming {
-                    finished,
-                    duration: finished - started,
-                });
-            }
+        // SAFETY: AppKit passes the live content view.
+        let Some(view) = (unsafe { ffi::legacy::borrow::<NSView>(view) }) else {
+            return;
+        };
+        let Some(window) = VIEW_WINDOW.send(view, ()) else {
+            return;
+        };
+        let paint = paint_states().lock().unwrap().get(&window.addr()).cloned();
+        let Some(paint) = paint else {
+            return;
+        };
+        let started = std::time::Instant::now();
+        let list = Arc::clone(&paint.lock().unwrap().list);
+        // drawRect: runs with a current graphics context. Its CGContext is
+        // borrowed only during this callback.
+        let Some(graphics) = CURRENT_GRAPHICS_CONTEXT.send_class(()).ok().flatten() else {
+            return;
+        };
+        let Some(context) = GRAPHICS_CG_CONTEXT.send(&graphics, ()) else {
+            return;
+        };
+        if paint::paint_commands(context, dirty, &list) {
+            let finished = std::time::Instant::now();
+            let mut paint = paint.lock().unwrap();
+            paint.count += 1;
+            paint.last_paint = Some(PaintTiming {
+                finished,
+                duration: finished - started,
+            });
         }
     }));
 }
@@ -332,15 +284,27 @@ fn native_rect(rect: choscorui_core::Rect) -> NSRect {
     }
 }
 
-fn record_window_event(notification: Id, make_event: impl FnOnce(Id) -> WindowEvent) {
+/// Queues the event of a window delegate notification.
+///
+/// # Safety
+///
+/// `notification` is nil or a live `NSNotification`.
+unsafe fn record_window_event(
+    notification: Id,
+    make_event: impl FnOnce(&Obj<NSWindow>) -> WindowEvent,
+) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: Each delegate selector passes a live NSNotification.
-        let window = unsafe { send_id(notification, c"object") };
-        let queue = window_queues()
-            .lock()
-            .unwrap()
-            .get(&(window as usize))
-            .cloned();
+        // SAFETY: the caller guarantees the notification.
+        let Some(notification) = (unsafe { ffi::legacy::borrow(notification) }) else {
+            return;
+        };
+        let Some(window) = NOTIFICATION_OBJECT
+            .send(notification, ())
+            .and_then(|object| object.downcast::<NSWindow>())
+        else {
+            return;
+        };
+        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
         if let Some(queue) = queue {
             let event = make_event(window);
             queue.lock().unwrap().push_back(event);
@@ -349,26 +313,33 @@ fn record_window_event(notification: Id, make_event: impl FnOnce(Id) -> WindowEv
 }
 
 unsafe extern "C" fn window_did_resize(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |window| WindowEvent::Resized {
-        // SAFETY: notification.object is the live NSWindow currently resizing.
-        size: unsafe { read_content_size(window) },
-        scale: unsafe { send_f64(window, c"backingScaleFactor") },
-    });
+    // SAFETY: AppKit passes a live notification.
+    unsafe {
+        record_window_event(notification, |window| WindowEvent::Resized {
+            size: read_content_size(window),
+            scale: BACKING_SCALE_FACTOR.send(window, ()),
+        })
+    };
 }
 unsafe extern "C" fn window_did_change_scale(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |window| WindowEvent::ScaleChanged {
-        // SAFETY: notification.object is the live NSWindow.
-        scale: unsafe { send_f64(window, c"backingScaleFactor") },
-    });
+    // SAFETY: AppKit passes a live notification.
+    unsafe {
+        record_window_event(notification, |window| WindowEvent::ScaleChanged {
+            scale: BACKING_SCALE_FACTOR.send(window, ()),
+        })
+    };
 }
 unsafe extern "C" fn window_did_focus(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |_| WindowEvent::Focused(true));
+    // SAFETY: AppKit passes a live notification.
+    unsafe { record_window_event(notification, |_| WindowEvent::Focused(true)) };
 }
 unsafe extern "C" fn window_did_blur(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |_| WindowEvent::Focused(false));
+    // SAFETY: AppKit passes a live notification.
+    unsafe { record_window_event(notification, |_| WindowEvent::Focused(false)) };
 }
 unsafe extern "C" fn window_will_close(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |_| WindowEvent::Closing);
+    // SAFETY: AppKit passes a live notification.
+    unsafe { record_window_event(notification, |_| WindowEvent::Closing) };
 }
 
 unsafe extern "C" fn view_is_flipped(_: Id, _: Sel) -> i8 {
@@ -381,85 +352,92 @@ unsafe extern "C" fn view_accepts_first_mouse(_: Id, _: Sel, _: Id) -> i8 {
     1
 }
 
+/// The content view and the event of an event callback, with the window
+/// of the view.
+///
+/// # Safety
+///
+/// `view` is nil or the live content view, and `event` is nil or a live
+/// `NSEvent`.
+unsafe fn event_arguments<'a>(
+    view: Id,
+    event: Id,
+) -> Option<(&'a Obj<NSView>, &'a Obj<NSWindow>, &'a Obj<NSEvent>)> {
+    // SAFETY: the caller guarantees the view.
+    let view = unsafe { ffi::legacy::borrow::<NSView>(view) }?;
+    // SAFETY: the caller guarantees the event.
+    let event = unsafe { ffi::legacy::borrow::<NSEvent>(event) }?;
+    Some((view, VIEW_WINDOW.send(view, ())?, event))
+}
+
 unsafe extern "C" fn view_pointer_event(view: Id, _: Sel, native_event: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit supplies a live NSEvent; the custom NSView is attached
-        // to a live NSWindow. `convertPoint:fromView:nil` maps its window point
-        // into the flipped view's logical coordinates.
-        unsafe {
-            let window = send_id(view, c"window");
-            if window.is_null() {
-                return;
+        // SAFETY: AppKit passes the live content view and a live event.
+        let Some((view, window, native_event)) = (unsafe { event_arguments(view, native_event) })
+        else {
+            return;
+        };
+        // `convertPoint:fromView:nil` maps the window point into the
+        // flipped view's logical coordinates.
+        let location = LOCATION_IN_WINDOW.send(native_event, ());
+        let point = CONVERT_POINT_FROM_VIEW.send(view, (location, None));
+        let position = Point::new(point.x, point.y);
+        let native_type = EVENT_TYPE.send(native_event, ());
+        let event = match native_type {
+            1 => PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            },
+            2 => PointerEvent::Up {
+                position,
+                button: PointerButton::Primary,
+            },
+            3 => PointerEvent::Down {
+                position,
+                button: PointerButton::Secondary,
+            },
+            4 => PointerEvent::Up {
+                position,
+                button: PointerButton::Secondary,
+            },
+            5 | 6 | 7 | 27 => PointerEvent::Move { position },
+            22 => {
+                let unit = if HAS_PRECISE_SCROLLING_DELTAS.send(native_event, ()) {
+                    WheelUnit::Points
+                } else {
+                    WheelUnit::Lines
+                };
+                PointerEvent::Wheel {
+                    position,
+                    delta: Point::new(
+                        -SCROLLING_DELTA_X.send(native_event, ()),
+                        -SCROLLING_DELTA_Y.send(native_event, ()),
+                    ),
+                    unit,
+                }
             }
-            let location = send_point(native_event, c"locationInWindow");
-            let point = send_point_point_id(
-                view,
-                c"convertPoint:fromView:",
-                location,
-                std::ptr::null_mut(),
-            );
-            let position = Point::new(point.x, point.y);
-            let native_type = send_usize(native_event, c"type");
-            let event = match native_type {
-                1 => PointerEvent::Down {
-                    position,
-                    button: PointerButton::Primary,
-                },
-                2 => PointerEvent::Up {
-                    position,
-                    button: PointerButton::Primary,
-                },
-                3 => PointerEvent::Down {
-                    position,
-                    button: PointerButton::Secondary,
-                },
-                4 => PointerEvent::Up {
-                    position,
-                    button: PointerButton::Secondary,
-                },
-                5 | 6 | 7 | 27 => PointerEvent::Move { position },
-                22 => {
-                    let unit = if send_bool(native_event, c"hasPreciseScrollingDeltas") != 0 {
-                        WheelUnit::Points
-                    } else {
-                        WheelUnit::Lines
-                    };
-                    PointerEvent::Wheel {
-                        position,
-                        delta: Point::new(
-                            -send_f64(native_event, c"scrollingDeltaX"),
-                            -send_f64(native_event, c"scrollingDeltaY"),
-                        ),
-                        unit,
-                    }
+            25 | 26 => {
+                let number = BUTTON_NUMBER.send(native_event, ()) as usize;
+                let button = if number == 2 {
+                    PointerButton::Middle
+                } else {
+                    PointerButton::Other(number)
+                };
+                if native_type == 25 {
+                    PointerEvent::Down { position, button }
+                } else {
+                    PointerEvent::Up { position, button }
                 }
-                25 | 26 => {
-                    let number = send_usize(native_event, c"buttonNumber");
-                    let button = if number == 2 {
-                        PointerButton::Middle
-                    } else {
-                        PointerButton::Other(number)
-                    };
-                    if native_type == 25 {
-                        PointerEvent::Down { position, button }
-                    } else {
-                        PointerEvent::Up { position, button }
-                    }
-                }
-                _ => return,
-            };
-            let modifiers = Modifiers::from_native(send_usize(native_event, c"modifierFlags"));
-            let queue = window_queues()
+            }
+            _ => return,
+        };
+        let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+        if let Some(queue) = queue {
+            queue
                 .lock()
                 .unwrap()
-                .get(&(window as usize))
-                .cloned();
-            if let Some(queue) = queue {
-                queue
-                    .lock()
-                    .unwrap()
-                    .push_back(WindowEvent::Pointer { event, modifiers });
-            }
+                .push_back(WindowEvent::Pointer { event, modifiers });
         }
     }));
 }
@@ -508,86 +486,69 @@ fn key_from_code(code: u16) -> Option<Key> {
     })
 }
 
+/// True for a character that a key event inserts as text.
+fn is_text_character(character: &char) -> bool {
+    !character.is_control() && !('\u{f700}'..='\u{f8ff}').contains(character)
+}
+
 unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: AppKit supplies a live NSEvent and attached NSView. Keycodes
-        // are macOS virtual keycodes; text insertion remains a separate path.
-        unsafe {
-            let window = send_id(view, c"window");
-            if window.is_null() {
-                return;
-            }
-            let code = send_u16(native_event, c"keyCode");
-            let key = match key_from_code(code) {
-                Some(key) => key,
-                None => {
-                    let chars = send_id(native_event, c"charactersIgnoringModifiers");
-                    let text = if chars.is_null() {
-                        std::ptr::null()
-                    } else {
-                        send_cstr(chars, c"UTF8String")
-                    };
-                    let printable = (!text.is_null())
-                        .then(|| CStr::from_ptr(text).to_str().ok())
-                        .flatten()
-                        .and_then(|text| text.chars().next())
-                        .filter(|ch| !ch.is_control() && !('\u{F700}'..='\u{F8FF}').contains(ch));
-                    match printable {
-                        Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
-                        None => Key::Other(u32::from(code)),
-                    }
+        // SAFETY: AppKit passes the live content view and a live event.
+        let Some((view, window, native_event)) = (unsafe { event_arguments(view, native_event) })
+        else {
+            return;
+        };
+        // Keycodes are macOS virtual keycodes; text insertion remains a
+        // separate path.
+        let code = KEY_CODE.send(native_event, ());
+        let key = match key_from_code(code) {
+            Some(key) => key,
+            None => {
+                let printable = CHARACTERS_IGNORING_MODIFIERS
+                    .send(native_event, ())
+                    .and_then(string)
+                    .and_then(|text| text.chars().next())
+                    .filter(is_text_character);
+                match printable {
+                    Some(ch) => Key::Character(ch.to_lowercase().next().unwrap_or(ch)),
+                    None => Key::Other(u32::from(code)),
                 }
+            }
+        };
+        let event = match EVENT_TYPE.send(native_event, ()) {
+            10 => KeyEvent::Down {
+                key,
+                repeat: IS_A_REPEAT.send(native_event, ()),
+            },
+            11 => KeyEvent::Up { key },
+            _ => return,
+        };
+        let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+        let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+        if let Some(queue) = queue {
+            let event_count = {
+                let mut queue = queue.lock().unwrap();
+                queue.push_back(WindowEvent::Key { event, modifiers });
+                queue.len()
             };
-            let event = match send_usize(native_event, c"type") {
-                10 => KeyEvent::Down {
-                    key,
-                    repeat: send_bool(native_event, c"isARepeat") != 0,
-                },
-                11 => KeyEvent::Up { key },
-                _ => return,
-            };
-            let modifiers = Modifiers::from_native(send_usize(native_event, c"modifierFlags"));
-            let queue = window_queues()
-                .lock()
-                .unwrap()
-                .get(&(window as usize))
-                .cloned();
-            if let Some(queue) = queue {
-                let event_count = {
-                    let mut queue = queue.lock().unwrap();
-                    queue.push_back(WindowEvent::Key { event, modifiers });
-                    queue.len()
-                };
-                if matches!(event, KeyEvent::Down { .. })
-                    && !modifiers.control
-                    && !modifiers.command
-                {
-                    let events = ns_array(&[native_event]).unwrap_or(std::ptr::null_mut());
-                    if !events.is_null() {
-                        send_void_id(view, c"interpretKeyEvents:", events);
-                    }
-                    let mut queue = queue.lock().unwrap();
-                    if queue.len() == event_count {
-                        let characters = send_id(native_event, c"characters");
-                        if !characters.is_null() {
-                            let bytes = send_cstr(characters, c"UTF8String");
-                            if !bytes.is_null() {
-                                let text: String = CStr::from_ptr(bytes)
-                                    .to_string_lossy()
-                                    .chars()
-                                    .filter(|character| {
-                                        !character.is_control()
-                                            && !(('\u{f700}'..='\u{f8ff}').contains(character))
-                                    })
-                                    .collect();
-                                if !text.is_empty() {
-                                    queue.push_back(WindowEvent::Ime(ImeEvent::CommitText {
-                                        text,
-                                        replacement_utf16: None,
-                                    }));
-                                }
-                            }
-                        }
+            if matches!(event, KeyEvent::Down { .. }) && !modifiers.control && !modifiers.command {
+                if let Ok(events) = ns_array(&[native_event.upcast()]) {
+                    INTERPRET_KEY_EVENTS.send(view, (&events,));
+                }
+                let mut queue = queue.lock().unwrap();
+                if queue.len() == event_count {
+                    let text: String = CHARACTERS
+                        .send(native_event, ())
+                        .and_then(string)
+                        .unwrap_or_default()
+                        .chars()
+                        .filter(is_text_character)
+                        .collect();
+                    if !text.is_empty() {
+                        queue.push_back(WindowEvent::Ime(ImeEvent::CommitText {
+                            text,
+                            replacement_utf16: None,
+                        }));
                     }
                 }
             }
@@ -595,7 +556,12 @@ unsafe extern "C" fn view_key_event(view: Id, _: Sel, native_event: Id) {
     }));
 }
 
-unsafe fn view_class() -> Result<Id, Error> {
+/// Registers the content view class once.
+///
+/// # Safety
+///
+/// Call on the main thread.
+unsafe fn view_class() -> Result<(), Error> {
     static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
     let result = CLASS.get_or_init(|| {
         // SAFETY: Registration happens once. BOOL methods use c@: and
@@ -769,10 +735,15 @@ unsafe fn view_class() -> Result<Id, Error> {
             Ok(cls as usize)
         }
     });
-    result.map(|value| value as Id)
+    result.map(|_| ())
 }
 
-unsafe fn delegate_class() -> Result<Id, Error> {
+/// Registers the window delegate class once.
+///
+/// # Safety
+///
+/// Call on the main thread.
+unsafe fn delegate_class() -> Result<(), Error> {
     static CLASS: OnceLock<Result<usize, Error>> = OnceLock::new();
     let result = CLASS.get_or_init(|| {
         // SAFETY: Runtime registration happens once; all method signatures
@@ -806,7 +777,7 @@ unsafe fn delegate_class() -> Result<Id, Error> {
             Ok(cls as usize)
         }
     });
-    result.map(|value| value as Id)
+    result.map(|_| ())
 }
 
 pub struct WindowOptions {
@@ -826,9 +797,12 @@ impl WindowOptions {
 
 /// Main-thread AppKit process handle. The marker prevents worker transfer.
 pub struct Application {
-    raw: NonNull<c_void>,
+    application: &'static Obj<NSApplication>,
+    runloop: MainRunLoop,
     posted: Arc<PostInner>,
-    source_info: *const PostInner,
+    /// The source of posted work, held for its `Drop`, which runs after
+    /// `Application::drop` clears the signal.
+    _source: RunLoopSource<PostInner>,
     timers: RefCell<Vec<Weak<TimerInner>>>,
     timer_panics: Rc<Cell<usize>>,
     _main_thread: PhantomData<Rc<()>>,
@@ -839,64 +813,41 @@ impl Application {
             return Err(Error::WrongThread);
         }
         let _pool = Pool::new()?;
-        // SAFETY: The selectors and Regular activation policy (0) match SDK headers.
-        unsafe {
-            let cls = class(c"NSApplication")?;
-            let raw =
-                NonNull::new(send_id(cls, c"sharedApplication")).ok_or(Error::AppKitUnavailable)?;
-            // Launched from an app bundle, AppKit may already be in the
-            // Regular policy and refuse the redundant switch; only a policy
-            // that stays non-regular is a failure.
-            if send_bool_usize(raw.as_ptr(), c"setActivationPolicy:", 0) == 0
-                && send_usize(raw.as_ptr(), c"activationPolicy") != 0
-            {
-                return Err(Error::AppKitUnavailable);
-            }
-            desktop::install_app_delegate(ffi::legacy::borrow_non_null(raw))?;
-            static FINISH_LAUNCHING: Once = Once::new();
-            FINISH_LAUNCHING.call_once(|| send_void(raw.as_ptr(), c"finishLaunching"));
-            let runloop = CFRunLoopGetMain();
-            if runloop.is_null() {
-                return Err(Error::AppKitUnavailable);
-            }
-            let posted = Arc::new(PostInner {
-                application: raw.as_ptr() as usize,
-                runloop: runloop as usize,
-                state: Mutex::new(PostState {
-                    source: 0,
-                    tasks: VecDeque::new(),
-                    panics: 0,
-                }),
-            });
-            let source_info = Arc::into_raw(Arc::clone(&posted));
-            let mut context = CFRunLoopSourceContext {
-                version: 0,
-                info: source_info as *mut c_void,
-                retain: None,
-                release: None,
-                copy_description: None,
-                equal: None,
-                hash: None,
-                schedule: None,
-                cancel: None,
-                perform: Some(perform_posted),
-            };
-            let source = CFRunLoopSourceCreate(std::ptr::null(), 0, &mut context);
-            if source.is_null() {
-                drop(Arc::from_raw(source_info));
-                return Err(Error::AppKitUnavailable);
-            }
-            posted.state.lock().unwrap().source = source as usize;
-            CFRunLoopAddSource(runloop, source, kCFRunLoopCommonModes);
-            Ok(Self {
-                raw,
-                posted,
-                source_info,
-                timers: RefCell::new(Vec::new()),
-                timer_panics: Rc::new(Cell::new(0)),
-                _main_thread: PhantomData,
-            })
+        let application = SHARED_APPLICATION
+            .send_class(())?
+            .ok_or(Error::AppKitUnavailable)?;
+        // Launched from an app bundle, AppKit may already be in the Regular
+        // policy (0) and refuse the redundant switch; only a policy that
+        // stays non-regular is a failure.
+        if !SET_ACTIVATION_POLICY.send(application, (0,))
+            && ACTIVATION_POLICY.send(application, ()) != 0
+        {
+            return Err(Error::AppKitUnavailable);
         }
+        desktop::install_app_delegate(application)?;
+        static FINISH_LAUNCHING_ONCE: Once = Once::new();
+        FINISH_LAUNCHING_ONCE.call_once(|| FINISH_LAUNCHING.send(application, ()));
+        let runloop = MainRunLoop::get().ok_or(Error::AppKitUnavailable)?;
+        let posted = Arc::new(PostInner {
+            runloop,
+            state: Mutex::new(PostState {
+                source: None,
+                tasks: VecDeque::new(),
+                panics: 0,
+            }),
+        });
+        let source =
+            RunLoopSource::new(runloop, Arc::clone(&posted)).ok_or(Error::AppKitUnavailable)?;
+        posted.state.lock().unwrap().source = Some(source.signal());
+        Ok(Self {
+            application,
+            runloop,
+            posted,
+            _source: source,
+            timers: RefCell::new(Vec::new()),
+            timer_panics: Rc::new(Cell::new(0)),
+            _main_thread: PhantomData,
+        })
     }
 
     pub fn install_main_menu(&self, model: MenuBarModel) -> Result<MainMenu, MenuError> {
@@ -911,8 +862,8 @@ impl Application {
         {
             return Err(Error::InvalidSize);
         }
-        let title = CString::new(options.title).map_err(|_| Error::InvalidTitle)?;
         let _pool = Pool::new()?;
+        let title = ns_string(&options.title).map_err(|_| Error::InvalidTitle)?;
         let frame = NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize {
@@ -920,133 +871,97 @@ impl Application {
                 height: options.height,
             },
         };
-        // SAFETY: NSWindow's designated initializer takes NSRect, NSUInteger,
-        // NSBackingStoreType, BOOL. The returned +1 object is released in Drop.
-        unsafe {
-            let cls = class(c"NSWindow")?;
-            let raw = NonNull::new(send_window_init(
-                send_id(cls, c"alloc"),
-                c"initWithContentRect:styleMask:backing:defer:",
-                frame,
-                1 | 2 | 4 | 8,
-                2,
-                0,
-            ))
+        // Titled, closable, miniaturizable, and resizable, with a buffered
+        // backing store (2) and no deferred creation.
+        let window = INIT_WITH_CONTENT_RECT
+            .init(alloc::<NSWindow>()?, (frame, 1 | 2 | 4 | 8, 2, false))
             .ok_or(Error::AppKitUnavailable)?;
-            send_void_bool(raw.as_ptr(), c"setReleasedWhenClosed:", 0);
-            if let Err(error) = set_title(raw.as_ptr(), &title) {
-                send_void(raw.as_ptr(), c"release");
-                return Err(error);
-            }
-            let content_class = match view_class() {
-                Ok(class) => class,
-                Err(error) => {
-                    send_void(raw.as_ptr(), c"release");
-                    return Err(error);
-                }
-            };
-            let content = send_view_init(
-                send_id(content_class, c"alloc"),
-                c"initWithFrame:",
-                NSRect {
+        // The handle owns the window, so closing must not release it.
+        SET_RELEASED_WHEN_CLOSED.send(&window, (false,));
+        SET_TITLE.send(&window, (&title,));
+        // SAFETY: registration runs on the main thread, checked above.
+        unsafe { view_class() }?;
+        let content = INIT_WITH_FRAME
+            .init(
+                alloc::<ChoscoruiV2ContentView>()?,
+                (NSRect {
                     origin: NSPoint { x: 0.0, y: 0.0 },
                     size: frame.size,
-                },
-            );
-            if content.is_null() {
-                send_void(raw.as_ptr(), c"release");
-                return Err(Error::AppKitUnavailable);
-            }
-            send_void_id(raw.as_ptr(), c"setContentView:", content);
-            send_void(content, c"release");
-            send_void_bool(raw.as_ptr(), c"setAcceptsMouseMovedEvents:", 1);
-            let delegate_class = match delegate_class() {
-                Ok(class) => class,
-                Err(error) => {
-                    send_void(raw.as_ptr(), c"release");
-                    return Err(error);
-                }
-            };
-            let delegate = send_id(send_id(delegate_class, c"alloc"), c"init");
-            if delegate.is_null() {
-                send_void(raw.as_ptr(), c"release");
-                return Err(Error::AppKitUnavailable);
-            }
-            let events = Arc::new(Mutex::new(VecDeque::new()));
-            let paint = Arc::new(Mutex::new(PaintState {
-                list: Arc::new(DisplayList::new()),
-                count: 0,
-                last_paint: None,
-                last_damage: None,
-                cursor: Default::default(),
-                drop_formats: Vec::new(),
-                drop_operations: choscorui_core::DragOperations::NONE,
-                drag_inside: false,
-                source_operations: choscorui_core::DragOperations::NONE,
-            }));
-            let ime = Arc::new(Mutex::new(TextInputState {
-                selected_utf16: 0..0,
-                marked_utf16: None,
-                caret: Rect::new(Point::new(0.0, 0.0), Size::new(1.0, 1.0)),
-            }));
-            window_queues()
-                .lock()
-                .unwrap()
-                .insert(raw.as_ptr() as usize, Arc::clone(&events));
-            paint_states()
-                .lock()
-                .unwrap()
-                .insert(raw.as_ptr() as usize, Arc::clone(&paint));
-            ime_states()
-                .lock()
-                .unwrap()
-                .insert(raw.as_ptr() as usize, Arc::clone(&ime));
-            send_void_id(raw.as_ptr(), c"setDelegate:", delegate);
-            Ok(Window {
-                raw,
-                delegate: NonNull::new_unchecked(delegate),
-                events,
-                paint,
-                ime,
-                accessibility: RefCell::new(NativeAccessibilityState::new()),
-                accessibility_actions: Arc::new(Mutex::new(VecDeque::new())),
-                closed: false,
-                _main_thread: PhantomData,
-            })
-        }
+                },),
+            )
+            .ok_or(Error::AppKitUnavailable)?;
+        SET_CONTENT_VIEW.send(&window, (Some(content.upcast()),));
+        drop(content);
+        SET_ACCEPTS_MOUSE_MOVED_EVENTS.send(&window, (true,));
+        // SAFETY: as above.
+        unsafe { delegate_class() }?;
+        let delegate = alloc_init::<ChoscoruiV2WindowDelegate>()?;
+        let events = Arc::new(Mutex::new(VecDeque::new()));
+        let paint = Arc::new(Mutex::new(PaintState {
+            list: Arc::new(DisplayList::new()),
+            count: 0,
+            last_paint: None,
+            last_damage: None,
+            cursor: Default::default(),
+            drop_formats: Vec::new(),
+            drop_operations: choscorui_core::DragOperations::NONE,
+            drag_inside: false,
+            source_operations: choscorui_core::DragOperations::NONE,
+        }));
+        let ime = Arc::new(Mutex::new(TextInputState {
+            selected_utf16: 0..0,
+            marked_utf16: None,
+            caret: Rect::new(Point::new(0.0, 0.0), Size::new(1.0, 1.0)),
+        }));
+        window_queues()
+            .lock()
+            .unwrap()
+            .insert(window.addr(), Arc::clone(&events));
+        paint_states()
+            .lock()
+            .unwrap()
+            .insert(window.addr(), Arc::clone(&paint));
+        ime_states()
+            .lock()
+            .unwrap()
+            .insert(window.addr(), Arc::clone(&ime));
+        SET_WINDOW_DELEGATE.send(&window, (Some(delegate.upcast()),));
+        Ok(Window {
+            _delegate: delegate,
+            window,
+            events,
+            paint,
+            ime,
+            accessibility: RefCell::new(NativeAccessibilityState::new()),
+            accessibility_actions: Arc::new(Mutex::new(VecDeque::new())),
+            closed: false,
+            drop_pool: None,
+            _main_thread: PhantomData,
+        })
     }
 
     /// Enters AppKit's blocking event loop; `stop` exits it on the UI thread.
     pub fn run(&self) {
-        // SAFETY: NSApplication is initialized and used on the main thread.
-        unsafe { send_void(self.raw.as_ptr(), c"run") }
+        RUN.send(self.application, ());
     }
 
     pub fn stop(&self) {
-        // SAFETY: NSApplication is initialized and used on the main thread.
-        unsafe { stop_application(self.raw.as_ptr()) }
+        runloop::stop_application();
     }
 
-    /// Requests foreground activation. AppKit may complete it asynchronously.
     /// Number of native windows AppKit still tracks (open or not yet
     /// released). Leak checks compare it before and after window churn.
     pub fn window_count(&self) -> usize {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
-        // SAFETY: NSApplication.windows returns an autoreleased NSArray.
-        unsafe {
-            let windows = send_id(self.raw.as_ptr(), c"windows");
-            if windows.is_null() {
-                0
-            } else {
-                send_usize(windows, c"count")
-            }
-        }
+        APPLICATION_WINDOWS
+            .send(self.application, ())
+            .map_or(0, |windows| COUNT.send(windows, ()))
     }
 
+    /// Requests foreground activation. AppKit may complete it asynchronously.
     pub fn activate(&self) {
         let _pool = Pool::new();
-        // SAFETY: NSApplication activate is available on the macOS 15+ target.
-        unsafe { send_void(self.raw.as_ptr(), c"activate") }
+        ACTIVATE.send(self.application, ());
     }
 
     pub fn poster(&self) -> Poster {
@@ -1059,10 +974,7 @@ impl Application {
     /// This supports native integration tests and future embedded loops.
     pub fn pump_once(&self, timeout: Duration) {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
-        // SAFETY: Called on the main thread, using the registered default mode.
-        unsafe {
-            CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout.as_secs_f64(), 1);
-        }
+        MainRunLoop::run_once(timeout.as_secs_f64());
     }
 
     /// Waits for and dispatches one native AppKit event, returning whether one
@@ -1070,31 +982,21 @@ impl Application {
     /// waiting. A caller can drain each window's owned events afterward.
     pub fn dispatch_next_event(&self, timeout: Duration) -> bool {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
-        // SAFETY: NSDate and NSApplication selectors use SDK signatures.
-        // NSDefaultRunLoopMode is a live Foundation NSString constant.
-        unsafe {
-            let date = send_id_f64(
-                class(c"NSDate").expect("NSDate unavailable"),
-                c"dateWithTimeIntervalSinceNow:",
-                timeout.as_secs_f64(),
-            );
-            let event = send_next_event(
-                self.raw.as_ptr(),
-                c"nextEventMatchingMask:untilDate:inMode:dequeue:",
-                usize::MAX,
-                date,
-                NSDefaultRunLoopMode,
-                1,
-            );
-            if event.is_null() {
-                false
-            } else {
-                send_void_id(self.raw.as_ptr(), c"sendEvent:", event);
+        let date = DATE_WITH_TIME_INTERVAL_SINCE_NOW
+            .send_class((timeout.as_secs_f64(),))
+            .expect("NSDate unavailable");
+        let event = NEXT_EVENT.send(
+            self.application,
+            (usize::MAX, date.as_deref(), NSDefaultRunLoopMode, true),
+        );
+        match event {
+            Some(event) => {
+                SEND_EVENT.send(self.application, (event,));
                 true
             }
+            None => false,
         }
     }
-
     pub fn posted_panic_count(&self) -> usize {
         self.posted.state.lock().unwrap().panics
     }
@@ -1135,49 +1037,19 @@ impl Application {
         interval: Option<Duration>,
         action: TimerAction,
     ) -> Result<Timer, Error> {
-        let inner = Rc::new(TimerInner {
-            raw: Cell::new(0),
-            info: Cell::new(0),
-            runloop: self.posted.runloop,
-            active: Cell::new(false),
-        });
-        let info = Box::into_raw(Box::new(TimerContext {
-            owner: Rc::downgrade(&inner),
+        let inner = Rc::new_cyclic(|owner| TimerInner {
+            timer: RunLoopTimer::new(
+                self.runloop,
+                delay.as_secs_f64(),
+                interval.map_or(0.0, |interval| interval.as_secs_f64()),
+                owner.clone(),
+            ),
             action: RefCell::new(Some(action)),
             panics: Rc::clone(&self.timer_panics),
-        }));
-        inner.info.set(info as usize);
-        let mut context = CFRunLoopTimerContext {
-            version: 0,
-            info: info as *mut c_void,
-            retain: None,
-            release: None,
-            copy_description: None,
-        };
-        // SAFETY: Context Box remains owned by TimerInner until invalidation
-        // and CFRelease. CF timer callback runs only on the main run loop.
-        unsafe {
-            let raw = CFRunLoopTimerCreate(
-                std::ptr::null(),
-                CFAbsoluteTimeGetCurrent() + delay.as_secs_f64(),
-                interval.map_or(0.0, |interval| interval.as_secs_f64()),
-                0,
-                0,
-                fire_timer,
-                &mut context,
-            );
-            if raw.is_null() {
-                inner.info.set(0);
-                drop(Box::from_raw(info));
-                return Err(Error::AppKitUnavailable);
-            }
-            inner.raw.set(raw as usize);
-            inner.active.set(true);
-            CFRunLoopAddTimer(
-                self.posted.runloop as *mut c_void,
-                raw,
-                kCFRunLoopCommonModes,
-            );
+            active: Cell::new(true),
+        });
+        if inner.timer.is_none() {
+            return Err(Error::AppKitUnavailable);
         }
         let mut timers = self.timers.borrow_mut();
         timers.retain(|timer| timer.strong_count() > 0);
@@ -1197,42 +1069,35 @@ impl Drop for Application {
                 timer.cancel();
             }
         }
-        // SAFETY: This runs on the main thread. The mutex excludes worker
-        // signals before invalidation; no callback can overlap main-thread Drop.
-        unsafe {
-            let mut state = self.posted.state.lock().unwrap();
-            let source = std::mem::replace(&mut state.source, 0) as *mut c_void;
-            state.tasks.clear();
-            CFRunLoopRemoveSource(
-                self.posted.runloop as *mut c_void,
-                source,
-                kCFRunLoopCommonModes,
-            );
-            CFRunLoopSourceInvalidate(source);
-            ffi::legacy::cf_release(source);
-            drop(state);
-            drop(Arc::from_raw(self.source_info));
-        }
+        // The mutex excludes worker signals; the source field then removes
+        // and invalidates the source on this thread.
+        let mut state = self.posted.state.lock().unwrap();
+        state.source = None;
+        state.tasks.clear();
     }
 }
 
 /// Retained NSWindow. Closing does not release it; Drop releases it once.
 pub struct Window {
-    raw: NonNull<c_void>,
-    delegate: NonNull<c_void>,
+    /// The window's delegate, held for its `Drop`. It releases before the
+    /// window, as fields drop in order.
+    _delegate: Retained<ChoscoruiV2WindowDelegate>,
+    window: Retained<NSWindow>,
     events: WindowQueue,
     paint: PaintHandle,
     ime: ImeHandle,
     accessibility: RefCell<NativeAccessibilityState>,
     accessibility_actions: AccessibilityActionQueue,
     closed: bool,
+    /// The pool that `Drop` creates. It drops after the other fields, so it
+    /// drains what releasing the window and the delegate autoreleases.
+    drop_pool: Option<Pool>,
     _main_thread: PhantomData<Rc<()>>,
 }
 impl Window {
     /// The native window, borrowed for as long as this handle lives.
-    fn ns_window(&self) -> &ffi::Obj<ffi::appkit::NSWindow> {
-        // SAFETY: `raw` is the +1 NSWindow that this handle owns until Drop.
-        unsafe { ffi::legacy::borrow_non_null(self.raw) }
+    fn ns_window(&self) -> &Obj<NSWindow> {
+        &self.window
     }
 
     pub fn set_text_input_state(&self, state: TextInputState) {
@@ -1254,50 +1119,33 @@ impl Window {
     }
     pub fn show(&mut self) {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
-        // SAFETY: makeKeyAndOrderFront: accepts a nullable sender.
-        unsafe {
-            send_void_id(
-                self.raw.as_ptr(),
-                c"makeKeyAndOrderFront:",
-                std::ptr::null_mut(),
-            )
-        }
+        MAKE_KEY_AND_ORDER_FRONT.send(&self.window, (None,));
         self.closed = false;
     }
 
     pub fn set_title(&self, title: &str) -> Result<(), Error> {
-        let title = CString::new(title).map_err(|_| Error::InvalidTitle)?;
         let _pool = Pool::new()?;
-        // SAFETY: An autoreleased NSString is created within the pool.
-        unsafe { set_title(self.raw.as_ptr(), &title) }
+        let title = ns_string(title).map_err(|_| Error::InvalidTitle)?;
+        SET_TITLE.send(&self.window, (&title,));
+        Ok(())
     }
 
     pub fn title(&self) -> String {
         let _pool = Pool::new().expect("AppKit autorelease pool unavailable");
-        // SAFETY: title is a live NSString while this retained window exists;
-        // UTF8String remains valid until copied below.
-        unsafe {
-            let title = send_id(self.raw.as_ptr(), c"title");
-            let bytes = send_cstr(title, c"UTF8String");
-            if bytes.is_null() {
-                String::new()
-            } else {
-                CStr::from_ptr(bytes).to_string_lossy().into_owned()
-            }
-        }
+        WINDOW_TITLE
+            .send(&self.window, ())
+            .and_then(string)
+            .unwrap_or_default()
     }
 
     pub fn is_visible(&self) -> bool {
         let _pool = Pool::new();
-        // SAFETY: isVisible returns an Objective-C BOOL.
-        unsafe { send_bool(self.raw.as_ptr(), c"isVisible") != 0 }
+        IS_WINDOW_VISIBLE.send(&self.window, ())
     }
 
     /// The content-view extent in logical points.
     pub fn content_size(&self) -> Size {
-        // SAFETY: NSWindow contentView returns a live NSView owned by the window;
-        // NSView frame returns NSRect with architecture-specific struct ABI.
-        unsafe { read_content_size(self.raw.as_ptr()) }
+        read_content_size(&self.window)
     }
 
     pub fn set_content_size(&mut self, size: Size) -> Result<(), Error> {
@@ -1309,343 +1157,72 @@ impl Window {
         {
             return Err(Error::InvalidSize);
         }
-        // SAFETY: setContentSize: takes an NSSize by value in logical points.
-        unsafe {
-            send_void_size(
-                self.raw.as_ptr(),
-                c"setContentSize:",
-                NSSize {
-                    width: size.width,
-                    height: size.height,
-                },
-            )
-        }
+        SET_CONTENT_SIZE.send(
+            &self.window,
+            (NSSize {
+                width: size.width,
+                height: size.height,
+            },),
+        );
         Ok(())
     }
 
     pub fn backing_scale_factor(&self) -> f64 {
         let _pool = Pool::new();
-        // SAFETY: backingScaleFactor returns CGFloat (double on supported Macs).
-        unsafe { send_f64(self.raw.as_ptr(), c"backingScaleFactor") }
+        BACKING_SCALE_FACTOR.send(&self.window, ())
     }
 
     pub fn close(&mut self) {
         if !self.closed {
             let _pool = Pool::new();
-            // SAFETY: setReleasedWhenClosed:NO retains ownership after close.
-            unsafe { send_void(self.raw.as_ptr(), c"close") }
+            // setReleasedWhenClosed:NO keeps ownership after close.
+            CLOSE.send(&self.window, ());
             self.closed = true;
         }
     }
 }
 impl Drop for Window {
     fn drop(&mut self) {
-        // `close` and `release` autorelease internally; drain them here so a
-        // caller without its own pool does not keep the window alive.
-        let _pool = Pool::new();
+        // `close` and `release` autorelease internally; this pool drains
+        // them, so a caller without its own pool does not keep the window
+        // alive. It drops after the window and delegate fields.
+        self.drop_pool = Pool::new().ok();
         self.close();
         for (_, element) in self.accessibility.get_mut().elements.drain() {
             accessibility_bridge::unbind(&element);
         }
-        // SAFETY: NSWindow.delegate is weak. Detach it before releasing the
-        // +1 delegate, then unregister its event queue and release the window.
-        unsafe {
-            send_void_id(self.raw.as_ptr(), c"setDelegate:", std::ptr::null_mut());
-            window_queues()
-                .lock()
-                .unwrap()
-                .remove(&(self.raw.as_ptr() as usize));
-            paint_states()
-                .lock()
-                .unwrap()
-                .remove(&(self.raw.as_ptr() as usize));
-            ime_states()
-                .lock()
-                .unwrap()
-                .remove(&(self.raw.as_ptr() as usize));
-            send_void(self.delegate.as_ptr(), c"release");
-            send_void(self.raw.as_ptr(), c"release");
-        }
+        // NSWindow.delegate is weak. Detach it before the delegate field
+        // releases it, then unregister the window's state.
+        SET_WINDOW_DELEGATE.send(&self.window, (None,));
+        let window = self.window.addr();
+        window_queues().lock().unwrap().remove(&window);
+        paint_states().lock().unwrap().remove(&window);
+        ime_states().lock().unwrap().remove(&window);
         if paint_states().lock().unwrap().is_empty() {
             paint::clear_image_cache();
         }
     }
 }
 
-unsafe fn read_content_size(window: Id) -> Size {
-    // SAFETY: NSWindow owns its contentView. On a missing view, return empty
-    // geometry rather than sending frame to nil.
-    unsafe {
-        let view = send_id(window, c"contentView");
-        if view.is_null() {
-            return Size::new(0.0, 0.0);
-        }
-        let frame = send_rect(view, c"frame");
-        Size::new(frame.size.width, frame.size.height)
-    }
+/// The content-view extent of `window`, or empty without a content view.
+fn read_content_size(window: &Obj<NSWindow>) -> Size {
+    CONTENT_VIEW
+        .send(window, ())
+        .map_or(Size::new(0.0, 0.0), |view| {
+            let frame = VIEW_FRAME.send(view, ());
+            Size::new(frame.size.width, frame.size.height)
+        })
 }
 
-unsafe fn set_title(window: Id, title: &CString) -> Result<(), Error> {
-    // SAFETY: NSString copies valid UTF-8; setTitle: retains/copies the value.
-    unsafe {
-        let cls = class(c"NSString")?;
-        let ns_title = send_id_cstr(cls, c"stringWithUTF8String:", title.as_ptr());
-        if ns_title.is_null() {
-            return Err(Error::InvalidTitle);
-        }
-        send_void_id(window, c"setTitle:", ns_title);
-    }
-    Ok(())
-}
-
-fn ns_array(values: &[Id]) -> Result<Id, Error> {
-    unsafe {
-        let result = send_id_ptr_usize(
-            class(c"NSArray")?,
-            c"arrayWithObjects:count:",
-            values.as_ptr(),
-            values.len(),
-        );
-        NonNull::new(result)
-            .map(NonNull::as_ptr)
-            .ok_or(Error::AppKitUnavailable)
-    }
-}
-
+/// The class named `name`, for class registration.
 unsafe fn class(name: &CStr) -> Result<Id, Error> {
     ffi::class::lookup_class(name)
         .map(|class| std::ptr::from_ref(class).cast_mut().cast())
         .ok_or(Error::AppKitUnavailable)
 }
+/// The selector named `name`, for class registration.
 unsafe fn selector(name: &CStr) -> Sel {
     ffi::class::Sel::register(name).as_ptr()
-}
-
-/// Stops `[NSApp run]`. AppKit checks the stop flag only after `run`
-/// handles an event, so an application-defined event follows `stop:`.
-/// Without it, a stop from a run loop source waits for the next input.
-///
-/// # Safety
-///
-/// Call on the main thread with an initialized NSApplication.
-unsafe fn stop_application(application: Id) {
-    let _pool = Pool::new();
-    // SAFETY: the caller guarantees the thread and the receiver. stop:
-    // accepts a nullable sender. otherEventWithType:... returns an
-    // autoreleased event or nil, which the pool above owns; postEvent:
-    // retains the event in the queue.
-    unsafe {
-        send_void_id(application, c"stop:", std::ptr::null_mut());
-        let Ok(events) = class(c"NSEvent") else {
-            return;
-        };
-        let event = send_application_event(events);
-        if !event.is_null() {
-            send_void_id_bool(application, c"postEvent:atStart:", event, 1);
-        }
-    }
-}
-
-/// `NSEventTypeApplicationDefined`.
-const APPLICATION_DEFINED_EVENT: usize = 15;
-
-// Each typed cast matches the SDK method signature used at its call site.
-unsafe fn send_application_event(receiver: Id) -> Id {
-    let f: unsafe extern "C" fn(
-        Id,
-        Sel,
-        usize,
-        NSPoint,
-        usize,
-        f64,
-        isize,
-        Id,
-        i16,
-        isize,
-        isize,
-    ) -> Id = unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    let name = c"otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:";
-    let origin = NSPoint { x: 0.0, y: 0.0 };
-    let null = std::ptr::null_mut();
-    unsafe {
-        f(
-            receiver,
-            selector(name),
-            APPLICATION_DEFINED_EVENT,
-            origin,
-            0,
-            0.0,
-            0,
-            null,
-            0,
-            0,
-            0,
-        )
-    }
-}
-unsafe fn send_void_id_bool(receiver: Id, name: &CStr, value: Id, flag: i8) {
-    let f: unsafe extern "C" fn(Id, Sel, Id, i8) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value, flag) }
-}
-unsafe fn send_id(receiver: Id, name: &CStr) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_id_cstr(receiver: Id, name: &CStr, value: *const i8) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, *const i8) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_id_f64(receiver: Id, name: &CStr, value: f64) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, f64) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_id_ptr_usize(receiver: Id, name: &CStr, values: *const Id, count: usize) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, *const Id, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), values, count) }
-}
-unsafe fn send_next_event(
-    receiver: Id,
-    name: &CStr,
-    mask: usize,
-    date: Id,
-    mode: Id,
-    dequeue: i8,
-) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, usize, Id, Id, i8) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), mask, date, mode, dequeue) }
-}
-unsafe fn send_void(receiver: Id, name: &CStr) {
-    let f: unsafe extern "C" fn(Id, Sel) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_bool(receiver: Id, name: &CStr) -> i8 {
-    let f: unsafe extern "C" fn(Id, Sel) -> i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_cstr(receiver: Id, name: &CStr) -> *const i8 {
-    let f: unsafe extern "C" fn(Id, Sel) -> *const i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_f64(receiver: Id, name: &CStr) -> f64 {
-    let f: unsafe extern "C" fn(Id, Sel) -> f64 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_usize(receiver: Id, name: &CStr) -> usize {
-    let f: unsafe extern "C" fn(Id, Sel) -> usize =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_u16(receiver: Id, name: &CStr) -> u16 {
-    let f: unsafe extern "C" fn(Id, Sel) -> u16 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_point(receiver: Id, name: &CStr) -> NSPoint {
-    let f: unsafe extern "C" fn(Id, Sel) -> NSPoint =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-unsafe fn send_point_point_id(receiver: Id, name: &CStr, point: NSPoint, view: Id) -> NSPoint {
-    let f: unsafe extern "C" fn(Id, Sel, NSPoint, Id) -> NSPoint =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), point, view) }
-}
-unsafe fn send_view_init(receiver: Id, name: &CStr, frame: NSRect) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), frame) }
-}
-unsafe fn send_void_size(receiver: Id, name: &CStr, size: NSSize) {
-    let f: unsafe extern "C" fn(Id, Sel, NSSize) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), size) }
-}
-
-// A 32-byte NSRect is returned in registers on arm64 but through a hidden
-// result pointer on x86-64, which needs objc_msgSend_stret.
-#[cfg(target_arch = "x86_64")]
-unsafe fn send_rect_rect_id(receiver: Id, name: &CStr, rect: NSRect, value: Id) -> NSRect {
-    unsafe extern "C" {
-        fn objc_msgSend_stret();
-    }
-    let f: unsafe extern "C" fn(*mut NSRect, Id, Sel, NSRect, Id) =
-        unsafe { std::mem::transmute(objc_msgSend_stret as *const ()) };
-    let mut result = std::mem::MaybeUninit::<NSRect>::uninit();
-    unsafe {
-        f(result.as_mut_ptr(), receiver, selector(name), rect, value);
-        result.assume_init()
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-unsafe fn send_rect_rect(receiver: Id, name: &CStr, rect: NSRect) -> NSRect {
-    unsafe extern "C" {
-        fn objc_msgSend_stret();
-    }
-    let f: unsafe extern "C" fn(*mut NSRect, Id, Sel, NSRect) =
-        unsafe { std::mem::transmute(objc_msgSend_stret as *const ()) };
-    let mut result = std::mem::MaybeUninit::<NSRect>::uninit();
-    unsafe {
-        f(result.as_mut_ptr(), receiver, selector(name), rect);
-        result.assume_init()
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-unsafe fn send_rect(receiver: Id, name: &CStr) -> NSRect {
-    let f: unsafe extern "C" fn(Id, Sel) -> NSRect =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name)) }
-}
-#[cfg(target_arch = "x86_64")]
-unsafe fn send_rect(receiver: Id, name: &CStr) -> NSRect {
-    unsafe extern "C" {
-        fn objc_msgSend_stret();
-    }
-    let f: unsafe extern "C" fn(*mut NSRect, Id, Sel) =
-        unsafe { std::mem::transmute(objc_msgSend_stret as *const ()) };
-    let mut result = std::mem::MaybeUninit::<NSRect>::uninit();
-    unsafe {
-        f(result.as_mut_ptr(), receiver, selector(name));
-        result.assume_init()
-    }
-}
-unsafe fn send_void_id(receiver: Id, name: &CStr, value: Id) {
-    let f: unsafe extern "C" fn(Id, Sel, Id) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_void_bool(receiver: Id, name: &CStr, value: i8) {
-    let f: unsafe extern "C" fn(Id, Sel, i8) =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_bool_usize(receiver: Id, name: &CStr, value: usize) -> i8 {
-    let f: unsafe extern "C" fn(Id, Sel, usize) -> i8 =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-unsafe fn send_window_init(
-    receiver: Id,
-    name: &CStr,
-    frame: NSRect,
-    style: usize,
-    backing: usize,
-    defer: i8,
-) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, NSRect, usize, usize, i8) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), frame, style, backing, defer) }
 }
 
 #[cfg(test)]

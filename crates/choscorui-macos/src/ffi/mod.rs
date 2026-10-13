@@ -25,6 +25,7 @@ pub(crate) mod image_io;
 pub(crate) mod legacy;
 pub(crate) mod msg;
 pub(crate) mod retained;
+pub(crate) mod runloop;
 mod runtime;
 pub(crate) mod text;
 mod thread;
@@ -32,5 +33,4 @@ pub(crate) mod user_notifications;
 
 pub(crate) use class::Obj;
 pub(crate) use retained::Pool;
-pub(crate) use runtime::objc_msgSend;
 pub(crate) use thread::is_main_thread;

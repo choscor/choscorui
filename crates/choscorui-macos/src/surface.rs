@@ -6,8 +6,8 @@ use crate::ffi::appkit::{
     ADD_CURSOR_RECT, ARROW_CURSOR, BITMAP_CG_IMAGE, BITMAP_IMAGE_REP_FOR_CACHING, BOUNDS,
     CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR, I_BEAM_CURSOR,
     INIT_WITH_IMAGE_HOT_SPOT, INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor,
-    NSView, NSWindow, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR,
-    RESIZE_LEFT_RIGHT_CURSOR, RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
+    NSView, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR,
+    RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
 };
 use crate::ffi::retained::{Retained, alloc};
 use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
@@ -16,12 +16,12 @@ use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
 const OCCLUSION_VISIBLE: usize = 1 << 1;
 
 pub(crate) unsafe extern "C" fn window_did_change_occlusion(_: Id, _: Sel, notification: Id) {
-    record_window_event(notification, |window| {
-        // SAFETY: notification.object is the live NSWindow.
-        let state = unsafe { ffi::legacy::borrow::<NSWindow>(window) }
-            .map_or(OCCLUSION_VISIBLE, |window| OCCLUSION_STATE.send(window, ()));
-        WindowEvent::Occluded(state & OCCLUSION_VISIBLE == 0)
-    });
+    // SAFETY: AppKit passes a live notification.
+    unsafe {
+        record_window_event(notification, |window| {
+            WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_VISIBLE == 0)
+        })
+    };
 }
 
 pub(crate) unsafe extern "C" fn view_reset_cursor_rects(view: Id, _: Sel) {

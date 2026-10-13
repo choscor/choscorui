@@ -7,7 +7,7 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 - The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, and the Objective-C runtime by hand. The crate uses no build script and no binding generator.
 - The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSApplication.h`, `NSWindow.h`, `NSGraphics.h`, and `objc/message.h`.
 - Raw Objective-C ids stay private to the crate. The safe types are `!Send` and `!Sync`, except `Poster`.
-- Each `objc_msgSend` cast uses the SDK argument and return ABI. The casts pass `NSRect` by value and use `i8` for Objective-C `BOOL`.
+- Each message descriptor (`Msg`) states the SDK argument and return types. `Msg::send` casts `objc_msgSend` to exactly these types. It passes `NSRect` by value and reads Objective-C `BOOL` as one byte.
 - The callbacks for events, accessibility actions, drawing, posted tasks, timers, menus, and the application delegate catch Rust panics before they return.
 - Some small callbacks do not catch panics, for example `accessibility_character_count` and `notification_will_present`. If one of them panics, Rust stops the process at the `extern "C"` boundary. Thus, a panic never unwinds into AppKit.
 - Objective-C exceptions are not caught. The crate calls selectors only with validated inputs.
@@ -15,7 +15,7 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 
 ## Architectures
 
-On arm64, every `NSRect` return uses `objc_msgSend`. On x86-64, a 32-byte `NSRect` return needs `objc_msgSend_stret`. The helpers `send_rect`, `send_rect_rect`, and `send_rect_rect_id` select the correct function for each architecture.
+On arm64, every `NSRect` return uses `objc_msgSend`. On x86-64, a 32-byte `NSRect` return needs `objc_msgSend_stret`. The return type of each message descriptor selects the correct function for each architecture.
 
 Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both architectures. `CGFloat` is `f64` on both architectures. CI runs the build and the native tests on `macos-15` (arm64) and `macos-15-intel` (x86-64).
 
@@ -39,16 +39,17 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 
 ### Run loop source and posted work
 
-- **Ownership.** `Application` owns the +1 Core Foundation run-loop source. On `Drop`, it removes, invalidates, and releases the source. An `Arc` keeps the callback context alive through the last callback.
+- **Ownership.** `Application` owns a `RunLoopSource`. It holds the +1 run-loop source and one `Arc` count of the posted state. On `Drop`, it removes and invalidates the source, and then releases both.
+- **Callbacks.** The source callback takes its own `Arc` count for each call. Thus, the posted state stays alive until the callback returns.
 - **Threads.** Workers signal the source through `Poster`. The source callback runs the queued tasks on the main thread. A mutex stops worker signals during teardown.
 - **Panics.** The callback catches a panic in each posted task, increments a count, and continues with the next task.
 - **Stop.** `Poster::request_stop` posts `NSApplication stop:` to the main thread. AppKit checks the stop flag only after `run` handles an event. Thus, `stop_application` also posts an application-defined `NSEvent` with `postEvent:atStart:`, and `run` returns without user input.
 
 ### Timers
 
-- **Ownership.** A `Timer` owns the +1 `CFRunLoopTimer` and its callback context. `Drop` removes, invalidates, and releases the timer, and then frees the context.
-- **Callbacks.** The context holds a weak reference to its owner. Thus, a cancel or a drop inside the callback cannot free the context during the callback.
-- **Repeating timers.** The `FnMut` stays in the context between ticks. A cancel inside the callback stops the next delivery.
+- **Ownership.** A `Timer` owns a `RunLoopTimer`. It holds the +1 `CFRunLoopTimer` and a weak reference to the timer state. `Drop` invalidates, removes, and releases the timer, and then frees the weak reference.
+- **Callbacks.** The callback upgrades the weak reference for the call. Thus, a cancel or a drop inside the callback cannot free the timer state during the callback.
+- **Repeating timers.** The `FnMut` stays in the timer state between ticks. A cancel inside the callback stops the next delivery.
 - **Modes.** Timers and the posted-work source use `kCFRunLoopCommonModes`. They run during live resize, menu tracking, and modal panels.
 - **Order.** Timers with equal deadlines, and timers that are ready at the same time as posted work, have no defined order.
 - **Teardown.** `Application` teardown cancels all timers that are still alive.

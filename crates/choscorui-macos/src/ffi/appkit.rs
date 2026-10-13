@@ -1,9 +1,9 @@
 //! AppKit classes, messages, constants, and functions.
 
 use super::class::{Obj, Sel, objc_class, objc_protocol};
-use super::foundation::{NSArray, NSData, NSDictionary, NSObject, NSString, NsUrl};
+use super::foundation::{NSArray, NSData, NSDate, NSDictionary, NSObject, NSString, NsUrl};
 use super::geometry::{NSPoint, NSRange, NSRect, NSSize};
-use super::graphics::CGImage;
+use super::graphics::{CGContext, CGImage};
 use super::msg::{Autoreleased, Init, Shared, messages};
 
 objc_class!(NSResponder: NSObject);
@@ -30,6 +30,7 @@ objc_class!(NSEvent: NSObject);
 objc_class!(NSCursor: NSObject);
 objc_class!(NSImage: NSObject);
 objc_class!(NSFont: NSObject);
+objc_class!(NSGraphicsContext: NSObject);
 objc_class!(NSImageRep: NSObject);
 objc_class!(NSBitmapImageRep: NSImageRep: NSObject);
 objc_class!(NSDraggingItem: NSObject);
@@ -65,6 +66,16 @@ objc_class!(
 );
 
 objc_class!(
+    /// The content view of every window, registered by the crate root.
+    ChoscoruiV2ContentView: NSView: NSResponder: NSObject
+);
+
+objc_class!(
+    /// The delegate of every window, registered by the crate root.
+    ChoscoruiV2WindowDelegate: NSObject
+);
+
+objc_class!(
     /// The dragging info of simulated drags, registered by `dnd`.
     ChoscoruiV2SimulatedDraggingInfo: NSObject
 );
@@ -75,6 +86,67 @@ messages! {
     pub(crate) SET_MAIN_MENU: instance NSApplication, c"setMainMenu:",
         (Option<&Obj<NSMenu>>) -> ();
     pub(crate) MAIN_MENU: instance NSApplication, c"mainMenu", () -> Option<&Obj<NSMenu>>;
+    pub(crate) SET_ACTIVATION_POLICY: instance NSApplication, c"setActivationPolicy:",
+        (isize) -> bool;
+    pub(crate) ACTIVATION_POLICY: instance NSApplication, c"activationPolicy", () -> isize;
+    pub(crate) FINISH_LAUNCHING: instance NSApplication, c"finishLaunching", () -> ();
+    pub(crate) RUN: instance NSApplication, c"run", () -> ();
+    pub(crate) STOP: instance NSApplication, c"stop:", (Option<&Obj<NSObject>>) -> ();
+    pub(crate) ACTIVATE: instance NSApplication, c"activate", () -> ();
+    pub(crate) APPLICATION_WINDOWS: instance NSApplication, c"windows",
+        () -> Option<&Obj<NSArray>>;
+    pub(crate) NEXT_EVENT: instance NSApplication,
+        c"nextEventMatchingMask:untilDate:inMode:dequeue:",
+        (usize, Option<&Obj<NSDate>>, &Obj<NSString>, bool) -> Option<&Obj<NSEvent>>;
+    pub(crate) SEND_EVENT: instance NSApplication, c"sendEvent:", (&Obj<NSEvent>) -> ();
+    pub(crate) POST_EVENT_AT_START: instance NSApplication, c"postEvent:atStart:",
+        (&Obj<NSEvent>, bool) -> ();
+
+    pub(crate) OTHER_EVENT: class NSEvent,
+        c"otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:",
+        (usize, NSPoint, usize, f64, isize, Option<&Obj<NSGraphicsContext>>, i16, isize, isize)
+            -> Autoreleased<NSEvent>;
+    pub(crate) LOCATION_IN_WINDOW: instance NSEvent, c"locationInWindow", () -> NSPoint;
+    pub(crate) EVENT_MODIFIER_FLAGS: instance NSEvent, c"modifierFlags", () -> usize;
+    pub(crate) HAS_PRECISE_SCROLLING_DELTAS: instance NSEvent,
+        c"hasPreciseScrollingDeltas", () -> bool;
+    pub(crate) SCROLLING_DELTA_X: instance NSEvent, c"scrollingDeltaX", () -> f64;
+    pub(crate) SCROLLING_DELTA_Y: instance NSEvent, c"scrollingDeltaY", () -> f64;
+    pub(crate) BUTTON_NUMBER: instance NSEvent, c"buttonNumber", () -> isize;
+    pub(crate) KEY_CODE: instance NSEvent, c"keyCode", () -> u16;
+    pub(crate) CHARACTERS: instance NSEvent, c"characters", () -> Option<&Obj<NSString>>;
+    pub(crate) CHARACTERS_IGNORING_MODIFIERS: instance NSEvent,
+        c"charactersIgnoringModifiers", () -> Option<&Obj<NSString>>;
+    pub(crate) IS_A_REPEAT: instance NSEvent, c"isARepeat", () -> bool;
+    pub(crate) INTERPRET_KEY_EVENTS: instance NSResponder, c"interpretKeyEvents:",
+        (&Obj<NSArray>) -> ();
+
+    pub(crate) CURRENT_GRAPHICS_CONTEXT: class NSGraphicsContext, c"currentContext",
+        () -> Autoreleased<NSGraphicsContext>;
+    pub(crate) GRAPHICS_CG_CONTEXT: instance NSGraphicsContext, c"CGContext",
+        () -> Option<&CGContext>;
+
+    pub(crate) INIT_WITH_FRAME: instance NSView, c"initWithFrame:", (NSRect) -> Init<NSView>;
+    pub(crate) VIEW_FRAME: instance NSView, c"frame", () -> NSRect;
+
+    pub(crate) INIT_WITH_CONTENT_RECT: instance NSWindow,
+        c"initWithContentRect:styleMask:backing:defer:",
+        (NSRect, usize, usize, bool) -> Init<NSWindow>;
+    pub(crate) SET_RELEASED_WHEN_CLOSED: instance NSWindow, c"setReleasedWhenClosed:",
+        (bool) -> ();
+    pub(crate) SET_CONTENT_VIEW: instance NSWindow, c"setContentView:",
+        (Option<&Obj<NSView>>) -> ();
+    pub(crate) SET_ACCEPTS_MOUSE_MOVED_EVENTS: instance NSWindow,
+        c"setAcceptsMouseMovedEvents:", (bool) -> ();
+    pub(crate) SET_WINDOW_DELEGATE: instance NSWindow, c"setDelegate:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) MAKE_KEY_AND_ORDER_FRONT: instance NSWindow, c"makeKeyAndOrderFront:",
+        (Option<&Obj<NSObject>>) -> ();
+    pub(crate) WINDOW_TITLE: instance NSWindow, c"title", () -> Option<&Obj<NSString>>;
+    pub(crate) IS_WINDOW_VISIBLE: instance NSWindow, c"isVisible", () -> bool;
+    pub(crate) SET_CONTENT_SIZE: instance NSWindow, c"setContentSize:", (NSSize) -> ();
+    pub(crate) BACKING_SCALE_FACTOR: instance NSWindow, c"backingScaleFactor", () -> f64;
+    pub(crate) CLOSE: instance NSWindow, c"close", () -> ();
 
     pub(crate) APPLICATION_DELEGATE: instance NSApplication, c"delegate",
         () -> Option<&Obj<NSApplicationDelegate>>;

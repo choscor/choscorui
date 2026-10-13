@@ -19,6 +19,8 @@ objc_class!(NSArray: NSObject);
 objc_class!(NSData: NSObject);
 objc_class!(NsUrl = "NSURL": NSObject);
 objc_class!(NSBundle: NSObject);
+objc_class!(NSDate: NSObject);
+objc_class!(NSNotification: NSObject);
 
 messages! {
     pub(crate) RETAIN: instance NSObject, c"retain", () -> Option<&Obj<NSObject>>;
@@ -43,7 +45,7 @@ messages! {
         (*const &Obj<NSObject>, *const &Obj<NSObject>, usize) -> Autoreleased<NSDictionary>;
     ARRAY_WITH_OBJECTS: class NSArray, c"arrayWithObjects:count:",
         (*const &Obj<NSObject>, usize) -> Autoreleased<NSArray>;
-    COUNT: instance NSArray, c"count", () -> usize;
+    pub(crate) COUNT: instance NSArray, c"count", () -> usize;
     OBJECT_AT_INDEX: instance NSArray, c"objectAtIndex:", (usize) -> Option<&Obj<NSObject>>;
     DATA_WITH_BYTES: class NSData, c"dataWithBytes:length:",
         (*const c_void, usize) -> Autoreleased<NSData>;
@@ -60,6 +62,16 @@ messages! {
     pub(crate) MAIN_BUNDLE: class NSBundle, c"mainBundle", () -> Autoreleased<NSBundle>;
     pub(crate) BUNDLE_IDENTIFIER: instance NSBundle, c"bundleIdentifier",
         () -> Autoreleased<NSString>;
+
+    pub(crate) DATE_WITH_TIME_INTERVAL_SINCE_NOW: class NSDate,
+        c"dateWithTimeIntervalSinceNow:", (f64) -> Autoreleased<NSDate>;
+    pub(crate) NOTIFICATION_OBJECT: instance NSNotification, c"object",
+        () -> Option<&Obj<NSObject>>;
+}
+
+#[link(name = "Foundation", kind = "framework")]
+unsafe extern "C" {
+    pub(crate) safe static NSDefaultRunLoopMode: &'static Obj<NSString>;
 }
 
 impl<C> Obj<C> {
