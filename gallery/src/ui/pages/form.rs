@@ -5,14 +5,13 @@
 use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Configured, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
-    HorizontalAlignment, Input, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea, Toggle,
-    ToggleGroup, VStack, View, ViewExt,
+    AnyView, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
+    HorizontalAlignment, Input, InputGroup, InputOtp, Kbd, RangeSlider, Select, Switch, Textarea,
+    Toggle, ToggleGroup, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    self, AddonAlign, CalendarMode, ControlKind, ControlSize, FieldOrientation, InputGroup,
-    InputGroupAddon, KbdVariant, ListEntry, Orientation, TextField, ToggleItem, ToggleVariant,
-    ValidationState,
+    self, AddonAlign, CalendarMode, ControlSize, FieldOrientation, InputGroupAddon, KbdVariant,
+    ListEntry, Orientation, ToggleItem, ToggleVariant, ValidationState,
 };
 use choscorui::core::{CivilDate, Icon, Space};
 
@@ -232,20 +231,22 @@ pub fn select(_: &PageCx) -> AnyView {
     })
 }
 
+/// The status options of the native selects.
+fn statuses(env: &Env) -> Vec<ListEntry> {
+    vec![
+        ListEntry::option(text(env, "select.todo")),
+        ListEntry::option(text(env, "select.in_progress")),
+        ListEntry::option(text(env, "select.done")),
+    ]
+}
+
 /// A status select with the native look, named by the catalog string
 /// `key`.
-fn native_select(key: &'static str, size: ControlSize, invalid: bool) -> impl View {
-    Configured::custom(ControlKind::NativeSelect, move |env| {
-        let mut select = controls::Select::native(
-            text(env, key),
-            vec![
-                ListEntry::option(text(env, "select.todo")),
-                ListEntry::option(text(env, "select.in_progress")),
-                ListEntry::option(text(env, "select.done")),
-            ],
-        )
-        .with_placeholder(text(env, "select.status_placeholder"))
-        .with_size(size);
+fn native_select(cx: &mut Cx, key: &'static str, size: ControlSize, invalid: bool) -> impl View {
+    Select::native(t!(key), statuses, cx.state(None).binding()).with_env(move |select, env| {
+        let mut select = select
+            .with_placeholder(text(env, "select.status_placeholder"))
+            .with_size(size);
         select.set_invalid(invalid);
         select
     })
@@ -253,20 +254,22 @@ fn native_select(key: &'static str, size: ControlSize, invalid: bool) -> impl Vi
 
 /// The native look of `Select`: default and small, then invalid.
 pub fn native_select_page(_: &PageCx) -> AnyView {
-    column((
-        section(
-            t!("switch.default"),
-            native_select("select.status", ControlSize::Default, false),
-        ),
-        section(
-            t!("switch.small"),
-            native_select("select.small_status", ControlSize::Sm, false),
-        ),
-        section(
-            t!("select.invalid"),
-            native_select("select.required_status", ControlSize::Default, true),
-        ),
-    ))
+    stateful(|cx| {
+        column((
+            section(
+                t!("switch.default"),
+                native_select(cx, "select.status", ControlSize::Default, false),
+            ),
+            section(
+                t!("switch.small"),
+                native_select(cx, "select.small_status", ControlSize::Sm, false),
+            ),
+            section(
+                t!("select.invalid"),
+                native_select(cx, "select.required_status", ControlSize::Default, true),
+            ),
+        ))
+    })
 }
 
 /// The invalid username sample of the input and field pages.
@@ -303,25 +306,39 @@ pub fn input_page(_: &PageCx) -> AnyView {
     })
 }
 
-/// A text field with addons, both made from the environment.
+/// An input group named by the catalog string `key` that starts with
+/// `value`, with the placeholder `placeholder` and `addons` from the
+/// environment.
 fn input_group(
-    field: impl Fn(&Env) -> TextField + 'static,
+    cx: &mut Cx,
+    key: &'static str,
+    value: &str,
+    placeholder: Option<&'static str>,
     addons: impl Fn(&Env) -> Vec<InputGroupAddon> + 'static,
-) -> impl View {
-    Configured::custom(ControlKind::InputGroup, move |env| {
-        InputGroup::new(field(env), addons(env))
-    })
+) -> InputGroup {
+    InputGroup::new(t!(key), addons, cx.state(value.to_owned()).binding()).with_env(
+        move |group, env| match placeholder {
+            Some(placeholder) => group.with_placeholder(text(env, placeholder)),
+            None => group,
+        },
+    )
 }
 
 pub fn input_group_page(_: &PageCx) -> AnyView {
+    stateful(input_groups)
+}
+
+/// Input groups with inline, text, button, and block addons, then an
+/// invalid one.
+fn input_groups(cx: &mut Cx) -> impl View + use<> {
     column((
         section(
             t!("input-group.inline"),
             input_group(
-                |env| {
-                    TextField::new(text(env, "input-group.search"), "")
-                        .with_placeholder(text(env, "input-group.search_placeholder"))
-                },
+                cx,
+                "input-group.search",
+                "",
+                Some("input-group.search_placeholder"),
                 |env| {
                     let results = env.plural("input-group.results", 12, &[("count", "12")]);
                     vec![
@@ -334,43 +351,37 @@ pub fn input_group_page(_: &PageCx) -> AnyView {
         section(
             t!("input-group.text_buttons"),
             row((
-                input_group(
-                    |env| TextField::new(text(env, "input-group.website"), "example"),
-                    |_| {
-                        vec![
-                            InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
-                            InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
-                        ]
-                    },
-                ),
-                input_group(
-                    |env| TextField::new(text(env, "input-group.link"), "https://choscor.com"),
-                    |env| {
-                        vec![
-                            InputGroupAddon::button(
-                                AddonAlign::InlineEnd,
-                                text(env, "input-group.copy"),
-                                Some(Icon::Copy),
-                                ControlSize::IconXs,
-                            ),
-                            InputGroupAddon::button(
-                                AddonAlign::InlineEnd,
-                                text(env, "input-group.share"),
-                                None,
-                                ControlSize::Xs,
-                            ),
-                        ]
-                    },
-                ),
+                input_group(cx, "input-group.website", "example", None, |_| {
+                    vec![
+                        InputGroupAddon::text(AddonAlign::InlineStart, "https://"),
+                        InputGroupAddon::text(AddonAlign::InlineEnd, ".com"),
+                    ]
+                }),
+                input_group(cx, "input-group.link", "https://choscor.com", None, |env| {
+                    vec![
+                        InputGroupAddon::button(
+                            AddonAlign::InlineEnd,
+                            text(env, "input-group.copy"),
+                            Some(Icon::Copy),
+                            ControlSize::IconXs,
+                        ),
+                        InputGroupAddon::button(
+                            AddonAlign::InlineEnd,
+                            text(env, "input-group.share"),
+                            None,
+                            ControlSize::Xs,
+                        ),
+                    ]
+                }),
             )),
         ),
         section(
             t!("input-group.block"),
             input_group(
-                |env| {
-                    TextField::new(text(env, "input-group.message"), "")
-                        .with_placeholder(text(env, "input-group.ask"))
-                },
+                cx,
+                "input-group.message",
+                "",
+                Some("input-group.ask"),
                 |env| {
                     vec![
                         InputGroupAddon::text(AddonAlign::BlockStart, text(env, "input-group.to")),
@@ -386,15 +397,15 @@ pub fn input_group_page(_: &PageCx) -> AnyView {
         ),
         section(
             t!("select.invalid"),
-            Configured::custom(ControlKind::InputGroup, |env| {
-                let field = TextField::new(text(env, "input.email"), "ana@");
-                let clear = InputGroupAddon::button(
+            input_group(cx, "input.email", "ana@", None, |env| {
+                vec![InputGroupAddon::button(
                     AddonAlign::InlineEnd,
                     text(env, "input-group.clear"),
                     Some(Icon::X),
                     ControlSize::IconSm,
-                );
-                let mut group = InputGroup::new(field, vec![clear]);
+                )]
+            })
+            .with_env(|mut group, env| {
                 group.set_validation(ValidationState::Invalid(text(
                     env,
                     "input-group.email_error",
@@ -595,10 +606,8 @@ pub fn range_slider(_: &PageCx) -> AnyView {
 }
 
 /// Key caps for a combination of keys.
-fn keys(keys: &'static [&'static str]) -> Configured<controls::Kbd> {
-    Configured::custom(ControlKind::Kbd, move |_| {
-        controls::Kbd::group(keys.iter().map(|key| (*key).to_owned()))
-    })
+fn keys(keys: &[&str]) -> Kbd {
+    Kbd::keys(keys.iter().map(|key| (*key).to_owned()).collect::<Vec<_>>())
 }
 
 pub fn kbd(_: &PageCx) -> AnyView {

@@ -4,13 +4,13 @@
 use crate::ui::page::{Build, PageCx, column, row};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Binding, Button, Card, Configured, Corner, Cx, Dynamic, Empty, Env, Fill, FontDialog,
-    Frame, HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text, TextContent, VStack,
-    View, ViewExt,
+    self, AlertDialog, AnyView, Binding, Button, Card, Corner, Cx, Dynamic, Empty, Env, Fill,
+    FontDialog, Frame, HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text,
+    TextContent, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    AlertDialog, ButtonVariant, ColorChannel, ColorPicker, ControlKind, ControlMessage,
-    ControlValue, DialogButton, DialogButtonRole, InputKind, ValidationState, dialog_key_button,
+    ButtonVariant, ColorChannel, ColorPicker, DialogButton, DialogButtonRole, InputKind,
+    ValidationState, dialog_key_button,
 };
 use choscorui::core::{Color, ColorRole, Key, RadiusScale, Space, TextPreset, TextStyle};
 
@@ -29,25 +29,20 @@ fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-fn save_alert(env: &Env) -> AlertDialog {
+/// The buttons of the "save changes" alert, in order.
+fn save_buttons(env: &Env) -> Vec<DialogButton> {
     let text = |key: &str| text(env, key);
-    let mut dialog = AlertDialog::new(
-        text("alert-dialog.title"),
-        env.text("alert-dialog.message", &[("file", "Notes.txt")]),
-        vec![
-            DialogButton::new(text("alert-dialog.save"), DialogButtonRole::Accept),
-            DialogButton::new(text("alert-dialog.dont_save"), DialogButtonRole::Discard),
-            DialogButton::new(text("alert-dialog.cancel"), DialogButtonRole::Reject),
-            DialogButton::new("?", DialogButtonRole::Help),
-        ],
-    );
-    dialog.detail = Some(text("alert-dialog.detail"));
-    dialog
+    vec![
+        DialogButton::new(text("alert-dialog.save"), DialogButtonRole::Accept),
+        DialogButton::new(text("alert-dialog.dont_save"), DialogButtonRole::Discard),
+        DialogButton::new(text("alert-dialog.cancel"), DialogButtonRole::Reject),
+        DialogButton::new("?", DialogButtonRole::Help),
+    ]
 }
 
-/// The readout for choosing button `index` of `dialog`.
-fn chose(env: &Env, dialog: &AlertDialog, index: usize) -> String {
-    let button = &dialog.buttons[index].title;
+/// The readout for choosing button `index` of `buttons`.
+fn chose(env: &Env, buttons: &[DialogButton], index: usize) -> String {
+    let button = &buttons[index].title;
     env.text("alert-dialog.chose", &[("button", button)])
 }
 
@@ -63,16 +58,21 @@ impl View for AlertDialogPage {
         let tip = cx.state(false);
         let (item_env, dismiss_env, tip_env) =
             (cx.env().clone(), cx.env().clone(), cx.env().clone());
-        let alert = Configured::custom(ControlKind::AlertDialog, |env| save_alert(env).hosted())
-            .open(modal.binding())
-            .on_item(move |index| last.set(chose(&item_env, &save_alert(&item_env), index)))
-            // Dismissing chooses the button that Escape chooses.
-            .on_dismiss(move || {
-                let dialog = save_alert(&dismiss_env);
-                if let Some(index) = dialog_key_button(&dialog.buttons, Key::Escape) {
-                    last.set(chose(&dismiss_env, &dialog, index));
-                }
-            });
+        let alert = AlertDialog::new(
+            t!("alert-dialog.title"),
+            t!("alert-dialog.message", file = "Notes.txt"),
+            save_buttons,
+            modal.binding(),
+        )
+        .detail(t!("alert-dialog.detail"))
+        .on_item(move |index| last.set(chose(&item_env, &save_buttons(&item_env), index)))
+        // Dismissing chooses the button that Escape chooses.
+        .on_dismiss(move || {
+            let buttons = save_buttons(&dismiss_env);
+            if let Some(index) = dialog_key_button(&buttons, Key::Escape) {
+                last.set(chose(&dismiss_env, &buttons, index));
+            }
+        });
         let note = Dynamic::new(move || {
             tip.get().then(|| {
                 let ok = text(&tip_env, "alert-dialog.ok");
@@ -245,24 +245,23 @@ impl View for ColorPickerPage {
                 .with(|picker| picker.recent().to_vec())
                 .unwrap_or_default()
         });
-        let picker = Configured::custom(ControlKind::ColorPicker, |env| {
-            ColorPicker::new(TEAL).with_name(text(env, "color-picker.current"))
-        })
-        .value(move || ControlValue::Text(model.with(ColorPicker::hex).unwrap_or_default()))
-        .on_message(move |message| match message {
-            ControlMessage::Changed(ControlValue::Text(hex)) => {
+        let chosen = Binding::new(
+            move || model.with(ColorPicker::hex).unwrap_or_default(),
+            move |hex: String| {
                 model.update(|picker| {
-                    picker.set_hex(hex);
+                    picker.set_hex(&hex);
                 });
-                hex_text.set(hex.clone());
+                hex_text.set(hex);
                 hex_state.set(ValidationState::Valid);
-            }
-            ControlMessage::Activated => model.update(|picker| {
-                picker.accept();
-            }),
-            _ => {}
-        })
-        .frame(Frame::new().width(300.0));
+            },
+        );
+        let picker = view::ColorPicker::new(t!("color-picker.current"), chosen)
+            .on_activate(move || {
+                model.update(|picker| {
+                    picker.accept();
+                })
+            })
+            .frame(Frame::new().width(300.0));
         let typed = Binding::new(
             move || hex_text.get(),
             move |text: String| {

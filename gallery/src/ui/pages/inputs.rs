@@ -3,13 +3,12 @@
 use crate::ui::page::{Build, PageCx, caption, column, row, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, ButtonGroup, Checkbox, Configured, Cx, Env, Frame, HStack,
-    HorizontalAlignment, Localized, State, Text, VStack, View, ViewExt,
+    AnyView, Button, ButtonGroup, Checkbox, Cx, Env, Frame, HStack, HorizontalAlignment,
+    KeySequenceEdit, Localized, State, Text, ToolButton, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonGroupMember, ButtonVariant, CommandId, ControlKind, ControlMessage, ControlSize,
-    ControlValue, KeySequenceEdit, Orientation, Shortcut, ShortcutModifiers, ToolButton,
-    ToolButtonMenu, shortcut_text,
+    self, ButtonGroupMember, ButtonVariant, CommandId, ControlMessage, ControlSize, ControlValue,
+    Orientation, Shortcut, ShortcutModifiers, ToolButtonMenu, shortcut_text,
 };
 use choscorui::core::{ColorRole, Icon, Key, Space, TextPreset};
 
@@ -101,17 +100,10 @@ impl View for CheckboxPage {
         // `None` is the mixed state.
         let mut row = |key: &'static str, checked: Option<bool>, invalid: bool, enabled: bool| {
             let checked: State<Option<bool>> = cx.state(checked);
-            Configured::custom(ControlKind::Checkbox, move |env| {
-                controls::Checkbox::new(env.text(key, &[]), false).with_invalid(invalid)
-            })
-            .value(move || ControlValue::Mixed(checked.get()))
-            .on_message(move |message| {
-                if let ControlMessage::Changed(ControlValue::Bool(value)) = message {
-                    checked.set(Some(*value));
-                }
-            })
-            .disabled(!enabled)
-            .frame(Frame::new().width(320.0))
+            Checkbox::mixed(t!(key), checked.binding())
+                .with(move |checkbox| checkbox.with_invalid(invalid))
+                .disabled(!enabled)
+                .frame(Frame::new().width(320.0))
         };
         column((
             row("checkbox.line_numbers", Some(true), false, true),
@@ -134,40 +126,33 @@ impl View for ToolButtonPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(env.text("tool-button.none", &[]));
-        let tool = |index: u64, key: &'static str, checkable: bool, menu, width: f64| {
-            let env = env.clone();
-            let label = env.text(key, &[]);
-            let name = label.clone();
-            Configured::custom(ControlKind::Toggle, move |_| {
-                let mut button = ToolButton::new(label.clone(), CommandId(index));
-                button.checkable = checkable;
-                button.menu = menu;
-                button.hosted()
-            })
-            .on_message(move |message| {
-                let report = |key: &str| last.set(env.text(key, &[("name", &name)]));
-                match message {
-                    ControlMessage::Command(_) => report("tool-button.activated"),
+        let mut tool = |key: &'static str, checkable: bool, menu, width: f64| {
+            let checked = cx.state(false);
+            let name = env.text(key, &[]);
+            let reported = env.clone();
+            let report = move |key: &str| last.set(reported.text(key, &[("name", &name)]));
+            let activated = report.clone();
+            let button = ToolButton::new(t!(key), move || activated("tool-button.activated"))
+                .menu(menu)
+                .on_message(move |message| match message {
                     ControlMessage::Changed(ControlValue::Bool(true)) => report("tool-button.on"),
                     ControlMessage::Changed(ControlValue::Bool(false)) => report("tool-button.off"),
                     ControlMessage::OpenChanged(true) => report("tool-button.menu_opened"),
                     _ => {}
-                }
-            })
+                });
+            if checkable {
+                button.checked(checked.binding())
+            } else {
+                button
+            }
             .frame(Frame::new().width(width))
         };
         column((
             HStack::new((
-                tool(1, "tool-button.cut", false, ToolButtonMenu::None, 72.0),
-                tool(2, "tool-button.bold", true, ToolButtonMenu::None, 72.0),
-                tool(
-                    3,
-                    "tool-button.recent",
-                    false,
-                    ToolButtonMenu::Instant,
-                    96.0,
-                ),
-                tool(4, "tool-button.undo", false, ToolButtonMenu::Split, 96.0),
+                tool("tool-button.cut", false, ToolButtonMenu::None, 72.0),
+                tool("tool-button.bold", true, ToolButtonMenu::None, 72.0),
+                tool("tool-button.recent", false, ToolButtonMenu::Instant, 96.0),
+                tool("tool-button.undo", false, ToolButtonMenu::Split, 96.0),
             ))
             .spacing(Space::S2),
             readout(t!("tool-button.last", action = last)),
@@ -375,23 +360,23 @@ impl View for KeySequencePage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(env.text("key-sequence.none", &[]));
+        let sequence = cx.state(String::new());
         column((
-            Configured::custom(ControlKind::Input, |env| {
-                KeySequenceEdit::new(2)
-                    .with_name(env.text("key-sequence.shortcut", &[]))
-                    .with_placeholder(env.text("key-sequence.placeholder", &[]))
-            })
-            .on_message(move |message| {
-                if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                    let key = if text.is_empty() {
-                        "key-sequence.cleared"
-                    } else {
-                        "key-sequence.committed"
-                    };
-                    last.set(env.text(key, &[]));
-                }
-            })
-            .frame(Frame::new().width(320.0)),
+            KeySequenceEdit::new(t!("key-sequence.shortcut"), 2, sequence.binding())
+                .with_env(|edit, env| {
+                    edit.with_placeholder(env.text("key-sequence.placeholder", &[]))
+                })
+                .on_message(move |message| {
+                    if let ControlMessage::Changed(ControlValue::Text(text)) = message {
+                        let key = if text.is_empty() {
+                            "key-sequence.cleared"
+                        } else {
+                            "key-sequence.committed"
+                        };
+                        last.set(env.text(key, &[]));
+                    }
+                })
+                .frame(Frame::new().width(320.0)),
             readout(t!("key-sequence.last", change = last)),
             caption(t!("key-sequence.examples", examples = examples()))
                 .accessibility_label(examples()),
