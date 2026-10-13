@@ -891,11 +891,12 @@ impl Dial {
             fraction * self.sweep() - 0.75 * PI
         }
     }
-    pub fn semantics(&self, name: &str) -> SemanticNode {
+    /// The semantics, described in the language of `strings`.
+    pub fn semantics(&self, name: &str, strings: &Localizer) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::Slider,
             name: name.to_owned(),
-            description: "Dial".into(),
+            description: strings.message("choscorui.dial", &[]),
             value: Some(self.range.value().to_string()),
             state: SemanticState::default(),
             relations: Vec::new(),
@@ -1102,7 +1103,11 @@ impl CustomControl for HostedDial {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.dial.semantics(&self.name)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.dial.semantics(&self.name, strings)
     }
 
     fn perform(
@@ -1500,12 +1505,14 @@ impl NumericDisplay {
             format!("{:>width$}", self.formatted(), width = self.digits)
         }
     }
-    pub fn semantics(&self, name: &str) -> SemanticNode {
+    /// The semantics, with an overflow described in the language of
+    /// `strings`.
+    pub fn semantics(&self, name: &str, strings: &Localizer) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::StaticText,
             name: name.to_owned(),
             description: if self.overflow() {
-                "Value too large to display".into()
+                strings.message("choscorui.overflow", &[])
             } else {
                 String::new()
             },
@@ -1679,7 +1686,11 @@ impl CustomControl for HostedNumericDisplay {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.display.semantics(&self.name)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.display.semantics(&self.name, strings)
     }
 
     fn focusable(&self) -> bool {

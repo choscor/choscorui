@@ -12,9 +12,10 @@ use crate::hosted::Routed;
 use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    DisplayList, DisplayListError, EventReply, Key, KeyEvent, Measured, Paint, Path, Point,
-    PointerButton, PointerEvent, Rect, Scene, SceneItemId, SemanticAction, SemanticCollection,
-    SemanticNode, SemanticRole, SemanticState, Size, StrokeStyle, Transform, WheelUnit,
+    DisplayList, DisplayListError, EventReply, Key, KeyEvent, Localizer, Measured, Paint, Path,
+    Point, PointerButton, PointerEvent, Rect, Scene, SceneItemId, SemanticAction,
+    SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, StrokeStyle, Transform,
+    WheelUnit,
 };
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -501,14 +502,20 @@ impl CanvasView {
         Ok(painted)
     }
 
-    /// Accessible container for the canvas.
-    pub fn semantics(&self, scene: &mut Scene) -> (SemanticNode, SemanticCollection) {
+    /// Accessible container for the canvas, with the zoom in the
+    /// language of `strings`.
+    pub fn semantics(
+        &self,
+        scene: &mut Scene,
+        strings: &Localizer,
+    ) -> (SemanticNode, SemanticCollection) {
         let count = scene.accessible_items().len();
+        let percent = (self.zoom * 100.0).round().to_string();
         (
             SemanticNode {
                 role: SemanticRole::List,
                 name: self.name.clone(),
-                description: format!("Zoom {}%", (self.zoom * 100.0).round()),
+                description: strings.message("choscorui.zoom", &[("percent", &percent)]),
                 value: None,
                 state: SemanticState::default(),
                 relations: Vec::new(),
@@ -775,7 +782,11 @@ impl CustomControl for HostedCanvas {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.view.semantics(&mut self.scene.borrow_mut()).0
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.view.semantics(&mut self.scene.borrow_mut(), strings).0
     }
 
     fn perform(

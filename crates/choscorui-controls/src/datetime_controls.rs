@@ -19,9 +19,9 @@ use crate::style::{
 use crate::{STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, EventPhase, EventReply, Icon,
-    Key, KeyEvent, Locale, Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid, month_name,
-    weekday_short_name,
+    Key, KeyEvent, Locale, Localizer, Measured, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, days_in_month, month_grid,
+    month_name, weekday_short_name,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -360,11 +360,21 @@ impl DateTimeEdit {
         paint_stepper_field(cx, &self.text(), self.visual_state(host), steppers);
     }
 
-    pub fn semantics(&self) -> SemanticNode {
+    /// The semantics, with the focused field in the language of
+    /// `strings`.
+    pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
+        let field = match self.focused_field() {
+            DateTimeField::Day => "choscorui.field.day",
+            DateTimeField::Month => "choscorui.field.month",
+            DateTimeField::Year => "choscorui.field.year",
+            DateTimeField::Hour => "choscorui.field.hour",
+            DateTimeField::Minute => "choscorui.field.minute",
+            DateTimeField::Second => "choscorui.field.second",
+        };
         SemanticNode {
             role: SemanticRole::SpinButton,
             name: self.name.clone(),
-            description: format!("{:?} field", self.focused_field()),
+            description: strings.message(field, &[]),
             value: Some(match self.kind {
                 DateTimeKind::Time => self.text(),
                 _ => {
@@ -1010,7 +1020,11 @@ impl CustomControl for DateTimeEdit {
     }
 
     fn semantics(&self) -> SemanticNode {
-        DateTimeEdit::semantics(self)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        DateTimeEdit::semantics(self, strings)
     }
 
     /// `Increment` and `Decrement` step the focused field as ArrowUp and

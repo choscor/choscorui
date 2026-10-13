@@ -8,7 +8,7 @@ use crate::style::{
     ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventReply, Measured, Point, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Localizer, Measured, Point, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// A switch: a pill track with a sliding thumb, and a label after it. A
@@ -164,13 +164,17 @@ impl CustomControl for Switch {
     }
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         let actions = if self.enabled {
             vec![SemanticAction::Activate, SemanticAction::Focus]
         } else {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::Checkbox, &self.label, actions);
-        node.description = "switch".into();
+        node.description = strings.message("choscorui.switch", &[]);
         node.state.checked = Some(self.checked);
         node.state.disabled = !self.enabled;
         node

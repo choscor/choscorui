@@ -1,7 +1,8 @@
 use choscorui_controls::{CanvasInput, CanvasView, EstimatedText, MAX_ZOOM, PaintContext, Styles};
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key, Paint,
-    Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction, SemanticRole, Size,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key,
+    Localizer, Paint, Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction, SemanticRole,
+    Size,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -217,8 +218,9 @@ fn keyboard_focus_nudge_delete_and_zoom() {
 fn accessible_items_follow_viewport_and_actions() {
     let (mut scene, ids) = scene();
     let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 160.0, 100.0));
-    let (node, collection) = view.semantics(&mut scene);
+    let (node, collection) = view.semantics(&mut scene, Localizer::builtin());
     assert_eq!(node.role, SemanticRole::List);
+    assert_eq!(node.description, "Zoom 100%");
     assert_eq!(collection.item_count, 3);
     let items = view.item_semantics(&mut scene);
     assert_eq!(items.len(), 2, "box 2 is offscreen and virtualized");

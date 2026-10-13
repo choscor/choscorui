@@ -13,8 +13,8 @@ use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size,
+    EventReply, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
 use std::collections::BTreeMap;
 
@@ -629,19 +629,18 @@ impl DockLayout {
             .map(|(area, _)| DockFocus::Splitter(*area))
     }
 
-    /// Splitter semantics: an adjustable value in points.
-    pub fn splitter_semantics(&self, area: DockArea) -> SemanticNode {
+    /// Splitter semantics: an adjustable value in points, named in the
+    /// language of `strings`.
+    pub fn splitter_semantics(&self, area: DockArea, strings: &Localizer) -> SemanticNode {
+        let id = match area {
+            DockArea::Left => "choscorui.dock.left",
+            DockArea::Right => "choscorui.dock.right",
+            DockArea::Top => "choscorui.dock.top",
+            DockArea::Bottom => "choscorui.dock.bottom",
+        };
         SemanticNode {
             role: SemanticRole::Slider,
-            name: format!(
-                "{} panel size",
-                match area {
-                    DockArea::Left => "Left",
-                    DockArea::Right => "Right",
-                    DockArea::Top => "Top",
-                    DockArea::Bottom => "Bottom",
-                }
-            ),
+            name: strings.message(id, &[]),
             description: String::new(),
             value: Some(format!("{}", self.extent(area).round())),
             state: SemanticState::default(),
@@ -652,8 +651,8 @@ impl DockLayout {
     }
 
     /// Panel semantics: a tab panel named by its title, with Dismiss when
-    /// closable.
-    pub fn panel_semantics(&self, id: PanelId) -> Option<SemanticNode> {
+    /// closable. A floating panel says so in the language of `strings`.
+    pub fn panel_semantics(&self, id: PanelId, strings: &Localizer) -> Option<SemanticNode> {
         let panel = self.panels.get(&id)?;
         let mut actions = vec![SemanticAction::Focus];
         if panel.closable {
@@ -663,7 +662,7 @@ impl DockLayout {
             role: SemanticRole::TabPanel,
             name: panel.title.clone(),
             description: match self.location(id) {
-                Some(PanelLocation::Floating(_)) => "Floating".into(),
+                Some(PanelLocation::Floating(_)) => strings.message("choscorui.dock.floating", &[]),
                 _ => String::new(),
             },
             value: None,
@@ -1185,11 +1184,15 @@ impl crate::CustomControl for DockLayout {
     }
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         let group = || crate::hosted::node(SemanticRole::Group, "", Vec::new());
         match self.host_focus(self.hosted.bounds) {
-            DockFocus::Tab(panel) => self.panel_semantics(panel).unwrap_or_else(group),
+            DockFocus::Tab(panel) => self.panel_semantics(panel, strings).unwrap_or_else(group),
             DockFocus::Splitter(area) => {
-                let mut node = self.splitter_semantics(area);
+                let mut node = self.splitter_semantics(area, strings);
                 node.actions.push(SemanticAction::Focus);
                 node
             }

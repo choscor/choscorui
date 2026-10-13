@@ -21,8 +21,8 @@ use crate::{
 };
 use choscorui_core::{
     Color, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent, Locale,
-    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
-    SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
+    Localizer, Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -217,13 +217,20 @@ impl DialogStack {
         None
     }
 
-    pub fn semantics(&self, id: DialogId, title: &str) -> Option<SemanticNode> {
+    /// The semantics of dialog `id`, with the description in the
+    /// language of `strings`.
+    pub fn semantics(
+        &self,
+        id: DialogId,
+        title: &str,
+        strings: &Localizer,
+    ) -> Option<SemanticNode> {
         let dialog = self.open.iter().find(|dialog| dialog.id == id)?;
         Some(SemanticNode {
             role: SemanticRole::Dialog,
             name: title.to_owned(),
             description: match dialog.modality {
-                Modality::Modal => "Modal".into(),
+                Modality::Modal => strings.message("choscorui.modal", &[]),
                 Modality::Modeless => String::new(),
             },
             value: None,
@@ -472,18 +479,22 @@ impl ColorPicker {
         &self.recent
     }
 
-    /// Accessible description such as "Red 30, Green 144, Blue 255".
-    pub fn semantics(&self, name: &str) -> SemanticNode {
+    /// Accessible description such as "Red 30, Green 144, Blue 255,
+    /// Opacity 100%", in the language of `strings`.
+    pub fn semantics(&self, name: &str, strings: &Localizer) -> SemanticNode {
         let color = self.color();
+        let opacity = (self.alpha * 100.0).round().to_string();
         SemanticNode {
             role: SemanticRole::Group,
             name: name.to_owned(),
-            description: format!(
-                "Red {}, Green {}, Blue {}, Opacity {}%",
-                color.red,
-                color.green,
-                color.blue,
-                (self.alpha * 100.0).round()
+            description: strings.message(
+                "choscorui.color.channels",
+                &[
+                    ("red", &color.red.to_string()),
+                    ("green", &color.green.to_string()),
+                    ("blue", &color.blue.to_string()),
+                    ("opacity", &opacity),
+                ],
             ),
             value: Some(self.hex()),
             state: SemanticState::default(),
@@ -673,7 +684,11 @@ impl CustomControl for ColorPicker {
     }
 
     fn semantics(&self) -> SemanticNode {
-        ColorPicker::semantics(self, &self.name)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        ColorPicker::semantics(self, &self.name, strings)
     }
 
     fn perform(

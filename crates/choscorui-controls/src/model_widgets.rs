@@ -12,8 +12,8 @@ use crate::validation::{DateError, NumberError, ValidationError};
 use crate::{DateInput, InputFilter, NumberInput, ValidationState};
 use choscorui_core::{
     CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, Locale,
-    Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
+    Localizer, Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
 };
 use std::collections::HashMap;
 
@@ -184,17 +184,24 @@ impl HeaderView {
         response
     }
 
-    pub fn column_semantics(&self, column: usize) -> Option<SemanticNode> {
+    /// The semantics of header `column`, with the sort order and the
+    /// width in the language of `strings`.
+    pub fn column_semantics(&self, column: usize, strings: &Localizer) -> Option<SemanticNode> {
         let entry = self.columns.get(column)?;
         let value = match self.sort {
-            Some((sorted, SortOrder::Ascending)) if sorted == column => Some("ascending".into()),
-            Some((sorted, SortOrder::Descending)) if sorted == column => Some("descending".into()),
+            Some((sorted, SortOrder::Ascending)) if sorted == column => {
+                Some(strings.message("choscorui.column.ascending", &[]))
+            }
+            Some((sorted, SortOrder::Descending)) if sorted == column => {
+                Some(strings.message("choscorui.column.descending", &[]))
+            }
             _ => None,
         };
+        let width = entry.width.round().to_string();
         Some(SemanticNode {
             role: SemanticRole::ColumnHeader,
             name: entry.title.clone(),
-            description: format!("{} points wide", entry.width.round()),
+            description: strings.message("choscorui.column.width", &[("width", &width)]),
             value,
             state: SemanticState {
                 selected: Some(column == self.focused),
@@ -796,7 +803,11 @@ impl CustomControl for HeaderView {
     /// The focused column's node: the header is one tab stop whose arrow
     /// keys move between columns.
     fn semantics(&self) -> SemanticNode {
-        self.column_semantics(self.focused)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.column_semantics(self.focused, strings)
             .unwrap_or_else(|| crate::hosted::node(SemanticRole::ColumnHeader, "", Vec::new()))
     }
 

@@ -14,9 +14,9 @@ use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, NodeId, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer, Measured, NodeId,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, Size,
 };
 use std::time::Duration;
 
@@ -688,13 +688,14 @@ impl StatusBar {
         }
     }
 
-    pub fn semantics(&self) -> SemanticNode {
+    /// The semantics, named in the language of `strings`.
+    pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
         let mut parts = vec![self.text().to_owned()];
         parts.extend(self.sections.iter().map(|section| section.text.clone()));
         parts.retain(|part| !part.is_empty());
         SemanticNode {
             role: SemanticRole::StatusBar,
-            name: "Status".into(),
+            name: strings.message("choscorui.status", &[]),
             description: String::new(),
             value: Some(parts.join(", ")),
             state: SemanticState::default(),
@@ -1161,7 +1162,11 @@ impl CustomControl for StatusBar {
     }
 
     fn semantics(&self) -> SemanticNode {
-        StatusBar::semantics(self)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        StatusBar::semantics(self, strings)
     }
 
     fn perform(

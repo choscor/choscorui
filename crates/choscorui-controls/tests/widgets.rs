@@ -7,8 +7,9 @@ use choscorui_controls::{
     ToolBox, ToolButton, ToolButtonAction, ToolButtonMenu, ValidationState, VisualState,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand, DisplayList,
-    InputModality, Key, Locale, Paint, Point, Rect, SemanticAction, SemanticRole, Size, Tree,
+    Catalog, CivilDate, CivilDateTime, CivilTime, ColorRole, DesignTokens, DisplayCommand,
+    DisplayList, InputModality, Key, Locale, Localizer, Paint, Point, Rect, SemanticAction,
+    SemanticRole, Size, Tree,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -201,7 +202,10 @@ fn dial_maps_angles_and_wraps() {
     );
     volume.handle_key(Key::Home);
     assert!(!volume.handle_key(Key::ArrowDown), "no wrap below minimum");
-    assert_eq!(volume.semantics("Âm lượng").value.as_deref(), Some("0"));
+    let vietnamese = Localizer::new(Locale::parse("vi").unwrap(), Catalog::new());
+    let node = volume.semantics("Âm lượng", &vietnamese);
+    assert_eq!(node.value.as_deref(), Some("0"));
+    assert_eq!(node.description, "Núm xoay");
 }
 
 fn registry() -> CommandRegistry {
@@ -298,7 +302,10 @@ fn toolbox_numeric_display_focus_frame_and_size_grip() {
     assert!(display.overflow());
     assert_eq!(display.text(), "----");
     assert_eq!(
-        display.semantics("Counter").value.as_deref(),
+        display
+            .semantics("Counter", Localizer::builtin())
+            .value
+            .as_deref(),
         Some("123456")
     );
     display.set_base(NumberBase::Hexadecimal);

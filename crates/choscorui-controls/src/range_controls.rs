@@ -5,8 +5,9 @@ use crate::style::{
 };
 use crate::{InputFilter, NumberInput};
 use choscorui_core::{
-    Dirty, Icon, Key, KeyEvent, LayoutDirection, Locale, NodeId, Path, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Tree, TreeError,
+    Dirty, Icon, Key, KeyEvent, LayoutDirection, Locale, Localizer, NodeId, Path, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -334,8 +335,15 @@ impl Slider {
             .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(id))
     }
 
-    pub fn semantics(&self, _tree: &Tree, _id: NodeId) -> SemanticNode {
-        range_semantics(SemanticRole::Slider, &self.label, self.range, self.enabled)
+    /// The semantics, with the range in the language of `strings`.
+    pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
+        range_semantics(
+            SemanticRole::Slider,
+            &self.label,
+            self.range,
+            self.enabled,
+            strings,
+        )
     }
 
     /// Paints the track, the filled range, and the thumb in the context's
@@ -553,12 +561,14 @@ impl SpinBox {
             .set(VisualState::FOCUSED, tree.focus() == Some(id))
             .set(VisualState::FOCUS_VISIBLE, tree.focus() == Some(id))
     }
-    pub fn semantics(&self, _tree: &Tree, _id: NodeId) -> SemanticNode {
+    /// The semantics, with the range in the language of `strings`.
+    pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
         range_semantics(
             SemanticRole::SpinButton,
             &self.label,
             self.range,
             self.enabled,
+            strings,
         )
     }
 
@@ -762,11 +772,18 @@ fn range_semantics(
     label: &str,
     range: IntegerRange,
     enabled: bool,
+    strings: &Localizer,
 ) -> SemanticNode {
     SemanticNode {
         role,
         name: label.to_owned(),
-        description: format!("Range {} to {}", range.minimum(), range.maximum()),
+        description: strings.message(
+            "choscorui.range",
+            &[
+                ("min", &range.minimum().to_string()),
+                ("max", &range.maximum().to_string()),
+            ],
+        ),
         value: Some(range.value().to_string()),
         state: SemanticState {
             disabled: !enabled,
@@ -881,7 +898,17 @@ impl crate::CustomControl for Slider {
     }
 
     fn semantics(&self) -> SemanticNode {
-        range_semantics(SemanticRole::Slider, &self.label, self.range, self.enabled)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        range_semantics(
+            SemanticRole::Slider,
+            &self.label,
+            self.range,
+            self.enabled,
+            strings,
+        )
     }
 
     fn perform(
@@ -1102,11 +1129,16 @@ impl crate::CustomControl for SpinBox {
     }
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         range_semantics(
             SemanticRole::SpinButton,
             &self.label,
             self.range,
             self.enabled,
+            strings,
         )
     }
 

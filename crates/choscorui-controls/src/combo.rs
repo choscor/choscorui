@@ -14,8 +14,8 @@ use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
 };
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, LayoutDirection, Measured,
-    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, LayoutDirection, Localizer,
+    Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
     SemanticState, Size, WheelUnit, fold_for_search, grapheme_boundaries,
 };
 
@@ -685,7 +685,8 @@ pub struct FontChooser {
 
 impl FontChooser {
     pub fn new(families: Vec<String>, current: &str, fallback: impl Into<String>) -> Self {
-        let mut combo = Combobox::new("Font", true);
+        // The semantics name the chooser in the user's language.
+        let mut combo = Combobox::new("", true);
         combo.set_items(
             families
                 .into_iter()
@@ -727,10 +728,15 @@ impl FontChooser {
             None => &self.fallback,
         }
     }
-    pub fn semantics(&self) -> SemanticNode {
+    /// The semantics, named and described in the language of `strings`.
+    pub fn semantics(&self, strings: &Localizer) -> SemanticNode {
         let mut node = self.combo.semantics();
+        if node.name.is_empty() {
+            node.name = strings.message("choscorui.font", &[]);
+        }
         if self.is_missing() {
-            node.description = format!("Not installed; using {}", self.fallback);
+            node.description =
+                strings.message("choscorui.font.fallback", &[("font", &self.fallback)]);
             node.state.invalid = true;
         }
         node
@@ -1063,7 +1069,11 @@ impl CustomControl for FontChooser {
     }
 
     fn semantics(&self) -> SemanticNode {
-        FontChooser::semantics(self)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        FontChooser::semantics(self, strings)
     }
 
     fn perform(

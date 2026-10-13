@@ -13,7 +13,7 @@ use choscorui::controls::{
     ToolbarItem,
 };
 use choscorui::core::{
-    ColorRole, EventReply, LayoutDirection, Measured, RadiusScale, Rect, SemanticAction,
+    ColorRole, EventReply, LayoutDirection, Localizer, Measured, RadiusScale, Rect, SemanticAction,
     SemanticNode, Space, TextPreset, Tree,
 };
 use std::time::Duration;
@@ -305,7 +305,11 @@ impl CustomControl for TimedStatus {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.bar.semantics()
+        CustomControl::semantics(&self.bar)
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.bar.semantics_in(strings)
     }
 
     fn perform(

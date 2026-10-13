@@ -90,7 +90,10 @@ fn modal_stack_confines_input_and_restores_focus() {
         "Tab wraps inside the dialog"
     );
     assert_eq!(
-        stack.semantics(id, "Rename").unwrap().role,
+        stack
+            .semantics(id, "Rename", Localizer::builtin())
+            .unwrap()
+            .role,
         SemanticRole::Dialog
     );
     assert!(stack.close(&mut tree, id));
@@ -136,7 +139,11 @@ fn color_picker_round_trips_hsv_and_hex() {
     picker.accept();
     assert_eq!(picker.recent().len(), 2, "duplicates move to the front");
     assert_eq!(picker.recent()[0], Color::rgba8(128, 128, 128, 255));
-    assert!(picker.semantics("Fill").description.contains("Red 128"));
+    let node = picker.semantics("Fill", Localizer::builtin());
+    assert_eq!(
+        node.description,
+        "Red 128, Green 128, Blue 128, Opacity 100%"
+    );
 }
 
 #[test]

@@ -201,7 +201,7 @@ mod tests {
     use super::{LIMITED, date_time, today};
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::{DateTimeEdit, DateTimeKind, ShortcutModifiers};
-    use choscorui::core::{Key, KeyEvent, Locale, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, Locale, Localizer, SemanticAction};
 
     fn press(page: &mut Harness, key: Key) {
         let none = ShortcutModifiers::default();
@@ -215,7 +215,7 @@ mod tests {
         let locale = Locale::parse("en").unwrap();
         let at = date_time(today(), hour, 0);
         DateTimeEdit::new(LIMITED, locale, DateTimeKind::DateTime, at)
-            .semantics()
+            .semantics(Localizer::builtin())
             .value
     }
 

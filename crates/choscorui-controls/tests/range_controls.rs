@@ -5,8 +5,8 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, Dirty, DisplayCommand, DisplayList, Key, KeyEvent,
-    LayoutDirection, Point, PointerButton, PointerEvent, RecipeSet, Rect, SemanticAction,
-    SemanticRole, Size, Tree,
+    LayoutDirection, Localizer, Point, PointerButton, PointerEvent, RecipeSet, Rect,
+    SemanticAction, SemanticRole, Size, Tree,
 };
 use std::rc::Rc;
 
@@ -97,7 +97,7 @@ fn slider_supports_drag_keyboard_and_accessibility_actions() {
             .unwrap(),
         Some(42)
     );
-    let semantics = slider.semantics(&tree, id);
+    let semantics = slider.semantics(Localizer::builtin());
     assert_eq!(semantics.role, SemanticRole::Slider);
     assert_eq!(semantics.value.as_deref(), Some("42"));
     assert_eq!(
@@ -194,7 +194,7 @@ fn spin_box_uses_steps_home_end_and_semantic_actions() {
         .unwrap(),
         Some(1)
     );
-    let semantics = spin.semantics(&tree, id);
+    let semantics = spin.semantics(Localizer::builtin());
     assert_eq!(semantics.role, SemanticRole::SpinButton);
     assert_eq!(semantics.value.as_deref(), Some("1"));
 }

@@ -5,8 +5,8 @@ use choscorui_controls::{
 };
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Point,
-    Rect, SemanticAction, Size, Tree,
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Localizer,
+    Point, Rect, SemanticAction, Size, Tree,
 };
 use std::time::Duration;
 
@@ -420,7 +420,10 @@ fn font_chooser_reports_missing_family_and_falls_back() {
     let mut chooser = FontChooser::new(families, "Comic Neue", "Helvetica");
     assert!(chooser.is_missing());
     assert_eq!(chooser.resolved_family(), "Helvetica");
-    assert!(chooser.semantics().state.invalid);
+    let node = chooser.semantics(Localizer::builtin());
+    assert!(node.state.invalid);
+    assert_eq!(node.name, "Font");
+    assert_eq!(node.description, "Not installed; using Helvetica");
     chooser.handle(ComboInput::SetText("Ti".into()));
     chooser.handle(ComboInput::Key {
         key: Key::Tab,

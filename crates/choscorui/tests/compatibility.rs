@@ -25,8 +25,8 @@ use choscorui::controls::{
 use choscorui::core::{
     AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, Constraints,
     CrossAlign, DesignTokens, DisplayList, FormLayout, GridLayout, Icon, InputModality, Insets,
-    ItemKey, Key, KeyEvent, LayoutDirection, LinearLayout, NodeId, Point, Rect, SemanticRole, Size,
-    StringListModel, ThemeOverride, ThemeResolver, Tree,
+    ItemKey, Key, KeyEvent, LayoutDirection, LinearLayout, Localizer, NodeId, Point, Rect,
+    SemanticRole, Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
 };
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -211,13 +211,14 @@ fn control_semantics() {
     writeln!(
         out,
         "{:?}",
-        Slider::new("Âm lượng", range, SliderOrientation::Horizontal).semantics(&tree, node)
+        Slider::new("Âm lượng", range, SliderOrientation::Horizontal)
+            .semantics(Localizer::builtin())
     )
     .unwrap();
     writeln!(
         out,
         "{:?}",
-        SpinBox::new("Số lượng", range).semantics(&tree, node)
+        SpinBox::new("Số lượng", range).semantics(Localizer::builtin())
     )
     .unwrap();
     writeln!(

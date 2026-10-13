@@ -5,10 +5,10 @@ use choscorui_controls::{
 };
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemData, ItemKey, ItemModel, Key,
-    ListStore, Locale, ModelError, NodeId, Paint, Point, Rect, Role, SelectionMode, SemanticAction,
-    SemanticRole, SemanticTree, Size, SliceModel, SortFilterProxy, SortOrder, StringListModel,
-    TextFilter, Tree, TreeStore, UndoStack, Value,
+    Catalog, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemData, ItemKey, ItemModel,
+    Key, ListStore, Locale, Localizer, ModelError, NodeId, Paint, Point, Rect, Role, SelectionMode,
+    SemanticAction, SemanticRole, SemanticTree, Size, SliceModel, SortFilterProxy, SortOrder,
+    StringListModel, TextFilter, Tree, TreeStore, UndoStack, Value,
 };
 use std::time::Duration;
 
@@ -280,10 +280,11 @@ fn header_sorts_resizes_and_exposes_semantics() {
     assert_eq!(header.sort(), Some((1, SortOrder::Ascending)));
     header.handle(HeaderInput::Press { x: 150.0 });
     assert_eq!(header.sort(), Some((1, SortOrder::Descending)));
-    assert_eq!(
-        header.column_semantics(1).unwrap().value.as_deref(),
-        Some("descending")
-    );
+    let english = header.column_semantics(1, Localizer::builtin()).unwrap();
+    assert_eq!(english.value.as_deref(), Some("descending"));
+    let vietnamese = Localizer::new(Locale::parse("vi").unwrap(), Catalog::new());
+    let column = header.column_semantics(1, &vietnamese).unwrap();
+    assert_eq!(column.value.as_deref(), Some("giảm dần"));
     header.handle(HeaderInput::Press { x: 120.0 });
     assert_eq!(
         header.handle(HeaderInput::Drag { x: 60.0 }).resized,

@@ -4,8 +4,8 @@ use choscorui_controls::{
     StatusBar, Styles, Toolbar, ToolbarArea, ToolbarItem, compose_main_window,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Point, Rect,
-    SemanticRole, SettingValue, Settings, SettingsSchema, Size, Tree,
+    ColorRole, DesignTokens, DisplayCommand, DisplayList, Key, LayoutDirection, Localizer, Point,
+    Rect, SemanticRole, SettingValue, Settings, SettingsSchema, Size, Tree,
 };
 use std::time::Duration;
 
@@ -140,7 +140,8 @@ fn dock_close_show_float_and_keyboard_resize() {
         dock.location(FILES),
         Some(PanelLocation::Floating(floating))
     );
-    assert_eq!(dock.panel_semantics(FILES).unwrap().description, "Floating");
+    let panel = dock.panel_semantics(FILES, Localizer::builtin()).unwrap();
+    assert_eq!(panel.description, "Floating");
     // Tab the floating panel into the left group.
     dock.dock(
         FILES,
@@ -159,8 +160,9 @@ fn dock_close_show_float_and_keyboard_resize() {
     assert!(dock.handle_splitter_key(DockArea::Left, Key::Home));
     assert!(!dock.handle_splitter_key(DockArea::Left, Key::ArrowLeft));
     assert_eq!(dock.extent(DockArea::Left), 80.0);
-    let semantics = dock.splitter_semantics(DockArea::Left);
+    let semantics = dock.splitter_semantics(DockArea::Left, Localizer::builtin());
     assert_eq!(semantics.role, SemanticRole::Slider);
+    assert_eq!(semantics.name, "Left panel size");
     assert_eq!(semantics.value.as_deref(), Some("80"));
 }
 
@@ -361,7 +363,7 @@ fn status_bar_messages_expire_and_sections_align_trailing() {
     assert_eq!(status.poll(ms(3000)), None);
     assert_eq!(status.text(), "Ready");
     assert_eq!(
-        status.semantics().value.as_deref(),
+        status.semantics(Localizer::builtin()).value.as_deref(),
         Some("Ready, Ln 1, Col 1, UTF-8")
     );
     status.set_section("position", "Ln 9, Col 2", 100.0);

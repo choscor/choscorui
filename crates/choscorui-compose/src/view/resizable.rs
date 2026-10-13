@@ -21,7 +21,8 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     ChildMeasure, Constraints, CustomLayout, Dirty, EventReply, LayoutDirection, LayoutKind,
-    LayoutStyle, Measured, NodeId, Point, Rect, SemanticAction, SemanticNode, SharedLayout, Size,
+    LayoutStyle, Localizer, Measured, NodeId, Point, Rect, SemanticAction, SemanticNode,
+    SharedLayout, Size,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -408,6 +409,10 @@ impl CustomControl for PaneControl {
 
     fn semantics(&self) -> SemanticNode {
         self.0.borrow().semantics()
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.0.borrow().semantics_in(strings)
     }
 
     fn focusable(&self) -> bool {

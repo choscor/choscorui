@@ -24,8 +24,8 @@ use crate::ui::shell::{Theme, WindowState};
 use choscorui::compose::view::ViewHost;
 use choscorui::controls::{DateTimeEdit, DateTimeKind, ShortcutModifiers};
 use choscorui::core::{
-    BaseColor, Key, KeyEvent, Locale, NodeId, Point, PointerButton, PointerEvent, SemanticAction,
-    SemanticNode, SemanticRole, StatusItemSpec, Support, WheelUnit, WindowGeometry,
+    BaseColor, Key, KeyEvent, Locale, Localizer, NodeId, Point, PointerButton, PointerEvent,
+    SemanticAction, SemanticNode, SemanticRole, StatusItemSpec, Support, WheelUnit, WindowGeometry,
 };
 use choscorui::{AppContext, WindowId};
 use std::time::{Duration, Instant};
@@ -277,7 +277,7 @@ fn limited_at(hour: u8) -> Option<String> {
         DateTimeKind::DateTime,
         date_time(today(), hour, 0),
     )
-    .semantics()
+    .semantics(Localizer::builtin())
     .value
 }
 

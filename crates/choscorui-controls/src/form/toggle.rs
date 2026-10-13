@@ -9,8 +9,8 @@ use crate::style::{
     ToggleVariant, VisualState, join_segment,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Measured, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Localizer, Measured, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// A button that stays on or off. A click, Space, or Enter flips it.
@@ -124,13 +124,17 @@ impl CustomControl for Toggle {
     }
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         let actions = if self.enabled {
             vec![SemanticAction::Activate, SemanticAction::Focus]
         } else {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::Button, &self.label, actions);
-        node.description = "toggle".into();
+        node.description = strings.message("choscorui.toggle", &[]);
         node.state.checked = Some(self.on);
         node.state.disabled = !self.enabled;
         node

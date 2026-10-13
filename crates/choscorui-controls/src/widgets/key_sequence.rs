@@ -7,7 +7,7 @@ use crate::form::input::default_width;
 use crate::style::{Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, NodeId, PointerButton, PointerEvent, Rect,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
 
@@ -112,17 +112,14 @@ impl KeySequenceEdit {
             .collect::<Vec<_>>()
             .join(", ")
     }
-    pub fn semantics(&self, name: &str, node: NodeId) -> SemanticNode {
-        let _ = node;
-        self.named_semantics(name)
-    }
-
-    fn named_semantics(&self, name: &str) -> SemanticNode {
+    /// The semantics, with the recording hint in the language of
+    /// `strings`.
+    pub fn semantics(&self, name: &str, strings: &Localizer) -> SemanticNode {
         SemanticNode {
             role: SemanticRole::TextField,
             name: name.to_owned(),
             description: if self.is_recording() {
-                "Recording shortcut; press Escape to cancel".into()
+                strings.message("choscorui.shortcut.recording", &[])
             } else {
                 String::new()
             },
@@ -248,7 +245,11 @@ impl CustomControl for KeySequenceEdit {
     }
 
     fn semantics(&self) -> SemanticNode {
-        self.named_semantics(&self.name)
+        self.semantics_in(Localizer::builtin())
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        KeySequenceEdit::semantics(self, &self.name, strings)
     }
 
     fn perform(
