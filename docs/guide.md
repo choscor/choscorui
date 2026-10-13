@@ -10,7 +10,7 @@ This guide tells how to build a desktop application with ChoscorUI. You describe
 | Xcode Command Line Tools | a release with the macOS 15 SDK | `xcode-select --install` |
 | Rust | 1.88 or later, edition 2024 | `rustup toolchain install 1.88` |
 
-The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. On other operating systems the facade compiles, but `App` and `choscorui::platform` do not exist. [platform-macos.md](platform-macos.md) describes the supported backend.
+The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. The application API is the same on every operating system. On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. [platform-macos.md](platform-macos.md) describes the supported backend.
 
 To run the gallery, use these commands from the repository root:
 
@@ -33,14 +33,14 @@ Depend only on `choscorui`. The other crates are internal and can change in any 
 
 | Module | Contents |
 | --- | --- |
-| `choscorui::prelude` | `App`, the views, the modifiers, state, and the types that views use |
+| `choscorui::prelude` | `App`, `Scene`, `AppContext`, the views, the modifiers, state, the services, and the types that views use |
 | `choscorui::core` | Geometry, text, models, themes, semantics, settings, locale, and resources |
 | `choscorui::controls` | The controls that the views host, and the hosted control types |
 | `choscorui::compose` | The view runtime, reactive state, and state machines |
-| `choscorui::platform` | The macOS backend: application, windows, menus, dialogs, clipboard, and desktop integration |
+| `choscorui::platform` | The backend of the current operating system, for code that the portable API does not cover. On macOS it is `choscorui-macos` and the `NativeAccess` trait. Code that uses it is not portable |
 | `choscorui::capabilities()` | What the current backend supports |
 
-[versioning.md](versioning.md) tells which parts are stable.
+[versioning.md](versioning.md) tells which parts are stable. The [API reference](api-docs/README.md) describes each public item of the prelude.
 
 ## Your first application
 
@@ -472,32 +472,51 @@ Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disable
 
 ## Commands, shortcuts, and menus
 
-`App::commands(menu, handler)` installs the native menu bar:
+`App::commands(menus)` installs the menu bar. Each menu is a `CommandMenu` with the `MenuChoice` rows that menus in views use: actions, checkbox and radio rows, submenus, and separators.
 
-- `menu` returns a `MenuBarModel`. When state that it read changes, the toolkit builds the menu bar again. Use this for check marks and for a new language.
-- `handler` gets the `AppContext` and the `MenuCommandId` of each command that the user chooses.
-- A menu item with a Command-key shortcut runs from the keyboard. Views do not get Command-key chords.
+- Each row runs its own action when the user chooses it. You do not give command ids. The toolkit makes an id for each row.
+- `MenuChoice::keyboard_shortcut(key, modifiers)` chooses the row from any window. Views do not get Command-key chords.
+- Labels, check marks, and disabled states can read state. When that state changes, the toolkit makes the menu bar again. Use this for check marks and for a new language.
+- A panic in an action stops at the menu boundary. The toolkit counts it in `AppContext::menu_panic_count`, and the row stays usable.
+
+An action does not get the `AppContext`. To open or close a window or to quit, put a request in shared state, and act on it in `App::on_tick`.
 
 `.keyboard_shortcut(key, modifiers, action)` runs an action while focus is in the view, or anywhere when no closer view declares the same keys. `.on_submit(action)` runs when a control commits its input, for example Return in a text input.
 
 ```rust,no_run
 use choscorui::prelude::*;
-
-const QUIT: MenuCommandId = MenuCommandId(1);
-
-fn menu() -> Result<MenuBarModel, choscorui::platform::MenuError> {
-    MenuBarModel::new(vec![MenuSpec::new(
-        "Notes",
-        vec![MenuEntry::command(QUIT, MenuItemState::new("Quit Notes"))],
-    )])
-}
+use std::cell::Cell;
+use std::rc::Rc;
 
 fn main() -> Result<(), choscorui::AppError> {
-    App::new()
-        .window(WindowOptions::new("Notes", 640.0, 480.0), || Text::new("Notes"))
-        .commands(menu, |app, command| {
-            if command == QUIT {
-                app.quit();
+    let app = App::new();
+    let wrap = app.runtime().property(false);
+    let (read, write) = (wrap.clone(), wrap.clone());
+    let quit = Rc::new(Cell::new(false));
+    let asked = quit.clone();
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    let menus = [
+        CommandMenu::new(
+            "Notes",
+            vec![MenuChoice::action("Quit Notes", move || asked.set(true))
+                .keyboard_shortcut('q', command)],
+        ),
+        CommandMenu::new(
+            "View",
+            vec![MenuChoice::checkbox(
+                "Wrap Lines",
+                Binding::new(move || read.get(), move |on| write.set(on)),
+            )],
+        ),
+    ];
+    app.window(WindowOptions::new("Notes", 640.0, 480.0), || Text::new("Notes"))
+        .commands(menus)
+        .on_tick(move |cx| {
+            if quit.get() {
+                cx.quit();
             }
         })
         .run()
@@ -510,20 +529,70 @@ A `Scene` is a window description: the options, a closure that makes the root vi
 
 - `AppContext::open(scene)` opens a window and returns its `WindowId`. `AppContext::close(id)` closes it.
 - `AppContext::active` gives the key window, and `AppContext::windows` lists the open windows.
-- `AppContext::window(id)` gives the native `Window`, for example for its geometry.
+- `AppContext::title(id)` gives the title of a window.
 - `AppContext::host(id)` gives the `ViewHost` of the window.
+- `AppContext::menu_bar` gives the installed menu model, and `AppContext::choose(id)` chooses an item as the user does.
 
-Windows share the runtime, so a `Property` from `App::runtime` updates every window that reads it. `App::on_tick` runs a closure once on each turn of the event loop. Use it for work that is not part of a view, for example to save settings.
+Windows share the runtime, so a `Property` from `App::runtime` updates every window that reads it. `App::on_tick` runs a closure once on each turn of the event loop. Use it for work that is not part of a view.
+
+`App::on_error(handler)` gets each `ViewError`. The first argument is the `WindowId` of the window that reported it, or `None` for an error of the application, for example a settings file that did not load.
+
+`choscorui::platform::NativeAccess` gives the native application, window, and menu of an `AppContext` on macOS. Use it only for features that the portable API does not have.
 
 ### Threads and timers
 
 The UI types work only on the main thread. They are not `Send`.
 
-- **Work from other threads.** Call `Application::poster` on `AppContext::application` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
+- **Work from other threads.** On macOS, call `Application::poster` on `NativeAccess::native_application` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
 - **Timers.** `Application::schedule_once` and `Application::schedule_repeating` return a `Timer`. When you drop the `Timer`, the timer stops.
 - **Panics.** A panic in a posted task, a timer, or a menu callback does not unwind into AppKit. The toolkit counts each such panic.
 
 [architecture.md](architecture.md#threading-model) gives the full threading model.
+
+## Desktop services
+
+`Env::services` and `AppContext::services` give the `Services` of the backend:
+
+| Service | Methods |
+| --- | --- |
+| Clipboard | `clipboard_text`, `set_clipboard_text` |
+| Notifications | `notification_permission`, `request_notification_permission`, `post_notification` |
+| Status item | `set_status_item`, `status_item` |
+| URL handlers | `url_handler` |
+| File dialogs | `choose_files` |
+
+Each method checks the capability first. When the backend does not have the service, the method returns `ServiceError::Unsupported`. When the service needs a condition, it returns `ServiceError::Unavailable` with the condition. A method never panics. `Services::none` has no services; use it in tests.
+
+In a view, `.file_importer(presented, types, on_result)` shows an open dialog while `presented` is true. `.file_exporter(presented, name, on_result)` shows a save dialog. Each sets `presented` to false and gives the result to `on_result`.
+
+## Stored state
+
+`App::id(app_id)` names the settings file of the application. `App::settings_path(path)` gives an explicit path instead, for example from an environment variable. `App::settings_schema(schema)` gives the defaults and the migrations. Without an id or a path, the settings stay in memory.
+
+`cx.stored(key, default)` is a `State` that loads from the settings file and writes each change back. The application saves the file at most once on each turn of the event loop, and when it stops.
+
+```rust,no_run
+use choscorui::prelude::*;
+
+struct Counter;
+
+impl View for Counter {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let count = cx.stored("counter.count", 0_i64);
+        Button::new("Add", move || count.update(|n| *n += 1))
+    }
+}
+
+fn main() -> Result<(), choscorui::AppError> {
+    let scene = Scene::new(WindowOptions::new("Counter", 320.0, 200.0), || Counter)
+        .restore_geometry("window.main");
+    App::new().id("com.example.counter").scene(scene).run()
+}
+```
+
+- A corrupt file moves aside, and the application uses the defaults. `App::on_error` gets `StorageError::Recovered` with `None` as the window.
+- A stored value of the wrong type gives the default, and the view reports `StorageError::TypeMismatch`.
+- `Scene::restore_geometry(key)` stores the frame of the window under `key` when it closes. At the next launch, the window opens at that frame, fitted to the screens.
 
 ## Settings
 
@@ -597,24 +666,27 @@ stateDiagram-v2
 
 ### Window geometry
 
-To keep the window position and size between launches, do these steps:
+`Scene::restore_geometry(key)` keeps the window position and size between launches. To do the same steps with your own `Settings`, use these functions:
 
-1. When the window closes, call `window.geometry().store(&mut settings, "window.main")`.
+1. When the window closes, call `geometry.store(&mut settings, "window.main")`.
 2. At launch, call `WindowGeometry::restore(&settings, "window.main")`.
-3. Call `fit_to_screens` on the result with `screen_visible_frames()` and a minimum size.
-4. Call `Window::set_geometry` with the fitted frame.
+3. Call `fit_to_screens` on the result with the visible frames of the screens and a minimum size.
 
-```rust,no_run
-use choscorui::core::{Settings, Size, WindowGeometry};
-use choscorui::platform::{Error, Window, screen_visible_frames};
+```rust
+use choscorui::core::{Point, Rect, Settings, SettingsSchema, Size, WindowGeometry};
 
-fn restore(settings: &Settings, window: &mut Window) -> Result<(), Error> {
-    if let Some(saved) = WindowGeometry::restore(settings, "window.main") {
-        let frame = saved.fit_to_screens(&screen_visible_frames()?, Size::new(320.0, 240.0));
-        window.set_geometry(&WindowGeometry { frame, ..saved })?;
-    }
-    Ok(())
-}
+let mut settings = Settings::new(SettingsSchema::new(1));
+let saved = WindowGeometry {
+    frame: Rect::new(Point::new(-5000.0, 40.0), Size::new(800.0, 600.0)),
+    zoomed: false,
+    full_screen: false,
+};
+saved.store(&mut settings, "window.main")?;
+let screens = [Rect::new(Point::new(0.0, 0.0), Size::new(1440.0, 900.0))];
+let restored = WindowGeometry::restore(&settings, "window.main").unwrap();
+let frame = restored.fit_to_screens(&screens, Size::new(320.0, 240.0));
+assert!(screens[0].intersection(frame).is_some());
+# Ok::<(), choscorui::core::SettingsError>(())
 ```
 
 `fit_to_screens` handles a change of screens between launches:
@@ -622,7 +694,7 @@ fn restore(settings: &Settings, window: &mut Window) -> Result<(), Error> {
 - If no screen shows enough of the title strip of the saved frame, the window moves to the center of the main screen.
 - If the frame is larger than its screen, the window becomes smaller, but not smaller than the minimum size.
 
-`set_geometry` applies the frame first, then the zoom and full-screen state. Thus, when the user leaves zoom, the window returns to the saved size.
+The window applies the frame first, then the zoom and full-screen state. Thus, when the user leaves zoom, the window returns to the saved size.
 
 ### Dock and toolbar state
 
