@@ -40,7 +40,7 @@ pub use app::{App, AppError, Scene, WindowId};
 pub use backend::platform;
 pub use context::AppContext;
 
-pub use choscorui_core::{BackendCapabilities, Support};
+pub use choscorui_core::{BackendCapabilities, Condition, Support};
 
 /// The examples in `docs/guide.md`, compiled and run as doctests so that
 /// the guide stays correct.

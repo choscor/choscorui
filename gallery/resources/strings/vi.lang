@@ -903,7 +903,6 @@ desktop.image_codecs = Bộ giải mã ảnh
 desktop.gpu_painting = Vẽ bằng GPU
 desktop.supported = được hỗ trợ
 desktop.unsupported = không được hỗ trợ
-desktop.needs = cần {condition}
 desktop.status_item_shown = Đã hiện biểu tượng trạng thái trên thanh menu
 desktop.status_item_removed = Đã gỡ biểu tượng trạng thái
 desktop.status_item_failed = Lỗi biểu tượng trạng thái: {error}

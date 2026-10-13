@@ -40,7 +40,7 @@ fn support_text(support: Support) -> Localized {
     match support {
         Support::Supported => t!("desktop.supported"),
         Support::Unsupported => t!("desktop.unsupported"),
-        Support::Conditional(condition) => t!("desktop.needs", condition = condition),
+        Support::Conditional(condition) => t!(condition.message_id()),
     }
 }
 

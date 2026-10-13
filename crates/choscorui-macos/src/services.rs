@@ -3,8 +3,8 @@
 
 use crate::{Clipboard, DesktopError, Error, FileDialogSpec, StatusItem};
 use choscorui_core::{
-    BackendCapabilities, FileDialogKind, FileDialogRequest, NotificationPermission, Service,
-    ServiceBackend, ServiceError, StatusItemSpec, SystemNotification,
+    BackendCapabilities, Condition, FileDialogKind, FileDialogRequest, NotificationPermission,
+    Service, ServiceBackend, ServiceError, StatusItemSpec, SystemNotification,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -28,7 +28,7 @@ fn desktop(service: Service) -> impl Fn(DesktopError) -> ServiceError {
         DesktopError::InvalidUrl => ServiceError::InvalidUrl,
         DesktopError::RequiresAppBundle => ServiceError::Unavailable {
             service,
-            condition: "run from an app bundle with a bundle identifier",
+            condition: Condition::AppBundle,
         },
         DesktopError::PermissionDenied => ServiceError::PermissionDenied,
         DesktopError::InvalidText => ServiceError::InvalidText,

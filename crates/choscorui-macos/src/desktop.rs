@@ -519,6 +519,7 @@ pub fn post_notification(identifier: &str, title: &str, body: &str) -> Result<()
 /// What this backend provides on the running system. Notifications need
 /// the process to run from an app bundle with a bundle identifier.
 pub fn capabilities() -> choscorui_core::BackendCapabilities {
+    use choscorui_core::Condition;
     use choscorui_core::Support::{Conditional, Supported, Unsupported};
     let mut capabilities = choscorui_core::BackendCapabilities::none("macos");
     capabilities.multiple_windows = Supported;
@@ -533,7 +534,7 @@ pub fn capabilities() -> choscorui_core::BackendCapabilities {
     capabilities.notifications = if has_bundle_identifier() {
         Supported
     } else {
-        Conditional("run from an app bundle with a bundle identifier")
+        Conditional(Condition::AppBundle)
     };
     capabilities.open_urls = Supported;
     capabilities.system_appearance = Supported;

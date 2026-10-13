@@ -45,7 +45,7 @@ pub use semantics::{
     SemanticTree,
 };
 mod capabilities;
-pub use capabilities::{BackendCapabilities, Support};
+pub use capabilities::{BackendCapabilities, Condition, Support};
 mod app_model;
 pub use app_model::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,

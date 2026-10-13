@@ -222,7 +222,7 @@ AppKit has no global text size, so `text_scale` is always 1.0. Give the applicat
 | `multiple_windows`, `native_menus`, `context_menus`, `native_dialogs` | `Supported` |
 | `clipboard`, `drag_and_drop`, `input_methods`, `accessibility` | `Supported` |
 | `status_items`, `open_urls`, `system_appearance`, `text_shaping`, `image_codecs` | `Supported` |
-| `notifications` | `Supported` in an app bundle with a bundle identifier, otherwise `Conditional("run from an app bundle with a bundle identifier")` |
+| `notifications` | `Supported` in an app bundle with a bundle identifier, otherwise `Conditional(Condition::AppBundle)` |
 | `gpu_painting` | `Unsupported`, because Core Graphics paints on the CPU |
 
 The services of `Services` follow these values. On macOS, `post_notification` from a binary that is not in an app bundle returns `ServiceError::Unavailable` with the condition, and the other services are available.

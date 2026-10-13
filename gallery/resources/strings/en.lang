@@ -908,7 +908,6 @@ desktop.image_codecs = Image codecs
 desktop.gpu_painting = GPU painting
 desktop.supported = supported
 desktop.unsupported = not supported
-desktop.needs = needs {condition}
 desktop.status_item_shown = Status item shown in the menu bar
 desktop.status_item_removed = Status item removed
 desktop.status_item_failed = Status item failed: {error}

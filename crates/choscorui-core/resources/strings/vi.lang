@@ -48,3 +48,6 @@ choscorui.field.year = Ô năm
 choscorui.field.hour = Ô giờ
 choscorui.field.minute = Ô phút
 choscorui.field.second = Ô giây
+
+# Điều kiện của các khả năng của backend.
+choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói

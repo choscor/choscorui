@@ -2,13 +2,46 @@
 //! operating system, so a feature can degrade gracefully where a backend
 //! lacks it or needs a precondition (for example an app bundle).
 
+use crate::Localizer;
+use std::fmt;
+
 /// Whether a backend provides a feature.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Support {
     Supported,
     Unsupported,
-    /// Supported once the stated condition holds.
-    Conditional(&'static str),
+    /// Supported once the condition holds.
+    Conditional(Condition),
+}
+
+/// The precondition of a [`Support::Conditional`] capability. Show it to
+/// the user with [`Condition::message`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Condition {
+    /// The binary runs from an app bundle with a bundle identifier.
+    AppBundle,
+}
+
+impl Condition {
+    /// The id of the condition's message in the built-in catalog.
+    pub fn message_id(self) -> &'static str {
+        match self {
+            Self::AppBundle => "choscorui.condition.app_bundle",
+        }
+    }
+
+    /// The condition in the language of `strings`.
+    pub fn message(self, strings: &Localizer) -> String {
+        strings.message(self.message_id(), &[])
+    }
+}
+
+impl fmt::Display for Condition {
+    /// The condition in English.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message(Localizer::builtin()))
+    }
 }
 
 impl Support {

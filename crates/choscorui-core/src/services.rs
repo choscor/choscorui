@@ -5,7 +5,7 @@
 //! call, so a service that the backend does not provide returns a
 //! [`ServiceError`] and never panics.
 
-use crate::{BackendCapabilities, Support};
+use crate::{BackendCapabilities, Condition, Support};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -52,7 +52,7 @@ pub enum ServiceError {
     /// The backend provides the service only when `condition` holds.
     Unavailable {
         service: Service,
-        condition: &'static str,
+        condition: Condition,
     },
     /// The user has not granted permission.
     PermissionDenied,

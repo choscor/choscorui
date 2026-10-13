@@ -2,6 +2,7 @@
 //! service is gated by its capability and returns a domain error instead
 //! of a panic, and stored state round-trips through a settings file.
 
+use choscorui::Condition;
 use choscorui::compose::Runtime;
 use choscorui::compose::view::{Storage, StorageError};
 use choscorui::controls::EstimatedText;
@@ -80,7 +81,7 @@ fn every_service_reports_its_error_when_the_backend_lacks_it() {
 #[test]
 fn a_conditional_service_names_its_condition() {
     let mut capabilities = BackendCapabilities::none("test");
-    capabilities.notifications = Support::Conditional("run from an app bundle");
+    capabilities.notifications = Support::Conditional(Condition::AppBundle);
     let services = Services::new(Rc::new(Guarded(capabilities)));
     let error = services
         .post_notification(&SystemNotification::new("id", "Title", "Body"))
@@ -89,12 +90,12 @@ fn a_conditional_service_names_its_condition() {
         error,
         ServiceError::Unavailable {
             service: Service::Notifications,
-            condition: "run from an app bundle",
+            condition: Condition::AppBundle,
         }
     );
     assert_eq!(
         error.to_string(),
-        "notifications needs this condition: run from an app bundle"
+        "notifications needs this condition: Needs an app bundle with a bundle identifier"
     );
 }
 

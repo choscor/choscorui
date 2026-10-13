@@ -30,7 +30,7 @@ The crates define no Cargo features, so all code is always built. A new feature 
 
 - `Supported`
 - `Unsupported`
-- `Conditional(reason)`: the feature is available when the stated condition is true.
+- `Conditional(condition)`: the feature is available when the condition is true. `Condition` is a `#[non_exhaustive]` enum, for example `Condition::AppBundle`. `Condition::message` gives its text in the user's language.
 
 Query capabilities, not the OS version or `cfg!(target_os)`. For example, on macOS, `notifications` is `Conditional` until the binary runs from an app bundle. `BackendCapabilities` is `#[non_exhaustive]`, so a new capability is not a breaking change. In tests, construct one with `BackendCapabilities::none`.
 
