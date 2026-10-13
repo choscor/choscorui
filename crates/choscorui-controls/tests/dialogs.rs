@@ -127,10 +127,26 @@ fn color_picker_round_trips_hsv_and_hex() {
     assert_eq!(picker.set_hex("33669980"), ValidationState::Valid);
     assert_eq!(picker.hex(), "#33669980");
 
+    // Only hex digits after at most one `#`, and `#RGBA` too.
+    for text in ["##FFF", "#FF00GG", "12 34 56", "#-123", "#123456789"] {
+        assert!(
+            matches!(picker.set_hex(text), ValidationState::Invalid(_)),
+            "{text}"
+        );
+    }
+    assert_eq!(picker.hex(), "#33669980", "a rejected text changes nothing");
+    assert_eq!(picker.set_hex("#F008"), ValidationState::Valid);
+    assert_eq!(picker.color(), Color::rgba8(255, 0, 0, 136));
+    assert_eq!(picker.set_hex("#ABCDE"), ValidationState::Intermediate);
+
     // Grays keep the previous hue.
     picker.set_hsv(120.0, 1.0, 1.0);
     picker.set_color(Color::rgba8(128, 128, 128, 255));
     assert_eq!(picker.hsv().0, 120.0);
+    // The same color as hex keeps the channels.
+    picker.set_hsv(200.0, 0.0, 0.5);
+    assert_eq!(picker.set_hex(&picker.hex()), ValidationState::Valid);
+    assert_eq!(picker.hsv(), (200.0, 0.0, 0.5));
 
     picker.accept();
     picker.set_hex("#000000");
@@ -310,5 +326,43 @@ fn color_picker_channels_round_trip_and_paint_a_slider_thumb() {
             DisplayCommand::StrokeRoundedRect { color, .. } if *color == primary
         )),
         "the slider thumb has a primary border"
+    );
+}
+
+/// The fill colors that `picker` paints for `channel`.
+fn strip_fills(picker: &ColorPicker, channel: ColorChannel) -> Vec<Color> {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut list = DisplayList::new();
+    let bounds = rect(0.0, 0.0, 240.0, 18.0);
+    let mut cx = PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText);
+    picker.paint_channel(&mut cx, channel, VisualState::NONE);
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::FillRect { color, .. } => Some(*color),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn color_strips_are_opaque_and_alpha_shows_a_checkerboard() {
+    let picker = ColorPicker::new(Color::rgba8(0, 128, 128, 64));
+    for channel in [
+        ColorChannel::Hue,
+        ColorChannel::Saturation,
+        ColorChannel::Value,
+    ] {
+        let fills = strip_fills(&picker, channel);
+        assert_eq!(fills.len(), 24);
+        assert!(fills.iter().all(|color| color.alpha == 255), "{channel:?}");
+    }
+    let tokens = DesignTokens::light();
+    let fills = strip_fills(&picker, ColorChannel::Alpha);
+    assert_eq!(fills[0], tokens.color(ColorRole::Background));
+    assert!(fills.contains(&tokens.color(ColorRole::Muted)));
+    assert!(
+        fills.iter().any(|color| color.alpha < 255),
+        "the alpha ramp"
     );
 }

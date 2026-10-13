@@ -2172,26 +2172,33 @@ index through `.on_item`, and Escape runs `.on_dismiss`.
 
 ### ColorPicker and FontDialog
 
-- **`ColorPicker::set_hex`** accepts `#RGB`, `#RRGGBB`, and `#RRGGBBAA`.
-  The `#` is optional.
+- **`ColorPicker::set_hex`** accepts `#RGB`, `#RGBA`, `#RRGGBB`, and
+  `#RRGGBBAA`. The one `#` is optional.
 - A shorter run of hex digits is `Intermediate`. Any other text is
-  `Invalid` and changes nothing.
-- A gray keeps the previous hue. `accept` puts the color at the front of
-  the recent list.
+  `Invalid` and changes nothing. A second `#`, a space, or a character
+  that is not a hex digit makes the text `Invalid`.
+- A gray keeps the previous hue. A hex value of the current color keeps
+  all the channels. `accept` puts the color at the front of the recent
+  list.
 - `channel` and `set_channel` edit one `ColorChannel` as a fraction from 0
   to 1. The hue stops short of a full turn.
 - **Look.** `paint_channel` draws a stepped gradient of the channel in an
   `Input` border, with the `Slider` thumb at the value. The gradient
   fills from the end in right-to-left layouts.
-- `paint_swatch` fills the color in the `Input` frame.
+- The hue, saturation, and value strips are opaque. The alpha strip shows
+  a checkerboard of `background` and `muted` squares through the color.
+- `paint_swatch` fills the color in the `Input` frame, over the same
+  checkerboard.
 - **In a control host.** `ColorPicker` shows the swatch and one strip for
-  each channel. `with_name` sets its accessible name.
+  each channel in its picker box. `with_name` sets its accessible name.
+- The picker box shows the focus ring while focus is visible. The thumb
+  of the focused channel also shows its ring.
 - ArrowUp and ArrowDown move between the channels. ArrowLeft and
   ArrowRight change the channel by 1%. Right-to-left layouts swap them.
 - PageUp and PageDown change the channel by 10%, and Home and End go to
   the ends. A press or a drag on a strip sets the channel.
-- A change reports `Changed(Text)` with the hex value. Enter accepts the
-  color and reports `Activated`. `SetValue` takes a hex value.
+- A change reports `Changed(Text)` with the hex value. Enter reports
+  `Activated`. `SetValue` takes a hex value.
 - **`FontDialog::set_size`** accepts 1 to 4096 points. Other sizes are
   `Invalid`.
 - `FontDialog` uses a `FontChooser`. A missing family resolves to
@@ -2201,8 +2208,7 @@ index through `.on_item`, and Escape runs `.on_dismiss`.
 | --- | --- | --- |
 | Strip and swatch frame | `Input` `Root` | the input box |
 | Channel thumb | `Slider` `Thumb` | the slider thumb |
-| Picker box | `ColorPicker` `Root` | input box, radius lg, 12 pt padding; focus ring while focus is visible |
-| Picker parts | `ColorPicker` `Track`, `Thumb`, `Label` | `muted` track, the slider thumb, xs `muted-foreground` labels |
+| Picker box | `ColorPicker` `Root` | input box, radius lg, 12 pt padding; focus ring while focus is visible; 50% opacity while disabled |
 
 | Field | `ColorPicker::semantics` |
 | --- | --- |

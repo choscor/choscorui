@@ -6,11 +6,12 @@ mod hosted;
 
 use choscorui_controls::{
     AlertDialog, Calendar, CalendarMode, CanvasView, ColorPicker, ColumnBrowser, CommandId,
-    CommandState, ContainerError, ControlMessage, ControlValue, CustomControl, DateTimeEdit,
-    DateTimeKind, DialogButton, DialogButtonRole, DockArea, DockLayout, DockPanel, DockTarget,
-    DropdownMenu, EstimatedText, GroupBox, HeaderColumn, HeaderView, ItemView, MeasureContext,
-    MenuItem, PanelId, Resizable, ScrollArea, ShortcutModifiers, SplitOrientation,
-    StackedContainer, StatusBar, Styles, TextItemDelegate, Toolbar, ToolbarItem,
+    CommandState, ContainerError, ControlKind, ControlMessage, ControlValue, CustomControl,
+    DateTimeEdit, DateTimeKind, DialogButton, DialogButtonRole, DockArea, DockLayout, DockPanel,
+    DockTarget, DropdownMenu, EstimatedText, GroupBox, HeaderColumn, HeaderView, ItemView,
+    MeasureContext, MenuItem, PanelId, Resizable, ScrollArea, ShortcutModifiers, Slot,
+    SplitOrientation, StackedContainer, StatusBar, StyleQuery, Styles, TextItemDelegate, Toolbar,
+    ToolbarItem,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, Color, ColorRole, Constraints, DesignTokens,
@@ -751,10 +752,13 @@ fn a_hosted_color_picker_edits_channels_and_takes_hex_values() {
     assert_eq!(h.semantics().value.as_deref(), Some("#0000FF"));
     assert!(h.messages().is_empty());
 
-    // A press at the start of the last row drags the opacity to zero.
+    // A press at the start of the last row, inside the padding of the
+    // picker box, drags the opacity to zero.
     let bounds = h.bounds();
-    let gap = DesignTokens::light().spacing * 2.0;
-    h.click(Point::new(bounds.origin.x, bounds.max_y() - gap - 1.0));
+    let query = StyleQuery::new(ControlKind::ColorPicker, Slot::Root);
+    let padding = Styles::new().resolve(&DesignTokens::light(), query).padding;
+    let end = Point::new(bounds.origin.x + padding.horizontal() / 2.0, bounds.max_y());
+    h.click(Point::new(end.x, end.y - padding.vertical() / 2.0 - 1.0));
     assert_eq!(
         h.messages(),
         vec![ControlMessage::Changed(ControlValue::Text(
@@ -766,6 +770,31 @@ fn a_hosted_color_picker_edits_channels_and_takes_hex_values() {
     h.key(Key::End);
     assert!(!h.perform(SemanticAction::SetValue, Some("#FFFFFF")));
     assert!(h.messages().is_empty());
+}
+
+#[test]
+fn a_hosted_color_picker_paints_its_box_with_the_focus_ring() {
+    let mut h = Harness::new(red_picker());
+    let bounds = h.bounds();
+    let tokens = DesignTokens::light();
+    let query = StyleQuery::new(ControlKind::ColorPicker, Slot::Root);
+    let resting = Styles::new().resolve(&tokens, query);
+    // The box of the picker, at its full bounds.
+    let boxed = |list: &DisplayList, color: Color| {
+        list.commands().iter().any(|command| match command {
+            DisplayCommand::StrokeRoundedRect { rect, color: c, .. } => {
+                *c == color && rect.size.width >= bounds.size.width - 2.0
+            }
+            _ => false,
+        })
+    };
+    assert!(boxed(&h.paint(), resting.border));
+    h.focus();
+    // The focus look eases in; paint after it settles.
+    h.paint();
+    h.set_time(h.time + 1.0);
+    let ring = tokens.color(ColorRole::Ring);
+    assert!(boxed(&h.paint(), ring), "the box border turns to the ring");
 }
 
 #[test]

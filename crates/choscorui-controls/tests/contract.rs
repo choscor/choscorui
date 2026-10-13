@@ -153,10 +153,6 @@ const EXEMPT: &[(ControlKind, &str)] = &[
         ControlKind::Typography,
         "no built-in control asks for it; text views take TextPreset specs from the tokens",
     ),
-    (
-        ControlKind::ColorPicker,
-        "ColorPicker paints its fields with the Input kind; the gallery only names the kind",
-    ),
 ];
 
 /// The default look that records each kind that a paint asks for.

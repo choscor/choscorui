@@ -4,15 +4,15 @@
 use crate::ui::page::{Build, PageCx, column, row};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    self, AlertDialog, AnyView, Binding, Button, Card, Corner, Cx, Dynamic, Empty, Env, Fill,
-    FontDialog, Frame, HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text,
-    TextContent, VStack, View, ViewExt,
+    self, AlertDialog, AnyView, Binding, Button, Card, Cx, Dynamic, Env, Fill, FontDialog, Frame,
+    HStack, HorizontalAlignment, Input, InputDialog, IntoLive, Text, TextContent, VStack, View,
+    ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, ColorChannel, ColorPicker, DialogButton, DialogButtonRole, InputKind,
     ValidationState, dialog_key_button,
 };
-use choscorui::core::{Color, ColorRole, Key, RadiusScale, Space, TextPreset, TextStyle};
+use choscorui::core::{Color, ColorRole, Key, Space, TextPreset, TextStyle};
 
 /// A small caption in `muted-foreground`, for headings and readouts.
 fn readout<M>(text: impl IntoLive<TextContent, M>) -> impl View {
@@ -227,17 +227,26 @@ fn channel_text(picker: &ColorPicker, index: usize, name: &str) -> String {
     }
 }
 
-/// A recent color.
-fn swatch(color: Color) -> impl View {
-    Empty
-        .frame(Frame::size(20.0, 20.0))
+/// A recent color: a button in the color, named by its hex value, that
+/// makes it the current color through `chosen`.
+fn swatch(color: Color, chosen: Binding<String>) -> impl View {
+    let hex = ColorPicker::new(color).hex();
+    let light =
+        u32::from(color.red) * 299 + u32::from(color.green) * 587 + u32::from(color.blue) * 114;
+    let ink = if light > 150_000 {
+        Color::BLACK
+    } else {
+        Color::WHITE
+    };
+    Button::new(hex.clone(), move || chosen.set(hex.clone()))
         .background(Fill::Color(color))
+        .foreground(Fill::Color(ink))
         .border(ColorRole::Input, 1.0)
-        .corner_radius(Corner::Scale(RadiusScale::Sm))
 }
 
 /// The hosted picker with its channel readouts, a hex field, and the
-/// recent colors chosen with Use Color.
+/// recent colors chosen with Use Color or Return in the picker. The
+/// readouts show the channels of the current color.
 struct ColorPickerPage;
 
 impl View for ColorPickerPage {
@@ -309,8 +318,8 @@ impl View for ColorPickerPage {
                 }),
             )),
             Dynamic::new(move || {
-                HStack::new(recent.get().into_iter().map(swatch).collect::<Vec<_>>())
-                    .spacing(Space::S1)
+                let swatches = recent.get().into_iter().map(|color| swatch(color, chosen));
+                HStack::new(swatches.collect::<Vec<_>>()).spacing(Space::S1)
             }),
             Dynamic::new(move || match checked() {
                 ValidationState::Invalid(error) => Some(
@@ -490,6 +499,20 @@ mod tests {
         page.host.layout();
         assert!(page.host.semantic(hex).unwrap().state.invalid);
         assert_eq!(page.value("Current color").as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn recent_colors_are_buttons_that_apply_their_color() {
+        let mut page = Harness::new("color-picker");
+        assert!(page.act("Use Color", SemanticAction::Activate));
+        let hex = page.node("Hex color");
+        page.host
+            .perform(hex, SemanticAction::SetValue, Some("#FF0000"));
+        page.host.layout();
+        assert!(page.host.find("Hue 0°").is_some());
+        assert!(page.act("#008080", SemanticAction::Activate));
+        assert_eq!(page.value("Current color").as_deref(), Some("#008080"));
+        assert!(page.host.find("Hue 180°").is_some(), "the channel readout");
     }
 
     #[test]

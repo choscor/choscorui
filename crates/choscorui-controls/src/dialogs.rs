@@ -13,16 +13,16 @@ use crate::custom::{
 use crate::hosted::{self, Parts, Reveal};
 use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
-    TextMeasure, VisualState,
+    TextMeasure, VisualState, content_rect,
 };
 use crate::{
     ComboChange, ComboInput, FontChooser, InputFilter, NumberError, NumberInput, ValidationError,
     ValidationState,
 };
 use choscorui_core::{
-    Color, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent, Locale,
-    Localizer, Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
+    Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent,
+    Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -361,7 +361,9 @@ impl ColorPicker {
 
     /// Paints `channel` in the context's bounds: a stepped gradient of the
     /// channel inside an `Input` border, and the `Slider` thumb at the
-    /// current value. `state` carries focus flags for the thumb.
+    /// current value. `state` carries focus flags for the thumb. The hue,
+    /// saturation, and value strips are opaque. The alpha strip shows a
+    /// checkerboard through the color.
     pub fn paint_channel(
         &self,
         cx: &mut PaintContext<'_>,
@@ -372,12 +374,16 @@ impl ColorPicker {
         let bounds = cx.bounds;
         let frame = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
         let width = bounds.size.width / STEPS as f64;
+        if channel == ColorChannel::Alpha {
+            checkerboard(cx, bounds);
+        }
         for step in 0..STEPS {
             let mut sample = self.clone();
             let t = step as f64 / (STEPS - 1) as f64;
             if channel == ColorChannel::Hue {
                 sample.set_hsv(0.0, 1.0, 1.0);
             }
+            sample.alpha = 1.0;
             sample.set_channel(channel, t);
             let x = if cx.rtl {
                 bounds.max_x() - (step + 1) as f64 * width
@@ -406,13 +412,19 @@ impl ColorPicker {
     }
 
     /// Paints a swatch of the current color in the context's bounds,
-    /// framed like an `Input`.
+    /// framed like an `Input`, over a checkerboard that shows through a
+    /// color that is not opaque.
     pub fn paint_swatch(&self, cx: &mut PaintContext<'_>) {
         let frame = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
         let mut swatch = frame;
         swatch.background = self.color().into();
         swatch.shadow = choscorui_core::ShadowLayers::NONE;
         let bounds = cx.bounds;
+        let shape = Path::rounded_rect_corners(bounds, swatch.radius.physical(cx.rtl));
+        if cx.list.push_clip_path(shape).is_ok() {
+            checkerboard(cx, bounds);
+            let _ = cx.list.pop_clip();
+        }
         cx.slot(bounds, &swatch, |_, _| {});
     }
 
@@ -429,42 +441,32 @@ impl ColorPicker {
         }
     }
 
-    /// Accepts `#RGB`, `#RRGGBB`, or `#RRGGBBAA` (the `#` is optional).
+    /// Accepts `#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA`. The one `#` is
+    /// optional, and the other characters must be hex digits. A color
+    /// that equals the current color keeps the channels, so a hue on a
+    /// gray does not change.
     pub fn set_hex(&mut self, text: &str) -> ValidationState {
-        let digits = text.trim().trim_start_matches('#');
-        let parse = |range: std::ops::Range<usize>| u8::from_str_radix(&digits[range], 16).ok();
-        let color = match digits.len() {
-            3 if digits.is_ascii() => {
-                let expand = |index: usize| parse(index..index + 1).map(|value| value * 17);
-                expand(0)
-                    .zip(expand(1))
-                    .zip(expand(2))
-                    .map(|((r, g), b)| Color::rgba8(r, g, b, 255))
-            }
-            6 | 8 if digits.is_ascii() => {
-                let alpha = if digits.len() == 8 {
-                    parse(6..8)
-                } else {
-                    Some(255)
-                };
-                parse(0..2)
-                    .zip(parse(2..4))
-                    .zip(parse(4..6))
-                    .zip(alpha)
-                    .map(|(((r, g), b), a)| Color::rgba8(r, g, b, a))
-            }
-            0..=7 if digits.chars().all(|c| c.is_ascii_hexdigit()) => {
-                return ValidationState::Intermediate;
-            }
-            _ => None,
-        };
-        match color {
-            Some(color) => {
-                self.set_color(color);
-                ValidationState::Valid
-            }
-            None => ValidationState::Invalid(ValidationError::Color),
+        let text = text.trim();
+        let digits = text.strip_prefix('#').unwrap_or(text);
+        if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+            return ValidationState::Invalid(ValidationError::Color);
         }
+        let parse = |at: usize, len: usize| {
+            u8::from_str_radix(&digits[at..at + len], 16)
+                .map_or(0, |value| if len == 1 { value * 17 } else { value })
+        };
+        let (len, count) = match digits.len() {
+            3 | 4 => (1, digits.len()),
+            6 | 8 => (2, digits.len() / 2),
+            0..=7 => return ValidationState::Intermediate,
+            _ => return ValidationState::Invalid(ValidationError::Color),
+        };
+        let alpha = if count == 4 { parse(3 * len, len) } else { 255 };
+        let color = Color::rgba8(parse(0, len), parse(len, len), parse(2 * len, len), alpha);
+        if color != self.color() {
+            self.set_color(color);
+        }
+        ValidationState::Valid
     }
 
     /// Records the accepted color at the front of the recent list.
@@ -578,7 +580,6 @@ impl ColorPicker {
                 return EventReply::Stop;
             }
             Key::Enter => {
-                self.accept();
                 cx.emit(ControlMessage::Activated);
                 return EventReply::Stop;
             }
@@ -598,9 +599,12 @@ impl ColorPicker {
 impl CustomControl for ColorPicker {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let (swatch, strip, gap) = Self::rows(cx.styles, cx.tokens);
-        let height = swatch + 4.0 * (strip + gap);
+        let padding = cx
+            .style(StyleQuery::new(ControlKind::ColorPicker, Slot::Root))
+            .padding;
+        let height = swatch + 4.0 * (strip + gap) - gap + padding.vertical();
         // A strip is 60 spacing units wide, so each 1% step moves visibly.
-        let width = cx.tokens.spacing * 60.0;
+        let width = cx.tokens.spacing * 60.0 + padding.horizontal();
         Measured::new(cx.constraints.constrain(Size::new(width, height)))
     }
 
@@ -608,6 +612,8 @@ impl CustomControl for ColorPicker {
         let (swatch, strip, gap) = Self::rows(cx.styles, cx.tokens);
         let thumb = cx.style(StyleQuery::new(ControlKind::Slider, Slot::Thumb));
         self.rtl = cx.rtl();
+        let root = cx.style(StyleQuery::new(ControlKind::ColorPicker, Slot::Root));
+        let bounds = content_rect(bounds, &root, self.rtl);
         self.swatch = Rect::from_xywh(bounds.origin.x, bounds.origin.y, bounds.size.width, swatch);
         // The strips leave room for half a thumb at each end.
         let inset = thumb.min_width / 2.0;
@@ -671,16 +677,18 @@ impl CustomControl for ColorPicker {
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
-        self.paint_swatch(&mut cx.at(self.swatch));
-        for (channel, strip) in ColorChannel::ALL.into_iter().zip(self.strips) {
-            let focused = channel == self.focus;
-            let state = VisualState::NONE
-                .set(VisualState::DISABLED, host.disabled())
-                .set(VisualState::FOCUSED, focused && host.focused())
-                .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
-                .set(VisualState::PRESSED, self.drag == Some(channel));
-            self.paint_channel(&mut cx.at(strip), channel, state);
-        }
+        let root = cx.style(StyleQuery::new(ControlKind::ColorPicker, Slot::Root).state(host));
+        cx.slot(cx.bounds, &root, |cx, _| {
+            self.paint_swatch(&mut cx.at(self.swatch));
+            for (channel, strip) in ColorChannel::ALL.into_iter().zip(self.strips) {
+                let focused = channel == self.focus;
+                let state = VisualState::NONE
+                    .set(VisualState::FOCUSED, focused && host.focused())
+                    .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
+                    .set(VisualState::PRESSED, self.drag == Some(channel));
+                self.paint_channel(&mut cx.at(strip), channel, state);
+            }
+        });
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -725,6 +733,32 @@ impl CustomControl for ColorPicker {
         match value {
             ControlValue::Text(text) => self.set_hex(text) == ValidationState::Valid,
             _ => false,
+        }
+    }
+}
+
+/// Fills `rect` with squares of two spacing units in the `background` and
+/// `muted` colors, which show through a color that is not opaque.
+fn checkerboard(cx: &mut PaintContext<'_>, rect: Rect) {
+    let side = cx.tokens.spacing * 2.0;
+    if side <= 0.0 {
+        return;
+    }
+    cx.list
+        .fill_rect(rect, cx.tokens.color(ColorRole::Background));
+    let muted = cx.tokens.color(ColorRole::Muted);
+    let (columns, rows) = (
+        (rect.size.width / side).ceil() as usize,
+        (rect.size.height / side).ceil() as usize,
+    );
+    for row in 0..rows {
+        for column in (row % 2..columns).step_by(2) {
+            let x = rect.origin.x + column as f64 * side;
+            let y = rect.origin.y + row as f64 * side;
+            let width = side.min(rect.max_x() - x);
+            let height = side.min(rect.max_y() - y);
+            cx.list
+                .fill_rect(Rect::from_xywh(x, y, width, height), muted);
         }
     }
 }
