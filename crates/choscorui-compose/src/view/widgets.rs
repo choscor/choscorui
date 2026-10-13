@@ -29,6 +29,7 @@ const NO_COMMAND: CommandId = CommandId(0);
 /// A list that a control shows: a fixed `Vec`, or a closure that makes
 /// it from the environment.
 pub trait Items<T>: 'static {
+    /// The items for the environment `env`.
     fn items(&self, env: &Env) -> Vec<T>;
 }
 

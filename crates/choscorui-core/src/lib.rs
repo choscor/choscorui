@@ -158,6 +158,8 @@ impl Rect {
         Self { origin, size }
     }
 
+    /// Whether `point` is inside the rectangle. An empty rectangle
+    /// contains no point.
     pub fn contains(self, point: Point) -> bool {
         self.size.width > 0.0
             && self.size.height > 0.0
