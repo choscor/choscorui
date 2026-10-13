@@ -482,8 +482,9 @@ fn toolbar_and_status_bar_paint_from_recipes() {
         &commands,
         false,
     );
-    // Commands paint their labels; the host paints the embedded control.
-    assert_eq!(draw_texts(&list), ["New", "Open", "Print"]);
+    // Commands paint their labels, truncated to the button length; the host
+    // paints the embedded control.
+    assert_eq!(draw_texts(&list), ["New", "Open", "Pri\u{2026}"]);
     let border = tokens.color(ColorRole::Border);
     assert!(
         list.commands().iter().any(|command| matches!(

@@ -394,6 +394,8 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("TextAlign", "placement of a text line in a slot"),
     ("TextLine", "one line of text for draw_text"),
     ("TextMeasure", "text measurement trait for layout and paint"),
+    ("TextOverflow", "truncate or clip mode of a text line"),
+    ("ELLIPSIS", "the mark at the end of truncated text"),
     (
         "TransitionStats",
         "counters of the state transitions, for tests",
@@ -407,6 +409,15 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("draw_text", "text helper of the slot painter"),
     ("fill_shape", "fill helper of the slot painter"),
     ("paint_box", "box helper of the slot painter"),
+    (
+        "paint_wrapped",
+        "wrapped paragraph helper of the slot painter",
+    ),
+    ("truncate_end", "text truncation helper of draw_text"),
+    (
+        "wrapped_height",
+        "wrapped paragraph measure of the slot painter",
+    ),
     (
         "paint_slot",
         "the general slot painter used by every control",

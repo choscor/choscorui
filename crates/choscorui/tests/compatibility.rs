@@ -35,6 +35,8 @@ use std::path::PathBuf;
 mod catalog;
 #[path = "compatibility/painted_slots.rs"]
 mod painted_slots;
+#[path = "compatibility/painted_text.rs"]
+mod painted_text;
 #[path = "compatibility/views.rs"]
 mod views;
 

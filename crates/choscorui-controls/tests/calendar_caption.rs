@@ -24,14 +24,20 @@ fn overlay(h: &Harness) -> Option<Rect> {
     h.host.get(h.node).unwrap().overlay()
 }
 
-/// The baseline start of the first text run that reads `text`.
+/// The baseline start of the first text run that reads `text`, whole or
+/// truncated with an ellipsis.
 fn text_x(list: &DisplayList, text: &str) -> f64 {
     list.commands()
         .iter()
         .find_map(|command| match command {
             DisplayCommand::DrawText {
                 baseline, text: t, ..
-            } if t == text => Some(baseline.x),
+            } if t == text
+                || t.strip_suffix('\u{2026}')
+                    .is_some_and(|start| !start.is_empty() && text.starts_with(start)) =>
+            {
+                Some(baseline.x)
+            }
             _ => None,
         })
         .unwrap_or_else(|| panic!("no text {text}"))
@@ -242,6 +248,8 @@ fn the_dropdowns_stay_between_the_month_buttons() {
         .with_dropdown_caption(2020, 2030);
     let h = Harness::new(calendar);
     let painted = h.paint();
+    // The narrowed month trigger truncates its long name.
+    assert!(!texts(&painted).contains(&"September".to_string()));
     let bounds = h.bounds();
     let (start, end) = (bounds.origin.x + 12.0 + 32.0, bounds.max_x() - 12.0 - 32.0);
     let month = text_x(&painted, "September");

@@ -1,7 +1,9 @@
 //! Line layout from measured advances, for hosted controls that wrap text
 //! without a shaper.
 
-use crate::style::{PaintContext, ResolvedStyle, TextAlign, TextMeasure};
+use crate::style::{
+    PaintContext, ResolvedStyle, TextAlign, TextLine, TextMeasure, TextOverflow, draw_text,
+};
 use choscorui_core::{CaretStop, LayoutLine, Rect, TextLayout, TypeSpec, grapheme_boundaries};
 
 /// Lays out `text` in lines no wider than `width`, breaking after spaces
@@ -104,12 +106,7 @@ pub(crate) fn measured_layout(
 
 /// The height of `text` wrapped in `width` with `spec`: zero for empty
 /// text, else the line count times the line height.
-pub(crate) fn wrapped_height(
-    text: &str,
-    spec: &TypeSpec,
-    width: f64,
-    measure: &dyn TextMeasure,
-) -> f64 {
+pub fn wrapped_height(text: &str, spec: &TypeSpec, width: f64, measure: &dyn TextMeasure) -> f64 {
     if text.is_empty() {
         return 0.0;
     }
@@ -120,8 +117,10 @@ pub(crate) fn wrapped_height(
     lines as f64 * spec.line_height
 }
 
-/// Paints `text` wrapped in `rect`, one label per line.
-pub(crate) fn paint_wrapped(
+/// Paints `text` wrapped in `rect`, one label per line. The layout fits
+/// each line, so a line never truncates: a single word wider than `rect`
+/// clips at its edges.
+pub fn paint_wrapped(
     cx: &mut PaintContext<'_>,
     rect: Rect,
     text: &str,
@@ -136,6 +135,10 @@ pub(crate) fn paint_wrapped(
             rect.size.width,
             style.text.line_height,
         );
-        cx.label(line_rect, &text[line.bytes.clone()], style, align);
+        let part = text[line.bytes.clone()].trim_end();
+        let label = TextLine::new(part, style, cx.rtl)
+            .align(align)
+            .overflow(TextOverflow::Clip);
+        let _ = draw_text(cx.list, line_rect, &label, cx.text);
     }
 }

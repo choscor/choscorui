@@ -8,7 +8,7 @@ use super::modifier::update_style;
 use super::state::{IntoLive, Live, State};
 use choscorui_controls::{
     ControlContext, ControlEvent, CustomControl, MeasureContext, PaintContext, TextAlign, TextLine,
-    TextMeasure, draw_text,
+    TextMeasure, TextOverflow, draw_text,
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, Dirty, EventReply, FontWeight, Measured, Rect, SemanticNode,
@@ -320,6 +320,7 @@ impl CustomControl for TextLeaf {
                 align,
                 rtl: cx.rtl,
                 underline: false,
+                overflow: TextOverflow::Ellipsis,
             };
             draw_text(cx.list, rect, &line, cx.text);
         }

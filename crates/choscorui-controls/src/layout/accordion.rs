@@ -90,9 +90,13 @@ impl Accordion {
         cx.request_semantics();
     }
 
-    fn header_height(cx: &MeasureContext<'_>) -> f64 {
+    /// The header height of `index` in `width`: the title wraps beside
+    /// the chevron.
+    fn header_height(&self, cx: &MeasureContext<'_>, index: usize, width: f64) -> f64 {
         let trigger = cx.style(Self::query(Slot::Trigger));
-        trigger.text.line_height + trigger.padding.vertical()
+        let room = (width - trigger.padding.horizontal() - trigger.icon_size).max(0.0);
+        let title = wrapped_height(&self.items[index].0, &trigger.text, room, cx.text);
+        title.max(trigger.text.line_height) + trigger.padding.vertical()
     }
 
     /// The content height of `index` when open, with its bottom padding.
@@ -122,9 +126,12 @@ impl CustomControl for Accordion {
         } else {
             cx.tokens.spacing * 120.0
         };
-        let header = Self::header_height(cx);
         let height: f64 = (0..self.items.len())
-            .map(|index| header + self.content_height(cx, index, width) + item.border_width)
+            .map(|index| {
+                self.header_height(cx, index, width)
+                    + self.content_height(cx, index, width)
+                    + item.border_width
+            })
             .sum();
         Measured {
             size: Size::new(width, height),
@@ -137,11 +144,11 @@ impl CustomControl for Accordion {
         let content = cx.style(Self::query(Slot::Content));
         self.rtl = cx.rtl();
         self.motion_ms = content.motion_ms;
-        let header = Self::header_height(cx);
         let width = bounds.size.width;
         let mut y = bounds.origin.y;
         self.rows = (0..self.items.len())
             .map(|index| {
+                let header = self.header_height(cx, index, width);
                 let head = Rect::from_xywh(bounds.origin.x, y, width, header);
                 let height = self.content_height(cx, index, width);
                 let body = Rect::from_xywh(bounds.origin.x, head.max_y(), width, height);
@@ -271,13 +278,15 @@ impl CustomControl for Accordion {
                     (inner.size.width - icon).max(0.0),
                     inner.size.height,
                 );
-                cx.label(label, title, &trigger, TextAlign::Start);
+                paint_wrapped(cx, label, title, &trigger, TextAlign::Start);
                 let x = if cx.rtl {
                     inner.origin.x
                 } else {
                     inner.max_x() - icon
                 };
-                let mark = Rect::from_xywh(x, inner.origin.y, icon, inner.size.height);
+                // The chevron stays beside the first title line.
+                let line = trigger.text.line_height.min(inner.size.height);
+                let mark = Rect::from_xywh(x, inner.origin.y, icon, line);
                 // The chevron turns over while the item opens.
                 let progress = self.reveals[index].progress(cx.tokens, self.motion_ms, cx.time);
                 let center = mark.center();

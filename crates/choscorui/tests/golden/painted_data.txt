@@ -262,7 +262,9 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #737373ff
 stroke 9,9 12x12 r10000 w2 #ffffffff
 fill 10,10 10x10 r9999 #171717ff
 stroke-path M16.666666666666664,13 L13,16.666666666666664 L11.333333333333334,15 #fafafaff w0.6666666666666666 Round Round dash[]
-text "Aa" at 18,19.9 system-ui 14 w400 t0 #fafafaff
+PushClip(Rect { origin: Point { x: 18.0, y: 5.0 }, size: Size { width: 2.0, height: 20.0 } })
+text "…" at 18,19.9 system-ui 14 w400 t0 #fafafaff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### avatar default sm root
 # rest
@@ -274,13 +276,13 @@ text "Aa" at 18,26.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 24x24 r9999 #f5f5f5ff
 stroke-path M20,19 L14.5,24.5 L12,22 #737373ff w1 Round Round dash[]
-text "Aa" at 22,26.2 system-ui 12 w400 t0 #737373ff
+text "…" at 22,26.2 system-ui 12 w400 t0 #737373ff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### avatar default sm badge
 # rest
 stroke 9,9 10x10 r10000 w2 #ffffffff
 fill 10,10 8x8 r9999 #171717ff
-text "Aa" at 10,18.9 system-ui 14 w400 t0 #fafafaff
+text "…" at 10,18.9 system-ui 14 w400 t0 #fafafaff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### avatar default lg root
 # rest
@@ -299,7 +301,9 @@ text "Aa" at 30,34.9 system-ui 14 w400 t0 #737373ff
 stroke 9,9 14x14 r10000 w2 #ffffffff
 fill 10,10 12x12 r9999 #171717ff
 stroke-path M16.666666666666664,14 L13,17.666666666666664 L11.333333333333334,16 #fafafaff w0.6666666666666666 Round Round dash[]
-text "Aa" at 18,20.9 system-ui 14 w400 t0 #fafafaff
+PushClip(Rect { origin: Point { x: 18.0, y: 6.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 18,20.9 system-ui 14 w400 t0 #fafafaff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## chart
 sizes default
@@ -324,7 +328,9 @@ text "Aa" at 26,15.399999999999999 system-ui 14 w400 t0 #0a0a0aff
 ### chart default default indicator
 # rest
 stroke-path M23.333333333333332,11 L16,18.333333333333332 L12.666666666666666,15 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,19.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 5.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,19.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### chart default default label
 # rest
@@ -1096,18 +1102,24 @@ text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill-rect 10,10 6x36 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### dial default default range
 # rest
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # disabled
 opacity 0.5 {
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 }
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ### dial default default thumb
@@ -1117,7 +1129,9 @@ shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1125,7 +1139,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1133,7 +1149,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### dial default default label
 # rest
@@ -1177,18 +1195,24 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill-rect 10,10 6x36 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### numeric-display default default range
 # rest
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # disabled
 opacity 0.5 {
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 }
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ### numeric-display default default thumb
@@ -1198,7 +1222,9 @@ shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1206,7 +1232,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1214,7 +1242,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### numeric-display default default label
 # rest
@@ -1258,18 +1288,24 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill-rect 10,10 6x36 #f5f5f5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### color-picker default default range
 # rest
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # disabled
 opacity 0.5 {
 fill-rect 10,10 6x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 16.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,32.9 system-ui 14 w400 t0 #171717ff
+PopClip
 }
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ### color-picker default default thumb
@@ -1279,7 +1315,9 @@ shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1287,7 +1325,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 16x16 r9999 offset 0,1 blur3 spread0 #0000001a
 shadow 10,10 16x16 r9999 offset 0,1 blur2 spread-1 #0000001a
@@ -1295,7 +1335,9 @@ stroke 8,8 20x20 r10001 w4 #a1a1a180
 fill 10,10 16x16 r9999 #ffffffff
 stroke 10.5,10.5 15x15 r9998.5 w1 #171717ff
 stroke-path M23.333333333333332,14 L16,21.333333333333332 L12.666666666666666,18 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 8.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,22.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### color-picker default default label
 # rest

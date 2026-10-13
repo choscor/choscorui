@@ -10,6 +10,7 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted::{self, Parts, Reveal};
 use crate::style::{
     ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
@@ -1067,7 +1068,8 @@ impl AlertDialog {
     }
 
     /// The panel size inside `available`: the padding, the title, the
-    /// message and detail lines, and the button row.
+    /// message and the detail wrapped in the panel width, and the button
+    /// row.
     pub fn measure(
         &self,
         available: Size,
@@ -1077,15 +1079,19 @@ impl AlertDialog {
     ) -> Size {
         let style = |slot| styles.resolve(tokens, StyleQuery::new(ControlKind::AlertDialog, slot));
         let (panel, header) = (style(Slot::Root), style(Slot::Header));
+        let width = available.width.min(panel.max_width);
+        let inner = (width - panel.padding.horizontal()).max(0.0);
         let lines: Vec<f64> = self
             .texts()
-            .map(|(slot, _)| style(slot).text.line_height)
+            .map(|(slot, line)| {
+                let spec = style(slot).text;
+                wrapped_height(line, &spec, inner, text).max(spec.line_height)
+            })
             .collect();
         let gaps = lines.len().saturating_sub(1) as f64 * header.gap;
         let row = (0..self.buttons.len())
             .map(|index| self.button_size(index, styles, tokens, text).height)
             .fold(0.0, f64::max);
-        let width = available.width.min(panel.max_width);
         let height = panel.padding.vertical() + lines.iter().sum::<f64>() + gaps + panel.gap + row;
         Size::new(width, height.min(available.height))
     }
@@ -1144,8 +1150,8 @@ impl AlertDialog {
         cx.slot(bounds, &style, |_, _| {});
     }
 
-    /// Paints the panel, the title, and the message lines in the context's
-    /// bounds. The host paints the buttons at [`AlertDialog::button_rects`]
+    /// Paints the panel, and the title, the message, and the detail
+    /// wrapped in the panel width, in the context's bounds. The host paints the buttons at [`AlertDialog::button_rects`]
     /// with [`AlertDialog::button_variant`].
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
         let query = |slot| StyleQuery::new(ControlKind::AlertDialog, slot);
@@ -1155,9 +1161,10 @@ impl AlertDialog {
             let mut y = inner.origin.y;
             for (slot, line) in self.texts() {
                 let style = cx.style(query(slot));
-                let height = style.text.line_height;
+                let height = wrapped_height(line, &style.text, inner.size.width, cx.text)
+                    .max(style.text.line_height);
                 let rect = Rect::from_xywh(inner.origin.x, y, inner.size.width, height);
-                cx.label(rect, line, &style, TextAlign::Start);
+                paint_wrapped(cx, rect, line, &style, TextAlign::Start);
                 y += height + header.gap;
             }
         });

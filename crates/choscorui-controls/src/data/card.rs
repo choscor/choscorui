@@ -146,7 +146,7 @@ impl CustomControl for Card {
             + root.gap * shown.saturating_sub(1) as f64
             + root.padding.vertical();
         Measured {
-            size: Size::new(width, height),
+            size: cx.constraints.constrain(Size::new(width, height)),
             baseline: None,
         }
     }

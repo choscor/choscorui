@@ -387,11 +387,13 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M30,18 L19,29 L14,24 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 14.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected highlighted
 ### attachment idle xs progress
 # rest
@@ -453,7 +455,7 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r10 #f5f5f5ff
 stroke-path M30,20 L19,31 L14,26 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected highlighted
 ### attachment idle sm progress
 # rest
@@ -889,17 +891,19 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 # selected
 opacity 0.6 {
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 }
 # open
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M30,18 L19,29 L14,24 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 14.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment uploading xs progress
 # rest
@@ -967,7 +971,7 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r10 #f5f5f5ff
 stroke-path M30,20 L19,31 L14,26 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment uploading sm progress
 # rest
@@ -1433,17 +1437,19 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 # selected
 opacity 0.6 {
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 }
 # open
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M30,18 L19,29 L14,24 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 14.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment processing xs progress
 # rest
@@ -1511,7 +1517,7 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r10 #f5f5f5ff
 stroke-path M30,20 L19,31 L14,26 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment processing sm progress
 # rest
@@ -1977,17 +1983,19 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 # selected
 opacity 0.6 {
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 }
 # open
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M30,18 L19,29 L14,24 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 14.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment error xs progress
 # rest
@@ -2055,7 +2063,7 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r10 #f5f5f5ff
 stroke-path M30,20 L19,31 L14,26 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate highlighted
 ### attachment error sm progress
 # rest
@@ -2515,11 +2523,13 @@ text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M21.666666666666668,20.5 L15.25,26.916666666666668 L12.333333333333334,24 #0a0a0aff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 24,28.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 28x28 r8 #f5f5f5ff
 stroke-path M30,18 L19,29 L14,24 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 14.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 34,28.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected highlighted
 ### attachment done xs progress
 # rest
@@ -2581,7 +2591,7 @@ text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 # open
 fill 10,10 32x32 r10 #f5f5f5ff
 stroke-path M30,20 L19,31 L14,26 #0a0a0aff w2 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected highlighted
 ### attachment done sm progress
 # rest
@@ -3008,16 +3018,22 @@ text "Aa" at 50,32.9 system-ui 14 w400 t0 #0a0a0aff
 # rest
 stroke 10.5,10.5 15x15 r3.5 w1 #e5e5e5ff
 stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PushClip(Rect { origin: Point { x: 24.0, y: 8.0 }, size: Size { width: 2.0, height: 20.0 } })
+text "…" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PopClip
 # invalid
 stroke 10.5,10.5 15x15 r3.5 w1 #e7000bff
 stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PushClip(Rect { origin: Point { x: 24.0, y: 8.0 }, size: Size { width: 2.0, height: 20.0 } })
+text "…" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PopClip
 # checked
 fill 10,10 16x16 r4 #171717ff
 stroke 10.5,10.5 15x15 r3.5 w1 #171717ff
 stroke-path M21.666666666666668,14.5 L15.25,20.916666666666668 L12.333333333333334,18 #fafafaff w1.1666666666666667 Round Round dash[]
-text "Aa" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PushClip(Rect { origin: Point { x: 24.0, y: 8.0 }, size: Size { width: 2.0, height: 20.0 } })
+text "…" at 24,22.9 system-ui 14 w400 t0 #fafafaff
+PopClip
 = rest: hovered pressed focused focus-visible disabled indeterminate selected open highlighted
 ### questionnaire default default title
 # rest
@@ -3045,7 +3061,9 @@ shadow 10,10 20x20 r8 offset 0,1 blur2 spread0 #0000000d
 fill 10,10 20x20 r8 #ffffffff
 stroke 10.5,10.5 19x19 r7.5 w1 #e5e5e5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #737373ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,23.5 ui-monospace 10 w500 t0 #737373ff
+PushClip(Rect { origin: Point { x: 26.0, y: 15.0 }, size: Size { width: 4.0, height: 10.0 } })
+text "…" at 26,23.5 ui-monospace 10 w500 t0 #737373ff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### questionnaire default default group
 # rest

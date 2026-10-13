@@ -6,6 +6,7 @@
 //! reach the control underneath); deactivating the window closes all
 //! popups; closing restores keyboard focus to the popup's owner.
 
+use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::style::paint_in;
 use crate::style::{
     Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, TextMeasure,
@@ -314,11 +315,16 @@ pub struct VisibleTooltip {
 
 impl VisibleTooltip {
     /// The size of the bubble: the text in the `Tooltip` recipe, at most
-    /// its maximum width.
+    /// its maximum width. Longer text wraps, and the bubble grows one line
+    /// height for each line.
     pub fn size(&self, styles: &Styles, tokens: &DesignTokens, text: &dyn TextMeasure) -> Size {
         let style = styles.resolve(tokens, StyleQuery::new(ControlKind::Tooltip, Slot::Root));
-        let size = Content::label(&self.text).size(&style, text);
-        Size::new(size.width.min(style.max_width), size.height)
+        let natural = Content::label(&self.text).size(&style, text);
+        let width = natural.width.min(style.max_width);
+        let inner = (width - style.padding.horizontal()).max(0.0);
+        let lines = wrapped_height(&self.text, &style.text, inner, text);
+        let height = (lines + style.padding.vertical()).max(natural.height);
+        Size::new(width, height)
     }
 
     /// Places the bubble above the anchor, centered, with room for the
@@ -374,7 +380,7 @@ impl VisibleTooltip {
             FillRule::NonZero,
         );
         cx.slot(rect, &bubble, |cx, inner| {
-            cx.label(inner, &self.text, &bubble, TextAlign::Center);
+            paint_wrapped(cx, inner, &self.text, &bubble, TextAlign::Center);
         });
     }
 }

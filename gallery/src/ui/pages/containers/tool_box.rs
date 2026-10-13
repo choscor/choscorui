@@ -4,9 +4,9 @@ use crate::ui::page::{PageCx, column, stateful};
 use choscorui::compose::view::{AnyView, Configured, Env, Frame, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
-    MeasureContext, PaintContext, Slot, StyleQuery, TextAlign, ToolBox,
+    MeasureContext, PaintContext, Slot, StyleQuery, TextAlign, ToolBox, paint_wrapped,
 };
-use choscorui::core::{EventReply, Measured, Rect, SemanticAction, SemanticNode, Size};
+use choscorui::core::{EventReply, Measured, Rect, SemanticAction, SemanticNode};
 
 /// The title and text keys of each tool page.
 const TOOL_PAGES: [(&str, &str); 3] = [
@@ -50,15 +50,14 @@ impl CustomControl for ToolBoxPages {
         CustomControl::paint(&self.toolbox, cx);
         let (_, page) = self.toolbox.layout(cx.bounds, self.header);
         let style = cx.style(StyleQuery::new(ControlKind::Accordion, Slot::Content));
-        let line = Rect::new(
-            page.origin,
-            Size::new(page.size.width, style.text.line_height),
-        );
         let text = self
             .texts
             .get(self.toolbox.current())
             .map_or("", String::as_str);
-        cx.label(line, text, &style, TextAlign::Start);
+        // The text wraps in the page, and lines past its end are cut.
+        cx.list.push_clip(page);
+        paint_wrapped(cx, page, text, &style, TextAlign::Start);
+        let _ = cx.list.pop_clip();
     }
 
     /// The focused header, which assistive technology can also focus.

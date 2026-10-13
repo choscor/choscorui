@@ -264,6 +264,23 @@ a drag keeps its cursor while the pointer leaves the part.
 | `ResizeDiagonalEnd` | `SizeGrip`; the window shows the diagonal of the bottom end corner |
 | `Arrow` | disabled slots; `SpinBox` and `DecimalSpinBox` steppers; `InputGroup` buttons |
 
+**Text that does not fit.** `draw_text` and `PaintContext::label` draw
+one line in a rectangle:
+
+- A line that is too wide truncates at its end. `truncate_end` cuts it at
+  a grapheme boundary and puts `ELLIPSIS` ("…") in place of the rest. The
+  ellipsis follows the text, so in right-to-left text it is at the left.
+- `TextLine::overflow(TextOverflow::Clip)` keeps the whole line and cuts
+  it at the edges of the rectangle.
+- A label next to a trailing part keeps room for it. Examples are a
+  shortcut, a badge, a count, a chevron, and a sort arrow.
+- `Content::draw` keeps its icons and truncates its label.
+
+`wrapped_height` measures a paragraph that wraps in a width, and
+`paint_wrapped` paints it, one line for each line height. Each line fits,
+so wrapped text does not truncate. A `measure` that has a natural width
+honors the constraints that it gets, and its labels truncate in less room.
+
 **Replacing a control.** `ControlHost::replace` puts a new control on a
 mounted node. The node keeps its identity, focus, and disabled state. A view
 uses it to build a control again, for example after a locale change.
@@ -560,8 +577,10 @@ check, and focus enters the group at the checked member.
   last or the first member.
 - Space, Enter, or a click runs the focused member. A toggle member
   reports `Changed(Indices)`, and a button member `ItemActivated(member)`.
-- The toggle and button members share the width evenly. Separators and
-  text parts keep their natural width.
+- Each member gets its natural width, so each label shows whole at the
+  natural width of the group. The toggle and button members share the
+  rest of the width evenly. Separators and text parts keep their natural
+  width.
 - `with_enabled(index, false)` disables a member: it takes no press, key,
   action, or focus.
 - `ButtonGroup::with_size` sets the size of the toggle, button, and text
@@ -1070,7 +1089,8 @@ behavior.
 - `ComboBox` is a deprecated alias of `Combobox`.
 - **Look.** `paint` draws the trigger and `paint_popup` draws the open
   list. `popup_rect` places the list with `place_popup`, below the anchor
-  and inside the bounds. `suggestion_at` maps a point to a shown row. `set_metrics` reads the row height from the
+  and inside the bounds. The list is as wide as the anchor, or as wide as
+  the widest suggestion when that is wider. `suggestion_at` maps a point to a shown row. `set_metrics` reads the row height from the
   `Combobox` recipe:
 
 | Part | Slot | Value |
@@ -2032,8 +2052,9 @@ its command through `.on_command`. The `dropdown_menu` modifier of
 - **Look.** `VisibleTooltip::place` centers the bubble above the anchor,
   and flips it below when it does not fit. `paint` uses the `Tooltip`
   recipe. The bubble has a `foreground` fill and xs `background` text. It
-  has radius md and 12 by 6 pt padding, and is at most 320 pt wide. A 10 pt
-  wide arrow points to the anchor.
+  has radius md and 12 by 6 pt padding, and is at most 320 pt wide. Longer
+  text wraps, and `VisibleTooltip::size` adds one line height for each
+  line. A 10 pt wide arrow points to the anchor.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -2096,8 +2117,9 @@ behavior.
   `OpenChanged(false)` and `Dismissed`. A press outside the panel does
   nothing.
 - **Look.** `measure` sizes the panel, and `button_rects` places the
-  buttons in platform order. `paint_overlay` draws the scrim, and `paint`
-  draws the panel and its text. The host paints each button with
+  buttons in platform order. The title, the message, and the detail wrap
+  in the panel width, and the panel grows for each line. `paint_overlay`
+  draws the scrim, and `paint` draws the panel and its text. The host paints each button with
   `button_variant`: default for `Accept`, destructive for `Destructive`,
   and outline for the rest.
 
@@ -3123,7 +3145,8 @@ is disabled. `set_value` returns false.
   close button, Escape, a press outside the panel, and `Dismiss` close it
   and emit `Dismissed`.
 - `with_close(label)` shows the close button with `label` as its name. A
-  drawer has no close button.
+  drawer has no close button. The title and the description wrap in the
+  panel width. The title lines stop before the close button.
 - **`Dialog::new`.** The panel is centered in the window. It is 448 pt
   wide, or the window width less 32 pt. The footer buttons are a row at the
   end. The panel fades and zooms in.
@@ -3228,6 +3251,8 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 - Every item but the last is a link. The last item is the current page and
   is not a link. Chevrons separate the items and point along the reading
   order.
+- In less width than the trail needs, each label gives up width in
+  proportion to its width, and truncates.
 - Each link is a tab stop inside the control. Tab and Shift+Tab move
   between the links, and leave the control after the last or the first.
 - Enter, Space, a click, or `Activate` on a link emits
@@ -3344,7 +3369,8 @@ false.
 ### Sidebar
 
 - The sidebar shows a toggle, then groups of items with icons, labels, and
-  optional badges. The selected item takes the accent look.
+  optional badges. The selected item takes the accent look. A long label
+  truncates before the badge and the chevron.
 - ArrowDown and ArrowUp move focus between the toggle and the items, and
   wrap. Home and End go to the ends.
 - Enter, Space, or a click on an item selects it and emits
@@ -3418,7 +3444,8 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 - The header shows the title and the description. An optional header
   action sits at the header end. Content text wraps to the card width.
   Footer buttons sit in a row at the end.
-- Without constraints, the card is 384 pt wide.
+- Without constraints, the card is 384 pt wide. Its measure honors the
+  constraints that it gets.
 - The header action and the footer buttons are tab stops inside the card.
   Tab and Shift+Tab move between them, and leave the card at the ends.
 - Enter, Space, a click, or `Activate` on a button emits
@@ -3472,7 +3499,9 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 ### Avatar and AvatarGroup
 
 - An avatar shows its image clipped to a circle. Without an image, it
-  shows the fallback text, such as initials, on a muted circle.
+  shows the fallback text, such as initials, on a muted circle. Fallback
+  text that is too wide gets a smaller type size to fit, and is clipped.
+  It does not truncate.
 - `with_badge(icon)` adds a badge at the bottom end. The `Sm` size shows
   no badge icon.
 - An avatar group overlaps its avatars in reading order. Each avatar has a
@@ -3614,7 +3643,9 @@ behavior.
   `place_popup` puts the tooltip 10 pt after the pick, and before it when
   only that side fits.
 - `with_legend()` shows the series names, or the category names for pie
-  and radial charts, under the chart.
+  and radial charts, under the chart. The entries go in centered rows.
+  An entry that does not fit in the row starts a new row, and the chart
+  grows for each row.
 - `with_format(format)` formats values in the tooltip and in semantics.
 - Polar charts go clockwise from the top in both directions.
 
@@ -3833,6 +3864,8 @@ behavior.
 - The chevron turns over while the item opens. The content fades in. With
   reduced motion, both change at once.
 - The chevron sits at the left in a right-to-left layout.
+- A long title wraps beside the chevron, and the header grows for each
+  line.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -4048,7 +4081,9 @@ behavior.
 - A questionnaire shows one `Question` at a time, under an optional
   progress line from `with_progress`.
 - `Question::choice` takes one option and `Question::multiple` takes any
-  number. Each row shows a check box, the option, and its number key.
+  number. Each row shows a check box, the option, and its number key. A
+  long option wraps between the check box and the key, and the row grows
+  for each line.
 - `Question::freeform` takes typed text. Enter in the text runs Next or
   Submit.
 - The answer and the buttons are tab stops. ArrowUp and ArrowDown move

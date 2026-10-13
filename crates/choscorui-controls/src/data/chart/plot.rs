@@ -3,7 +3,9 @@
 use super::{Chart, ChartKind, chart_color};
 use crate::custom::MeasureContext;
 use crate::popup::{Placement, place_popup};
-use crate::style::{PaintContext, ResolvedStyle, Slot, TextAlign, fill_area, paint_in};
+use crate::style::{
+    PaintContext, ResolvedStyle, Slot, TextAlign, TextMeasure, fill_area, paint_in,
+};
 use choscorui_core::{
     Color, FillRule, LayoutDirection, LineJoin, Paint, Path, Point, Rect, Size, StrokeStyle,
 };
@@ -118,12 +120,46 @@ impl Chart {
         label.text.line_height + label.gap
     }
 
-    pub(super) fn legend_height(&self, cx: &MeasureContext<'_>) -> f64 {
+    /// The height of the legend in `width`: two gaps above, and its rows
+    /// one gap apart.
+    pub(super) fn legend_height(&self, cx: &MeasureContext<'_>, width: f64) -> f64 {
         if !self.legend {
             return 0.0;
         }
         let legend = cx.style(Self::query(Slot::Legend));
-        legend.text.line_height + legend.gap * 2.0
+        let indicator = cx.style(Self::query(Slot::Indicator));
+        let rows = self.legend_rows(&legend, &indicator, cx.text, width).len() as f64;
+        rows * legend.text.line_height + (rows - 1.0).max(0.0) * legend.gap + legend.gap * 2.0
+    }
+
+    /// The legend entries in rows no wider than `width`: color index,
+    /// label, and entry width. Entries sit two gaps apart. An entry wider
+    /// than `width` has a row of its own, and its label truncates.
+    fn legend_rows(
+        &self,
+        legend: &ResolvedStyle,
+        indicator: &ResolvedStyle,
+        text: &dyn TextMeasure,
+        width: f64,
+    ) -> Vec<Vec<(usize, &str, f64)>> {
+        let spacing = legend.gap * 2.0;
+        let mut rows: Vec<Vec<(usize, &str, f64)>> = Vec::new();
+        let mut used = 0.0;
+        for (color, label) in self.legend_entries() {
+            let entry = (indicator.min_width + legend.gap + text.width(label, &legend.text))
+                .min(width.max(0.0));
+            match rows.last_mut() {
+                Some(row) if used + spacing + entry <= width => {
+                    row.push((color, label, entry));
+                    used += spacing + entry;
+                }
+                _ => {
+                    rows.push(vec![(color, label, entry)]);
+                    used = entry;
+                }
+            }
+        }
+        rows
     }
 
     fn max_value(&self) -> f64 {
@@ -140,7 +176,7 @@ impl Chart {
 
     pub(super) fn layout(&self, cx: &MeasureContext<'_>, bounds: Rect) -> Plot {
         let axis = self.axis_height(cx);
-        let legend = self.legend_height(cx);
+        let legend = self.legend_height(cx, bounds.size.width);
         let area = Rect::from_xywh(
             bounds.origin.x,
             bounds.origin.y,
@@ -627,22 +663,36 @@ impl Chart {
         }
         let legend = cx.style(Self::query(Slot::Legend));
         let indicator = cx.style(Self::query(Slot::Indicator));
-        let entries = self.legend_entries();
-        let widths: Vec<f64> = entries
-            .iter()
-            .map(|(_, label)| indicator.min_width + legend.gap + cx.measure(label, &legend))
-            .collect();
-        // Entries sit two gaps apart, centered.
-        let spacing = legend.gap * 2.0;
-        let total = widths.iter().sum::<f64>() + spacing * widths.len().saturating_sub(1) as f64;
         let rect = self.plot.legend;
-        let y = rect.origin.y + legend.gap * 2.0;
-        let mut x = if self.rtl {
-            rect.center().x + total / 2.0
-        } else {
-            rect.center().x - total / 2.0
-        };
-        for ((color, label), width) in entries.into_iter().zip(widths) {
+        let rows = self.legend_rows(&legend, &indicator, cx.text, rect.size.width);
+        // Entries sit two gaps apart, and each row is centered.
+        let spacing = legend.gap * 2.0;
+        let line = legend.text.line_height;
+        for (row, entries) in rows.into_iter().enumerate() {
+            let y = rect.origin.y + legend.gap * 2.0 + row as f64 * (line + legend.gap);
+            let total = entries.iter().map(|entry| entry.2).sum::<f64>()
+                + spacing * entries.len().saturating_sub(1) as f64;
+            let x = if self.rtl {
+                rect.center().x + total / 2.0
+            } else {
+                rect.center().x - total / 2.0
+            };
+            self.paint_legend_row(cx, &entries, x, y);
+        }
+    }
+
+    /// Paints one legend row from `x`, its start in reading order, at `y`.
+    fn paint_legend_row(
+        &self,
+        cx: &mut PaintContext<'_>,
+        entries: &[(usize, &str, f64)],
+        mut x: f64,
+        y: f64,
+    ) {
+        let legend = cx.style(Self::query(Slot::Legend));
+        let indicator = cx.style(Self::query(Slot::Indicator));
+        let spacing = legend.gap * 2.0;
+        for &(color, label, width) in entries {
             let start = if self.rtl { x - width } else { x };
             let line = legend.text.line_height;
             let swatch_x = if self.rtl {
@@ -662,7 +712,8 @@ impl Chart {
             } else {
                 start + indicator.min_width + legend.gap
             };
-            let text = Rect::from_xywh(text_x, y, width - indicator.min_width - legend.gap, line);
+            let room = (width - indicator.min_width - legend.gap).max(0.0);
+            let text = Rect::from_xywh(text_x, y, room, line);
             cx.label(text, label, &legend, TextAlign::Start);
             x += if self.rtl {
                 -(width + spacing)
@@ -731,8 +782,7 @@ impl Chart {
                     row.size.width - offset,
                     line,
                 );
-                cx.label(name_rect, name, &label, TextAlign::Start);
-                cx.label(name_rect, amount, &value, TextAlign::End);
+                cx.label_and_trailing(name_rect, name, &label, amount, &value);
                 y += line + content.gap;
             }
         });

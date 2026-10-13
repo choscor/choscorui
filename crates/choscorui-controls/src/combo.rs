@@ -114,6 +114,8 @@ pub struct Combobox {
     /// shows, and the most rows that it shows at a time.
     first: usize,
     page: usize,
+    /// The popup width that shows the widest suggestion whole.
+    list_width: f64,
 }
 
 /// Deprecated name of [`Combobox`].
@@ -139,6 +141,7 @@ impl Combobox {
             reveal: Reveal::default(),
             motion_ms: 0,
             anchor: Rect::default(),
+            list_width: 0.0,
             bounds: Rect::from_xywh(0.0, 0.0, f64::MAX, f64::MAX),
             first: 0,
             page: POPUP_ROWS,
@@ -544,14 +547,15 @@ impl Combobox {
         });
     }
 
-    /// The popup below `anchor`, as wide as the anchor, showing at most
+    /// The popup below `anchor`, as wide as the anchor or as the widest
+    /// suggestion when that is wider, showing at most
     /// `max_rows` suggestions. [`place_popup`] keeps it inside `bounds`
     /// (from [`crate::popup_bounds`]): it opens above the anchor when only
     /// that side fits, and else it shrinks and its rows scroll.
     pub fn popup_rect(&self, anchor: Rect, max_rows: usize, bounds: Rect) -> Rect {
         let rows = self.matches.len().min(max_rows) as f64;
         let size = Size::new(
-            anchor.size.width,
+            anchor.size.width.max(self.list_width),
             rows * self.metrics.row + 2.0 * self.metrics.inset,
         );
         let anchor = gap_anchor(anchor, self.metrics.inset, None);
@@ -864,11 +868,19 @@ impl CustomControl for Combobox {
         self.set_metrics(cx.styles, cx.tokens);
         self.anchor = bounds;
         self.bounds = cx.popup_bounds();
+        let query = |slot| StyleQuery::new(ControlKind::Combobox, slot);
+        let (content, item) = (cx.style(query(Slot::Content)), cx.style(query(Slot::Item)));
+        let widest = self
+            .items
+            .iter()
+            .map(|entry| cx.text.width(&entry.text, &item.text))
+            .fold(0.0, f64::max);
+        self.list_width = widest + item.padding.horizontal() + content.padding.horizontal();
         // The rows that fit when the popup has all of its rows.
         let full = place_popup(
             gap_anchor(bounds, self.metrics.inset, None),
             Size::new(
-                bounds.size.width,
+                bounds.size.width.max(self.list_width),
                 POPUP_ROWS as f64 * self.metrics.row + 2.0 * self.metrics.inset,
             ),
             self.bounds,

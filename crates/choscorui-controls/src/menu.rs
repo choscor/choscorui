@@ -511,12 +511,8 @@ impl DropdownMenu {
                                 paint_mark(cx, mark, *check, &indicator);
                             }
                         }
-                        if let Some(shortcut) = shortcut {
-                            cx.label(text, shortcut, &shortcut_style, TextAlign::End);
-                            let width = cx.measure(shortcut, &shortcut_style) + style.gap;
-                            text = trim_end(text, width, cx.rtl);
-                        }
-                        cx.label(text, label, &style, TextAlign::Start);
+                        let keys = shortcut.as_deref().unwrap_or_default();
+                        cx.label_and_trailing(text, label, &style, keys, &shortcut_style);
                     });
                 }
                 MenuItem::Submenu { label, .. } => {
@@ -588,10 +584,6 @@ fn split_end(rect: Rect, width: f64, rtl: bool) -> (Rect, Rect) {
 
 fn trim_start(rect: Rect, width: f64, rtl: bool) -> Rect {
     split_start(rect, width, rtl).1
-}
-
-fn trim_end(rect: Rect, width: f64, rtl: bool) -> Rect {
-    split_end(rect, width, rtl).1
 }
 
 impl DropdownMenu {

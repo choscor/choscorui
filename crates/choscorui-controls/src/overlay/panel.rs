@@ -17,6 +17,8 @@ use choscorui_core::{
 pub(crate) struct PanelText {
     pub title: String,
     pub description: String,
+    /// The room at the end of the title lines, for a close button.
+    pub title_end: f64,
 }
 
 impl PanelText {
@@ -24,6 +26,7 @@ impl PanelText {
         Self {
             title: title.into(),
             description: description.into(),
+            title_end: 0.0,
         }
     }
 
@@ -37,12 +40,14 @@ impl PanelText {
     }
 
     /// The height of the title, the header gap, and the description,
-    /// wrapped in `width`. `query` names the overlay kind and variant.
+    /// wrapped in `width`. The title wraps [`PanelText::title_end`]
+    /// before the end. `query` names the overlay kind and variant.
     pub fn height(&self, cx: &MeasureContext<'_>, query: StyleQuery, width: f64) -> f64 {
         let title = cx.style(query.slot(Slot::Title));
         let description = cx.style(query.slot(Slot::Description));
         let header = cx.style(query.slot(Slot::Header));
-        let title_height = wrapped_height(&self.title, &title.text, width, cx.text);
+        let title_width = (width - self.title_end).max(0.0);
+        let title_height = wrapped_height(&self.title, &title.text, title_width, cx.text);
         let description_height =
             wrapped_height(&self.description, &description.text, width, cx.text);
         let gap = if title_height > 0.0 && description_height > 0.0 {
@@ -65,8 +70,14 @@ impl PanelText {
         let description = cx.style(query.slot(Slot::Description));
         let header = cx.style(query.slot(Slot::Header));
         let width = rect.size.width;
-        let title_height = wrapped_height(&self.title, &title.text, width, cx.text);
-        let title_rect = Rect::from_xywh(rect.origin.x, rect.origin.y, width, title_height);
+        let title_width = (width - self.title_end).max(0.0);
+        let title_height = wrapped_height(&self.title, &title.text, title_width, cx.text);
+        let title_x = if cx.rtl {
+            rect.max_x() - title_width
+        } else {
+            rect.origin.x
+        };
+        let title_rect = Rect::from_xywh(title_x, rect.origin.y, title_width, title_height);
         paint_wrapped(cx, title_rect, &self.title, &title, align);
         let top = if title_height > 0.0 {
             title_rect.max_y() + header.gap

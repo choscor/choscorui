@@ -600,10 +600,8 @@ impl Command {
                                 inner.size.height,
                             );
                         }
-                        if let Some(keys) = &item.shortcut {
-                            cx.label(text, keys, &shortcut, TextAlign::End);
-                        }
-                        cx.label(text, &item.label, &style, TextAlign::Start);
+                        let keys = item.shortcut.as_deref().unwrap_or_default();
+                        cx.label_and_trailing(text, &item.label, &style, keys, &shortcut);
                     });
                 }
             }

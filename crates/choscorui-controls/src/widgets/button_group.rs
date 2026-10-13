@@ -452,21 +452,16 @@ impl CustomControl for HostedButtonGroup {
     }
 
     /// Separators and text parts keep their natural length. The toggle and
-    /// button members share the rest evenly. The first member is at the
+    /// button members keep theirs too, and share the difference to the
+    /// bounds evenly, so that each label shows whole when the group has its
+    /// natural length. The first member is at the
     /// start of the reading order.
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let horizontal = self.horizontal();
         self.rtl = cx.rtl();
         let sizes = self.sizes(cx);
         let main = |size: &Size| if horizontal { size.width } else { size.height };
-        let fixed: f64 = self
-            .group
-            .members
-            .iter()
-            .zip(&sizes)
-            .filter(|(member, _)| member.command().is_none())
-            .map(|(_, size)| main(size))
-            .sum();
+        let natural: f64 = sizes.iter().map(main).sum();
         let shared = (self.group.members.iter())
             .filter(|member| member.command().is_some())
             .count()
@@ -476,7 +471,7 @@ impl CustomControl for HostedButtonGroup {
         } else {
             bounds.size.height
         };
-        let share = ((length - fixed) / shared).max(0.0);
+        let share = (length - natural) / shared;
         let mut offset = 0.0;
         self.rects = self
             .group
@@ -485,7 +480,7 @@ impl CustomControl for HostedButtonGroup {
             .zip(&sizes)
             .map(|(member, size)| {
                 let step = if member.command().is_some() {
-                    share
+                    (main(size) + share).max(0.0)
                 } else {
                     main(size)
                 };

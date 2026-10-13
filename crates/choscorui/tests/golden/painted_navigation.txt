@@ -18,7 +18,9 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### tabs default default indicator
 # rest
 stroke-path M19.333333333333332,7 L12,14.333333333333332 L8.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 1.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### tabs default default trigger
 # rest
@@ -63,11 +65,15 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### tabs line default indicator
 # rest
 stroke-path M19.333333333333332,7 L12,14.333333333333332 L8.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 1.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # selected
 fill-rect 10,10 2x2 #0a0a0aff
 stroke-path M19.333333333333332,7 L12,14.333333333333332 L8.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 16.0, y: 1.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 16,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### tabs line default trigger
 # rest
@@ -120,14 +126,20 @@ text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
 ### breadcrumb default default ellipsis
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #737373ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #737373ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #737373ff
+PopClip
 # hovered
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 23x23 r7.5 w3 #a1a1a180
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #737373ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #737373ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #737373ff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### breadcrumb default default link
 # rest
@@ -386,15 +398,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar sidebar default action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar default default item
 # rest
@@ -445,28 +463,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar sidebar default handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar default row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar default badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar sidebar default input
 # rest
@@ -546,15 +576,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar sidebar sm action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar default sm item
 # rest
@@ -605,28 +641,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar sidebar sm handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar sm row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar sm badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar sidebar sm input
 # rest
@@ -706,15 +754,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar sidebar lg action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar default lg item
 # rest
@@ -765,28 +819,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar sidebar lg handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar lg row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar lg badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar sidebar lg input
 # rest
@@ -866,41 +932,59 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar sidebar icon action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar default icon item
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # pressed
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 34x34 r9 w2 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # disabled
 opacity 0.5 {
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 }
 # selected
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PopClip
 = rest: focused invalid checked indeterminate open highlighted
 ### sidebar sidebar icon separator
 # rest
@@ -925,28 +1009,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar sidebar icon handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar icon row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar sidebar icon badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar sidebar icon input
 # rest
@@ -977,28 +1073,40 @@ text "Aa" at 36,30.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar default icon link
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # pressed
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 34x34 r9 w2 #a1a1a1ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # disabled
 opacity 0.5 {
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 }
 # selected
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PopClip
 = rest: focused invalid checked indeterminate open highlighted
 ### sidebar sidebar icon panel
 # rest
@@ -1028,15 +1136,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar floating default action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar outline default item
 # rest
@@ -1095,28 +1209,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar floating default handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating default row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating default badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar floating default input
 # rest
@@ -1206,15 +1332,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar floating sm action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar outline sm item
 # rest
@@ -1273,28 +1405,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar floating sm handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating sm row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating sm badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar floating sm input
 # rest
@@ -1384,15 +1528,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar floating lg action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar outline lg item
 # rest
@@ -1451,28 +1601,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar floating lg handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating lg row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating lg badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar floating lg input
 # rest
@@ -1562,49 +1724,67 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar floating icon action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar outline icon item
 # rest
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 stroke 9.5,9.5 33x33 r8.5 w1 #f5f5f5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # pressed
 stroke 9.5,9.5 33x33 r8.5 w1 #f5f5f5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 34x34 r9 w2 #a1a1a1ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # disabled
 opacity 0.5 {
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 }
 # selected
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PopClip
 = rest: focused invalid checked indeterminate open highlighted
 ### sidebar floating icon separator
 # rest
@@ -1629,28 +1809,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar floating icon handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating icon row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar floating icon badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar floating icon input
 # rest
@@ -1683,34 +1875,46 @@ text "Aa" at 36,30.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 stroke 9.5,9.5 33x33 r8.5 w1 #f5f5f5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # pressed
 stroke 9.5,9.5 33x33 r8.5 w1 #f5f5f5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 34x34 r9 w2 #a1a1a1ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # disabled
 opacity 0.5 {
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #ffffffff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 }
 # selected
 stroke 9.5,9.5 33x33 r8.5 w1 #e5e5e5ff
 fill 10,10 32x32 r8 #f5f5f5ff
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 34.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 34,30.9 system-ui 14 w500 t0 #171717ff
+PopClip
 = rest: focused invalid checked indeterminate open highlighted
 ### sidebar floating icon panel
 # rest
@@ -1737,15 +1941,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar inset default action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset default separator
 # rest
@@ -1770,28 +1980,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar inset default handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset default row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset default badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar inset default input
 # rest
@@ -1846,15 +2068,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar inset sm action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset sm separator
 # rest
@@ -1879,28 +2107,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar inset sm handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset sm row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset sm badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar inset sm input
 # rest
@@ -1955,15 +2195,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar inset lg action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset lg separator
 # rest
@@ -1988,28 +2234,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar inset lg handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset lg row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset lg badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar inset lg input
 # rest
@@ -2064,15 +2322,21 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### sidebar inset icon action
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill 10,10 20x20 r8 #f5f5f5ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #171717ff
+PopClip
 # focus-visible
 stroke 9,9 22x22 r9 w2 #a1a1a1ff
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 10.0 }, size: Size { width: 4.0, height: 20.0 } })
+text "…" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset icon separator
 # rest
@@ -2097,28 +2361,40 @@ text "Aa" at 34,30.2 system-ui 12 w500 t0 #0a0a0ab3
 ### sidebar inset icon handle
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 # hovered
 fill-rect 10,10 16x36 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset icon row
 # rest
 fill-rect 10,10 1x36 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 20.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 20,32.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### sidebar inset icon badge
 # rest
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #0a0a0aff
+PopClip
 # hovered
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 # selected
 stroke-path M27.333333333333332,16 L20,23.333333333333332 L16.666666666666668,20 #171717ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PushClip(Rect { origin: Point { x: 26.0, y: 12.0 }, size: Size { width: 0.0, height: 16.0 } })
+text "…" at 26,24.2 system-ui 12 w500 t0 #171717ff
+PopClip
 = rest: pressed focused focus-visible disabled invalid checked indeterminate open highlighted
 ### sidebar inset icon input
 # rest
@@ -2206,7 +2482,9 @@ text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
 stroke-path M27.333333333333332,12 L20,19.333333333333332 L16.666666666666668,16 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 14.0, y: 6.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## status-bar
 sizes default
@@ -2260,7 +2538,9 @@ text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
 stroke-path M27.333333333333332,12 L20,19.333333333333332 L16.666666666666668,16 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 14.0, y: 6.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## dock
 sizes default
@@ -2314,5 +2594,7 @@ text "Aa" at 26,30.9 system-ui 14 w500 t0 #0a0a0aff
 # rest
 fill-rect 10,10 1x1 #e5e5e5ff
 stroke-path M27.333333333333332,12 L20,19.333333333333332 L16.666666666666668,16 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 14.0, y: 6.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted

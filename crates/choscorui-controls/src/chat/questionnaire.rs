@@ -411,11 +411,22 @@ impl Questionnaire {
         y += title_height + title.padding.block_end;
         match &question.answer {
             Answer::Choices { options, .. } => {
-                let row = choice.text.line_height + choice.padding.vertical();
-                for index in 0..options.len() {
+                // Each choice wraps between the check and the number key.
+                let indicator = cx.style(Self::query(Slot::Indicator));
+                let shortcut = cx.style(Self::query(Slot::Shortcut));
+                let room = (width
+                    - choice.padding.horizontal()
+                    - indicator.min_width
+                    - shortcut.min_width
+                    - 2.0 * choice.gap)
+                    .max(0.0);
+                for (index, option) in options.iter().enumerate() {
                     if index > 0 {
                         y += group.gap;
                     }
+                    let lines = wrapped_height(option, &choice.text, room, cx.text)
+                        .max(choice.text.line_height);
+                    let row = lines + choice.padding.vertical();
                     geometry.choices.push(Rect::from_xywh(x, y, width, row));
                     y += row;
                 }
@@ -652,7 +663,7 @@ impl Questionnaire {
                     (inner.size.width - used - key - style.gap).max(0.0),
                     inner.size.height,
                 );
-                cx.label(label, option, &style, TextAlign::Start);
+                paint_wrapped(cx, label, option, &style, TextAlign::Start);
                 if index < 9 {
                     let cap = at(inner.size.width - key, key, shortcut.min_height);
                     let digit = (index + 1).to_string();

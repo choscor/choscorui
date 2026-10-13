@@ -3,7 +3,10 @@
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
-use crate::style::{ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign};
+use crate::style::{
+    ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, TextLine,
+    TextOverflow, draw_text,
+};
 use choscorui_core::{
     EventReply, Icon, Image, ImageSampling, Measured, Path, Rect, SemanticNode, SemanticRole, Size,
 };
@@ -81,7 +84,7 @@ impl Avatar {
             None => {
                 let style = cx.style(Self::query(self.size, Slot::Fallback));
                 cx.slot(rect, &style, |cx, inner| {
-                    cx.label(inner, &self.fallback, &style, TextAlign::Center);
+                    fitted_label(cx, inner, &self.fallback, &style);
                 });
             }
         }
@@ -218,7 +221,7 @@ impl CustomControl for AvatarGroup {
             let mut style = cx.style(Avatar::query(self.size, Slot::Group));
             style.ring = ring;
             cx.slot(rect, &style, |cx, inner| {
-                cx.label(inner, count, &style, TextAlign::Center);
+                fitted_label(cx, inner, count, &style);
             });
         }
     }
@@ -236,4 +239,22 @@ impl CustomControl for AvatarGroup {
     fn focusable(&self) -> bool {
         false
     }
+}
+
+/// Draws `text` centered in `rect`, in a smaller type size when it is
+/// wider than `rect`, and clipped at the edges of `rect`. A circle shows
+/// initials whole, so they never truncate.
+fn fitted_label(cx: &mut PaintContext<'_>, rect: Rect, text: &str, style: &ResolvedStyle) {
+    let mut style = style.clone();
+    let width = cx.text.width(text, &style.text);
+    if width > rect.size.width && width > 0.0 {
+        let scale = rect.size.width / width;
+        style.text.size *= scale;
+        style.text.line_height *= scale;
+        style.text.tracking *= scale;
+    }
+    let line = TextLine::new(text, &style, cx.rtl)
+        .align(TextAlign::Center)
+        .overflow(TextOverflow::Clip);
+    let _ = draw_text(cx.list, rect, &line, cx.text);
 }

@@ -4,10 +4,12 @@ use super::{
     ControlKind, Corners, Cursor, Orientation, ResolvedStyle, Slot, StyleQuery, Styles,
     Transitions, VisualState,
 };
+use choscorui_core::grapheme_boundaries;
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Localizer, Paint, Path, Point, Rect, Shadow,
     Size, StrokeStyle, TextRun, TextShaper, TextStyle, TypeSpec,
 };
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
@@ -345,6 +347,18 @@ pub fn align_x(rect: Rect, width: f64, align: TextAlign, rtl: bool) -> f64 {
     }
 }
 
+/// What [`draw_text`] does with a line that is wider than its rectangle.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TextOverflow {
+    /// Cut the end of the text, and put an ellipsis ("…") in its place.
+    /// The ellipsis follows the text, so it mirrors with the text in
+    /// right-to-left layouts.
+    #[default]
+    Ellipsis,
+    /// Cut the text at the edges of the rectangle.
+    Clip,
+}
+
 /// One line of text and how to place it.
 #[derive(Clone, Copy, Debug)]
 pub struct TextLine<'a> {
@@ -354,6 +368,7 @@ pub struct TextLine<'a> {
     pub align: TextAlign,
     pub rtl: bool,
     pub underline: bool,
+    pub overflow: TextOverflow,
 }
 
 impl<'a> TextLine<'a> {
@@ -366,7 +381,14 @@ impl<'a> TextLine<'a> {
             align: TextAlign::Start,
             rtl,
             underline: style.underline,
+            overflow: TextOverflow::Ellipsis,
         }
+    }
+
+    #[must_use]
+    pub fn overflow(mut self, overflow: TextOverflow) -> Self {
+        self.overflow = overflow;
+        self
     }
 
     #[must_use]
@@ -382,8 +404,51 @@ impl<'a> TextLine<'a> {
     }
 }
 
+/// The ellipsis that ends a truncated line.
+pub const ELLIPSIS: &str = "\u{2026}";
+
+/// Rounding room when text is compared with the width it must fit in.
+const FIT_TOLERANCE: f64 = 0.01;
+
+/// `text` cut at the end to fit in `width` in `spec`, with [`ELLIPSIS`] in
+/// place of the rest, and its width. Text that fits comes back whole. When
+/// not even the ellipsis fits, the result is the ellipsis alone. Each cut
+/// falls on a grapheme boundary, and spaces before the ellipsis go away.
+/// The search measures about log2(n) prefixes of an n-grapheme text.
+pub fn truncate_end<'a>(
+    text: &'a str,
+    spec: &TypeSpec,
+    width: f64,
+    measure: &dyn TextMeasure,
+) -> (Cow<'a, str>, f64) {
+    let full = measure.width(text, spec);
+    if full <= width + FIT_TOLERANCE {
+        return (Cow::Borrowed(text), full);
+    }
+    let boundaries = grapheme_boundaries(text);
+    let candidate = |count: usize| -> String {
+        let end = boundaries[count.min(boundaries.len() - 1)];
+        format!("{}{ELLIPSIS}", text[..end].trim_end())
+    };
+    // The largest grapheme count whose prefix and ellipsis fit.
+    let (mut low, mut high) = (0, boundaries.len().saturating_sub(1));
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        if measure.width(&candidate(mid), spec) <= width + FIT_TOLERANCE {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    let cut = candidate(low);
+    let cut_width = measure.width(&cut, spec);
+    (Cow::Owned(cut), cut_width)
+}
+
 /// Draws one line vertically centered in `rect`, with an underline 1 pt
-/// below the baseline when asked. Returns the drawn rectangle.
+/// below the baseline when asked. Text wider than `rect` truncates with an
+/// ellipsis or clips, as `line.overflow` says. Returns the drawn
+/// rectangle, inside `rect` across.
 pub fn draw_text(
     list: &mut DisplayList,
     rect: Rect,
@@ -394,15 +459,28 @@ pub fn draw_text(
     if line.text.is_empty() || line.color.alpha == 0 {
         return Rect::new(rect.origin, Size::new(0.0, 0.0));
     }
-    let width = measure.width(line.text, spec);
+    let room = rect.size.width.max(0.0);
+    let (text, width) = match line.overflow {
+        TextOverflow::Ellipsis => truncate_end(line.text, spec, room, measure),
+        TextOverflow::Clip => (Cow::Borrowed(line.text), measure.width(line.text, spec)),
+    };
     let x = align_x(rect, width, line.align, line.rtl);
     let top = rect.origin.y + (rect.size.height - spec.line_height) / 2.0;
+    // Text that still does not fit is cut at the rectangle's edges.
+    let clip = width > room + FIT_TOLERANCE;
+    if clip {
+        list.push_clip(Rect::from_xywh(rect.origin.x, top, room, spec.line_height));
+    }
     let run = spec_run(spec);
     let baseline = top + spec.baseline();
-    let _ = list.draw_text_run(Point::new(x, baseline), line.text, &run, line.color);
+    let _ = list.draw_text_run(Point::new(x, baseline), &text, &run, line.color);
     if line.underline {
         let y = baseline + (spec.size * 0.12).max(1.0);
         list.fill_rect(Rect::from_xywh(x, y, width, 1.0), line.color);
+    }
+    if clip {
+        let _ = list.pop_clip();
+        return Rect::from_xywh(rect.origin.x, top, room, spec.line_height);
     }
     Rect::from_xywh(x, top, width, spec.line_height)
 }
@@ -622,6 +700,29 @@ impl<'a> PaintContext<'a> {
         draw_text(self.list, rect, &line, self.text)
     }
 
+    /// Draws `trailing` (a shortcut, a count, or a value) at the end of
+    /// `rect` in `trailing_style`, and `text` at the start in `style`. The
+    /// text truncates `style.gap` before the trailing text.
+    pub(crate) fn label_and_trailing(
+        &mut self,
+        rect: Rect,
+        text: &str,
+        style: &ResolvedStyle,
+        trailing: &str,
+        trailing_style: &ResolvedStyle,
+    ) {
+        let drawn = self.label(rect, trailing, trailing_style, TextAlign::End);
+        let mut rest = rect;
+        if drawn.size.width > 0.0 {
+            let room = (drawn.size.width + style.gap).min(rect.size.width);
+            rest.size.width -= room;
+            if self.rtl {
+                rest.origin.x += room;
+            }
+        }
+        self.label(rest, text, style, TextAlign::Start);
+    }
+
     /// Draws an icon centered in `rect` in the style's icon size and color.
     pub fn icon(&mut self, rect: Rect, icon: Icon, style: &ResolvedStyle) {
         draw_icon(self.list, rect, icon, style.icon_size, style.foreground);
@@ -713,7 +814,8 @@ impl<'a> Content<'a> {
         Size::new(width.max(style.min_width), height.max(style.min_height))
     }
 
-    /// Draws the content in `rect`, aligned in reading order.
+    /// Draws the content in `rect`, aligned in reading order. Content
+    /// wider than `rect` keeps its icons, and its label truncates.
     pub fn draw(
         &self,
         cx: &mut PaintContext<'_>,
@@ -722,7 +824,8 @@ impl<'a> Content<'a> {
         align: TextAlign,
     ) {
         let width = self.width(style, cx.text);
-        let mut x = align_x(rect, width, align, cx.rtl);
+        let excess = (width - rect.size.width).max(0.0);
+        let mut x = align_x(rect, width - excess, align, cx.rtl);
         let mut parts: Vec<(Option<Icon>, &str)> = Vec::with_capacity(3);
         if let Some(icon) = self.leading {
             parts.push((Some(icon), ""));
@@ -739,7 +842,7 @@ impl<'a> Content<'a> {
         for (icon, text) in parts {
             let part = match icon {
                 Some(_) => style.icon_size,
-                None => cx.text.width(text, &style.text),
+                None => (cx.text.width(text, &style.text) - excess).max(0.0),
             };
             let slot = Rect::from_xywh(x, rect.origin.y, part, rect.size.height);
             match icon {

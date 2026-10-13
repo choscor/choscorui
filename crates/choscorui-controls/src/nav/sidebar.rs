@@ -744,10 +744,8 @@ impl Sidebar {
                             (inner.size.width - skip - end).max(0.0),
                             inner.size.height,
                         );
-                        if let Some(count) = &item.badge {
-                            cx.label(text, count, &badge, TextAlign::End);
-                        }
-                        cx.label(text, &item.label, &style, TextAlign::Start);
+                        let count = item.badge.as_deref().unwrap_or_default();
+                        cx.label_and_trailing(text, &item.label, &style, count, &badge);
                     });
                 }
             }

@@ -313,6 +313,18 @@ impl Dialog {
         EventReply::Stop
     }
 
+    /// The room that the title keeps free for the close button, past
+    /// `padding` at the end of the panel: the button and its inset on
+    /// both sides.
+    fn close_room(&self, cx: &MeasureContext<'_>, padding: f64) -> f64 {
+        if !self.has_close() {
+            return 0.0;
+        }
+        let close = cx.style(self.query(Slot::Close));
+        let size = close.min_width.max(close.min_height);
+        (size + 2.0 * close.padding.inline_end - padding).max(0.0)
+    }
+
     fn arrange_dialog(&mut self, cx: &MeasureContext<'_>, panel: &ResolvedStyle) {
         let viewport = self.viewport;
         let footer = cx.style(self.query(Slot::Footer));
@@ -320,6 +332,7 @@ impl Dialog {
             .max_width
             .min(viewport.size.width - 2.0 * cx.tokens.spacing * 4.0);
         let inner = width - panel.padding.horizontal();
+        self.text.title_end = self.close_room(cx, panel.padding.inline_end);
         let text = self.text.height(cx, self.query(Slot::Root), inner);
         let buttons = self.buttons.height(cx, false, footer.gap);
         let gap = if buttons > 0.0 { panel.gap } else { 0.0 };
@@ -346,6 +359,7 @@ impl Dialog {
             viewport.size.width
         };
         let inner = width - header.padding.horizontal();
+        self.text.title_end = self.close_room(cx, header.padding.inline_end);
         let text = self.text.height(cx, self.query(Slot::Root), inner);
         let buttons = self.buttons.height(cx, true, footer.gap);
         let handle_height = if drawer && side == SheetSide::Bottom {

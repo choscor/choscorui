@@ -342,7 +342,7 @@ impl Chart {
         };
         Size::new(
             width,
-            root.min_height + self.axis_height(cx) + self.legend_height(cx),
+            root.min_height + self.axis_height(cx) + self.legend_height(cx, width),
         )
     }
 }

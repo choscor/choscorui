@@ -145,6 +145,7 @@ pub use data::{
 pub use feedback::{
     Alert, Empty, Skeleton, Spinner, TOAST_DURATION, Toast, ToastId, ToastPosition, Toaster, Toasts,
 };
+pub use form::measured::{paint_wrapped, wrapped_height};
 pub use form::{
     AddonContent, DatePicker, Field, FieldGap, FieldLayout, FieldPart, FieldText, Input,
     InputGroup, InputGroupAddon, InputOtp, InputType, Kbd, RangeSlider, Select, Switch, SwitchSize,
@@ -175,13 +176,13 @@ pub use button::{Button, ButtonInput, ButtonSemantics};
 mod style;
 pub use style::{
     AddonAlign, AlertVariant, AttachmentState, BadgeVariant, BubbleVariant, ButtonVariant,
-    CalendarDay, Content, ControlKind, ControlSize, Corners, Cursor, DefaultRecipe, Edges,
-    EmptyMediaVariant, EstimatedText, FieldOrientation, ItemVariant, KbdVariant, MarkerVariant,
-    MenuItemVariant, Orientation, PaintContext, Recipe, ResolvedStyle, Ring, ShapedText, SheetSide,
-    SidebarItemVariant, SidebarVariant, Sides, Slot, StyleCacheStats, StyleQuery, Styles,
-    TabsVariant, TextAlign, TextLine, TextMeasure, ToastVariant, ToggleVariant, TransitionStats,
-    Variant, VisualState, align_x, content_rect, draw_icon, draw_text, fill_shape, paint_box,
-    paint_slot,
+    CalendarDay, Content, ControlKind, ControlSize, Corners, Cursor, DefaultRecipe, ELLIPSIS,
+    Edges, EmptyMediaVariant, EstimatedText, FieldOrientation, ItemVariant, KbdVariant,
+    MarkerVariant, MenuItemVariant, Orientation, PaintContext, Recipe, ResolvedStyle, Ring,
+    ShapedText, SheetSide, SidebarItemVariant, SidebarVariant, Sides, Slot, StyleCacheStats,
+    StyleQuery, Styles, TabsVariant, TextAlign, TextLine, TextMeasure, TextOverflow, ToastVariant,
+    ToggleVariant, TransitionStats, Variant, VisualState, align_x, content_rect, draw_icon,
+    draw_text, fill_shape, paint_box, paint_slot, truncate_end,
 };
 mod navigation;
 pub use navigation::{

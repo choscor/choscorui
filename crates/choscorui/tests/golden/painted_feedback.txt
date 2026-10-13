@@ -423,7 +423,9 @@ slot media: media
 ### empty default default root
 # rest
 stroke-path M71.33333333333333,54 L64,61.33333333333333 L60.666666666666664,58 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 82.0, y: 48.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### empty default default content
 # rest
@@ -453,7 +455,9 @@ text "Aa" at 26,28.9 system-ui 14 w400 t0 #0a0a0aff
 ### empty icon default root
 # rest
 stroke-path M71.33333333333333,54 L64,61.33333333333333 L60.666666666666664,58 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
+PushClip(Rect { origin: Point { x: 82.0, y: 48.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
+PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### empty icon default content
 # rest

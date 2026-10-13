@@ -14,7 +14,7 @@ fn setup() -> (Tree, choscorui_core::NodeId, Checkbox) {
     let id = tree
         .attach(
             tree.root(),
-            Rect::new(Point::new(10.0, 10.0), Size::new(80.0, 40.0)),
+            Rect::new(Point::new(10.0, 10.0), Size::new(120.0, 40.0)),
         )
         .unwrap();
     (tree, id, Checkbox::new("Remember", false))

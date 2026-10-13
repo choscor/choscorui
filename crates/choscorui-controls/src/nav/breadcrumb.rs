@@ -201,13 +201,12 @@ impl CustomControl for Breadcrumb {
         let parts = self.sequence();
         let widths: f64 = parts.iter().map(|part| self.width(cx, *part)).sum();
         let gaps = root.gap * parts.len().saturating_sub(1) as f64;
-        Measured {
-            size: Size::new(
-                widths + gaps,
-                root.text.line_height.max(ellipsis.min_height),
-            ),
-            baseline: None,
-        }
+        // In less room, the labels truncate.
+        let size = Size::new(
+            widths + gaps,
+            root.text.line_height.max(ellipsis.min_height),
+        );
+        Measured::new(cx.constraints.constrain(size))
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
@@ -218,11 +217,32 @@ impl CustomControl for Breadcrumb {
         } else {
             bounds.origin.x
         };
-        self.parts = self
-            .sequence()
+        let parts = self.sequence();
+        let widths: Vec<f64> = parts.iter().map(|part| self.width(cx, *part)).collect();
+        // When the trail is wider than the bounds, each label gives up
+        // room in proportion to its width, and truncates.
+        let gaps = root.gap * parts.len().saturating_sub(1) as f64;
+        let labels: f64 = parts
+            .iter()
+            .zip(&widths)
+            .filter(|(part, _)| matches!(part, Part::Link(_) | Part::Current(_)))
+            .map(|(_, width)| width)
+            .sum();
+        let excess = (widths.iter().sum::<f64>() + gaps - bounds.size.width).max(0.0);
+        let keep = if labels > 0.0 {
+            ((labels - excess) / labels).max(0.0)
+        } else {
+            1.0
+        };
+        self.parts = parts
             .into_iter()
-            .map(|part| {
-                let width = self.width(cx, part);
+            .zip(widths)
+            .map(|(part, width)| {
+                let width = if matches!(part, Part::Link(_) | Part::Current(_)) {
+                    width * keep
+                } else {
+                    width
+                };
                 let left = if self.rtl { x - width } else { x };
                 x = if self.rtl {
                     x - width - root.gap

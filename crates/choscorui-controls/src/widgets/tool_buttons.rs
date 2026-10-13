@@ -550,7 +550,9 @@ impl CustomControl for HostedCommandLink {
         // The description line sits 4 pt under the title, as `paint` draws.
         let lines = title.text.line_height + 4.0 + description.text.line_height;
         let height = (root.padding.vertical() + lines).max(root.min_height);
-        Measured::new(Size::new(width.max(root.min_width), height))
+        // In less room, the title and the description truncate.
+        let size = Size::new(width.max(root.min_width), height);
+        Measured::new(cx.constraints.constrain(size))
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {

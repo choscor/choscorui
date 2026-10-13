@@ -826,7 +826,11 @@ fn a_hosted_toolbar_runs_commands_by_key_and_pointer() {
     let mut h = Harness::new(toolbar.clone().hosted());
     assert_eq!(h.semantics().role, SemanticRole::Toolbar);
     assert_eq!(h.semantics().name, "Edit");
-    assert_eq!(texts(&h.paint()), vec!["Copy", "Paste", "Share"]);
+    // Labels longer than the button truncate.
+    assert_eq!(
+        texts(&h.paint()),
+        vec!["Copy", "Pas\u{2026}", "Sha\u{2026}"]
+    );
 
     // Focus entering the toolbar goes to the first command.
     h.focus();
