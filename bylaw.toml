@@ -2,7 +2,7 @@ version = 1
 
 [analysis]
 manifest_path = "Cargo.toml"
-packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery"]
+packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery", "choscorui-api-docs"]
 incomplete = "deny"
 
 [selectors.core]
@@ -25,8 +25,10 @@ packages = ["choscorui"]
 packages = ["choscorui-gallery"]
 [selectors.libraries]
 packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui"]
+[selectors.api-docs]
+packages = ["choscorui-api-docs"]
 [selectors.workspace]
-packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery"]
+packages = ["choscorui-core", "choscorui-controls", "choscorui-compose", "choscorui-render", "choscorui-macos", "choscorui-windows", "choscorui-linux", "choscorui", "choscorui-gallery", "choscorui-api-docs"]
 
 [[rule]]
 id = "library-layers"
@@ -83,6 +85,14 @@ id = "libraries-do-not-depend-on-gallery"
 kind = "forbid-dependencies"
 from = "libraries"
 to = "gallery"
+scope = "both"
+
+# The api-docs generator reads rustdoc JSON. It links no workspace crate.
+[[rule]]
+id = "api-docs-depends-on-no-workspace-crate"
+kind = "forbid-dependencies"
+from = "api-docs"
+to = "libraries"
 scope = "both"
 
 [[rule]]

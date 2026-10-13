@@ -14,6 +14,10 @@
 #   4. No tracked file of any type outside docs/specs/ contains the name of
 #      the reference design system or its style (case-insensitive).
 #
+# The generated reference in api-docs/ gets checks 1 and 4 only. Its text
+# comes from the source doc comments, which follow the Rust API style, so
+# the banned-term and sentence checks (2 and 3) do not apply to it.
+#
 # Prints `file:line: message` for each finding and exits 1 when there is a
 # finding (2 when git fails). Runs with macOS bash 3.2 and BSD awk; it needs
 # no network.
@@ -240,10 +244,12 @@ FNR == 1 { load_anchors(FILENAME); fence = ""; comment = 0; verbatim = 0; unit =
     if (marker != "") { flush(); fence = marker; next }
 
     # The bracket in each pattern keeps this script out of its own term search.
-    if (raw ~ /(^|[^A-Za-z0-9_])Q[t]([^A-Za-z0-9_]|$)/) report(FNR, "banned term: other toolkit name")
-    if (tolower(raw) ~ /phas[e] [0-9]/) report(FNR, "banned term: phase number")
-    if (tolower(raw) ~ /roadma[p]/) report(FNR, "banned term: plan document")
-    if (raw ~ /^[ \t]*[-*] \[[ xX]\]([ \t]|$)/) report(FNR, "banned checkbox list item")
+    if (!generated) {
+        if (raw ~ /(^|[^A-Za-z0-9_])Q[t]([^A-Za-z0-9_]|$)/) report(FNR, "banned term: other toolkit name")
+        if (tolower(raw) ~ /phas[e] [0-9]/) report(FNR, "banned term: phase number")
+        if (tolower(raw) ~ /roadma[p]/) report(FNR, "banned term: plan document")
+        if (raw ~ /^[ \t]*[-*] \[[ xX]\]([ \t]|$)/) report(FNR, "banned checkbox list item")
+    }
 
     check_links(raw, FNR)
     # A reference definition, such as `[name]: path`, is a link, not prose.
@@ -315,10 +321,11 @@ status=0
 while IFS= read -r file; do
     [ -n "$file" ] || continue
     case $file in
-        CLAUDE.md | .claude/*) ste=0 ;;
-        *) ste=1 ;;
+        CLAUDE.md | .claude/*) ste=0 generated=0 ;;
+        api-docs/*) ste=0 generated=1 ;;
+        *) ste=1 generated=0 ;;
     esac
-    awk -v ste="$ste" -v paths="$paths" "$program" "$file" || status=1
+    awk -v ste="$ste" -v generated="$generated" -v paths="$paths" "$program" "$file" || status=1
 done <<LIST
 $(printf '%s' "$docs" | sort -u)
 LIST

@@ -26,8 +26,12 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup toolchain install 1.88 --profile minimal
+          # The pinned nightly writes the rustdoc JSON of api-docs/.
+          rustup toolchain install "$(grep -v '^#' tools/api-docs/nightly.txt | head -n 1)" --profile minimal --target aarch64-apple-darwin
       - name: Docs
         run: scripts/check-docs.sh
+      - name: API docs are current
+        run: cargo run -p choscorui-api-docs --locked -- --check
       - name: Format
         run: cargo fmt --all --check
       - name: Lint
