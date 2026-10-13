@@ -1,7 +1,6 @@
 //! Desktop integration: status items, URL handlers, and notifications,
 //! offered only where the backend reports support.
 
-use crate::page::Desktop;
 use crate::ui::page::{Build, PageCx, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
@@ -9,8 +8,9 @@ use choscorui::compose::view::{
     ViewExt,
 };
 use choscorui::controls::ButtonVariant;
-use choscorui::core::{BackendCapabilities, Space, Support, TextPreset};
-use std::rc::Rc;
+use choscorui::core::{
+    BackendCapabilities, Services, Space, StatusItemSpec, Support, SystemNotification, TextPreset,
+};
 
 /// Every capability the backend reports, by the catalog key of its
 /// display name.
@@ -46,9 +46,7 @@ fn support_text(support: Support) -> Localized {
 
 /// The backend's capability report plus buttons for the desktop features
 /// it supports; unsupported ones are disabled with the reason.
-struct DesktopPage {
-    desktop: Rc<dyn Desktop>,
-}
+struct DesktopPage;
 
 /// What a desktop button does.
 #[derive(Clone, Copy)]
@@ -59,38 +57,48 @@ enum Action {
 }
 
 /// Runs `action` and describes the outcome in `env`'s language.
-fn run(env: &Env, desktop: &dyn Desktop, action: Action) -> String {
+fn run(env: &Env, services: &Services, action: Action) -> String {
     let text = |key: &str| env.text(key, &[]);
-    let failed = |key: &str, error: &str| env.text(key, &[("error", error)]);
+    let failed =
+        |key: &str, error: &dyn std::fmt::Display| env.text(key, &[("error", &error.to_string())]);
     let app = text("app.name");
     match action {
-        Action::StatusItem => match desktop.toggle_status_item(&app) {
-            Ok(true) => text("desktop.status_item_shown"),
-            Ok(false) => text("desktop.status_item_removed"),
-            Err(error) => failed("desktop.status_item_failed", &error),
-        },
-        Action::Url => match desktop.url_handler("https://example.com") {
+        Action::StatusItem => {
+            let shown = services.status_item().is_some();
+            let item = (!shown).then(|| StatusItemSpec::new(app.clone()));
+            match services.set_status_item(item) {
+                Ok(()) if shown => text("desktop.status_item_removed"),
+                Ok(()) => text("desktop.status_item_shown"),
+                Err(error) => failed("desktop.status_item_failed", &error),
+            }
+        }
+        Action::Url => match services.url_handler("https://example.com") {
             Ok(Some(handler)) => env.text("desktop.url_handler", &[("app", &handler)]),
             Ok(None) => text("desktop.no_url_handler"),
             Err(error) => failed("desktop.url_handler_failed", &error),
         },
-        Action::Notify => match desktop.notify(&app, &text("desktop.notification_body")) {
-            Ok(()) => text("desktop.notification_sent"),
-            Err(error) => failed("desktop.notification_failed", &error),
-        },
+        Action::Notify => {
+            let body = text("desktop.notification_body");
+            let notification = SystemNotification::new("com.choscor.gallery.demo", &app, &body);
+            match services.post_notification(&notification) {
+                Ok(()) => text("desktop.notification_sent"),
+                Err(error) => failed("desktop.notification_failed", &error),
+            }
+        }
     }
 }
 
 impl View for DesktopPage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let capabilities = self.desktop.capabilities();
         let env = cx.env().clone();
+        let services = env.services().clone();
+        let capabilities = services.capabilities();
         let backend = capabilities.backend;
         let last = cx.state(env.text("desktop.backend", &[("backend", backend)]));
         let button = |label: &'static str, action: Action, support: Support| {
-            let desktop = self.desktop.clone();
+            let services = services.clone();
             let (ran, hinted) = (env.clone(), env.clone());
-            Button::new(t!(label), move || last.set(run(&ran, &*desktop, action)))
+            Button::new(t!(label), move || last.set(run(&ran, &services, action)))
                 .variant(ButtonVariant::Outline)
                 .disabled(!support.is_supported())
                 .accessibility_hint(move || {
@@ -139,11 +147,8 @@ impl View for DesktopPage {
     }
 }
 
-pub fn desktop(cx: &PageCx) -> AnyView {
-    DesktopPage {
-        desktop: cx.desktop.clone(),
-    }
-    .into_any()
+pub fn desktop(_: &PageCx) -> AnyView {
+    DesktopPage.into_any()
 }
 
 /// The view of page `id`, when this module has it.

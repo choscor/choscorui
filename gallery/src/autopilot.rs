@@ -5,11 +5,16 @@
 //! release. The checks drive the views through their semantics, as
 //! assistive technology does. One line per check, then `OK (0 failures)`
 //! or `FAILED (<n> failures)`.
+//!
+//! This is the one gallery module that reads native state: the paint
+//! count of a window and the windows that the platform still tracks. It
+//! reads them through `choscorui::platform` on macOS; other targets
+//! never start the gallery, so they get stand-ins.
 
 use crate::catalog::PAGES;
 use crate::settings::{self, Saved};
-use crate::strings::Source;
-use crate::ui::app::{self, Gallery};
+use crate::strings::{LANGUAGE_NAMES, Source};
+use crate::ui::app::Gallery;
 use crate::ui::pages::containers::dock::{default_dock, move_console};
 use crate::ui::pages::data::RECORDS;
 use crate::ui::pages::data::canvas::{CANVAS_COLUMNS, CANVAS_ITEMS, CANVAS_SPACING};
@@ -20,7 +25,7 @@ use choscorui::compose::view::ViewHost;
 use choscorui::controls::{DateTimeEdit, DateTimeKind, ShortcutModifiers};
 use choscorui::core::{
     BaseColor, Key, KeyEvent, Locale, NodeId, Point, PointerButton, PointerEvent, SemanticAction,
-    SemanticNode, SemanticRole, Support, WheelUnit,
+    SemanticNode, SemanticRole, StatusItemSpec, Support, WheelUnit, WindowGeometry,
 };
 use choscorui::{AppContext, WindowId};
 use std::time::{Duration, Instant};
@@ -37,8 +42,92 @@ fn settle(cx: &mut AppContext) {
     while Instant::now() < deadline && cx.pump() {}
 }
 
-fn paint_count(cx: &mut AppContext, id: WindowId) -> usize {
-    cx.window(id).map_or(0, |window| window.paint_count())
+/// The native state that the checks read.
+#[cfg(target_os = "macos")]
+mod native {
+    use choscorui::platform::NativeAccess;
+    use choscorui::{AppContext, WindowId};
+    use std::time::{Duration, Instant};
+
+    /// The frames that window `id` presented.
+    pub fn paint_count(cx: &mut AppContext, id: WindowId) -> usize {
+        cx.native_window(id)
+            .map_or(0, |window| window.paint_count())
+    }
+
+    /// When window `id` finished its last frame.
+    pub fn last_paint(cx: &mut AppContext, id: WindowId) -> Option<Instant> {
+        cx.native_window(id)
+            .and_then(|window| window.last_paint())
+            .map(|paint| paint.finished)
+    }
+
+    /// The windows that AppKit still tracks.
+    pub fn window_count(cx: &AppContext) -> usize {
+        cx.native_application().window_count()
+    }
+
+    /// Handles native events until AppKit releases every window or
+    /// `deadline` passes.
+    pub fn release(cx: &AppContext, deadline: Instant) {
+        while window_count(cx) > 0 && Instant::now() < deadline {
+            cx.native_application()
+                .dispatch_next_event(Duration::from_millis(20));
+        }
+    }
+}
+
+/// Stand-ins: a target without a backend never starts the gallery.
+#[cfg(not(target_os = "macos"))]
+mod native {
+    use choscorui::{AppContext, WindowId};
+    use std::time::Instant;
+
+    pub fn paint_count(_: &mut AppContext, _: WindowId) -> usize {
+        0
+    }
+
+    pub fn last_paint(_: &mut AppContext, _: WindowId) -> Option<Instant> {
+        None
+    }
+
+    pub fn window_count(cx: &AppContext) -> usize {
+        cx.windows().len()
+    }
+
+    pub fn release(_: &AppContext, _: Instant) {}
+}
+
+use native::paint_count;
+
+/// Pumps until the main window presents its first frame and returns the
+/// time from `entered` to that frame, or `None` when no window opened.
+pub fn first_frame(gallery: &Gallery, cx: &mut AppContext, entered: Instant) -> Option<Duration> {
+    loop {
+        let main = (*gallery.main.borrow())?;
+        if let Some(finished) = native::last_paint(cx, main) {
+            return Some(finished - entered);
+        }
+        if !cx.pump() {
+            return None;
+        }
+    }
+}
+
+/// Chooses the menu bar item titled `title`, as the user does. Returns
+/// false when no enabled item has that title.
+fn choose(cx: &mut AppContext, title: &str) -> bool {
+    let item = cx.menu_bar().and_then(|menu| menu.find(title));
+    item.is_some_and(|id| cx.choose(id))
+}
+
+/// Whether the menu bar item titled `title` has a check mark.
+fn checked(cx: &AppContext, title: &str) -> bool {
+    cx.menu_bar().is_some_and(|menu| {
+        menu.find(title)
+            .and_then(|id| menu.state(id).ok())
+            .is_some_and(|state| state.checked)
+    })
 }
 
 /// Pumps until window `id` presents a frame after `before`.
@@ -170,7 +259,7 @@ fn migrates() -> bool {
     let path = dir.join("settings.txt");
     let written = std::fs::create_dir_all(&dir)
         .and_then(|()| std::fs::write(&path, "choscorui-settings 1\npage = text:slider\n"));
-    let (settings, issues) = settings::load(Some(path));
+    let (settings, issues) = settings::load(path);
     let _ = std::fs::remove_dir_all(&dir);
     written.is_ok()
         && Saved::read(&settings).page.as_deref() == Some("slider")
@@ -291,10 +380,10 @@ fn exercise_canvas(host: &mut ViewHost) -> Option<(Option<String>, bool, usize, 
 /// restore: the page, filter, and canvas zoom, then the dock.
 fn restores(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext, saved: &Saved) -> bool {
     let start = settings::start_page(None, saved.page.as_deref());
-    let Some(canvas) = gallery.open(cx, start, &saved.filter, &saved.state, None) else {
+    let Some(canvas) = gallery.open(cx, start, &saved.filter, &saved.state, false) else {
         return false;
     };
-    let dock = gallery.open(cx, page_index("dock"), "", &saved.state, None);
+    let dock = gallery.open(cx, page_index("dock"), "", &saved.state, false);
     settle(cx);
     let window = state(gallery, canvas);
     let zoom = format!("Zoom {:.0}%", saved.state.canvas_zoom * 100.0);
@@ -325,7 +414,7 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         println!("{} {name}", if ok { "ok  " } else { "FAIL" });
         failures += usize::from(!ok);
     };
-    for note in &gallery.notes {
+    for note in gallery.notes.borrow().iter() {
         println!("     note: {note}");
     }
     let shared = gallery.shared.clone();
@@ -333,7 +422,11 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     shared.language.set("en");
 
     // Translations.
-    let vi_file = !gallery.notes.iter().any(|note| note.contains("vi.lang"));
+    let vi_file = !gallery
+        .notes
+        .borrow()
+        .iter()
+        .any(|note| note.contains("vi.lang"));
     check(
         match gallery.source {
             Source::Resources => "translations load from the resources directory",
@@ -378,13 +471,16 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         pressed && shared.theme.get() == Theme::Brand && painted_after(cx, main, before),
     );
     settle(cx);
+    check("the View menu checks the active theme", checked(cx, &brand));
+    let light = shared.text("theme.light", &[]);
+    let chose_light = choose(cx, &light);
+    settle(cx);
+    let lit = shared.theme.get() == Theme::Light && checked(cx, &light);
+    let chose_brand = choose(cx, &brand);
+    settle(cx);
     check(
-        "the View menu checks the active theme",
-        cx.menu().is_some_and(|menu| {
-            menu.model()
-                .state(app::theme_command(Theme::Brand))
-                .is_ok_and(|state| state.checked)
-        }),
+        "View > Theme sets the theme and moves the check mark",
+        chose_light && lit && chose_brand && shared.theme.get() == Theme::Brand,
     );
 
     // A base color swatch restyles and repaints. The swatch differs from
@@ -522,36 +618,33 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
             && saved_dock == expected_dock.save(),
     );
 
-    // Vietnamese relabels the window and rebuilds the menu bar.
-    gallery.command(cx, app::language_command("vi"));
+    // View > Language > Vietnamese relabels the window and rebuilds the
+    // menu bar.
+    let chose_vi = choose(cx, LANGUAGE_NAMES[1]);
     settle(cx);
     let file_title = shared.text("menu.file", &[]);
     let title = shared.window_title(window.page.get());
     let menu_ok = cx
-        .menu()
-        .is_some_and(|menu| menu.model().menus()[1].title == file_title);
+        .menu_bar()
+        .is_some_and(|menu| menu.menus()[1].title == file_title);
     check(
-        "Vietnamese rebuilds the menu bar and window title",
-        file_title != "File"
+        "View > Language > Vietnamese rebuilds the menu bar and window title",
+        chose_vi
+            && shared.language.get() == "vi"
+            && file_title != "File"
             && menu_ok
-            && cx
-                .window(main)
-                .is_some_and(|native| native.title() == title),
+            && cx.title(main) == Some(title)
+            && checked(cx, LANGUAGE_NAMES[1]),
     );
 
     // A second window through File > New Window.
-    let via_menu = cx
-        .menu()
-        .is_some_and(|menu| menu.perform_action(app::NEW_WINDOW).unwrap_or(false));
+    let via_menu = choose(cx, &shared.text("menu.new_window", &[]));
     settle(cx);
     let second = cx.windows().into_iter().find(|id| *id != main);
     let second_painted = second.is_some_and(|id| painted_after(cx, id, 0));
     check(
         "File > New Window opens a second painted window",
-        via_menu
-            && cx.windows().len() == 2
-            && cx.application().window_count() == 2
-            && second_painted,
+        via_menu && cx.windows().len() == 2 && native::window_count(cx) == 2 && second_painted,
     );
 
     // Settings: save, reload from disk, rebuild, and compare.
@@ -559,16 +652,13 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     show(cx, gallery, main, "canvas");
     window.filter.set("canvas".to_owned());
     settle(cx);
-    let expected = gallery.session(cx);
+    let expected = gallery.session();
     let saved = gallery.save(cx);
-    let path = gallery
-        .settings
-        .borrow()
-        .path()
-        .map(std::path::Path::to_path_buf);
+    let path = cx.storage().path();
     let reloaded = path.clone().map(|path| {
-        let (settings, issues) = settings::load(Some(path));
-        (Saved::read(&settings), issues)
+        let (settings, issues) = settings::load(path);
+        let geometry = WindowGeometry::restore(&settings, settings::MAIN_WINDOW);
+        (Saved::read(&settings), issues, geometry.is_some())
     });
     if let Err(error) = &saved {
         println!("     save failed: {error}");
@@ -577,9 +667,9 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         Some(path) => println!("     settings file: {}", path.display()),
         None => println!("     no settings file location"),
     }
-    let restored = reloaded
-        .as_ref()
-        .is_some_and(|(saved, issues)| issues.is_empty() && *saved == expected);
+    let restored = reloaded.as_ref().is_some_and(|(saved, issues, geometry)| {
+        issues.is_empty() && *saved == expected && *geometry
+    });
     check(
         "settings save, then reload page, theme, base, language, geometry, filter, zoom, and dock",
         saved.is_ok()
@@ -590,10 +680,9 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
             && expected.language == "vi"
             && expected.filter == "canvas"
             && (expected.state.canvas_zoom - 2.5).abs() < 1e-9
-            && expected.state.dock == saved_dock
-            && expected.window.is_some(),
+            && expected.state.dock == saved_dock,
     );
-    let rebuilt = reloaded.map(|(saved, _)| restores(gallery, cx, &saved));
+    let rebuilt = reloaded.map(|(saved, _, _)| restores(gallery, cx, &saved));
     check(
         "rebuilt windows restore the page, filter, canvas zoom, and dock",
         rebuilt.is_some_and(|ok| ok),
@@ -610,12 +699,8 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         gallery.close(cx, id);
         settle(cx);
     }
-    let deadline = Instant::now() + Duration::from_secs(3);
-    while cx.application().window_count() > 0 && Instant::now() < deadline {
-        cx.application()
-            .dispatch_next_event(Duration::from_millis(20));
-    }
-    let left = cx.application().window_count();
+    native::release(cx, Instant::now() + Duration::from_secs(3));
+    let left = native::window_count(cx);
     if left > 0 {
         println!("     {left} native windows still tracked");
     }
@@ -628,9 +713,14 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     for (key, support) in capability_rows(&capabilities) {
         println!("     {}: {support:?}", shared.text(key, &[]));
     }
+    let services = cx.services().clone();
     let status = if capabilities.status_items.is_supported() {
-        shared.desktop.toggle_status_item("autopilot") == Ok(true)
-            && shared.desktop.toggle_status_item("autopilot") == Ok(false)
+        services
+            .set_status_item(Some(StatusItemSpec::new("autopilot")))
+            .is_ok()
+            && services.status_item().is_some()
+            && services.set_status_item(None).is_ok()
+            && services.status_item().is_none()
     } else {
         true
     };

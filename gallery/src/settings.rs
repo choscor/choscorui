@@ -1,24 +1,25 @@
 //! What the gallery remembers between launches, stored with the core
-//! `Settings` file format at `user_settings_path("com.choscor.gallery")`
-//! or `CHOSCORUI_GALLERY_SETTINGS`.
+//! `Settings` file format in the settings file of the app id
+//! `com.choscor.gallery`, or at `CHOSCORUI_GALLERY_SETTINGS`. The
+//! application loads and saves the file; the main window's frame is
+//! stored under `window.main` by its scene.
 
 use crate::catalog::PAGES;
 use crate::page::PageState;
 use crate::strings::LANGUAGES;
 use crate::ui::shell::Theme;
 use choscorui::core::{
-    BaseColor, LoadReport, SettingValue, Settings, SettingsError, SettingsSchema, WindowGeometry,
+    BaseColor, LoadReport, SettingValue, Settings, SettingsError, SettingsSchema,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-#[cfg(target_os = "macos")]
 pub const APP_ID: &str = "com.choscor.gallery";
-#[cfg(target_os = "macos")]
 pub const PATH_VARIABLE: &str = "CHOSCORUI_GALLERY_SETTINGS";
 /// Version 1 stored the page under `page`; version 2 namespaces it.
 pub const VERSION: u32 = 2;
-const MAIN_WINDOW: &str = "window.main";
+/// The restore key of the main window's frame.
+pub const MAIN_WINDOW: &str = "window.main";
 
 pub fn schema() -> SettingsSchema {
     SettingsSchema::new(VERSION)
@@ -40,27 +41,19 @@ fn rename_page(values: &mut BTreeMap<String, SettingValue>) {
     }
 }
 
-/// The settings file: the override variable when set, else the per-user
-/// location.
-#[cfg(target_os = "macos")]
-pub fn path() -> Option<PathBuf> {
+/// The settings file that the override variable names, if it is set.
+/// Without it, the application uses the per-user file of [`APP_ID`].
+pub fn override_path() -> Option<PathBuf> {
     std::env::var_os(PATH_VARIABLE)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
-        .or_else(|| choscorui::core::user_settings_path(APP_ID))
 }
 
-/// Loads `path`, never failing: a corrupt file is moved aside, and a file
-/// that cannot be read or comes from a newer gallery leaves the defaults in
-/// effect without a save path, so it is not overwritten. Problems come back
-/// as readable lines.
-pub fn load(path: Option<PathBuf>) -> (Settings, Vec<String>) {
-    let Some(path) = path else {
-        return (
-            Settings::new(schema()),
-            vec!["no settings location (HOME is unset); settings will not be saved".into()],
-        );
-    };
+/// Loads `path` to check what a launch restores, never failing: a
+/// corrupt file is moved aside, and a file that cannot be read or comes
+/// from a newer gallery leaves the defaults in effect without a save path,
+/// so it is not overwritten. Problems come back as readable lines.
+pub fn load(path: PathBuf) -> (Settings, Vec<String>) {
     match Settings::load_or_recover(schema(), path.clone()) {
         Ok((settings, report)) => (settings, report_lines(&report)),
         Err(error) => (
@@ -109,7 +102,6 @@ pub struct Saved {
     pub language: &'static str,
     pub filter: String,
     pub state: PageState,
-    pub window: Option<WindowGeometry>,
 }
 
 impl Saved {
@@ -131,7 +123,6 @@ impl Saved {
                     .unwrap_or(1.0),
                 dock: text("dock.main"),
             },
-            window: WindowGeometry::restore(settings, MAIN_WINDOW),
         }
     }
 
@@ -145,9 +136,6 @@ impl Saved {
         settings.set("gallery.filter", SettingValue::Text(self.filter.clone()))?;
         settings.set("canvas.zoom", SettingValue::Float(self.state.canvas_zoom))?;
         settings.set("dock.main", SettingValue::Text(self.state.dock.clone()))?;
-        if let Some(window) = &self.window {
-            window.store(settings, MAIN_WINDOW)?;
-        }
         Ok(())
     }
 }
@@ -163,7 +151,6 @@ pub fn start_page(command_line: Option<usize>, restored: Option<&str>) -> usize 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use choscorui::core::{Point, Rect, Size};
 
     fn index(id: &str) -> usize {
         PAGES.iter().position(|page| page.id == id).unwrap()
@@ -207,18 +194,13 @@ mod tests {
                 canvas_zoom: 2.5,
                 dock: "dock v1\nconsole=right".into(),
             },
-            window: Some(WindowGeometry {
-                frame: Rect::new(Point::new(40.0, 60.0), Size::new(1100.0, 720.0)),
-                zoomed: false,
-                full_screen: false,
-            }),
         };
-        let (mut settings, issues) = load(Some(path.clone()));
+        let (mut settings, issues) = load(path.clone());
         assert!(issues.is_empty(), "{issues:?}");
         saved.write(&mut settings).unwrap();
         settings.save().unwrap();
 
-        let (settings, issues) = load(Some(path));
+        let (settings, issues) = load(path);
         assert!(issues.is_empty(), "{issues:?}");
         assert_eq!(Saved::read(&settings), saved);
     }
@@ -227,35 +209,34 @@ mod tests {
     fn a_version_one_file_migrates_its_page_key() {
         let path = scratch("migrate");
         std::fs::write(&path, "choscorui-settings 1\npage = text:slider\n").unwrap();
-        let (settings, issues) = load(Some(path));
+        let (settings, issues) = load(path);
         assert_eq!(Saved::read(&settings).page.as_deref(), Some("slider"));
         assert_eq!(issues, ["settings migrated from version 1 to 2"]);
     }
 
     #[test]
     fn a_missing_file_gives_the_defaults() {
-        let (settings, issues) = load(Some(scratch("missing")));
+        let (settings, issues) = load(scratch("missing"));
         assert!(issues.is_empty(), "{issues:?}");
         let saved = Saved::read(&settings);
         assert_eq!(saved.page, None);
         assert_eq!(saved.theme, Theme::Dark);
         assert_eq!(saved.language, "en");
         assert_eq!(saved.state, PageState::default());
-        assert_eq!(saved.window, None);
     }
 
     #[test]
     fn corrupt_and_future_files_fall_back_to_defaults_without_panicking() {
         let corrupt = scratch("corrupt");
         std::fs::write(&corrupt, "choscorui-settings 2\nthis is not a setting\n").unwrap();
-        let (settings, issues) = load(Some(corrupt.clone()));
+        let (settings, issues) = load(corrupt.clone());
         assert_eq!(Saved::read(&settings).theme, Theme::Dark);
         assert!(issues[0].contains("corrupt"), "{issues:?}");
         assert!(corrupt.with_file_name("settings.txt.corrupt").exists());
 
         let future = scratch("future");
         std::fs::write(&future, "choscorui-settings 9\n").unwrap();
-        let (settings, issues) = load(Some(future));
+        let (settings, issues) = load(future);
         assert_eq!(settings.path(), None);
         assert!(issues[0].contains("newer"), "{issues:?}");
     }

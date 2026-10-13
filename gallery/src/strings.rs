@@ -29,7 +29,6 @@ pub enum Source {
 /// Where packaged resources live: `Contents/Resources` when running from
 /// an app bundle (`Contents/MacOS/<binary>`), else this crate's
 /// `resources/` directory during development.
-#[cfg(target_os = "macos")]
 pub fn resources_dir() -> PathBuf {
     std::env::current_exe()
         .ok()

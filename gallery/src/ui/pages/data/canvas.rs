@@ -203,7 +203,7 @@ pub fn canvas(cx: &PageCx) -> AnyView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::page::{NoDesktop, PageState};
+    use crate::page::PageState;
     use crate::ui::page::PageStore;
     use crate::ui::pages::tests::Harness;
     use choscorui::compose::Runtime;
@@ -308,7 +308,6 @@ mod tests {
             dock: String::new(),
         };
         let cx = PageCx {
-            desktop: Rc::new(NoDesktop),
             store: PageStore::new(&runtime, &state),
         };
         let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");

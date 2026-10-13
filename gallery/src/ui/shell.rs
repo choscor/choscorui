@@ -2,7 +2,7 @@
 //! and the selected page.
 
 use crate::catalog::PAGES;
-use crate::page::{Category, Desktop};
+use crate::page::Category;
 use crate::strings::{LANGUAGE_NAMES, LANGUAGES};
 use crate::ui::page::{PageCx, PageStore};
 use choscorui::compose::Property;
@@ -70,6 +70,15 @@ impl Theme {
 pub enum Request {
     /// Open the page with this catalog index in a new window.
     NewWindow(usize),
+    /// Open the page of the active window in a new window.
+    NewActiveWindow,
+    /// Close the active window.
+    CloseWindow,
+    /// Show the next page (`true`) or the previous page of the active
+    /// window, in sidebar order.
+    StepPage(bool),
+    /// Quit the application.
+    Quit,
 }
 
 /// State that every window shares.
@@ -79,7 +88,6 @@ pub struct Shared {
     pub base: Property<BaseColor>,
     pub language: Property<&'static str>,
     pub catalog: Rc<Catalog>,
-    pub desktop: Rc<dyn Desktop>,
     /// What windows asked for since the application last looked.
     pub requests: Rc<RefCell<Vec<Request>>>,
 }
@@ -167,7 +175,7 @@ fn rows(pages: &[usize]) -> Vec<Row> {
     rows
 }
 
-fn binding<T: Clone + PartialEq + 'static>(property: &Property<T>) -> Binding<T> {
+pub fn binding<T: Clone + PartialEq + 'static>(property: &Property<T>) -> Binding<T> {
     let (get, set) = (property.clone(), property.clone());
     Binding::new(move || get.get(), move |value| set.set(value))
 }
@@ -355,7 +363,6 @@ fn page_area(shared: &Shared, window: &WindowState) -> impl View {
     let shown = window.page.clone();
     let enabled = window.enabled.clone();
     let cx = PageCx {
-        desktop: shared.desktop.clone(),
         store: window.store.clone(),
     };
     let language = shared.language.clone();

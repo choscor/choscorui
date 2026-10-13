@@ -1,7 +1,5 @@
-//! The catalog entry of a page, the page state that survives restarts,
-//! and the desktop integration that pages call.
-
-use choscorui::core::BackendCapabilities;
+//! The catalog entry of a page and the page state that survives
+//! restarts.
 
 /// Sidebar groups, in display order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -86,36 +84,5 @@ impl Default for PageState {
             canvas_zoom: 1.0,
             dock: String::new(),
         }
-    }
-}
-
-/// Desktop integration supplied by the platform. Pages call it from
-/// buttons; tests and other OSes use [`NoDesktop`].
-pub trait Desktop {
-    fn capabilities(&self) -> BackendCapabilities;
-    /// Shows or removes a status item; returns whether it is now shown.
-    fn toggle_status_item(&self, title: &str) -> Result<bool, String>;
-    /// The application that opens `url`, if any.
-    fn url_handler(&self, url: &str) -> Result<Option<String>, String>;
-    fn notify(&self, title: &str, body: &str) -> Result<(), String>;
-}
-
-/// No desktop integration: every capability is unsupported.
-#[cfg(test)]
-pub struct NoDesktop;
-
-#[cfg(test)]
-impl Desktop for NoDesktop {
-    fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::none("headless")
-    }
-    fn toggle_status_item(&self, _title: &str) -> Result<bool, String> {
-        Err("status items are unsupported".into())
-    }
-    fn url_handler(&self, _url: &str) -> Result<Option<String>, String> {
-        Err("URL handlers are unsupported".into())
-    }
-    fn notify(&self, _title: &str, _body: &str) -> Result<(), String> {
-        Err("notifications are unsupported".into())
     }
 }

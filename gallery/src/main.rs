@@ -18,26 +18,18 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(target_os = "macos")]
 mod autopilot;
-// Only the AppKit build shows the pages. Tests still run them headlessly on
-// every OS.
-#[cfg(any(target_os = "macos", test))]
 mod catalog;
-#[cfg(any(target_os = "macos", test))]
 mod cli;
 #[cfg(test)]
 mod coverage;
-#[cfg(any(target_os = "macos", test))]
 mod page;
-#[cfg(any(target_os = "macos", test))]
 mod settings;
-#[cfg(any(target_os = "macos", test))]
 mod strings;
-#[cfg(any(target_os = "macos", test))]
 mod ui;
 
-#[cfg(target_os = "macos")]
+/// Starts the gallery. A target without a backend reports
+/// `AppError::Unsupported` and exits with status 1.
 fn main() {
     // Process-entry timestamp for the startup benchmark.
     let entered = std::time::Instant::now();
@@ -64,13 +56,13 @@ fn main() {
         let failures = autopilot::run(&gallery, &mut cx);
         std::process::exit(i32::from(failures > 0));
     }
-    for note in &gallery.notes {
+    for note in gallery.notes.borrow().iter() {
         eprintln!("choscorui-gallery: {note}");
     }
     // `choscorui-bench` launches the gallery with this set and times the
     // first presented frame.
     if std::env::var_os("CHOSCORUI_GALLERY_REPORT_FIRST_FRAME").is_some() {
-        match ui::app::first_frame(&gallery, &mut cx, entered) {
+        match autopilot::first_frame(&gallery, &mut cx, entered) {
             Some(elapsed) => println!("first_frame_us={}", elapsed.as_micros()),
             None => {
                 eprintln!("choscorui-gallery: no window opened, so no first frame to report");
@@ -84,9 +76,4 @@ fn main() {
         .and_then(|value| value.parse::<u64>().ok())
         .map(std::time::Duration::from_millis);
     ui::app::run(&gallery, &mut cx, autoclose);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn main() {
-    println!("choscorui-gallery currently runs on macOS");
 }

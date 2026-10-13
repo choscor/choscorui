@@ -59,7 +59,7 @@ pub fn find(id: &str) -> Option<Build> {
 #[cfg(test)]
 pub mod tests {
     use crate::catalog::PAGES;
-    use crate::page::{NoDesktop, PageState};
+    use crate::page::PageState;
     use crate::ui::page::{PageCx, PageStore};
     use choscorui::compose::Runtime;
     use choscorui::compose::view::{Env, ViewExt, ViewHost};
@@ -84,7 +84,6 @@ pub mod tests {
         fn with(id: &str, tokens: DesignTokens, tag: &str, enabled: bool) -> Self {
             let runtime = Runtime::new();
             let cx = PageCx {
-                desktop: Rc::new(NoDesktop),
                 store: PageStore::new(&runtime, &PageState::default()),
             };
             let build = super::find(id).unwrap_or_else(|| panic!("page {id} has no view"));

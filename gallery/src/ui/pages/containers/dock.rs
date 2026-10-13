@@ -285,7 +285,7 @@ pub fn dock(cx: &PageCx) -> AnyView {
 #[cfg(test)]
 mod tests {
     use super::{default_dock, move_console, restored, toggle_outline};
-    use crate::page::{NoDesktop, PageState};
+    use crate::page::PageState;
     use crate::strings;
     use crate::ui::page::{PageCx, PageStore};
     use crate::ui::pages::tests::Harness;
@@ -307,7 +307,6 @@ mod tests {
         };
         let store = PageStore::new(&runtime, &state);
         let cx = PageCx {
-            desktop: Rc::new(NoDesktop),
             store: store.clone(),
         };
         let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");

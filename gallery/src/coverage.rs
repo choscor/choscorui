@@ -560,4 +560,40 @@ mod tests {
             .expect("gallery manifest is readable");
         assert_eq!(manifest_dependencies(&manifest), ["choscorui"]);
     }
+
+    /// The Rust files under `dir`, recursively.
+    fn rust_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("gallery sources are readable") {
+            let path = entry.expect("gallery sources are readable").path();
+            if path.is_dir() {
+                rust_files(&path, files);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_autopilot_reads_the_target_or_the_platform() {
+        // The patterns are split so that this file does not contain them.
+        let patterns = [
+            concat!("cfg", "(target_os"),
+            concat!("cfg!", "(target_os"),
+            concat!("choscorui::", "platform"),
+        ];
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rust_files(&root, &mut files);
+        assert!(files.len() > 10, "the walk found the sources");
+        let offenders: Vec<String> = files
+            .iter()
+            .filter(|path| !path.ends_with("autopilot.rs"))
+            .filter(|path| {
+                let source = std::fs::read_to_string(path).expect("gallery sources are readable");
+                patterns.iter().any(|pattern| source.contains(pattern))
+            })
+            .map(|path| path.display().to_string())
+            .collect();
+        assert!(offenders.is_empty(), "{offenders:?}");
+    }
 }

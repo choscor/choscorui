@@ -8,14 +8,13 @@
 //! the language changes. Personal names, addresses, and file names stand
 //! for user data and stay literal.
 
-use crate::page::{Desktop, PageState};
+use crate::page::PageState;
 use choscorui::compose::view::{
     AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::compose::{Property, Runtime};
 use choscorui::controls::ControlSize;
 use choscorui::core::{ColorRole, Image, Space, TextPreset};
-use std::rc::Rc;
 
 /// Builds a page's view.
 pub type Build = fn(&PageCx) -> AnyView;
@@ -49,7 +48,6 @@ impl PageStore {
 /// What a page is built from.
 #[derive(Clone)]
 pub struct PageCx {
-    pub desktop: Rc<dyn Desktop>,
     pub store: PageStore,
 }
 
