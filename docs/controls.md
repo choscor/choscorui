@@ -247,8 +247,9 @@ a drag keeps its cursor while the pointer leaves the part.
 | --- | --- |
 | `Text` | text fields and text areas |
 | `Pointer` | link badges, link `Item` rows, `CommandLink`, `Breadcrumb` links |
-| `ResizeHorizontal`, `ResizeVertical` | `Resizable` handles and `DockLayout` splitters, across the split |
-| `Arrow` | disabled slots |
+| `ResizeHorizontal`, `ResizeVertical` | `Resizable` handles and `DockLayout` splitters, across the split; `HeaderView` column edges, from the handle recipe |
+| `ResizeDiagonalEnd` | `SizeGrip`; the window shows the diagonal of the bottom end corner |
+| `Arrow` | disabled slots; `SpinBox` and `DecimalSpinBox` steppers; `InputGroup` buttons |
 
 **Replacing a control.** `ControlHost::replace` puts a new control on a
 mounted node. The node keeps its identity, focus, and disabled state. A view
@@ -2312,7 +2313,7 @@ makes from the environment. `on_item` receives the id of an activated panel.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
-| Grip | `SizeGrip` `Root` | 16 by 16 pt, lines in `muted-foreground` |
+| Grip | `SizeGrip` `Root` | 16 by 16 pt, lines in `muted-foreground`, diagonal resize cursor |
 
 These types have no semantic node.
 

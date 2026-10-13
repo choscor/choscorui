@@ -953,6 +953,7 @@ impl TextField {
             rtl: cx.rtl,
             offsets,
         };
+        cx.cursor(rect, style.cursor);
         self.paint_text(cx, rect, state);
     }
 

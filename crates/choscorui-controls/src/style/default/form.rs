@@ -230,6 +230,8 @@ fn input(cx: &Cx) -> ResolvedStyle {
             // Stepper chevrons and other glyphs inside the field.
             let mut style = muted_text(cx, TextSize::Sm);
             style.icon_size = 16.0;
+            // A stepper is a button, not text.
+            style.cursor = Cursor::Arrow;
             style
         }
         _ => {
@@ -644,6 +646,8 @@ fn input_group(cx: &Cx) -> ResolvedStyle {
         Slot::Action => {
             let mut style = button(cx, ButtonVariant::Ghost, cx.q.size);
             style.gap = cx.sp(2.0);
+            // The field shows the text cursor; a button in it does not.
+            style.cursor = Cursor::Arrow;
             let small = (cx.t.radius - 5.0).max(0.0);
             match cx.q.size {
                 ControlSize::Xs => {

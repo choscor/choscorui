@@ -1810,6 +1810,7 @@ impl SizeGrip {
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
         let style = cx.style(StyleQuery::new(ControlKind::SizeGrip, Slot::Root));
         let bounds = cx.bounds;
+        cx.cursor(bounds, style.cursor);
         let size = bounds.size.width.min(bounds.size.height);
         let (corner_x, sign) = if self.rtl {
             (bounds.origin.x, 1.0)

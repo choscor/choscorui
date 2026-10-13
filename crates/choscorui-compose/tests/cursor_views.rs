@@ -3,11 +3,15 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Badge, Binding, Env, Frame, Resizable, Text, View, ViewExt, ViewHost,
+    Badge, Binding, Env, Frame, HeaderView, InputGroup, Resizable, SizeGrip, SpinBox, Text, View,
+    ViewExt, ViewHost,
 };
-use choscorui_controls::{BadgeVariant, EstimatedText, ShortcutModifiers, SplitOrientation};
+use choscorui_controls::{
+    AddonAlign, BadgeVariant, ControlSize, EstimatedText, HeaderColumn, InputGroupAddon,
+    ShortcutModifiers, SplitOrientation,
+};
 use choscorui_core::{
-    Catalog, CursorShape, DesignTokens, Locale, Point, PointerButton, PointerEvent, Size,
+    Catalog, CursorShape, DesignTokens, Locale, Point, PointerButton, PointerEvent, Rect, Size,
 };
 use std::rc::Rc;
 
@@ -110,6 +114,92 @@ fn a_link_badge_shows_the_pointing_hand() {
     );
     assert_eq!(
         cursor_after(&mut host, moved(390.0, 90.0)),
+        CursorShape::Arrow
+    );
+}
+
+/// The cursor over the point at `fraction` of the bounds of the node
+/// `label`, from the top start corner.
+fn cursor_over(host: &mut ViewHost, label: &str, fraction: (f64, f64)) -> CursorShape {
+    let node = host.find(label).expect("the node");
+    let bounds: Rect = host.tree().bounds(node).unwrap();
+    let x = bounds.origin.x + bounds.size.width * fraction.0;
+    let y = bounds.origin.y + bounds.size.height * fraction.1;
+    cursor_after(host, moved(x, y))
+}
+
+#[test]
+fn a_size_grip_shows_the_diagonal_of_its_corner() {
+    let grip = || SizeGrip::new(Size::new(100.0, 100.0), Size::new(900.0, 900.0), |_| {});
+    for (tag, shape) in [
+        ("en", CursorShape::ResizeNorthWestSouthEast),
+        ("he", CursorShape::ResizeNorthEastSouthWest),
+    ] {
+        // The 16 pt grip sits at the center of the frame.
+        let mut host = host(tag, grip().frame(Frame::size(400.0, 100.0)));
+        assert_eq!(cursor_after(&mut host, moved(200.0, 50.0)), shape, "{tag}");
+        assert_eq!(
+            cursor_after(&mut host, moved(20.0, 20.0)),
+            CursorShape::Arrow
+        );
+    }
+}
+
+#[test]
+fn buttons_inside_a_field_show_the_arrow_not_the_text_cursor() {
+    let copies = Binding::new(|| 1, |_| {});
+    let spin = SpinBox::new("Copies", copies).frame(Frame::size(200.0, 32.0));
+    let mut host = host("en", spin);
+    assert_eq!(
+        cursor_over(&mut host, "Copies", (0.3, 0.5)),
+        CursorShape::IBeam
+    );
+    assert_eq!(
+        cursor_over(&mut host, "Copies", (0.97, 0.3)),
+        CursorShape::Arrow,
+        "stepper"
+    );
+
+    let text = Binding::new(String::new, |_| {});
+    let addons = vec![InputGroupAddon::button(
+        AddonAlign::InlineEnd,
+        "Go",
+        None,
+        ControlSize::Xs,
+    )];
+    let group = InputGroup::new("Search", addons, text).frame(Frame::size(200.0, 32.0));
+    let mut host = self::host("en", group);
+    assert_eq!(
+        cursor_over(&mut host, "Search", (0.3, 0.5)),
+        CursorShape::IBeam
+    );
+    assert_eq!(
+        cursor_over(&mut host, "Search", (0.92, 0.5)),
+        CursorShape::Arrow,
+        "button"
+    );
+}
+
+#[test]
+fn a_header_column_edge_shows_the_resize_cursor() {
+    let column = |title: &str| HeaderColumn {
+        title: title.into(),
+        width: 120.0,
+        min_width: 40.0,
+    };
+    let sort = Binding::new(|| None, |_| {});
+    let header = HeaderView::new(vec![column("Name"), column("Size")], sort);
+    let mut host = host("en", header.frame(Frame::size(400.0, 100.0)));
+    let node = host.find("Name").expect("the header");
+    let bounds = host.tree().bounds(node).unwrap();
+    let y = bounds.center().y;
+    let edge = bounds.origin.x + 120.0;
+    assert_eq!(
+        cursor_after(&mut host, moved(edge + 2.0, y)),
+        CursorShape::ResizeLeftRight
+    );
+    assert_eq!(
+        cursor_after(&mut host, moved(edge - 60.0, y)),
         CursorShape::Arrow
     );
 }

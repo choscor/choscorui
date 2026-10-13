@@ -87,6 +87,10 @@ fn resizable(cx: &Cx) -> ResolvedStyle {
             style.foreground = cx.c(ColorRole::MutedForeground);
             style.min_width = cx.sp(4.0);
             style.min_height = cx.sp(4.0);
+            if cx.q.kind == ControlKind::SizeGrip {
+                // The grip sits at the bottom end corner of the window.
+                style.cursor = Cursor::ResizeDiagonalEnd;
+            }
             style
         }
     }

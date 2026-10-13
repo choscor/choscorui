@@ -221,6 +221,7 @@ impl HeaderView {
         let header = cx.style(query(Slot::Header));
         cx.slot(bounds, &header, |_, _| {});
         let indicator = cx.style(query(Slot::Indicator));
+        let handle = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle));
         let mut x = bounds.origin.x;
         for (index, column) in self.columns.iter().enumerate() {
             let rect = Rect::new(
@@ -270,6 +271,14 @@ impl HeaderView {
                 (bounds.size.height - cell.padding.vertical()).max(0.0),
             );
             cx.list.fill_rect(divider, header.border);
+            // The edge that starts a resize shows the cursor of a handle.
+            let edge = Rect::from_xywh(
+                x + column.width - RESIZE_SLOP,
+                bounds.origin.y,
+                RESIZE_SLOP * 2.0,
+                bounds.size.height,
+            );
+            cx.cursor(edge, handle.cursor);
             if state.focus_visible() {
                 let ring = cx.style(query(Slot::Root).state(state));
                 cx.slot(rect, &ring, |_, _| {});

@@ -633,6 +633,7 @@ pub(crate) fn paint_stepper_box(
         chevron.icon_size = icon.icon_size.min(half + 2.0);
         cx.icon(up, Icon::ChevronUp, &chevron);
         cx.icon(down, Icon::ChevronDown, &chevron);
+        cx.cursor(steppers, icon.cursor);
     });
 }
 
