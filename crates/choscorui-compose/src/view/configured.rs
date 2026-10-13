@@ -14,7 +14,6 @@ use std::rc::Rc;
 
 type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
 type Change<C> = Rc<dyn Fn(C, &Env) -> C>;
-type Check<C> = Rc<dyn Fn(&mut C) -> Option<String>>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
 
 /// A control of type `C` as a view. The view builds the control from the
@@ -74,9 +73,6 @@ pub struct Configured<C> {
     handlers: Vec<Handler>,
     /// The bounds of a range view, which clamp the value.
     limits: Option<SharedLimits>,
-    /// Options that apply after the changes and can skip an invalid
-    /// value.
-    checks: Vec<Check<C>>,
     /// Invalid options that the view clamped or skipped.
     notes: SharedNotes,
 }
@@ -108,7 +104,6 @@ impl<C: CustomControl + 'static> Configured<C> {
             open: None,
             handlers: Vec::new(),
             limits: None,
-            checks: Vec::new(),
             notes: SharedNotes::default(),
         }
     }
@@ -156,9 +151,14 @@ impl<C: CustomControl + 'static> Configured<C> {
     /// [`ViewError::Clamped`] and keeps the rest of the control.
     ///
     /// [`ViewError::Clamped`]: super::ViewError::Clamped
-    pub(super) fn with_check(mut self, check: impl Fn(&mut C) -> Option<String> + 'static) -> Self {
-        self.checks.push(Rc::new(check));
-        self
+    pub(super) fn with_check(self, check: impl Fn(&mut C) -> Option<String> + 'static) -> Self {
+        let notes = self.notes.clone();
+        self.with(move |mut control| {
+            if let Some(note) = check(&mut control) {
+                notes.borrow_mut().push(note);
+            }
+            control
+        })
     }
 
     /// Gives the control this value now and whenever it changes.
@@ -279,20 +279,13 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             open,
             handlers,
             limits,
-            checks,
             notes,
         } = self;
-        let found = notes.clone();
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
-            let mut control = changes
+            let control = changes
                 .iter()
                 .fold(control, |control, change| change(control, env));
-            for check in &checks {
-                if let Some(note) = check(&mut control) {
-                    found.borrow_mut().push(note);
-                }
-            }
             Ok(Box::new(control))
         });
         let mut view = ControlView::configured(build, kind, value, open, handlers);
