@@ -67,7 +67,9 @@ Each result file repeats the manifest: model, CPU, memory, architecture, power s
 
 [`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms.
 
-The baselines are from the reference machine, measured on 2026-10-08. The `views`, `startup.gallery`, and `size` baselines are from 2026-10-12.
+The baselines are from the reference machine, measured on 2026-10-08. The `views` and `startup.gallery` baselines are from 2026-10-12, and the `size` baseline is from 2026-10-13.
+
+The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The views of the hosted controls and the portable app layer made the executable larger than 3 MiB, so the budget went up. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
@@ -89,7 +91,7 @@ The baselines are from the reference machine, measured on 2026-10-08. The `views
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.96 MiB | ≤ 3 |
+| `size.choscorui-gallery_mib` | 3.107 MiB | ≤ 3.123 |
 
 These correctness counters have a budget of 0:
 

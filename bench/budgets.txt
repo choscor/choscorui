@@ -52,5 +52,6 @@ windows.leaked_native_windows <= 0
 windows.missed_present <= 0
 windows.idle_cpu_percent_after_close <= 3
 
-# Release executable size, as the release profile builds it.
-size.choscorui-gallery_mib <= 3
+# Release executable size, as the release profile builds it: the
+# measured size plus one 16 KiB page. The cap is 3.25 MiB.
+size.choscorui-gallery_mib <= 3.123
