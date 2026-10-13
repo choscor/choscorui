@@ -1,16 +1,15 @@
 //! Spoken announcements for live updates (validation errors, progress,
 //! completed actions) that have no focused element to carry them.
+#![deny(unsafe_code)]
 
-use super::*;
+use super::{Error, Pool, Window};
+use crate::ffi::Obj;
+use crate::ffi::appkit::{
+    NSAccessibilityAnnouncementKey, NSAccessibilityAnnouncementRequestedNotification,
+    NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey, SHARED_APPLICATION,
+};
+use crate::ffi::foundation::{NSObject, NUMBER_WITH_INTEGER, ns_dictionary, ns_string};
 use choscorui_core::AnnouncementPriority;
-
-#[link(name = "AppKit", kind = "framework")]
-unsafe extern "C" {
-    static NSAccessibilityAnnouncementRequestedNotification: Id;
-    static NSAccessibilityAnnouncementKey: Id;
-    static NSAccessibilityPriorityKey: Id;
-    fn NSAccessibilityPostNotificationWithUserInfo(element: Id, notification: Id, user_info: Id);
-}
 
 /// NSAccessibilityPriorityLevel values.
 fn priority_level(priority: AnnouncementPriority) -> isize {
@@ -21,24 +20,6 @@ fn priority_level(priority: AnnouncementPriority) -> isize {
     }
 }
 
-unsafe fn send_id_ptr_ptr_usize(
-    receiver: Id,
-    name: &CStr,
-    objects: *const Id,
-    keys: *const Id,
-    count: usize,
-) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, *const Id, *const Id, usize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), objects, keys, count) }
-}
-
-unsafe fn send_id_isize(receiver: Id, name: &CStr, value: isize) -> Id {
-    let f: unsafe extern "C" fn(Id, Sel, isize) -> Id =
-        unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-    unsafe { f(receiver, selector(name), value) }
-}
-
 impl Window {
     /// Asks VoiceOver to speak `message`. `High` interrupts current speech.
     /// Empty messages are ignored.
@@ -46,36 +27,26 @@ impl Window {
         if message.trim().is_empty() {
             return Ok(());
         }
+        // The dictionary, string, and number are autoreleased into the
+        // local pool; AppKit copies what it keeps.
         let _pool = Pool::new()?;
-        // SAFETY: Main thread. The dictionary, string, and number are
-        // autoreleased into the local pool; AppKit copies what it keeps.
-        unsafe {
-            let values = [
-                ns_string(message)?,
-                send_id_isize(
-                    class(c"NSNumber")?,
-                    c"numberWithInteger:",
-                    priority_level(priority),
-                ),
-            ];
-            let keys = [NSAccessibilityAnnouncementKey, NSAccessibilityPriorityKey];
-            let info = send_id_ptr_ptr_usize(
-                class(c"NSDictionary")?,
-                c"dictionaryWithObjects:forKeys:count:",
-                values.as_ptr(),
-                keys.as_ptr(),
-                values.len(),
-            );
-            if info.is_null() {
-                return Err(Error::AppKitUnavailable);
-            }
-            let app = send_id(class(c"NSApplication")?, c"sharedApplication");
-            NSAccessibilityPostNotificationWithUserInfo(
-                app,
-                NSAccessibilityAnnouncementRequestedNotification,
-                info,
-            );
-        }
+        let text = ns_string(message)?;
+        let level = NUMBER_WITH_INTEGER
+            .send_class((priority_level(priority),))?
+            .ok_or(Error::AppKitUnavailable)?;
+        let entries: [(&Obj<NSObject>, &Obj<NSObject>); 2] = [
+            (NSAccessibilityAnnouncementKey, &text),
+            (NSAccessibilityPriorityKey, &level),
+        ];
+        let info = ns_dictionary(&entries)?;
+        let app = SHARED_APPLICATION
+            .send_class(())?
+            .ok_or(Error::AppKitUnavailable)?;
+        NSAccessibilityPostNotificationWithUserInfo(
+            app,
+            NSAccessibilityAnnouncementRequestedNotification,
+            &info,
+        );
         self.accessibility.borrow_mut().last_announcement = Some((message.to_owned(), priority));
         Ok(())
     }

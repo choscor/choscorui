@@ -1,7 +1,7 @@
 use super::{
     Application, Id, MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec,
-    Pool, Sel, class, class_addMethod, objc_allocateClassPair, objc_getClass,
-    objc_registerClassPair, sel_registerName, send_id, send_id_cstr, send_void, send_void_id,
+    Pool, Sel, class, class_addMethod, objc_allocateClassPair, objc_registerClassPair, selector,
+    send_id, send_id_cstr, send_void, send_void_id,
 };
 use std::collections::{HashMap, VecDeque};
 use std::ffi::{CStr, CString, c_void};
@@ -46,18 +46,14 @@ fn menu_target_class() -> Result<Id, MenuError> {
     static CLASS: OnceLock<Result<usize, MenuError>> = OnceLock::new();
     CLASS
         .get_or_init(|| unsafe {
-            let superclass = objc_getClass(c"NSObject".as_ptr());
-            if superclass.is_null() {
-                return Err(MenuError::AppKitUnavailable);
-            }
+            let superclass = class(c"NSObject").map_err(|_| MenuError::AppKitUnavailable)?;
             let class = objc_allocateClassPair(superclass, c"ChoscorMenuTarget".as_ptr(), 0);
             if class.is_null() {
-                let existing = objc_getClass(c"ChoscorMenuTarget".as_ptr());
-                return (!existing.is_null())
-                    .then_some(existing as usize)
-                    .ok_or(MenuError::AppKitUnavailable);
+                return super::class(c"ChoscorMenuTarget")
+                    .map(|existing| existing as usize)
+                    .map_err(|_| MenuError::AppKitUnavailable);
             }
-            let action = sel_registerName(c"choscorMenuItemActivated:".as_ptr());
+            let action = selector(c"choscorMenuItemActivated:");
             if class_addMethod(
                 class,
                 action,
@@ -431,49 +427,35 @@ fn ns_string(value: &str) -> Result<Id, MenuError> {
 unsafe fn send_id_id_cstr(receiver: Id, name: &CStr, value: Id) -> Id {
     let function: unsafe extern "C" fn(Id, Sel, Id) -> Id =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, sel_registerName(name.as_ptr()), value) }
+    unsafe { function(receiver, selector(name), value) }
 }
 
 unsafe fn send_menu_item_init(receiver: Id, name: &CStr, title: Id, action: Sel, key: Id) -> Id {
     let function: unsafe extern "C" fn(Id, Sel, Id, Sel, Id) -> Id =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe {
-        function(
-            receiver,
-            sel_registerName(name.as_ptr()),
-            title,
-            action,
-            key,
-        )
-    }
+    unsafe { function(receiver, selector(name), title, action, key) }
 }
 
 unsafe fn set_action(receiver: Id, action: &CStr) {
     let function: unsafe extern "C" fn(Id, Sel, Sel) =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe {
-        function(
-            receiver,
-            sel_registerName(c"setAction:".as_ptr()),
-            sel_registerName(action.as_ptr()),
-        )
-    }
+    unsafe { function(receiver, selector(c"setAction:"), selector(action)) }
 }
 
 unsafe fn send_void_bool(receiver: Id, name: &CStr, value: i8) {
     let function: unsafe extern "C" fn(Id, Sel, i8) =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, sel_registerName(name.as_ptr()), value) }
+    unsafe { function(receiver, selector(name), value) }
 }
 
 unsafe fn send_void_isize(receiver: Id, name: &CStr, value: isize) {
     let function: unsafe extern "C" fn(Id, Sel, isize) =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, sel_registerName(name.as_ptr()), value) }
+    unsafe { function(receiver, selector(name), value) }
 }
 
 unsafe fn send_void_usize(receiver: Id, name: &CStr, value: usize) {
     let function: unsafe extern "C" fn(Id, Sel, usize) =
         unsafe { std::mem::transmute(super::objc_msgSend as *const ()) };
-    unsafe { function(receiver, sel_registerName(name.as_ptr()), value) }
+    unsafe { function(receiver, selector(name), value) }
 }

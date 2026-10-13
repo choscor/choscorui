@@ -1,0 +1,79 @@
+//! Raw declarations of the Objective-C runtime (`objc/runtime.h` and
+//! `objc/message.h`) and their safe wrappers.
+//!
+//! The message functions are `C-unwind`: an Objective-C exception that
+//! leaves a message send unwinds through Rust as a defined foreign unwind.
+
+use super::class::{AnyClass, Sel};
+use std::ffi::{CStr, c_char};
+
+#[link(name = "objc")]
+unsafe extern "C-unwind" {
+    fn objc_getClass(name: *const c_char) -> Option<&'static AnyClass>;
+    fn sel_registerName(name: *const c_char) -> Sel;
+    pub(crate) fn objc_msgSend();
+    #[cfg(target_arch = "x86_64")]
+    fn objc_msgSend_stret();
+}
+
+/// The runtime class with `name`.
+pub(super) fn get_class(name: &CStr) -> Option<&'static AnyClass> {
+    // SAFETY: `name` is a NUL-terminated string that lives for the call.
+    unsafe { objc_getClass(name.as_ptr()) }
+}
+
+/// The selector with `name`, registered when it is new.
+pub(super) fn register_selector(name: &CStr) -> Sel {
+    // SAFETY: `name` is a NUL-terminated string that lives for the call;
+    // the runtime copies it and never returns null.
+    unsafe { sel_registerName(name.as_ptr()) }
+}
+
+/// The address of `objc_msgSend`. On x86-64 a struct return larger than
+/// 16 bytes uses `objc_msgSend_stret`; arm64 has no such variant.
+pub(super) fn msg_send(struct_return: bool) -> *const () {
+    #[cfg(target_arch = "x86_64")]
+    if struct_return {
+        return objc_msgSend_stret as *const ();
+    }
+    let _ = struct_return;
+    objc_msgSend as *const ()
+}
+
+/// An opaque `Method` of the runtime.
+#[cfg(test)]
+#[repr(C)]
+struct Method {
+    _opaque: [u8; 0],
+}
+
+#[cfg(test)]
+#[link(name = "objc")]
+unsafe extern "C-unwind" {
+    safe fn class_getInstanceMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
+    safe fn class_getClassMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
+    safe fn method_getTypeEncoding(method: &Method) -> *const c_char;
+}
+
+/// Copies a type encoding that the runtime owns.
+#[cfg(test)]
+fn copy_types(types: *const c_char) -> Option<String> {
+    if types.is_null() {
+        return None;
+    }
+    // SAFETY: the runtime keeps method type strings for the life of the
+    // process; the pointer is not null.
+    let types = unsafe { CStr::from_ptr(types) };
+    Some(types.to_string_lossy().into_owned())
+}
+
+/// The type encoding of a method that `class` or a superclass declares.
+#[cfg(test)]
+pub(super) fn method_types(class: &AnyClass, name: Sel, instance: bool) -> Option<String> {
+    let method = if instance {
+        class_getInstanceMethod(class, name)
+    } else {
+        class_getClassMethod(class, name)
+    }?;
+    copy_types(method_getTypeEncoding(method))
+}

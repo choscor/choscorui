@@ -48,6 +48,8 @@ use runloop::{
 mod imaging;
 pub use imaging::{decode_image, encode_png};
 mod announce;
+mod ffi;
+use ffi::{Pool, objc_msgSend};
 mod dnd;
 mod pasteboard;
 mod preferences;
@@ -187,9 +189,6 @@ unsafe extern "C" {
 }
 #[link(name = "objc")]
 unsafe extern "C" {
-    fn objc_getClass(name: *const i8) -> Id;
-    fn sel_registerName(name: *const i8) -> Sel;
-    fn objc_msgSend();
     fn objc_allocateClassPair(superclass: Id, name: *const i8, extra_bytes: usize) -> Id;
     fn objc_disposeClassPair(class: Id);
     fn objc_registerClassPair(class: Id);
@@ -1272,26 +1271,6 @@ impl WindowOptions {
     }
 }
 
-struct Pool(NonNull<c_void>);
-impl Pool {
-    fn new() -> Result<Self, Error> {
-        // SAFETY: NSAutoreleasePool alloc/init are SDK selectors and the pool
-        // is created and drained on the same thread.
-        unsafe {
-            let cls = class(c"NSAutoreleasePool")?;
-            NonNull::new(send_id(send_id(cls, c"alloc"), c"init"))
-                .map(Self)
-                .ok_or(Error::AppKitUnavailable)
-        }
-    }
-}
-impl Drop for Pool {
-    fn drop(&mut self) {
-        // SAFETY: This pool is still owned by the creating thread.
-        unsafe { send_void(self.0.as_ptr(), c"drain") }
-    }
-}
-
 /// Main-thread AppKit process handle. The marker prevents worker transfer.
 pub struct Application {
     raw: NonNull<c_void>,
@@ -2223,14 +2202,12 @@ unsafe fn accessibility_screen_rect(view: Id, window: Id, bounds: choscorui_core
     }
 }
 unsafe fn class(name: &CStr) -> Result<Id, Error> {
-    // SAFETY: objc_getClass reads a static NUL-terminated class name.
-    NonNull::new(unsafe { objc_getClass(name.as_ptr()) })
-        .map(NonNull::as_ptr)
+    ffi::class::lookup_class(name)
+        .map(|class| std::ptr::from_ref(class).cast_mut().cast())
         .ok_or(Error::AppKitUnavailable)
 }
 unsafe fn selector(name: &CStr) -> Sel {
-    // SAFETY: sel_registerName reads a static NUL-terminated selector.
-    unsafe { sel_registerName(name.as_ptr()) }
+    ffi::class::Sel::register(name).as_ptr()
 }
 
 /// Stops `[NSApp run]`. AppKit checks the stop flag only after `run`
