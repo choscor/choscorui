@@ -124,6 +124,9 @@ sdk_const! {
     pub(crate) MODAL_RESPONSE_OK: isize = 1, sdk = NSModalResponseOK;
     pub(crate) CONTROL_STATE_OFF: isize = 0, sdk = NSControlStateValueOff;
     pub(crate) CONTROL_STATE_ON: isize = 1, sdk = NSControlStateValueOn;
+    pub(crate) FRAME_RESIZE_TOP_LEFT: usize = 3, sdk = NSCursorFrameResizePositionTopLeft;
+    pub(crate) FRAME_RESIZE_TOP_RIGHT: usize = 9, sdk = NSCursorFrameResizePositionTopRight;
+    pub(crate) FRAME_RESIZE_ALL: usize = 3, sdk = NSCursorFrameResizeDirectionsAll;
 }
 
 messages! {
@@ -352,6 +355,8 @@ messages! {
         () -> Shared<NSCursor>;
     pub(crate) RESIZE_UP_DOWN_CURSOR: class NSCursor, c"resizeUpDownCursor",
         () -> Shared<NSCursor>;
+    pub(crate) FRAME_RESIZE_CURSOR: class NSCursor,
+        c"frameResizeCursorFromPosition:inDirections:", (usize, usize) -> Shared<NSCursor>;
 
     pub(crate) BITMAP_CG_IMAGE: instance NSBitmapImageRep, c"CGImage",
         () -> Option<&CGImage>;

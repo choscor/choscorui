@@ -227,6 +227,29 @@ the old resolved style to the new one. The blend uses the slot's
 `motion_ms` and the `motion.easing` curve. The other values change at once.
 [Theming](theming.md#state-transitions) gives the rules.
 
+**Inner parts.** A control with inner buttons or rows tracks the hovered
+part from pointer moves and the pressed part during a press. The pressed
+look shows only while the pointer is on the pressed part, and a release
+away from it does nothing. Each part also gets the disabled state of the
+control. One shared helper does this for every such control.
+
+**Disabled look.** In a `ControlHost`, a disabled control paints under one
+group opacity, the opacity of a disabled `Button` `Root`. Its disabled
+slots do not fade again. The group opacity eases like a slot.
+
+**Cursor.** The host records the `cursor` of each slot that the hovered
+control paints under the pointer. The topmost slot that sets a cursor wins,
+and `Cursor::Auto` sets none. `ControlHost::cursor` gives the result of the
+last paint, and the window shows it. A control that holds the pointer for
+a drag keeps its cursor while the pointer leaves the part.
+
+| Cursor | Parts |
+| --- | --- |
+| `Text` | text fields and text areas |
+| `Pointer` | link badges, link `Item` rows, `CommandLink`, `Breadcrumb` links |
+| `ResizeHorizontal`, `ResizeVertical` | `Resizable` handles and `DockLayout` splitters, across the split |
+| `Arrow` | disabled slots |
+
 **Replacing a control.** `ControlHost::replace` puts a new control on a
 mounted node. The node keeps its identity, focus, and disabled state. A view
 uses it to build a control again, for example after a locale change.
@@ -1424,7 +1447,7 @@ scroll view use the same bar.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, default arrow cursor |
+| Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, resize cursor across the split |
 | Focus | `Handle`, focus visible | 1 pt `ring` ring |
 | Grip | `Icon` | 4 by 24 pt `border` grip, radius lg |
 
@@ -2228,7 +2251,7 @@ default text and the sections at the end. It has no binding.
 | --- | --- | --- |
 | Frame | `Dock` `Root` | `card` fill, `card-foreground` text, 1 pt `border` outline |
 | Tab bar | `Tabs` `Trigger`, `Indicator`, `Line` | line-variant tabs |
-| Splitter | `Resizable` `Handle` | the resizable handle |
+| Splitter | `Resizable` `Handle` | the resizable handle, with its cursor |
 
 | Field | `DockLayout::panel_semantics` | `DockLayout::splitter_semantics` |
 | --- | --- | --- |
@@ -2241,7 +2264,8 @@ default text and the sections at the end. It has no binding.
 the frames, the tab bars, and the splitters. The view layer places the
 center and the panel contents in the frames of `arrange` for the node's
 bounds. Each group and each splitter is a tab stop, and Tab moves between
-them. A press or the arrow keys select a tab and send
+them. The tabs and the splitters show hover and press. A press or the
+arrow keys select a tab and send
 `ItemActivated(panel)`, with the `PanelId` number. A splitter drag, the
 splitter keys, and `Increment` or `Decrement` send
 `Changed(Number(extent))`. A double click on a splitter collapses the
@@ -3042,7 +3066,7 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 | Link | `Link` | sm `muted-foreground` text; `foreground` while hovered |
 | Current page | `Item` | sm `foreground` text |
 | Separator | `Separator` | 14 pt chevron in `muted-foreground` |
-| Ellipsis | `Ellipsis` | 20 by 20 pt box with a 16 pt icon |
+| Ellipsis | `Ellipsis` | 20 by 20 pt box with a 16 pt icon; `foreground` while hovered; focus ring on keyboard focus |
 
 | Field | `Breadcrumb::semantics` |
 | --- | --- |
@@ -3549,7 +3573,7 @@ behavior.
 | Icon | `Icon` | 16 pt; check, info, alert, error, or a turning loader |
 | Title | `Title` | sm medium `popover-foreground` text |
 | Description | `Description` | sm `muted-foreground` text, 2 pt below the title |
-| Close | `Close` | 16 pt icon in `muted-foreground`; `foreground` while hovered |
+| Close | `Close` | 16 pt icon in `muted-foreground`; `foreground` while hovered; focus ring on keyboard focus |
 | Action | `Button` `Root` | default button |
 
 | Field | `Toaster::semantics` |

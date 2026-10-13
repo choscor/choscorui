@@ -121,7 +121,14 @@ text "Aa" at 24,32.9 system-ui 14 w400 t0 #737373ff
 # rest
 stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,24.9 system-ui 14 w400 t0 #737373ff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# hovered
+stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 23x23 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,16 L16,23.333333333333332 L12.666666666666666,20 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,24.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### breadcrumb default default link
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
@@ -2241,24 +2248,16 @@ text "Aa" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## dock
 sizes default
-slot root: root track range thumb indicator icon label content description footer trigger value placeholder item-indicator shortcut group group-label overlay caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
-slot header: header
+slot root: root track range thumb indicator icon label content header description footer trigger value placeholder item-indicator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
 slot title: title
 slot action: action item
 slot separator: separator
-slot handle: handle
 ### dock default default root
 # rest
 fill-rect 10,10 120x36 #ffffffff
 stroke 10.5,10.5 119x35 r0 w1 #e5e5e5ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### dock default default header
-# rest
-fill-rect 10,41 120x1 #e5e5e5ff
-stroke-path M35.33333333333333,22 L28,29.333333333333332 L24.666666666666668,26 #737373ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,30.2 system-ui 12 w500 t0 #737373ff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### dock default default title
 # rest
@@ -2297,16 +2296,3 @@ fill-rect 10,10 1x1 #e5e5e5ff
 stroke-path M27.333333333333332,12 L20,19.333333333333332 L16.666666666666668,16 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### dock default default handle
-# rest
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,32.9 system-ui 14 w400 t0 #0a0a0aff
-# hovered
-fill-rect 10,10 4x36 #e5e5e5ff
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,32.9 system-ui 14 w400 t0 #0a0a0aff
-# pressed
-fill-rect 10,10 4x36 #e5e5e5ff
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 14,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: focused focus-visible disabled invalid checked indeterminate selected open highlighted

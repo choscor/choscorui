@@ -5,7 +5,8 @@ use crate::ffi::Obj;
 use crate::ffi::appkit::{
     ADD_CURSOR_RECT, ARROW_CURSOR, BITMAP_CG_IMAGE, BITMAP_IMAGE_REP_FOR_CACHING, BOUNDS,
     CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR,
-    ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, I_BEAM_CURSOR, INIT_WITH_IMAGE_HOT_SPOT,
+    ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, FRAME_RESIZE_ALL, FRAME_RESIZE_CURSOR,
+    FRAME_RESIZE_TOP_LEFT, FRAME_RESIZE_TOP_RIGHT, I_BEAM_CURSOR, INIT_WITH_IMAGE_HOT_SPOT,
     INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor, OCCLUSION_STATE,
     OCCLUSION_STATE_VISIBLE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR,
     RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
@@ -53,9 +54,21 @@ fn native_cursor(shape: &CursorShape) -> Option<Retained<NSCursor>> {
         CursorShape::NotAllowed => &NOT_ALLOWED_CURSOR,
         CursorShape::ResizeLeftRight => &RESIZE_LEFT_RIGHT_CURSOR,
         CursorShape::ResizeUpDown => &RESIZE_UP_DOWN_CURSOR,
+        CursorShape::ResizeNorthWestSouthEast => return frame_cursor(FRAME_RESIZE_TOP_LEFT),
+        CursorShape::ResizeNorthEastSouthWest => return frame_cursor(FRAME_RESIZE_TOP_RIGHT),
         CursorShape::Custom { image, hotspot } => return custom_cursor(image, *hotspot),
     };
     cursor.class_send(()).ok().flatten().map(Obj::retain)
+}
+
+/// The system cursor that resizes a frame from the corner at `position`,
+/// in both directions.
+fn frame_cursor(position: usize) -> Option<Retained<NSCursor>> {
+    FRAME_RESIZE_CURSOR
+        .class_send((position, FRAME_RESIZE_ALL))
+        .ok()
+        .flatten()
+        .map(Obj::retain)
 }
 
 fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {

@@ -7,9 +7,9 @@ use crate::AppError;
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback,
-    Point, Rect, SemanticChange, SemanticEntry, Services, Size, Support, WindowGeometry,
-    WindowOptions,
+    BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel, MenuCommandId,
+    MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services, Size, Support,
+    WindowGeometry, WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -60,6 +60,7 @@ impl Platform {
                 Point::new(0.0, 0.0),
                 Size::new(options.width(), options.height()),
             ),
+            cursor: CursorShape::Arrow,
         })
     }
 
@@ -78,10 +79,11 @@ impl Platform {
     }
 }
 
-/// A window that keeps its title and frame in memory.
+/// A window that keeps its title, frame, and cursor in memory.
 pub(crate) struct NativeWindow {
     title: String,
     frame: Rect,
+    cursor: CursorShape,
 }
 
 impl NativeWindow {
@@ -104,6 +106,10 @@ impl NativeWindow {
     }
 
     pub(crate) fn present(&self, _list: DisplayList) {}
+
+    pub(crate) fn set_cursor(&mut self, shape: CursorShape) {
+        self.cursor = shape;
+    }
 
     pub(crate) fn publish(
         &self,

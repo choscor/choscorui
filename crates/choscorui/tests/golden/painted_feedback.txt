@@ -111,7 +111,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### toast success default root
 # rest
 shadow 10,10 120x36 r18 offset 0,10 blur15 spread-3 #0000001a
@@ -156,7 +160,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### toast info default root
 # rest
 shadow 10,10 120x36 r18 offset 0,10 blur15 spread-3 #0000001a
@@ -201,7 +209,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### toast warning default root
 # rest
 shadow 10,10 120x36 r18 offset 0,10 blur15 spread-3 #0000001a
@@ -246,7 +258,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### toast error default root
 # rest
 shadow 10,10 120x36 r18 offset 0,10 blur15 spread-3 #0000001a
@@ -291,7 +307,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ### toast loading default root
 # rest
 shadow 10,10 120x36 r18 offset 0,10 blur15 spread-3 #0000001a
@@ -336,7 +356,11 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+# focus-visible
+stroke 8.5,8.5 123x39 r7.5 w3 #a1a1a180
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: pressed focused disabled invalid checked indeterminate selected open highlighted
 ## progress
 sizes default
 slot root: root

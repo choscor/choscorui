@@ -4,8 +4,9 @@ use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    BackendCapabilities, CompositionEvent, DisplayList, Feedback, MenuBarModel, MenuCommandId,
-    MenuError, Rect, SemanticChange, SemanticEntry, Services, Size, WindowGeometry, WindowOptions,
+    BackendCapabilities, CompositionEvent, CursorShape, DisplayList, Feedback, MenuBarModel,
+    MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry, Services, Size, WindowGeometry,
+    WindowOptions,
 };
 use choscorui_macos::{
     Application, CoreTextShaper, Error, ImeEvent, MainMenu, Modifiers, NativeServices,
@@ -226,6 +227,12 @@ impl NativeWindow {
 
     pub(crate) fn present(&self, list: DisplayList) {
         self.window.set_display_list(list);
+    }
+
+    /// Shows `shape` over the content. A shape that AppKit cannot show
+    /// keeps the cursor that shows.
+    pub(crate) fn set_cursor(&self, shape: CursorShape) {
+        let _ = self.window.set_cursor(shape);
     }
 
     pub(crate) fn publish(

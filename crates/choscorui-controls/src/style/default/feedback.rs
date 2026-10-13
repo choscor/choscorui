@@ -85,6 +85,8 @@ fn toast(cx: &Cx) -> ResolvedStyle {
                 style.foreground = cx.c(ColorRole::Foreground);
             }
             style.icon_size = 16.0;
+            style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            focus(&mut style, cx);
             style
         }
         Slot::Group => {

@@ -3,7 +3,7 @@
 use super::{Toast, ToastId, ToastOp, ToastPosition, Toasts};
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::overlay::panel::{Buttons, PanelButton};
 use crate::style::{
     ButtonVariant, ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign,
@@ -65,8 +65,7 @@ pub struct Toaster {
     focused: bool,
     /// The focused tab stop, and the pressed button.
     focus: usize,
-    pressed: Option<(ToastId, Button)>,
-    hovered_close: Option<ToastId>,
+    parts: Parts<(ToastId, Button)>,
     viewport: Rect,
     motion_ms: u32,
     turn_ms: u32,
@@ -87,8 +86,7 @@ impl Toaster {
             hovered: false,
             focused: false,
             focus: 0,
-            pressed: None,
-            hovered_close: None,
+            parts: Parts::default(),
             viewport: Rect::default(),
             motion_ms: 0,
             turn_ms: 0,
@@ -274,14 +272,25 @@ impl Toaster {
             .reduce(|a, b| a.union(b))
     }
 
+    /// The button under `point`, by toast id.
+    fn part_at(&self, point: Point) -> Option<(ToastId, Button)> {
+        self.button_at(point)
+            .map(|(index, button)| (self.entries[index].id, button))
+    }
+
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, &ControlEvent::Pointer(*event), |point| {
+            self.part_at(point)
+        });
+        self.parts = parts;
         match event {
             PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
             } => match self.button_at(*position) {
                 Some((index, button)) => {
-                    self.pressed = Some((self.entries[index].id, button));
                     if let Some(stop) = self
                         .stops()
                         .iter()
@@ -289,35 +298,22 @@ impl Toaster {
                     {
                         self.focus = stop;
                     }
-                    cx.capture_pointer(true);
-                    cx.request_paint();
                     EventReply::Stop
                 }
                 None => EventReply::Continue,
             },
-            PointerEvent::Up { position, .. } if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let pressed = self.pressed.take();
+            PointerEvent::Up { position, .. } if pressed.is_some() => {
                 if let Some((index, button)) = self.button_at(*position)
                     && pressed == Some((self.entries[index].id, button))
                 {
                     self.activate(cx, index, button);
                 }
-                cx.request_paint();
                 EventReply::Stop
             }
             PointerEvent::Move { position } => {
                 let over = self
                     .stack_rect()
                     .is_some_and(|rect| rect.contains(*position));
-                let close = self
-                    .button_at(*position)
-                    .filter(|(_, button)| *button == Button::Close)
-                    .map(|(index, _)| self.entries[index].id);
-                if close != self.hovered_close {
-                    self.hovered_close = close;
-                    cx.request_paint();
-                }
                 if over != self.hovered {
                     let was = self.paused();
                     self.hovered = over;
@@ -537,6 +533,7 @@ impl Toaster {
         let faded = cx.list.push_opacity(presence.clamp(0.0, 1.0)).is_ok();
         let focused = stops.get(self.focus).copied();
         let focus_visible = cx.state.focus_visible();
+        let host = cx.state;
         cx.slot(entry.rect, &root, |cx, inner| {
             if collapsed_behind {
                 return;
@@ -548,19 +545,10 @@ impl Toaster {
                     Button::Close => entry.close,
                     Button::Action => continue,
                 };
-                let state = VisualState::NONE
-                    .set(
-                        VisualState::FOCUS_VISIBLE,
-                        focus_visible && focused == Some((index, button)),
-                    )
-                    .set(
-                        VisualState::PRESSED,
-                        self.pressed == Some((entry.id, button)),
-                    )
-                    .set(
-                        VisualState::HOVERED,
-                        button == Button::Close && self.hovered_close == Some(entry.id),
-                    );
+                let state = self.parts.state((entry.id, button), host).set(
+                    VisualState::FOCUS_VISIBLE,
+                    focus_visible && focused == Some((index, button)),
+                );
                 match button {
                     Button::Action => {
                         let style = cx.style(
@@ -575,7 +563,7 @@ impl Toaster {
                     }
                     Button::Close => {
                         let style = cx.style(Self::query(Slot::Close).state(state));
-                        cx.icon(rect, Icon::X, &style);
+                        cx.slot(rect, &style, |cx, inner| cx.icon(inner, Icon::X, &style));
                     }
                 }
             }
@@ -698,7 +686,7 @@ impl CustomControl for Toaster {
             }
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Hover(false) => {
-                self.hovered_close = None;
+                self.parts.track(cx, event, |_| None);
                 if self.hovered {
                     let was = self.paused();
                     self.hovered = false;
@@ -708,6 +696,7 @@ impl CustomControl for Toaster {
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => self.key(cx, *key, *repeat),
             ControlEvent::FocusChanged(focused) => {
+                self.parts.track(cx, event, |_| None);
                 let was = self.paused();
                 self.focused = *focused;
                 if *focused {

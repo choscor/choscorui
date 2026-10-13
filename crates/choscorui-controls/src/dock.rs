@@ -6,6 +6,8 @@
 //! provided. Documents use tabs in the central area or separate native
 //! windows, which is what macOS users expect.
 
+use crate::SplitOrientation;
+use crate::hosted::Parts;
 use crate::style::fill_area;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
@@ -554,6 +556,7 @@ impl DockLayout {
         arrangement: &DockArrangement,
         focus: DockFocus,
     ) {
+        let (parts, host) = (self.hosted.parts, cx.state);
         let tabs = |slot, state| {
             StyleQuery::new(ControlKind::Tabs, slot)
                 .variant(TabsVariant::Line)
@@ -577,7 +580,8 @@ impl DockLayout {
             );
             for (index, panel) in group.tabs.iter().enumerate() {
                 let rect = group.tab_rect(index, cx.rtl);
-                let state = VisualState::NONE
+                let state = parts
+                    .state(DockFocus::Tab(*panel), host)
                     .set(VisualState::SELECTED, *panel == group.active)
                     .set(VisualState::FOCUS_VISIBLE, focus == DockFocus::Tab(*panel));
                 let trigger = cx.style(tabs(Slot::Trigger, state));
@@ -594,29 +598,35 @@ impl DockLayout {
             }
         }
         for (area, rect) in &arrangement.splitters {
-            let state = VisualState::NONE.set(
-                VisualState::FOCUS_VISIBLE,
-                focus == DockFocus::Splitter(*area),
-            );
-            let line = cx.style(StyleQuery::new(ControlKind::Resizable, Slot::Handle).state(state));
-            let center = rect.center();
-            let divider = if area.horizontal() {
-                Rect::from_xywh(
-                    center.x - line.min_width / 2.0,
-                    rect.origin.y,
-                    line.min_width,
-                    rect.size.height,
-                )
+            let part = DockFocus::Splitter(*area);
+            let state = parts
+                .state(part, host)
+                .set(VisualState::FOCUS_VISIBLE, focus == part);
+            let orientation = if area.horizontal() {
+                SplitOrientation::Horizontal
             } else {
-                Rect::from_xywh(
-                    rect.origin.x,
-                    center.y - line.min_height / 2.0,
-                    rect.size.width,
-                    line.min_height,
-                )
+                SplitOrientation::Vertical
             };
-            cx.slot(divider, &line, |_, _| {});
+            crate::containers::paint_divider(cx, *rect, orientation, false, state);
         }
+    }
+
+    /// The tab or splitter under `point`, as a [`DockFocus`] part.
+    fn part_at(&self, point: Point) -> Option<DockFocus> {
+        let arrangement = self.arrange(self.hosted.bounds);
+        let rtl = self.hosted.rtl;
+        for group in &arrangement.groups {
+            let tab =
+                (0..group.tabs.len()).find(|index| group.tab_rect(*index, rtl).contains(point));
+            if let Some(index) = tab {
+                return Some(DockFocus::Tab(group.tabs[index]));
+            }
+        }
+        arrangement
+            .splitters
+            .iter()
+            .find(|(_, rect)| rect.contains(point))
+            .map(|(area, _)| DockFocus::Splitter(*area))
     }
 
     /// Splitter semantics: an adjustable value in points.
@@ -911,6 +921,8 @@ struct HostState {
     /// The extent of each area before a double click on its splitter
     /// collapsed it, by area index.
     collapsed: [Option<f64>; 4],
+    /// Hover and press of the tabs and splitters.
+    parts: Parts<DockFocus>,
 }
 
 impl DockLayout {
@@ -1140,6 +1152,9 @@ impl crate::CustomControl for DockLayout {
         cx: &mut crate::ControlContext<'_>,
         event: &crate::ControlEvent,
     ) -> EventReply {
+        let mut parts = self.hosted.parts;
+        parts.track(cx, event, |point| self.part_at(point));
+        self.hosted.parts = parts;
         match crate::hosted::route(cx, event) {
             Some(crate::hosted::Routed::Pointer(event)) => self.host_pointer(cx, event),
             Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) => self.host_key(cx, key),

@@ -6,8 +6,8 @@
 //! platform or FFI code is involved.
 
 use crate::style::{
-    PaintContext, ResolvedStyle, StyleQuery, Styles, TextMeasure, TransitionStats, Transitions,
-    VisualState,
+    ControlKind, Cursor, PaintContext, ResolvedStyle, Slot, StyleQuery, Styles, TextMeasure,
+    TransitionStats, Transitions, VisualState,
 };
 use crate::{EditCommand, Shortcut, ShortcutModifiers};
 use choscorui_core::{
@@ -17,6 +17,7 @@ use choscorui_core::{
     SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree, Services,
     TextInputInfo, ThemeResolver, Tree, TreeError,
 };
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -401,6 +402,11 @@ pub struct ControlHost {
     feedback: HostFeedback,
     /// The messages of the window locale.
     strings: HostStrings,
+    /// The position of the last pointer event.
+    pointer_at: Option<Point>,
+    /// The cursor of the hovered part, from the last paint of the hovered
+    /// control.
+    cursor: Cell<Cursor>,
 }
 
 /// The messages of a host: the built-in ones of the root locale until the
@@ -883,6 +889,7 @@ impl ControlHost {
         details: PointerDetails,
     ) {
         self.pointer = details;
+        self.pointer_at = Some(event.position());
         let target = self.route(tree, event.position());
         if matches!(event, PointerEvent::Move { .. } | PointerEvent::Down { .. }) {
             self.update_hover(tree, target);
@@ -1185,21 +1192,65 @@ impl ControlHost {
         list.push_clip(bounds);
         let state = self.visual_state(tree, node);
         let hot = self.is_hot(tree, node);
+        let pointer = self.hover_pointer(tree, node);
+        let earlier = self.cursor.replace(Cursor::Auto);
         let mut cx = PaintContext::new(list, bounds, tokens, env.styles, env.text)
             .rtl(env.direction == LayoutDirection::Rtl)
             .state(state)
             .time(env.time)
             .strings(&self.strings.0);
+        if let Some(point) = pointer {
+            cx = cx.pointer(point, &self.cursor);
+        } else {
+            self.cursor.set(earlier);
+        }
         let eased = self.transitions.begin(node, hot, state, env.time);
         if eased {
             cx = cx.transitions(&self.transitions);
         }
+        // A disabled control fades as one group, not slot by slot, with
+        // the opacity of a disabled button. The group eases like a slot.
+        let group = cx
+            .style(
+                StyleQuery::new(ControlKind::Button, Slot::Root)
+                    .state(VisualState::NONE.set(VisualState::DISABLED, state.disabled())),
+            )
+            .opacity;
+        let faded = group < 1.0 && cx.list.push_opacity(group.clamp(0.0, 1.0)).is_ok();
+        let mut cx = cx.dimmed(state.disabled());
         control.paint(&mut cx);
         if eased {
             self.transitions.end(hot);
         }
+        // A drag keeps its cursor while the pointer leaves the part.
+        if pointer.is_some()
+            && self.cursor.get() == Cursor::Auto
+            && tree.pointer_capture() == Some(node)
+        {
+            self.cursor.set(earlier);
+        }
+        if faded {
+            let _ = list.pop_opacity();
+        }
         let _ = list.pop_clip();
         true
+    }
+
+    /// The pointer position while `node` is the hovered control.
+    fn hover_pointer(&self, tree: &Tree, node: NodeId) -> Option<Point> {
+        let hovered = self.hovered.first() == Some(&node) || tree.pointer_capture() == Some(node);
+        self.pointer_at.filter(|_| hovered)
+    }
+
+    /// The cursor of the part under the pointer, from the last paint: the
+    /// cursor of the topmost slot of the hovered control that sets one.
+    /// The window shows [`Cursor::shape`] of it.
+    pub fn cursor(&self) -> Cursor {
+        if self.hovered.is_empty() {
+            Cursor::Auto
+        } else {
+            self.cursor.get()
+        }
     }
 
     /// Paints every open overlay, and every closing one that still
@@ -1221,6 +1272,14 @@ impl ControlHost {
                 .state(self.visual_state(tree, node))
                 .time(env.time)
                 .strings(&self.strings.0);
+            // Over its open popup, the cursor comes from the popup.
+            let over = self
+                .hover_pointer(tree, node)
+                .filter(|point| control.overlay().is_some_and(|rect| rect.contains(*point)));
+            if let Some(point) = over {
+                self.cursor.set(Cursor::Auto);
+                cx = cx.pointer(point, &self.cursor);
+            }
             control.paint_overlay(&mut cx);
         }
     }

@@ -99,6 +99,7 @@ fn breadcrumb(cx: &Cx) -> ResolvedStyle {
             }
             focus(&mut style, cx);
             style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            style.cursor = crate::style::Cursor::Pointer;
             style
         }
         Slot::Item => text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL),
@@ -112,6 +113,11 @@ fn breadcrumb(cx: &Cx) -> ResolvedStyle {
             style.min_width = cx.sp(5.0);
             style.min_height = cx.sp(5.0);
             style.icon_size = 16.0;
+            style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            if s.interactive_hover() {
+                style.foreground = cx.c(ColorRole::Foreground);
+            }
+            focus(&mut style, cx);
             style
         }
         _ => {
@@ -424,25 +430,6 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
             style.min_height = cx.sp(6.0);
             style.padding = Edges::axes(cx.sp(3.0), 0.0);
             style.gap = cx.sp(3.0);
-            style
-        }
-        (ControlKind::Dock, Slot::Header) => {
-            let mut style = muted_text(cx, TextSize::Xs);
-            style.text.weight = FontWeight::MEDIUM;
-            style.min_height = cx.sp(8.0);
-            style.padding = Edges::axes(cx.sp(3.0), 0.0);
-            style.border = cx.c(ColorRole::Border);
-            style.border_width = cx.t.border_width;
-            style.border_sides = Sides::BOTTOM;
-            style
-        }
-        (ControlKind::Dock, Slot::Handle) => {
-            let mut style = cx.base();
-            style.min_width = cx.sp(1.0);
-            if cx.s().interactive_hover() || cx.s().pressed() {
-                style.background = cx.c(ColorRole::Border).into();
-            }
-            style.cursor = crate::style::Cursor::ResizeHorizontal;
             style
         }
         (ControlKind::Dock, _) => {

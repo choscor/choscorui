@@ -81,6 +81,10 @@ pub enum CursorShape {
     NotAllowed,
     ResizeLeftRight,
     ResizeUpDown,
+    /// Resize along the diagonal from the top left to the bottom right.
+    ResizeNorthWestSouthEast,
+    /// Resize along the diagonal from the top right to the bottom left.
+    ResizeNorthEastSouthWest,
     /// Image-based cursor; `hotspot` is in image points.
     Custom {
         image: Image,

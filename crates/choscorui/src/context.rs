@@ -619,6 +619,7 @@ impl AppContext {
         if entry.host.needs_frame() {
             entry.host.layout();
             entry.native.present(entry.host.paint());
+            entry.native.set_cursor(entry.host.cursor());
             let (snapshot, changes) = entry.host.semantics();
             if let Err(error) = entry.native.publish(&snapshot, &changes) {
                 eprintln!("choscorui: accessibility update failed: {error}");

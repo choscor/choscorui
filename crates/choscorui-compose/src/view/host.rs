@@ -1321,6 +1321,15 @@ impl ViewHost {
         list
     }
 
+    /// The window cursor over the hovered part, from the last paint: the
+    /// cursor of the topmost slot under the pointer that sets one.
+    pub fn cursor(&self) -> choscorui_core::CursorShape {
+        self.inner
+            .controls
+            .cursor()
+            .shape(self.inner.direction == LayoutDirection::Rtl)
+    }
+
     /// Whether the window should draw again: changed state, layout, or
     /// paint, or a running animation.
     pub fn needs_frame(&self) -> bool {

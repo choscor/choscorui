@@ -259,6 +259,10 @@ A `ResolvedStyle` holds every visual value of one slot. These include the
 background, foreground, border, corner radii, shadows, ring, logical padding,
 minimum size, gap, text, icon size, opacity, cursor, and duration.
 
+The `cursor` is the pointer shape over the slot. `Cursor::Auto` keeps the
+cursor of the slot below. `Cursor::shape` gives the window `CursorShape`
+for the layout direction, so a diagonal grip cursor mirrors.
+
 The background is a `Paint`. The default recipe gives a solid color, and a
 recipe can give a linear or radial gradient. The points of a gradient are in
 the unit square of the slot box. The point (0, 0) is the top start corner,

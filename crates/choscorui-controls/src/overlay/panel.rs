@@ -4,6 +4,7 @@
 
 use crate::custom::{ControlContext, ControlEvent, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
+use crate::hosted::Parts;
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
@@ -174,22 +175,22 @@ impl Buttons {
         crate::hosted::hit(&self.rects, point)
     }
 
-    /// Paints the buttons. `focused` shows the ring when `focus_visible`,
-    /// and `pressed` shows the pressed look.
+    /// Paints the buttons. `focused` shows the ring when `focus_visible`.
+    /// `parts` gives the hovered and pressed button, and the host state
+    /// of `cx` disables them.
     pub fn paint(
         &self,
         cx: &mut PaintContext<'_>,
         focused: Option<usize>,
-        pressed: Option<usize>,
+        parts: &Parts,
         focus_visible: bool,
     ) {
+        let host = cx.state;
         for (index, (button, rect)) in self.buttons.iter().zip(&self.rects).enumerate() {
-            let state = VisualState::NONE
-                .set(
-                    VisualState::FOCUS_VISIBLE,
-                    focus_visible && focused == Some(index),
-                )
-                .set(VisualState::PRESSED, pressed == Some(index));
+            let state = parts.state(index, host).set(
+                VisualState::FOCUS_VISIBLE,
+                focus_visible && focused == Some(index),
+            );
             let style = cx.style(Self::query(button.variant, state));
             cx.slot(*rect, &style, |cx, inner| {
                 cx.label(inner, &button.label, &style, TextAlign::Center);
@@ -198,13 +199,14 @@ impl Buttons {
     }
 }
 
-/// Focus and press tracking for buttons that are tab stops inside one
-/// control. Tab and Shift+Tab move between the buttons and leave the
-/// control at the ends. Enter, Space, and a click activate a button.
+/// Focus, hover, and press tracking for buttons that are tab stops
+/// inside one control. Tab and Shift+Tab move between the buttons and
+/// leave the control at the ends. Enter, Space, and a click activate a
+/// button.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ButtonStops {
     pub focus: usize,
-    pub pressed: Option<usize>,
+    pub parts: Parts,
 }
 
 impl ButtonStops {
@@ -219,27 +221,23 @@ impl ButtonStops {
         if cx.phase() != EventPhase::Target {
             return (EventReply::Continue, None);
         }
+        let pressed = self.parts.pressed;
+        self.parts.track(cx, event, |point| buttons.hit(point));
         let count = buttons.buttons.len();
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
-                position,
                 button: PointerButton::Primary,
-            }) => {
-                let Some(index) = buttons.hit(*position) else {
-                    return (EventReply::Continue, None);
-                };
-                self.pressed = Some(index);
-                self.focus = index;
-                cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
-                (EventReply::Stop, None)
-            }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                cx.request_paint();
-                let hit = buttons.hit(*position);
-                let activated = self.pressed.take().filter(|index| hit == Some(*index));
+                ..
+            }) => match self.parts.pressed {
+                Some(index) => {
+                    self.focus = index;
+                    cx.request_focus();
+                    (EventReply::Stop, None)
+                }
+                None => (EventReply::Continue, None),
+            },
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                let activated = pressed.filter(|index| self.parts.hovered == Some(*index));
                 (EventReply::Stop, activated)
             }
             ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
@@ -265,8 +263,6 @@ impl ButtonStops {
                     } else {
                         0
                     };
-                } else if self.pressed.take().is_some() {
-                    cx.capture_pointer(false);
                 }
                 cx.request_paint();
                 cx.request_semantics();

@@ -608,6 +608,13 @@ fn check_surface(app: &Application, window: &choscorui_macos::Window) {
 
     window.set_cursor(CursorShape::IBeam).unwrap();
     assert_eq!(window.cursor(), CursorShape::IBeam);
+    for diagonal in [
+        CursorShape::ResizeNorthWestSouthEast,
+        CursorShape::ResizeNorthEastSouthWest,
+    ] {
+        window.set_cursor(diagonal.clone()).unwrap();
+        assert_eq!(window.cursor(), diagonal);
+    }
     let arrow = Image::from_rgba8(16, 16, vec![255; 16 * 16 * 4]).unwrap();
     window
         .set_cursor(CursorShape::Custom {

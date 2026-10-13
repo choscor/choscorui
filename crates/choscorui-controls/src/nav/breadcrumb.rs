@@ -3,7 +3,7 @@
 
 use crate::CommandId;
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::menu::{MenuItem, MenuResponse};
 use crate::overlay::menu_popup::MenuPopup;
 use crate::popup::gap_anchor;
@@ -31,8 +31,8 @@ pub struct Breadcrumb {
     parts: Vec<(Part, Rect)>,
     /// The focused tab stop.
     focus: usize,
-    hovered: Option<usize>,
-    pressed: Option<usize>,
+    /// Hover and press of the links and the ellipsis.
+    tracked: Parts,
     menu: MenuPopup,
     enabled: bool,
     rtl: bool,
@@ -46,8 +46,7 @@ impl Breadcrumb {
             hidden: 0..0,
             parts: Vec::new(),
             focus: 0,
-            hovered: None,
-            pressed: None,
+            tracked: Parts::default(),
             menu: MenuPopup::new(Vec::new()),
             enabled: true,
             rtl: false,
@@ -276,44 +275,29 @@ impl CustomControl for Breadcrumb {
             }
         }
         let stops = self.stops();
+        let pressed = self.tracked.pressed;
+        let mut tracked = self.tracked;
+        tracked.track(cx, event, |point| self.part_at(point));
+        self.tracked = tracked;
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
-                position,
                 button: PointerButton::Primary,
+                ..
             }) => {
-                let Some(part) = self.part_at(*position) else {
+                let Some(part) = self.tracked.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(part);
                 if let Some(stop) = stops.iter().position(|stop| *stop == part) {
                     self.focus = stop;
                 }
                 cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = self.part_at(*position);
-                if let Some(part) = self.pressed.take().filter(|part| hit == Some(*part)) {
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                if let Some(part) = pressed.filter(|part| self.tracked.hovered == Some(*part)) {
                     self.activate(cx, part);
                 }
-                cx.request_paint();
                 EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hovered = self.part_at(*position);
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
-                EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => match key {
                 Key::Tab => match hosted::tab_stop(self.focus, stops.len(), cx.modifiers().shift) {
@@ -356,14 +340,10 @@ impl CustomControl for Breadcrumb {
         let stops = self.stops();
         let focused = stops.get(self.focus).copied();
         for (index, (part, rect)) in self.parts.iter().enumerate() {
-            let state = VisualState::NONE
-                .set(VisualState::HOVERED, self.hovered == Some(index))
-                .set(VisualState::PRESSED, self.pressed == Some(index))
-                .set(
-                    VisualState::FOCUS_VISIBLE,
-                    host.focus_visible() && focused == Some(index),
-                )
-                .set(VisualState::DISABLED, host.disabled());
+            let state = self.tracked.state(index, host).set(
+                VisualState::FOCUS_VISIBLE,
+                host.focus_visible() && focused == Some(index),
+            );
             match part {
                 Part::Link(item) => {
                     let style = cx.style(Self::query(Slot::Link, state));

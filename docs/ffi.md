@@ -131,7 +131,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 
 ### Cursors, capture, and occlusion
 
-- **Cursors.** `resetCursorRects` adds one cursor rectangle for the view bounds. The crate rejects a custom cursor larger than 256 points, or with a hotspot outside the image.
+- **Cursors.** `resetCursorRects` adds one cursor rectangle for the view bounds. The diagonal resize shapes come from `frameResizeCursorFromPosition:inDirections:` with the top left or top right corner. The crate rejects a custom cursor larger than 256 points, or with a hotspot outside the image.
 - **Capture.** `Window::capture` uses `cacheDisplayInRect:toBitmapImageRep:` and copies the result into an owned sRGB `Image`.
 - **Occlusion.** `windowDidChangeOcclusionState:` queues `WindowEvent::Occluded`.
 - **Tests.** The smoke test checks idle paint counts, damage rectangles, captured pixel colors, and cursor validation.

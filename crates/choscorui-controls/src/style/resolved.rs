@@ -185,25 +185,47 @@ pub struct Ring {
     pub color: Color,
 }
 
-/// The pointer appearance over a slot.
+/// The pointer appearance over a slot. The host shows the cursor of the
+/// topmost painted slot under the pointer that sets one.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum Cursor {
+    /// The slot sets no cursor: the cursor of the slot below it shows, or
+    /// the arrow.
     #[default]
+    Auto,
     Arrow,
     Text,
+    /// The pointing hand of a link.
+    Pointer,
     ResizeHorizontal,
     ResizeVertical,
+    /// A grip at the bottom end corner: the diagonal from the top start
+    /// corner to the bottom end corner.
+    ResizeDiagonalEnd,
+    /// A grip at the bottom start corner.
+    ResizeDiagonalStart,
     Grab,
     NotAllowed,
 }
 
 impl Cursor {
-    pub fn shape(self) -> CursorShape {
+    /// The window cursor for the layout direction.
+    pub fn shape(self, rtl: bool) -> CursorShape {
+        let diagonal = |end: bool| {
+            if end != rtl {
+                CursorShape::ResizeNorthWestSouthEast
+            } else {
+                CursorShape::ResizeNorthEastSouthWest
+            }
+        };
         match self {
-            Self::Arrow => CursorShape::Arrow,
+            Self::Auto | Self::Arrow => CursorShape::Arrow,
             Self::Text => CursorShape::IBeam,
+            Self::Pointer => CursorShape::PointingHand,
             Self::ResizeHorizontal => CursorShape::ResizeLeftRight,
             Self::ResizeVertical => CursorShape::ResizeUpDown,
+            Self::ResizeDiagonalEnd => diagonal(true),
+            Self::ResizeDiagonalStart => diagonal(false),
             Self::Grab => CursorShape::OpenHand,
             Self::NotAllowed => CursorShape::NotAllowed,
         }
@@ -271,7 +293,7 @@ impl ResolvedStyle {
             icon_size: 16.0,
             opacity: 1.0,
             offset_y: 0.0,
-            cursor: Cursor::Arrow,
+            cursor: Cursor::Auto,
             backdrop_blur: 0.0,
             motion_ms: if tokens.motion.reduced {
                 0

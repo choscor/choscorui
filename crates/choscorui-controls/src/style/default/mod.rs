@@ -157,10 +157,14 @@ pub(super) fn choice_invalid(style: &mut ResolvedStyle, cx: &Cx) {
     }
 }
 
+/// The opacity of a disabled slot, and through the button root, of the
+/// group over a disabled control.
+pub(super) const DISABLED_OPACITY: f64 = 0.5;
+
 /// The disabled look: half opacity.
 pub(super) fn disabled(style: &mut ResolvedStyle, cx: &Cx) {
     if cx.s().disabled() {
-        style.opacity = 0.5;
+        style.opacity = DISABLED_OPACITY;
         style.cursor = super::Cursor::Arrow;
     }
 }

@@ -6,7 +6,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::form::measured::{paint_wrapped, wrapped_height};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::overlay::panel::{Buttons, PanelButton};
 use crate::style::{
     ButtonVariant, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
@@ -153,6 +153,8 @@ pub struct Questionnaire {
     choice: usize,
     invalid: bool,
     pressed: Option<Stop>,
+    /// Hover and press of the footer buttons.
+    button_parts: Parts,
     hovered: Option<usize>,
     geometry: Geometry,
     enabled: bool,
@@ -186,6 +188,7 @@ impl Questionnaire {
             choice: 0,
             invalid: false,
             pressed: None,
+            button_parts: Parts::default(),
             hovered: None,
             geometry: Geometry::default(),
             enabled: true,
@@ -686,6 +689,9 @@ impl CustomControl for Questionnaire {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        let buttons = &self.geometry.buttons;
+        self.button_parts
+            .track(cx, event, |point| hosted::hit(buttons, point));
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
@@ -782,12 +788,8 @@ impl CustomControl for Questionnaire {
             Stop::Button(index) if host.focused() => Some(index),
             _ => None,
         };
-        let pressed = match self.pressed {
-            Some(Stop::Button(index)) => Some(index),
-            _ => None,
-        };
         self.buttons()
-            .paint(cx, focused, pressed, host.focus_visible());
+            .paint(cx, focused, &self.button_parts, host.focus_visible());
     }
 
     fn text_input(&self) -> Option<TextInputInfo> {

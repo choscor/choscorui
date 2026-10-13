@@ -206,6 +206,7 @@ pub(crate) fn badge(cx: &Cx, variant: BadgeVariant) -> ResolvedStyle {
         BadgeVariant::Link => {
             style.foreground = cx.c(ColorRole::Primary);
             style.underline = hover;
+            style.cursor = crate::style::Cursor::Pointer;
         }
     }
     focus(&mut style, cx);
@@ -368,7 +369,7 @@ fn calendar(cx: &Cx) -> ResolvedStyle {
             }
             if s.disabled() {
                 style.foreground = cx.c(ColorRole::MutedForeground);
-                style.opacity = 0.5;
+                style.opacity = super::DISABLED_OPACITY;
             }
             style
         }

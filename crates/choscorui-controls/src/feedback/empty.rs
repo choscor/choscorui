@@ -226,12 +226,8 @@ impl CustomControl for Empty {
                 &description,
                 TextAlign::Center,
             );
-            self.buttons.paint(
-                cx,
-                Some(self.stops.focus),
-                self.stops.pressed,
-                focus_visible,
-            );
+            self.buttons
+                .paint(cx, Some(self.stops.focus), &self.stops.parts, focus_visible);
         });
     }
 

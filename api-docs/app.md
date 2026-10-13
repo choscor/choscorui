@@ -1574,6 +1574,15 @@ pub fn controls(&self) -> &ControlHost
 
 The host of the mounted controls.
 
+#### `ViewHost::cursor`
+
+```rust
+pub fn cursor(&self) -> CursorShape
+```
+
+The window cursor over the hovered part, from the last paint: the
+cursor of the topmost slot under the pointer that sets one.
+
 #### `ViewHost::edit`
 
 ```rust

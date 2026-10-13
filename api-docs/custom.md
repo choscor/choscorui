@@ -892,6 +892,16 @@ pub fn at(&mut self, bounds: Rect) -> PaintContext<'_>
 
 The same context for another rectangle, such as a child part.
 
+#### `PaintContext::cursor`
+
+```rust
+pub fn cursor(&self, rect: Rect, cursor: Cursor)
+```
+
+Shows `cursor` while the pointer is over `rect`, for a part that a
+control paints without [`PaintContext::slot`](#paintcontextslot). A later part over
+the same point wins. `Cursor::Auto` changes nothing.
+
 #### `PaintContext::icon`
 
 ```rust

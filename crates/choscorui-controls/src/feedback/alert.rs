@@ -228,12 +228,8 @@ impl CustomControl for Alert {
                 &description,
                 TextAlign::Start,
             );
-            self.buttons.paint(
-                cx,
-                Some(self.stops.focus),
-                self.stops.pressed,
-                focus_visible,
-            );
+            self.buttons
+                .paint(cx, Some(self.stops.focus), &self.stops.parts, focus_visible);
         });
     }
 

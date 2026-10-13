@@ -222,12 +222,8 @@ impl CustomControl for Card {
             self.text
                 .paint(cx, self.query(Slot::Root), self.header, TextAlign::Start);
             paint_wrapped(cx, self.body, &self.content, &content, TextAlign::Start);
-            self.buttons.paint(
-                cx,
-                Some(self.stops.focus),
-                self.stops.pressed,
-                focus_visible,
-            );
+            self.buttons
+                .paint(cx, Some(self.stops.focus), &self.stops.parts, focus_visible);
         });
     }
 

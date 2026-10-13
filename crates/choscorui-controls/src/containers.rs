@@ -1523,8 +1523,9 @@ fn split_rects(
 }
 
 /// Paints the 1 pt divider centered in `bounds`, across the split, and the
-/// grip when `grip` is set.
-fn paint_divider(
+/// grip when `grip` is set. The handle recipe gives the cursor over a
+/// divider between side-by-side panes; between stacked panes it turns.
+pub(crate) fn paint_divider(
     cx: &mut PaintContext<'_>,
     bounds: Rect,
     orientation: SplitOrientation,
@@ -1548,6 +1549,13 @@ fn paint_divider(
         ),
     };
     cx.slot(divider, &line, |_, _| {});
+    let cursor = match (orientation, line.cursor) {
+        (SplitOrientation::Vertical, crate::Cursor::ResizeHorizontal) => {
+            crate::Cursor::ResizeVertical
+        }
+        (_, cursor) => cursor,
+    };
+    cx.cursor(bounds, cursor);
     if !grip {
         return;
     }

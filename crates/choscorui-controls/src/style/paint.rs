@@ -1,14 +1,14 @@
 //! The general slot painter and text helpers that every control uses.
 
 use super::{
-    ControlKind, Corners, Orientation, ResolvedStyle, Slot, StyleQuery, Styles, Transitions,
-    VisualState,
+    ControlKind, Corners, Cursor, Orientation, ResolvedStyle, Slot, StyleQuery, Styles,
+    Transitions, VisualState,
 };
 use choscorui_core::{
     Color, DesignTokens, DisplayList, FillRule, Icon, Localizer, Paint, Path, Point, Rect, Shadow,
     Size, StrokeStyle, TextRun, TextShaper, TypeSpec,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 /// Measures one line of text, for layout and alignment.
@@ -418,6 +418,11 @@ pub struct PaintContext<'a> {
     key: u64,
     /// The host's transition store, when the host eases state changes.
     transitions: Option<&'a Transitions>,
+    /// The pointer position and where the cursor of the slot under it
+    /// goes, while the node is the hovered one.
+    pointer: Option<(Point, &'a Cell<Cursor>)>,
+    /// True inside the group opacity of a disabled control.
+    dimmed: bool,
 }
 
 impl<'a> PaintContext<'a> {
@@ -443,6 +448,8 @@ impl<'a> PaintContext<'a> {
             strings: Localizer::builtin(),
             key: tokens.fingerprint(),
             transitions: None,
+            pointer: None,
+            dimmed: false,
         }
     }
 
@@ -496,6 +503,36 @@ impl<'a> PaintContext<'a> {
             strings: self.strings,
             key: self.key,
             transitions: self.transitions,
+            pointer: self.pointer,
+            dimmed: self.dimmed,
+        }
+    }
+
+    /// Records into `sink` the cursor of each painted slot under `point`,
+    /// so that the host shows the cursor of the hovered part.
+    #[must_use]
+    pub(crate) fn pointer(mut self, point: Point, sink: &'a Cell<Cursor>) -> Self {
+        self.pointer = Some((point, sink));
+        self
+    }
+
+    /// Marks the context as inside the group opacity of a disabled
+    /// control. Disabled slots then do not fade again.
+    #[must_use]
+    pub(crate) fn dimmed(mut self, dimmed: bool) -> Self {
+        self.dimmed = dimmed;
+        self
+    }
+
+    /// Shows `cursor` while the pointer is over `rect`, for a part that a
+    /// control paints without [`PaintContext::slot`]. A later part over
+    /// the same point wins. [`Cursor::Auto`] changes nothing.
+    pub fn cursor(&self, rect: Rect, cursor: Cursor) {
+        if let Some((point, sink)) = self.pointer
+            && cursor != Cursor::Auto
+            && rect.contains(point)
+        {
+            sink.set(cursor);
         }
     }
 
@@ -504,12 +541,17 @@ impl<'a> PaintContext<'a> {
     /// offset are part of the way from the earlier style.
     pub fn style(&self, query: StyleQuery) -> ResolvedStyle {
         let target = self.styles.resolve_keyed(self.key, self.tokens, query);
-        match self.transitions {
+        let mut style = match self.transitions {
             Some(transitions) => transitions.apply(&query, target, self.tokens, |earlier| {
                 self.styles.resolve_keyed(self.key, self.tokens, earlier)
             }),
             None => target,
+        };
+        if self.dimmed && query.state.disabled() {
+            // The group opacity of the control carries the disabled look.
+            style.opacity = 1.0;
         }
+        style
     }
 
     /// Paints a slot box like [`paint_slot`], then calls `content` with
@@ -526,6 +568,7 @@ impl<'a> PaintContext<'a> {
             let _ = self.list.push_opacity(style.opacity.clamp(0.0, 1.0));
         }
         paint_box(self.list, rect, style, self.rtl);
+        self.cursor(rect, style.cursor);
         let inner = content_rect(rect, style, self.rtl);
         content(&mut self.at(inner), inner);
         if faded {

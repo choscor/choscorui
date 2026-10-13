@@ -3,7 +3,7 @@
 
 use super::panel::{Buttons, PanelButton, PanelText};
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::hosted::{self, Press, PressOutcome, Reveal};
+use crate::hosted::{self, Parts, Press, PressOutcome, Reveal};
 use crate::style::{
     ButtonVariant, ControlKind, ControlSize, Edges, PaintContext, ResolvedStyle, SheetSide, Slot,
     StyleQuery, TextAlign, VisualState,
@@ -53,7 +53,8 @@ pub struct Dialog {
     /// for the close button.
     focus: usize,
     /// The part under a pointer press.
-    pressed: Option<usize>,
+    /// Hover and press of the buttons and the close button.
+    parts: Parts,
     trigger_press: Press,
     drag: Option<Drag>,
     enabled: bool,
@@ -80,7 +81,7 @@ impl Dialog {
             handle: None,
             motion_ms: 0,
             focus: 0,
-            pressed: None,
+            parts: Parts::default(),
             trigger_press: Press::default(),
             drag: None,
             enabled: true,
@@ -187,7 +188,7 @@ impl Dialog {
     /// Returns true when it changed.
     fn apply_open(&mut self, open: bool, time: f64) -> bool {
         self.drag = None;
-        self.pressed = None;
+        self.parts.clear();
         if self.reveal.open == open {
             return false;
         }
@@ -261,15 +262,19 @@ impl Dialog {
     }
 
     fn open_pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, &ControlEvent::Pointer(*event), |point| {
+            self.part_at(point)
+        });
+        self.parts = parts;
         match *event {
             PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
             } => {
-                if let Some(part) = self.part_at(position) {
-                    self.pressed = Some(part);
+                if let Some(part) = self.parts.pressed {
                     self.focus = part;
-                    cx.capture_pointer(true);
                 } else if !self.panel.contains(position) {
                     self.dismiss(cx);
                 } else if matches!(self.form, Form::Drawer(_)) {
@@ -296,7 +301,7 @@ impl Dialog {
                         self.dismiss(cx);
                     }
                     cx.request_paint();
-                } else if let Some(part) = self.pressed.take() {
+                } else if let Some(part) = pressed {
                     if self.part_at(position) == Some(part) {
                         self.activate(cx, part);
                     }
@@ -412,15 +417,13 @@ impl Dialog {
         self.text
             .paint(cx, self.query(Slot::Root), self.header, align);
         let focused = Some(self.focus);
-        self.buttons.paint(cx, focused, self.pressed, focus_visible);
+        self.buttons.paint(cx, focused, &self.parts, focus_visible);
         if self.has_close() {
             let part = self.buttons.buttons.len();
-            let state = VisualState::NONE
-                .set(
-                    VisualState::FOCUS_VISIBLE,
-                    focus_visible && self.focus == part,
-                )
-                .set(VisualState::PRESSED, self.pressed == Some(part));
+            let state = self.parts.state(part, cx.state).set(
+                VisualState::FOCUS_VISIBLE,
+                focus_visible && self.focus == part,
+            );
             let style = cx.style(self.query(Slot::Close).state(state));
             let button = ResolvedStyle {
                 padding: Edges::ZERO,
@@ -474,6 +477,10 @@ impl CustomControl for Dialog {
         if self.reveal.open {
             return match event {
                 ControlEvent::Pointer(pointer) => self.open_pointer(cx, pointer),
+                ControlEvent::Hover(false) | ControlEvent::FocusChanged(false) => {
+                    self.parts.track(cx, event, |_| None);
+                    EventReply::Continue
+                }
                 ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => self.open_key(cx, *key),
                 ControlEvent::Key(_) => EventReply::Stop,
                 _ => EventReply::Continue,
@@ -593,7 +600,7 @@ impl CustomControl for Dialog {
         if !enabled {
             self.reveal = Reveal::default();
             self.drag = None;
-            self.pressed = None;
+            self.parts.clear();
         }
     }
 

@@ -4,7 +4,7 @@
 use crate::Avatar;
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::form::measured::{paint_wrapped, wrapped_height};
-use crate::hosted;
+use crate::hosted::{self, Parts};
 use crate::overlay::panel::{Buttons, PanelButton};
 use crate::style::fill_area;
 use crate::style::{
@@ -315,8 +315,8 @@ pub struct ItemGroup {
     separators: bool,
     rows: Vec<RowLayout>,
     focus: usize,
-    pressed: Option<Stop>,
-    hovered: Option<usize>,
+    /// Hover and press over the stops, by stop index.
+    parts: Parts,
     enabled: bool,
 }
 
@@ -328,8 +328,7 @@ impl ItemGroup {
             separators: false,
             rows: Vec::new(),
             focus: 0,
-            pressed: None,
-            hovered: None,
+            parts: Parts::default(),
             enabled: true,
         }
     }
@@ -413,26 +412,28 @@ impl ItemGroup {
         }
     }
 
-    fn paint_row(&self, cx: &mut PaintContext<'_>, index: usize, focused: Option<Stop>) {
+    fn paint_row(
+        &self,
+        cx: &mut PaintContext<'_>,
+        index: usize,
+        focused: Option<Stop>,
+        stops: &[Stop],
+    ) {
         let item = &self.items[index];
         let row = &self.rows[index];
         let host = cx.state;
-        let link_focused = focused
-            == Some(Stop {
-                item: index,
-                action: None,
-            });
-        let state = VisualState::NONE
-            .set(
-                VisualState::HOVERED,
-                item.link && self.hovered == Some(index),
-            )
-            .set(VisualState::HIGHLIGHTED, item.link)
-            .set(
-                VisualState::FOCUS_VISIBLE,
-                host.focus_visible() && link_focused,
-            )
-            .set(VisualState::DISABLED, host.disabled());
+        let link = Stop {
+            item: index,
+            action: None,
+        };
+        let link_state = stops.iter().position(|stop| *stop == link).map_or(
+            VisualState::NONE.set(VisualState::DISABLED, host.disabled()),
+            |stop| self.parts.state(stop, host),
+        );
+        let state = link_state.set(VisualState::HIGHLIGHTED, item.link).set(
+            VisualState::FOCUS_VISIBLE,
+            host.focus_visible() && focused == Some(link),
+        );
         let root = cx.style(item.query(Slot::Root).state(state));
         let title = cx.style(item.query(Slot::Title));
         let description = cx.style(item.query(Slot::Description));
@@ -497,11 +498,13 @@ impl ItemGroup {
             let focused_action = focused
                 .filter(|stop| stop.item == index)
                 .and_then(|stop| stop.action);
-            let pressed = self
-                .pressed
-                .filter(|stop| stop.item == index)
-                .and_then(|stop| stop.action);
-            buttons.paint(cx, focused_action, pressed, host.focus_visible());
+            let parts = self.parts.map(|stop| {
+                stops
+                    .get(stop)
+                    .filter(|stop| stop.item == index)
+                    .and_then(|stop| stop.action)
+            });
+            buttons.paint(cx, focused_action, &parts, host.focus_visible());
         });
     }
 }
@@ -532,47 +535,31 @@ impl CustomControl for ItemGroup {
             return EventReply::Continue;
         }
         let stops = self.stops();
+        let pressed = self.parts.pressed;
+        let mut parts = self.parts;
+        parts.track(cx, event, |point| {
+            let stop = self.stop_at(point)?;
+            stops.iter().position(|other| *other == stop)
+        });
+        self.parts = parts;
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
-                position,
                 button: PointerButton::Primary,
+                ..
             }) => {
-                let Some(stop) = self.stop_at(*position) else {
+                let Some(index) = self.parts.pressed else {
                     return EventReply::Continue;
                 };
-                self.pressed = Some(stop);
-                if let Some(index) = stops.iter().position(|other| *other == stop) {
-                    self.focus = index;
-                }
+                self.focus = index;
                 cx.request_focus();
-                cx.capture_pointer(true);
-                cx.request_paint();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
-                cx.capture_pointer(false);
-                let hit = self.stop_at(*position);
-                if let Some(stop) = self.pressed.take().filter(|stop| hit == Some(*stop)) {
+            ControlEvent::Pointer(PointerEvent::Up { .. }) if pressed.is_some() => {
+                let activated = pressed.filter(|index| self.parts.hovered == Some(*index));
+                if let Some(stop) = activated.and_then(|index| stops.get(index).copied()) {
                     self.activate(cx, stop);
                 }
-                cx.request_paint();
                 EventReply::Stop
-            }
-            ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hovered = self
-                    .rows
-                    .iter()
-                    .position(|row| row.rect.contains(*position));
-                if hovered != self.hovered {
-                    self.hovered = hovered;
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-            ControlEvent::Hover(false) => {
-                self.hovered = None;
-                cx.request_paint();
-                EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => match key {
                 Key::Tab => match hosted::tab_stop(self.focus, stops.len(), cx.modifiers().shift) {
@@ -593,7 +580,7 @@ impl CustomControl for ItemGroup {
                 _ => EventReply::Continue,
             },
             ControlEvent::FocusChanged(focused) => {
-                if *focused && self.pressed.is_none() {
+                if *focused && self.parts.pressed.is_none() {
                     self.focus = if cx.modifiers().shift {
                         stops.len().saturating_sub(1)
                     } else {
@@ -609,10 +596,11 @@ impl CustomControl for ItemGroup {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let focused = self.stops().get(self.focus).copied();
+        let stops = self.stops();
+        let focused = stops.get(self.focus).copied();
         let separator = cx.style(StyleQuery::new(ControlKind::Item, Slot::Separator));
         for index in 0..self.rows.len() {
-            self.paint_row(cx, index, focused);
+            self.paint_row(cx, index, focused, &stops);
             if self.separators && index + 1 < self.rows.len() {
                 let row = self.rows[index].rect;
                 let line = Rect::from_xywh(

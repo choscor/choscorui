@@ -5,7 +5,7 @@
 //! [`ControlHost`]: crate::ControlHost
 
 use crate::custom::{ControlContext, ControlEvent};
-use crate::style::PaintContext;
+use crate::style::{PaintContext, VisualState};
 use choscorui_core::{
     DesignTokens, EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticNode, SemanticRole, SemanticState, Transform,
@@ -67,6 +67,106 @@ impl Press {
             }
             _ => PressOutcome::Ignored,
         }
+    }
+}
+
+/// Hover and press of the inner parts of a composite control, such as
+/// the buttons of a panel or the rows of a list. `K` names a part, by
+/// default its index. Move and the end of the hover set the hovered part.
+/// A primary press on a part captures the pointer and presses the part
+/// until the release. The pressed look shows only while the pointer is
+/// over the pressed part.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Parts<K = usize> {
+    pub hovered: Option<K>,
+    pub pressed: Option<K>,
+}
+
+impl<K> Default for Parts<K> {
+    fn default() -> Self {
+        Self {
+            hovered: None,
+            pressed: None,
+        }
+    }
+}
+
+impl<K: Copy + PartialEq> Parts<K> {
+    /// Follows `event` for the parts that `hit` finds, and requests a
+    /// paint when a part changes. The control still handles the event.
+    pub fn track(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+        hit: impl Fn(Point) -> Option<K>,
+    ) {
+        if cx.phase() != EventPhase::Target {
+            return;
+        }
+        let before = *self;
+        match event {
+            ControlEvent::Pointer(PointerEvent::Move { position }) => {
+                self.hovered = hit(*position);
+            }
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                self.hovered = hit(*position);
+                self.pressed = self.hovered;
+                if self.pressed.is_some() {
+                    cx.capture_pointer(true);
+                }
+            }
+            ControlEvent::Pointer(PointerEvent::Up { position, .. }) => {
+                self.hovered = hit(*position);
+                if self.pressed.take().is_some() {
+                    cx.capture_pointer(false);
+                }
+            }
+            ControlEvent::Hover(false) => self.hovered = None,
+            ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.pressed.is_some() => {
+                self.pressed = None;
+                cx.capture_pointer(false);
+            }
+            _ => {}
+        }
+        if *self != before {
+            cx.request_paint();
+        }
+    }
+
+    /// Forgets the parts, for example when the parts change.
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// The parts renamed by `local`, for example the buttons of one row
+    /// out of the parts of a whole list. A part that `local` drops is not
+    /// hovered or pressed.
+    pub fn map<L>(&self, local: impl Fn(K) -> Option<L>) -> Parts<L> {
+        Parts {
+            hovered: self.hovered.and_then(&local),
+            pressed: self.pressed.and_then(&local),
+        }
+    }
+
+    /// The pressed part while the pointer is still over it.
+    pub fn shown_pressed(&self) -> Option<K> {
+        self.pressed.filter(|part| self.hovered == Some(*part))
+    }
+
+    /// The state of `part`: hovered, pressed while the pointer is over it,
+    /// and the disabled state of the `host` control.
+    pub fn state(&self, part: K, host: VisualState) -> VisualState {
+        let enabled = !host.disabled();
+        VisualState::NONE
+            .set(VisualState::DISABLED, !enabled)
+            .set(VisualState::HOVERED, enabled && self.hovered == Some(part))
+            .set(
+                VisualState::PRESSED,
+                enabled && self.shown_pressed() == Some(part),
+            )
     }
 }
 

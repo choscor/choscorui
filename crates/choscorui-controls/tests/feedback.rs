@@ -7,7 +7,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, Icon, Key, KeyEvent, LayoutDirection,
-    Point, SemanticRole, ThemeResolver,
+    Point, PointerButton, PointerEvent, SemanticRole, ThemeResolver,
 };
 use hosted::{Harness, paints, texts};
 
@@ -153,4 +153,84 @@ fn empty_centers_its_parts_and_activates_buttons() {
     let avatar =
         Harness::new(Empty::new("User offline", "").with_avatar(Avatar::new("Ana Lee", "AL")));
     assert_eq!(texts(&avatar.paint()), ["AL", "User offline"]);
+}
+
+/// The opacity layers of `list`, in paint order.
+fn opacity_layers(list: &DisplayList) -> Vec<f64> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::PushOpacity(opacity) => Some(*opacity),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Lets the state transitions finish.
+fn settle(h: &mut Harness) {
+    let time = h.time + 1.0;
+    h.paint();
+    h.set_time(time);
+}
+
+fn press(h: &mut Harness, down: bool, position: Point) {
+    let button = PointerButton::Primary;
+    let event = if down {
+        PointerEvent::Down { position, button }
+    } else {
+        PointerEvent::Up { position, button }
+    };
+    h.host.dispatch_pointer(&mut h.tree, event);
+}
+
+#[test]
+fn panel_buttons_show_hover_press_while_inside_and_disabled() {
+    let tokens = DesignTokens::light();
+    let primary = tokens.color(ColorRole::Primary);
+    let mut h = Harness::new(
+        Alert::new("Update", "A new version is ready.")
+            .with_action("Install", ButtonVariant::Default),
+    );
+    let rest = hosted::rounded_fills(&h.paint(), primary);
+    assert_eq!(rest.len(), 1, "one button at rest");
+    let button = rest[0];
+    let inside = button.center();
+
+    h.hover(inside);
+    settle(&mut h);
+    let hovered = h.paint();
+    assert!(hosted::rounded_fills(&hovered, primary).is_empty());
+    assert_eq!(
+        hosted::rounded_fills(&hovered, primary.with_alpha(0.8)),
+        [button],
+        "a Move over the button shows hover"
+    );
+
+    press(&mut h, true, inside);
+    settle(&mut h);
+    let hover = primary.with_alpha(0.8);
+    let down = hosted::rounded_fills(&h.paint(), hover);
+    assert_eq!(down.len(), 1);
+    assert_eq!(down[0].min_y(), button.min_y() + 1.0, "the pressed offset");
+
+    let outside = Point::new(h.bounds().origin.x + 4.0, h.bounds().max_y() - 4.0);
+    h.hover(outside);
+    settle(&mut h);
+    assert_eq!(
+        hosted::rounded_fills(&h.paint(), primary),
+        [button],
+        "dragged off, the button shows no press"
+    );
+    h.hover(inside);
+    settle(&mut h);
+    assert_eq!(hosted::rounded_fills(&h.paint(), hover), down);
+    press(&mut h, false, outside);
+    assert!(h.messages().is_empty(), "a release outside does nothing");
+
+    h.set_enabled(false);
+    h.hover(inside);
+    settle(&mut h);
+    let disabled = h.paint();
+    assert_eq!(opacity_layers(&disabled), [0.5], "one group opacity");
+    assert_eq!(hosted::rounded_fills(&disabled, primary), [button]);
 }
