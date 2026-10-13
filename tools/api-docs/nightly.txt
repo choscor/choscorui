@@ -1,0 +1,3 @@
+# The nightly toolchain that writes the rustdoc JSON. Bump it together
+# with FORMAT_VERSION in src/model.rs, then run tests/fixture/generate.sh.
+nightly-2026-10-13

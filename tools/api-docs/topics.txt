@@ -1,0 +1,260 @@
+# The topic of each item in api-docs/. Each line is `<topic> <item path>`.
+#
+# - Every item of `choscorui::prelude` must have a line.
+# - A line for an item outside the prelude adds that item to the docs.
+#   Use it only for an extension point that an application needs.
+# - A `ViewExt` method line sets the group of that modifier in
+#   `modifiers.md`.
+#
+# Regenerate after a change: cargo run -p choscorui-api-docs --locked
+
+# The application, its windows, and its menus.
+app choscorui::prelude::App
+app choscorui::prelude::AppContext
+app choscorui::prelude::Scene
+app choscorui::prelude::WindowId
+app choscorui::prelude::WindowOptions
+app choscorui::prelude::MenuBarModel
+app choscorui::prelude::MenuCommandId
+app choscorui::prelude::MenuEntry
+app choscorui::prelude::MenuItemState
+app choscorui::prelude::MenuSpec
+app choscorui::prelude::View
+app choscorui::prelude::AnyView
+app choscorui::prelude::Empty
+app choscorui::prelude::Either
+app choscorui::prelude::ViewHost
+app choscorui::prelude::ViewError
+app choscorui::prelude::capabilities
+app choscorui::core::BackendCapabilities
+app choscorui::core::Support
+
+# State, bindings, the environment, and views that follow state.
+state choscorui::prelude::Cx
+state choscorui::prelude::State
+state choscorui::prelude::Binding
+state choscorui::prelude::Memo
+state choscorui::prelude::Live
+state choscorui::prelude::Fixed
+state choscorui::prelude::IntoLive
+state choscorui::prelude::Reading
+state choscorui::prelude::Handle
+state choscorui::prelude::take_handle_errors
+state choscorui::prelude::Runtime
+state choscorui::prelude::Env
+state choscorui::prelude::Dynamic
+state choscorui::prelude::Branch
+state choscorui::prelude::ForEach
+state choscorui::core::Settings
+state choscorui::core::SettingsSchema
+state choscorui::core::SettingValue
+
+# Stacks, grids, forms, and geometry.
+layout choscorui::prelude::HStack
+layout choscorui::prelude::VStack
+layout choscorui::prelude::ZStack
+layout choscorui::prelude::Group
+layout choscorui::prelude::Grid
+layout choscorui::prelude::GridItem
+layout choscorui::prelude::Spacer
+layout choscorui::prelude::Divider
+layout choscorui::prelude::ScrollView
+layout choscorui::prelude::LazyHStack
+layout choscorui::prelude::LazyVStack
+layout choscorui::prelude::Alignment
+layout choscorui::prelude::HorizontalAlignment
+layout choscorui::prelude::VerticalAlignment
+layout choscorui::prelude::Form
+layout choscorui::prelude::FormRow
+layout choscorui::prelude::Field
+layout choscorui::prelude::FieldContent
+layout choscorui::prelude::FieldGroup
+layout choscorui::prelude::FieldSeparator
+layout choscorui::prelude::FieldSet
+layout choscorui::prelude::FieldTitle
+layout choscorui::prelude::FieldOrientation
+layout choscorui::prelude::Resizable
+layout choscorui::prelude::SplitOrientation
+layout choscorui::prelude::AspectRatio
+layout choscorui::prelude::Dock
+layout choscorui::prelude::LayoutDirection
+layout choscorui::prelude::Point
+layout choscorui::prelude::Rect
+layout choscorui::prelude::Size
+layout choscorui::prelude::Space
+
+# The controls.
+controls choscorui::prelude::Accordion
+controls choscorui::prelude::Alert
+controls choscorui::prelude::Attachment
+controls choscorui::prelude::Avatar
+controls choscorui::prelude::Badge
+controls choscorui::prelude::Breadcrumb
+controls choscorui::prelude::Button
+controls choscorui::prelude::ButtonGroup
+controls choscorui::prelude::Calendar
+controls choscorui::prelude::Card
+controls choscorui::prelude::Carousel
+controls choscorui::prelude::Chart
+controls choscorui::prelude::Checkbox
+controls choscorui::prelude::Collapsible
+controls choscorui::prelude::ColorPicker
+controls choscorui::prelude::ColumnBrowser
+controls choscorui::prelude::Combobox
+controls choscorui::prelude::Command
+controls choscorui::prelude::DataTable
+controls choscorui::prelude::DatePicker
+controls choscorui::prelude::DateTimeEdit
+controls choscorui::prelude::DecimalSpinBox
+controls choscorui::prelude::Dial
+controls choscorui::prelude::EmptyState
+controls choscorui::prelude::FieldText
+controls choscorui::prelude::HeaderView
+controls choscorui::prelude::Input
+controls choscorui::prelude::InputGroup
+controls choscorui::prelude::InputOtp
+controls choscorui::prelude::IntegerRange
+controls choscorui::prelude::ItemGroup
+controls choscorui::prelude::Items
+controls choscorui::prelude::Kbd
+controls choscorui::prelude::KeySequenceEdit
+controls choscorui::prelude::Label
+controls choscorui::prelude::List
+controls choscorui::prelude::Marker
+controls choscorui::prelude::Menubar
+controls choscorui::prelude::Message
+controls choscorui::prelude::MessageScroller
+controls choscorui::prelude::NavigationMenu
+controls choscorui::prelude::NumericDisplay
+controls choscorui::prelude::Pagination
+controls choscorui::prelude::Progress
+controls choscorui::prelude::Questionnaire
+controls choscorui::prelude::RadioGroup
+controls choscorui::prelude::RangeSlider
+controls choscorui::prelude::Select
+controls choscorui::prelude::Sidebar
+controls choscorui::prelude::SizeGrip
+controls choscorui::prelude::Skeleton
+controls choscorui::prelude::Slider
+controls choscorui::prelude::SpinBox
+controls choscorui::prelude::Spinner
+controls choscorui::prelude::StatusBar
+controls choscorui::prelude::Switch
+controls choscorui::prelude::Tabs
+controls choscorui::prelude::TabsVariant
+controls choscorui::prelude::TextEditor
+controls choscorui::prelude::TextField
+controls choscorui::prelude::Textarea
+controls choscorui::prelude::Toggle
+controls choscorui::prelude::ToggleGroup
+controls choscorui::prelude::Toolbar
+controls choscorui::prelude::ControlKind
+
+# Dialogs, popovers, menus, and toasts.
+presentation choscorui::prelude::Dialog
+presentation choscorui::prelude::FontDialog
+presentation choscorui::prelude::InputDialog
+presentation choscorui::prelude::Popover
+presentation choscorui::prelude::ContextMenu
+presentation choscorui::prelude::MenuChoice
+presentation choscorui::prelude::SheetSide
+presentation choscorui::prelude::Toast
+presentation choscorui::prelude::ToastPosition
+presentation choscorui::prelude::ToastVariant
+presentation choscorui::prelude::Toasts
+
+# Modifiers: the trait, its result, and its arguments.
+modifiers choscorui::prelude::ViewExt
+modifiers choscorui::prelude::Styled
+modifiers choscorui::prelude::Edges
+modifiers choscorui::prelude::Frame
+
+# Design tokens, colors, and variants.
+styling choscorui::prelude::DesignTokens
+styling choscorui::prelude::BaseColor
+styling choscorui::prelude::Color
+styling choscorui::prelude::ColorRole
+styling choscorui::prelude::ColorScheme
+styling choscorui::prelude::Corner
+styling choscorui::prelude::Elevation
+styling choscorui::prelude::Fill
+styling choscorui::prelude::Metric
+styling choscorui::prelude::FontWeight
+styling choscorui::prelude::ButtonVariant
+styling choscorui::prelude::ControlSize
+styling choscorui::prelude::FocusFrame
+styling choscorui::prelude::Icon
+
+# Text, translations, and locales.
+text choscorui::prelude::Text
+text choscorui::prelude::TextContent
+text choscorui::prelude::TextEnv
+text choscorui::prelude::TextPreset
+text choscorui::prelude::Localized
+text choscorui::prelude::IntoTextArg
+text choscorui::prelude::Catalog
+text choscorui::prelude::Locale
+text choscorui::prelude::t
+
+# Custom controls and drawing.
+custom choscorui::prelude::Canvas
+custom choscorui::prelude::CanvasContext
+custom choscorui::prelude::Configured
+custom choscorui::prelude::ControlView
+custom choscorui::prelude::CustomView
+custom choscorui::controls::CustomControl
+custom choscorui::controls::ControlEvent
+custom choscorui::controls::MeasureContext
+custom choscorui::controls::ControlContext
+custom choscorui::controls::PaintContext
+
+# Modifier groups.
+layout choscorui::prelude::ViewExt::aspect_ratio
+layout choscorui::prelude::ViewExt::fixed_size
+layout choscorui::prelude::ViewExt::frame
+layout choscorui::prelude::ViewExt::hidden
+layout choscorui::prelude::ViewExt::layout_direction
+layout choscorui::prelude::ViewExt::layout_priority
+layout choscorui::prelude::ViewExt::offset
+layout choscorui::prelude::ViewExt::padding
+styling choscorui::prelude::ViewExt::background
+styling choscorui::prelude::ViewExt::border
+styling choscorui::prelude::ViewExt::button_variant
+styling choscorui::prelude::ViewExt::clip_shape
+styling choscorui::prelude::ViewExt::color_scheme
+styling choscorui::prelude::ViewExt::control_size
+styling choscorui::prelude::ViewExt::corner_radius
+styling choscorui::prelude::ViewExt::environment
+styling choscorui::prelude::ViewExt::foreground
+styling choscorui::prelude::ViewExt::opacity
+styling choscorui::prelude::ViewExt::recipe
+styling choscorui::prelude::ViewExt::ring
+styling choscorui::prelude::ViewExt::shadow
+styling choscorui::prelude::ViewExt::theme
+styling choscorui::prelude::ViewExt::tint
+styling choscorui::prelude::ViewExt::token
+text choscorui::prelude::ViewExt::font_weight
+text choscorui::prelude::ViewExt::locale
+text choscorui::prelude::ViewExt::text_style
+text choscorui::prelude::ViewExt::tracking
+presentation choscorui::prelude::ViewExt::alert_dialog
+presentation choscorui::prelude::ViewExt::context_menu
+presentation choscorui::prelude::ViewExt::dialog
+presentation choscorui::prelude::ViewExt::drawer
+presentation choscorui::prelude::ViewExt::dropdown_menu
+presentation choscorui::prelude::ViewExt::hover_card
+presentation choscorui::prelude::ViewExt::popover
+presentation choscorui::prelude::ViewExt::sheet
+presentation choscorui::prelude::ViewExt::toast
+presentation choscorui::prelude::ViewExt::toaster
+presentation choscorui::prelude::ViewExt::tooltip
+controls choscorui::prelude::ViewExt::accessibility_hidden
+controls choscorui::prelude::ViewExt::accessibility_hint
+controls choscorui::prelude::ViewExt::accessibility_label
+controls choscorui::prelude::ViewExt::accessibility_value
+controls choscorui::prelude::ViewExt::disabled
+controls choscorui::prelude::ViewExt::focusable
+controls choscorui::prelude::ViewExt::focused
+controls choscorui::prelude::ViewExt::keyboard_shortcut
+controls choscorui::prelude::ViewExt::on_message
+controls choscorui::prelude::ViewExt::on_submit
