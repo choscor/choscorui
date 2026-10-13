@@ -10,10 +10,9 @@ use choscorui_core::{
 };
 mod ime;
 pub use ime::{ImeEvent, TextInputState};
-mod menu;
-pub use menu::{
+pub use choscorui_core::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
-    MenuShortcutModifiers, MenuSpec,
+    MenuShortcutModifiers, MenuSpec, WindowOptions,
 };
 mod backdrop;
 mod dialog;
@@ -33,6 +32,8 @@ pub use desktop::{
 };
 mod window_state;
 pub use window_state::screen_visible_frames;
+mod services;
+pub use services::NativeServices;
 mod accessibility;
 mod accessibility_bridge;
 use accessibility_bridge::{AccessibilityActionQueue, NativeAccessibilityState};
@@ -521,24 +522,6 @@ fn view_key_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<
     }
 }
 
-/// The title and the content size of a new window.
-pub struct WindowOptions {
-    title: String,
-    width: f64,
-    height: f64,
-}
-impl WindowOptions {
-    /// A window with `title` and a content area of `width` by `height`
-    /// points.
-    pub fn new(title: impl Into<String>, width: f64, height: f64) -> Self {
-        Self {
-            title: title.into(),
-            width,
-            height,
-        }
-    }
-}
-
 /// Main-thread AppKit process handle. The marker prevents worker transfer.
 pub struct Application {
     application: &'static Obj<NSApplication>,
@@ -599,21 +582,15 @@ impl Application {
     }
 
     pub fn create_window(&self, options: WindowOptions) -> Result<Window, Error> {
-        if !options.width.is_finite()
-            || !options.height.is_finite()
-            || options.width <= 0.0
-            || options.height <= 0.0
-        {
+        let (width, height) = (options.width(), options.height());
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
             return Err(Error::InvalidSize);
         }
         let _pool = Pool::new()?;
-        let title = ns_string(&options.title).map_err(|_| Error::InvalidTitle)?;
+        let title = ns_string(options.title()).map_err(|_| Error::InvalidTitle)?;
         let frame = NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
-            size: NSSize {
-                width: options.width,
-                height: options.height,
-            },
+            size: NSSize { width, height },
         };
         // Titled, closable, miniaturizable, and resizable, with a buffered
         // backing store and no deferred creation.

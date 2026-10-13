@@ -152,6 +152,10 @@ messages! {
         c"otherEventWithType:location:modifierFlags:timestamp:windowNumber:context:subtype:data1:data2:",
         (usize, NSPoint, usize, f64, isize, Option<&Obj<NSGraphicsContext>>, i16, isize, isize)
             -> Autoreleased<NSEvent>;
+    pub(crate) KEY_EVENT: class NSEvent,
+        c"keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:",
+        (usize, NSPoint, usize, f64, isize, Option<&Obj<NSGraphicsContext>>, &Obj<NSString>,
+            &Obj<NSString>, bool, u16) -> Autoreleased<NSEvent>;
     pub(crate) LOCATION_IN_WINDOW: instance NSEvent, c"locationInWindow", () -> NSPoint;
     pub(crate) EVENT_MODIFIER_FLAGS: instance NSEvent, c"modifierFlags", () -> usize;
     pub(crate) HAS_PRECISE_SCROLLING_DELTAS: instance NSEvent,
@@ -408,6 +412,8 @@ messages! {
     pub(crate) ADD_ITEM: instance NSMenu, c"addItem:", (&Obj<NSMenuItem>) -> ();
     pub(crate) SET_AUTOENABLES_ITEMS: instance NSMenu, c"setAutoenablesItems:", (bool) -> ();
     pub(crate) NUMBER_OF_ITEMS: instance NSMenu, c"numberOfItems", () -> isize;
+    pub(crate) PERFORM_KEY_EQUIVALENT: instance NSMenu, c"performKeyEquivalent:",
+        (&Obj<NSEvent>) -> bool;
     pub(crate) POP_UP_MENU: instance NSMenu, c"popUpMenuPositioningItem:atLocation:inView:",
         (Option<&Obj<NSMenuItem>>, NSPoint, Option<&Obj<NSView>>) -> bool;
     pub(crate) SEPARATOR_ITEM: class NSMenuItem, c"separatorItem",

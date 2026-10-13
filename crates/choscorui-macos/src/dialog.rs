@@ -316,7 +316,7 @@ fn show_alert(spec: &AlertSpec) -> Result<AlertResponse, DialogError> {
     AlertResponse::from_native_code(response, spec.buttons.len()).ok_or(DialogError::InvalidResult)
 }
 
-fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogError> {
+pub(crate) fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogError> {
     ensure_main_thread()?;
     let _pool = Pool::new().map_err(map_error)?;
     let paths = if spec.mode == FileDialogMode::SaveFile {

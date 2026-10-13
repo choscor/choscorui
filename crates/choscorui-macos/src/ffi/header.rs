@@ -195,3 +195,4 @@ header_args!(A0, A1, A2, A3, A4, A5);
 header_args!(A0, A1, A2, A3, A4, A5, A6);
 header_args!(A0, A1, A2, A3, A4, A5, A6, A7);
 header_args!(A0, A1, A2, A3, A4, A5, A6, A7, A8);
+header_args!(A0, A1, A2, A3, A4, A5, A6, A7, A8, A9);

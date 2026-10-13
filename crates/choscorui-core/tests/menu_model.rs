@@ -1,4 +1,4 @@
-use choscorui_macos::{
+use choscorui_core::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
     MenuShortcutModifiers, MenuSpec,
 };
@@ -81,4 +81,44 @@ fn menu_model_preserves_menu_and_separator_order() {
     assert_eq!(model.menus()[0].title, "File");
     assert!(matches!(model.menus()[0].entries[1], MenuEntry::Separator));
     assert_eq!(model.menus()[1].title, "View");
+}
+
+#[test]
+fn submenus_hold_commands_that_the_model_finds_and_updates() {
+    let mut model = MenuBarModel::new(vec![MenuSpec::new(
+        "View",
+        vec![MenuEntry::submenu(
+            "Theme",
+            vec![
+                MenuEntry::command(MenuCommandId(1), MenuItemState::new("Dark")),
+                MenuEntry::command(MenuCommandId(2), MenuItemState::new("Light")),
+            ],
+        )],
+    )])
+    .unwrap();
+    assert_eq!(model.find("Light"), Some(MenuCommandId(2)));
+    assert_eq!(model.find("Missing"), None);
+    let checked = MenuItemState {
+        checked: true,
+        ..MenuItemState::new("Light")
+    };
+    model.set_state(MenuCommandId(2), checked).unwrap();
+    assert!(model.state(MenuCommandId(2)).unwrap().checked);
+    assert_eq!(
+        MenuBarModel::new(vec![MenuSpec::new(
+            "View",
+            vec![
+                save_item(),
+                MenuEntry::submenu("More", vec![save_item()]),
+            ],
+        )]),
+        Err(MenuError::DuplicateCommand(MenuCommandId(7)))
+    );
+    assert_eq!(
+        MenuBarModel::new(vec![MenuSpec::new(
+            "View",
+            vec![MenuEntry::submenu("Bad\0", vec![])],
+        )]),
+        Err(MenuError::InvalidText)
+    );
 }

@@ -45,6 +45,16 @@ pub use semantics::{
 };
 mod capabilities;
 pub use capabilities::{BackendCapabilities, Support};
+mod app_model;
+pub use app_model::{
+    MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
+    MenuShortcutModifiers, MenuSpec, WindowOptions,
+};
+mod services;
+pub use services::{
+    FileDialogKind, FileDialogRequest, NotificationPermission, Service, ServiceBackend,
+    ServiceError, Services, StatusItemSpec, SystemNotification,
+};
 mod text;
 pub use text::{TextBuffer, TextError, TextMotion, UNDO_LIMIT, grapheme_boundaries};
 mod text_layout;

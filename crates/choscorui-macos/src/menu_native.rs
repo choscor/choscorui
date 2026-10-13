@@ -1,7 +1,10 @@
-use super::{MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool};
+use super::{
+    MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcutModifiers,
+    MenuSpec, NSPoint, Pool,
+};
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
-    ADD_ITEM, CONTROL_STATE_OFF, CONTROL_STATE_ON, ChoscorMenuTarget, INIT_WITH_TITLE,
+    ADD_ITEM, CONTROL_STATE_OFF, EVENT_KEY_DOWN, KEY_EVENT, PERFORM_KEY_EQUIVALENT, CONTROL_STATE_ON, ChoscorMenuTarget, INIT_WITH_TITLE,
     INIT_WITH_TITLE_ACTION_KEY, MAIN_MENU, MENU_ITEM_ACTIVATED, MODIFIER_COMMAND, MODIFIER_CONTROL,
     MODIFIER_OPTION, MODIFIER_SHIFT, NSMenu, NSMenuItem, NUMBER_OF_ITEMS, SEPARATOR_ITEM,
     SET_ACTION, SET_AUTOENABLES_ITEMS, SET_ENABLED, SET_ITEM_TITLE, SET_KEY_EQUIVALENT,
@@ -78,6 +81,9 @@ impl MainMenu {
         let mut commands = HashMap::new();
         for menu in model.menus() {
             let submenu = owned_menu(&menu.title)?;
+            // Items keep their own enabled state instead of AppKit's
+            // responder-chain validation.
+            SET_AUTOENABLES_ITEMS.send(&submenu, (false,));
             let parent_item = owned_menu_item(&menu.title, None)?;
             SET_SUBMENU.send(&parent_item, (Some(&submenu),));
             ADD_ITEM.send(&root, (&parent_item,));
@@ -141,6 +147,36 @@ impl MainMenu {
     pub fn callback_panic_count(&self) -> usize {
         *self.panics.lock().unwrap()
     }
+
+    /// Sends a key-down event of `key` with `modifiers` to the menu bar,
+    /// as the keyboard does, and returns whether an item took it. The
+    /// item's command then waits in [`MainMenu::take_activations`]. This
+    /// is for application automation and native smoke tests.
+    pub fn perform_key_equivalent(
+        &self,
+        key: &str,
+        modifiers: MenuShortcutModifiers,
+    ) -> Result<bool, MenuError> {
+        let _pool = Pool::new();
+        let characters = ns_string(key)?;
+        let event = KEY_EVENT
+            .class_send((
+                EVENT_KEY_DOWN,
+                NSPoint { x: 0.0, y: 0.0 },
+                modifier_mask(modifiers),
+                0.0,
+                0,
+                None,
+                &characters,
+                &characters,
+                false,
+                0,
+            ))
+            .ok()
+            .flatten()
+            .ok_or(MenuError::Unavailable)?;
+        Ok(PERFORM_KEY_EQUIVALENT.send(&self.root, (&event,)))
+    }
 }
 
 /// The shared `NSApplication`.
@@ -149,13 +185,13 @@ fn shared_application() -> Result<&'static Obj<crate::ffi::appkit::NSApplication
         .class_send(())
         .ok()
         .flatten()
-        .ok_or(MenuError::AppKitUnavailable)
+        .ok_or(MenuError::Unavailable)
 }
 
 /// A new instance of the target class.
 fn new_target() -> Result<Retained<ChoscorMenuTarget>, MenuError> {
-    ChoscorMenuTarget::register().map_err(|_| MenuError::AppKitUnavailable)?;
-    alloc_init::<ChoscorMenuTarget>().map_err(|_| MenuError::AppKitUnavailable)
+    ChoscorMenuTarget::register().map_err(|_| MenuError::Unavailable)?;
+    alloc_init::<ChoscorMenuTarget>().map_err(|_| MenuError::Unavailable)
 }
 
 /// Adds `entries` to `menu`, wiring command items to `target`.
@@ -173,8 +209,16 @@ fn populate(
                     .class_send(())
                     .ok()
                     .flatten()
-                    .ok_or(MenuError::AppKitUnavailable)?;
+                    .ok_or(MenuError::Unavailable)?;
                 ADD_ITEM.send(menu, (&separator,));
+            }
+            MenuEntry::Submenu { title, entries } => {
+                let submenu = owned_menu(title)?;
+                SET_AUTOENABLES_ITEMS.send(&submenu, (false,));
+                let parent_item = owned_menu_item(title, None)?;
+                SET_SUBMENU.send(&parent_item, (Some(&submenu),));
+                ADD_ITEM.send(menu, (&parent_item,));
+                populate(&submenu, entries, target, items, commands)?;
             }
             MenuEntry::Command { command, state } => {
                 let item = owned_menu_item(
@@ -305,19 +349,19 @@ impl Drop for MainMenu {
 
 fn owned_menu(title: &str) -> Result<Retained<NSMenu>, MenuError> {
     let title = ns_string(title)?;
-    let menu = alloc::<NSMenu>().map_err(|_| MenuError::AppKitUnavailable)?;
+    let menu = alloc::<NSMenu>().map_err(|_| MenuError::Unavailable)?;
     INIT_WITH_TITLE
         .init(menu, (&title,))
-        .ok_or(MenuError::AppKitUnavailable)
+        .ok_or(MenuError::Unavailable)
 }
 
 fn owned_menu_item(title: &str, shortcut: Option<&str>) -> Result<Retained<NSMenuItem>, MenuError> {
     let title = ns_string(title)?;
     let shortcut = ns_string(shortcut.unwrap_or(""))?;
-    let item = alloc::<NSMenuItem>().map_err(|_| MenuError::AppKitUnavailable)?;
+    let item = alloc::<NSMenuItem>().map_err(|_| MenuError::Unavailable)?;
     INIT_WITH_TITLE_ACTION_KEY
         .init(item, (&title, None, &shortcut))
-        .ok_or(MenuError::AppKitUnavailable)
+        .ok_or(MenuError::Unavailable)
 }
 
 fn apply_state(item: &Obj<NSMenuItem>, state: &MenuItemState) -> Result<(), MenuError> {
@@ -334,25 +378,30 @@ fn apply_state(item: &Obj<NSMenuItem>, state: &MenuItemState) -> Result<(), Menu
         .as_ref()
         .map_or("", |shortcut| shortcut.key.as_str());
     SET_KEY_EQUIVALENT.send(item, (&*ns_string(key)?,));
-    let mask = state.shortcut.as_ref().map_or(0, |shortcut| {
-        let modifiers = shortcut.modifiers;
-        [
-            (modifiers.shift, MODIFIER_SHIFT),
-            (modifiers.control, MODIFIER_CONTROL),
-            (modifiers.option, MODIFIER_OPTION),
-            (modifiers.command, MODIFIER_COMMAND),
-        ]
-        .into_iter()
-        .filter(|(held, _)| *held)
-        .fold(0, |mask, (_, flag)| mask | flag)
-    });
+    let mask = state
+        .shortcut
+        .as_ref()
+        .map_or(0, |shortcut| modifier_mask(shortcut.modifiers));
     SET_KEY_EQUIVALENT_MODIFIER_MASK.send(item, (mask,));
     Ok(())
+}
+
+/// The AppKit modifier flags of `modifiers`.
+fn modifier_mask(modifiers: MenuShortcutModifiers) -> usize {
+    [
+        (modifiers.shift, MODIFIER_SHIFT),
+        (modifiers.control, MODIFIER_CONTROL),
+        (modifiers.option, MODIFIER_OPTION),
+        (modifiers.command, MODIFIER_COMMAND),
+    ]
+    .into_iter()
+    .filter(|(held, _)| *held)
+    .fold(0, |mask, (_, flag)| mask | flag)
 }
 
 fn ns_string(value: &str) -> Result<Retained<NSString>, MenuError> {
     crate::ffi::foundation::ns_string(value).map_err(|error| match error {
         TextError::InteriorNul => MenuError::InvalidText,
-        TextError::Unavailable => MenuError::AppKitUnavailable,
+        TextError::Unavailable => MenuError::Unavailable,
     })
 }
