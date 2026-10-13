@@ -1020,7 +1020,7 @@ enum in `choscorui::prelude::ServiceError`
 ```rust
 pub enum ServiceError {
     Unsupported(Service),
-    Unavailable { service: Service, condition: &'static str },
+    Unavailable { service: Service, condition: Condition },
     PermissionDenied,
     InvalidText,
     InvalidUrl,
@@ -1033,7 +1033,7 @@ Why a service call failed.
 ### Variants
 
 - `Unsupported(Service)`: The backend does not provide the service.
-- `Unavailable { service: Service, condition: &'static str }`: The backend provides the service only when `condition` holds.
+- `Unavailable { service: Service, condition: Condition }`: The backend provides the service only when `condition` holds.
 - `PermissionDenied`: The user has not granted permission.
 - `InvalidText`: The text contains an interior NUL character.
 - `InvalidUrl`: The URL is not valid.
@@ -1370,7 +1370,7 @@ enum in `choscorui::core::Support`
 pub enum Support {
     Supported,
     Unsupported,
-    Conditional(&'static str),
+    Conditional(Condition),
 }
 ```
 
@@ -1380,7 +1380,7 @@ Whether a backend provides a feature.
 
 - `Supported`
 - `Unsupported`
-- `Conditional(&'static str)`: Supported once the stated condition holds.
+- `Conditional(Condition)`: Supported once the condition holds.
 
 ### Methods
 
