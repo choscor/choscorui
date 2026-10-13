@@ -5,7 +5,7 @@
 use crate::ui::page::{Build, PageCx, column, row, section, size_key, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Cx, DatePicker, Dynamic, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
+    AnyView, Cx, DatePicker, Env, Field, FieldGroup, FieldSeparator, FieldSet, Frame,
     HorizontalAlignment, Input, InputGroup, InputOtp, Kbd, RangeSlider, Select, State, Switch,
     Text, Textarea, Toggle, ToggleGroup, VStack, View, ViewExt,
 };
@@ -425,11 +425,7 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
             }),
         ),
         // The result of the last button, once there is one.
-        Dynamic::new(move || {
-            Some(status.get())
-                .filter(|text| !text.is_empty())
-                .map(Text::new)
-        }),
+        Text::new(move || status.get()).hidden(move || status.get().is_empty()),
         section(
             t!("select.invalid"),
             Field::new(
