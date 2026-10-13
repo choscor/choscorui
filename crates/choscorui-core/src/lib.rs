@@ -14,7 +14,9 @@ pub use path::{
     PathElement, StrokeStyle, lerp_color,
 };
 mod blur;
-pub use blur::blur_pixels;
+mod stroke;
+pub use blur::{blur_box_radii, blur_pixels};
+pub use stroke::{MITER_LIMIT, dash_polylines, stroke_polygons};
 mod display;
 pub use display::{
     Color, CursorShape, DisplayCommand, DisplayList, DisplayListError, Shadow, TextRun, damage,

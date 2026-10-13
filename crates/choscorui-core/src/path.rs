@@ -178,6 +178,51 @@ impl Path {
         path
     }
 
+    /// The rectangle and the corner radii, clockwise from the top left,
+    /// when this path is [`Path::rect`], [`Path::rounded_rect`], or
+    /// [`Path::rounded_rect_corners`] of them, also after a translation.
+    /// A painter can then draw the shape analytically.
+    pub fn as_rounded_rect(&self) -> Option<(Rect, [f64; 4])> {
+        let Some(PathElement::MoveTo(start)) = self.elements.first() else {
+            return None;
+        };
+        let lines: Vec<Point> = self
+            .elements
+            .iter()
+            .filter_map(|element| match element {
+                PathElement::LineTo(point) => Some(*point),
+                _ => None,
+            })
+            .collect();
+        let rect = self.bounds();
+        let (l, t, r, b) = (rect.min_x(), rect.min_y(), rect.max_x(), rect.max_y());
+        let radii = match lines.as_slice() {
+            [_, _, _] => [0.0; 4],
+            [first, second, third, _] => [start.x - l, r - first.x, b - second.y, third.x - l],
+            _ => return None,
+        };
+        let candidate = Self::rounded_rect_corners(rect, radii);
+        let tolerance =
+            1e-9 * (1.0 + rect.size.width.abs() + rect.size.height.abs() + l.abs() + t.abs());
+        let near =
+            |p: Point, q: Point| (p.x - q.x).abs() <= tolerance && (p.y - q.y).abs() <= tolerance;
+        let same = candidate.elements.len() == self.elements.len()
+            && candidate
+                .elements
+                .iter()
+                .zip(&self.elements)
+                .all(|pair| match pair {
+                    (PathElement::MoveTo(p), PathElement::MoveTo(q))
+                    | (PathElement::LineTo(p), PathElement::LineTo(q)) => near(*p, *q),
+                    (PathElement::CubicTo(a, b, p), PathElement::CubicTo(c, d, q)) => {
+                        near(*a, *c) && near(*b, *d) && near(*p, *q)
+                    }
+                    (PathElement::Close, PathElement::Close) => true,
+                    _ => false,
+                });
+        same.then_some((rect, radii))
+    }
+
     pub fn ellipse(rect: Rect) -> Self {
         let c = rect.center();
         let (rx, ry) = (rect.size.width / 2.0, rect.size.height / 2.0);

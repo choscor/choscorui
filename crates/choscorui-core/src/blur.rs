@@ -16,7 +16,7 @@ pub fn blur_pixels(pixels: &mut [u8], width: usize, height: usize, stride: usize
     {
         return;
     }
-    let radii = box_radii(sigma);
+    let radii = blur_box_radii(sigma);
     let mut line = Vec::new();
     let mut out = Vec::new();
     for y in 0..height {
@@ -46,9 +46,10 @@ pub fn blur_pixels(pixels: &mut [u8], width: usize, height: usize, stride: usize
     }
 }
 
-/// The radii of three box blurs whose sum approximates a Gaussian of
+/// The radii of the three box blurs that [`blur_pixels`] applies in each
+/// direction. Their sum approximates a Gaussian of
 /// standard deviation `sigma`.
-fn box_radii(sigma: f64) -> [usize; 3] {
+pub fn blur_box_radii(sigma: f64) -> [usize; 3] {
     // The ideal box width for three passes, split into two odd widths so
     // that the variance matches.
     let ideal = (12.0 * sigma * sigma / 3.0 + 1.0).sqrt();
@@ -108,7 +109,7 @@ mod tests {
     #[test]
     fn box_radii_match_the_gaussian_variance() {
         for sigma in [2.0, 4.0, 8.0, 16.0] {
-            let variance: f64 = box_radii(sigma)
+            let variance: f64 = blur_box_radii(sigma)
                 .iter()
                 .map(|radius| {
                     let width = (2 * radius + 1) as f64;

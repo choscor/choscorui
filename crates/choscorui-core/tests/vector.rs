@@ -354,3 +354,32 @@ fn a_paint_converts_from_a_color_and_reports_its_visibility() {
     assert!(!gradient(255).is_transparent());
     assert!(gradient(0).is_transparent());
 }
+
+#[test]
+fn rounded_rect_paths_report_their_rect_and_radii() {
+    let rect = Rect::from_xywh(4.0, 6.0, 40.0, 20.0);
+    assert_eq!(Path::rect(rect).as_rounded_rect(), Some((rect, [0.0; 4])));
+    assert_eq!(
+        Path::rounded_rect(rect, 6.0).as_rounded_rect(),
+        Some((rect, [6.0; 4]))
+    );
+    let radii = [8.0, 0.0, 4.0, 2.0];
+    assert_eq!(
+        Path::rounded_rect_corners(rect, radii).as_rounded_rect(),
+        Some((rect, radii))
+    );
+    let moved = Path::rounded_rect_corners(rect, radii).transformed(Transform::translate(0.3, 7.1));
+    let (bounds, found) = moved.as_rounded_rect().unwrap();
+    assert!((bounds.origin.x - 4.3).abs() < 1e-9 && (found[0] - 8.0).abs() < 1e-9);
+    assert_eq!(Path::ellipse(rect).as_rounded_rect(), None);
+    let mut open = Path::rect(rect);
+    open.line_to(Point::new(0.0, 0.0));
+    assert_eq!(open.as_rounded_rect(), None);
+    let skewed = Path::polygon(&[
+        Point::new(0.0, 0.0),
+        Point::new(10.0, 1.0),
+        Point::new(10.0, 10.0),
+        Point::new(0.0, 10.0),
+    ]);
+    assert_eq!(skewed.as_rounded_rect(), None);
+}

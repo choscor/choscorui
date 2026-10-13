@@ -6,8 +6,8 @@
 //! Text is rendered only by platform painters and is rejected here.
 
 use choscorui_core::{
-    Color, DisplayCommand, DisplayList, FillRule, Image, ImageSampling, LineCap, LineJoin, Paint,
-    Path, Point, Rect, Shadow, StrokeStyle, Transform,
+    Color, DisplayCommand, DisplayList, FillRule, Image, ImageSampling, LineCap, LineJoin,
+    MITER_LIMIT, Paint, Path, Point, Rect, Shadow, StrokeStyle, Transform, dash_polylines,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -369,7 +369,7 @@ impl Renderer {
             return;
         };
         // Stroke in local space so width follows the transform's scale.
-        let polys = dash(path.flatten(0.05 / self.scale), &style.dash);
+        let polys = dash_polylines(path.flatten(0.05 / self.scale), &style.dash);
         let half = style.width / 2.0;
         let device_bounds = transform.apply_rect(path.bounds().inset(-style.width * 2.0));
         let paint = paint.clone();
@@ -487,50 +487,6 @@ fn winding_contains(polys: &[(Vec<Point>, bool)], point: Point, rule: FillRule) 
     }
 }
 
-/// Splits polylines into dashes. Closed paths become open dash pieces.
-fn dash(polys: Vec<(Vec<Point>, bool)>, pattern: &[f64]) -> Vec<(Vec<Point>, bool)> {
-    if pattern.is_empty() || pattern.iter().sum::<f64>() <= 0.0 {
-        return polys;
-    }
-    let mut out = Vec::new();
-    for (mut poly, closed) in polys {
-        if closed {
-            poly.push(poly[0]);
-        }
-        let mut index = 0;
-        let mut remaining = pattern[0];
-        let mut on = true;
-        let mut piece = vec![poly[0]];
-        for pair in poly.windows(2) {
-            let (mut a, b) = (pair[0], pair[1]);
-            let mut length = a.distance(b);
-            while length > remaining {
-                let t = remaining / length;
-                let split = Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
-                if on {
-                    piece.push(split);
-                    out.push((std::mem::take(&mut piece), false));
-                } else {
-                    piece = vec![split];
-                }
-                length -= remaining;
-                a = split;
-                on = !on;
-                index = (index + 1) % pattern.len();
-                remaining = pattern[index];
-            }
-            remaining -= length;
-            if on {
-                piece.push(b);
-            }
-        }
-        if on && piece.len() > 1 {
-            out.push((piece, false));
-        }
-    }
-    out
-}
-
 fn stroke_contains(
     polys: &[(Vec<Point>, bool)],
     p: Point,
@@ -612,7 +568,7 @@ fn miter_contains(prev: Point, vertex: Point, next: Point, p: Point, half: f64) 
         return false;
     };
     let cos_half = bis.x * n1.x + bis.y * n1.y;
-    if cos_half <= 0.1 {
+    if cos_half <= 1.0 / MITER_LIMIT {
         return false; // beyond miter limit 10: bevel
     }
     let tip = half / cos_half;
