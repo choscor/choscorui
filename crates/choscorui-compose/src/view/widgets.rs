@@ -229,6 +229,19 @@ impl Configured<controls::Checkbox> {
         })
         .bind(checked, ControlValue::Bool, as_bool)
     }
+
+    /// A checkbox that also shows the mixed state, for a choice that
+    /// covers items with both values. `checked` is `None` while mixed. A
+    /// press sets it to `Some`.
+    pub fn mixed<M>(label: impl IntoLive<TextContent, M>, checked: Binding<Option<bool>>) -> Self {
+        let label = self::label(label);
+        Configured::custom(ControlKind::Checkbox, move |env| {
+            controls::Checkbox::new(text(&label, env), false)
+        })
+        .bind(checked, ControlValue::Mixed, |value| {
+            as_bool(value).map(Some)
+        })
+    }
 }
 
 /// An on or off switch that edits `on`.
@@ -316,6 +329,13 @@ impl Configured<controls::Kbd> {
         let key = label(key);
         Configured::custom(ControlKind::Kbd, move |env| {
             controls::Kbd::new(text(&key, env))
+        })
+    }
+
+    /// Key caps for a combination of keys, for example `⌘` and `K`.
+    pub fn keys(keys: impl Items<String>) -> Self {
+        Configured::custom(ControlKind::Kbd, move |env| {
+            controls::Kbd::group(keys.items(env))
         })
     }
 }
@@ -649,6 +669,25 @@ impl Configured<controls::Command> {
         let (name, placeholder) = (label(name), label(placeholder));
         Configured::custom(ControlKind::Command, move |env| {
             controls::Command::new(text(&name, env), text(&placeholder, env), groups.items(env))
+        })
+    }
+
+    /// A button labeled `trigger` that opens the command search in a
+    /// modal dialog.
+    pub fn dialog<M, N, O>(
+        trigger: impl IntoLive<TextContent, M>,
+        name: impl IntoLive<TextContent, N>,
+        placeholder: impl IntoLive<TextContent, O>,
+        groups: impl Items<(String, Vec<CommandItem>)>,
+    ) -> Self {
+        let (trigger, name, placeholder) = (label(trigger), label(name), label(placeholder));
+        Configured::custom(ControlKind::Command, move |env| {
+            controls::Command::dialog(
+                text(&trigger, env),
+                text(&name, env),
+                text(&placeholder, env),
+                groups.items(env),
+            )
         })
     }
 }

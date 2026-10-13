@@ -1153,6 +1153,13 @@ impl HostedAlertDialog {
         &self.alert
     }
 
+    /// The alert with `detail` as its informative text under the message.
+    #[must_use]
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.alert.detail = Some(detail.into());
+        self
+    }
+
     pub fn is_open(&self) -> bool {
         self.reveal.open
     }

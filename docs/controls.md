@@ -320,6 +320,10 @@ other sizes.
 [recipe.rs](../crates/choscorui-controls/tests/recipe.rs), and
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pin this behavior.
 
+**As a view.** `Button::new(label, action)` runs `action` on activation.
+`CommandLink::new(title, description, action)` mounts a `HostedCommandLink`
+and runs `action` when it reports `Activated`.
+
 ### Checkbox
 
 - Pointer, Space, and `Cancel` work as on `Button`. Activation toggles the
@@ -356,6 +360,11 @@ other sizes.
 
 [checkbox.rs](../crates/choscorui-controls/tests/checkbox.rs) pins this
 behavior.
+
+**As a view.** `Checkbox::new(label, checked)` edits a `Binding<bool>`.
+`Checkbox::mixed(label, checked)` edits a `Binding<Option<bool>>` through
+the `Mixed` value, where `None` is the mixed state. A press sets
+`Some(value)`.
 
 ### RadioGroup and Tabs
 
@@ -513,6 +522,14 @@ the check.
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) and
 [builtin_hosting_widgets.rs](../crates/choscorui-controls/tests/builtin_hosting_widgets.rs)
 pin this behavior.
+
+`HostedToolButton::with_checkable` and `HostedToolButton::with_menu` set the
+check state and the menu of a hosted button.
+
+**As a view.** `ToolButton::new(label, action)` runs `action` when the
+button reports `Command`. `.checked(binding)` makes it checkable and edits
+a `Binding<bool>` through the `Bool` value. `.menu(menu)` adds an instant
+or a split menu, which reports `OpenChanged`.
 
 ### CommandRegistry and shortcuts
 
@@ -675,6 +692,13 @@ length.
 `HostedNumericDisplay`. The view gives the live `i64` value as `Number`. A
 change of `base` builds the display again.
 
+`HostedNumericDisplay::counter` makes the display a counter, and
+`NumericDisplay::counter(name, digits, base, value)` is its view. A counter
+is a tab stop that edits a `Binding<i64>`. ArrowUp and ArrowRight add 1, and
+ArrowDown and ArrowLeft subtract 1. PageUp multiplies by 10, and PageDown
+divides by 10. Each change saturates at the `i64` bounds and emits
+`Changed(Number)`. The semantics do not change.
+
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
 ### KeySequenceEdit
@@ -750,6 +774,12 @@ page nodes. It paints nothing and takes no focus. `set_value` with
 [containers.rs](../crates/choscorui-controls/tests/containers.rs) pins this
 behavior.
 
+**As a view.** `GroupBox::new(title)` mounts a `HostedGroupBox`. Put the
+members over it in a `ZStack`, with padding that clears the title.
+`StackedContainer::new(name, pages, current)` mounts a `HostedStack` and
+gives it the live page as `Index`. Show the view of the current page next
+to it in a `ZStack`. No pages report a build error.
+
 ### ToolBox
 
 - One page is open at a time. `open(page)` opens a page and focuses its
@@ -774,6 +804,10 @@ behavior.
 `ToolBox` has no handler for these actions. The host maps them to `open`.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
+
+**As a view.** `ToolBox::new(titles, open)` edits a `Binding<usize>`
+through the `Index` value in both directions. The application paints the
+open page in the area under the headers.
 
 ### TextField
 
@@ -940,6 +974,12 @@ For a missing family, `FontChooser::semantics` adds the invalid state and
 the description "Not installed; using" with the fallback name.
 
 [popup.rs](../crates/choscorui-controls/tests/popup.rs) pins this behavior.
+
+**As a view.** `Combobox::new(name, items, selected)` edits the chosen
+index, and `Combobox::editable` edits the text.
+`FontChooser::new(families, fallback, selected)` edits a
+`Binding<Option<usize>>` through the `Index` value. A typed family that is
+not in the list sets it to `None`.
 
 ### Slider
 
@@ -1160,6 +1200,10 @@ clamp rules of the `Slider` view.
 | Actions | `Increment`, `Decrement` |
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
+
+**As a view.** `ScrollBar::new(name, orientation, content, viewport,
+offset)` edits a `Binding<f64>` through the `Number` value in both
+directions. `.line_step(step)` sets the distance of one arrow key.
 
 ### OverlayScrollBar
 
@@ -1738,6 +1782,11 @@ the actions are `Activate` and `Focus`.
 
 [popup.rs](../crates/choscorui-controls/tests/popup.rs) pins this behavior.
 
+**As a view.** `DropdownMenu::new(name, items)` mounts a
+`HostedDropdownMenu` behind a trigger named `name`. A chosen action reports
+its command through `.on_command`. The `dropdown_menu` modifier of
+`choscorui-compose` gives menus with closures and bindings instead.
+
 ### PopupStack
 
 - `open` saves the current focus. `close(id)` closes that popup and all
@@ -1892,6 +1941,14 @@ locale of the environment.
   text are hidden, because the group and the field have these names.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
+
+`HostedAlertDialog::with_detail` sets the informative text of a hosted
+alert.
+
+**As a view.** `AlertDialog::new(title, message, buttons, presented)` mounts
+a `HostedAlertDialog` that is open while the `Binding<bool>` is true.
+`.detail(text)` adds the informative text. The chosen button reports its
+index through `.on_item`, and Escape runs `.on_dismiss`.
 
 ### ColorPicker and FontDialog
 
@@ -2351,6 +2408,9 @@ extra-small medium text.
 | Actions | none |
 
 [form.rs](../crates/choscorui-controls/tests/form.rs) pins this behavior.
+
+**As a view.** `Kbd::new(key)` shows one key cap, and `Kbd::keys(keys)`
+shows the caps of a combination.
 
 ### Select and ListEntry
 
@@ -2828,6 +2888,10 @@ palette returns false.
 
 [command.rs](../crates/choscorui-controls/tests/command.rs) pins this behavior.
 
+**As a view.** `Command::new(name, placeholder, groups)` shows the search
+inline. `Command::dialog(trigger, name, placeholder, groups)` shows it in a
+modal dialog behind a trigger button. The chosen row reports `.on_item`.
+
 ### Breadcrumb
 
 - Every item but the last is a link. The last item is the current page and
@@ -3091,6 +3155,11 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 
 [data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
 
+**As a view.** `Avatar::new(name, fallback)` shows one avatar.
+`AvatarGroup::new(name, avatars)` shows overlapping avatars. Set the count
+and the size with `.with(|group| group.with_count(count))` and
+`.with(|group| group.with_size(size))`.
+
 ### Carousel
 
 - Each slide is a card surface that shows its label. Previous and Next
@@ -3329,6 +3398,9 @@ behavior.
 - **In a view.** The `toaster` view modifier mounts a `Toaster` above the
   window content. It puts the `Toasts` handle in the environment of its
   view, where `Env::toasts` and the `toast` modifier find it.
+- **As a view.** `Toaster::new(name, toasts, close)` shows the queue of a
+  `Toasts` handle in one place of the layout. `.position(position)` sets
+  the corner.
 
 | Part | Slot | Value |
 | --- | --- | --- |

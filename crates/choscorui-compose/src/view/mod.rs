@@ -33,6 +33,7 @@ mod widgets;
 mod widgets_chat;
 mod widgets_data;
 mod widgets_form;
+mod widgets_hosted;
 mod widgets_shell;
 
 pub use builtins::{
@@ -70,6 +71,10 @@ pub use widgets_data::{ColumnBrowser, HeaderView, ItemGroup};
 pub use widgets_form::{
     ColorPicker, DateTimeEdit, DecimalSpinBox, Dial, InputGroup, KeySequenceEdit, Label,
     NumericDisplay,
+};
+pub use widgets_hosted::{
+    AlertDialog, AvatarGroup, CommandLink, DropdownMenu, FontChooser, GroupBox, ScrollBar,
+    StackedContainer, Toaster, ToolBox, ToolButton,
 };
 pub use widgets_shell::{Dock, SizeGrip, StatusBar, Toolbar};
 

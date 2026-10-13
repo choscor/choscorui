@@ -86,9 +86,9 @@ The toolkit gives these views:
 | Fields | `Field`, `FieldSet`, `FieldGroup`, `FieldContent`, `FieldTitle`, `FieldSeparator` |
 | Text | `Text`, `Label`, `Kbd`, `Badge` |
 | Structure | `Dynamic`, `Branch`, `ForEach`, `Either`, `AnyView`, `Empty` |
-| Controls | `Button`, `ButtonGroup`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `Input`, `InputGroup`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker`, `DateTimeEdit`, `DecimalSpinBox`, `KeySequenceEdit`, `ColorPicker`, `Dial`, `NumericDisplay` |
-| Dialogs | `Dialog`, `InputDialog`, `FontDialog` |
-| Content | `Card`, `Alert`, `Avatar`, `Accordion`, `Collapsible`, `Carousel`, `Chart`, `DataTable`, `List`, `HeaderView`, `ColumnBrowser`, `ItemGroup`, `EmptyState`, `Skeleton`, `Spinner` |
+| Controls | `Button`, `CommandLink`, `ButtonGroup`, `ToolButton`, `Checkbox`, `Switch`, `Toggle`, `ToggleGroup`, `Slider`, `RangeSlider`, `SpinBox`, `Progress`, `ScrollBar`, `Input`, `InputGroup`, `TextField`, `Textarea`, `TextEditor`, `InputOtp`, `Select`, `Combobox`, `FontChooser`, `RadioGroup`, `Tabs`, `Calendar`, `DatePicker`, `DateTimeEdit`, `DecimalSpinBox`, `KeySequenceEdit`, `ColorPicker`, `Dial`, `NumericDisplay` |
+| Dialogs | `Dialog`, `AlertDialog`, `InputDialog`, `FontDialog`, `DropdownMenu` |
+| Content | `Card`, `Alert`, `Avatar`, `AvatarGroup`, `Accordion`, `Collapsible`, `ToolBox`, `GroupBox`, `StackedContainer`, `Carousel`, `Chart`, `DataTable`, `List`, `HeaderView`, `ColumnBrowser`, `ItemGroup`, `EmptyState`, `Skeleton`, `Spinner`, `Toaster` |
 | Chat | `Message`, `MessageScroller`, `Marker`, `Attachment`, `Questionnaire` |
 | Window parts | `Toolbar`, `StatusBar`, `Dock`, `SizeGrip` |
 | Navigation | `Breadcrumb`, `Pagination`, `NavigationMenu`, `Menubar`, `Sidebar`, `Command` |
@@ -96,7 +96,7 @@ The toolkit gives these views:
 
 A tuple of views is one view, so a stack takes a tuple of its children. To keep two branches of different types in one place, use `Either` or `.into_any()`. [controls.md](controls.md) gives the behavior and accessibility semantics of each control.
 
-Some views have more than one constructor. `Select::native` gives the native-select look, `Input::masked` fits the text into an `InputMask`, and `List::table` shows the rows as a table. A bubble is content of a `Message`, and an item is content of an `ItemGroup`.
+Each hosted control of `choscorui::controls` has a view. Some views have more than one constructor. `Select::native` gives the native-select look, `Input::masked` fits the text into an `InputMask`, and `List::table` shows the rows as a table. `Command::dialog` opens the command search in a dialog, and `Checkbox::mixed` has a mixed state. `Kbd::keys` shows a key combination, and `NumericDisplay::counter` edits its value from the keyboard. A bubble is content of a `Message`, and an item is content of an `ItemGroup`.
 
 A control view changes its control with `.with(change)` after each build. For example, `.with(move |checkbox| checkbox.with_invalid(invalid.get()))` marks a `Checkbox` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. Only fields take `with_invalid`: `Checkbox`, `RadioGroup`, `Combobox`, and `DatePicker`. A button, a switch, or a toggle has no invalid state. Use `.with_env(change)` when the change needs the environment, for example a placeholder from the catalog.
 
@@ -713,7 +713,7 @@ fn swatch() -> impl View {
 }
 ```
 
-For a new interactive control, implement the `CustomControl` trait in safe Rust and mount it with `ControlView::new`. You need no platform code or FFI. `ControlView::value` and `ControlView::on_message` connect the control to state. `Configured::custom(kind, build)` mounts one of the hosted controls of `choscorui::controls` that has no view of its own. `Configured::bind(binding, to, from)` connects the value of that control to a `Binding` in both directions.
+For a new interactive control, implement the `CustomControl` trait in safe Rust and mount it with `ControlView::new`. You need no platform code or FFI. `ControlView::value` and `ControlView::on_message` connect the control to state. `Configured::custom(kind, build)` mounts your own `CustomControl` with the options, bindings, and actions of the toolkit views. `Configured::bind(binding, to, from)` connects the value of that control to a `Binding` in both directions.
 
 | Method | When the toolkit calls it | Contract |
 | --- | --- | --- |

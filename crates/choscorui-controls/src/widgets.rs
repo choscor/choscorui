@@ -1520,17 +1520,45 @@ impl NumericDisplay {
         HostedNumericDisplay {
             display: self,
             name: name.into(),
+            counter: false,
         }
     }
 }
 
 /// A [`NumericDisplay`] with its name, mounted in a control host.
 /// `NumericDisplay` is `Copy` and takes its name in `semantics`, so it
-/// cannot keep the name itself. It takes no input and reports nothing.
+/// cannot keep the name itself. It takes no input and reports nothing,
+/// unless it is a [`counter`](Self::counter).
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostedNumericDisplay {
     display: NumericDisplay,
     name: String,
+    counter: bool,
+}
+
+impl HostedNumericDisplay {
+    /// Makes the display a counter: a tab stop whose keys change the
+    /// value. ArrowUp and ArrowRight add 1, ArrowDown and ArrowLeft
+    /// subtract 1, PageUp multiplies by 10, and PageDown divides by 10.
+    /// Each change saturates at the `i64` bounds and reports
+    /// `Changed(Number)`.
+    #[must_use]
+    pub fn counter(mut self) -> Self {
+        self.counter = true;
+        self
+    }
+
+    /// The value after `key`, for the keys that change a counter.
+    fn stepped(&self, key: Key) -> Option<i64> {
+        let value = self.display.value;
+        Some(match key {
+            Key::ArrowUp | Key::ArrowRight => value.saturating_add(1),
+            Key::ArrowDown | Key::ArrowLeft => value.saturating_sub(1),
+            Key::PageUp => value.saturating_mul(10),
+            Key::PageDown => value / 10,
+            _ => return None,
+        })
+    }
 }
 
 impl CustomControl for HostedNumericDisplay {
@@ -1546,8 +1574,21 @@ impl CustomControl for HostedNumericDisplay {
         ))
     }
 
-    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
-        EventReply::Continue
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        let ControlEvent::Key(KeyEvent::Down { key, .. }) = event else {
+            return EventReply::Continue;
+        };
+        if !self.counter || cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        let Some(value) = self.stepped(*key) else {
+            return EventReply::Continue;
+        };
+        self.display.set_value(value);
+        cx.emit(ControlMessage::Changed(ControlValue::Number(value as f64)));
+        cx.request_paint();
+        cx.request_semantics();
+        EventReply::Stop
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
@@ -1560,7 +1601,7 @@ impl CustomControl for HostedNumericDisplay {
     }
 
     fn focusable(&self) -> bool {
-        false
+        self.counter
     }
 
     /// Takes a whole `Number`.

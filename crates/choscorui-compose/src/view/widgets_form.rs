@@ -311,4 +311,30 @@ impl Configured<controls::HostedNumericDisplay> {
                 .map(|value| ControlValue::Number(value as f64)),
         )
     }
+
+    /// A display that is also a counter: a tab stop that edits `value`.
+    /// ArrowUp and ArrowRight add 1, ArrowDown and ArrowLeft subtract 1,
+    /// PageUp multiplies by 10, and PageDown divides by 10.
+    pub fn counter<M, N>(
+        name: impl IntoLive<TextContent, M>,
+        digits: usize,
+        base: impl IntoLive<NumberBase, N>,
+        value: Binding<i64>,
+    ) -> Self {
+        let name = label(name);
+        let base = base.into_live();
+        Configured::custom(ControlKind::NumericDisplay, move |env| {
+            controls::NumericDisplay::new(digits, base.get())
+                .hosted(text(&name, env))
+                .counter()
+        })
+        .bind(
+            value,
+            |value| ControlValue::Number(value as f64),
+            |value| match value {
+                ControlValue::Number(number) if number.is_finite() => Some(*number as i64),
+                _ => None,
+            },
+        )
+    }
 }

@@ -246,6 +246,20 @@ pub struct HostedToolButton {
 }
 
 impl HostedToolButton {
+    /// The button with a check state when `checkable` is true.
+    #[must_use]
+    pub fn with_checkable(mut self, checkable: bool) -> Self {
+        self.button.checkable = checkable;
+        self
+    }
+
+    /// The button with `menu`.
+    #[must_use]
+    pub fn with_menu(mut self, menu: ToolButtonMenu) -> Self {
+        self.button.menu = menu;
+        self
+    }
+
     fn act(&mut self, cx: &mut ControlContext<'_>, action: ToolButtonAction) {
         match action {
             ToolButtonAction::Activated(id) => cx.emit(ControlMessage::Command(id)),

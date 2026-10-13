@@ -1,6 +1,7 @@
 //! A control view built from the environment, with chained options,
-//! bindings, and actions. The control constructors in this module return
-//! one; any other control mounts through [`Configured::custom`].
+//! bindings, and actions. Each hosted control of `choscorui-controls` has
+//! a view constructor that returns one. An application's own
+//! `CustomControl` mounts through [`Configured::custom`].
 
 use super::View;
 use super::control::ControlView;
@@ -33,8 +34,9 @@ pub struct Configured<C> {
 }
 
 impl<C: CustomControl + 'static> Configured<C> {
-    /// A view of the control that `build` makes. `kind` is the control
-    /// kind whose root slot local style modifiers change.
+    /// A view of the control that `build` makes, for an application's own
+    /// `CustomControl`. `kind` is the control kind whose root slot local
+    /// style modifiers change.
     pub fn custom(kind: ControlKind, build: impl Fn(&Env) -> C + 'static) -> Self {
         Self::try_custom(kind, move |env| {
             Ok::<_, std::convert::Infallible>(build(env))
