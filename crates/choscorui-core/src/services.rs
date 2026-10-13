@@ -311,7 +311,9 @@ impl Services {
         match service.support(&self.capabilities) {
             Support::Supported => Ok(&*self.backend),
             Support::Unsupported => Err(ServiceError::Unsupported(service)),
-            Support::Conditional(condition) => Err(ServiceError::Unavailable { service, condition }),
+            Support::Conditional(condition) => {
+                Err(ServiceError::Unavailable { service, condition })
+            }
         }
     }
 

@@ -9,11 +9,11 @@ use choscorui_core::{
     Size, TextBuffer, WheelUnit,
 };
 mod ime;
-pub use ime::{ImeEvent, TextInputState};
 pub use choscorui_core::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
     MenuShortcutModifiers, MenuSpec, WindowOptions,
 };
+pub use ime::{ImeEvent, TextInputState};
 mod backdrop;
 mod dialog;
 mod menu_native;

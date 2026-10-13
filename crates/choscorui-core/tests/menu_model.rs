@@ -107,10 +107,7 @@ fn submenus_hold_commands_that_the_model_finds_and_updates() {
     assert_eq!(
         MenuBarModel::new(vec![MenuSpec::new(
             "View",
-            vec![
-                save_item(),
-                MenuEntry::submenu("More", vec![save_item()]),
-            ],
+            vec![save_item(), MenuEntry::submenu("More", vec![save_item()]),],
         )]),
         Err(MenuError::DuplicateCommand(MenuCommandId(7)))
     );

@@ -61,8 +61,8 @@ pub use lazy::{LazyHStack, LazyVStack};
 pub use menus::MenuChoice;
 pub use modifier::{Edges, Frame, Styled, ViewExt};
 pub use resizable::Resizable;
-pub use storage::{Storage, StorageError, StoredValue};
 pub use state::{Binding, Fixed, Handle, IntoLive, Live, Memo, Reading, State, take_handle_errors};
+pub use storage::{Storage, StorageError, StoredValue};
 pub use text::{IntoTextArg, Localized, Text, TextContent};
 pub use widgets::{
     Accordion, Alert, AspectRatio, Attachment, Avatar, Badge, Breadcrumb, Button, ButtonGroup,

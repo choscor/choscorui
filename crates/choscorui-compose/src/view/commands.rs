@@ -73,11 +73,7 @@ impl LoweredMenus {
     }
 }
 
-fn lower_rows(
-    rows: &[MenuChoice],
-    env: &Env,
-    actions: &mut Vec<Rc<dyn Fn()>>,
-) -> Vec<MenuEntry> {
+fn lower_rows(rows: &[MenuChoice], env: &Env, actions: &mut Vec<Rc<dyn Fn()>>) -> Vec<MenuEntry> {
     rows.iter()
         .map(|choice| {
             let (label, checked, action) = match &choice.row {

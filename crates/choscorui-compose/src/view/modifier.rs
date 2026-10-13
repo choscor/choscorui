@@ -6,6 +6,7 @@
 
 use super::View;
 use super::env::{Corner, Elevation, Env, Fill, Metric};
+use super::file_dialog::{self, DialogResult};
 use super::fragment::FragmentId;
 use super::host::{Cx, Flex, Handler, Inner, Layer, ShortcutEntry, ViewError};
 use super::layout::{Alignment, parent_tokens};
@@ -13,7 +14,6 @@ use super::menus::{self, MenuChoice};
 use super::present::{Placement, Presentation, present};
 use super::state::{Binding, IntoLive, Live};
 use super::text::TextContent;
-use super::file_dialog::{self, DialogResult};
 use super::toast::{self, MakeToast, ToasterSpec};
 use super::widgets::Items;
 use super::{hover_card, tooltip};
@@ -28,8 +28,8 @@ use choscorui_core::{
     LayoutStyle, Length, Locale, NodeId, Point, RecipeSet, ServiceError, Size, TextPreset,
     Tracking,
 };
-use std::path::PathBuf;
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 /// Padding on logical edges: `leading` is the start edge, which is the

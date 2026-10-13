@@ -48,7 +48,9 @@ impl ServiceBackend for NativeServices {
 
     fn set_clipboard_text(&self, text: &str) -> Result<(), ServiceError> {
         let clipboard = Clipboard::general().map_err(failed(Service::Clipboard))?;
-        clipboard.write_text(text).map_err(failed(Service::Clipboard))
+        clipboard
+            .write_text(text)
+            .map_err(failed(Service::Clipboard))
     }
 
     fn notification_permission(&self) -> Result<NotificationPermission, ServiceError> {
