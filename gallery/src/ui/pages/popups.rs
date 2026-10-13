@@ -3,12 +3,11 @@
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Configured, Env, HStack, State, Text, View, ViewExt,
+    AnyView, Button, Configured, DropdownMenu, Env, HStack, State, Text, View, ViewExt,
 };
 use choscorui::controls::{
     self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
-    CustomControl, DropdownMenu, MeasureContext, MenuCheck, MenuItem, PaintContext,
-    TooltipController,
+    CustomControl, MeasureContext, MenuCheck, MenuItem, PaintContext, TooltipController,
 };
 use choscorui::core::{
     ColorRole, EventReply, KeyEvent, LayoutDirection, Measured, NodeId, PointerEvent, Rect,
@@ -84,38 +83,38 @@ fn edit_menu(
     last: State<String>,
     open: State<bool>,
 ) -> impl View {
-    Configured::custom(ControlKind::Menu, move |env| {
-        let mut menu = DropdownMenu::new(menu_items(env)).hosted(text(env, "dropdown-menu.edit"));
-        let disabled = CommandState {
-            enabled: false,
-            checked: false,
-        };
-        let wrapped = CommandState {
-            enabled: true,
-            checked: wrap.get(),
-        };
-        let _ = menu.set_command(PASTE, disabled);
-        let _ = menu.set_command(WRAP, wrapped);
-        for order in [BY_NAME, BY_DATE] {
-            let state = CommandState {
-                enabled: true,
-                checked: by_date.get() == (order == BY_DATE),
+    DropdownMenu::new(t!("dropdown-menu.edit"), menu_items)
+        .with(move |mut menu| {
+            let disabled = CommandState {
+                enabled: false,
+                checked: false,
             };
-            let _ = menu.set_command(order, state);
-        }
-        menu
-    })
-    .on_command(move |command| {
-        if command == WRAP {
-            wrap.update(|on| *on = !*on);
-        }
-        if command == BY_NAME || command == BY_DATE {
-            by_date.set(command == BY_DATE);
-        }
-        last.set(chose(&env, command));
-        open.set(false);
-    })
-    .on_dismiss(move || open.set(false))
+            let wrapped = CommandState {
+                enabled: true,
+                checked: wrap.get(),
+            };
+            let _ = menu.set_command(PASTE, disabled);
+            let _ = menu.set_command(WRAP, wrapped);
+            for order in [BY_NAME, BY_DATE] {
+                let state = CommandState {
+                    enabled: true,
+                    checked: by_date.get() == (order == BY_DATE),
+                };
+                let _ = menu.set_command(order, state);
+            }
+            menu
+        })
+        .on_command(move |command| {
+            if command == WRAP {
+                wrap.update(|on| *on = !*on);
+            }
+            if command == BY_NAME || command == BY_DATE {
+                by_date.set(command == BY_DATE);
+            }
+            last.set(chose(&env, command));
+            open.set(false);
+        })
+        .on_dismiss(move || open.set(false))
 }
 
 /// A button that opens a popup menu; Paste is disabled, Wrap toggles a

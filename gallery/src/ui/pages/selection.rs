@@ -4,13 +4,10 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Canvas, Configured, Cx, Dynamic, Frame, HStack, HorizontalAlignment,
-    IntoLive, Text, TextContent, VStack, View, ViewExt,
+    Alignment, AnyView, Canvas, Combobox, Cx, Dynamic, Env, FontChooser, Frame, HStack,
+    HorizontalAlignment, IntoLive, RadioGroup, Tabs, Text, TextContent, VStack, View, ViewExt,
 };
-use choscorui::controls::{
-    self, ComboItem, CompletionMode, ControlKind, ControlMessage, ControlValue, FontChooser,
-    Orientation, TabsVariant, text_key,
-};
+use choscorui::controls::{CompletionMode, ControlMessage, ControlValue, Orientation, TabsVariant};
 use choscorui::core::{ColorRole, Point, RadiusScale, Space, TextPreset};
 
 /// A small muted caption. It repeats the name of the control below it, so
@@ -40,21 +37,13 @@ fn radios(
     invalid: bool,
 ) -> impl View {
     let selected = cx.state(0usize);
-    let group = Configured::try_custom(ControlKind::RadioGroup, move |env| {
-        let options = options.map(|option| env.text(option, &[]));
-        let group =
-            controls::RadioGroup::hosted(env.text(name, &[]), options, 0)?.with_invalid(invalid);
-        match disabled {
-            Some(index) => group.with_disabled(index),
-            None => Ok(group),
-        }
-    })
-    .value(move || ControlValue::Index(Some(selected.get())))
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Index(Some(index))) = message {
-            selected.set(*index);
-        }
-    });
+    let labels = move |env: &Env| options.map(|option| env.text(option, &[])).to_vec();
+    let group = RadioGroup::new(t!(name), labels, selected.binding())
+        .with(move |group| group.with_invalid(invalid));
+    let group = match disabled {
+        Some(index) => group.disabled_option(index),
+        None => group,
+    };
     captioned(hidden_caption(t!(name)), group)
 }
 
@@ -104,19 +93,10 @@ const TAB_CONTENT: [(&str, &str); 3] = [
 /// it for vertical tabs; the last tab is disabled.
 fn tab_set(cx: &mut Cx, variant: TabsVariant, orientation: Orientation) -> AnyView {
     let selected = cx.state(0usize);
-    let tabs = Configured::try_custom(ControlKind::Tabs, move |env| {
-        let labels = TAB_CONTENT.map(|(label, _)| env.text(label, &[]));
-        controls::Tabs::hosted(env.text("tabs.settings", &[]), labels, 0)?
-            .with_variant(variant)
-            .with_orientation(orientation)
-            .with_disabled(2)
-    })
-    .value(move || ControlValue::Index(Some(selected.get())))
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Index(Some(index))) = message {
-            selected.set(*index);
-        }
-    });
+    let labels = |env: &Env| TAB_CONTENT.map(|(label, _)| env.text(label, &[])).to_vec();
+    let tabs = Tabs::new(t!("tabs.settings"), labels, selected.binding())
+        .with(move |tabs| tabs.with_variant(variant).with_orientation(orientation))
+        .disabled_tab(2);
     let panel = Text::new(move || t!(TAB_CONTENT[selected.get()].1))
         .padding(Space::S3)
         .frame(
@@ -170,14 +150,8 @@ const CITIES: [&str; 8] = [
     "Nha Trang",
 ];
 
-fn city_items() -> Vec<ComboItem> {
-    CITIES
-        .iter()
-        .map(|text| ComboItem {
-            key: text_key(text),
-            text: (*text).to_owned(),
-        })
-        .collect()
+fn city_items() -> Vec<String> {
+    CITIES.iter().map(|city| (*city).to_owned()).collect()
 }
 
 /// A city combobox labeled by catalog key `label`, invalid when `invalid`
@@ -192,20 +166,21 @@ fn city_combo(
 ) -> impl View {
     let start = (!editable).then(|| CITIES.iter().position(|city| *city == "Huế"));
     let selected = cx.state(start.flatten());
-    let combo = Configured::custom(ControlKind::Combobox, move |env| {
-        let mut combo =
-            controls::Combobox::new(env.text(label, &[]), editable).with_invalid(invalid);
+    let combo = if editable {
+        // The caption follows the chosen city, not the typed text.
+        Combobox::editable(t!(label), city_items(), cx.state(String::new()).binding()).on_message(
+            move |message| {
+                if let ControlMessage::Changed(ControlValue::Index(index)) = message {
+                    selected.set(*index);
+                }
+            },
+        )
+    } else {
+        Combobox::new(t!(label), city_items(), selected.binding())
+    }
+    .with(move |mut combo| {
         combo.set_completion_mode(mode);
-        combo.set_items(city_items());
-        if !editable {
-            combo.select(Some(text_key("Huế")));
-        }
-        combo
-    })
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Index(index)) = message {
-            selected.set(*index);
-        }
+        combo.with_invalid(invalid)
     })
     .frame(Frame::new().width(280.0).alignment(Alignment::FILL));
     let env = cx.env().clone();
@@ -273,19 +248,9 @@ impl View for FontChooserPage {
         // The chosen family's index; `None` while the typed family is
         // missing and the fallback renders.
         let chosen = cx.state(FAMILIES.iter().position(|family| *family == "Georgia"));
-        let chooser = Configured::custom(ControlKind::Combobox, |_| {
-            FontChooser::new(
-                FAMILIES.iter().map(|family| (*family).to_owned()).collect(),
-                "Georgia",
-                FALLBACK,
-            )
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Index(index)) = message {
-                chosen.set(*index);
-            }
-        })
-        .frame(Frame::new().width(280.0).alignment(Alignment::FILL));
+        let families: Vec<String> = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
+        let chooser = FontChooser::new(families, FALLBACK, chosen.binding())
+            .frame(Frame::new().width(280.0).alignment(Alignment::FILL));
         let family = move || chosen.get().map_or(FALLBACK, |index| FAMILIES[index]);
         let env = cx.env().clone();
         let preview = Dynamic::new(move || {

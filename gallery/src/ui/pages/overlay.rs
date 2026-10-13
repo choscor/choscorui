@@ -3,9 +3,9 @@
 
 use crate::ui::page::{Build, PageCx, column, row, section, stateful};
 use choscorui::compose::t;
-use choscorui::compose::view::{AnyView, Configured, ContextMenu, Env, Menubar, Popover};
+use choscorui::compose::view::{AnyView, Command, ContextMenu, Dialog, Env, Menubar, Popover};
 use choscorui::controls::{
-    self, ButtonVariant, CommandId, CommandItem, ControlKind, MenuCheck, MenuItem, SheetSide,
+    self, ButtonVariant, CommandId, CommandItem, MenuCheck, MenuItem, SheetSide,
 };
 use choscorui::core::Icon;
 
@@ -112,7 +112,7 @@ pub fn hover_card(_: &PageCx) -> AnyView {
 }
 
 /// The profile form's actions and close button.
-fn profile(env: &Env, dialog: controls::Dialog) -> controls::Dialog {
+fn profile(dialog: controls::Dialog, env: &Env) -> controls::Dialog {
     dialog
         .with_action(text(env, "dialog.cancel"), ButtonVariant::Outline)
         .with_action(text(env, "dialog.save"), ButtonVariant::Default)
@@ -122,12 +122,14 @@ fn profile(env: &Env, dialog: controls::Dialog) -> controls::Dialog {
 pub fn dialog(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
-        let dialog = Configured::custom(ControlKind::Dialog, |env| {
-            let title = text(env, "dialog.edit_profile");
-            let dialog = controls::Dialog::new(&title, &title, text(env, "dialog.profile"));
-            profile(env, dialog)
-        });
-        column(section(t!("dialog.caption"), dialog.open(open.binding())))
+        let dialog = Dialog::new(
+            t!("dialog.edit_profile"),
+            t!("dialog.edit_profile"),
+            t!("dialog.profile"),
+            open.binding(),
+        )
+        .with_env(profile);
+        column(section(t!("dialog.caption"), dialog))
     })
 }
 
@@ -144,16 +146,14 @@ pub fn sheet(_: &PageCx) -> AnyView {
             .into_iter()
             .map(|(side, label)| {
                 let open = cx.state(false);
-                Configured::custom(ControlKind::Sheet, move |env| {
-                    let sheet = controls::Dialog::sheet(
-                        side,
-                        text(env, label),
-                        text(env, "dialog.edit_profile"),
-                        text(env, "dialog.profile"),
-                    );
-                    profile(env, sheet)
-                })
-                .open(open.binding())
+                Dialog::sheet(
+                    side,
+                    t!(label),
+                    t!("dialog.edit_profile"),
+                    t!("dialog.profile"),
+                    open.binding(),
+                )
+                .with_env(profile)
             })
             .collect();
         column(section(t!("sheet.caption"), row(sheets)))
@@ -166,17 +166,18 @@ pub fn drawer(_: &PageCx) -> AnyView {
             .into_iter()
             .map(|(side, label)| {
                 let open = cx.state(false);
-                Configured::custom(ControlKind::Drawer, move |env| {
-                    controls::Dialog::drawer(
-                        side,
-                        text(env, label),
-                        text(env, "drawer.title"),
-                        text(env, "drawer.description"),
-                    )
-                    .with_action(text(env, "drawer.submit"), ButtonVariant::Default)
-                    .with_action(text(env, "dialog.cancel"), ButtonVariant::Outline)
+                Dialog::drawer(
+                    side,
+                    t!(label),
+                    t!("drawer.title"),
+                    t!("drawer.description"),
+                    open.binding(),
+                )
+                .with_env(|drawer, env| {
+                    drawer
+                        .with_action(text(env, "drawer.submit"), ButtonVariant::Default)
+                        .with_action(text(env, "dialog.cancel"), ButtonVariant::Outline)
                 })
-                .open(open.binding())
             })
             .collect();
         column(section(t!("drawer.caption"), row(drawers)))
@@ -211,36 +212,26 @@ fn commands(env: &Env) -> Vec<(String, Vec<CommandItem>)> {
     ]
 }
 
+/// The text the palette shows when no command matches.
+fn empty(command: controls::Command, env: &Env) -> controls::Command {
+    command.with_empty(text(env, "command.empty"))
+}
+
 pub fn command(_: &PageCx) -> AnyView {
-    let empty =
-        |env: &Env, command: controls::Command| command.with_empty(text(env, "command.empty"));
     column((
         section(
             t!("command.inline"),
-            Configured::custom(ControlKind::Command, move |env| {
-                empty(
-                    env,
-                    controls::Command::new(
-                        text(env, "command.name"),
-                        text(env, "command.placeholder"),
-                        commands(env),
-                    ),
-                )
-            }),
+            Command::new(t!("command.name"), t!("command.placeholder"), commands).with_env(empty),
         ),
         section(
             t!("command.dialog"),
-            Configured::custom(ControlKind::Command, move |env| {
-                empty(
-                    env,
-                    controls::Command::dialog(
-                        text(env, "command.open_palette"),
-                        text(env, "command.name"),
-                        text(env, "command.placeholder"),
-                        commands(env),
-                    ),
-                )
-            }),
+            Command::dialog(
+                t!("command.open_palette"),
+                t!("command.name"),
+                t!("command.placeholder"),
+                commands,
+            )
+            .with_env(empty),
         ),
     ))
 }
