@@ -620,6 +620,29 @@ impl Image {
         })
     }
 
+    /// An image whose pixel at `(x, y)` is `pixel(x, y)`, as straight-alpha
+    /// RGBA8. Each side clamps to `1..=`[`Image::MAX_SIDE`], so the image
+    /// always builds.
+    pub fn from_fn(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 4]) -> Self {
+        let (width, height) = (
+            width.clamp(1, Self::MAX_SIDE),
+            height.clamp(1, Self::MAX_SIDE),
+        );
+        let pixels: Vec<u8> = (0..height)
+            .flat_map(|y| (0..width).map(move |x| (x, y)))
+            .flat_map(|(x, y)| pixel(x, y))
+            .collect();
+        Self {
+            id: NEXT_IMAGE.fetch_add(1, Ordering::Relaxed),
+            width,
+            height,
+            pixels: pixels.into(),
+        }
+    }
+
+    /// The longest side of an image that [`Image::from_fn`] makes.
+    pub const MAX_SIDE: u32 = 16_384;
+
     pub fn id(&self) -> u64 {
         self.id
     }

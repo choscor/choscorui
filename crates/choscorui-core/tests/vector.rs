@@ -99,6 +99,17 @@ fn images_validate_dimensions_and_compare_by_identity() {
 }
 
 #[test]
+fn images_from_a_function_always_build() {
+    let image = Image::from_fn(3, 2, |x, y| [x as u8, y as u8, 0, 255]);
+    assert_eq!((image.width(), image.height()), (3, 2));
+    assert_eq!(image.pixel(2, 1), Some([2, 1, 0, 255]));
+    assert_eq!(image.pixels().len(), 3 * 2 * 4);
+    let empty = Image::from_fn(0, 0, |_, _| [9, 9, 9, 9]);
+    assert_eq!((empty.width(), empty.height()), (1, 1));
+    assert_eq!(empty.pixel(0, 0), Some([9, 9, 9, 9]));
+}
+
+#[test]
 fn damage_covers_only_changed_draws_including_state() {
     let mut base = DisplayList::new();
     base.fill_rect(Rect::from_xywh(0.0, 0.0, 10.0, 10.0), Color::BLACK);

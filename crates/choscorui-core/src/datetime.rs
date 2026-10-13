@@ -50,6 +50,16 @@ impl CivilDate {
         Ok(Self { year, month, day })
     }
 
+    /// The nearest valid date: the year clamps to `1..=9999`, the month
+    /// to `1..=12`, and the day to the days of that month. Use it for
+    /// fixed dates in code; [`CivilDate::new`] reports invalid input.
+    pub fn clamped(year: i32, month: u8, day: u8) -> Self {
+        let year = year.clamp(1, 9999);
+        let month = month.clamp(1, 12);
+        let day = day.clamp(1, days_in_month(year, month));
+        Self { year, month, day }
+    }
+
     pub fn year(self) -> i32 {
         self.year
     }
@@ -276,6 +286,17 @@ impl CivilTime {
             second,
         })
     }
+
+    /// The nearest valid time: the hour clamps to 23, and the minute and
+    /// the second to 59. [`CivilTime::new`] reports invalid input.
+    pub fn clamped(hour: u8, minute: u8, second: u8) -> Self {
+        Self {
+            hour: hour.min(23),
+            minute: minute.min(59),
+            second: second.min(59),
+        }
+    }
+
     pub fn hour(self) -> u8 {
         self.hour
     }

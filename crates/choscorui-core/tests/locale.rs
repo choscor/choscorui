@@ -216,6 +216,24 @@ fn numbers_format_and_parse_per_locale() {
 }
 
 #[test]
+fn clamped_dates_and_times_take_the_nearest_valid_value() {
+    let date = |year, month, day| CivilDate::new(year, month, day).unwrap();
+    assert_eq!(CivilDate::clamped(2026, 10, 12), date(2026, 10, 12));
+    assert_eq!(CivilDate::clamped(2023, 2, 29), date(2023, 2, 28));
+    assert_eq!(CivilDate::clamped(2024, 13, 0), date(2024, 12, 1));
+    assert_eq!(CivilDate::clamped(0, 0, 40), date(1, 1, 31));
+    assert_eq!(CivilDate::clamped(12_000, 6, 31), date(9999, 6, 30));
+    assert_eq!(
+        CivilTime::clamped(9, 30, 0),
+        CivilTime::new(9, 30, 0).unwrap()
+    );
+    assert_eq!(
+        CivilTime::clamped(24, 60, 99),
+        CivilTime::new(23, 59, 59).unwrap()
+    );
+}
+
+#[test]
 fn dates_round_trip_through_epoch_and_locale_formats() {
     let date = CivilDate::new(2024, 2, 29).unwrap();
     assert!(CivilDate::new(2023, 2, 29).is_err());

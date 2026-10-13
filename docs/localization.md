@@ -117,6 +117,8 @@ the missing category (see [Validating translations](#validating-translations)).
 groups of three digits. They accept an ASCII `.` as the decimal separator
 only when `.` is not the group separator of the locale.
 `CivilDate::parse_short` reads a date in the field order of the locale.
+`CivilDate::clamped` and `CivilTime::clamped` make the nearest valid value
+without a `Result`. Use them for fixed dates and times in code.
 
 These types parse user input with the locale functions:
 
