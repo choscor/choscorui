@@ -1,6 +1,6 @@
 # macOS backend
 
-macOS is the supported platform. The `choscorui-macos` crate is the backend, and the facade re-exports it as `choscorui::platform`. Applications use `choscorui::platform` and do not depend on the backend crate.
+macOS is the supported platform. The `choscorui-macos` crate is the backend. The facade uses it behind the portable `App`, `AppContext`, and `Services`, and also re-exports it as `choscorui::platform` with the `NativeAccess` trait. Applications use the portable API first, use `choscorui::platform` only for what it does not cover, and do not depend on the backend crate.
 
 ## Requirements
 
@@ -90,14 +90,14 @@ Other window operations:
 
 ## Menus and context menus
 
-The menu bar comes from a `MenuBarModel`. A model is a list of `MenuSpec` values. Each `MenuSpec` has a title and a list of `MenuEntry` values: commands and separators.
+An application declares the menu bar with `CommandMenu` views, and the facade lowers them to a `MenuBarModel` from `choscorui-core`. A model is a list of `MenuSpec` values. Each `MenuSpec` has a title and a list of `MenuEntry` values: commands, submenus, and separators. The backend uses the model directly:
 
 1. Give each command a unique `MenuCommandId`. `MenuBarModel::new` returns `MenuError::DuplicateCommand` for a repeated identifier.
 2. Install the model with `Application::install_main_menu`. Keep the returned `MainMenu`.
 3. After each event pump, read the chosen commands with `MainMenu::take_activations`.
 4. Change the title, enabled state, checked state, or shortcut of a command with `MainMenu::set_state`.
 
-`MainMenu::perform_action` sends a command through the same target and action path as a menu click. Automation and smoke tests use it.
+`MainMenu::perform_action` sends a command through the same target and action path as a menu click. `MainMenu::perform_key_equivalent` sends a key-down event to the menu bar, as a keyboard shortcut does. Automation and smoke tests use them.
 
 A `ContextMenu` is a native `NSMenu` built from one `MenuSpec`. `Window::show_context_menu(&menu, at)` shows it at a point in content coordinates. The call runs the AppKit menu loop until the menu closes. It returns the chosen command and also queues the command in `ContextMenu::take_activations`.
 
@@ -200,12 +200,12 @@ AppKit has no global text size, so `text_scale` is always 1.0. Give the applicat
 - The function returns `None` for an identifier with a `/` or a leading `.`, or when `HOME` is not set.
 - The path comes from `HOME`. In a sandboxed application, `HOME` is the container of the application, so the file is in the container.
 
-To restore the window placement:
+`App::id(app_id)` keeps the stored state and the restored window frames of an application in this file. `Scene::restore_geometry(key)` restores the window placement. It does these steps:
 
-1. On close, store `window.geometry()` with `WindowGeometry::store`.
-2. On launch, read it with `WindowGeometry::restore`.
-3. Fit the frame to the current displays with `fit_to_screens(&screen_visible_frames()?, minimum)`.
-4. Apply the result with `Window::set_geometry`.
+1. On close, it stores the frame of the window with `WindowGeometry::store`.
+2. On launch, it reads the frame with `WindowGeometry::restore`.
+3. It fits the frame to the current displays with `fit_to_screens(&screen_visible_frames()?, minimum)`.
+4. It applies the result with `Window::set_geometry`.
 
 `set_geometry` applies zoom and full screen after the frame, so the window returns to the saved size when it leaves those states. [guide.md](guide.md) describes the `Settings` API and the file format.
 
@@ -220,6 +220,8 @@ To restore the window placement:
 | `status_items`, `open_urls`, `system_appearance`, `text_shaping`, `image_codecs` | `Supported` |
 | `notifications` | `Supported` in an app bundle with a bundle identifier, otherwise `Conditional("run from an app bundle with a bundle identifier")` |
 | `gpu_painting` | `Unsupported`, because Core Graphics paints on the CPU |
+
+The services of `Services` follow these values. On macOS, `post_notification` from a binary that is not in an app bundle returns `ServiceError::Unavailable` with the condition, and the other services are available.
 
 ## Accessibility
 

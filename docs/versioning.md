@@ -6,7 +6,8 @@ ChoscorUI follows [Semantic Versioning](https://semver.org/) for the `choscorui`
 
 - **Before 1.0 (`0.y.z`).** A breaking change increments `y`. A `z` release is compatible. The API is experimental, and the release notes list each breaking change.
 - **From 1.0.** A breaking change needs a major release. Additions go in minor releases. Examples of additions are new types, new methods, new enum variants on `#[non_exhaustive]` types, and new capability fields. A patch release only fixes bugs.
-- **Stable surface.** The stable surface is the `choscorui` facade: `prelude`, `core`, `controls`, `compose`, `platform`, and `capabilities()`. The backend crates and `choscorui-render` are implementation details, and their versions can change without notice. Use them through `choscorui::platform`.
+- **Stable surface.** The stable surface is the `choscorui` facade: `prelude`, `core`, `controls`, `compose`, and `capabilities()`. `App`, `Scene`, `AppContext`, `WindowId`, `AppError`, `WindowOptions`, and the services are in the prelude on every target. The backend crates and `choscorui-render` are implementation details, and their versions can change without notice.
+- **Platform escape hatch.** `choscorui::platform` is the backend of the target. On macOS it is `choscorui-macos` with the `NativeAccess` trait, and on other targets it is empty. It follows the version of the backend crate, so a minor release can change it. Code that uses it is not portable, so put it behind your own check of the target.
 - **MSRV.** The minimum Rust version is part of the contract: 1.88, with edition 2024. Before 1.0, an increase is a minor-version change. After 1.0, an increase is a minor change that the previous release announces.
 - **Not covered.** Pixel-exact rendering, `Debug` output, the text of error messages, and timing are not part of the API. The [compatibility suite](#compatibility-suite) pins the behavior that is part of the API.
 
@@ -34,6 +35,8 @@ The crates define no Cargo features, so all code is always built. A new feature 
 Query capabilities, not the OS version or `cfg!(target_os)`. For example, on macOS, `notifications` is `Conditional` until the binary runs from an app bundle. `BackendCapabilities` is `#[non_exhaustive]`, so a new capability is not a breaking change. In tests, construct one with `BackendCapabilities::none`.
 
 [platform-macos.md](platform-macos.md) lists the values on macOS.
+
+On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. The message is "no backend exists for this operating system". A service of `Services` returns `ServiceError::Unsupported` when the backend does not have it, and `ServiceError::Unavailable` with the condition when the capability is `Conditional`.
 
 ## Error reporting
 

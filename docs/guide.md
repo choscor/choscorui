@@ -40,7 +40,7 @@ Depend only on `choscorui`. The other crates are internal and can change in any 
 | `choscorui::platform` | The backend of the current operating system, for code that the portable API does not cover. On macOS it is `choscorui-macos` and the `NativeAccess` trait. Code that uses it is not portable |
 | `choscorui::capabilities()` | What the current backend supports |
 
-[versioning.md](versioning.md) tells which parts are stable. The [API reference](api-docs/README.md) describes each public item of the prelude.
+[versioning.md](versioning.md) tells which parts are stable.
 
 ## Your first application
 
@@ -535,7 +535,7 @@ A `Scene` is a window description: the options, a closure that makes the root vi
 
 Windows share the runtime, so a `Property` from `App::runtime` updates every window that reads it. `App::on_tick` runs a closure once on each turn of the event loop. Use it for work that is not part of a view.
 
-`App::on_error(handler)` gets each `ViewError`. The first argument is the `WindowId` of the window that reported it, or `None` for an error of the application, for example a settings file that did not load.
+`App::on_error(handler)` gets each `ViewError`. The first argument is the `WindowId` of the window that reported it. It is `None` for an error of the application, for example a settings file that did not load.
 
 `choscorui::platform::NativeAccess` gives the native application, window, and menu of an `AppContext` on macOS. Use it only for features that the portable API does not have.
 

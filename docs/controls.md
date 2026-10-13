@@ -1759,6 +1759,10 @@ pin this behavior.
   `MenuChoice::checkbox` and `MenuChoice::radio` make check rows. The
   command state of a check row follows its binding when the menu opens.
   Its `Command` sets the binding and closes the layer.
+- **In the menu bar.** `CommandMenu` takes the same `MenuChoice` rows.
+  The application lowers them to native menu items, so the system draws
+  them and the recipe does not apply. `MenuChoice::keyboard_shortcut`
+  chooses a row from any window. A menu that a view presents ignores it.
 - **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
   shortcut text, and `destructive` sets the destructive look.
   `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`

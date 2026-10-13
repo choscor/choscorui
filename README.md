@@ -4,7 +4,7 @@ ChoscorUI is a desktop UI toolkit for Rust. It uses only the standard library, h
 
 ## Requirements
 
-macOS is the supported platform. You need:
+macOS is the supported platform. The application API is portable: it compiles on every target, and on a target without a backend `App::run` returns `AppError::Unsupported`. On macOS you need:
 
 - macOS 15 or later, on Apple silicon or Intel
 - the Xcode Command Line Tools: `xcode-select --install`

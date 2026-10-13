@@ -12,21 +12,32 @@ The workspace has a safe facade, four platform-independent crates, and one crate
 
 | Module | Contents |
 | --- | --- |
-| `choscorui::prelude` | The views, their modifiers and state, and `App` |
+| `choscorui::prelude` | The views, their modifiers and state, `App`, `Scene`, `AppContext`, and the services |
 | `choscorui::core` | All of `choscorui-core` |
 | `choscorui::controls` | All of `choscorui-controls` |
 | `choscorui::compose` | All of `choscorui-compose` |
-| `choscorui::platform` | All of `choscorui-macos`, only when the target OS is macOS |
+| `choscorui::platform` | The backend of the target: all of `choscorui-macos` and `NativeAccess` on macOS, empty on other targets |
 | `choscorui::capabilities()` | What the current backend supports |
 
-On macOS the facade also has `App`, the view-based entry point. `App` opens each window with a `ViewHost` that shares one `Runtime` with the other windows. Each turn of the event loop does these steps:
+The facade also has `App`, the view-based entry point, on every target. `App` opens each window with a `ViewHost` that shares one `Runtime` with the other windows. Each turn of the event loop does these steps:
 
 1. Wait for a native event until the next timer or frame is due.
-2. Send menu commands to the `commands` handler.
+2. Run the action of each menu item that the user chose. A panic in an action stops at this boundary and is counted.
 3. Route window events and accessibility requests to the views.
-4. Advance the timers. Then lay out, paint, and publish semantics for each window that needs a frame.
+4. Run the tick hook, and install the menu bar again when its state changed.
+5. Advance the timers. Then lay out, paint, and publish semantics for each window that needs a frame.
+6. Save the settings file when a stored value changed.
 
-The `platform` module has the attribute `#[cfg(target_os = "macos")]`. On other targets the module does not exist, and `capabilities()` returns `BackendCapabilities::none("headless")`. The crate root also re-exports a set of common types directly, and the aliases `Node` (for `NodeId`) and `Theme` (for `DesignTokens`).
+**Backend selection.** The private `backend` module is the only place in the facade that reads the target OS. It selects one implementation of the crate-private `Platform`, `NativeWindow`, and `NativeMenu` types:
+
+- On macOS, `backend/macos.rs` wraps `choscorui-macos`.
+- On other targets, `backend/none.rs` keeps windows and menus in memory. Its `Platform::new` returns `AppError::Unsupported`, so `App::start` fails before a window opens, and `capabilities()` returns `BackendCapabilities::none("headless")`.
+
+The rest of the facade (`App`, `Scene`, `AppContext`) is the same code on every target.
+
+**Portable descriptions.** The descriptions that an application gives are platform-independent data in `choscorui-core`. They are `WindowOptions`, the menu model (`MenuBarModel`, `MenuSpec`, `MenuEntry`), and the service requests (`SystemNotification`, `StatusItemSpec`, `FileDialogRequest`). `Services` checks the capability before it calls the `ServiceBackend` of the backend. It returns `ServiceError` when the backend does not have the service. `choscorui-compose` lowers `CommandMenu` views to the menu model, with a generated id for each row. A backend maps the descriptions to native objects through its FFI.
+
+The crate root also re-exports a set of common types directly, and the aliases `Node` (for `NodeId`) and `Theme` (for `DesignTokens`).
 
 Dependencies: `choscorui-core`, `choscorui-controls`, `choscorui-compose`, and, on macOS only, `choscorui-macos`. The tests also use `choscorui-render` on macOS, as a dev-dependency.
 
@@ -124,7 +135,7 @@ Dependencies: none.
 - `tools/bench` (`choscorui-bench`) runs the benchmark scenarios. See [performance.md](performance.md).
 - `tools/api-docs` (`choscorui-api-docs`) generates the [API reference](../api-docs/README.md) for application authors. It runs rustdoc from a pinned nightly toolchain and reads the JSON output. [CONTRIBUTING.md](../CONTRIBUTING.md#api-reference) tells how to use it.
 
-The gallery depends only on the facade, as an external application does. A test in [coverage.rs](../gallery/src/coverage.rs) reads `gallery/Cargo.toml` and makes sure that `choscorui` is the only dependency. The gallery also has `#![forbid(unsafe_code)]`.
+The gallery depends only on the facade, as an external application does. A test in [coverage.rs](../gallery/src/coverage.rs) reads `gallery/Cargo.toml` and makes sure that `choscorui` is the only dependency. Another test makes sure that only `autopilot.rs` reads the target OS or `choscorui::platform`. The gallery also has `#![forbid(unsafe_code)]`.
 
 The API reference tool uses only the standard library. It has its own JSON parser, and it depends on no crate.
 

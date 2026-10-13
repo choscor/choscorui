@@ -191,6 +191,13 @@ The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes th
 - **Tracking.** `Window::show_context_menu` calls `popUpMenuPositioningItem:atLocation:inView:`. The menu and its target stay alive during this synchronous call.
 - **Tests.** `window_smoke` sends geometry through `set_geometry` and `geometry`. It also selects context-menu items through the native target and action.
 
+### Main menu
+
+- **Submenus.** `MainMenu` builds a nested `NSMenu` for each `MenuEntry::Submenu`. Each menu turns off `autoenablesItems`, so the enabled state comes only from the model.
+- **Key equivalents.** `MainMenu::perform_key_equivalent` makes an autoreleased key-down `NSEvent` with `keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:` in a local pool. It sends `performKeyEquivalent:` to the root menu while the event is alive.
+- **Actions.** The facade runs each chosen item's Rust action after the AppKit callback returns. It catches a panic of the action with `catch_unwind` and counts it in `AppContext::menu_panic_count`.
+- **Tests.** `app_smoke` chooses items through the native target and action, presses a key equivalent, and checks that a panicking action stays usable.
+
 ### Desktop integration
 
 - **Delegate.** `desktop.rs` registers `ChoscoruiV2AppDelegate`. The process creates one instance and never releases it, because `NSApplication` and `UNUserNotificationCenter` hold their delegates weakly.
