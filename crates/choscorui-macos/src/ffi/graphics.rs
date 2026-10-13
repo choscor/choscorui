@@ -2,6 +2,7 @@
 
 use super::cf::{CFData, CFDictionary, CFString, CfRetained, cf_data, cf_type};
 use super::geometry::{CGAffineTransform, NSPoint, NSRect};
+use super::sdk::{c_functions, sdk_const};
 use std::ffi::c_void;
 use std::ops::Range;
 use std::ptr::NonNull;
@@ -16,170 +17,196 @@ cf_type!(
     CGImage,
 );
 
-/// `kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big`: RGBA bytes
-/// with premultiplied alpha.
-pub(crate) const PREMULTIPLIED_RGBA: u32 = 1 | (4 << 12);
-/// `kCGImageAlphaLast`: straight (non-premultiplied) RGBA pixels.
-pub(crate) const STRAIGHT_RGBA: u32 = 3;
-/// `kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation`.
-pub(crate) const GRADIENT_EXTEND: u32 = 1 | 2;
+sdk_const! {
+    /// RGBA bytes with premultiplied alpha.
+    pub(crate) PREMULTIPLIED_RGBA: u32 = 1 | (4 << 12),
+        sdk = kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big;
+    /// Straight (non-premultiplied) RGBA pixels.
+    pub(crate) STRAIGHT_RGBA: u32 = 3, sdk = kCGImageAlphaLast;
+    /// A gradient that extends past both ends.
+    pub(crate) GRADIENT_EXTEND: u32 = 1 | 2,
+        sdk = kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation;
+    RENDERING_INTENT_DEFAULT: i32 = 0, sdk = kCGRenderingIntentDefault;
+    LINE_CAP_BUTT: i32 = 0, sdk = kCGLineCapButt;
+    LINE_CAP_ROUND: i32 = 1, sdk = kCGLineCapRound;
+    LINE_CAP_SQUARE: i32 = 2, sdk = kCGLineCapSquare;
+    LINE_JOIN_MITER: i32 = 0, sdk = kCGLineJoinMiter;
+    LINE_JOIN_ROUND: i32 = 1, sdk = kCGLineJoinRound;
+    LINE_JOIN_BEVEL: i32 = 2, sdk = kCGLineJoinBevel;
+    INTERPOLATION_NONE: i32 = 1, sdk = kCGInterpolationNone;
+    INTERPOLATION_HIGH: i32 = 3, sdk = kCGInterpolationHigh;
+}
 
 /// `CGLineCap`.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum LineCap {
-    Butt = 0,
-    Round = 1,
-    Square = 2,
+    Butt = LINE_CAP_BUTT,
+    Round = LINE_CAP_ROUND,
+    Square = LINE_CAP_SQUARE,
 }
 
 /// `CGLineJoin`.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum LineJoin {
-    Miter = 0,
-    Round = 1,
-    Bevel = 2,
+    Miter = LINE_JOIN_MITER,
+    Round = LINE_JOIN_ROUND,
+    Bevel = LINE_JOIN_BEVEL,
 }
 
 /// `CGInterpolationQuality`.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Interpolation {
-    None = 1,
-    High = 3,
+    None = INTERPOLATION_NONE,
+    High = INTERPOLATION_HIGH,
 }
 
-#[link(name = "CoreGraphics", kind = "framework")]
-unsafe extern "C-unwind" {
-    safe static kCGColorSpaceSRGB: &'static CFString;
+/// The enums cross the boundary as their `i32` values.
+#[cfg(test)]
+macro_rules! enum_shape {
+    ($($name:ident),*) => {$(
+        impl super::sdk::CShape for $name {
+            const SHAPE: super::sdk::Shape = <i32 as super::sdk::CShape>::SHAPE;
+        }
+    )*};
+}
 
-    safe fn CGColorSpaceCreateWithName(name: &CFString) -> Option<CfRetained<CGColorSpace>>;
-    fn CGColorCreate(space: &CGColorSpace, components: *const f64) -> Option<CfRetained<CGColor>>;
-    fn CGGradientCreateWithColorComponents(
-        space: &CGColorSpace,
-        components: *const f64,
-        locations: *const f64,
-        count: usize,
-    ) -> Option<CfRetained<CGGradient>>;
-    safe fn CGDataProviderCreateWithCFData(data: &CFData) -> Option<CfRetained<CGDataProvider>>;
-    fn CGImageCreate(
-        width: usize,
-        height: usize,
-        bits_per_component: usize,
-        bits_per_pixel: usize,
-        bytes_per_row: usize,
-        space: &CGColorSpace,
-        bitmap_info: u32,
-        provider: &CGDataProvider,
-        decode: *const f64,
-        should_interpolate: bool,
-        intent: i32,
-    ) -> Option<CfRetained<CGImage>>;
-    pub(crate) safe fn CGImageGetWidth(image: &CGImage) -> usize;
-    pub(crate) safe fn CGImageGetHeight(image: &CGImage) -> usize;
-    pub(crate) safe fn CGAffineTransformInvert(transform: CGAffineTransform) -> CGAffineTransform;
+#[cfg(test)]
+enum_shape!(LineCap, LineJoin, Interpolation);
 
-    fn CGBitmapContextCreate(
-        data: *mut c_void,
-        width: usize,
-        height: usize,
-        bits_per_component: usize,
-        bytes_per_row: usize,
-        space: &CGColorSpace,
-        bitmap_info: u32,
-    ) -> Option<CfRetained<CGContext>>;
-    safe fn CGBitmapContextGetData(context: &CGContext) -> *mut c_void;
-    safe fn CGBitmapContextGetWidth(context: &CGContext) -> usize;
-    safe fn CGBitmapContextGetHeight(context: &CGContext) -> usize;
-    safe fn CGBitmapContextGetBytesPerRow(context: &CGContext) -> usize;
-    safe fn CGBitmapContextGetBitsPerPixel(context: &CGContext) -> usize;
-    safe fn CGBitmapContextGetBitsPerComponent(context: &CGContext) -> usize;
-    safe fn CGBitmapContextGetBitmapInfo(context: &CGContext) -> u32;
-    safe fn CGBitmapContextGetColorSpace(context: &CGContext) -> Option<&CGColorSpace>;
-
-    pub(crate) safe fn CGContextSaveGState(context: &CGContext);
-    pub(crate) safe fn CGContextRestoreGState(context: &CGContext);
-    pub(crate) safe fn CGContextFlush(context: &CGContext);
-    pub(crate) safe fn CGContextClipToRect(context: &CGContext, rect: NSRect);
-    pub(crate) safe fn CGContextClip(context: &CGContext);
-    pub(crate) safe fn CGContextEOClip(context: &CGContext);
-    pub(crate) safe fn CGContextSetAlpha(context: &CGContext, alpha: f64);
-    pub(crate) safe fn CGContextSetRGBFillColor(
-        context: &CGContext,
-        red: f64,
-        green: f64,
-        blue: f64,
-        alpha: f64,
-    );
-    pub(crate) safe fn CGContextSetFillColorWithColor(context: &CGContext, color: &CGColor);
-    pub(crate) safe fn CGContextSetStrokeColorWithColor(context: &CGContext, color: &CGColor);
-    pub(crate) safe fn CGContextFillRect(context: &CGContext, rect: NSRect);
-    pub(crate) safe fn CGContextStrokeRectWithWidth(context: &CGContext, rect: NSRect, width: f64);
-    pub(crate) safe fn CGContextBeginPath(context: &CGContext);
-    pub(crate) safe fn CGContextMoveToPoint(context: &CGContext, x: f64, y: f64);
-    pub(crate) safe fn CGContextAddLineToPoint(context: &CGContext, x: f64, y: f64);
-    pub(crate) safe fn CGContextAddQuadCurveToPoint(
-        context: &CGContext,
-        cx: f64,
-        cy: f64,
-        x: f64,
-        y: f64,
-    );
-    pub(crate) safe fn CGContextAddCurveToPoint(
-        context: &CGContext,
-        c1x: f64,
-        c1y: f64,
-        c2x: f64,
-        c2y: f64,
-        x: f64,
-        y: f64,
-    );
-    pub(crate) safe fn CGContextClosePath(context: &CGContext);
-    pub(crate) safe fn CGContextFillPath(context: &CGContext);
-    pub(crate) safe fn CGContextEOFillPath(context: &CGContext);
-    pub(crate) safe fn CGContextStrokePath(context: &CGContext);
-    pub(crate) safe fn CGContextReplacePathWithStrokedPath(context: &CGContext);
-    pub(crate) safe fn CGContextSetLineWidth(context: &CGContext, width: f64);
-    pub(crate) safe fn CGContextSetLineCap(context: &CGContext, cap: LineCap);
-    pub(crate) safe fn CGContextSetLineJoin(context: &CGContext, join: LineJoin);
-    pub(crate) safe fn CGContextSetMiterLimit(context: &CGContext, limit: f64);
-    fn CGContextSetLineDash(context: &CGContext, phase: f64, lengths: *const f64, count: usize);
-    pub(crate) safe fn CGContextConcatCTM(context: &CGContext, transform: CGAffineTransform);
-    pub(crate) safe fn CGContextTranslateCTM(context: &CGContext, x: f64, y: f64);
-    pub(crate) safe fn CGContextScaleCTM(context: &CGContext, x: f64, y: f64);
-    pub(crate) safe fn CGContextGetUserSpaceToDeviceSpaceTransform(
-        context: &CGContext,
-    ) -> CGAffineTransform;
-    pub(crate) safe fn CGContextBeginTransparencyLayer(
-        context: &CGContext,
-        auxiliary: Option<&CFDictionary>,
-    );
-    pub(crate) safe fn CGContextEndTransparencyLayer(context: &CGContext);
-    pub(crate) safe fn CGContextSetInterpolationQuality(
-        context: &CGContext,
-        quality: Interpolation,
-    );
-    pub(crate) safe fn CGContextDrawImage(context: &CGContext, rect: NSRect, image: &CGImage);
-    pub(crate) safe fn CGContextDrawLinearGradient(
-        context: &CGContext,
-        gradient: &CGGradient,
-        start: NSPoint,
-        end: NSPoint,
-        options: u32,
-    );
-    pub(crate) safe fn CGContextDrawRadialGradient(
-        context: &CGContext,
-        gradient: &CGGradient,
-        start_center: NSPoint,
-        start_radius: f64,
-        end_center: NSPoint,
-        end_radius: f64,
-        options: u32,
-    );
-    pub(crate) safe fn CGContextSetTextPosition(context: &CGContext, x: f64, y: f64);
-    pub(crate) safe fn CGContextSetTextMatrix(context: &CGContext, matrix: CGAffineTransform);
-    pub(crate) safe fn CGContextGetTextMatrix(context: &CGContext) -> CGAffineTransform;
+c_functions! {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    statics {
+        safe static kCGColorSpaceSRGB: &'static CFString;
+    }
+    functions {
+        safe fn CGColorSpaceCreateWithName(name: &CFString) -> Option<CfRetained<CGColorSpace>>;
+        unsafe fn CGColorCreate(space: &CGColorSpace, components: *const f64) -> Option<CfRetained<CGColor>>;
+        unsafe fn CGGradientCreateWithColorComponents(
+            space: &CGColorSpace,
+            components: *const f64,
+            locations: *const f64,
+            count: usize,
+        ) -> Option<CfRetained<CGGradient>>;
+        safe fn CGDataProviderCreateWithCFData(data: &CFData) -> Option<CfRetained<CGDataProvider>>;
+        unsafe fn CGImageCreate(
+            width: usize,
+            height: usize,
+            bits_per_component: usize,
+            bits_per_pixel: usize,
+            bytes_per_row: usize,
+            space: &CGColorSpace,
+            bitmap_info: u32,
+            provider: &CGDataProvider,
+            decode: *const f64,
+            should_interpolate: bool,
+            intent: i32,
+        ) -> Option<CfRetained<CGImage>>;
+        pub(crate) safe fn CGImageGetWidth(image: &CGImage) -> usize;
+        pub(crate) safe fn CGImageGetHeight(image: &CGImage) -> usize;
+        pub(crate) safe fn CGAffineTransformInvert(transform: CGAffineTransform) -> CGAffineTransform;
+        unsafe fn CGBitmapContextCreate(
+            data: *mut c_void,
+            width: usize,
+            height: usize,
+            bits_per_component: usize,
+            bytes_per_row: usize,
+            space: &CGColorSpace,
+            bitmap_info: u32,
+        ) -> Option<CfRetained<CGContext>>;
+        safe fn CGBitmapContextGetData(context: &CGContext) -> *mut c_void;
+        safe fn CGBitmapContextGetWidth(context: &CGContext) -> usize;
+        safe fn CGBitmapContextGetHeight(context: &CGContext) -> usize;
+        safe fn CGBitmapContextGetBytesPerRow(context: &CGContext) -> usize;
+        safe fn CGBitmapContextGetBitsPerPixel(context: &CGContext) -> usize;
+        safe fn CGBitmapContextGetBitsPerComponent(context: &CGContext) -> usize;
+        safe fn CGBitmapContextGetBitmapInfo(context: &CGContext) -> u32;
+        safe fn CGBitmapContextGetColorSpace(context: &CGContext) -> Option<&CGColorSpace>;
+        pub(crate) safe fn CGContextSaveGState(context: &CGContext);
+        pub(crate) safe fn CGContextRestoreGState(context: &CGContext);
+        pub(crate) safe fn CGContextFlush(context: &CGContext);
+        pub(crate) safe fn CGContextClipToRect(context: &CGContext, rect: NSRect);
+        pub(crate) safe fn CGContextClip(context: &CGContext);
+        pub(crate) safe fn CGContextEOClip(context: &CGContext);
+        pub(crate) safe fn CGContextSetAlpha(context: &CGContext, alpha: f64);
+        pub(crate) safe fn CGContextSetRGBFillColor(
+            context: &CGContext,
+            red: f64,
+            green: f64,
+            blue: f64,
+            alpha: f64,
+        );
+        pub(crate) safe fn CGContextSetFillColorWithColor(context: &CGContext, color: &CGColor);
+        pub(crate) safe fn CGContextSetStrokeColorWithColor(context: &CGContext, color: &CGColor);
+        pub(crate) safe fn CGContextFillRect(context: &CGContext, rect: NSRect);
+        pub(crate) safe fn CGContextStrokeRectWithWidth(context: &CGContext, rect: NSRect, width: f64);
+        pub(crate) safe fn CGContextBeginPath(context: &CGContext);
+        pub(crate) safe fn CGContextMoveToPoint(context: &CGContext, x: f64, y: f64);
+        pub(crate) safe fn CGContextAddLineToPoint(context: &CGContext, x: f64, y: f64);
+        pub(crate) safe fn CGContextAddQuadCurveToPoint(
+            context: &CGContext,
+            cx: f64,
+            cy: f64,
+            x: f64,
+            y: f64,
+        );
+        pub(crate) safe fn CGContextAddCurveToPoint(
+            context: &CGContext,
+            c1x: f64,
+            c1y: f64,
+            c2x: f64,
+            c2y: f64,
+            x: f64,
+            y: f64,
+        );
+        pub(crate) safe fn CGContextClosePath(context: &CGContext);
+        pub(crate) safe fn CGContextFillPath(context: &CGContext);
+        pub(crate) safe fn CGContextEOFillPath(context: &CGContext);
+        pub(crate) safe fn CGContextStrokePath(context: &CGContext);
+        pub(crate) safe fn CGContextReplacePathWithStrokedPath(context: &CGContext);
+        pub(crate) safe fn CGContextSetLineWidth(context: &CGContext, width: f64);
+        pub(crate) safe fn CGContextSetLineCap(context: &CGContext, cap: LineCap);
+        pub(crate) safe fn CGContextSetLineJoin(context: &CGContext, join: LineJoin);
+        pub(crate) safe fn CGContextSetMiterLimit(context: &CGContext, limit: f64);
+        unsafe fn CGContextSetLineDash(context: &CGContext, phase: f64, lengths: *const f64, count: usize);
+        pub(crate) safe fn CGContextConcatCTM(context: &CGContext, transform: CGAffineTransform);
+        pub(crate) safe fn CGContextTranslateCTM(context: &CGContext, x: f64, y: f64);
+        pub(crate) safe fn CGContextScaleCTM(context: &CGContext, x: f64, y: f64);
+        pub(crate) safe fn CGContextGetUserSpaceToDeviceSpaceTransform(
+            context: &CGContext,
+        ) -> CGAffineTransform;
+        pub(crate) safe fn CGContextBeginTransparencyLayer(
+            context: &CGContext,
+            auxiliary: Option<&CFDictionary>,
+        );
+        pub(crate) safe fn CGContextEndTransparencyLayer(context: &CGContext);
+        pub(crate) safe fn CGContextSetInterpolationQuality(
+            context: &CGContext,
+            quality: Interpolation,
+        );
+        pub(crate) safe fn CGContextDrawImage(context: &CGContext, rect: NSRect, image: &CGImage);
+        pub(crate) safe fn CGContextDrawLinearGradient(
+            context: &CGContext,
+            gradient: &CGGradient,
+            start: NSPoint,
+            end: NSPoint,
+            options: u32,
+        );
+        pub(crate) safe fn CGContextDrawRadialGradient(
+            context: &CGContext,
+            gradient: &CGGradient,
+            start_center: NSPoint,
+            start_radius: f64,
+            end_center: NSPoint,
+            end_radius: f64,
+            options: u32,
+        );
+        pub(crate) safe fn CGContextSetTextPosition(context: &CGContext, x: f64, y: f64);
+        pub(crate) safe fn CGContextSetTextMatrix(context: &CGContext, matrix: CGAffineTransform);
+        pub(crate) safe fn CGContextGetTextMatrix(context: &CGContext) -> CGAffineTransform;
+    }
 }
 
 /// The process-wide sRGB color space, created once and kept for the life
@@ -260,7 +287,7 @@ pub(crate) fn image_from_pixels(
             &provider,
             std::ptr::null(),
             layout.interpolate,
-            0,
+            RENDERING_INTENT_DEFAULT,
         )
     }
 }

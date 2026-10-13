@@ -5,6 +5,7 @@ use super::foundation::{NSArray, NSData, NSDate, NSDictionary, NSObject, NSStrin
 use super::geometry::{NSPoint, NSRange, NSRect, NSSize};
 use super::graphics::{CGContext, CGImage};
 use super::msg::{Autoreleased, Init, Shared, messages};
+use super::sdk::{c_functions, sdk_const};
 
 objc_class!(NSResponder: NSObject);
 objc_class!(NSApplication: NSResponder: NSObject);
@@ -82,6 +83,48 @@ objc_class!(
     /// The dragging info of simulated drags, registered by `dnd`.
     ChoscoruiV2SimulatedDraggingInfo: NSObject
 );
+
+sdk_const! {
+    pub(crate) EVENT_LEFT_MOUSE_DOWN: usize = 1, sdk = NSEventTypeLeftMouseDown;
+    pub(crate) EVENT_LEFT_MOUSE_UP: usize = 2, sdk = NSEventTypeLeftMouseUp;
+    pub(crate) EVENT_RIGHT_MOUSE_DOWN: usize = 3, sdk = NSEventTypeRightMouseDown;
+    pub(crate) EVENT_RIGHT_MOUSE_UP: usize = 4, sdk = NSEventTypeRightMouseUp;
+    pub(crate) EVENT_MOUSE_MOVED: usize = 5, sdk = NSEventTypeMouseMoved;
+    pub(crate) EVENT_LEFT_MOUSE_DRAGGED: usize = 6, sdk = NSEventTypeLeftMouseDragged;
+    pub(crate) EVENT_RIGHT_MOUSE_DRAGGED: usize = 7, sdk = NSEventTypeRightMouseDragged;
+    pub(crate) EVENT_KEY_DOWN: usize = 10, sdk = NSEventTypeKeyDown;
+    pub(crate) EVENT_KEY_UP: usize = 11, sdk = NSEventTypeKeyUp;
+    pub(crate) EVENT_APPLICATION_DEFINED: usize = 15, sdk = NSEventTypeApplicationDefined;
+    pub(crate) EVENT_SCROLL_WHEEL: usize = 22, sdk = NSEventTypeScrollWheel;
+    pub(crate) EVENT_OTHER_MOUSE_DOWN: usize = 25, sdk = NSEventTypeOtherMouseDown;
+    pub(crate) EVENT_OTHER_MOUSE_UP: usize = 26, sdk = NSEventTypeOtherMouseUp;
+    pub(crate) EVENT_OTHER_MOUSE_DRAGGED: usize = 27, sdk = NSEventTypeOtherMouseDragged;
+    pub(crate) MODIFIER_CAPS_LOCK: usize = 1 << 16, sdk = NSEventModifierFlagCapsLock;
+    pub(crate) MODIFIER_SHIFT: usize = 1 << 17, sdk = NSEventModifierFlagShift;
+    pub(crate) MODIFIER_CONTROL: usize = 1 << 18, sdk = NSEventModifierFlagControl;
+    pub(crate) MODIFIER_OPTION: usize = 1 << 19, sdk = NSEventModifierFlagOption;
+    pub(crate) MODIFIER_COMMAND: usize = 1 << 20, sdk = NSEventModifierFlagCommand;
+    pub(crate) WINDOW_STYLE_TITLED: usize = 1, sdk = NSWindowStyleMaskTitled;
+    pub(crate) WINDOW_STYLE_CLOSABLE: usize = 1 << 1, sdk = NSWindowStyleMaskClosable;
+    pub(crate) WINDOW_STYLE_MINIATURIZABLE: usize = 1 << 2,
+        sdk = NSWindowStyleMaskMiniaturizable;
+    pub(crate) WINDOW_STYLE_RESIZABLE: usize = 1 << 3, sdk = NSWindowStyleMaskResizable;
+    pub(crate) WINDOW_STYLE_FULL_SCREEN: usize = 1 << 14, sdk = NSWindowStyleMaskFullScreen;
+    pub(crate) BACKING_STORE_BUFFERED: usize = 2, sdk = NSBackingStoreBuffered;
+    pub(crate) ACTIVATION_POLICY_REGULAR: isize = 0, sdk = NSApplicationActivationPolicyRegular;
+    pub(crate) OCCLUSION_STATE_VISIBLE: usize = 1 << 1, sdk = NSWindowOcclusionStateVisible;
+    pub(crate) DRAG_OPERATION_COPY: usize = 1, sdk = NSDragOperationCopy;
+    pub(crate) DRAG_OPERATION_LINK: usize = 2, sdk = NSDragOperationLink;
+    pub(crate) DRAG_OPERATION_GENERIC: usize = 4, sdk = NSDragOperationGeneric;
+    pub(crate) DRAG_OPERATION_MOVE: usize = 16, sdk = NSDragOperationMove;
+    pub(crate) ALERT_STYLE_WARNING: usize = 0, sdk = NSAlertStyleWarning;
+    pub(crate) ALERT_STYLE_INFORMATIONAL: usize = 1, sdk = NSAlertStyleInformational;
+    pub(crate) ALERT_STYLE_CRITICAL: usize = 2, sdk = NSAlertStyleCritical;
+    pub(crate) ALERT_FIRST_BUTTON_RETURN: isize = 1000, sdk = NSAlertFirstButtonReturn;
+    pub(crate) MODAL_RESPONSE_OK: isize = 1, sdk = NSModalResponseOK;
+    pub(crate) CONTROL_STATE_OFF: isize = 0, sdk = NSControlStateValueOff;
+    pub(crate) CONTROL_STATE_ON: isize = 1, sdk = NSControlStateValueOn;
+}
 
 messages! {
     pub(crate) SHARED_APPLICATION: class NSApplication, c"sharedApplication",
@@ -410,55 +453,55 @@ messages! {
         (&Obj<NSString>) -> Autoreleased<NSString>;
 }
 
-#[link(name = "AppKit", kind = "framework")]
-unsafe extern "C" {
-    pub(crate) safe static NSAccessibilityAnnouncementRequestedNotification: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityAnnouncementKey: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityPriorityKey: &'static Obj<NSString>;
-    pub(crate) safe static NSPasteboardTypeString: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityButtonRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityCheckBoxRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityGroupRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityListRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityIncrementorRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityProgressIndicatorRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityRadioButtonRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityScrollAreaRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilitySliderRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityStaticTextRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityTextFieldRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityTextAreaRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilitySelectedTextChangedNotification: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilitySecureTextFieldSubrole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityWindowRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityTableRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityRowRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityCellRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityOutlineRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityMenuRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityMenuItemRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityComboBoxRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityHelpTagRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityToolbarRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityImageRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityLinkRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityScrollBarRole: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityLayoutChangedNotification: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityTitleChangedNotification: &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityFocusedUIElementChangedNotification:
-        &'static Obj<NSString>;
-    pub(crate) safe static NSAccessibilityValueChangedNotification: &'static Obj<NSString>;
-}
-
-#[link(name = "AppKit", kind = "framework")]
-unsafe extern "C-unwind" {
-    pub(crate) safe fn NSAccessibilityPostNotificationWithUserInfo(
-        element: &Obj<NSObject>,
-        notification: &Obj<NSString>,
-        user_info: &Obj<NSDictionary>,
-    );
-    pub(crate) safe fn NSAccessibilityPostNotification(
-        element: &Obj<NSObject>,
-        notification: &Obj<NSString>,
-    );
+c_functions! {
+    #[link(name = "AppKit", kind = "framework")]
+    statics {
+        pub(crate) safe static NSAccessibilityAnnouncementRequestedNotification: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityAnnouncementKey: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityPriorityKey: &'static Obj<NSString>;
+        pub(crate) safe static NSPasteboardTypeString: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityButtonRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityCheckBoxRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityGroupRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityListRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityIncrementorRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityProgressIndicatorRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityRadioButtonRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityScrollAreaRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilitySliderRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityStaticTextRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityTextFieldRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityTextAreaRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilitySelectedTextChangedNotification: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilitySecureTextFieldSubrole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityWindowRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityTableRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityRowRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityCellRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityOutlineRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityMenuRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityMenuItemRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityComboBoxRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityHelpTagRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityToolbarRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityImageRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityLinkRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityScrollBarRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityLayoutChangedNotification: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityTitleChangedNotification: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityFocusedUIElementChangedNotification:
+            &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityValueChangedNotification: &'static Obj<NSString>;
+    }
+    functions {
+        pub(crate) safe fn NSAccessibilityPostNotificationWithUserInfo(
+            element: &Obj<NSObject>,
+            notification: &Obj<NSString>,
+            user_info: &Obj<NSDictionary>,
+        );
+        pub(crate) safe fn NSAccessibilityPostNotification(
+            element: &Obj<NSObject>,
+            notification: &Obj<NSString>,
+        );
+    }
 }

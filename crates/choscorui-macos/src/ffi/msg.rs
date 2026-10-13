@@ -14,6 +14,7 @@ use super::encode::Encode;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 use super::retained::Retained;
 use super::runtime;
+use super::sdk::ffi_struct;
 use crate::Error;
 use std::ffi::{CStr, c_char};
 use std::marker::PhantomData;
@@ -116,7 +117,7 @@ impl<C: ClassType, A: Args, R: Ret> Msg<C, A, R> {
     ) -> Result<R::Out<'a>, Error> {
         debug_assert_eq!(self.kind, Kind::Instance, "{:?}", self.selector);
         let target = ObjcSuper {
-            receiver: receiver.cast(),
+            receiver: NonNull::from(receiver.cast()),
             superclass: C::class()?,
         };
         Ok(R::out(A::invoke::<_, R>(
@@ -512,15 +513,17 @@ impl Target for &AnyClass {
     const SUPER: bool = false;
 }
 
-/// `struct objc_super`: the receiver and the class where the method
-/// lookup starts.
-#[repr(C)]
-pub(crate) struct ObjcSuper<'a> {
-    receiver: &'a Obj<super::foundation::NSObject>,
-    superclass: &'static AnyClass,
+ffi_struct! {
+    /// `struct objc_super`: the receiver and the class where the method
+    /// lookup starts. A send builds it on the stack, so the receiver
+    /// outlives it.
+    pub(crate) struct ObjcSuper = objc_super {
+        receiver: NonNull<Obj<super::foundation::NSObject>>,
+        superclass as super_class: &'static AnyClass,
+    }
 }
 
-impl Target for &ObjcSuper<'_> {
+impl Target for &ObjcSuper {
     const SUPER: bool = true;
 }
 
@@ -614,7 +617,12 @@ macro_rules! messages {
 pub(crate) use messages;
 
 #[cfg(test)]
-impl<C: Receiver, A: Args, R: Encode + MsgOwnership> Msg<C, A, R> {
+impl<C, A, R> Msg<C, A, R>
+where
+    C: Receiver,
+    A: Args + super::header::HeaderArgs,
+    R: Encode + MsgOwnership + super::header::Header,
+{
     /// The descriptor data that the checks read.
     pub(crate) const fn info(&self) -> super::checks::MsgInfo {
         super::checks::MsgInfo {
@@ -624,6 +632,7 @@ impl<C: Receiver, A: Args, R: Encode + MsgOwnership> Msg<C, A, R> {
             selector: self.selector,
             ownership: R::OWNERSHIP,
             encoding: Self::encoding,
+            signature: super::header::signature::<A, R>,
         }
     }
 

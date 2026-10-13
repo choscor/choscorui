@@ -3,9 +3,10 @@
 use super::{MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuSpec, Pool};
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
-    ADD_ITEM, ChoscorMenuTarget, INIT_WITH_TITLE, INIT_WITH_TITLE_ACTION_KEY, MAIN_MENU,
-    MENU_ITEM_ACTIVATED, NSMenu, NSMenuItem, NUMBER_OF_ITEMS, SEPARATOR_ITEM, SET_ACTION,
-    SET_AUTOENABLES_ITEMS, SET_ENABLED, SET_ITEM_TITLE, SET_KEY_EQUIVALENT,
+    ADD_ITEM, CONTROL_STATE_OFF, CONTROL_STATE_ON, ChoscorMenuTarget, INIT_WITH_TITLE,
+    INIT_WITH_TITLE_ACTION_KEY, MAIN_MENU, MENU_ITEM_ACTIVATED, MODIFIER_COMMAND, MODIFIER_CONTROL,
+    MODIFIER_OPTION, MODIFIER_SHIFT, NSMenu, NSMenuItem, NUMBER_OF_ITEMS, SEPARATOR_ITEM,
+    SET_ACTION, SET_AUTOENABLES_ITEMS, SET_ENABLED, SET_ITEM_TITLE, SET_KEY_EQUIVALENT,
     SET_KEY_EQUIVALENT_MODIFIER_MASK, SET_MAIN_MENU, SET_STATE, SET_SUBMENU, SET_TARGET,
     SHARED_APPLICATION,
 };
@@ -328,7 +329,12 @@ fn owned_menu_item(title: &str, shortcut: Option<&str>) -> Result<Retained<NSMen
 fn apply_state(item: &Obj<NSMenuItem>, state: &MenuItemState) -> Result<(), MenuError> {
     SET_ITEM_TITLE.send(item, (&*ns_string(&state.title)?,));
     SET_ENABLED.send(item, (state.enabled,));
-    SET_STATE.send(item, (isize::from(state.checked),));
+    let checked = if state.checked {
+        CONTROL_STATE_ON
+    } else {
+        CONTROL_STATE_OFF
+    };
+    SET_STATE.send(item, (checked,));
     let key = state
         .shortcut
         .as_ref()
@@ -336,10 +342,15 @@ fn apply_state(item: &Obj<NSMenuItem>, state: &MenuItemState) -> Result<(), Menu
     SET_KEY_EQUIVALENT.send(item, (&*ns_string(key)?,));
     let mask = state.shortcut.as_ref().map_or(0, |shortcut| {
         let modifiers = shortcut.modifiers;
-        (usize::from(modifiers.shift) << 17)
-            | (usize::from(modifiers.control) << 18)
-            | (usize::from(modifiers.option) << 19)
-            | (usize::from(modifiers.command) << 20)
+        [
+            (modifiers.shift, MODIFIER_SHIFT),
+            (modifiers.control, MODIFIER_CONTROL),
+            (modifiers.option, MODIFIER_OPTION),
+            (modifiers.command, MODIFIER_COMMAND),
+        ]
+        .into_iter()
+        .filter(|(held, _)| *held)
+        .fold(0, |mask, (_, flag)| mask | flag)
     });
     SET_KEY_EQUIVALENT_MODIFIER_MASK.send(item, (mask,));
     Ok(())

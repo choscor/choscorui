@@ -5,11 +5,14 @@
 //! shows the whole scope of an SDK change. A missing class, protocol, or
 //! selector is a failure.
 
+mod sdk;
+
 use super::callback::{ClassDef, Origin};
 use super::class::{ReceiverKind, Sel, lookup_class};
 use super::encode::{same_encoding, selector_family};
 use super::msg::{Kind, Ownership};
 use super::runtime;
+use super::sdk::CItem;
 use std::ffi::CStr;
 
 /// The data of one message descriptor.
@@ -20,6 +23,7 @@ pub(crate) struct MsgInfo {
     pub(crate) selector: &'static CStr,
     pub(crate) ownership: Ownership,
     pub(crate) encoding: fn() -> String,
+    pub(crate) signature: fn() -> super::header::Signature,
 }
 
 /// Every registered message descriptor.
@@ -28,6 +32,25 @@ fn all_messages() -> Vec<&'static MsgInfo> {
         super::foundation::MESSAGES,
         super::appkit::MESSAGES,
         super::user_notifications::MESSAGES,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+/// Every C function and static.
+fn all_c_items() -> Vec<CItem> {
+    [
+        super::appkit::c_items(),
+        super::block::c_items(),
+        super::cf::c_items(),
+        super::foundation::c_items(),
+        super::graphics::c_items(),
+        super::image_io::c_items(),
+        super::runloop::c_items(),
+        super::runtime::c_items(),
+        super::text::c_items(),
+        super::thread::c_items(),
     ]
     .into_iter()
     .flatten()
@@ -132,6 +155,37 @@ pub(crate) fn check_message_ownership<'a>(
     }
 }
 
+/// Checks that a C function returns a `CfRetained` exactly when its name
+/// contains `Create` or `Copy`, the Core Foundation rule for a +1 result.
+pub(crate) fn check_function_ownership<'a>(
+    items: impl IntoIterator<Item = &'a CItem>,
+) -> Result<(), String> {
+    let failures: Vec<_> = items
+        .into_iter()
+        .filter_map(|item| match *item {
+            CItem::Function { name, owned, .. }
+                if (name.contains("Create") || name.contains("Copy")) != owned =>
+            {
+                Some(if owned {
+                    format!("{name}: expected a borrowed result, actual CfRetained")
+                } else {
+                    format!("{name}: expected a CfRetained result of the Create or Copy rule")
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} C functions break the ownership naming rules:\n{}",
+            failures.len(),
+            failures.join("\n")
+        ))
+    }
+}
+
 /// The type encoding of `selector` in its origin, or why there is none.
 fn origin_encoding(origin: Origin, selector: Sel) -> Result<String, String> {
     match origin {
@@ -224,7 +278,48 @@ fn callbacks_match_sdk() {
 
 #[test]
 fn ownership_follows_naming() {
-    if let Err(report) = check_message_ownership(all_messages()) {
+    let messages = check_message_ownership(all_messages());
+    let functions = check_function_ownership(&all_c_items());
+    let failures: Vec<_> = [messages, functions]
+        .into_iter()
+        .filter_map(Result::err)
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn sdk_headers_compile() {
+    let items = all_c_items();
+    let consts = [
+        super::appkit::SDK_CONSTS,
+        super::cf::SDK_CONSTS,
+        super::graphics::SDK_CONSTS,
+        super::keys::SDK_CONSTS,
+        super::text::SDK_CONSTS,
+        super::user_notifications::SDK_CONSTS,
+    ]
+    .concat();
+    let structs = [
+        super::geometry::STRUCTS,
+        super::msg::STRUCTS,
+        super::runloop::STRUCTS,
+        super::runtime::STRUCTS,
+        super::text::STRUCTS,
+    ]
+    .concat();
+    let messages = all_messages();
+    let classes: Vec<_> = super::classes::CLASSES
+        .iter()
+        .map(|class| (class.definition)())
+        .collect();
+    let descriptors = sdk::Descriptors {
+        items: &items,
+        consts: &consts,
+        structs: &structs,
+        messages: &messages,
+        classes: &classes,
+    };
+    if let Err(report) = sdk::check_sdk(&descriptors) {
         panic!("{report}");
     }
 }
@@ -251,6 +346,7 @@ mod tests {
             selector,
             ownership: Ownership::Value,
             encoding,
+            signature: crate::ffi::header::signature::<(), ()>,
         }
     }
 

@@ -21,11 +21,12 @@ use crate::ffi::foundation::{
 };
 use crate::ffi::retained::{ProcessObject, Retained, alloc_init};
 use crate::ffi::user_notifications::{
-    ADD_NOTIFICATION_REQUEST, CURRENT_NOTIFICATION_CENTER, DEFAULT_SOUND, NEW_CONTENT,
-    NOTIFICATION_REQUEST, REQUEST_AUTHORIZATION, REQUEST_IDENTIFIER, REQUEST_WITH_IDENTIFIER,
-    RESPONSE_ACTION_IDENTIFIER, RESPONSE_NOTIFICATION, SET_CENTER_DELEGATE, SET_CONTENT_BODY,
-    SET_CONTENT_SOUND, SET_CONTENT_TITLE, UNNotification, UNNotificationResponse,
-    UNUserNotificationCenter,
+    ADD_NOTIFICATION_REQUEST, AUTHORIZATION_ALERT, AUTHORIZATION_BADGE, AUTHORIZATION_SOUND,
+    CURRENT_NOTIFICATION_CENTER, DEFAULT_SOUND, NEW_CONTENT, NOTIFICATION_REQUEST,
+    PRESENTATION_BANNER, PRESENTATION_LIST, PRESENTATION_SOUND, REQUEST_AUTHORIZATION,
+    REQUEST_IDENTIFIER, REQUEST_WITH_IDENTIFIER, RESPONSE_ACTION_IDENTIFIER, RESPONSE_NOTIFICATION,
+    SET_CENTER_DELEGATE, SET_CONTENT_BODY, SET_CONTENT_SOUND, SET_CONTENT_TITLE, UNNotification,
+    UNNotificationResponse, UNUserNotificationCenter,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -206,7 +207,7 @@ pub(crate) fn notification_will_present(
 ) {
     // UNNotificationPresentationOptionSound | List | Banner.
     if let Some(handler) = handler {
-        handler.call((1 << 1) | (1 << 3) | (1 << 4));
+        handler.call(PRESENTATION_SOUND | PRESENTATION_LIST | PRESENTATION_BANNER);
     }
 }
 
@@ -485,7 +486,8 @@ pub fn request_notification_permission() -> Result<(), DesktopError> {
     let center = notification_center()?;
     PERMISSION.store(1, Ordering::SeqCst);
     // UNAuthorizationOptionBadge | Sound | Alert.
-    REQUEST_AUTHORIZATION.send(center, ((1 << 0) | (1 << 1) | (1 << 2), block.as_block()));
+    let options = AUTHORIZATION_BADGE | AUTHORIZATION_SOUND | AUTHORIZATION_ALERT;
+    REQUEST_AUTHORIZATION.send(center, (options, block.as_block()));
     Ok(())
 }
 

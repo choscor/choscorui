@@ -5,6 +5,7 @@ use super::cf::{CFArray, CFAttributedString, CFDictionary, CFString, CFType, CfR
 use super::geometry::{CGAffineTransform, NSPoint, NSSize};
 use super::graphics::CGContext;
 use super::retained::Retained;
+use super::sdk::{c_functions, ffi_struct, sdk_const};
 use std::ffi::c_void;
 use std::ops::Range;
 
@@ -17,127 +18,128 @@ cf_type!(
     CTParagraphStyle,
 );
 
-/// `CTFontSymbolicTraits`: `kCTFontTraitItalic`.
-pub(crate) const FONT_TRAIT_ITALIC: u32 = 1 << 0;
-/// `CTFontSymbolicTraits`: `kCTFontTraitBold`.
-pub(crate) const FONT_TRAIT_BOLD: u32 = 1 << 1;
-/// `kCTParagraphStyleSpecifierBaseWritingDirection`.
-const PARAGRAPH_BASE_WRITING_DIRECTION: u32 = 13;
-/// `kCTRunStatusRightToLeft`.
-const RUN_STATUS_RIGHT_TO_LEFT: u32 = 1;
-
-/// `CFRange`.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct CFRange {
-    pub(crate) location: isize,
-    pub(crate) length: isize,
+sdk_const! {
+    pub(crate) FONT_TRAIT_ITALIC: u32 = 1 << 0, sdk = kCTFontTraitItalic;
+    pub(crate) FONT_TRAIT_BOLD: u32 = 1 << 1, sdk = kCTFontTraitBold;
+    PARAGRAPH_BASE_WRITING_DIRECTION: u32 = 13,
+        sdk = kCTParagraphStyleSpecifierBaseWritingDirection;
+    WRITING_DIRECTION_LEFT_TO_RIGHT: i8 = 0, sdk = kCTWritingDirectionLeftToRight;
+    WRITING_DIRECTION_RIGHT_TO_LEFT: i8 = 1, sdk = kCTWritingDirectionRightToLeft;
+    RUN_STATUS_RIGHT_TO_LEFT: u32 = 1, sdk = kCTRunStatusRightToLeft;
 }
 
-/// `CTParagraphStyleSetting`.
-#[repr(C)]
-struct CTParagraphStyleSetting {
-    spec: u32,
-    value_size: usize,
-    value: *const c_void,
+ffi_struct! {
+    /// `CFRange`.
+    #[derive(Clone, Copy, Debug)]
+    pub(crate) struct CFRange = CFRange {
+        pub(crate) location: isize,
+        pub(crate) length: isize,
+    }
+
+    /// `CTParagraphStyleSetting`.
+    struct CTParagraphStyleSetting = CTParagraphStyleSetting {
+        spec: u32,
+        value_size as valueSize: usize,
+        value: *const c_void,
+    }
 }
 
-#[link(name = "CoreText", kind = "framework")]
-unsafe extern "C-unwind" {
-    pub(crate) safe static kCTFontAttributeName: &'static CFString;
-    pub(crate) safe static kCTForegroundColorFromContextAttributeName: &'static CFString;
-    pub(crate) safe static kCTKernAttributeName: &'static CFString;
-    pub(crate) safe static kCTLanguageAttributeName: &'static CFString;
-    pub(crate) safe static kCTParagraphStyleAttributeName: &'static CFString;
-    pub(crate) safe static kCTFontCascadeListAttribute: &'static CFString;
-    pub(crate) safe static kCTFontFamilyNameAttribute: &'static CFString;
-
-    safe fn CTFontGetTypeID() -> usize;
-    pub(crate) safe fn CTFontCreateWithName(
-        name: &CFString,
-        size: f64,
-        matrix: Option<&CGAffineTransform>,
-    ) -> Option<CfRetained<CTFont>>;
-    pub(crate) safe fn CTFontCreateCopyWithSymbolicTraits(
-        font: &CTFont,
-        size: f64,
-        matrix: Option<&CGAffineTransform>,
-        value: u32,
-        mask: u32,
-    ) -> Option<CfRetained<CTFont>>;
-    pub(crate) safe fn CTFontCopyFontDescriptor(
-        font: &CTFont,
-    ) -> Option<CfRetained<CTFontDescriptor>>;
-    pub(crate) safe fn CTFontDescriptorCreateWithAttributes(
-        attributes: &CFDictionary,
-    ) -> Option<CfRetained<CTFontDescriptor>>;
-    pub(crate) safe fn CTFontDescriptorCreateCopyWithAttributes(
-        descriptor: &CTFontDescriptor,
-        attributes: &CFDictionary,
-    ) -> Option<CfRetained<CTFontDescriptor>>;
-    pub(crate) safe fn CTFontCreateWithFontDescriptor(
-        descriptor: &CTFontDescriptor,
-        size: f64,
-        matrix: Option<&CGAffineTransform>,
-    ) -> Option<CfRetained<CTFont>>;
-    pub(crate) safe fn CTFontCopyPostScriptName(font: &CTFont) -> Option<CfRetained<CFString>>;
-    pub(crate) safe fn CTFontGetSize(font: &CTFont) -> f64;
-    pub(crate) safe fn CTFontGetAscent(font: &CTFont) -> f64;
-    pub(crate) safe fn CTFontGetDescent(font: &CTFont) -> f64;
-    pub(crate) safe fn CTFontGetLeading(font: &CTFont) -> f64;
-    fn CTFontDrawGlyphs(
-        font: &CTFont,
-        glyphs: *const u16,
-        positions: *const NSPoint,
-        count: usize,
-        context: &CGContext,
-    );
-    pub(crate) safe fn CTFontManagerCopyAvailableFontFamilyNames()
-    -> Option<CfRetained<CFArray<CFString>>>;
-    fn CTParagraphStyleCreate(
-        settings: *const CTParagraphStyleSetting,
-        count: usize,
-    ) -> Option<CfRetained<CTParagraphStyle>>;
-
-    pub(crate) safe fn CTLineCreateWithAttributedString(
-        string: &CFAttributedString,
-    ) -> Option<CfRetained<CTLine>>;
-    pub(crate) safe fn CTLineDraw(line: &CTLine, context: &CGContext);
-    pub(crate) safe fn CTLineGetTypographicBounds(
-        line: &CTLine,
-        ascent: &mut f64,
-        descent: &mut f64,
-        leading: &mut f64,
-    ) -> f64;
-    pub(crate) safe fn CTLineGetOffsetForStringIndex(
-        line: &CTLine,
-        index: isize,
-        secondary: &mut f64,
-    ) -> f64;
-    pub(crate) safe fn CTLineGetTrailingWhitespaceWidth(line: &CTLine) -> f64;
-    pub(crate) safe fn CTLineGetPenOffsetForFlush(line: &CTLine, flush: f64, width: f64) -> f64;
-    pub(crate) safe fn CTLineGetGlyphRuns(line: &CTLine) -> &CFArray<CTRun>;
-
-    pub(crate) safe fn CTTypesetterCreateWithAttributedString(
-        string: &CFAttributedString,
-    ) -> Option<CfRetained<CTTypesetter>>;
-    pub(crate) safe fn CTTypesetterSuggestLineBreak(
-        typesetter: &CTTypesetter,
-        start: isize,
-        width: f64,
-    ) -> isize;
-    pub(crate) safe fn CTTypesetterCreateLine(
-        typesetter: &CTTypesetter,
-        range: CFRange,
-    ) -> Option<CfRetained<CTLine>>;
-
-    safe fn CTRunGetGlyphCount(run: &CTRun) -> isize;
-    fn CTRunGetGlyphs(run: &CTRun, range: CFRange, buffer: *mut u16);
-    fn CTRunGetPositions(run: &CTRun, range: CFRange, buffer: *mut NSPoint);
-    fn CTRunGetAdvances(run: &CTRun, range: CFRange, buffer: *mut NSSize);
-    fn CTRunGetStringIndices(run: &CTRun, range: CFRange, buffer: *mut isize);
-    safe fn CTRunGetStatus(run: &CTRun) -> u32;
-    safe fn CTRunGetAttributes(run: &CTRun) -> &CFDictionary;
+c_functions! {
+    #[link(name = "CoreText", kind = "framework")]
+    statics {
+        pub(crate) safe static kCTFontAttributeName: &'static CFString;
+        pub(crate) safe static kCTForegroundColorFromContextAttributeName: &'static CFString;
+        pub(crate) safe static kCTKernAttributeName: &'static CFString;
+        pub(crate) safe static kCTLanguageAttributeName: &'static CFString;
+        pub(crate) safe static kCTParagraphStyleAttributeName: &'static CFString;
+        pub(crate) safe static kCTFontCascadeListAttribute: &'static CFString;
+        pub(crate) safe static kCTFontFamilyNameAttribute: &'static CFString;
+    }
+    functions {
+        safe fn CTFontGetTypeID() -> usize;
+        pub(crate) safe fn CTFontCreateWithName(
+            name: &CFString,
+            size: f64,
+            matrix: Option<&CGAffineTransform>,
+        ) -> Option<CfRetained<CTFont>>;
+        pub(crate) safe fn CTFontCreateCopyWithSymbolicTraits(
+            font: &CTFont,
+            size: f64,
+            matrix: Option<&CGAffineTransform>,
+            value: u32,
+            mask: u32,
+        ) -> Option<CfRetained<CTFont>>;
+        pub(crate) safe fn CTFontCopyFontDescriptor(
+            font: &CTFont,
+        ) -> Option<CfRetained<CTFontDescriptor>>;
+        pub(crate) safe fn CTFontDescriptorCreateWithAttributes(
+            attributes: &CFDictionary,
+        ) -> Option<CfRetained<CTFontDescriptor>>;
+        pub(crate) safe fn CTFontDescriptorCreateCopyWithAttributes(
+            descriptor: &CTFontDescriptor,
+            attributes: &CFDictionary,
+        ) -> Option<CfRetained<CTFontDescriptor>>;
+        pub(crate) safe fn CTFontCreateWithFontDescriptor(
+            descriptor: &CTFontDescriptor,
+            size: f64,
+            matrix: Option<&CGAffineTransform>,
+        ) -> Option<CfRetained<CTFont>>;
+        pub(crate) safe fn CTFontCopyPostScriptName(font: &CTFont) -> Option<CfRetained<CFString>>;
+        pub(crate) safe fn CTFontGetSize(font: &CTFont) -> f64;
+        pub(crate) safe fn CTFontGetAscent(font: &CTFont) -> f64;
+        pub(crate) safe fn CTFontGetDescent(font: &CTFont) -> f64;
+        pub(crate) safe fn CTFontGetLeading(font: &CTFont) -> f64;
+        unsafe fn CTFontDrawGlyphs(
+            font: &CTFont,
+            glyphs: *const u16,
+            positions: *const NSPoint,
+            count: usize,
+            context: &CGContext,
+        );
+        pub(crate) safe fn CTFontManagerCopyAvailableFontFamilyNames()
+        -> Option<CfRetained<CFArray<CFString>>>;
+        unsafe fn CTParagraphStyleCreate(
+            settings: *const CTParagraphStyleSetting,
+            count: usize,
+        ) -> Option<CfRetained<CTParagraphStyle>>;
+        pub(crate) safe fn CTLineCreateWithAttributedString(
+            string: &CFAttributedString,
+        ) -> Option<CfRetained<CTLine>>;
+        pub(crate) safe fn CTLineDraw(line: &CTLine, context: &CGContext);
+        pub(crate) safe fn CTLineGetTypographicBounds(
+            line: &CTLine,
+            ascent: &mut f64,
+            descent: &mut f64,
+            leading: &mut f64,
+        ) -> f64;
+        pub(crate) safe fn CTLineGetOffsetForStringIndex(
+            line: &CTLine,
+            index: isize,
+            secondary: &mut f64,
+        ) -> f64;
+        pub(crate) safe fn CTLineGetTrailingWhitespaceWidth(line: &CTLine) -> f64;
+        pub(crate) safe fn CTLineGetPenOffsetForFlush(line: &CTLine, flush: f64, width: f64) -> f64;
+        pub(crate) safe fn CTLineGetGlyphRuns(line: &CTLine) -> &CFArray<CTRun>;
+        pub(crate) safe fn CTTypesetterCreateWithAttributedString(
+            string: &CFAttributedString,
+        ) -> Option<CfRetained<CTTypesetter>>;
+        pub(crate) safe fn CTTypesetterSuggestLineBreak(
+            typesetter: &CTTypesetter,
+            start: isize,
+            width: f64,
+        ) -> isize;
+        pub(crate) safe fn CTTypesetterCreateLine(
+            typesetter: &CTTypesetter,
+            range: CFRange,
+        ) -> Option<CfRetained<CTLine>>;
+        safe fn CTRunGetGlyphCount(run: &CTRun) -> isize;
+        unsafe fn CTRunGetGlyphs(run: &CTRun, range: CFRange, buffer: *mut u16);
+        unsafe fn CTRunGetPositions(run: &CTRun, range: CFRange, buffer: *mut NSPoint);
+        unsafe fn CTRunGetAdvances(run: &CTRun, range: CFRange, buffer: *mut NSSize);
+        unsafe fn CTRunGetStringIndices(run: &CTRun, range: CFRange, buffer: *mut isize);
+        safe fn CTRunGetStatus(run: &CTRun) -> u32;
+        safe fn CTRunGetAttributes(run: &CTRun) -> &CFDictionary;
+    }
 }
 
 impl CTFont {
@@ -166,7 +168,11 @@ impl CTFont {
 
 /// A new paragraph style with a base writing direction.
 pub(crate) fn paragraph_style(right_to_left: bool) -> Option<CfRetained<CTParagraphStyle>> {
-    let direction: i8 = right_to_left.into();
+    let direction = if right_to_left {
+        WRITING_DIRECTION_RIGHT_TO_LEFT
+    } else {
+        WRITING_DIRECTION_LEFT_TO_RIGHT
+    };
     let setting = CTParagraphStyleSetting {
         spec: PARAGRAPH_BASE_WRITING_DIRECTION,
         value_size: size_of::<i8>(),

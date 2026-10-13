@@ -6,6 +6,12 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 
 - The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, and the Objective-C runtime by hand. The crate uses no build script and no binding generator.
 - The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSApplication.h`, `NSWindow.h`, `NSGraphics.h`, and `objc/message.h`.
+- `c_functions!` declares the C functions and statics of each framework in one `extern "C-unwind"` block. Each item states `safe` or `unsafe`.
+- `sdk_const!` declares each SDK constant with the SDK symbol that it equals. `ffi_struct!` declares each `repr(C)` struct with its C name and C field names.
+- The `sdk_headers_compile` test makes one Objective-C++ file from these declarations and from each `Msg`. It compiles the file against the SDK headers with `xcrun clang++`.
+- That test fails for a wrong argument or result shape, a wrong constant, or a wrong struct layout. It also fails for an API that is deprecated or newer than macOS 15.
+- The `ownership_follows_naming` test checks that a C function returns `CfRetained` when its name contains `Create` or `Copy`, and only then.
+- No SDK header declares the Block ABI layouts in `ffi/block.rs`. They follow the clang Block ABI specification, and the header test does not check them.
 - Raw Objective-C ids stay private to the crate. The safe types are `!Send` and `!Sync`, except `Poster`.
 - Each message descriptor (`Msg`) states the SDK argument and return types. `Msg::send` casts `objc_msgSend` to exactly these types. It passes `NSRect` by value and reads Objective-C `BOOL` as one byte.
 - `define_classes!` in `ffi/classes.rs` declares each Objective-C class of the crate. Each method states its origin: a superclass method, a protocol method, or a selector that the crate invents.

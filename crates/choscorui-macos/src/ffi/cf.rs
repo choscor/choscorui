@@ -5,6 +5,7 @@
 //! [`CfRetained<T>`]. A function named `*Create*` or `*Copy*` returns a
 //! `CfRetained`; any other object result is borrowed from its argument.
 
+use super::sdk::{c_functions, sdk_const};
 use std::ffi::c_void;
 use std::marker::{PhantomData, PhantomPinned};
 use std::ops::Deref;
@@ -57,6 +58,18 @@ macro_rules! cf_type {
         impl $crate::ffi::encode::Encode for Option<&$name> {
             fn encode(out: &mut String) {
                 <&$name as $crate::ffi::encode::Encode>::encode(out);
+            }
+        }
+        #[cfg(test)]
+        impl $crate::ffi::header::Header for &$name {
+            fn header(out: &mut String) {
+                out.push_str(concat!(stringify!($name), "Ref"));
+            }
+        }
+        #[cfg(test)]
+        impl $crate::ffi::header::Header for Option<&$name> {
+            fn header(out: &mut String) {
+                <&$name as $crate::ffi::header::Header>::header(out);
             }
         }
     )*};
@@ -174,10 +187,10 @@ impl CFType {
     }
 }
 
-/// `kCFStringEncodingUTF8`.
-const UTF8: u32 = 0x0800_0100;
-/// `kCFNumberFloat64Type`.
-const NUMBER_FLOAT64: isize = 6;
+sdk_const! {
+    UTF8: u32 = 0x0800_0100, sdk = kCFStringEncodingUTF8;
+    NUMBER_FLOAT64: isize = 6, sdk = kCFNumberFloat64Type;
+}
 
 /// `CFDictionaryKeyCallBacks`, read only by Core Foundation.
 #[repr(C)]
@@ -195,64 +208,85 @@ pub(crate) struct CFArrayCallBacks {
     _opaque: [u8; 0],
 }
 
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C-unwind" {
-    pub(crate) safe static kCFBooleanTrue: &'static CFBoolean;
-    static kCFTypeDictionaryKeyCallBacks: CFDictionaryKeyCallBacks;
-    static kCFTypeDictionaryValueCallBacks: CFDictionaryValueCallBacks;
-    static kCFTypeArrayCallBacks: CFArrayCallBacks;
+/// Implements [`CShape`](super::sdk::CShape) for the callback tables, which
+/// Rust keeps opaque.
+#[cfg(test)]
+macro_rules! opaque_shape {
+    ($($name:ident),*) => {$(
+        impl super::sdk::CShape for $name {
+            const SHAPE: super::sdk::Shape = super::sdk::Shape::Opaque(stringify!($name));
+        }
+    )*};
+}
 
-    fn CFRetain(object: NonNull<c_void>) -> NonNull<c_void>;
-    fn CFRelease(object: *const c_void);
-    safe fn CFGetTypeID(object: &CFType) -> usize;
-    fn CFStringCreateWithBytes(
-        allocator: *const c_void,
-        bytes: *const u8,
-        length: isize,
-        encoding: u32,
-        external: u8,
-    ) -> Option<CfRetained<CFString>>;
-    safe fn CFStringGetLength(string: &CFString) -> isize;
-    safe fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
-    fn CFStringGetCString(string: &CFString, buffer: *mut u8, size: isize, encoding: u32) -> u8;
-    fn CFDataCreate(
-        allocator: *const c_void,
-        bytes: *const u8,
-        length: isize,
-    ) -> Option<CfRetained<CFData>>;
-    fn CFDataCreateMutable(
-        allocator: *const c_void,
-        capacity: isize,
-    ) -> Option<CfRetained<CFMutableData>>;
-    safe fn CFDataGetLength(data: &CFData) -> isize;
-    safe fn CFDataGetBytePtr(data: &CFData) -> *const u8;
-    fn CFDictionaryCreate(
-        allocator: *const c_void,
-        keys: *const &CFString,
-        values: *const &CFType,
-        count: isize,
-        key_callbacks: *const CFDictionaryKeyCallBacks,
-        value_callbacks: *const CFDictionaryValueCallBacks,
-    ) -> Option<CfRetained<CFDictionary>>;
-    fn CFDictionaryGetValue(dictionary: &CFDictionary, key: NonNull<c_void>) -> Option<&CFType>;
-    fn CFArrayCreate(
-        allocator: *const c_void,
-        values: *const &CFType,
-        count: isize,
-        callbacks: *const CFArrayCallBacks,
-    ) -> Option<CfRetained<CFArray<CFType>>>;
-    fn CFArrayGetCount(array: NonNull<c_void>) -> isize;
-    fn CFArrayGetValueAtIndex(array: NonNull<c_void>, index: isize) -> Option<NonNull<c_void>>;
-    safe fn CFAttributedStringCreate(
-        allocator: Option<&CFType>,
-        string: &CFString,
-        attributes: &CFDictionary,
-    ) -> Option<CfRetained<CFAttributedString>>;
-    fn CFNumberCreate(
-        allocator: *const c_void,
-        kind: isize,
-        value: *const c_void,
-    ) -> Option<CfRetained<CFNumber>>;
+#[cfg(test)]
+opaque_shape!(
+    CFDictionaryKeyCallBacks,
+    CFDictionaryValueCallBacks,
+    CFArrayCallBacks
+);
+
+c_functions! {
+    #[link(name = "CoreFoundation", kind = "framework")]
+    statics {
+        pub(crate) safe static kCFBooleanTrue: &'static CFBoolean;
+        unsafe static kCFTypeDictionaryKeyCallBacks: CFDictionaryKeyCallBacks;
+        unsafe static kCFTypeDictionaryValueCallBacks: CFDictionaryValueCallBacks;
+        unsafe static kCFTypeArrayCallBacks: CFArrayCallBacks;
+    }
+    functions {
+        unsafe fn CFRetain(object: NonNull<c_void>) -> NonNull<c_void>;
+        unsafe fn CFRelease(object: *const c_void);
+        safe fn CFGetTypeID(object: &CFType) -> usize;
+        unsafe fn CFStringCreateWithBytes(
+            allocator: *const c_void,
+            bytes: *const u8,
+            length: isize,
+            encoding: u32,
+            external: u8,
+        ) -> Option<CfRetained<CFString>>;
+        safe fn CFStringGetLength(string: &CFString) -> isize;
+        safe fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
+        unsafe fn CFStringGetCString(string: &CFString, buffer: *mut u8, size: isize, encoding: u32) -> u8;
+        unsafe fn CFDataCreate(
+            allocator: *const c_void,
+            bytes: *const u8,
+            length: isize,
+        ) -> Option<CfRetained<CFData>>;
+        unsafe fn CFDataCreateMutable(
+            allocator: *const c_void,
+            capacity: isize,
+        ) -> Option<CfRetained<CFMutableData>>;
+        safe fn CFDataGetLength(data: &CFData) -> isize;
+        safe fn CFDataGetBytePtr(data: &CFData) -> *const u8;
+        unsafe fn CFDictionaryCreate(
+            allocator: *const c_void,
+            keys: *const &CFString,
+            values: *const &CFType,
+            count: isize,
+            key_callbacks: *const CFDictionaryKeyCallBacks,
+            value_callbacks: *const CFDictionaryValueCallBacks,
+        ) -> Option<CfRetained<CFDictionary>>;
+        unsafe fn CFDictionaryGetValue(dictionary: &CFDictionary, key: NonNull<c_void>) -> Option<&CFType>;
+        unsafe fn CFArrayCreate(
+            allocator: *const c_void,
+            values: *const &CFType,
+            count: isize,
+            callbacks: *const CFArrayCallBacks,
+        ) -> Option<CfRetained<CFArray<CFType>>>;
+        unsafe fn CFArrayGetCount(array: NonNull<c_void>) -> isize;
+        unsafe fn CFArrayGetValueAtIndex(array: NonNull<c_void>, index: isize) -> Option<NonNull<c_void>>;
+        safe fn CFAttributedStringCreate(
+            allocator: Option<&CFType>,
+            string: &CFString,
+            attributes: &CFDictionary,
+        ) -> Option<CfRetained<CFAttributedString>>;
+        unsafe fn CFNumberCreate(
+            allocator: *const c_void,
+            kind: isize,
+            value: *const c_void,
+        ) -> Option<CfRetained<CFNumber>>;
+    }
 }
 
 /// A new `CFString` with the UTF-8 text of `text`.

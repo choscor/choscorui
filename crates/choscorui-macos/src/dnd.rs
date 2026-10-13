@@ -7,13 +7,15 @@ use super::*;
 use crate::ffi::Obj;
 use crate::ffi::appkit::{
     BEGIN_DRAGGING_SESSION, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW, CONVERT_POINT_TO_VIEW,
-    CURRENT_EVENT, ChoscoruiV2ContentView, ChoscoruiV2SimulatedDraggingInfo, DRAGGING_ENTERED,
+    CURRENT_EVENT, ChoscoruiV2ContentView, ChoscoruiV2SimulatedDraggingInfo, DRAG_OPERATION_COPY,
+    DRAG_OPERATION_GENERIC, DRAG_OPERATION_LINK, DRAG_OPERATION_MOVE, DRAGGING_ENTERED,
     DRAGGING_EXITED, DRAGGING_LOCATION, DRAGGING_PASTEBOARD, DRAGGING_SOURCE,
-    DRAGGING_SOURCE_OPERATION_MASK, DRAGGING_UPDATED, EVENT_TYPE, EVENT_WINDOW,
-    INIT_WITH_PASTEBOARD_WRITER, MODIFIER_FLAGS, NSDraggingDestination, NSDraggingInfo,
-    NSDraggingItem, NSDraggingSession, NSPasteboard, NSView, PERFORM_DRAG_OPERATION,
-    PREPARE_FOR_DRAG_OPERATION, REGISTER_FOR_DRAGGED_TYPES, SET_DRAGGING_FRAME, SHARED_APPLICATION,
-    UNREGISTER_DRAGGED_TYPES, VIEW_WINDOW,
+    DRAGGING_SOURCE_OPERATION_MASK, DRAGGING_UPDATED, EVENT_LEFT_MOUSE_DOWN,
+    EVENT_LEFT_MOUSE_DRAGGED, EVENT_TYPE, EVENT_WINDOW, INIT_WITH_PASTEBOARD_WRITER,
+    MODIFIER_FLAGS, NSDraggingDestination, NSDraggingInfo, NSDraggingItem, NSDraggingSession,
+    NSPasteboard, NSView, PERFORM_DRAG_OPERATION, PREPARE_FOR_DRAG_OPERATION,
+    REGISTER_FOR_DRAGGED_TYPES, SET_DRAGGING_FRAME, SHARED_APPLICATION, UNREGISTER_DRAGGED_TYPES,
+    VIEW_WINDOW,
 };
 use crate::ffi::foundation::NSObject;
 use crate::ffi::retained::{Retained, alloc, alloc_init};
@@ -21,40 +23,39 @@ use choscorui_core::{
     DragEvent, DragFormat, DragItem, DragOperation, DragOperations, Image, negotiate_drag,
 };
 
-const OP_COPY: usize = 1;
-const OP_LINK: usize = 2;
-const OP_GENERIC: usize = 4;
-const OP_MOVE: usize = 16;
-
 fn operations_from_mask(mask: usize) -> DragOperations {
     DragOperations {
-        copy: mask & OP_COPY != 0,
-        move_: mask & (OP_MOVE | OP_GENERIC) != 0,
-        link: mask & OP_LINK != 0,
+        copy: mask & DRAG_OPERATION_COPY != 0,
+        move_: mask & (DRAG_OPERATION_MOVE | DRAG_OPERATION_GENERIC) != 0,
+        link: mask & DRAG_OPERATION_LINK != 0,
     }
 }
 
 fn mask_from_operations(ops: DragOperations) -> usize {
-    (if ops.copy { OP_COPY } else { 0 })
-        | (if ops.move_ { OP_MOVE | OP_GENERIC } else { 0 })
-        | (if ops.link { OP_LINK } else { 0 })
+    (if ops.copy { DRAG_OPERATION_COPY } else { 0 })
+        | (if ops.move_ {
+            DRAG_OPERATION_MOVE | DRAG_OPERATION_GENERIC
+        } else {
+            0
+        })
+        | (if ops.link { DRAG_OPERATION_LINK } else { 0 })
 }
 
 fn mask_from_operation(op: DragOperation) -> usize {
     match op {
         DragOperation::None => 0,
-        DragOperation::Copy => OP_COPY,
-        DragOperation::Move => OP_MOVE,
-        DragOperation::Link => OP_LINK,
+        DragOperation::Copy => DRAG_OPERATION_COPY,
+        DragOperation::Move => DRAG_OPERATION_MOVE,
+        DragOperation::Link => DRAG_OPERATION_LINK,
     }
 }
 
 fn operation_from_mask(mask: usize) -> DragOperation {
-    if mask & OP_MOVE != 0 || mask & OP_GENERIC != 0 {
+    if mask & DRAG_OPERATION_MOVE != 0 || mask & DRAG_OPERATION_GENERIC != 0 {
         DragOperation::Move
-    } else if mask & OP_COPY != 0 {
+    } else if mask & DRAG_OPERATION_COPY != 0 {
         DragOperation::Copy
-    } else if mask & OP_LINK != 0 {
+    } else if mask & DRAG_OPERATION_LINK != 0 {
         DragOperation::Link
     } else {
         DragOperation::None
@@ -297,10 +298,12 @@ impl Window {
             .send_class(())?
             .ok_or(Error::AppKitUnavailable)?;
         let event = CURRENT_EVENT.send(app, ()).filter(|event| {
-            matches!(EVENT_TYPE.send(event, ()), 1 | 6)
-                && EVENT_WINDOW
-                    .send(event, ())
-                    .is_some_and(|event_window| event_window.addr() == window.addr())
+            matches!(
+                EVENT_TYPE.send(event, ()),
+                EVENT_LEFT_MOUSE_DOWN | EVENT_LEFT_MOUSE_DRAGGED
+            ) && EVENT_WINDOW
+                .send(event, ())
+                .is_some_and(|event_window| event_window.addr() == window.addr())
         });
         let Some(event) = event else {
             return Err(Error::NoDragEvent);

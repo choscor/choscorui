@@ -9,6 +9,7 @@ use super::callback::report_panic;
 use super::class::Obj;
 use super::encode::{Bool, Encode};
 use super::foundation::NSObject;
+use super::sdk::c_functions;
 use std::ffi::{CStr, c_char, c_void};
 use std::marker::{PhantomData, PhantomPinned};
 use std::panic::catch_unwind;
@@ -86,9 +87,12 @@ struct BlockDescriptor {
 /// `BLOCK_IS_GLOBAL | BLOCK_HAS_SIGNATURE`.
 const GLOBAL_FLAGS: i32 = (1 << 28) | (1 << 30);
 
-unsafe extern "C" {
-    /// The class of blocks without captures; only its address is used.
-    static _NSConcreteGlobalBlock: c_void;
+c_functions! {
+    statics {
+        // The class of blocks without captures; only its address is used.
+        unsafe static _NSConcreteGlobalBlock: [*const c_void; 32];
+    }
+    functions {}
 }
 
 /// The arguments of the completion block of
@@ -143,7 +147,7 @@ impl GlobalBlock<AuthorizationArgs> {
             signature: AUTHORIZATION_SIGNATURE.as_ptr(),
         });
         Self {
-            isa: &raw const _NSConcreteGlobalBlock,
+            isa: (&raw const _NSConcreteGlobalBlock).cast(),
             flags: GLOBAL_FLAGS,
             reserved: 0,
             invoke: authorization_invoke::<H> as *const (),

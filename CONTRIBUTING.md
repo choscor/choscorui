@@ -22,7 +22,7 @@ The [PR template](.github/pull_request_template.md) asks for the reason, the imp
 Install these tools:
 
 - macOS 15 or later
-- the Xcode Command Line Tools: `xcode-select --install`
+- the Xcode Command Line Tools: `xcode-select --install`. `cargo test` uses their `xcrun clang++` to compile the SDK header check of `choscorui-macos`.
 - Rust stable with `rustfmt` and `clippy`
 - Rust 1.88 for the minimum version check: `rustup toolchain install 1.88`
 

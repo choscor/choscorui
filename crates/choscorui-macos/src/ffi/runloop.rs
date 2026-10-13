@@ -5,6 +5,7 @@
 //! Each one catches a panic, so no panic crosses into Core Foundation.
 
 use super::cf::{CFString, CfRetained, cf_type};
+use super::sdk::{c_functions, ffi_struct};
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::NonNull;
@@ -13,61 +14,66 @@ use std::sync::Arc;
 
 cf_type!(CFRunLoop, CFRunLoopSource, CFRunLoopTimer);
 
-/// `CFRunLoopSourceContext` (version 0).
-#[repr(C)]
-struct CFRunLoopSourceContext {
-    version: isize,
-    info: *const c_void,
-    retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    release: Option<unsafe extern "C" fn(*const c_void)>,
-    copy_description: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    equal: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> u8>,
-    hash: Option<unsafe extern "C" fn(*const c_void) -> usize>,
-    schedule: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
-    cancel: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
-    perform: Option<unsafe extern "C" fn(*const c_void)>,
+ffi_struct! {
+    /// `CFRunLoopSourceContext` (version 0).
+    struct CFRunLoopSourceContext = CFRunLoopSourceContext {
+        version: isize,
+        info: *const c_void,
+        retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
+        release: Option<unsafe extern "C" fn(*const c_void)>,
+        copy_description as copyDescription:
+            Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
+        equal: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> u8>,
+        hash: Option<unsafe extern "C" fn(*const c_void) -> usize>,
+        schedule: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
+        cancel: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_void)>,
+        perform: Option<unsafe extern "C" fn(*const c_void)>,
+    }
+
+    /// `CFRunLoopTimerContext`.
+    struct CFRunLoopTimerContext = CFRunLoopTimerContext {
+        version: isize,
+        info: *const c_void,
+        retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
+        release: Option<unsafe extern "C" fn(*const c_void)>,
+        copy_description as copyDescription:
+            Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
+    }
 }
 
-/// `CFRunLoopTimerContext`.
-#[repr(C)]
-struct CFRunLoopTimerContext {
-    version: isize,
-    info: *const c_void,
-    retain: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-    release: Option<unsafe extern "C" fn(*const c_void)>,
-    copy_description: Option<unsafe extern "C" fn(*const c_void) -> *const c_void>,
-}
-
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C-unwind" {
-    safe static kCFRunLoopDefaultMode: &'static CFString;
-    safe static kCFRunLoopCommonModes: &'static CFString;
-
-    safe fn CFRunLoopGetMain() -> Option<&'static CFRunLoop>;
-    safe fn CFRunLoopWakeUp(runloop: &CFRunLoop);
-    safe fn CFRunLoopRunInMode(mode: &CFString, seconds: f64, return_after_source: u8) -> i32;
-    fn CFRunLoopSourceCreate(
-        allocator: *const c_void,
-        order: isize,
-        context: *mut CFRunLoopSourceContext,
-    ) -> Option<CfRetained<CFRunLoopSource>>;
-    safe fn CFRunLoopAddSource(runloop: &CFRunLoop, source: &CFRunLoopSource, mode: &CFString);
-    safe fn CFRunLoopRemoveSource(runloop: &CFRunLoop, source: &CFRunLoopSource, mode: &CFString);
-    safe fn CFRunLoopSourceSignal(source: &CFRunLoopSource);
-    safe fn CFRunLoopSourceInvalidate(source: &CFRunLoopSource);
-    fn CFRunLoopTimerCreate(
-        allocator: *const c_void,
-        fire_date: f64,
-        interval: f64,
-        flags: usize,
-        order: isize,
-        callback: unsafe extern "C" fn(*mut c_void, *const c_void),
-        context: *mut CFRunLoopTimerContext,
-    ) -> Option<CfRetained<CFRunLoopTimer>>;
-    safe fn CFRunLoopAddTimer(runloop: &CFRunLoop, timer: &CFRunLoopTimer, mode: &CFString);
-    safe fn CFRunLoopRemoveTimer(runloop: &CFRunLoop, timer: &CFRunLoopTimer, mode: &CFString);
-    safe fn CFRunLoopTimerInvalidate(timer: &CFRunLoopTimer);
-    safe fn CFAbsoluteTimeGetCurrent() -> f64;
+c_functions! {
+    #[link(name = "CoreFoundation", kind = "framework")]
+    statics {
+        safe static kCFRunLoopDefaultMode: &'static CFString;
+        safe static kCFRunLoopCommonModes: &'static CFString;
+    }
+    functions {
+        safe fn CFRunLoopGetMain() -> Option<&'static CFRunLoop>;
+        safe fn CFRunLoopWakeUp(runloop: &CFRunLoop);
+        safe fn CFRunLoopRunInMode(mode: &CFString, seconds: f64, return_after_source: u8) -> i32;
+        unsafe fn CFRunLoopSourceCreate(
+            allocator: *const c_void,
+            order: isize,
+            context: *mut CFRunLoopSourceContext,
+        ) -> Option<CfRetained<CFRunLoopSource>>;
+        safe fn CFRunLoopAddSource(runloop: &CFRunLoop, source: &CFRunLoopSource, mode: &CFString);
+        safe fn CFRunLoopRemoveSource(runloop: &CFRunLoop, source: &CFRunLoopSource, mode: &CFString);
+        safe fn CFRunLoopSourceSignal(source: &CFRunLoopSource);
+        safe fn CFRunLoopSourceInvalidate(source: &CFRunLoopSource);
+        unsafe fn CFRunLoopTimerCreate(
+            allocator: *const c_void,
+            fire_date: f64,
+            interval: f64,
+            flags: usize,
+            order: isize,
+            callback: unsafe extern "C" fn(*mut c_void, *const c_void),
+            context: *mut CFRunLoopTimerContext,
+        ) -> Option<CfRetained<CFRunLoopTimer>>;
+        safe fn CFRunLoopAddTimer(runloop: &CFRunLoop, timer: &CFRunLoopTimer, mode: &CFString);
+        safe fn CFRunLoopRemoveTimer(runloop: &CFRunLoop, timer: &CFRunLoopTimer, mode: &CFString);
+        safe fn CFRunLoopTimerInvalidate(timer: &CFRunLoopTimer);
+        safe fn CFAbsoluteTimeGetCurrent() -> f64;
+    }
 }
 
 /// The main run loop, which any thread may wake.

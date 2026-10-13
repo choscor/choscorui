@@ -1,9 +1,12 @@
 //! The main-thread check that AppKit entry points make first.
 
+use super::sdk::c_functions;
 use std::ffi::c_int;
 
-unsafe extern "C" {
-    safe fn pthread_main_np() -> c_int;
+c_functions! {
+    functions {
+        safe fn pthread_main_np() -> c_int;
+    }
 }
 
 /// True on the process main thread, the only thread that may use AppKit.

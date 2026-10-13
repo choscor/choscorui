@@ -5,6 +5,7 @@ use super::class::{Obj, objc_class, objc_protocol};
 use super::foundation::{NSObject, NSString};
 use super::msg::{Autoreleased, Shared, messages};
 use super::retained::Retained;
+use super::sdk::sdk_const;
 
 #[link(name = "UserNotifications", kind = "framework")]
 unsafe extern "C" {}
@@ -18,6 +19,16 @@ objc_class!(UNNotificationRequest: NSObject);
 objc_class!(UNNotification: NSObject);
 objc_class!(UNNotificationResponse: NSObject);
 objc_protocol!(UNUserNotificationCenterDelegate);
+
+sdk_const! {
+    pub(crate) AUTHORIZATION_BADGE: usize = 1 << 0, sdk = UNAuthorizationOptionBadge;
+    pub(crate) AUTHORIZATION_SOUND: usize = 1 << 1, sdk = UNAuthorizationOptionSound;
+    pub(crate) AUTHORIZATION_ALERT: usize = 1 << 2, sdk = UNAuthorizationOptionAlert;
+    pub(crate) PRESENTATION_SOUND: usize = 1 << 1, sdk = UNNotificationPresentationOptionSound;
+    pub(crate) PRESENTATION_LIST: usize = 1 << 3, sdk = UNNotificationPresentationOptionList;
+    pub(crate) PRESENTATION_BANNER: usize = 1 << 4,
+        sdk = UNNotificationPresentationOptionBanner;
+}
 
 messages! {
     pub(crate) CURRENT_NOTIFICATION_CENTER: class UNUserNotificationCenter,

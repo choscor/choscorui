@@ -56,6 +56,12 @@ impl Method {
         (self.encode)(&mut out);
         out
     }
+
+    /// True for a selector that the crate invents.
+    #[cfg(test)]
+    pub(in crate::ffi) fn is_own(&self) -> bool {
+        matches!(self.origin, Origin::Own)
+    }
 }
 
 /// The argument types of a method, as a tuple.

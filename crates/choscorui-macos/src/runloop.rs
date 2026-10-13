@@ -1,7 +1,9 @@
 #![deny(unsafe_code)]
 
 use super::*;
-use crate::ffi::appkit::{OTHER_EVENT, POST_EVENT_AT_START, SHARED_APPLICATION, STOP};
+use crate::ffi::appkit::{
+    EVENT_APPLICATION_DEFINED, OTHER_EVENT, POST_EVENT_AT_START, SHARED_APPLICATION, STOP,
+};
 use crate::ffi::runloop::{Fire, MainRunLoop, Perform, RunLoopTimer, SourceSignal};
 
 pub(crate) type PostedTask = Box<dyn FnOnce() + Send + 'static>;
@@ -81,9 +83,6 @@ impl Perform for PostInner {
     }
 }
 
-/// `NSEventTypeApplicationDefined`.
-const APPLICATION_DEFINED_EVENT: usize = 15;
-
 /// Stops `[NSApp run]` on the main thread. AppKit checks the stop flag only
 /// after `run` handles an event, so an application-defined event follows
 /// `stop:`. Without it, a stop from a run loop source waits for the next
@@ -96,7 +95,7 @@ pub(crate) fn stop_application() {
     STOP.send(application, (None,));
     let origin = NSPoint { x: 0.0, y: 0.0 };
     let event = OTHER_EVENT
-        .send_class((APPLICATION_DEFINED_EVENT, origin, 0, 0.0, 0, None, 0, 0, 0))
+        .send_class((EVENT_APPLICATION_DEFINED, origin, 0, 0.0, 0, None, 0, 0, 0))
         .ok()
         .flatten();
     if let Some(event) = event {

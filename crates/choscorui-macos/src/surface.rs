@@ -8,21 +8,18 @@ use crate::ffi::appkit::{
     CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR,
     ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, I_BEAM_CURSOR, INIT_WITH_IMAGE_HOT_SPOT,
     INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor, OCCLUSION_STATE,
-    OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR, RESIZE_UP_DOWN_CURSOR,
-    SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
+    OCCLUSION_STATE_VISIBLE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR, RESIZE_LEFT_RIGHT_CURSOR,
+    RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
 };
 use crate::ffi::retained::{Retained, alloc};
 use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
-
-/// NSWindowOcclusionStateVisible.
-const OCCLUSION_VISIBLE: usize = 1 << 1;
 
 pub(crate) fn window_did_change_occlusion(
     _: &Obj<ChoscoruiV2WindowDelegate>,
     notification: Option<&Obj<NSNotification>>,
 ) {
     record_window_event(notification, |window| {
-        WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_VISIBLE == 0)
+        WindowEvent::Occluded(OCCLUSION_STATE.send(window, ()) & OCCLUSION_STATE_VISIBLE == 0)
     });
 }
 
@@ -144,7 +141,7 @@ impl Window {
     /// pause animations and timers that only drive drawing.
     pub fn is_occluded(&self) -> bool {
         let _pool = Pool::new();
-        OCCLUSION_STATE.send(self.ns_window(), ()) & OCCLUSION_VISIBLE == 0
+        OCCLUSION_STATE.send(self.ns_window(), ()) & OCCLUSION_STATE_VISIBLE == 0
     }
 
     /// Renders the content view into straight-alpha sRGB pixels at the

@@ -3,6 +3,7 @@
 use super::class::{AnyClass, AnyProtocol, ClassType, Obj, ProtocolType, objc_class};
 use super::msg::{Autoreleased, Init, Utf8, messages};
 use super::retained::Retained;
+use super::sdk::c_functions;
 use crate::Error;
 use std::ffi::{CStr, CString, c_void};
 
@@ -69,9 +70,12 @@ messages! {
         () -> Option<&Obj<NSObject>>;
 }
 
-#[link(name = "Foundation", kind = "framework")]
-unsafe extern "C" {
-    pub(crate) safe static NSDefaultRunLoopMode: &'static Obj<NSString>;
+c_functions! {
+    #[link(name = "Foundation", kind = "framework")]
+    statics {
+        pub(crate) safe static NSDefaultRunLoopMode: &'static Obj<NSString>;
+    }
+    functions {}
 }
 
 impl<C> Obj<C> {

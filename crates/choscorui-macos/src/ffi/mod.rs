@@ -23,11 +23,15 @@ pub(crate) mod encode;
 pub(crate) mod foundation;
 pub(crate) mod geometry;
 pub(crate) mod graphics;
+#[cfg(test)]
+pub(crate) mod header;
 pub(crate) mod image_io;
+pub(crate) mod keys;
 pub(crate) mod msg;
 pub(crate) mod retained;
 pub(crate) mod runloop;
 mod runtime;
+pub(crate) mod sdk;
 pub(crate) mod text;
 mod thread;
 pub(crate) mod user_notifications;

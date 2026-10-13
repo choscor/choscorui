@@ -47,16 +47,22 @@ mod ffi;
 use ffi::Obj;
 use ffi::Pool;
 use ffi::appkit::{
-    ACTIVATE, ACTIVATION_POLICY, APPLICATION_WINDOWS, BACKING_SCALE_FACTOR, BUTTON_NUMBER,
-    CHARACTERS, CHARACTERS_IGNORING_MODIFIERS, CLOSE, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW,
-    CURRENT_GRAPHICS_CONTEXT, ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate,
-    EVENT_MODIFIER_FLAGS, EVENT_TYPE, FINISH_LAUNCHING, GRAPHICS_CG_CONTEXT,
+    ACTIVATE, ACTIVATION_POLICY, ACTIVATION_POLICY_REGULAR, APPLICATION_WINDOWS,
+    BACKING_SCALE_FACTOR, BACKING_STORE_BUFFERED, BUTTON_NUMBER, CHARACTERS,
+    CHARACTERS_IGNORING_MODIFIERS, CLOSE, CONTENT_VIEW, CONVERT_POINT_FROM_VIEW,
+    CURRENT_GRAPHICS_CONTEXT, ChoscoruiV2ContentView, ChoscoruiV2WindowDelegate, EVENT_KEY_DOWN,
+    EVENT_KEY_UP, EVENT_LEFT_MOUSE_DOWN, EVENT_LEFT_MOUSE_DRAGGED, EVENT_LEFT_MOUSE_UP,
+    EVENT_MODIFIER_FLAGS, EVENT_MOUSE_MOVED, EVENT_OTHER_MOUSE_DOWN, EVENT_OTHER_MOUSE_DRAGGED,
+    EVENT_OTHER_MOUSE_UP, EVENT_RIGHT_MOUSE_DOWN, EVENT_RIGHT_MOUSE_DRAGGED, EVENT_RIGHT_MOUSE_UP,
+    EVENT_SCROLL_WHEEL, EVENT_TYPE, FINISH_LAUNCHING, GRAPHICS_CG_CONTEXT,
     HAS_PRECISE_SCROLLING_DELTAS, INIT_WITH_CONTENT_RECT, INIT_WITH_FRAME, INTERPRET_KEY_EVENTS,
     IS_A_REPEAT, IS_WINDOW_VISIBLE, KEY_CODE, LOCATION_IN_WINDOW, MAKE_KEY_AND_ORDER_FRONT,
+    MODIFIER_CAPS_LOCK, MODIFIER_COMMAND, MODIFIER_CONTROL, MODIFIER_OPTION, MODIFIER_SHIFT,
     NEXT_EVENT, NSApplication, NSEvent, NSWindow, RUN, SCROLLING_DELTA_X, SCROLLING_DELTA_Y,
     SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS, SET_ACTIVATION_POLICY, SET_CONTENT_SIZE,
     SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE, SET_WINDOW_DELEGATE, SHARED_APPLICATION,
-    VIEW_FRAME, VIEW_WINDOW, WINDOW_TITLE,
+    VIEW_FRAME, VIEW_WINDOW, WINDOW_STYLE_CLOSABLE, WINDOW_STYLE_MINIATURIZABLE,
+    WINDOW_STYLE_RESIZABLE, WINDOW_STYLE_TITLED, WINDOW_TITLE,
 };
 use ffi::foundation::{
     COUNT, DATE_WITH_TIME_INTERVAL_SINCE_NOW, NOTIFICATION_OBJECT, NSDefaultRunLoopMode,
@@ -186,11 +192,11 @@ pub struct Modifiers {
 impl Modifiers {
     fn from_native(flags: usize) -> Self {
         Self {
-            caps_lock: flags & (1 << 16) != 0,
-            shift: flags & (1 << 17) != 0,
-            control: flags & (1 << 18) != 0,
-            option: flags & (1 << 19) != 0,
-            command: flags & (1 << 20) != 0,
+            caps_lock: flags & MODIFIER_CAPS_LOCK != 0,
+            shift: flags & MODIFIER_SHIFT != 0,
+            control: flags & MODIFIER_CONTROL != 0,
+            option: flags & MODIFIER_OPTION != 0,
+            command: flags & MODIFIER_COMMAND != 0,
         }
     }
 }
@@ -340,24 +346,27 @@ fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&
     let position = Point::new(point.x, point.y);
     let native_type = EVENT_TYPE.send(native_event, ());
     let event = match native_type {
-        1 => PointerEvent::Down {
+        EVENT_LEFT_MOUSE_DOWN => PointerEvent::Down {
             position,
             button: PointerButton::Primary,
         },
-        2 => PointerEvent::Up {
+        EVENT_LEFT_MOUSE_UP => PointerEvent::Up {
             position,
             button: PointerButton::Primary,
         },
-        3 => PointerEvent::Down {
+        EVENT_RIGHT_MOUSE_DOWN => PointerEvent::Down {
             position,
             button: PointerButton::Secondary,
         },
-        4 => PointerEvent::Up {
+        EVENT_RIGHT_MOUSE_UP => PointerEvent::Up {
             position,
             button: PointerButton::Secondary,
         },
-        5 | 6 | 7 | 27 => PointerEvent::Move { position },
-        22 => {
+        EVENT_MOUSE_MOVED
+        | EVENT_LEFT_MOUSE_DRAGGED
+        | EVENT_RIGHT_MOUSE_DRAGGED
+        | EVENT_OTHER_MOUSE_DRAGGED => PointerEvent::Move { position },
+        EVENT_SCROLL_WHEEL => {
             let unit = if HAS_PRECISE_SCROLLING_DELTAS.send(native_event, ()) {
                 WheelUnit::Points
             } else {
@@ -372,7 +381,7 @@ fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&
                 unit,
             }
         }
-        25 | 26 => {
+        EVENT_OTHER_MOUSE_DOWN | EVENT_OTHER_MOUSE_UP => {
             let number = BUTTON_NUMBER.send(native_event, ()) as usize;
             let button = if number == 2 {
                 PointerButton::Middle
@@ -400,43 +409,43 @@ fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&
 /// Maps a macOS virtual keycode for a named key to its [`Key`]. A keycode
 /// that is not here becomes a character or [`Key::Other`] from the event text.
 fn key_from_code(code: u16) -> Option<Key> {
+    use ffi::keys::*;
     Some(match code {
-        0x30 => Key::Tab,
-        0x24 => Key::Enter,
-        0x31 => Key::Space,
-        0x35 => Key::Escape,
-        0x7e => Key::ArrowUp,
-        0x7d => Key::ArrowDown,
-        0x7b => Key::ArrowLeft,
-        0x7c => Key::ArrowRight,
-        0x73 => Key::Home,
-        0x77 => Key::End,
-        0x33 => Key::Backspace,
-        0x75 => Key::Delete,
-        0x74 => Key::PageUp,
-        0x79 => Key::PageDown,
-        0x7a => Key::F(1),
-        0x78 => Key::F(2),
-        0x63 => Key::F(3),
-        0x76 => Key::F(4),
-        0x60 => Key::F(5),
-        0x61 => Key::F(6),
-        0x62 => Key::F(7),
-        0x64 => Key::F(8),
-        0x65 => Key::F(9),
-        0x6d => Key::F(10),
-        0x67 => Key::F(11),
-        0x6f => Key::F(12),
-        0x69 => Key::F(13),
-        0x6b => Key::F(14),
-        0x71 => Key::F(15),
-        0x6a => Key::F(16),
-        0x40 => Key::F(17),
-        0x4f => Key::F(18),
-        0x50 => Key::F(19),
-        0x5a => Key::F(20),
-        // kVK_ContextualMenu: the Menu key of a PC keyboard.
-        0x6e => Key::ContextMenu,
+        KEY_TAB => Key::Tab,
+        KEY_RETURN => Key::Enter,
+        KEY_SPACE => Key::Space,
+        KEY_ESCAPE => Key::Escape,
+        KEY_UP_ARROW => Key::ArrowUp,
+        KEY_DOWN_ARROW => Key::ArrowDown,
+        KEY_LEFT_ARROW => Key::ArrowLeft,
+        KEY_RIGHT_ARROW => Key::ArrowRight,
+        KEY_HOME => Key::Home,
+        KEY_END => Key::End,
+        KEY_DELETE => Key::Backspace,
+        KEY_FORWARD_DELETE => Key::Delete,
+        KEY_PAGE_UP => Key::PageUp,
+        KEY_PAGE_DOWN => Key::PageDown,
+        KEY_F1 => Key::F(1),
+        KEY_F2 => Key::F(2),
+        KEY_F3 => Key::F(3),
+        KEY_F4 => Key::F(4),
+        KEY_F5 => Key::F(5),
+        KEY_F6 => Key::F(6),
+        KEY_F7 => Key::F(7),
+        KEY_F8 => Key::F(8),
+        KEY_F9 => Key::F(9),
+        KEY_F10 => Key::F(10),
+        KEY_F11 => Key::F(11),
+        KEY_F12 => Key::F(12),
+        KEY_F13 => Key::F(13),
+        KEY_F14 => Key::F(14),
+        KEY_F15 => Key::F(15),
+        KEY_F16 => Key::F(16),
+        KEY_F17 => Key::F(17),
+        KEY_F18 => Key::F(18),
+        KEY_F19 => Key::F(19),
+        KEY_F20 => Key::F(20),
+        KEY_CONTEXTUAL_MENU => Key::ContextMenu,
         _ => return None,
     })
 }
@@ -468,11 +477,11 @@ fn view_key_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<
         }
     };
     let event = match EVENT_TYPE.send(native_event, ()) {
-        10 => KeyEvent::Down {
+        EVENT_KEY_DOWN => KeyEvent::Down {
             key,
             repeat: IS_A_REPEAT.send(native_event, ()),
         },
-        11 => KeyEvent::Up { key },
+        EVENT_KEY_UP => KeyEvent::Up { key },
         _ => return,
     };
     let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
@@ -544,10 +553,10 @@ impl Application {
             .send_class(())?
             .ok_or(Error::AppKitUnavailable)?;
         // Launched from an app bundle, AppKit may already be in the Regular
-        // policy (0) and refuse the redundant switch; only a policy that
-        // stays non-regular is a failure.
-        if !SET_ACTIVATION_POLICY.send(application, (0,))
-            && ACTIVATION_POLICY.send(application, ()) != 0
+        // policy and refuse the redundant switch; only a policy that stays
+        // non-regular is a failure.
+        if !SET_ACTIVATION_POLICY.send(application, (ACTIVATION_POLICY_REGULAR,))
+            && ACTIVATION_POLICY.send(application, ()) != ACTIVATION_POLICY_REGULAR
         {
             return Err(Error::AppKitUnavailable);
         }
@@ -599,9 +608,16 @@ impl Application {
             },
         };
         // Titled, closable, miniaturizable, and resizable, with a buffered
-        // backing store (2) and no deferred creation.
+        // backing store and no deferred creation.
+        let style = WINDOW_STYLE_TITLED
+            | WINDOW_STYLE_CLOSABLE
+            | WINDOW_STYLE_MINIATURIZABLE
+            | WINDOW_STYLE_RESIZABLE;
         let window = INIT_WITH_CONTENT_RECT
-            .init(alloc::<NSWindow>()?, (frame, 1 | 2 | 4 | 8, 2, false))
+            .init(
+                alloc::<NSWindow>()?,
+                (frame, style, BACKING_STORE_BUFFERED, false),
+            )
             .ok_or(Error::AppKitUnavailable)?;
         // The handle owns the window, so closing must not release it.
         SET_RELEASED_WHEN_CLOSED.send(&window, (false,));

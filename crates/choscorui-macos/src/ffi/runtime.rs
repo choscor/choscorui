@@ -7,30 +7,51 @@
 use super::class::{AnyClass, AnyProtocol, Obj, Sel};
 use super::encode::Bool;
 use super::foundation::NSObject;
+use super::sdk::{c_functions, ffi_struct};
 use std::ffi::{CStr, c_char};
 
-#[link(name = "objc")]
-unsafe extern "C-unwind" {
-    fn objc_getClass(name: *const c_char) -> Option<&'static AnyClass>;
-    fn objc_getProtocol(name: *const c_char) -> Option<&'static AnyProtocol>;
-    fn sel_registerName(name: *const c_char) -> Sel;
-    safe fn sel_getName(name: Sel) -> *const c_char;
-    safe fn object_getClassName(object: &Obj<NSObject>) -> *const c_char;
-    fn objc_allocateClassPair(
-        superclass: &AnyClass,
-        name: *const c_char,
-        extra_bytes: usize,
-    ) -> Option<&'static AnyClass>;
-    safe fn objc_registerClassPair(class: &AnyClass);
-    fn objc_disposeClassPair(class: &AnyClass);
-    fn class_addMethod(class: &AnyClass, name: Sel, imp: *const (), types: *const c_char) -> Bool;
-    safe fn class_addProtocol(class: &AnyClass, protocol: &AnyProtocol) -> Bool;
-    fn objc_msgSend();
-    fn objc_msgSendSuper();
-    #[cfg(target_arch = "x86_64")]
-    fn objc_msgSend_stret();
-    #[cfg(target_arch = "x86_64")]
-    fn objc_msgSendSuper_stret();
+c_functions! {
+    #[link(name = "objc")]
+    functions {
+        unsafe fn objc_getClass(name: *const c_char) -> Option<&'static AnyClass>;
+        unsafe fn objc_getProtocol(name: *const c_char) -> Option<&'static AnyProtocol>;
+        unsafe fn sel_registerName(name: *const c_char) -> Sel;
+        safe fn sel_getName(name: Sel) -> *const c_char;
+        safe fn object_getClassName(object: &Obj<NSObject>) -> *const c_char;
+        unsafe fn objc_allocateClassPair(
+            superclass: &AnyClass,
+            name: *const c_char,
+            extra_bytes: usize,
+        ) -> Option<&'static AnyClass>;
+        safe fn objc_registerClassPair(class: &AnyClass);
+        unsafe fn objc_disposeClassPair(class: &AnyClass);
+        unsafe fn class_addMethod(
+            class: &AnyClass,
+            name: Sel,
+            imp: *const (),
+            types: *const c_char,
+        ) -> Bool;
+        safe fn class_addProtocol(class: &AnyClass, protocol: &AnyProtocol) -> Bool;
+        unsafe fn objc_msgSend();
+        unsafe fn objc_msgSendSuper();
+        #[cfg(target_arch = "x86_64")]
+        unsafe fn objc_msgSend_stret();
+        #[cfg(target_arch = "x86_64")]
+        unsafe fn objc_msgSendSuper_stret();
+        #[cfg(test)]
+        safe fn class_getInstanceMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
+        #[cfg(test)]
+        safe fn class_getClassMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
+        #[cfg(test)]
+        safe fn method_getTypeEncoding(method: &Method) -> *const c_char;
+        #[cfg(test)]
+        safe fn protocol_getMethodDescription(
+            protocol: &AnyProtocol,
+            name: Sel,
+            required: Bool,
+            instance: Bool,
+        ) -> MethodDescription;
+    }
 }
 
 /// The runtime class with `name`.
@@ -148,27 +169,14 @@ struct Method {
     _opaque: [u8; 0],
 }
 
-#[cfg(test)]
-#[link(name = "objc")]
-unsafe extern "C-unwind" {
-    safe fn class_getInstanceMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
-    safe fn class_getClassMethod(class: &AnyClass, name: Sel) -> Option<&'static Method>;
-    safe fn method_getTypeEncoding(method: &Method) -> *const c_char;
-    safe fn protocol_getMethodDescription(
-        protocol: &AnyProtocol,
-        name: Sel,
-        required: bool,
-        instance: bool,
-    ) -> MethodDescription;
-}
-
-/// `struct objc_method_description`; both fields are null when the
-/// protocol has no such method.
-#[cfg(test)]
-#[repr(C)]
-struct MethodDescription {
-    name: Option<Sel>,
-    types: *const c_char,
+ffi_struct! {
+    /// `struct objc_method_description`; both fields are null when the
+    /// protocol has no such method.
+    #[cfg(test)]
+    struct MethodDescription = objc_method_description {
+        name: Option<Sel>,
+        types: *const c_char,
+    }
 }
 
 /// Copies a type encoding that the runtime owns.
@@ -203,7 +211,8 @@ pub(super) fn protocol_method_types(
     instance: bool,
 ) -> Option<String> {
     [true, false].into_iter().find_map(|required| {
-        let description = protocol_getMethodDescription(protocol, name, required, instance);
+        let description =
+            protocol_getMethodDescription(protocol, name, Bool::new(required), Bool::new(instance));
         description.name.and_then(|_| copy_types(description.types))
     })
 }

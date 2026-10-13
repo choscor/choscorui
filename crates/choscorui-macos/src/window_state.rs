@@ -6,13 +6,11 @@
 use super::{ContextMenu, Error, MenuCommandId, NSPoint, NSRect, NSSize, Pool, Size, Window};
 use crate::ffi::appkit::{
     CONTENT_VIEW, IS_ZOOMED, NSScreen, POP_UP_MENU, SCREEN_FRAME, SCREEN_VISIBLE_FRAME, SCREENS,
-    SET_FRAME_DISPLAY, STYLE_MASK, TOGGLE_FULL_SCREEN, WINDOW_FRAME, ZOOM,
+    SET_FRAME_DISPLAY, STYLE_MASK, TOGGLE_FULL_SCREEN, WINDOW_FRAME, WINDOW_STYLE_FULL_SCREEN,
+    ZOOM,
 };
 use crate::ffi::foundation::array_items;
 use choscorui_core::{Point, Rect, WindowGeometry};
-
-/// NSWindowStyleMaskFullScreen.
-const FULL_SCREEN_MASK: usize = 1 << 14;
 
 /// The connected screens, main (menu-bar) screen first. Requires a pool.
 fn screen_frames(frame: impl Fn(&crate::ffi::Obj<NSScreen>) -> NSRect) -> Vec<NSRect> {
@@ -67,7 +65,7 @@ impl Window {
         WindowGeometry {
             frame: flip(frame, main_height),
             zoomed: IS_ZOOMED.send(window, ()),
-            full_screen: STYLE_MASK.send(window, ()) & FULL_SCREEN_MASK != 0,
+            full_screen: STYLE_MASK.send(window, ()) & WINDOW_STYLE_FULL_SCREEN != 0,
         }
     }
 
@@ -103,7 +101,7 @@ impl Window {
         if IS_ZOOMED.send(window, ()) != geometry.zoomed {
             ZOOM.send(window, (None,));
         }
-        let full_screen = STYLE_MASK.send(window, ()) & FULL_SCREEN_MASK != 0;
+        let full_screen = STYLE_MASK.send(window, ()) & WINDOW_STYLE_FULL_SCREEN != 0;
         if full_screen != geometry.full_screen {
             TOGGLE_FULL_SCREEN.send(window, (None,));
         }

@@ -2,11 +2,13 @@
 
 use super::{Application, Pool};
 use crate::ffi::appkit::{
-    ADD_BUTTON_WITH_TITLE, ALERT_RUN_MODAL, NSAlert, NSSavePanel, OPEN_PANEL, PANEL_RUN_MODAL,
-    PANEL_URL, PANEL_URLS, SAVE_PANEL, SET_ALERT_STYLE, SET_ALLOWED_CONTENT_TYPES,
-    SET_ALLOWS_MULTIPLE_SELECTION, SET_CAN_CHOOSE_DIRECTORIES, SET_CAN_CHOOSE_FILES,
-    SET_DIRECTORY_URL, SET_INFORMATIVE_TEXT, SET_MESSAGE_TEXT, SET_NAME_FIELD_STRING_VALUE,
-    SET_PROMPT, SET_SHOWS_HIDDEN_FILES, SET_TITLE, TYPE_WITH_FILENAME_EXTENSION,
+    ADD_BUTTON_WITH_TITLE, ALERT_FIRST_BUTTON_RETURN, ALERT_RUN_MODAL, ALERT_STYLE_CRITICAL,
+    ALERT_STYLE_INFORMATIONAL, ALERT_STYLE_WARNING, MODAL_RESPONSE_OK, NSAlert, NSSavePanel,
+    OPEN_PANEL, PANEL_RUN_MODAL, PANEL_URL, PANEL_URLS, SAVE_PANEL, SET_ALERT_STYLE,
+    SET_ALLOWED_CONTENT_TYPES, SET_ALLOWS_MULTIPLE_SELECTION, SET_CAN_CHOOSE_DIRECTORIES,
+    SET_CAN_CHOOSE_FILES, SET_DIRECTORY_URL, SET_INFORMATIVE_TEXT, SET_MESSAGE_TEXT,
+    SET_NAME_FIELD_STRING_VALUE, SET_PROMPT, SET_SHOWS_HIDDEN_FILES, SET_TITLE,
+    TYPE_WITH_FILENAME_EXTENSION,
 };
 use crate::ffi::foundation::{
     self, FILE_URL_WITH_PATH, NSObject, NSString, NsUrl, PATH, TextError, array_items, ns_array,
@@ -140,10 +142,10 @@ pub enum AlertResponse {
 
 impl AlertResponse {
     pub fn from_native_code(code: isize, button_count: usize) -> Option<Self> {
-        if code < 1000 {
+        if code < ALERT_FIRST_BUTTON_RETURN {
             return Some(Self::Cancelled);
         }
-        let index = usize::try_from(code - 1000).ok()?;
+        let index = usize::try_from(code - ALERT_FIRST_BUTTON_RETURN).ok()?;
         (index < button_count).then_some(Self::Button(index))
     }
 }
@@ -304,9 +306,9 @@ fn show_alert(spec: &AlertSpec) -> Result<AlertResponse, DialogError> {
         SET_INFORMATIVE_TEXT.send(&alert, (&*ns_string(detail)?,));
     }
     let style = match spec.style {
-        AlertStyle::Warning => 0,
-        AlertStyle::Informational => 1,
-        AlertStyle::Critical => 2,
+        AlertStyle::Warning => ALERT_STYLE_WARNING,
+        AlertStyle::Informational => ALERT_STYLE_INFORMATIONAL,
+        AlertStyle::Critical => ALERT_STYLE_CRITICAL,
     };
     SET_ALERT_STYLE.send(&alert, (style,));
     for button in &spec.buttons {
@@ -325,7 +327,7 @@ fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogE
             .map_err(map_error)?
             .ok_or(DialogError::AppKitUnavailable)?;
         configure_panel(&panel, spec)?;
-        if PANEL_RUN_MODAL.send(&panel, ()) != 1 {
+        if PANEL_RUN_MODAL.send(&panel, ()) != MODAL_RESPONSE_OK {
             return Ok(FileDialogResponse::Cancelled);
         }
         vec![path_from_url(PANEL_URL.send(&panel, ()).as_deref())?]
@@ -339,7 +341,7 @@ fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogE
         SET_CAN_CHOOSE_DIRECTORIES.send(&panel, (directories,));
         SET_CAN_CHOOSE_FILES.send(&panel, (!directories,));
         SET_ALLOWS_MULTIPLE_SELECTION.send(&panel, (spec.mode == FileDialogMode::OpenFiles,));
-        if PANEL_RUN_MODAL.send(&panel, ()) != 1 {
+        if PANEL_RUN_MODAL.send(&panel, ()) != MODAL_RESPONSE_OK {
             return Ok(FileDialogResponse::Cancelled);
         }
         let urls = PANEL_URLS
