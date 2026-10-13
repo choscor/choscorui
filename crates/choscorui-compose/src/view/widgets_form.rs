@@ -408,11 +408,7 @@ impl Configured<controls::HostedNumericDisplay> {
         Configured::custom(ControlKind::NumericDisplay, move |env| {
             controls::NumericDisplay::new(digits, base.get()).hosted(text(&name, env))
         })
-        .value(
-            value
-                .into_live()
-                .map(|value| ControlValue::Number(value as f64)),
-        )
+        .value(value.into_live().map(exact))
     }
 
     /// A display that is also a counter: a tab stop that edits `value`.
@@ -431,13 +427,14 @@ impl Configured<controls::HostedNumericDisplay> {
                 .hosted(text(&name, env))
                 .counter()
         })
-        .bind(
-            value,
-            |value| ControlValue::Number(value as f64),
-            |value| match value {
-                ControlValue::Number(number) if number.is_finite() => Some(*number as i64),
-                _ => None,
-            },
-        )
+        .bind(value, exact, |value| match value {
+            ControlValue::Text(text) => text.parse().ok(),
+            _ => None,
+        })
     }
+}
+
+/// An `i64` as a `Text` value, which keeps each digit.
+fn exact(value: i64) -> ControlValue {
+    ControlValue::Text(value.to_string())
 }

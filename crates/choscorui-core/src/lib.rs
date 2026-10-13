@@ -41,8 +41,8 @@ pub use stack_window::UniformStack;
 mod semantics;
 pub use semantics::{
     AnnouncementPriority, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry,
-    SemanticError, SemanticNode, SemanticRelation, SemanticRole, SemanticState, SemanticText,
-    SemanticTree,
+    SemanticError, SemanticNode, SemanticRange, SemanticRelation, SemanticRole, SemanticState,
+    SemanticText, SemanticTree,
 };
 mod capabilities;
 pub use capabilities::{BackendCapabilities, Condition, Support};

@@ -703,7 +703,11 @@ recipe gives its thickness and color, so
   `primary` indicator from the start in reading order. An indeterminate
   bar sweeps a segment of 30% of the width once every
   `INDETERMINATE_PERIOD` seconds at the context time. With reduced
-  motion, the segment stays in the middle.
+  motion, still stripes cover the whole track, so that the bar shows no
+  value.
+- In a control host, a new value moves the fill from its current width
+  over the `motion_ms` of the `Indicator` recipe. With reduced motion, the
+  fill moves at once.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -717,11 +721,13 @@ recipe gives its thickness and color, so
 | --- | --- |
 | Role | `ProgressIndicator` (AXProgressIndicator) |
 | Name / value | label / whole percent, for example `30%`; none when indeterminate |
-| State | - |
+| State | `range`: the value, 0, and the maximum, when determinate |
 | Actions | - |
 
-In a control host, `set_value` takes a whole `Number` from 0 to the maximum
-of a determinate bar.
+The macOS bridge publishes the `range` value and bounds as numbers, so
+assistive technology reads the value as a part of the whole. In a control
+host, `set_value` takes a whole `Number` from 0 to the maximum of a
+determinate bar.
 
 **As a view.** `Progress::new(name, value).maximum(10)` shows a live `u32`
 value. The maximum is 100 by default. A maximum of zero becomes 1, and a
@@ -743,7 +749,9 @@ length.
   Unlit segments use the `Track` color, `muted`. Keyboard focus adds the
   focus ring.
 - In a control host, `NumericDisplay::hosted` adds the name. The hosted
-  node does not take focus.
+  node does not take focus. It takes and reports the value as `Text` with
+  the decimal digits, so that each `i64` value stays exact. It also takes
+  a whole `Number`.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -759,7 +767,7 @@ length.
 | Actions | - |
 
 **As a view.** `NumericDisplay::new(name, digits, base, value)` mounts a
-`HostedNumericDisplay`. The view gives the live `i64` value as `Number`. A
+`HostedNumericDisplay`. The view gives the live `i64` value as `Text`. A
 change of `base` builds the display again.
 
 `HostedNumericDisplay::counter` makes the display a counter, and
@@ -767,7 +775,8 @@ change of `base` builds the display again.
 is a tab stop that edits a `Binding<i64>`. ArrowUp and ArrowRight add 1, and
 ArrowDown and ArrowLeft subtract 1. PageUp multiplies by 10, and PageDown
 divides by 10. Each change saturates at the `i64` bounds and emits
-`Changed(Number)`. The semantics do not change.
+`Changed(Text)`. A counter has the `SpinButton` role and the `Increment`,
+`Decrement`, and `Focus` actions, which step by 1.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
@@ -1130,15 +1139,21 @@ not in the list sets it to `None`.
 | Input | Behavior |
 | --- | --- |
 | Primary press on the node | Takes focus, captures the pointer, starts a drag, and jumps to the pointer. |
-| Pointer move during a drag | The value follows the pointer and clamps. |
+| Pointer move during a drag | The value follows the pointer, snaps to the step, and clamps. |
 | Primary release | Sets the value at the release point. A release outside does not cancel. |
 | ArrowRight or ArrowUp | Steps up. Repeats are accepted. |
 | ArrowLeft or ArrowDown | Steps down. Repeats are accepted. |
+| PageUp, PageDown | Steps up or down by `page_step`. |
 | Home, End | Goes to the minimum or the maximum. |
-| `Semantic(SetValue(v))`, `Increment`, `Decrement` | Sets or steps the value. |
+| `Semantic(SetValue(v))`, `Increment`, `Decrement` | Sets or steps the value. `SetValue` snaps to the step. |
 | `Cancel` | Ends the drag and releases capture. The value stays. |
 
-- PageUp and PageDown do nothing.
+- The step grid starts at the minimum. The maximum is always on the grid.
+  `IntegerRange::snap` gives the nearest value on the grid.
+- The thumb center travels from half a thumb inside the start to half a
+  thumb inside the end. The pointer maps onto the same travel, so a
+  press at an end of the bounds gives the minimum or the maximum. In a
+  control host, `arrange` reads the thumb length from the recipe.
 - A vertical slider has its minimum at the bottom.
 - `set_direction(Rtl)` puts the minimum of a horizontal slider at the
   right for pointer input, and swaps ArrowLeft and ArrowRight: ArrowLeft
@@ -1148,8 +1163,8 @@ not in the list sets it to `None`.
 - **Look.** `paint` draws a 6 pt `muted` track, a `primary` range, and a
   16 pt white thumb with a `primary` edge and a small shadow. On hover,
   drag, or keyboard focus, the thumb has a 4 pt ring in `ring` at 50%. The
-  thumb stays inside the bounds at both ends. A disabled slider has 50%
-  opacity.
+  range runs from the start of the track to the thumb center. A disabled
+  slider has 50% opacity.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -1189,8 +1204,15 @@ this behavior.
   PageUp and PageDown move ten steps. Home and End go to the bounds.
 - A press moves the nearer thumb to the press, and a drag moves it. Each
   change emits `Changed(Range(low, high))`.
+- When the thumbs meet, a press on them picks no thumb. The first drag
+  toward the start moves the low thumb, and toward the end the high thumb.
+- Values round to the decimals of the step, so three steps of 0.1 give
+  0.3. The pointer maps onto the thumb travel of `Slider`, so the thumbs
+  stay inside the bounds.
+- Disabling the slider ends a drag.
 - The track and the thumbs use the `Slider` recipe. The `primary` band
-  runs between the thumbs. The active thumb shows the hover and focus ring.
+  runs between the thumbs. The thumb under the pointer shows the hover
+  ring, and the active thumb shows the focus ring.
 
 | Field | `RangeSlider::semantics` |
 | --- | --- |
@@ -1215,7 +1237,9 @@ These limits are the defaults. Invalid limits and values clamp and report a
 
 - A primary press focuses the spin box. A press in the stepper column
   increments in the top half or decrements in the bottom half. It steps
-  once, on the press.
+  on the press. In a control host, a held stepper steps again after
+  0.4 seconds, and then every 0.06 seconds, until the release. The repeat
+  stops while the pointer is off the stepper.
 - The stepper column is `STEPPER_WIDTH` wide at the end of the bounds.
   `set_direction(Rtl)` puts it at the left. In a control host, the host
   direction replaces `set_direction`.
@@ -1224,12 +1248,18 @@ These limits are the defaults. Invalid limits and values clamp and report a
 - In a control host, the stepper under the pointer gets a `muted` fill
   with radius sm and `foreground` chevrons. The `Input` `Icon` slot gives
   this look. The pressed stepper keeps it only while the pointer is on it.
-- ArrowUp and ArrowDown step. Home and End go to the bounds. PageUp and
-  PageDown do nothing.
+  The up stepper dims at the maximum, and the down stepper dims at the
+  minimum.
+- ArrowUp and ArrowDown step. PageUp and PageDown step by `page_step`.
+  Home and End go to the bounds.
+- `with_locale` formats and reads the text with the digit grouping of a
+  locale, for example `1,500`. The default is the root locale. The view
+  uses the locale of the environment.
 - Values clamp and do not wrap. A step past a bound beeps.
 - **In a control host.** The field is editable, with a caret and a
-  selection as in `Input`. Focus selects the text. The integer rule
-  refuses other keys, and a refused key beeps.
+  selection as in `Input`. Focus selects the text. ArrowLeft and
+  ArrowRight move the caret. The integer rule refuses other keys, and a
+  refused key beeps.
 - Return and a loss of focus commit the typed number. The commit clamps
   it to the range. Escape restores the text of the value. A step first
   commits the typed number.
@@ -1270,9 +1300,10 @@ this behavior.
   `SetValue` replaces the text, then commits.
 - `set_locale` formats the text again and keeps the value.
 - **In a control host.** A press on the upper or the lower half of the
-  steppers steps the value. The field shows a caret and a selection as in
-  `Input`, and focus selects the text. The `NumberInput` filter refuses
-  other keys, and a refused key beeps.
+  steppers steps the value. A held stepper repeats as in `SpinBox`, and
+  the steppers dim at the bounds. The field shows a caret and a selection
+  as in `Input`, and focus selects the text. The `NumberInput` filter
+  refuses other keys, and a refused key beeps.
 - A loss of focus commits valid text. It restores the text of the
   committed value when the text is not valid.
 - The control has no disabled state.
@@ -1296,15 +1327,20 @@ directions. It formats numbers in the locale of the environment.
 
 ### Dial
 
-- `point_to` sets the value from the angle, clockwise from up.
-- A wrapping dial uses a full turn. A dial that does not wrap uses 270
-  degrees, and a point in the dead zone snaps to the nearer end.
-- ArrowUp and ArrowRight increment. ArrowDown and ArrowLeft decrement. A
-  wrapping dial wraps at the ends.
-- PageUp and PageDown step by `page_step`. Home and End go to the bounds.
-- The dial has no disabled state.
-- In a control host, `Dial::hosted` adds the name. A press or a drag
-  points the dial at the pointer.
+- `point_to` sets the value from the angle, clockwise from up, and snaps
+  it to the step.
+- A wrapping dial uses a full turn with `span + 1` places, so the maximum
+  is one step before the minimum. A dial that does not wrap uses 270
+  degrees, and a press in the dead zone snaps to the nearer end.
+- ArrowUp and ArrowRight increment. ArrowDown and ArrowLeft decrement.
+  PageUp and PageDown step by `page_step`. A wrapping dial wraps these
+  steps around the ends. Home and End go to the bounds.
+- In a control host, `Dial::hosted` adds the name. A press on the dial
+  circle or a drag points the dial at the pointer. A press outside the
+  circle does nothing. During a drag, a dial that does not wrap stays at
+  the end that the pointer left, and does not jump across the dead zone.
+- A drag shows the pressed state. The host dims a disabled dial and
+  stops its input.
 - **Look.** `paint` uses the `Dial` recipe. A 6 pt `muted` track arc follows
   the sweep, and a 6 pt `primary` arc runs to the value. A 16 pt white thumb
   with a `primary` border sits at the value. Hover or keyboard focus rings
@@ -1339,17 +1375,22 @@ clamp rules of the `Slider` view.
 
 - A press on the thumb starts a drag. A press on the track pages one
   viewport toward the press.
-- A drag follows the thumb travel. `Release` ends the drag. The scroll bar
-  has no capture and no cancel.
+- A drag follows the thumb travel. `Release` ends the drag. Without a
+  host, the scroll bar has no capture and no cancel.
 - The arrow keys on the bar's axis step `line_step` (default 16 points).
   PageUp and PageDown page one viewport. Home and End go to the ends.
 - `set_direction(Rtl)` starts a horizontal bar at the right. The thumb at
   value 0 is at the right edge, and presses measure from the right.
   ArrowLeft steps forward. A hosted bar takes the host direction.
-- Semantic `Increment` and `Decrement` page one viewport.
-- The value stays in `0..=content - viewport`. The scroll bar has no focus
-  and no disabled state.
-- In a control host, the bar captures the pointer during a thumb drag.
+- Semantic `Increment` and `Decrement` page one viewport. In a control
+  host, `perform` returns false at the end of the range.
+- The value stays in `0..=content - viewport`.
+- In a control host, the bar is a tab stop, so its keys work. It captures
+  the pointer during a thumb drag and a track press. A held track press
+  repeats the paging as a held `SpinBox` stepper, until the thumb reaches
+  the pointer.
+- A disabled bar gets no input, paints dimmed, and publishes the
+  disabled state with no actions.
 - **Look.** `paint` fills the bar with the `ScrollArea` `Scrollbar`
   background, which is empty by default. Then it paints the `ScrollArea`
   thumb, inset 1 pt in the bar. A drag changes the thumb to
@@ -1360,8 +1401,8 @@ clamp rules of the `Slider` view.
 | --- | --- |
 | Role | `ScrollBar` (AXScrollBar) |
 | Name / value | name / position in whole percent |
-| State | hidden when the content fits |
-| Actions | `Increment`, `Decrement` |
+| State | hidden when the content fits; disabled |
+| Actions | `Increment`, `Decrement`, `Focus` while enabled |
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 

@@ -114,7 +114,9 @@ impl Configured<controls::SpinBox> {
         let read = limits.clone();
         Configured::try_custom(ControlKind::Input, move |env| {
             let range = read.get().integers(0)?;
-            Ok::<_, RangeError>(controls::SpinBox::new(text(&name, env), range))
+            Ok::<_, RangeError>(
+                controls::SpinBox::new(text(&name, env), range).with_locale(env.locale()),
+            )
         })
         .limited(limits)
         .bind(value, to_number, as_whole)

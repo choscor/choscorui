@@ -22,7 +22,7 @@ The application builds a `SemanticTree`, takes a `snapshot`, and passes it with 
 - A node that stays in the snapshot keeps its identity and its native element. The window updates the attributes of that element in place.
 - The projection retires a node that is not in the snapshot. The window releases its native element, and the projection never uses the identity again.
 
-Each update sets the role, subrole, frame in screen coordinates, enabled state, focus, expanded state, selected state, label, help text, and value. A checked state becomes an `NSNumber` value. Editable text also sets the selected text range and the character count in UTF-16 units. `LabelledBy` relations set `accessibilityTitleUIElement`, and `DescribedBy` and `Controls` relations set `accessibilityLinkedUIElements`.
+Each update sets the role, subrole, frame in screen coordinates, enabled state, focus, expanded state, selected state, label, help text, and value. A checked state becomes an `NSNumber` value. A `SemanticRange` sets the value, `accessibilityMinValue`, and `accessibilityMaxValue` as `NSNumber` values, saturated to `NSInteger`. Editable text also sets the selected text range and the character count in UTF-16 units. `LabelledBy` relations set `accessibilityTitleUIElement`, and `DescribedBy` and `Controls` relations set `accessibilityLinkedUIElements`.
 
 [`tests/accessibility.rs`](tests/accessibility.rs) pins the identity and retirement rules.
 

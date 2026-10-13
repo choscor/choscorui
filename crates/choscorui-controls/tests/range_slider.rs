@@ -65,9 +65,10 @@ fn keys_move_the_active_thumb_and_tab_moves_between_thumbs() {
 fn a_press_moves_the_nearer_thumb_and_drags_it() {
     let mut h = Harness::new(price());
     let bounds = h.bounds();
+    // A point on the thumb travel, half a 16 pt thumb inside each end.
     let at = |fraction: f64| {
         Point::new(
-            bounds.origin.x + bounds.size.width * fraction,
+            bounds.origin.x + 8.0 + (bounds.size.width - 16.0) * fraction,
             bounds.center().y,
         )
     };

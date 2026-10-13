@@ -7,7 +7,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     MeasureContext,
 };
-use crate::form::step_text::{StepText, text_rect};
+use crate::form::step_text::{Repeat, StepText, text_rect};
 use crate::hosted::{self, Parts};
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState, content_rect,
@@ -62,6 +62,8 @@ pub enum ScrollBarInput {
 /// track pages toward the press; dragging the thumb tracks the pointer;
 /// arrows step by `line_step`, Page keys by the viewport, Home/End to the
 /// ends. Exposed as a slider-like range with increment/decrement actions.
+/// In a control host, the bar is a tab stop, and a held press on the
+/// track repeats the paging until the thumb reaches the pointer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScrollBar {
     name: String,
@@ -74,6 +76,10 @@ pub struct ScrollBar {
     drag: Option<(f64, f64)>,
     /// Whether a horizontal bar starts at the right.
     rtl: bool,
+    enabled: bool,
+    /// The paging repeat of a held press on the track, and the press
+    /// position along the bar.
+    paging: (Repeat, f64),
 }
 
 impl ScrollBar {
@@ -88,6 +94,8 @@ impl ScrollBar {
             track_length: 0.0,
             drag: None,
             rtl: false,
+            enabled: true,
+            paging: (Repeat::default(), 0.0),
         }
     }
     pub fn orientation(&self) -> ScrollOrientation {
@@ -209,10 +217,19 @@ impl ScrollBar {
             value: Some(format!("{percent}%")),
             state: SemanticState {
                 hidden: !self.is_needed(),
+                disabled: !self.enabled,
                 ..SemanticState::default()
             },
             relations: Vec::new(),
-            actions: vec![SemanticAction::Increment, SemanticAction::Decrement],
+            actions: if self.enabled {
+                vec![
+                    SemanticAction::Increment,
+                    SemanticAction::Decrement,
+                    SemanticAction::Focus,
+                ]
+            } else {
+                Vec::new()
+            },
             text: None,
         }
     }
@@ -295,8 +312,8 @@ impl ScrollBar {
     }
 }
 
-/// The bar has no focus, as without a host. It captures the pointer
-/// during a thumb drag.
+/// The bar is a tab stop that takes its keys. It captures the pointer
+/// during a thumb drag and while a track press repeats.
 impl CustomControl for ScrollBar {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let bar = cx.style(StyleQuery::new(ControlKind::ScrollArea, Slot::Scrollbar));
@@ -332,9 +349,37 @@ impl CustomControl for ScrollBar {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
-            }) if bounds.contains(*position) => ScrollBarInput::Press {
-                at: self.along(bounds, *position),
-            },
+            }) if bounds.contains(*position) => {
+                let at = self.along(bounds, *position);
+                let (start, _) = self.thumb();
+                let changed = self.handle(ScrollBarInput::Press { at });
+                if self.drag.is_none() {
+                    self.paging = (Repeat::default(), at);
+                    self.paging.0.press(at > start, cx.time());
+                }
+                cx.capture_pointer(true);
+                self.report(cx, changed);
+                return EventReply::Stop;
+            }
+            ControlEvent::Timer => {
+                let (start, length) = self.thumb();
+                let at = self.paging.1;
+                let changed = match self.paging.0.fire(cx.time()) {
+                    Some(true) if at > start + length => self.set_value(self.value + self.viewport),
+                    Some(false) if at < start => self.set_value(self.value - self.viewport),
+                    _ => false,
+                };
+                self.report(cx, changed);
+                return EventReply::Continue;
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. })
+            | ControlEvent::FocusChanged(false)
+            | ControlEvent::Dismiss
+                if self.paging.0.release() =>
+            {
+                cx.capture_pointer(false);
+                return EventReply::Stop;
+            }
             ControlEvent::Pointer(PointerEvent::Move { position }) if self.drag.is_some() => {
                 ScrollBarInput::Drag {
                     at: self.along(bounds, *position),
@@ -373,30 +418,31 @@ impl CustomControl for ScrollBar {
         ScrollBar::semantics(self)
     }
 
+    fn deadline(&self) -> Option<f64> {
+        self.paging.0.deadline()
+    }
+
+    /// Steps one page. Returns false at the end of the range.
     fn perform(
         &mut self,
         cx: &mut ControlContext<'_>,
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
-        if !matches!(
-            action,
-            SemanticAction::Increment | SemanticAction::Decrement
-        ) {
-            return false;
+        if action == SemanticAction::Focus {
+            cx.request_focus();
+            return true;
         }
         let changed = self.handle(ScrollBarInput::Semantic(action));
         self.report(cx, changed);
-        true
-    }
-
-    fn focusable(&self) -> bool {
-        false
+        changed
     }
 
     fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
         if !enabled {
             self.drag = None;
+            self.paging.0.release();
         }
     }
 
@@ -657,7 +703,8 @@ impl DecimalSpinBox {
     pub fn paint(&self, cx: &mut PaintContext<'_>, host: VisualState) {
         let steppers = Self::stepper_rect(cx.bounds, cx.rtl);
         let state = self.text.state(self.visual_state(host));
-        self.text.paint(cx, state, steppers);
+        let ends = (self.value >= self.maximum, self.value <= self.minimum);
+        self.text.paint(cx, state, steppers, ends);
     }
 
     /// Reports a value change in a host.
@@ -787,6 +834,10 @@ impl CustomControl for DecimalSpinBox {
         self.text.set_enabled(enabled);
     }
 
+    fn deadline(&self) -> Option<f64> {
+        self.text.deadline()
+    }
+
     fn set_value(&mut self, value: &ControlValue) -> bool {
         match value {
             ControlValue::Number(value) if value.is_finite() => {
@@ -801,7 +852,9 @@ impl CustomControl for DecimalSpinBox {
 // --------------------------------------------------------------------- Dial
 
 /// Rotary range control. Angle 0 points up; values increase clockwise over
-/// `sweep` radians (wrapping dials use a full turn). Keyboard and
+/// `sweep` radians. A wrapping dial uses a full turn of `span + 1` steps,
+/// so the maximum sits one step before the minimum, and its steps and
+/// page steps wrap. Pointer input snaps to the step. Keyboard and
 /// accessibility actions match [`crate::Slider`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Dial {
@@ -819,8 +872,23 @@ impl Dial {
     fn sweep(&self) -> f64 {
         if self.wrapping { 2.0 * PI } else { 1.5 * PI }
     }
-    /// Sets the value from a pointer position around `center`.
+    /// The number of values on the scale: one more than the span, so that
+    /// a wrapping dial does not put the maximum on the minimum.
+    fn scale(&self) -> f64 {
+        let span = f64::from(self.range.maximum()) - f64::from(self.range.minimum());
+        if self.wrapping { span + 1.0 } else { span }
+    }
+
+    /// Sets the value from a pointer position around `center`, snapped to
+    /// the step.
     pub fn point_to(&mut self, center: Point, point: Point) -> bool {
+        self.aim(center, point, false)
+    }
+
+    /// Sets the value from a pointer position around `center`. During a
+    /// drag (`dragging`), a non-wrapping dial stays at the end that the
+    /// pointer left, and does not jump across the gap to the other end.
+    fn aim(&mut self, center: Point, point: Point, dragging: bool) -> bool {
         let dx = point.x - center.x;
         let dy = point.y - center.y;
         if dx == 0.0 && dy == 0.0 {
@@ -832,55 +900,65 @@ impl Dial {
             angle += 2.0 * PI;
         }
         let sweep = self.sweep();
+        let current = self.range.fraction();
         let fraction = if self.wrapping {
             angle / sweep
         } else {
-            // Non-wrapping dials start at -135°; the dead zone snaps to the
-            // nearer end.
+            // Non-wrapping dials start at -135°. In the dead zone, a drag
+            // keeps its end, and a press takes the nearer end.
             let shifted = (angle + 0.75 * PI) % (2.0 * PI);
-            if shifted > sweep {
-                if shifted - sweep < (2.0 * PI - shifted) {
-                    1.0
-                } else {
-                    0.0
-                }
-            } else {
+            let fraction = if shifted <= sweep {
                 shifted / sweep
+            } else if dragging {
+                current.round()
+            } else {
+                f64::from(u8::from(shifted - sweep < 2.0 * PI - shifted))
+            };
+            if dragging && (fraction - current).abs() > 0.5 {
+                return false;
             }
+            fraction
         };
-        let span = f64::from(self.range.maximum()) - f64::from(self.range.minimum());
-        let value = f64::from(self.range.minimum()) + (fraction * span).round();
+        let offset = (fraction * self.scale()).round() as i64;
         let old = self.range.value();
-        let value = if self.wrapping && value as i32 > self.range.maximum() {
-            self.range.minimum()
+        let value = if self.wrapping {
+            self.wrapped(offset - (i64::from(old) - i64::from(self.range.minimum())))
         } else {
-            value as i32
+            (i64::from(self.range.minimum()) + offset) as i32
         };
-        self.range.set_value(value) != old
+        self.range.set_value(self.range.snap(value)) != old
     }
+
+    /// The value `delta` away from the value, around the scale of a
+    /// wrapping dial.
+    fn wrapped(&self, delta: i64) -> i32 {
+        let minimum = i64::from(self.range.minimum());
+        let scale = self.scale() as i64;
+        let offset = (i64::from(self.range.value()) - minimum + delta).rem_euclid(scale.max(1));
+        (minimum + offset) as i32
+    }
+
+    /// Moves by `steps` steps of `size`: around the scale of a wrapping
+    /// dial, and else clamped to the range.
+    fn step(&mut self, steps: i64, size: u32) {
+        let delta = steps * i64::from(size);
+        if self.wrapping {
+            self.range.set_value(self.wrapped(delta));
+        } else {
+            let value = i64::from(self.range.value()) + delta;
+            self.range
+                .set_value(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32);
+        }
+    }
+
     pub fn handle_key(&mut self, key: Key) -> bool {
         let old = self.range.value();
+        let (step, page) = (self.range.step(), self.range.page_step());
         match key {
-            Key::ArrowUp | Key::ArrowRight => {
-                if self.wrapping && old == self.range.maximum() {
-                    self.range.set_value(self.range.minimum());
-                } else {
-                    self.range.increment();
-                }
-            }
-            Key::ArrowDown | Key::ArrowLeft => {
-                if self.wrapping && old == self.range.minimum() {
-                    self.range.set_value(self.range.maximum());
-                } else {
-                    self.range.decrement();
-                }
-            }
-            Key::PageUp => {
-                self.range.page_increment();
-            }
-            Key::PageDown => {
-                self.range.page_decrement();
-            }
+            Key::ArrowUp | Key::ArrowRight => self.step(1, step),
+            Key::ArrowDown | Key::ArrowLeft => self.step(-1, step),
+            Key::PageUp => self.step(1, page),
+            Key::PageDown => self.step(-1, page),
             Key::Home => {
                 self.range.set_value(self.range.minimum());
             }
@@ -893,11 +971,11 @@ impl Dial {
     }
     /// Angle of the indicator, clockwise from up.
     pub fn angle(&self) -> f64 {
-        let span = f64::from(self.range.maximum()) - f64::from(self.range.minimum());
-        let fraction = if span == 0.0 {
+        let scale = self.scale();
+        let fraction = if scale == 0.0 {
             0.0
         } else {
-            (f64::from(self.range.value()) - f64::from(self.range.minimum())) / span
+            (f64::from(self.range.value()) - f64::from(self.range.minimum())) / scale
         };
         if self.wrapping {
             fraction * self.sweep()
@@ -1009,6 +1087,13 @@ impl Dial {
         cx.slot(knob, &thumb, |_, _| {});
     }
 
+    /// True when `point` is on the dial circle in `bounds`.
+    fn hit(bounds: Rect, point: Point) -> bool {
+        let radius = bounds.size.width.min(bounds.size.height) / 2.0;
+        let center = bounds.center();
+        (point.x - center.x).hypot(point.y - center.y) <= radius
+    }
+
     /// The dial with `name`, for a control host.
     pub fn hosted(self, name: impl Into<String>) -> HostedDial {
         HostedDial {
@@ -1022,8 +1107,9 @@ impl Dial {
 
 /// A [`Dial`] with its name, mounted in a control host. `Dial` is `Copy`
 /// and takes its name in `semantics`, so it cannot keep the name itself.
-/// A press or a drag points the dial, and keys and assistive actions
-/// step it. It reports `Changed(Number)`.
+/// A press on the dial circle or a drag points the dial, and keys and
+/// assistive actions step it. It shows the pressed state during a drag.
+/// It reports `Changed(Number)`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostedDial {
     dial: Dial,
@@ -1067,7 +1153,7 @@ impl CustomControl for HostedDial {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
-            }) if cx.bounds().contains(*position) => {
+            }) if Dial::hit(cx.bounds(), *position) => {
                 self.dragging = true;
                 cx.capture_pointer(true);
                 let changed = self.dial.point_to(self.center, *position);
@@ -1075,7 +1161,7 @@ impl CustomControl for HostedDial {
                 EventReply::Stop
             }
             ControlEvent::Pointer(PointerEvent::Move { position }) if self.dragging => {
-                let changed = self.dial.point_to(self.center, *position);
+                let changed = self.dial.aim(self.center, *position, true);
                 self.report(cx, changed);
                 EventReply::Stop
             }
@@ -1112,7 +1198,7 @@ impl CustomControl for HostedDial {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = cx.state;
+        let state = cx.state.set(VisualState::PRESSED, self.dragging);
         self.dial.paint(cx, state);
     }
 
@@ -1138,6 +1224,7 @@ impl CustomControl for HostedDial {
                     return false;
                 };
                 let old = self.dial.range.value();
+                let value = self.dial.range.snap(value);
                 self.dial.range.set_value(value) != old
             }
             SemanticAction::Focus => {
@@ -1625,7 +1712,9 @@ impl NumericDisplay {
 /// A [`NumericDisplay`] with its name, mounted in a control host.
 /// `NumericDisplay` is `Copy` and takes its name in `semantics`, so it
 /// cannot keep the name itself. It takes no input and reports nothing,
-/// unless it is a [`counter`](Self::counter).
+/// unless it is a [`counter`](Self::counter). It takes and reports its
+/// value as `Text` with the decimal digits, so that each `i64` stays
+/// exact.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostedNumericDisplay {
     display: NumericDisplay,
@@ -1638,7 +1727,8 @@ impl HostedNumericDisplay {
     /// value. ArrowUp and ArrowRight add 1, ArrowDown and ArrowLeft
     /// subtract 1, PageUp multiplies by 10, and PageDown divides by 10.
     /// Each change saturates at the `i64` bounds and reports
-    /// `Changed(Number)`.
+    /// `Changed(Text)`. A counter is a spin button with the increment and
+    /// decrement actions.
     #[must_use]
     pub fn counter(mut self) -> Self {
         self.counter = true;
@@ -1655,6 +1745,16 @@ impl HostedNumericDisplay {
             Key::PageDown => value / 10,
             _ => return None,
         })
+    }
+
+    /// Sets the value and reports it.
+    fn change(&mut self, cx: &mut ControlContext<'_>, value: i64) {
+        self.display.set_value(value);
+        cx.emit(ControlMessage::Changed(ControlValue::Text(
+            value.to_string(),
+        )));
+        cx.request_paint();
+        cx.request_semantics();
     }
 }
 
@@ -1681,10 +1781,7 @@ impl CustomControl for HostedNumericDisplay {
         let Some(value) = self.stepped(*key) else {
             return EventReply::Continue;
         };
-        self.display.set_value(value);
-        cx.emit(ControlMessage::Changed(ControlValue::Number(value as f64)));
-        cx.request_paint();
-        cx.request_semantics();
+        self.change(cx, value);
         EventReply::Stop
     }
 
@@ -1698,24 +1795,62 @@ impl CustomControl for HostedNumericDisplay {
     }
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        self.display.semantics(&self.name, strings)
+        let mut node = self.display.semantics(&self.name, strings);
+        if self.counter {
+            node.role = SemanticRole::SpinButton;
+            node.actions = vec![
+                SemanticAction::Increment,
+                SemanticAction::Decrement,
+                SemanticAction::Focus,
+            ];
+        }
+        node
+    }
+
+    /// A counter steps by 1.
+    fn perform(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        action: SemanticAction,
+        _value: Option<&str>,
+    ) -> bool {
+        let key = match action {
+            SemanticAction::Increment => Key::ArrowUp,
+            SemanticAction::Decrement => Key::ArrowDown,
+            SemanticAction::Focus if self.counter => {
+                cx.request_focus();
+                return true;
+            }
+            _ => return false,
+        };
+        match self.stepped(key).filter(|_| self.counter) {
+            Some(value) => {
+                self.change(cx, value);
+                true
+            }
+            None => false,
+        }
     }
 
     fn focusable(&self) -> bool {
         self.counter
     }
 
-    /// Takes a whole `Number`.
+    /// Takes `Text` with an `i64`, or a whole `Number`.
     fn set_value(&mut self, value: &ControlValue) -> bool {
-        match value {
+        let value = match value {
+            ControlValue::Text(text) => text.trim().parse::<i64>().ok(),
             ControlValue::Number(value)
                 if value.fract() == 0.0 && value.abs() <= i64::MAX as f64 =>
             {
-                self.display.set_value(*value as i64);
-                true
+                Some(*value as i64)
             }
-            _ => false,
-        }
+            _ => None,
+        };
+        value.is_some_and(|value| {
+            self.display.set_value(value);
+            true
+        })
     }
 }
 

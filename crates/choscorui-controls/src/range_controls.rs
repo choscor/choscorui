@@ -6,9 +6,10 @@ use crate::style::{
 use crate::{InputFilter, NumberInput};
 use choscorui_core::{
     Dirty, Icon, Key, KeyEvent, LayoutDirection, Locale, Localizer, NodeId, Path, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    Tree, TreeError,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRange, SemanticRole,
+    SemanticState, Tree, TreeError,
 };
+use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RangeError {
@@ -113,13 +114,24 @@ impl IntegerRange {
         self.add(-(self.page_step as i64))
     }
 
+    /// The value on the step grid from the minimum that is nearest to
+    /// `value`, clamped to the range. The maximum is always reachable.
+    pub fn snap(&self, value: i32) -> i32 {
+        snap_to_step(
+            f64::from(value),
+            f64::from(self.minimum),
+            f64::from(self.maximum),
+            f64::from(self.step),
+        ) as i32
+    }
+
     fn add(&mut self, delta: i64) -> i32 {
         let candidate = i64::from(self.value) + delta;
         self.value = candidate.clamp(i64::from(self.minimum), i64::from(self.maximum)) as i32;
         self.value
     }
 
-    fn fraction(&self) -> f64 {
+    pub(crate) fn fraction(&self) -> f64 {
         let span = i64::from(self.maximum) - i64::from(self.minimum);
         if span == 0 {
             0.0
@@ -132,6 +144,85 @@ impl IntegerRange {
         let span = i64::from(self.maximum) - i64::from(self.minimum);
         let offset = (fraction.clamp(0.0, 1.0) * span as f64).round() as i64;
         (i64::from(self.minimum) + offset) as i32
+    }
+}
+
+/// The value on the `step` grid from `minimum` that is nearest to
+/// `value`, clamped to `minimum..=maximum` and rounded to the decimals of
+/// `step`, so that 0.1 + 0.2 gives 0.3. A value at the maximum stays
+/// there, also when the maximum is not on the grid.
+pub(crate) fn snap_to_step(value: f64, minimum: f64, maximum: f64, step: f64) -> f64 {
+    if value >= maximum {
+        return maximum;
+    }
+    let snapped = minimum + ((value - minimum) / step).round() * step;
+    let scale = 10f64.powi(step_decimals(step));
+    ((snapped * scale).round() / scale).clamp(minimum, maximum)
+}
+
+/// The number of decimals of `step`, at most 9.
+fn step_decimals(step: f64) -> i32 {
+    (0..9)
+        .find(|&decimals| {
+            let scaled = step * 10f64.powi(decimals);
+            (scaled - scaled.round()).abs() < 1e-9 * scaled.abs().max(1.0)
+        })
+        .unwrap_or(9)
+}
+
+/// The travel of a thumb of `thumb` points along a track in `bounds`: the
+/// thumb center stays half a thumb inside each end. Returns the start and
+/// the length along the axis.
+fn travel(bounds: Rect, vertical: bool, thumb: f64) -> (f64, f64) {
+    let (start, length) = if vertical {
+        (bounds.origin.y, bounds.size.height)
+    } else {
+        (bounds.origin.x, bounds.size.width)
+    };
+    let inset = (thumb / 2.0).min(length / 2.0).max(0.0);
+    (start + inset, length - 2.0 * inset)
+}
+
+/// The fraction of the range at `point` along a track in `bounds`, from
+/// the start in reading order, or from the bottom when `vertical`. The
+/// ends of the travel give 0 and 1.
+pub(crate) fn track_fraction(
+    bounds: Rect,
+    vertical: bool,
+    rtl: bool,
+    thumb: f64,
+    point: Point,
+) -> f64 {
+    let (start, length) = travel(bounds, vertical, thumb);
+    if length <= 0.0 {
+        return 0.0;
+    }
+    let along = (if vertical { point.y } else { point.x } - start) / length;
+    let along = along.clamp(0.0, 1.0);
+    if vertical || rtl { 1.0 - along } else { along }
+}
+
+/// The thumb center at `fraction` of a track in `bounds`, the inverse of
+/// [`track_fraction`].
+pub(crate) fn track_point(
+    bounds: Rect,
+    vertical: bool,
+    rtl: bool,
+    thumb: f64,
+    fraction: f64,
+) -> Point {
+    let (start, length) = travel(bounds, vertical, thumb);
+    let fraction = fraction.clamp(0.0, 1.0);
+    let along = if vertical || rtl {
+        1.0 - fraction
+    } else {
+        fraction
+    };
+    let at = start + length.max(0.0) * along;
+    if vertical {
+        Point::new(bounds.center().x, at)
+    } else {
+        Point::new(at, bounds.center().y)
     }
 }
 
@@ -164,6 +255,8 @@ pub struct Slider {
     dragging: bool,
     hovered: bool,
     direction: LayoutDirection,
+    /// The thumb length along the track, from the last arrange.
+    thumb: f64,
 }
 
 impl Slider {
@@ -180,6 +273,7 @@ impl Slider {
             dragging: false,
             hovered: false,
             direction: LayoutDirection::Ltr,
+            thumb: 0.0,
         }
     }
 
@@ -277,21 +371,14 @@ impl Slider {
         changed_value(tree, id, old, self.range.value())
     }
 
+    /// Moves the value to `point` on the thumb's travel, snapped to the
+    /// step.
     fn set_from_point(&mut self, bounds: Rect, point: Point) {
-        let fraction = match self.orientation {
-            SliderOrientation::Horizontal if bounds.size.width > 0.0 => {
-                let fraction = (point.x - bounds.origin.x) / bounds.size.width;
-                match self.direction {
-                    LayoutDirection::Ltr => fraction,
-                    LayoutDirection::Rtl => 1.0 - fraction,
-                }
-            }
-            SliderOrientation::Vertical if bounds.size.height > 0.0 => {
-                1.0 - (point.y - bounds.origin.y) / bounds.size.height
-            }
-            _ => 0.0,
-        };
-        self.range.set_value(self.range.value_at_fraction(fraction));
+        let vertical = self.orientation == SliderOrientation::Vertical;
+        let rtl = self.direction == LayoutDirection::Rtl;
+        let fraction = track_fraction(bounds, vertical, rtl, self.thumb, point);
+        let value = self.range.value_at_fraction(fraction);
+        self.range.set_value(self.range.snap(value));
     }
 
     fn handle_key(&mut self, key: Key) {
@@ -303,6 +390,12 @@ impl Slider {
             }
             Key::ArrowLeft | Key::ArrowDown => {
                 self.range.decrement();
+            }
+            Key::PageUp => {
+                self.range.page_increment();
+            }
+            Key::PageDown => {
+                self.range.page_decrement();
             }
             Key::Home => {
                 self.range.set_value(self.range.minimum());
@@ -317,7 +410,7 @@ impl Slider {
     fn handle_semantic(&mut self, action: SliderSemanticAction) {
         match action {
             SliderSemanticAction::SetValue(value) => {
-                self.range.set_value(value);
+                self.range.set_value(self.range.snap(value));
             }
             SliderSemanticAction::Increment => {
                 self.range.increment();
@@ -366,39 +459,32 @@ impl Slider {
             cx.style(query(Slot::Thumb)),
         );
         let bounds = cx.bounds;
-        let fraction = self.range.fraction().clamp(0.0, 1.0);
-        let fraction = if cx.rtl && self.orientation == SliderOrientation::Horizontal {
-            1.0 - fraction
+        let vertical = self.orientation == SliderOrientation::Vertical;
+        let along = if vertical {
+            thumb.min_height
         } else {
-            fraction
+            thumb.min_width
         };
-        let (track_rect, range_rect, center) = match self.orientation {
-            SliderOrientation::Horizontal => {
-                let t = track.min_height;
-                let y = bounds.origin.y + (bounds.size.height - t) / 2.0;
-                let x = bounds.origin.x + bounds.size.width * fraction;
-                let (start, end) = if cx.rtl {
-                    (x, bounds.max_x())
-                } else {
-                    (bounds.origin.x, x)
-                };
-                (
-                    Rect::from_xywh(bounds.origin.x, y, bounds.size.width, t),
-                    Rect::from_xywh(start, y, end - start, t),
-                    Point::new(x, bounds.origin.y + bounds.size.height / 2.0),
-                )
-            }
-            SliderOrientation::Vertical => {
-                let t = track.min_width;
-                let x = bounds.origin.x + (bounds.size.width - t) / 2.0;
-                let height = bounds.size.height * fraction;
-                let y = bounds.max_y() - height;
-                (
-                    Rect::from_xywh(x, bounds.origin.y, t, bounds.size.height),
-                    Rect::from_xywh(x, y, t, height),
-                    Point::new(bounds.origin.x + bounds.size.width / 2.0, y),
-                )
-            }
+        let center = track_point(bounds, vertical, cx.rtl, along, self.range.fraction());
+        let (track_rect, range_rect) = if vertical {
+            let t = track.min_width;
+            let x = bounds.origin.x + (bounds.size.width - t) / 2.0;
+            (
+                Rect::from_xywh(x, bounds.origin.y, t, bounds.size.height),
+                Rect::from_xywh(x, center.y, t, bounds.max_y() - center.y),
+            )
+        } else {
+            let t = track.min_height;
+            let y = bounds.origin.y + (bounds.size.height - t) / 2.0;
+            let (start, end) = if cx.rtl {
+                (center.x, bounds.max_x())
+            } else {
+                (bounds.origin.x, center.x)
+            };
+            (
+                Rect::from_xywh(bounds.origin.x, y, bounds.size.width, t),
+                Rect::from_xywh(start, y, end - start, t),
+            )
         };
         cx.slot(track_rect, &track, |_, _| {});
         let faded = range.opacity < 1.0;
@@ -415,13 +501,10 @@ impl Slider {
         if faded {
             let _ = cx.list.pop_opacity();
         }
-        // Keep the thumb inside the bounds at both ends.
+        // The travel keeps the thumb inside the bounds at both ends.
         let (w, h) = (thumb.min_width, thumb.min_height);
-        let x =
-            (center.x - w / 2.0).clamp(bounds.origin.x, (bounds.max_x() - w).max(bounds.origin.x));
-        let y =
-            (center.y - h / 2.0).clamp(bounds.origin.y, (bounds.max_y() - h).max(bounds.origin.y));
-        cx.slot(Rect::from_xywh(x, y, w, h), &thumb, |_, _| {});
+        let knob = Rect::from_xywh(center.x - w / 2.0, center.y - h / 2.0, w, h);
+        cx.slot(knob, &thumb, |_, _| {});
     }
 }
 
@@ -451,19 +534,42 @@ pub struct SpinBox {
     direction: LayoutDirection,
     /// The editable text in a control host.
     text: StepText,
+    /// The locale that formats and reads the text.
+    locale: Locale,
 }
 
 impl SpinBox {
     pub fn new(label: impl Into<String>, range: IntegerRange) -> Self {
         let label = label.into();
-        let text = StepText::new(&label, &range.value().to_string(), integer_filter(range));
+        let locale = Locale::root();
+        let text = StepText::new(
+            &label,
+            &locale.format_integer(range.value().into()),
+            integer_filter(range, locale.clone()),
+        );
         Self {
             label,
             range,
             enabled: true,
             direction: LayoutDirection::Ltr,
             text,
+            locale,
         }
+    }
+
+    /// Formats and reads the text with the digit grouping of `locale`.
+    #[must_use]
+    pub fn with_locale(mut self, locale: Locale) -> Self {
+        self.text
+            .set_filter(integer_filter(self.range, locale.clone()));
+        self.locale = locale;
+        self.text.set(&self.formatted());
+        self
+    }
+
+    /// The value as the text shows it.
+    fn formatted(&self) -> String {
+        self.locale.format_integer(self.range.value().into())
     }
 
     /// Puts the steppers at the end in reading order: at the left in a
@@ -519,6 +625,12 @@ impl SpinBox {
                     }
                     Key::ArrowDown => {
                         self.range.decrement();
+                    }
+                    Key::PageUp => {
+                        self.range.page_increment();
+                    }
+                    Key::PageDown => {
+                        self.range.page_decrement();
                     }
                     Key::Home => {
                         self.range.set_value(self.range.minimum());
@@ -579,12 +691,7 @@ impl SpinBox {
     /// the end.
     pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, id: NodeId) {
         let state = self.visual_state(tree, id);
-        paint_stepper_field(
-            cx,
-            &self.range.value().to_string(),
-            state,
-            self.stepper_rect(cx.bounds),
-        );
+        paint_stepper_field(cx, &self.formatted(), state, self.stepper_rect(cx.bounds));
     }
 }
 
@@ -650,26 +757,66 @@ pub(crate) fn paint_stepper_box(
 #[deprecated(since = "0.1.0", note = "renamed to `Progress`")]
 pub type ProgressBar = Progress;
 
-/// A determinate or indeterminate progress bar.
+/// A determinate or indeterminate progress bar. In a control host, a new
+/// value moves the fill over the `motion_ms` of the `Indicator` recipe.
 pub struct Progress {
     label: String,
     value: Option<(u32, u32)>,
+    /// The fill animation: the fraction that it starts from, and the host
+    /// time that it starts at. The first paint after a change sets the
+    /// time.
+    fill: Cell<(f64, Option<f64>)>,
+    /// The fraction that the last paint showed.
+    shown: Cell<f64>,
+    /// The fill duration, from the last arrange.
+    motion_ms: u32,
 }
 impl Progress {
     pub fn new(label: impl Into<String>, value: u32, maximum: u32) -> Result<Self, RangeError> {
         if maximum == 0 {
             return Err(RangeError::InvalidMaximum);
         }
+        let value = value.min(maximum);
+        let fraction = f64::from(value) / f64::from(maximum);
         Ok(Self {
             label: label.into(),
-            value: Some((value.min(maximum), maximum)),
+            value: Some((value, maximum)),
+            fill: Cell::new((fraction, Some(f64::NEG_INFINITY))),
+            shown: Cell::new(fraction),
+            motion_ms: 0,
         })
     }
     pub fn indeterminate(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
             value: None,
+            fill: Cell::new((0.0, Some(f64::NEG_INFINITY))),
+            shown: Cell::new(0.0),
+            motion_ms: 0,
         }
+    }
+
+    /// Sets a determinate value; the fill moves from where it shows now.
+    fn change(&mut self, value: u32, maximum: u32) {
+        self.value = Some((value, maximum));
+        self.fill.set((self.shown.get(), None));
+    }
+
+    /// The fill fraction to show at `time`: on the way from the start of
+    /// the fill animation to the value.
+    fn shown_at(&self, tokens: &choscorui_core::DesignTokens, time: f64) -> f64 {
+        let target = self.fraction().unwrap_or(0.0).clamp(0.0, 1.0);
+        let (from, started) = self.fill.get();
+        let started = started.unwrap_or(time);
+        self.fill.set((from, Some(started)));
+        let linear = if tokens.motion.reduced || self.motion_ms == 0 {
+            1.0
+        } else {
+            ((time - started) * 1000.0 / f64::from(self.motion_ms)).clamp(0.0, 1.0)
+        };
+        let shown = from + (target - from) * tokens.motion.easing.solve(linear);
+        self.shown.set(shown);
+        shown
     }
     pub const fn value(&self) -> Option<(u32, u32)> {
         self.value
@@ -689,7 +836,7 @@ impl Progress {
         }
         let next = Some((value.min(maximum), maximum));
         if self.value != next {
-            self.value = next;
+            self.change(value.min(maximum), maximum);
             invalidate_value(tree, id).map_err(|_| RangeError::MissingNode)?;
         }
         Ok(())
@@ -714,8 +861,8 @@ impl Progress {
 
     /// Paints the track and the indicator in the context's bounds. An
     /// indeterminate bar sweeps a segment once per
-    /// [`INDETERMINATE_PERIOD`] at `cx.time`, and holds it still when the
-    /// tokens ask for reduced motion.
+    /// [`INDETERMINATE_PERIOD`] at `cx.time`. With reduced motion, it
+    /// shows still stripes over the whole track, which show no value.
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
         let state = cx.state;
         let track = cx.style(StyleQuery::new(ControlKind::Progress, Slot::Track).state(state));
@@ -729,31 +876,40 @@ impl Progress {
             height,
         );
         let reduced = cx.tokens.motion.reduced;
+        let shown = self.shown_at(cx.tokens, cx.time);
         cx.slot(bar, &track, |cx, _| {
-            let (start, width) = match self.fraction() {
-                Some(fraction) => (0.0, bar.size.width * fraction.clamp(0.0, 1.0)),
+            // Each segment is a start and a width along the bar.
+            let segments: Vec<(f64, f64)> = match self.fraction() {
+                Some(_) => vec![(0.0, bar.size.width * shown)],
+                None if reduced => {
+                    // Stripes of twice the bar height, with gaps of the
+                    // same width.
+                    let stripe = (bar.size.height * 2.0).max(1.0);
+                    let count = (bar.size.width / (stripe * 2.0)).ceil() as usize;
+                    (0..count)
+                        .map(|index| (index as f64 * stripe * 2.0, stripe))
+                        .collect()
+                }
                 None => {
                     let width = bar.size.width * 0.3;
-                    let phase = if reduced {
-                        0.5
-                    } else {
-                        (cx.time / INDETERMINATE_PERIOD).fract()
-                    };
-                    (-width + (bar.size.width + width) * phase, width)
+                    let phase = (cx.time / INDETERMINATE_PERIOD).fract();
+                    vec![(-width + (bar.size.width + width) * phase, width)]
                 }
-            };
-            let x = if cx.rtl {
-                bar.max_x() - start - width
-            } else {
-                bar.origin.x + start
             };
             // Clip the indicator to the rounded track.
             let path = Path::rounded_rect_corners(bar, track.radius.physical(cx.rtl));
             if cx.list.push_clip_path(path).is_err() {
                 cx.list.push_clip(bar);
             }
-            let indicator = Rect::from_xywh(x, bar.origin.y, width, bar.size.height);
-            fill_area(cx.list, indicator, cx.rtl, &fill.background);
+            for (start, width) in segments {
+                let x = if cx.rtl {
+                    bar.max_x() - start - width
+                } else {
+                    bar.origin.x + start
+                };
+                let indicator = Rect::from_xywh(x, bar.origin.y, width, bar.size.height);
+                fill_area(cx.list, indicator, cx.rtl, &fill.background);
+            }
             let _ = cx.list.pop_clip();
         });
     }
@@ -766,7 +922,14 @@ impl Progress {
             value: self.value.map(|(value, maximum)| {
                 format!("{}%", u64::from(value) * 100 / u64::from(maximum))
             }),
-            state: SemanticState::default(),
+            state: SemanticState {
+                range: self.value.map(|(value, maximum)| SemanticRange {
+                    value: value.into(),
+                    minimum: 0,
+                    maximum: maximum.into(),
+                }),
+                ..SemanticState::default()
+            },
             relations: Vec::new(),
             actions: Vec::new(),
             text: None,
@@ -838,7 +1001,14 @@ fn range_reply(routed: crate::hosted::Routed) -> choscorui_core::EventReply {
         Routed::Pointer(PointerEvent::Down { .. } | PointerEvent::Up { .. })
         | Routed::Key(KeyEvent::Down {
             key:
-                Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight | Key::Home | Key::End,
+                Key::ArrowUp
+                | Key::ArrowDown
+                | Key::ArrowLeft
+                | Key::ArrowRight
+                | Key::PageUp
+                | Key::PageDown
+                | Key::Home
+                | Key::End,
             ..
         }) => choscorui_core::EventReply::Stop,
         _ => choscorui_core::EventReply::Continue,
@@ -870,8 +1040,15 @@ impl crate::CustomControl for Slider {
         choscorui_core::Measured::new(cx.constraints.constrain(size))
     }
 
+    /// Records the direction and the thumb length, so that the pointer
+    /// maps onto the travel that paint draws.
     fn arrange(&mut self, cx: &crate::MeasureContext<'_>, _bounds: Rect) {
         self.direction = cx.direction;
+        let thumb = cx.style(StyleQuery::new(ControlKind::Slider, Slot::Thumb));
+        self.thumb = match self.orientation {
+            SliderOrientation::Horizontal => thumb.min_width,
+            SliderOrientation::Vertical => thumb.min_height,
+        };
     }
 
     fn event(
@@ -966,10 +1143,10 @@ impl crate::CustomControl for Slider {
     }
 }
 
-/// The filter of a spin box's text: whole numbers, with a minus when the
-/// range has negative values.
-fn integer_filter(range: IntegerRange) -> InputFilter {
-    NumberInput::new(Locale::root(), 0)
+/// The filter of a spin box's text: whole numbers in `locale`, with a
+/// minus when the range has negative values.
+fn integer_filter(range: IntegerRange, locale: Locale) -> InputFilter {
+    NumberInput::new(locale, 0)
         .with_range(
             Some(f64::from(range.minimum())),
             Some(f64::from(range.maximum())),
@@ -981,7 +1158,7 @@ impl SpinBox {
     /// The value of the edited text, clamped to the range, or `None`
     /// when the text is no number.
     fn pending(&self) -> Option<i32> {
-        let value = Locale::root().parse_integer(self.text.text().trim()).ok()?;
+        let value = self.locale.parse_integer(self.text.text().trim()).ok()?;
         let value = value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
         Some(value.clamp(self.range.minimum(), self.range.maximum()))
     }
@@ -997,7 +1174,7 @@ impl SpinBox {
                 f64::from(value),
             )));
         }
-        self.text.set(&self.range.value().to_string());
+        self.text.set(&self.formatted());
         cx.request_paint();
         cx.request_semantics();
     }
@@ -1013,6 +1190,8 @@ impl SpinBox {
         match key {
             Key::ArrowUp => self.range.increment(),
             Key::ArrowDown => self.range.decrement(),
+            Key::PageUp => self.range.page_increment(),
+            Key::PageDown => self.range.page_decrement(),
             Key::Home => self.range.set_value(self.range.minimum()),
             _ => self.range.set_value(self.range.maximum()),
         };
@@ -1024,7 +1203,7 @@ impl SpinBox {
                 f64::from(self.range.value()),
             )));
         }
-        self.text.set(&self.range.value().to_string());
+        self.text.set(&self.formatted());
         cx.request_paint();
         cx.request_semantics();
     }
@@ -1048,7 +1227,10 @@ impl crate::CustomControl for SpinBox {
         let style = cx.style(StyleQuery::new(ControlKind::Input, Slot::Root));
         let text = [self.range.minimum(), self.range.maximum()]
             .iter()
-            .map(|bound| cx.text.width(&bound.to_string(), &style.text))
+            .map(|&bound| {
+                cx.text
+                    .width(&self.locale.format_integer(bound.into()), &style.text)
+            })
             .fold(0.0, f64::max);
         let size = choscorui_core::Size::new(
             (text + style.padding.horizontal() + STEPPER_WIDTH).max(style.min_width),
@@ -1062,10 +1244,10 @@ impl crate::CustomControl for SpinBox {
     }
 
     /// The text edits like an input, through the integer filter. Focus
-    /// selects the whole text. Arrows, Home, End, and the steppers take
-    /// the pending text and then step; a step past the end of the range
-    /// beeps. Return and a loss of focus commit the text, clamped to the
-    /// range.
+    /// selects the whole text. Arrows, Page keys, Home, End, and the
+    /// steppers take the pending text and then step; a step past the end
+    /// of the range beeps. A held stepper repeats. Return and a loss of
+    /// focus commit the text, clamped to the range.
     fn event(
         &mut self,
         cx: &mut crate::ControlContext<'_>,
@@ -1086,7 +1268,15 @@ impl crate::CustomControl for SpinBox {
         match event {
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if cx.is_focused()
-                    && matches!(key, Key::ArrowUp | Key::ArrowDown | Key::Home | Key::End) =>
+                    && matches!(
+                        key,
+                        Key::ArrowUp
+                            | Key::ArrowDown
+                            | Key::PageUp
+                            | Key::PageDown
+                            | Key::Home
+                            | Key::End
+                    ) =>
             {
                 self.step(cx, *key);
                 EventReply::Stop
@@ -1100,7 +1290,7 @@ impl crate::CustomControl for SpinBox {
             ControlEvent::Key(KeyEvent::Down {
                 key: Key::Escape, ..
             }) if cx.is_focused() => {
-                self.text.set(&self.range.value().to_string());
+                self.text.set(&self.formatted());
                 cx.request_paint();
                 EventReply::Continue
             }
@@ -1131,7 +1321,16 @@ impl crate::CustomControl for SpinBox {
             .set(VisualState::FOCUS_VISIBLE, cx.state.focused())
             .set(VisualState::DISABLED, cx.state.disabled() || !self.enabled);
         let steppers = Self::steppers(cx.bounds, cx.rtl);
-        self.text.paint(cx, self.text.state(state), steppers);
+        let range = self.range;
+        let ends = (
+            range.value() >= range.maximum(),
+            range.value() <= range.minimum(),
+        );
+        self.text.paint(cx, self.text.state(state), steppers, ends);
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.text.deadline()
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -1169,7 +1368,7 @@ impl crate::CustomControl for SpinBox {
         };
         let node = cx.node();
         let changed = self.handle(cx.tree_mut(), node, SpinBoxInput::Semantic(semantic));
-        self.text.set(&self.range.value().to_string());
+        self.text.set(&self.formatted());
         emit_number(cx, changed);
         cx.request_paint();
         true
@@ -1184,7 +1383,7 @@ impl crate::CustomControl for SpinBox {
         match value {
             crate::ControlValue::Number(value) => integer(*value).is_some_and(|value| {
                 self.range.set_value(value);
-                self.text.set(&self.range.value().to_string());
+                self.text.set(&self.formatted());
                 true
             }),
             _ => false,
@@ -1200,6 +1399,12 @@ impl crate::CustomControl for Progress {
         let width = crate::form::input::default_width(cx, &track);
         let size = choscorui_core::Size::new(width, track.min_height);
         choscorui_core::Measured::new(cx.constraints.constrain(size))
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, _bounds: Rect) {
+        self.motion_ms = cx
+            .style(StyleQuery::new(ControlKind::Progress, Slot::Indicator))
+            .motion_ms;
     }
 
     fn event(
@@ -1228,16 +1433,23 @@ impl crate::CustomControl for Progress {
             (crate::ControlValue::Number(number), Some((_, maximum)))
                 if number.fract() == 0.0 && (0.0..=f64::from(maximum)).contains(number) =>
             {
-                self.value = Some((*number as u32, maximum));
+                if self.value != Some((*number as u32, maximum)) {
+                    self.change(*number as u32, maximum);
+                }
                 true
             }
             _ => false,
         }
     }
 
-    /// An indeterminate bar sweeps while it is mounted and visible.
-    fn animating(&self, _time: f64) -> bool {
-        self.needs_frame(true)
+    /// An indeterminate bar sweeps while it is mounted and visible. A
+    /// determinate fill animates after a change, until it reaches the
+    /// value.
+    fn animating(&self, time: f64) -> bool {
+        let (_, started) = self.fill.get();
+        let filling =
+            started.is_none_or(|started| (time - started) * 1000.0 < f64::from(self.motion_ms));
+        self.needs_frame(true) || filling
     }
 }
 

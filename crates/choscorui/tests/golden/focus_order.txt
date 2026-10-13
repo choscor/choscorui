@@ -86,10 +86,10 @@ dock (inside)
 dock (inside)
 color-picker
 decimal-spin-box
+scroll-bar
 key-sequence-edit
 text-editor
 canvas
-canvas (inside)
 canvas (inside)
 canvas (inside)
 canvas (inside)
@@ -429,10 +429,10 @@ dock (inside)
 dock (inside)
 color-picker
 decimal-spin-box
+scroll-bar
 key-sequence-edit
 text-editor
 canvas
-canvas (inside)
 canvas (inside)
 canvas (inside)
 canvas (inside)

@@ -95,11 +95,12 @@ fn slider_supports_drag_keyboard_and_accessibility_actions() {
                 SliderInput::Semantic(SliderSemanticAction::SetValue(42))
             )
             .unwrap(),
-        Some(42)
+        Some(40),
+        "a value snaps to the step"
     );
     let semantics = slider.semantics(Localizer::builtin());
     assert_eq!(semantics.role, SemanticRole::Slider);
-    assert_eq!(semantics.value.as_deref(), Some("42"));
+    assert_eq!(semantics.value.as_deref(), Some("40"));
     assert_eq!(
         semantics.actions,
         vec![
@@ -302,8 +303,10 @@ fn slider_paints_range_and_thumb_at_the_value_and_mirrors_in_rtl() {
         &tree,
         id,
     );
+    // The range ends at the thumb center, which travels half a 16 pt
+    // thumb inside each end: 8 + 25% of 184.
     let range = range_of(&ltr);
-    assert_eq!((range.origin.x, range.size.width), (0.0, 50.0));
+    assert_eq!((range.origin.x, range.size.width), (0.0, 54.0));
     assert_eq!(range.size.height, 6.0, "the track is 6 pt thick");
 
     let mut rtl = DisplayList::new();
@@ -320,7 +323,7 @@ fn slider_paints_range_and_thumb_at_the_value_and_mirrors_in_rtl() {
         id,
     );
     let range = range_of(&rtl);
-    assert_eq!((range.origin.x, range.size.width), (150.0, 50.0));
+    assert_eq!((range.origin.x, range.size.width), (146.0, 54.0));
 
     // Pointer input follows the same direction.
     slider.set_direction(LayoutDirection::Rtl);

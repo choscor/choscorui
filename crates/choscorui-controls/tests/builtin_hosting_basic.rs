@@ -143,10 +143,9 @@ fn a_hosted_slider_mirrors_in_right_to_left_layouts() {
     assert!(thumb(&ltr).center().x < middle);
     assert!(thumb(&rtl).center().x > middle);
 
-    // A press near the left end of a right-to-left slider is near the
-    // maximum.
-    rtl.click(along(&rtl, 0.1));
-    assert_eq!(rtl.messages(), vec![number(90.0)]);
+    // A press at the left end of a right-to-left slider is the maximum.
+    rtl.click(along(&rtl, 0.0));
+    assert_eq!(rtl.messages(), vec![number(100.0)]);
 }
 
 #[test]

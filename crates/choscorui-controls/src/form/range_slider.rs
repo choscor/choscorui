@@ -4,6 +4,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted;
+use crate::range_controls::{snap_to_step, track_fraction, track_point};
 use crate::style::{
     ControlKind, Orientation, PaintContext, Slot, StyleQuery, VisualState, fill_shape,
 };
@@ -14,7 +15,8 @@ use choscorui_core::{
 
 /// A range slider: a track with a low and a high thumb. Each thumb is a
 /// tab stop: Tab moves from the low thumb to the high thumb, and Shift+Tab
-/// back. The thumbs do not cross.
+/// back. The thumbs do not cross. When the thumbs meet, a drag from them
+/// moves the low thumb toward the start and the high thumb toward the end.
 #[derive(Clone, Debug)]
 pub struct RangeSlider {
     name: String,
@@ -26,6 +28,13 @@ pub struct RangeSlider {
     /// The thumb that keys move: 0 for low, 1 for high.
     active: usize,
     dragging: bool,
+    /// A press on the thumbs where they meet: the drag direction picks
+    /// the thumb.
+    meeting: bool,
+    /// The thumb under the pointer.
+    hovered: Option<usize>,
+    /// The thumb length along the track, from the last arrange.
+    thumb: f64,
     enabled: bool,
     rtl: bool,
 }
@@ -51,6 +60,9 @@ impl RangeSlider {
             orientation: Orientation::Horizontal,
             active: 0,
             dragging: false,
+            meeting: false,
+            hovered: None,
+            thumb: 0.0,
             enabled: true,
             rtl: false,
         };
@@ -78,8 +90,7 @@ impl RangeSlider {
     }
 
     fn snap(&self, value: f64) -> f64 {
-        let steps = ((value - self.minimum) / self.step).round();
-        (self.minimum + steps * self.step).clamp(self.minimum, self.maximum)
+        snap_to_step(value, self.minimum, self.maximum, self.step)
     }
 
     fn fraction(&self, value: f64) -> f64 {
@@ -95,37 +106,35 @@ impl RangeSlider {
         StyleQuery::new(ControlKind::Slider, slot).state(state)
     }
 
-    /// The thumb center of `value` along the track in `bounds`.
-    fn point(&self, bounds: Rect, value: f64) -> Point {
-        let fraction = self.fraction(value);
-        match self.orientation {
-            Orientation::Horizontal => {
-                let fraction = if self.rtl { 1.0 - fraction } else { fraction };
-                Point::new(
-                    bounds.origin.x + bounds.size.width * fraction,
-                    bounds.center().y,
-                )
-            }
-            Orientation::Vertical => Point::new(
-                bounds.center().x,
-                bounds.max_y() - bounds.size.height * fraction,
-            ),
-        }
+    fn vertical(&self) -> bool {
+        self.orientation == Orientation::Vertical
     }
 
-    /// The value at `point` along the track in `bounds`.
+    /// The thumb center of `value` on the thumb travel in `bounds`.
+    fn point(&self, bounds: Rect, value: f64) -> Point {
+        let fraction = self.fraction(value);
+        track_point(bounds, self.vertical(), self.rtl, self.thumb, fraction)
+    }
+
+    /// The value at `point` on the thumb travel in `bounds`.
     fn value_at(&self, bounds: Rect, point: Point) -> f64 {
-        let fraction = match self.orientation {
-            Orientation::Horizontal if bounds.size.width > 0.0 => {
-                let fraction = (point.x - bounds.origin.x) / bounds.size.width;
-                if self.rtl { 1.0 - fraction } else { fraction }
+        let fraction = track_fraction(bounds, self.vertical(), self.rtl, self.thumb, point);
+        self.snap(self.minimum + fraction * (self.maximum - self.minimum))
+    }
+
+    /// The thumb under `point`, the nearer one when both are.
+    fn thumb_at(&self, bounds: Rect, point: Point) -> Option<usize> {
+        let distance = |value: f64| {
+            let center = self.point(bounds, value);
+            if self.vertical() {
+                (center.y - point.y).abs()
+            } else {
+                (center.x - point.x).abs()
             }
-            Orientation::Vertical if bounds.size.height > 0.0 => {
-                (bounds.max_y() - point.y) / bounds.size.height
-            }
-            _ => 0.0,
         };
-        self.snap(self.minimum + fraction.clamp(0.0, 1.0) * (self.maximum - self.minimum))
+        let (low, high) = (distance(self.values[0]), distance(self.values[1]));
+        let index = usize::from(high < low);
+        (bounds.contains(point) && low.min(high) <= self.thumb / 2.0).then_some(index)
     }
 
     /// Moves the active thumb to `value`, kept between the other thumb and
@@ -164,8 +173,16 @@ impl CustomControl for RangeSlider {
         }
     }
 
+    /// Records the direction and the thumb length, so that the pointer
+    /// maps onto the travel that paint draws.
     fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
         self.rtl = cx.rtl();
+        let thumb = cx.style(Self::query(Slot::Thumb, VisualState::NONE));
+        self.thumb = if self.vertical() {
+            thumb.min_height
+        } else {
+            thumb.min_width
+        };
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -179,9 +196,11 @@ impl CustomControl for RangeSlider {
                 button: PointerButton::Primary,
             }) if bounds.contains(*position) => {
                 cx.request_focus();
-                // The nearer thumb follows the pointer.
+                // The nearer thumb follows the pointer. On the point where
+                // the thumbs meet, the drag direction picks it.
                 let value = self.value_at(bounds, *position);
                 let (low, high) = (self.values[0], self.values[1]);
+                self.meeting = low == high && value == low;
                 self.active = if (value - low).abs() <= (value - high).abs() && value <= high {
                     0
                 } else {
@@ -195,11 +214,32 @@ impl CustomControl for RangeSlider {
             }
             ControlEvent::Pointer(PointerEvent::Move { position }) if self.dragging => {
                 let value = self.value_at(bounds, *position);
+                if self.meeting {
+                    if value == self.values[0] {
+                        return EventReply::Stop;
+                    }
+                    self.meeting = false;
+                    self.active = usize::from(value > self.values[0]);
+                }
                 self.set_active(cx, value);
                 EventReply::Stop
             }
+            ControlEvent::Pointer(PointerEvent::Move { position }) => {
+                let hovered = self.thumb_at(bounds, *position);
+                if hovered != self.hovered {
+                    self.hovered = hovered;
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
+            ControlEvent::Hover(false) if self.hovered.is_some() => {
+                self.hovered = None;
+                cx.request_paint();
+                EventReply::Continue
+            }
             ControlEvent::Pointer(PointerEvent::Up { .. }) if self.dragging => {
                 self.dragging = false;
+                self.meeting = false;
                 cx.capture_pointer(false);
                 EventReply::Stop
             }
@@ -285,9 +325,10 @@ impl CustomControl for RangeSlider {
         }
         for (index, center) in [low, high].into_iter().enumerate() {
             let active = index == self.active;
+            let hovered = self.hovered == Some(index) || self.dragging && active;
             let state = base
                 .set(VisualState::FOCUS_VISIBLE, host.focus_visible() && active)
-                .set(VisualState::HOVERED, host.hovered() && active)
+                .set(VisualState::HOVERED, host.hovered() && hovered)
                 .set(VisualState::PRESSED, self.dragging && active);
             let thumb = cx.style(Self::query(Slot::Thumb, state));
             let rect = Rect::from_xywh(
@@ -335,8 +376,14 @@ impl CustomControl for RangeSlider {
         }
     }
 
+    /// Disabling ends a drag and the hover.
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        if !enabled {
+            self.dragging = false;
+            self.meeting = false;
+            self.hovered = None;
+        }
     }
 
     /// Takes `Range`, clamped to the bounds and snapped to the step.

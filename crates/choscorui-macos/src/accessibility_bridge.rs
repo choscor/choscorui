@@ -24,13 +24,15 @@ use crate::ffi::appkit::{
     SET_ACCESSIBILITY_CHILDREN, SET_ACCESSIBILITY_COLUMN_COUNT, SET_ACCESSIBILITY_ENABLED,
     SET_ACCESSIBILITY_EXPANDED, SET_ACCESSIBILITY_FOCUSED, SET_ACCESSIBILITY_FRAME,
     SET_ACCESSIBILITY_HELP, SET_ACCESSIBILITY_INDEX, SET_ACCESSIBILITY_LABEL,
-    SET_ACCESSIBILITY_LINKED_UI_ELEMENTS, SET_ACCESSIBILITY_ROLE, SET_ACCESSIBILITY_ROW_COUNT,
-    SET_ACCESSIBILITY_SELECTED, SET_ACCESSIBILITY_SELECTED_TEXT_RANGE, SET_ACCESSIBILITY_SUBROLE,
+    SET_ACCESSIBILITY_LINKED_UI_ELEMENTS, SET_ACCESSIBILITY_MAX_VALUE, SET_ACCESSIBILITY_MIN_VALUE,
+    SET_ACCESSIBILITY_ROLE, SET_ACCESSIBILITY_ROW_COUNT, SET_ACCESSIBILITY_SELECTED,
+    SET_ACCESSIBILITY_SELECTED_TEXT_RANGE, SET_ACCESSIBILITY_SUBROLE,
     SET_ACCESSIBILITY_TITLE_UI_ELEMENT, SET_ACCESSIBILITY_VALUE,
 };
 use crate::ffi::encode::Bool;
 use crate::ffi::foundation::{
-    DESCRIPTION, NSObject, NSString, NUMBER_WITH_BOOL, ns_array, ns_string, string,
+    DESCRIPTION, NSObject, NSString, NUMBER_WITH_BOOL, NUMBER_WITH_INTEGER, ns_array, ns_string,
+    string,
 };
 use crate::ffi::retained::Retained;
 
@@ -432,12 +434,22 @@ fn apply_attributes(
             .class_send((checked,))?
             .ok_or(Error::AppKitUnavailable)?;
         Some(number.into_super())
+    } else if let Some(range) = semantic.state.range {
+        Some(number(range.value)?)
     } else if let Some(value) = &semantic.value {
         Some(ns_string(value)?.into_super())
     } else {
         None
     };
     SET_ACCESSIBILITY_VALUE.send(native, (value.as_deref(),));
+    // A range node reports its bounds as numbers, so assistive technology
+    // reads the value as a part of the whole.
+    let bounds = match semantic.state.range {
+        Some(range) => (Some(number(range.minimum)?), Some(number(range.maximum)?)),
+        None => (None, None),
+    };
+    SET_ACCESSIBILITY_MIN_VALUE.send(native, (bounds.0.as_deref(),));
+    SET_ACCESSIBILITY_MAX_VALUE.send(native, (bounds.1.as_deref(),));
     if let Some(text) = &semantic.text {
         SET_ACCESSIBILITY_SELECTED_TEXT_RANGE.send(
             native,
@@ -463,6 +475,15 @@ fn apply_attributes(
         SET_ACCESSIBILITY_INDEX.send(native, (isize::try_from(index).unwrap_or(isize::MAX),));
     }
     Ok(())
+}
+
+/// An `NSNumber` of `value`, saturated to the native integer.
+fn number(value: i64) -> Result<Retained<NSObject>, Error> {
+    let value = isize::try_from(value).unwrap_or(if value < 0 { isize::MIN } else { isize::MAX });
+    Ok(NUMBER_WITH_INTEGER
+        .class_send((value,))?
+        .ok_or(Error::AppKitUnavailable)?
+        .into_super())
 }
 
 fn native_accessibility_role(role: SemanticRole) -> &'static Obj<NSString> {

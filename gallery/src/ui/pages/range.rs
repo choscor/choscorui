@@ -337,21 +337,31 @@ const BASES: [(&str, NumberBase); 4] = [
     ("numeric-display.bin", NumberBase::Binary),
 ];
 
-/// A seven-segment display in four bases.
+/// A read-only seven-segment display in four bases, and a counter that
+/// edits its value.
 struct NumericDisplayPage;
 
 impl View for NumericDisplayPage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let value = cx.state(2026_i64);
+        // The value fits 8 digits in every base, also in binary.
+        let value = cx.state(42_i64);
         // The index of the chosen base in `BASES`.
         let base = cx.state(0_usize);
-        let display = NumericDisplay::counter(
-            t!("numeric-display.counter"),
+        let size = Frame::new().width(360.0).height(70.0);
+        let display = NumericDisplay::new(
+            t!("numeric-display.reading"),
             8,
             move || BASES[base.get()].1,
+            move || value.get(),
+        )
+        .frame(size);
+        let counter = NumericDisplay::counter(
+            t!("numeric-display.counter"),
+            8,
+            NumberBase::Decimal,
             value.binding(),
         )
-        .frame(Frame::new().width(360.0).height(70.0));
+        .frame(size);
         // The chosen base shows as a secondary (filled) button.
         let choice = |index: usize| {
             Button::new(t!(BASES[index].0), move || base.set(index))
@@ -365,8 +375,9 @@ impl View for NumericDisplayPage {
                 .frame(Frame::new().width(64.0))
         };
         column((
-            display,
+            captioned(label("numeric-display.reading"), display),
             HStack::new((choice(0), choice(1), choice(2), choice(3))).spacing(Space::S2),
+            captioned(label("numeric-display.counter"), counter),
             caption(t!("numeric-display.hint")),
         ))
     }
@@ -471,13 +482,17 @@ mod tests {
     }
 
     #[test]
-    fn numeric_display_steps_with_keys_and_changes_base() {
+    fn numeric_display_counter_steps_and_the_display_changes_base() {
         let mut page = Harness::new("numeric-display");
         let counter = page.node("Counter");
         page.host.focus(Some(counter));
         press(&mut page, Key::ArrowUp);
-        assert_eq!(page.value("Counter").as_deref(), Some("2027"));
+        assert_eq!(page.value("Counter").as_deref(), Some("43"));
+        assert!(page.act("Counter", SemanticAction::Increment));
+        assert!(page.act("BIN", SemanticAction::Activate));
+        assert_eq!(page.value("In the chosen base").as_deref(), Some("101100"));
         assert!(page.act("HEX", SemanticAction::Activate));
-        assert_eq!(page.value("Counter").as_deref(), Some("7EB"));
+        assert_eq!(page.value("In the chosen base").as_deref(), Some("2C"));
+        assert_eq!(page.value("Counter").as_deref(), Some("44"));
     }
 }

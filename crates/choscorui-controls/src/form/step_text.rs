@@ -17,6 +17,8 @@ pub(crate) struct StepText {
     editor: TextField,
     /// Hover and press of the steppers, by the key that they step with.
     steppers: Parts<Key>,
+    /// The auto-repeat of a held stepper.
+    repeat: Repeat,
 }
 
 impl StepText {
@@ -26,6 +28,7 @@ impl StepText {
         Self {
             editor: TextField::new(name, text).with_filter(filter).quiet(),
             steppers: Parts::default(),
+            repeat: Repeat::default(),
         }
     }
 
@@ -54,6 +57,7 @@ impl StepText {
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
+        self.repeat.release();
         self.editor.set_enabled_state(enabled);
     }
 
@@ -72,7 +76,9 @@ impl StepText {
     }
 
     /// Tracks hover and press of the steppers at `steppers`. Returns the
-    /// key of the stepper that a primary press starts on.
+    /// key of the stepper that a primary press starts on, and again at
+    /// each repeat while the press stays on that stepper. A release, a
+    /// dismiss, or a loss of focus ends the repeat.
     pub fn track_steppers(
         &mut self,
         cx: &mut ControlContext<'_>,
@@ -85,9 +91,29 @@ impl StepText {
             ControlEvent::Pointer(PointerEvent::Down {
                 button: PointerButton::Primary,
                 ..
-            }) => self.steppers.pressed,
+            }) => {
+                let key = self.steppers.pressed?;
+                self.repeat.press(key == Key::ArrowUp, cx.time());
+                Some(key)
+            }
+            ControlEvent::Timer => {
+                let up = self.repeat.fire(cx.time())?;
+                let key = if up { Key::ArrowUp } else { Key::ArrowDown };
+                (self.steppers.shown_pressed() == Some(key)).then_some(key)
+            }
+            ControlEvent::Pointer(PointerEvent::Up { .. })
+            | ControlEvent::Dismiss
+            | ControlEvent::FocusChanged(false) => {
+                self.repeat.release();
+                None
+            }
             _ => None,
         }
+    }
+
+    /// The host time of the next stepper repeat.
+    pub fn deadline(&self) -> Option<f64> {
+        self.repeat.deadline()
     }
 
     /// The text part of the spin box's semantics.
@@ -103,8 +129,18 @@ impl StepText {
 
     /// Paints the input box, the text with its caret and selection, and
     /// the steppers at `steppers`, each hovered and pressed on its own.
-    pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState, steppers: Rect) {
-        let arrows = [Key::ArrowUp, Key::ArrowDown].map(|key| self.steppers.state(key, state));
+    /// `ends` dims the up and the down stepper at the ends of the range.
+    pub fn paint(
+        &self,
+        cx: &mut PaintContext<'_>,
+        state: VisualState,
+        steppers: Rect,
+        ends: (bool, bool),
+    ) {
+        let arrows = [(Key::ArrowUp, ends.0), (Key::ArrowDown, ends.1)].map(|(key, end)| {
+            let arrow = self.steppers.state(key, state);
+            arrow.set(VisualState::DISABLED, arrow.disabled() || end)
+        });
         paint_stepper_box(cx, state, steppers, arrows, |cx, rect| {
             self.editor.paint_hosted_text(cx, rect, state);
         });
@@ -129,4 +165,46 @@ pub(crate) fn text_rect(bounds: Rect, steppers: Rect) -> Rect {
         bounds.origin.x
     };
     Rect::from_xywh(x, bounds.origin.y, width, bounds.size.height)
+}
+
+/// The delay before a held stepper repeats, in seconds.
+const REPEAT_DELAY: f64 = 0.4;
+/// The time between two repeats of a held stepper, in seconds.
+const REPEAT_INTERVAL: f64 = 0.06;
+
+/// The auto-repeat of a held stepper or scroll bar track: the first
+/// repeat comes after [`REPEAT_DELAY`], and the next ones after each
+/// [`REPEAT_INTERVAL`], until the release.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Repeat {
+    /// The direction (true is forward) and the time of the next repeat.
+    held: Option<(bool, f64)>,
+}
+
+impl Repeat {
+    /// Starts to hold `forward` at host `time`.
+    pub fn press(&mut self, forward: bool, time: f64) {
+        self.held = Some((forward, time + REPEAT_DELAY));
+    }
+
+    /// Stops the repeat. Returns true when a press was held.
+    pub fn release(&mut self) -> bool {
+        self.held.take().is_some()
+    }
+
+    /// The host time of the next repeat, for the control's deadline.
+    pub fn deadline(&self) -> Option<f64> {
+        self.held.map(|(_, at)| at)
+    }
+
+    /// The direction to step again at host `time`, when a repeat is due.
+    /// It schedules the next repeat.
+    pub fn fire(&mut self, time: f64) -> Option<bool> {
+        let (forward, at) = self.held?;
+        if time < at {
+            return None;
+        }
+        self.held = Some((forward, time + REPEAT_INTERVAL));
+        Some(forward)
+    }
 }

@@ -72,7 +72,7 @@ impl SemanticRelation {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct SemanticState {
     pub disabled: bool,
     pub checked: Option<bool>,
@@ -81,6 +81,36 @@ pub struct SemanticState {
     pub read_only: bool,
     pub invalid: bool,
     pub hidden: bool,
+    /// The numeric value and its bounds, for a node with a range, such as
+    /// a progress indicator. Assistive technology reads it as a number.
+    pub range: Option<SemanticRange>,
+}
+
+/// The whole-number value of a range node and its bounds.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SemanticRange {
+    pub value: i64,
+    pub minimum: i64,
+    pub maximum: i64,
+}
+
+/// Lists `range` only when the node has one, so the output of a node
+/// without a range stays short.
+impl std::fmt::Debug for SemanticState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut out = f.debug_struct("SemanticState");
+        out.field("disabled", &self.disabled)
+            .field("checked", &self.checked)
+            .field("selected", &self.selected)
+            .field("expanded", &self.expanded)
+            .field("read_only", &self.read_only)
+            .field("invalid", &self.invalid)
+            .field("hidden", &self.hidden);
+        if let Some(range) = &self.range {
+            out.field("range", range);
+        }
+        out.finish()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

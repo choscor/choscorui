@@ -317,6 +317,10 @@ messages! {
         (Option<&Obj<NSString>>) -> ();
     pub(crate) SET_ACCESSIBILITY_VALUE: instance NSAccessibility, c"setAccessibilityValue:",
         (Option<&Obj<NSObject>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_MIN_VALUE: instance NSAccessibility,
+        c"setAccessibilityMinValue:", (Option<&Obj<NSObject>>) -> ();
+    pub(crate) SET_ACCESSIBILITY_MAX_VALUE: instance NSAccessibility,
+        c"setAccessibilityMaxValue:", (Option<&Obj<NSObject>>) -> ();
     pub(crate) SET_ACCESSIBILITY_SELECTED_TEXT_RANGE: instance NSAccessibility,
         c"setAccessibilitySelectedTextRange:", (NSRange) -> ();
     pub(crate) SET_ACCESSIBILITY_ROW_COUNT: instance NSAccessibility,

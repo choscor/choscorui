@@ -199,6 +199,15 @@ pub fn set_value(&mut self, value: i32) -> i32
 
 Sets the value, clamped to the range, and returns the result.
 
+#### `IntegerRange::snap`
+
+```rust
+pub fn snap(&self, value: i32) -> i32
+```
+
+The value on the step grid from the minimum that is nearest to
+`value`, clamped to the range. The maximum is always reachable.
+
 #### `IntegerRange::step`
 
 ```rust

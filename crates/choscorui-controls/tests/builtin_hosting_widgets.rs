@@ -234,7 +234,10 @@ fn a_hosted_scroll_bar_pages_drags_and_steps() {
     let mut bar = ScrollBar::new("Scroll", ScrollOrientation::Vertical);
     bar.set_range(1000.0, 100.0, 200.0);
     let mut h = Harness::new(bar);
-    assert!(!h.host.get(h.node).unwrap().focusable());
+    assert!(
+        h.host.get(h.node).unwrap().focusable(),
+        "a tab stop for its keys"
+    );
     assert_eq!(h.semantics().role, SemanticRole::ScrollBar);
     let bounds = h.bounds();
     h.click(Point::new(bounds.center().x, bounds.origin.y + 150.0));
