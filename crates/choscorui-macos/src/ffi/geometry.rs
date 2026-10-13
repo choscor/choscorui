@@ -47,14 +47,6 @@ pub(crate) struct CGAffineTransform {
     pub(crate) ty: f64,
 }
 
-/// An opaque `CGImageRef` target.
-#[repr(C)]
-pub(crate) struct CGImage {
-    _opaque: [u8; 0],
-}
-
-#[cfg(test)]
-encode_as!(CGImage, "{CGImage=}");
 #[cfg(test)]
 encode_as!(NSPoint, "{CGPoint=dd}");
 #[cfg(test)]

@@ -349,13 +349,7 @@ impl Window {
             .ok_or(Error::AppKitUnavailable)?;
         let writers = pasteboard::pasteboard_items(items)?;
         let image = match preview {
-            // SAFETY: the NSImage is autoreleased into `_pool`.
-            Some(image) => Some(
-                unsafe {
-                    imaging::ns_image(image).and_then(|raw| ffi::legacy::borrow::<NSObject>(raw))
-                }
-                .ok_or(Error::UnsupportedFormat)?,
-            ),
+            Some(image) => Some(imaging::ns_image(image).ok_or(Error::UnsupportedFormat)?),
             None => None,
         };
         let size = preview.map_or(
@@ -380,7 +374,7 @@ impl Window {
             let item = INIT_WITH_PASTEBOARD_WRITER
                 .init(alloc::<NSDraggingItem>()?, (writer.upcast(),))
                 .ok_or(Error::AppKitUnavailable)?;
-            SET_DRAGGING_FRAME.send(&item, (frame, image));
+            SET_DRAGGING_FRAME.send(&item, (frame, image.as_deref().map(|image| image.upcast())));
             dragging.push(item);
         }
         let objects: Vec<&Obj<NSObject>> = dragging.iter().map(|item| item.upcast()).collect();

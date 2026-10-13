@@ -1,4 +1,20 @@
+#![deny(unsafe_code)]
+
 use super::*;
+use crate::ffi::cf::{
+    CFType, CfRetained, cf_attributed_string, cf_dictionary, cf_string, kCFBooleanTrue,
+};
+use crate::ffi::graphics::{
+    CGContext, CGContextGetTextMatrix, CGContextRestoreGState, CGContextSaveGState,
+    CGContextScaleCTM, CGContextSetRGBFillColor, CGContextSetTextMatrix, CGContextSetTextPosition,
+    CGContextTranslateCTM, PREMULTIPLIED_RGBA, bitmap_context,
+};
+use crate::ffi::text::{
+    CTFontCreateWithName, CTLine, CTLineCreateWithAttributedString, CTLineDraw,
+    CTLineGetOffsetForStringIndex, CTLineGetTypographicBounds,
+    CTTypesetterCreateWithAttributedString, CTTypesetterSuggestLineBreak, kCTFontAttributeName,
+    kCTForegroundColorFromContextAttributeName,
+};
 use choscorui_core::{FontSlant, FontWeight};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,45 +73,22 @@ impl MacBitmap {
                 pixels,
             });
         }
-        // SAFETY: Core Graphics owns the automatically allocated context data.
-        // It stays alive until every row has been copied into `pixels`.
-        unsafe {
-            let context = CfOwned::new(CGBitmapContextCreate(
-                std::ptr::null_mut(),
-                width as usize,
-                height as usize,
-                8,
-                0,
-                paint::srgb(),
-                1 | (4 << 12),
-            ))
+        let context = bitmap_context(width as usize, height as usize, PREMULTIPLIED_RGBA)
             .ok_or(BitmapError::ContextUnavailable)?;
-            CGContextTranslateCTM(context.as_ptr(), 0.0, f64::from(height));
-            CGContextScaleCTM(context.as_ptr(), scale, -scale);
-            let dirty = NSRect {
-                origin: NSPoint { x: 0.0, y: 0.0 },
-                size: NSSize {
-                    width: f64::from(width) / scale,
-                    height: f64::from(height) / scale,
-                },
-            };
-            if !paint::paint_commands(context.as_ptr(), dirty, list) {
-                return Err(BitmapError::PaintFailed);
-            }
-            let data = NonNull::new(CGBitmapContextGetData(context.as_ptr()))
-                .ok_or(BitmapError::ContextUnavailable)?;
-            let stride = CGBitmapContextGetBytesPerRow(context.as_ptr());
-            if stride < row_len || stride.checked_mul(height as usize).is_none() {
-                return Err(BitmapError::TooLarge);
-            }
-            pixels.resize(len, 0);
-            for y in 0..height as usize {
-                let row = std::slice::from_raw_parts(
-                    (data.as_ptr() as *const u8).add(y * stride),
-                    row_len,
-                );
-                pixels[y * row_len..(y + 1) * row_len].copy_from_slice(row);
-            }
+        CGContextTranslateCTM(&context, 0.0, f64::from(height));
+        CGContextScaleCTM(&context, scale, -scale);
+        let dirty = NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size: NSSize {
+                width: f64::from(width) / scale,
+                height: f64::from(height) / scale,
+            },
+        };
+        if !paint::paint_commands(&context, dirty, list) {
+            return Err(BitmapError::PaintFailed);
+        }
+        if !context.copy_bitmap_rows(0..height as usize, 0..row_len, &mut pixels) {
+            return Err(BitmapError::TooLarge);
         }
         Ok(Self {
             width,
@@ -124,13 +117,6 @@ impl MacBitmap {
                 .expect("pixel has four channels"),
         )
     }
-}
-
-pub(crate) unsafe fn cf_utf8(text: &str) -> Option<CfOwned> {
-    let length = isize::try_from(text.len()).ok()?;
-    CfOwned::new(unsafe {
-        CFStringCreateWithBytes(std::ptr::null_mut(), text.as_ptr(), length, 0x0800_0100, 0)
-    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -172,7 +158,7 @@ pub struct CaretOffsets {
 /// this same shaped object, with grapheme indices at the safe API boundary.
 pub struct ShapedLine {
     text: TextBuffer,
-    line: CfOwned,
+    line: CfRetained<CTLine>,
 }
 
 impl ShapedLine {
@@ -192,55 +178,35 @@ impl ShapedLine {
         if family.is_empty() || !size.is_finite() || size <= 0.0 {
             return Err(ShapeError::InvalidFont);
         }
-        // SAFETY: The attributed string, font, and kern number stay alive
-        // through line creation. Core Text returns a separately owned
-        // immutable CTLine.
-        unsafe {
-            let string = cf_utf8(text).ok_or(ShapeError::Unavailable)?;
-            let font = fonts::create_font(family, size, weight, FontSlant::Upright)
-                .ok_or(ShapeError::Unavailable)?;
-            let kern = fonts::kern_attribute(tracking);
-            let mut keys = vec![
-                kCTFontAttributeName,
-                kCTForegroundColorFromContextAttributeName,
-            ];
-            let mut values = vec![font.as_ptr(), kCFBooleanTrue as Id];
-            if let Some((key, number)) = &kern {
-                keys.push(*key);
-                values.push(number.as_ptr());
-            }
-            let attributes = CfOwned::new(CFDictionaryCreate(
-                std::ptr::null_mut(),
-                keys.as_ptr(),
-                values.as_ptr(),
-                keys.len() as isize,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            ))
+        let string = cf_string(text).ok_or(ShapeError::Unavailable)?;
+        let font = fonts::create_font(family, size, weight, FontSlant::Upright)
             .ok_or(ShapeError::Unavailable)?;
-            let attributed = CfOwned::new(CFAttributedStringCreate(
-                std::ptr::null_mut(),
-                string.as_ptr(),
-                attributes.as_ptr(),
-            ))
-            .ok_or(ShapeError::Unavailable)?;
-            let line = CfOwned::new(CTLineCreateWithAttributedString(attributed.as_ptr()))
-                .ok_or(ShapeError::Unavailable)?;
-            Ok(Self {
-                text: TextBuffer::new(text),
-                line,
-            })
+        let kern = fonts::kern_attribute(tracking);
+        let mut keys = vec![
+            kCTFontAttributeName,
+            kCTForegroundColorFromContextAttributeName,
+        ];
+        let mut values: Vec<&CFType> = vec![&font, kCFBooleanTrue];
+        if let Some((key, number)) = &kern {
+            keys.push(key);
+            values.push(number);
         }
+        let attributes = cf_dictionary(&keys, &values).ok_or(ShapeError::Unavailable)?;
+        let attributed =
+            cf_attributed_string(&string, &attributes).ok_or(ShapeError::Unavailable)?;
+        let line = CTLineCreateWithAttributedString(&attributed).ok_or(ShapeError::Unavailable)?;
+        Ok(Self {
+            text: TextBuffer::new(text),
+            line,
+        })
     }
 
     pub fn metrics(&self) -> TextLineMetrics {
         let mut ascent = 0.0;
         let mut descent = 0.0;
         let mut leading = 0.0;
-        // SAFETY: `line` is an owned live CTLine; output pointers are valid.
-        let advance = unsafe {
-            CTLineGetTypographicBounds(self.line.as_ptr(), &mut ascent, &mut descent, &mut leading)
-        };
+        let advance =
+            CTLineGetTypographicBounds(&self.line, &mut ascent, &mut descent, &mut leading);
         TextLineMetrics {
             advance,
             ascent,
@@ -254,9 +220,7 @@ impl ShapedLine {
         let utf16 = self.text.byte_to_utf16(byte)?;
         let index = isize::try_from(utf16).ok()?;
         let mut secondary = 0.0;
-        // SAFETY: UTF-16 offset is a valid grapheme boundary in this CTLine.
-        let primary =
-            unsafe { CTLineGetOffsetForStringIndex(self.line.as_ptr(), index, &mut secondary) };
+        let primary = CTLineGetOffsetForStringIndex(&self.line, index, &mut secondary);
         Some(CaretOffsets { primary, secondary })
     }
 
@@ -282,35 +246,33 @@ impl ShapedLine {
         nearest
     }
 
-    unsafe fn draw(&self, context: Id, baseline: Point, color: choscorui_core::Color) {
-        unsafe {
-            let previous_text_matrix = CGContextGetTextMatrix(context);
-            CGContextSaveGState(context);
-            CGContextSetRGBFillColor(
-                context,
-                f64::from(color.red) / 255.0,
-                f64::from(color.green) / 255.0,
-                f64::from(color.blue) / 255.0,
-                f64::from(color.alpha) / 255.0,
-            );
-            CGContextTranslateCTM(context, baseline.x, baseline.y);
-            CGContextScaleCTM(context, 1.0, -1.0);
-            CGContextSetTextMatrix(
-                context,
-                CGAffineTransform {
-                    a: 1.0,
-                    b: 0.0,
-                    c: 0.0,
-                    d: 1.0,
-                    tx: 0.0,
-                    ty: 0.0,
-                },
-            );
-            CGContextSetTextPosition(context, 0.0, 0.0);
-            CTLineDraw(self.line.as_ptr(), context);
-            CGContextRestoreGState(context);
-            CGContextSetTextMatrix(context, previous_text_matrix);
-        }
+    fn draw(&self, context: &CGContext, baseline: Point, color: choscorui_core::Color) {
+        let previous_text_matrix = CGContextGetTextMatrix(context);
+        CGContextSaveGState(context);
+        CGContextSetRGBFillColor(
+            context,
+            f64::from(color.red) / 255.0,
+            f64::from(color.green) / 255.0,
+            f64::from(color.blue) / 255.0,
+            f64::from(color.alpha) / 255.0,
+        );
+        CGContextTranslateCTM(context, baseline.x, baseline.y);
+        CGContextScaleCTM(context, 1.0, -1.0);
+        CGContextSetTextMatrix(
+            context,
+            CGAffineTransform {
+                a: 1.0,
+                b: 0.0,
+                c: 0.0,
+                d: 1.0,
+                tx: 0.0,
+                ty: 0.0,
+            },
+        );
+        CGContextSetTextPosition(context, 0.0, 0.0);
+        CTLineDraw(&self.line, context);
+        CGContextRestoreGState(context);
+        CGContextSetTextMatrix(context, previous_text_matrix);
     }
 }
 
@@ -372,89 +334,68 @@ impl WrappedText {
                 append_wrapped_line(&mut lines, "", family, size, &mut top, grapheme..grapheme)?;
                 continue;
             }
-            // SAFETY: The temporary attributed text, font and dictionary stay
-            // alive for every typesetter query in this paragraph.
-            unsafe {
-                let string = cf_utf8(paragraph).ok_or(ShapeError::Unavailable)?;
-                let font_name = cf_utf8(family).ok_or(ShapeError::Unavailable)?;
-                let font = CfOwned::new(CTFontCreateWithName(
-                    font_name.as_ptr(),
-                    size,
-                    std::ptr::null_mut(),
-                ))
-                .ok_or(ShapeError::Unavailable)?;
-                let keys = [
+            let string = cf_string(paragraph).ok_or(ShapeError::Unavailable)?;
+            let font_name = cf_string(family).ok_or(ShapeError::Unavailable)?;
+            let font =
+                CTFontCreateWithName(&font_name, size, None).ok_or(ShapeError::Unavailable)?;
+            let attributes = cf_dictionary(
+                &[
                     kCTFontAttributeName,
                     kCTForegroundColorFromContextAttributeName,
-                ];
-                let values = [font.as_ptr(), kCFBooleanTrue as Id];
-                let attributes = CfOwned::new(CFDictionaryCreate(
-                    std::ptr::null_mut(),
-                    keys.as_ptr(),
-                    values.as_ptr(),
-                    2,
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                ))
+                ],
+                &[&font, kCFBooleanTrue],
+            )
+            .ok_or(ShapeError::Unavailable)?;
+            let attributed =
+                cf_attributed_string(&string, &attributes).ok_or(ShapeError::Unavailable)?;
+            let typesetter = CTTypesetterCreateWithAttributedString(&attributed)
                 .ok_or(ShapeError::Unavailable)?;
-                let attributed = CfOwned::new(CFAttributedStringCreate(
-                    std::ptr::null_mut(),
-                    string.as_ptr(),
-                    attributes.as_ptr(),
-                ))
-                .ok_or(ShapeError::Unavailable)?;
-                let typesetter =
-                    CfOwned::new(CTTypesetterCreateWithAttributedString(attributed.as_ptr()))
+            let buffer = TextBuffer::new(paragraph);
+            let total = buffer.grapheme_count();
+            let mut start = 0;
+            while start < total {
+                let start_byte = buffer
+                    .grapheme_to_byte(start)
+                    .ok_or(ShapeError::Unavailable)?;
+                let start_utf16 = buffer
+                    .byte_to_utf16(start_byte)
+                    .ok_or(ShapeError::Unavailable)?;
+                let start_index =
+                    isize::try_from(start_utf16).map_err(|_| ShapeError::Unavailable)?;
+                let count = CTTypesetterSuggestLineBreak(&typesetter, start_index, width);
+                let suggested_end = start_utf16.saturating_add(usize::try_from(count).unwrap_or(0));
+                let mut end = start;
+                for candidate in start + 1..=total {
+                    let byte = buffer
+                        .grapheme_to_byte(candidate)
                         .ok_or(ShapeError::Unavailable)?;
-                let buffer = TextBuffer::new(paragraph);
-                let total = buffer.grapheme_count();
-                let mut start = 0;
-                while start < total {
-                    let start_byte = buffer
-                        .grapheme_to_byte(start)
-                        .ok_or(ShapeError::Unavailable)?;
-                    let start_utf16 = buffer
-                        .byte_to_utf16(start_byte)
-                        .ok_or(ShapeError::Unavailable)?;
-                    let start_index =
-                        isize::try_from(start_utf16).map_err(|_| ShapeError::Unavailable)?;
-                    let count =
-                        CTTypesetterSuggestLineBreak(typesetter.as_ptr(), start_index, width);
-                    let suggested_end =
-                        start_utf16.saturating_add(usize::try_from(count).unwrap_or(0));
-                    let mut end = start;
-                    for candidate in start + 1..=total {
-                        let byte = buffer
-                            .grapheme_to_byte(candidate)
-                            .ok_or(ShapeError::Unavailable)?;
-                        let offset = buffer.byte_to_utf16(byte).ok_or(ShapeError::Unavailable)?;
-                        if offset > suggested_end {
-                            break;
-                        }
-                        end = candidate;
+                    let offset = buffer.byte_to_utf16(byte).ok_or(ShapeError::Unavailable)?;
+                    if offset > suggested_end {
+                        break;
                     }
-                    if end == start {
-                        end += 1;
-                    }
-                    let end_byte = buffer
-                        .grapheme_to_byte(end)
-                        .ok_or(ShapeError::Unavailable)?;
-                    let source_start = source
-                        .byte_to_grapheme(paragraph_start + start_byte)
-                        .ok_or(ShapeError::Unavailable)?;
-                    let source_end = source
-                        .byte_to_grapheme(paragraph_start + end_byte)
-                        .ok_or(ShapeError::Unavailable)?;
-                    append_wrapped_line(
-                        &mut lines,
-                        &paragraph[start_byte..end_byte],
-                        family,
-                        size,
-                        &mut top,
-                        source_start..source_end,
-                    )?;
-                    start = end;
+                    end = candidate;
                 }
+                if end == start {
+                    end += 1;
+                }
+                let end_byte = buffer
+                    .grapheme_to_byte(end)
+                    .ok_or(ShapeError::Unavailable)?;
+                let source_start = source
+                    .byte_to_grapheme(paragraph_start + start_byte)
+                    .ok_or(ShapeError::Unavailable)?;
+                let source_end = source
+                    .byte_to_grapheme(paragraph_start + end_byte)
+                    .ok_or(ShapeError::Unavailable)?;
+                append_wrapped_line(
+                    &mut lines,
+                    &paragraph[start_byte..end_byte],
+                    family,
+                    size,
+                    &mut top,
+                    source_start..source_end,
+                )?;
+                start = end;
             }
         }
         Ok(Self {
@@ -639,8 +580,8 @@ pub(crate) fn append_wrapped_line(
     Ok(())
 }
 
-pub(crate) unsafe fn draw_text_run(
-    context: Id,
+pub(crate) fn draw_text_run(
+    context: &CGContext,
     baseline: Point,
     text: &str,
     run: &choscorui_core::TextRun<'_>,
@@ -649,6 +590,6 @@ pub(crate) unsafe fn draw_text_run(
     let Ok(line) = ShapedLine::styled(text, run.family, run.size, run.weight, run.tracking) else {
         return false;
     };
-    unsafe { line.draw(context, baseline, color) };
+    line.draw(context, baseline, color);
     true
 }

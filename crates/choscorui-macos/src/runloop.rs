@@ -132,7 +132,7 @@ impl Drop for TimerInner {
         unsafe {
             let raw = self.raw.get() as *mut c_void;
             CFRunLoopRemoveTimer(self.runloop as *mut c_void, raw, kCFRunLoopCommonModes);
-            CFRelease(raw);
+            ffi::legacy::cf_release(raw);
             drop(Box::from_raw(self.info.get() as *mut TimerContext));
         }
     }

@@ -6,7 +6,7 @@ use crate::ffi::appkit::{
     ADD_CURSOR_RECT, ARROW_CURSOR, BITMAP_CG_IMAGE, BITMAP_IMAGE_REP_FOR_CACHING, BOUNDS,
     CACHE_DISPLAY_IN_RECT, CLOSED_HAND_CURSOR, CONTENT_VIEW, CROSSHAIR_CURSOR, I_BEAM_CURSOR,
     INIT_WITH_IMAGE_HOT_SPOT, INVALIDATE_CURSOR_RECTS_FOR_VIEW, NOT_ALLOWED_CURSOR, NSCursor,
-    NSImage, NSView, NSWindow, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR,
+    NSView, NSWindow, OCCLUSION_STATE, OPEN_HAND_CURSOR, POINTING_HAND_CURSOR,
     RESIZE_LEFT_RIGHT_CURSOR, RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
 };
 use crate::ffi::retained::{Retained, alloc};
@@ -78,13 +78,12 @@ fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {
     if !inside || width > 256.0 || height > 256.0 {
         return None;
     }
-    // SAFETY: the NSImage is autoreleased into the caller's pool.
-    let ns_image = unsafe { ffi::legacy::borrow::<NSImage>(imaging::ns_image(image)?) }?;
+    let ns_image = imaging::ns_image(image)?;
     let cursor = alloc::<NSCursor>().ok()?;
     INIT_WITH_IMAGE_HOT_SPOT.init(
         cursor,
         (
-            ns_image,
+            &ns_image,
             NSPoint {
                 x: hotspot.x,
                 y: hotspot.y,
@@ -169,12 +168,9 @@ impl Window {
             .send(view, (bounds,))
             .ok_or(ImageError::InvalidDimensions)?;
         CACHE_DISPLAY_IN_RECT.send(view, (bounds, &rep));
-        let cg = BITMAP_CG_IMAGE.send(&rep, ());
-        if cg.is_null() {
-            return Err(ImageError::DecodeFailed);
-        }
-        // SAFETY: the CGImage belongs to `rep`, which lives until this
-        // function returns; it is copied into an owned Image.
-        unsafe { imaging::image_from_cg(cg.cast_mut().cast()) }
+        let cg = BITMAP_CG_IMAGE
+            .send(&rep, ())
+            .ok_or(ImageError::DecodeFailed)?;
+        imaging::image_from_cg(cg)
     }
 }

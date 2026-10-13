@@ -49,3 +49,26 @@ pub(crate) fn autoreleased<C>(object: super::retained::Retained<C>) -> *mut c_vo
     std::mem::forget(object);
     raw
 }
+
+/// Borrows a raw Core Foundation reference, or `None` for null.
+///
+/// # Safety
+///
+/// `raw` is null or an object of type `T` that stays alive for `'a`.
+pub(crate) unsafe fn cf<'a, T: super::cf::CfType>(raw: *mut c_void) -> Option<&'a T> {
+    // SAFETY: the caller guarantees the type and the lifetime.
+    unsafe { raw.cast::<T>().as_ref() }
+}
+
+/// Releases a raw +1 Core Foundation reference.
+///
+/// # Safety
+///
+/// `raw` is a +1 reference to a live Core Foundation object that the
+/// caller gives up.
+pub(crate) unsafe fn cf_release(raw: *mut c_void) {
+    if let Some(raw) = NonNull::new(raw.cast::<super::cf::CFType>()) {
+        // SAFETY: the caller gives up its +1 reference.
+        drop(unsafe { super::cf::CfRetained::from_raw(raw) });
+    }
+}

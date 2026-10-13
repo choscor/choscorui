@@ -13,16 +13,20 @@
 
 pub(crate) mod appkit;
 pub(crate) mod block;
+pub(crate) mod cf;
 #[cfg(test)]
 pub(crate) mod checks;
 pub(crate) mod class;
 pub(crate) mod encode;
 pub(crate) mod foundation;
 pub(crate) mod geometry;
+pub(crate) mod graphics;
+pub(crate) mod image_io;
 pub(crate) mod legacy;
 pub(crate) mod msg;
 pub(crate) mod retained;
 mod runtime;
+pub(crate) mod text;
 mod thread;
 pub(crate) mod user_notifications;
 

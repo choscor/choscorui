@@ -2,8 +2,8 @@
 
 use super::class::{Obj, Sel, objc_class, objc_protocol};
 use super::foundation::{NSArray, NSData, NSDictionary, NSObject, NSString, NsUrl};
-use super::geometry::CGImage;
-use super::geometry::{NSPoint, NSRange, NSRect};
+use super::geometry::{NSPoint, NSRange, NSRect, NSSize};
+use super::graphics::CGImage;
 use super::msg::{Autoreleased, Init, Shared, messages};
 
 objc_class!(NSResponder: NSObject);
@@ -29,6 +29,7 @@ objc_class!(NSScreen: NSObject);
 objc_class!(NSEvent: NSObject);
 objc_class!(NSCursor: NSObject);
 objc_class!(NSImage: NSObject);
+objc_class!(NSFont: NSObject);
 objc_class!(NSImageRep: NSObject);
 objc_class!(NSBitmapImageRep: NSImageRep: NSObject);
 objc_class!(NSDraggingItem: NSObject);
@@ -207,6 +208,12 @@ messages! {
     pub(crate) ATTRIBUTED_STRING_STRING: instance NSAttributedString, c"string",
         () -> Autoreleased<NSString>;
 
+    pub(crate) INIT_WITH_CG_IMAGE_SIZE: instance NSImage, c"initWithCGImage:size:",
+        (&CGImage, NSSize) -> Init<NSImage>;
+    pub(crate) SYSTEM_FONT_OF_SIZE_WEIGHT: class NSFont, c"systemFontOfSize:weight:",
+        (f64, f64) -> Autoreleased<NSFont>;
+    pub(crate) MONOSPACED_SYSTEM_FONT_OF_SIZE_WEIGHT: class NSFont,
+        c"monospacedSystemFontOfSize:weight:", (f64, f64) -> Autoreleased<NSFont>;
     pub(crate) INIT_WITH_IMAGE_HOT_SPOT: instance NSCursor, c"initWithImage:hotSpot:",
         (&Obj<NSImage>, NSPoint) -> Init<NSCursor>;
     pub(crate) ARROW_CURSOR: class NSCursor, c"arrowCursor", () -> Shared<NSCursor>;
@@ -223,7 +230,8 @@ messages! {
     pub(crate) RESIZE_UP_DOWN_CURSOR: class NSCursor, c"resizeUpDownCursor",
         () -> Shared<NSCursor>;
 
-    pub(crate) BITMAP_CG_IMAGE: instance NSBitmapImageRep, c"CGImage", () -> *const CGImage;
+    pub(crate) BITMAP_CG_IMAGE: instance NSBitmapImageRep, c"CGImage",
+        () -> Option<&CGImage>;
 
     pub(crate) INIT_WITH_PASTEBOARD_WRITER: instance NSDraggingItem,
         c"initWithPasteboardWriter:", (&Obj<NSObject>) -> Init<NSDraggingItem>;

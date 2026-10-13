@@ -88,38 +88,6 @@ use ffi::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
 unsafe extern "C" {
     static NSDefaultRunLoopMode: Id;
 }
-#[link(name = "CoreGraphics", kind = "framework")]
-unsafe extern "C" {
-    fn CGContextSaveGState(context: Id);
-    fn CGContextRestoreGState(context: Id);
-    fn CGContextClipToRect(context: Id, rect: NSRect);
-    fn CGContextSetRGBFillColor(context: Id, red: f64, green: f64, blue: f64, alpha: f64);
-    fn CGContextSetAlpha(context: Id, alpha: f64);
-    fn CGContextFillRect(context: Id, rect: NSRect);
-    fn CGContextStrokeRectWithWidth(context: Id, rect: NSRect, width: f64);
-    fn CGContextBeginPath(context: Id);
-    fn CGContextMoveToPoint(context: Id, x: f64, y: f64);
-    fn CGContextClosePath(context: Id);
-    fn CGContextFillPath(context: Id);
-    fn CGContextStrokePath(context: Id);
-    fn CGContextSetLineWidth(context: Id, width: f64);
-    fn CGContextTranslateCTM(context: Id, x: f64, y: f64);
-    fn CGContextScaleCTM(context: Id, x: f64, y: f64);
-    fn CGContextSetTextPosition(context: Id, x: f64, y: f64);
-    fn CGContextSetTextMatrix(context: Id, matrix: CGAffineTransform);
-    fn CGContextGetTextMatrix(context: Id) -> CGAffineTransform;
-    fn CGBitmapContextCreate(
-        data: Id,
-        width: usize,
-        height: usize,
-        bits_per_component: usize,
-        bytes_per_row: usize,
-        color_space: Id,
-        bitmap_info: u32,
-    ) -> Id;
-    fn CGBitmapContextGetData(context: Id) -> Id;
-    fn CGBitmapContextGetBytesPerRow(context: Id) -> usize;
-}
 #[link(name = "objc")]
 unsafe extern "C" {
     fn objc_allocateClassPair(superclass: Id, name: *const i8, extra_bytes: usize) -> Id;
@@ -156,23 +124,6 @@ struct CFRunLoopTimerContext {
 unsafe extern "C" {
     static kCFRunLoopDefaultMode: *const c_void;
     static kCFRunLoopCommonModes: *const c_void;
-    static kCFBooleanTrue: *const c_void;
-    fn CFStringCreateWithBytes(
-        allocator: Id,
-        bytes: *const u8,
-        length: isize,
-        encoding: u32,
-        external: u8,
-    ) -> Id;
-    fn CFDictionaryCreate(
-        allocator: Id,
-        keys: *const Id,
-        values: *const Id,
-        count: isize,
-        key_callbacks: Id,
-        value_callbacks: Id,
-    ) -> Id;
-    fn CFAttributedStringCreate(allocator: Id, string: Id, attributes: Id) -> Id;
     fn CFRunLoopGetMain() -> *mut c_void;
     fn CFRunLoopSourceCreate(
         allocator: *const c_void,
@@ -197,41 +148,7 @@ unsafe extern "C" {
     fn CFRunLoopTimerInvalidate(timer: *mut c_void);
     fn CFRunLoopWakeUp(runloop: *mut c_void);
     fn CFRunLoopRunInMode(mode: *const c_void, seconds: f64, return_after_source: u8) -> i32;
-    fn CFRelease(object: *const c_void);
     fn CFAbsoluteTimeGetCurrent() -> f64;
-}
-
-#[link(name = "CoreText", kind = "framework")]
-unsafe extern "C" {
-    static kCTFontAttributeName: Id;
-    static kCTForegroundColorFromContextAttributeName: Id;
-    fn CTFontCreateWithName(name: Id, size: f64, matrix: Id) -> Id;
-    fn CTLineCreateWithAttributedString(string: Id) -> Id;
-    fn CTLineDraw(line: Id, context: Id);
-    fn CTLineGetTypographicBounds(
-        line: Id,
-        ascent: *mut f64,
-        descent: *mut f64,
-        leading: *mut f64,
-    ) -> f64;
-    fn CTLineGetOffsetForStringIndex(line: Id, index: isize, secondary: *mut f64) -> f64;
-    fn CTTypesetterCreateWithAttributedString(string: Id) -> Id;
-    fn CTTypesetterSuggestLineBreak(typesetter: Id, start: isize, width: f64) -> isize;
-}
-
-struct CfOwned(NonNull<c_void>);
-impl CfOwned {
-    fn new(raw: Id) -> Option<Self> {
-        NonNull::new(raw).map(Self)
-    }
-    fn as_ptr(&self) -> Id {
-        self.0.as_ptr()
-    }
-}
-impl Drop for CfOwned {
-    fn drop(&mut self) {
-        unsafe { CFRelease(self.as_ptr()) }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -384,10 +301,11 @@ unsafe extern "C" fn view_draw_rect(view: Id, _: Sel, dirty: NSRect) {
             if graphics.is_null() {
                 return;
             }
-            let context = send_id(graphics, c"CGContext");
-            if context.is_null() {
+            let Some(context) =
+                ffi::legacy::cf::<ffi::graphics::CGContext>(send_id(graphics, c"CGContext"))
+            else {
                 return;
-            }
+            };
             if paint::paint_commands(context, dirty, &list) {
                 let finished = std::time::Instant::now();
                 let mut paint = paint.lock().unwrap();
@@ -1291,7 +1209,7 @@ impl Drop for Application {
                 kCFRunLoopCommonModes,
             );
             CFRunLoopSourceInvalidate(source);
-            CFRelease(source);
+            ffi::legacy::cf_release(source);
             drop(state);
             drop(Arc::from_raw(self.source_info));
         }
