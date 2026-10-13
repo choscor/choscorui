@@ -123,17 +123,46 @@ fn anchored_items(world: &World, scope: &Scope) -> BTreeSet<ItemRef> {
     set
 }
 
-/// The members that an entry's section lists: inherent items of a type,
-/// the items of a trait other than the modifier trait.
+/// The self type of a generic alias in scope, such as
+/// `Configured<Badge>`. The impl blocks for that type belong to the alias.
+fn alias_self_types(world: &World, scope: &Scope) -> BTreeSet<String> {
+    scope
+        .entries
+        .iter()
+        .filter(|entry| world.inner(entry.item).0 == "type_alias")
+        .map(|entry| sig::ty(world.inner(entry.item).1.get("type")))
+        .filter(|text| text.contains('<'))
+        .collect()
+}
+
+/// The members that an entry's section lists: the inherent items of a
+/// type, without the impl blocks of its generic aliases; for a generic
+/// alias, the items of its own impl blocks; the items of a trait other
+/// than the modifier trait.
 fn members_of(world: &World, scope: &Scope, item: ItemRef) -> BTreeMap<String, Vec<ItemRef>> {
     match world.inner(item).0 {
-        "struct" | "enum" | "union" => world.inherent_members(item),
+        "struct" | "enum" | "union" => {
+            let claimed = alias_self_types(world, scope);
+            world.inherent_members(item, &|self_ty| !claimed.contains(&sig::ty(self_ty)))
+        }
+        "type_alias" => {
+            let own = sig::ty(world.inner(item).1.get("type"));
+            match world.alias_target(item) {
+                Some(target) if own.contains('<') => {
+                    world.inherent_members(target, &|self_ty| sig::ty(self_ty) == own)
+                }
+                _ => BTreeMap::new(),
+            }
+        }
         "trait" if Some(item) != scope.modifier_trait => world.trait_members(item),
         _ => BTreeMap::new(),
     }
 }
 
+/// Whether an item is a type, or an alias of a type, that implements
+/// the view trait.
 fn is_view_type(world: &World, scope: &Scope, item: ItemRef) -> bool {
+    let item = world.alias_target(item).unwrap_or(item);
     matches!(world.inner(item).0, "struct" | "enum" | "union")
         && scope
             .view_trait

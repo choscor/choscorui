@@ -136,7 +136,7 @@ fn resolve_path(world: &World, path: &str) -> Result<Target, String> {
         let members = if kind == "trait" {
             world.trait_members(current)
         } else {
-            world.inherent_members(current)
+            world.inherent_members(current, &|_| true)
         };
         return match members.get(*segment).map(Vec::as_slice) {
             Some([one]) => Ok(Target::Method {

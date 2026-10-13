@@ -312,11 +312,20 @@ impl World {
 
     /// The public functions, constants, and types of the inherent impl
     /// blocks of an item, by name.
-    pub fn inherent_members(&self, item: ItemRef) -> BTreeMap<String, Vec<ItemRef>> {
+    /// `accept` sees the self type of each impl block and picks the
+    /// blocks to read.
+    pub fn inherent_members(
+        &self,
+        item: ItemRef,
+        accept: &dyn Fn(&Json) -> bool,
+    ) -> BTreeMap<String, Vec<ItemRef>> {
         let mut members: BTreeMap<String, Vec<ItemRef>> = BTreeMap::new();
         for imp in self.impls(item) {
             let (_, inner) = self.inner(imp);
-            if !inner.get("trait").is_null() || inner.get("is_synthetic").as_bool() {
+            if !inner.get("trait").is_null()
+                || inner.get("is_synthetic").as_bool()
+                || !accept(inner.get("for"))
+            {
                 continue;
             }
             for id in inner.get("items").items() {
@@ -332,6 +341,15 @@ impl World {
             }
         }
         members
+    }
+
+    /// The type that a type alias names, when it is a resolved path.
+    pub fn alias_target(&self, item: ItemRef) -> Option<ItemRef> {
+        let (kind, inner) = self.inner(item);
+        let path = inner.get("type").get("resolved_path");
+        (kind == "type_alias" && !path.is_null())
+            .then(|| self.resolve(item.krate, path.get("id")))
+            .flatten()
     }
 
     /// The items of a trait, by name.
