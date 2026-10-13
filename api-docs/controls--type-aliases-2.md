@@ -314,6 +314,15 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `Tabs::disabled_tab`
+
+```rust
+pub fn disabled_tab(self, index: usize) -> Self
+```
+
+Disables the tab at `index`. An index out of range, or the selected
+tab, reports `ViewError::Clamped` and leaves every tab enabled.
+
 #### `Tabs::new`
 
 ```rust

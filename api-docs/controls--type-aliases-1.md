@@ -1731,6 +1731,16 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `RadioGroup::disabled_option`
+
+```rust
+pub fn disabled_option(self, index: usize) -> Self
+```
+
+Disables the option at `index`. An index out of range, or the
+selected option, reports `ViewError::Clamped` and leaves every
+option enabled.
+
 #### `RadioGroup::new`
 
 ```rust
