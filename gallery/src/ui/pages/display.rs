@@ -140,11 +140,7 @@ fn numbers(count: usize) -> Vec<String> {
 }
 
 /// A carousel named by the catalog string `name`.
-fn carousel_of(
-    cx: &mut Cx<'_>,
-    name: &'static str,
-    count: usize,
-) -> Configured<controls::Carousel> {
+fn carousel_of(cx: &mut Cx, name: &'static str, count: usize) -> Configured<controls::Carousel> {
     Carousel::new(
         t!(name),
         t!("carousel.previous"),

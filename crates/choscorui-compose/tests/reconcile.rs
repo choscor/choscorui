@@ -265,7 +265,7 @@ type Items = Property<Vec<(u32, &'static str)>>;
 fn list_host(items: Items, runtime: Runtime) -> ViewHost {
     struct List(Items);
     impl View for List {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let items = self.0.clone();
             VStack::new(ForEach::new(
                 move || items.get(),

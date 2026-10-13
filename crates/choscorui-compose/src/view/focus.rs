@@ -22,7 +22,7 @@ impl<V: View> FocusFrame<V> {
 }
 
 impl<V: View> View for FocusFrame<V> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = overlay_node(cx, Alignment::FILL);
         cx.inner.data(node).focus_frame = true;
         let env = cx.env.clone();

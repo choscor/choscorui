@@ -87,7 +87,7 @@ fn press(env: &Env, buttons: &[Mnemonic], letter: char, last: State<String>) {
 }
 
 impl View for MnemonicsPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(text(&env, "mnemonics.prompt"));
         let buttons: Vec<Mnemonic> = MNEMONIC_LABELS
@@ -217,7 +217,7 @@ fn labeled(caption: impl Into<TextContent>, field: impl View) -> impl View {
 }
 
 impl View for DialogKeysPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let form = Form {
             name: cx.state("Lựu".to_owned()),

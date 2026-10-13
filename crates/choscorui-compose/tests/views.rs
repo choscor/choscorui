@@ -127,7 +127,7 @@ fn names(host: &mut ViewHost) -> Vec<String> {
 struct Counter;
 
 impl View for Counter {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let count = cx.state(0);
         VStack::new((
             Text::new(choscorui_compose::t!("count", n = count)),
@@ -179,7 +179,7 @@ fn wide_tree(rows: usize) -> (ViewHost, choscorui_compose::view::State<i32>) {
         out: Rc<std::cell::Cell<Option<choscorui_compose::view::State<i32>>>>,
     }
     impl View for Wide {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let value = cx.state(0);
             self.out.set(Some(value));
             let rows: Vec<Text> = (0..self.rows)
@@ -222,7 +222,7 @@ fn a_focus_binding_turns_false_when_another_binding_takes_focus() {
         Binding::new(move || get.get(), move |value| set.set(value))
     }
     impl View for Pair {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             VStack::new((
                 tap("first", || {}).focused(binding(&self.0)),
                 tap("second", || {}).focused(binding(&self.1)),
@@ -256,7 +256,7 @@ fn for_each_keeps_identity_across_reorder_and_insert() {
     let list = items.clone();
     struct List(choscorui_compose::Property<Vec<i32>>);
     impl View for List {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let items = self.0.clone();
             VStack::new(ForEach::new(
                 move || items.get(),
@@ -306,7 +306,7 @@ fn branches_mount_and_unmount_cleanly() {
     let flag = show.clone();
     struct Branches(choscorui_compose::Property<bool>);
     impl View for Branches {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let show = self.0.clone();
             let either = self.0.clone();
             VStack::new((
@@ -358,7 +358,7 @@ fn a_branch_keeps_its_view_while_the_key_stays() {
     let live = count.clone();
     struct Keyed(choscorui_compose::Property<i32>);
     impl View for Keyed {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let count = self.0.clone();
             VStack::new(Branch::new(
                 move || count.get() > 2,
@@ -398,7 +398,7 @@ fn theme_modifier_changes_colors_without_remounting() {
     let live = theme.clone();
     struct Themed(choscorui_compose::Property<(BaseColor, ColorScheme)>);
     impl View for Themed {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let theme = self.0.clone();
             VStack::new(tap("inside", || {}))
                 .background(ColorRole::Background)
@@ -486,7 +486,7 @@ fn stacks_mirror_in_right_to_left_layouts() {
 fn dialog_traps_focus_closes_on_escape_and_returns_focus() {
     struct Screen;
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let open = cx.state(false);
             VStack::new((tap("open", move || open.set(true)), tap("other", || {}))).dialog(
                 open.binding(),
@@ -532,7 +532,7 @@ fn sheet_and_popover_close_on_a_press_outside() {
         sheet: bool,
     }
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let open = cx.state(true);
             let content = move || tap("inside", move || {});
             let base = VStack::new(tap("anchor", || {}));
@@ -575,7 +575,7 @@ fn sheet_and_popover_trap_focus_close_on_escape_and_return_focus() {
         sheet: bool,
     }
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let open = cx.state(false);
             let content = move || VStack::new((tap("first", || {}), tap("second", || {})));
             let base = VStack::new((tap("open", move || open.set(true)), tap("other", || {})));
@@ -668,7 +668,7 @@ fn environment_button_variant_reaches_nested_buttons_only() {
     use choscorui_controls::ButtonVariant;
     struct Screen(choscorui_compose::Property<ButtonVariant>);
     impl View for Screen {
-        fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, _cx: &mut Cx) -> impl View {
             let variant = self.0.clone();
             VStack::new((
                 VStack::new((
@@ -772,7 +772,7 @@ fn checkbox_binds_both_ways() {
     use choscorui_compose::view::Checkbox;
     struct Screen;
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let on = cx.state(false);
             VStack::new((
                 Checkbox::new("remember", on.binding()),
@@ -810,7 +810,7 @@ fn control_labels_follow_the_locale_on_the_same_node() {
     let env = Env::new(Rc::new(catalog), move || live.get());
     struct Screen;
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let on = cx.state(false);
             VStack::new((
                 Button::new(choscorui_compose::t!("save"), || {}),
@@ -848,7 +848,7 @@ fn range_and_selection_views_bind_both_ways() {
     use choscorui_controls::IntegerRange;
     struct Screen;
     impl View for Screen {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let level = cx.state(50);
             let size = cx.state(0_usize);
             let tab = cx.state(0_usize);

@@ -162,7 +162,7 @@ pub(super) fn hover_card<C: View>(content: impl Fn() -> C + 'static) -> Modifier
                 panel: control_panel,
             })
         }),
-        mount: Box::new(move |cx: &mut Cx<'_>, wrapper, _view| {
+        mount: Box::new(move |cx: &mut Cx, wrapper, _view| {
             let open = cx.state(false).binding();
             card.open.set(Some(open));
             let data = cx.inner.data(wrapper);

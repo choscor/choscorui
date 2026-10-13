@@ -73,7 +73,7 @@ where
     F: Fn() -> V + 'static,
     V: View,
 {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let choose = self.choose;
         let runs = Cell::new(0_u64);
         mount_branch(cx, move || {
@@ -113,7 +113,7 @@ where
     KF: Fn() -> K + 'static,
     VF: Fn(&K) -> V + 'static,
 {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let (key, view) = (self.key, Rc::new(self.view));
         mount_branch(cx, move || {
             let key = key();
@@ -136,7 +136,7 @@ struct Child<K> {
 /// Mounts the one keyed child that `next` chooses, and reconciles it with
 /// [`plan_keyed`] whenever state that `next` read changes. The child view
 /// is made only when the plan creates the child.
-fn mount_branch<K, V>(cx: &mut Cx<'_>, next: impl Fn() -> (K, Box<dyn FnOnce() -> V>) + 'static)
+fn mount_branch<K, V>(cx: &mut Cx, next: impl Fn() -> (K, Box<dyn FnOnce() -> V>) + 'static)
 where
     K: Clone + Eq + Hash + 'static,
     V: View,
@@ -215,7 +215,7 @@ where
     K: Clone + Eq + Hash + std::fmt::Debug + 'static,
     V: View,
 {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let fragment = cx.inner.fragments.child(cx.fragment);
         let owner = cx.scope;
         let env = cx.env.clone();

@@ -105,7 +105,7 @@ fn records(record: &str) -> StringListModel {
 struct ItemViewPage;
 
 impl View for ItemViewPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let model = SharedModel::proxied(records(&cx.env().text("item-view.record", &[])));
         let matches = cx.state(RECORDS);
         let revision = cx.state(0_u64);
@@ -281,7 +281,7 @@ fn place_names(env: &Env, rows: &[usize]) -> Vec<String> {
 struct ColumnBrowserPage;
 
 impl View for ColumnBrowserPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let path = cx.state(vec![0_usize]);
         let env = cx.env().clone();
         let browser = Configured::custom(ControlKind::ListView, |env| {
@@ -413,7 +413,7 @@ impl History {
 struct UndoHistoryPage;
 
 impl View for UndoHistoryPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let history = History {
             counter: Rc::new(RefCell::new(Counter {
                 value: 0,

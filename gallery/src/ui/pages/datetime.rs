@@ -35,7 +35,7 @@ pub(crate) fn today() -> CivilDate {
 struct CalendarPage;
 
 impl View for CalendarPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let selected = cx.state(today());
         let chosen = cx.state(None::<CivilDate>);
         let locale = cx.env().locale();
@@ -145,7 +145,7 @@ fn labeled(key: &'static str, content: impl View) -> impl View {
 struct DateTimeEditPage;
 
 impl View for DateTimeEditPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let outside = cx.state(false);
         let width = || Frame::new().width(260.0);
         let limited =

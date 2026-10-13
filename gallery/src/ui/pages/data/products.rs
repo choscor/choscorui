@@ -162,7 +162,7 @@ fn header_bar(
 struct HeaderViewPage;
 
 impl View for HeaderViewPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let count = 60;
         let total: i64 = (0..count).map(quantity).sum();
         let model = SharedModel::proxied(products(cx.env(), count));
@@ -212,7 +212,7 @@ pub fn header_view(_: &PageCx) -> AnyView {
 struct CellEditPage;
 
 impl View for CellEditPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let model = SharedModel::new(products(cx.env(), 30));
         let header = product_header(cx.env());
         let widths = cx.state(header.borrow().widths());
@@ -574,7 +574,7 @@ impl Form {
 struct DataMapperPage;
 
 impl View for DataMapperPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let model = SharedModel::new(products(cx.env(), 20));
         let mut mapper = DataMapper::new(MAPPED.to_vec());
         mapper.set_current(model.model.borrow().key(None, 0));

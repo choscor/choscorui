@@ -28,7 +28,7 @@ pub fn aspect_ratio(_: &PageCx) -> AnyView {
 struct CollapsiblePage;
 
 impl View for CollapsiblePage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let (closed, open) = (cx.state(false), cx.state(true));
         column((
             section(
@@ -79,7 +79,7 @@ fn faq(env: &Env) -> Vec<(String, String)> {
 struct AccordionPage;
 
 impl View for AccordionPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let (single, multiple) = (cx.state(vec![0]), cx.state(Vec::new()));
         column((
             section(

@@ -63,7 +63,7 @@ impl InputDialog {
 }
 
 impl View for InputDialog {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Self {
             title,
             prompt,
@@ -225,7 +225,7 @@ fn field<T: Clone + PartialEq + 'static>(
 }
 
 impl View for FontDialog {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Self {
             sample,
             size,

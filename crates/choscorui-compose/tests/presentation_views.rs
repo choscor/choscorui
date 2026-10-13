@@ -262,7 +262,7 @@ fn tooltip_shows_on_keyboard_focus_and_hides_on_escape() {
 struct Editor;
 
 impl View for Editor {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let chosen: State<String> = cx.state(String::from("none"));
         VStack::new((
             Button::new("Target", || {}).context_menu(vec![
@@ -508,7 +508,7 @@ fn nested_context_menus_open_the_innermost_one() {
 struct Options;
 
 impl View for Options {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let open = cx.state(false);
         let renamed = cx.state(0);
         VStack::new((
@@ -571,7 +571,7 @@ fn dropdown_menu_follows_its_binding() {
 struct Poster;
 
 impl View for Poster {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let toasts = cx.env().toasts().expect("a toaster is above");
         Button::new("Direct", move || {
             toasts.push(Toast::new("Direct toast"));
@@ -582,7 +582,7 @@ impl View for Poster {
 struct Saver;
 
 impl View for Saver {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let posted = cx.state(false);
         VStack::new((
             Button::new("Post", move || posted.set(true))
@@ -657,7 +657,7 @@ fn toast_closes_at_its_time_with_reduced_motion() {
 fn toast_without_a_toaster_reports_an_error() {
     struct Lonely;
     impl View for Lonely {
-        fn body(&self, cx: &mut Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut Cx) -> impl View {
             let posted = cx.state(false);
             Button::new("Post", move || posted.set(true))
                 .toast(posted.binding(), |_env| Toast::new("Saved"))
@@ -698,7 +698,7 @@ fn text_opacity(list: &DisplayList, text: &str) -> Option<f64> {
 struct Confirm;
 
 impl View for Confirm {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let open = cx.state(false);
         VStack::new((
             Button::new("Open", move || open.set(true)),
@@ -851,7 +851,7 @@ fn dialog_shows_and_closes_at_once_with_reduced_motion() {
 struct Filters;
 
 impl View for Filters {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let open = cx.state(true);
         VStack::new((
             Button::new("Show filters", move || open.set(true)),
@@ -1020,7 +1020,7 @@ fn tooltip_shows_and_hides_at_once_with_reduced_motion() {
 struct ViewMenu;
 
 impl View for ViewMenu {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let open = cx.state(false);
         let bookmarks = cx.state(false);
         let zoom = cx.state(0_u8);

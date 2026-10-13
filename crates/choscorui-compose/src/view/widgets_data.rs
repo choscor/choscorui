@@ -162,7 +162,7 @@ impl HeaderView {
 }
 
 impl View for HeaderView {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Self {
             columns,
             sort,

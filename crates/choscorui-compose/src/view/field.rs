@@ -78,7 +78,7 @@ impl<C: View> Field<C> {
 }
 
 impl<C: View> View for Field<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = field_node(cx, self.orientation);
         let env = cx.env.clone();
         let mut inside = cx.within(node, env);
@@ -121,7 +121,7 @@ impl<C: View> View for Field<C> {
 
 /// A new custom layout node that the controls' field layout places.
 #[inline(never)]
-fn field_node(cx: &mut Cx<'_>, orientation: FieldOrientation) -> NodeId {
+fn field_node(cx: &mut Cx, orientation: FieldOrientation) -> NodeId {
     let tokens = parent_tokens(cx);
     let layout = controls::Field::new(orientation).layout(&cx.inner.styles, &tokens);
     cx.node(LayoutStyle {
@@ -131,7 +131,7 @@ fn field_node(cx: &mut Cx<'_>, orientation: FieldOrientation) -> NodeId {
 }
 
 /// Mounts `view` in a fragment of its own, and returns its nodes.
-fn part<V: View>(cx: &mut Cx<'_>, view: V) -> Vec<NodeId> {
+fn part<V: View>(cx: &mut Cx, view: V) -> Vec<NodeId> {
     let fragment = cx.inner.fragments.child(cx.fragment);
     {
         let mut part = Cx {
@@ -147,7 +147,7 @@ fn part<V: View>(cx: &mut Cx<'_>, view: V) -> Vec<NodeId> {
 }
 
 /// The first focusable control at or under `node`, in tree order.
-fn first_control(cx: &Cx<'_>, node: NodeId) -> Option<NodeId> {
+fn first_control(cx: &Cx, node: NodeId) -> Option<NodeId> {
     let inner = &*cx.inner;
     if inner
         .controls
@@ -165,7 +165,7 @@ fn first_control(cx: &Cx<'_>, node: NodeId) -> Option<NodeId> {
 /// Keeps the accessibility description and the invalid state of
 /// `control` in step with the field's description and error.
 fn describe(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     control: NodeId,
     description: Option<Label>,
     error: Option<(Label, Live<bool>)>,
@@ -191,7 +191,7 @@ fn describe(
 /// Mounts `children` in a column that fills its width, with the `Field`
 /// recipe gap of `gap`, and returns the column.
 #[inline(never)]
-fn column_node(cx: &mut Cx<'_>, gap: FieldGap) -> NodeId {
+fn column_node(cx: &mut Cx, gap: FieldGap) -> NodeId {
     let tokens = parent_tokens(cx);
     let spacing = gap.resolve(&cx.inner.styles, &tokens);
     stack_node(
@@ -231,7 +231,7 @@ impl<C: View> FieldSet<C> {
 }
 
 impl<C: View> View for FieldSet<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = column_node(cx, FieldGap::Set);
         let env = cx.env.clone();
         let legend = self.legend.clone();
@@ -263,7 +263,7 @@ impl<C: View> FieldGroup<C> {
 }
 
 impl<C: View> View for FieldGroup<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = column_node(cx, FieldGap::Group);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.0);
@@ -281,7 +281,7 @@ impl<C: View> FieldContent<C> {
 }
 
 impl<C: View> View for FieldContent<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = column_node(cx, FieldGap::Content);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.0);
@@ -298,7 +298,7 @@ impl FieldTitle {
 }
 
 impl View for FieldTitle {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         cx.mount(FieldText::new(FieldPart::Title, self.0));
     }
 }
@@ -321,7 +321,7 @@ impl FieldSeparator {
 }
 
 impl View for FieldSeparator {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let content = self
             .0
             .unwrap_or(Live::Value(TextContent::Plain(String::new())));

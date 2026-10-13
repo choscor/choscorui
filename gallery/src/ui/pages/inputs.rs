@@ -25,7 +25,7 @@ fn readout(text: Localized) -> impl View {
 struct ButtonPage;
 
 impl View for ButtonPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let activations = cx.state(0_usize);
         let archive = cx.state(false);
         let count = move || activations.update(|count| *count += 1);
@@ -108,7 +108,7 @@ pub fn button(_: &PageCx) -> AnyView {
 struct CheckboxPage;
 
 impl View for CheckboxPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         // `None` is the mixed state.
         let mut row = |key: &'static str, checked: Option<bool>, invalid: bool, enabled: bool| {
             let checked: State<Option<bool>> = cx.state(checked);
@@ -142,7 +142,7 @@ pub fn checkbox(_: &PageCx) -> AnyView {
 struct ToolButtonPage;
 
 impl View for ToolButtonPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(env.text("tool-button.none", &[]));
         let tool = |index: u64, key: &'static str, checkable: bool, menu, width: f64| {
@@ -241,7 +241,7 @@ fn titled(title: &'static str, name: String, content: impl View) -> impl View {
 struct ButtonGroupPage;
 
 impl View for ButtonGroupPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let alignment = cx.state(vec![0]);
         let style = cx.state(vec![0]);
         let vertical = cx.state(vec![1]);
@@ -383,7 +383,7 @@ fn examples() -> String {
 struct KeySequencePage;
 
 impl View for KeySequencePage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(env.text("key-sequence.none", &[]));
         column((

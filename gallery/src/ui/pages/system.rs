@@ -82,7 +82,7 @@ fn run(env: &Env, desktop: &dyn Desktop, action: Action) -> String {
 }
 
 impl View for DesktopPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let capabilities = self.desktop.capabilities();
         let env = cx.env().clone();
         let backend = capabilities.backend;

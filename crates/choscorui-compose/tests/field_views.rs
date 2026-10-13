@@ -46,7 +46,7 @@ fn bounds(host: &mut ViewHost, name: &str) -> Rect {
 fn email(orientation: FieldOrientation) -> impl View {
     struct Email(FieldOrientation);
     impl View for Email {
-        fn body(&self, cx: &mut choscorui_compose::view::Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
             let text = cx.state(String::new());
             Field::new(
                 choscorui_compose::t!("email"),
@@ -125,7 +125,7 @@ fn a_horizontal_field_mirrors_in_right_to_left_layouts() {
 struct Username;
 
 impl View for Username {
-    fn body(&self, cx: &mut choscorui_compose::view::Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
         let name = cx.state(String::from("x"));
         let invalid = cx.state(true);
         VStack::new((
@@ -181,7 +181,7 @@ fn an_error_shows_and_marks_the_control_invalid() {
 fn sets_and_groups_stack_with_their_recipe_gaps() {
     struct Payment;
     impl View for Payment {
-        fn body(&self, cx: &mut choscorui_compose::view::Cx<'_>) -> impl View {
+        fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
             let (card, owner) = (cx.state(String::new()), cx.state(String::new()));
             FieldSet::new(
                 "Payment",

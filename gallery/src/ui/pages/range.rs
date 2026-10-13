@@ -51,7 +51,7 @@ fn named_value(env: &Env, key: &str, value: State<i32>) -> Localized {
 struct SliderPage;
 
 impl View for SliderPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let mut row = |key: &'static str, range: IntegerRange, vertical: bool, enabled: bool| {
             let value = cx.state(range.value());
             let slider = if vertical {
@@ -80,7 +80,7 @@ pub fn slider(_: &PageCx) -> AnyView {
 struct SpinBoxPage;
 
 impl View for SpinBoxPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let mut row = |key: &'static str, range: IntegerRange, enabled: bool| {
             let value = cx.state(range.value());
             captioned(
@@ -106,7 +106,7 @@ pub fn spin_box(_: &PageCx) -> AnyView {
 struct ProgressPage;
 
 impl View for ProgressPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let value = cx.state(35_u32);
         let bar = |progress: Progress| progress.frame(Frame::new().width(360.0));
         column((
@@ -183,7 +183,7 @@ fn scroll_bar(
 struct ScrollBarPage;
 
 impl View for ScrollBarPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let top = cx.state(0.0);
         let left = cx.state(0.0);
         let env = cx.env().clone();
@@ -261,7 +261,7 @@ pub fn scroll_bar_page(_: &PageCx) -> AnyView {
 struct DialPage;
 
 impl View for DialPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let mut dial = |key: &'static str, range: IntegerRange, wrapping: bool| {
             let value = cx.state(range.value());
             let readout = named_value(cx.env(), key, value);
@@ -294,7 +294,7 @@ pub fn dial(_: &PageCx) -> AnyView {
 struct DecimalSpinBoxPage;
 
 impl View for DecimalSpinBoxPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let mut row = |key: &'static str, limits: (f64, f64), step: f64, digits, start: f64| {
             let value = cx.state(start);
             let name = cx.env().text(key, &[]);
@@ -397,7 +397,7 @@ const BASES: [(&str, NumberBase); 4] = [
 struct NumericDisplayPage;
 
 impl View for NumericDisplayPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let value = cx.state(2026_i64);
         // The index of the chosen base in `BASES`.
         let base = cx.state(0_usize);

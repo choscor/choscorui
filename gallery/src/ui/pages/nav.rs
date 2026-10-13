@@ -56,7 +56,7 @@ pub fn breadcrumb(_: &PageCx) -> AnyView {
 struct PaginationPage;
 
 impl View for PaginationPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let few = cx.state(1);
         let many = cx.state(9);
         let (previous, next) = (|| t!("pagination.previous"), || t!("pagination.next"));
@@ -173,7 +173,7 @@ const SUB_ITEM: usize = 5;
 struct SidebarPage;
 
 impl View for SidebarPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let sub_item = cx.state(Some(SUB_ITEM));
         let mut make = |name: &'static str,
                         variant: SidebarVariant,

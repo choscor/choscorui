@@ -83,7 +83,7 @@ impl<P: View> Resizable<P> {
 }
 
 impl<P: View> View for Resizable<P> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Some((node, model)) = group_node(
             cx,
             self.name,
@@ -106,7 +106,7 @@ impl<P: View> View for Resizable<P> {
 /// first children of the group node, and returns them. Each node writes
 /// `sizes` when its handle moves, and refreshes the semantics of every
 /// handle, as a move changes the range of its neighbors.
-fn handle_nodes(cx: &mut Cx<'_>, model: &Model, sizes: Binding<Vec<f64>>) -> Rc<[NodeId]> {
+fn handle_nodes(cx: &mut Cx, model: &Model, sizes: Binding<Vec<f64>>) -> Rc<[NodeId]> {
     let count = {
         let group = model.borrow();
         if group.handle_count() < 2 {
@@ -140,7 +140,7 @@ fn handle_nodes(cx: &mut Cx<'_>, model: &Model, sizes: Binding<Vec<f64>>) -> Rc<
 
 /// The handle extent along the split, from the `Resizable` recipe: the
 /// hit area around the line, and the grip.
-fn handle_extent(cx: &Cx<'_>, grip: bool) -> f64 {
+fn handle_extent(cx: &Cx, grip: bool) -> f64 {
     let tokens = parent_tokens(cx);
     let style = |slot| {
         cx.inner
@@ -161,7 +161,7 @@ fn handle_extent(cx: &Cx<'_>, grip: bool) -> f64 {
 /// [`ViewError::Control`] and mounts nothing.
 #[inline(never)]
 fn group_node(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     name: Label,
     orientation: SplitOrientation,
     sizes: Binding<Vec<f64>>,
@@ -238,7 +238,7 @@ fn write(model: &Model, sizes: Binding<Vec<f64>>) {
 /// Gives the group the sizes of `sizes` whenever they change, and
 /// refreshes the semantics of the group and of each handle node.
 fn follow(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     node: NodeId,
     handles: Rc<[NodeId]>,
     model: Model,

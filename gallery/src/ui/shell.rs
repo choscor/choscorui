@@ -179,7 +179,7 @@ pub struct GalleryRoot {
 }
 
 impl View for GalleryRoot {
-    fn body(&self, _cx: &mut choscorui::compose::view::Cx<'_>) -> impl View {
+    fn body(&self, _cx: &mut choscorui::compose::view::Cx) -> impl View {
         HStack::new((
             sidebar(&self.shared, &self.window),
             Divider,

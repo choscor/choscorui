@@ -180,13 +180,13 @@ pub(crate) enum AccessField {
 }
 
 /// Mounts presented content for the node that a modifier applies to.
-pub(crate) type PresentFn = Rc<dyn Fn(&mut Cx<'_>, NodeId)>;
+pub(crate) type PresentFn = Rc<dyn Fn(&mut Cx, NodeId)>;
 
 /// Makes the control of a [`Trigger`].
 pub(crate) type MakeTrigger = Box<dyn FnOnce(&mut Inner) -> Box<dyn CustomControl>>;
 
 /// Finishes a [`Trigger`] with the wrapper node and the view's node.
-pub(crate) type MountTrigger = Box<dyn FnOnce(&mut Cx<'_>, NodeId, NodeId)>;
+pub(crate) type MountTrigger = Box<dyn FnOnce(&mut Cx, NodeId, NodeId)>;
 
 /// A control that wraps the view to watch its input, such as the hover
 /// of a tooltip or the secondary click of a context menu.
@@ -490,7 +490,7 @@ modifiers! {
 impl<V: View> Styled<V> {
     /// Adds a modifier that mounts extra content tied to this view, such
     /// as a dialog.
-    pub(crate) fn present(self, present: impl Fn(&mut Cx<'_>, NodeId) + 'static) -> Self {
+    pub(crate) fn present(self, present: impl Fn(&mut Cx, NodeId) + 'static) -> Self {
         self.push(Modifier::Present(Rc::new(present)))
     }
 }
@@ -578,7 +578,7 @@ struct Target {
 }
 
 impl<V: View> View for Styled<V> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Styled { view, modifiers } = self;
         let (env, fragment) = enter_styled(cx, &modifiers);
         {
@@ -600,7 +600,7 @@ impl<V: View> View for Styled<V> {
 
 /// The environment and fragment for the content of a styled view.
 #[inline(never)]
-fn enter_styled(cx: &mut Cx<'_>, modifiers: &[Modifier]) -> (Env, FragmentId) {
+fn enter_styled(cx: &mut Cx, modifiers: &[Modifier]) -> (Env, FragmentId) {
     let env = child_env(&cx.env, modifiers);
     let fragment = cx.inner.fragments.child(cx.fragment);
     (env, fragment)
@@ -608,7 +608,7 @@ fn enter_styled(cx: &mut Cx<'_>, modifiers: &[Modifier]) -> (Env, FragmentId) {
 
 /// Applies `modifiers` to the content mounted in `fragment`.
 #[inline(never)]
-fn finish_styled(cx: &mut Cx<'_>, env: &Env, fragment: FragmentId, modifiers: Vec<Modifier>) {
+fn finish_styled(cx: &mut Cx, env: &Env, fragment: FragmentId, modifiers: Vec<Modifier>) {
     let only_environment = modifiers.iter().all(Modifier::is_environment);
     if only_environment {
         return;
@@ -690,7 +690,7 @@ fn child_env(parent: &Env, modifiers: &[Modifier]) -> Env {
 
 /// Puts the fragment's nodes in one new column node at their place, and
 /// returns it.
-fn gather(cx: &mut Cx<'_>, fragment: FragmentId) -> NodeId {
+fn gather(cx: &mut Cx, fragment: FragmentId) -> NodeId {
     let column = LayoutStyle {
         kind: LayoutKind::Stack {
             axis: Axis::Vertical,
@@ -828,7 +828,7 @@ fn parent_axis(inner: &Inner, node: NodeId) -> Option<Axis> {
 
 /// Adds a paint layer to the target and keeps it live.
 fn add_layer<T: Clone + 'static>(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     target: &mut Target,
     live: Live<T>,
     layer: impl Fn(T) -> Layer + 'static,
@@ -856,7 +856,7 @@ fn add_layer<T: Clone + 'static>(
 
 /// Changes the control's local patch and keeps it live.
 fn patch_value<T: Clone + 'static>(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     node: NodeId,
     patch: &Rc<RefCell<Patch>>,
     live: Live<T>,
@@ -875,7 +875,7 @@ fn patch_value<T: Clone + 'static>(
     reason = "the mount state of one Styled view, passed to each modifier"
 )]
 fn apply(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     env: &Env,
     modifier: Modifier,
     target: &mut Target,
@@ -1146,7 +1146,7 @@ fn apply(
 }
 
 /// Registers the control's local patch as a recipe set of its own.
-fn install_patch(cx: &mut Cx<'_>, node: NodeId, patch: Rc<RefCell<Patch>>) {
+fn install_patch(cx: &mut Cx, node: NodeId, patch: Rc<RefCell<Patch>>) {
     let inherited = parent_tokens(cx).recipes;
     let set = cx.inner.new_recipe_set();
     let kind = cx.inner.nodes.get(&node).and_then(|data| data.kind);
@@ -1171,7 +1171,7 @@ fn install_patch(cx: &mut Cx<'_>, node: NodeId, patch: Rc<RefCell<Patch>>) {
 }
 
 /// Applies theme modifiers to `node` as a theme scope.
-fn apply_theme(cx: &mut Cx<'_>, node: NodeId, modifiers: Vec<Modifier>) {
+fn apply_theme(cx: &mut Cx, node: NodeId, modifiers: Vec<Modifier>) {
     cx.inner.data(node).themed = true;
     let mut recipes: Option<RecipeSet> = None;
     for modifier in modifiers {

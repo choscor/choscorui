@@ -152,7 +152,7 @@ impl Current {
 impl View for ControlView {
     // Out of line, so that each `Configured<C>` adds only its build.
     #[inline(never)]
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let current: Rc<Current> = Rc::default();
         let node = match self.source {
             Source::Fixed(control) => cx.control(control),
@@ -204,7 +204,7 @@ impl View for ControlView {
 
 /// Mounts the control that `build` makes, and builds it again on the same
 /// node when what `build` read changes.
-fn mount_built(cx: &mut Cx<'_>, build: Build, current: Rc<Current>) -> NodeId {
+fn mount_built(cx: &mut Cx, build: Build, current: Rc<Current>) -> NodeId {
     let env = cx.env.clone();
     let first: Rc<RefCell<Option<Box<dyn CustomControl>>>> = Rc::default();
     let mounted: Rc<Cell<Option<NodeId>>> = Rc::default();

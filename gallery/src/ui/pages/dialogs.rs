@@ -57,7 +57,7 @@ fn chose(env: &Env, dialog: &AlertDialog, index: usize) -> String {
 struct AlertDialogPage;
 
 impl View for AlertDialogPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let last = cx.state(text(cx.env(), "alert-dialog.none"));
         let modal = cx.state(false);
         let tip = cx.state(false);
@@ -117,7 +117,7 @@ type Spec = (&'static str, &'static str, InputKind, String);
 struct InputDialogPage;
 
 impl InputDialogPage {
-    fn specs(cx: &Cx<'_>) -> [Spec; 4] {
+    fn specs(cx: &Cx) -> [Spec; 4] {
         let env = cx.env();
         let locale = env.locale();
         let size = |key: &str| text(env, key);
@@ -164,7 +164,7 @@ impl InputDialogPage {
 }
 
 impl View for InputDialogPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let last = cx.state(text(cx.env(), "input-dialog.start"));
         let mut dialogs = Vec::new();
         for (title, prompt, kind, initial) in Self::specs(cx) {
@@ -234,7 +234,7 @@ fn swatch(color: Color) -> impl View {
 struct ColorPickerPage;
 
 impl View for ColorPickerPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let model = cx.state(ColorPicker::new(TEAL));
         let hex_text = cx.state(ColorPicker::new(TEAL).hex());
         let hex_state = cx.state(ValidationState::Valid);
@@ -340,7 +340,7 @@ const FAMILIES: [&str; 8] = [
 struct FontDialogPage;
 
 impl View for FontDialogPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let style = cx.state(TextStyle::new("Georgia", 22.0));
         let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
         column((

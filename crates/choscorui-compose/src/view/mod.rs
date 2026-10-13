@@ -78,7 +78,7 @@ pub use widgets_shell::{Dock, SizeGrip, StatusBar, Toolbar};
 /// component mounts.
 pub trait View: 'static {
     /// The component's content.
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let _ = cx;
         Empty
     }
@@ -86,7 +86,7 @@ pub trait View: 'static {
     /// Creates the view's nodes under the context's parent. Components
     /// keep the default, which mounts the body.
     #[doc(hidden)]
-    fn mount(self, cx: &mut Cx<'_>)
+    fn mount(self, cx: &mut Cx)
     where
         Self: Sized,
     {
@@ -109,10 +109,10 @@ pub trait View: 'static {
 pub struct Empty;
 
 impl View for Empty {
-    fn mount(self, _cx: &mut Cx<'_>) {}
+    fn mount(self, _cx: &mut Cx) {}
 }
 
-type Mounter = Box<dyn FnOnce(&mut Cx<'_>)>;
+type Mounter = Box<dyn FnOnce(&mut Cx)>;
 
 /// A view of any type.
 pub struct AnyView(Mounter);
@@ -124,7 +124,7 @@ impl AnyView {
 }
 
 impl View for AnyView {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         (self.0)(cx);
     }
 
@@ -147,7 +147,7 @@ pub enum Either<A, B> {
 }
 
 impl<A: View, B: View> View for Either<A, B> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         match self {
             Self::Left(view) => view.mount(cx),
             Self::Right(view) => view.mount(cx),
@@ -156,7 +156,7 @@ impl<A: View, B: View> View for Either<A, B> {
 }
 
 impl<V: View> View for Option<V> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         if let Some(view) = self {
             view.mount(cx);
         }
@@ -164,7 +164,7 @@ impl<V: View> View for Option<V> {
 }
 
 impl<V: View> View for Vec<V> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         for view in self {
             view.mount(cx);
         }
@@ -174,7 +174,7 @@ impl<V: View> View for Vec<V> {
 macro_rules! tuple_view {
     ($($name:ident $index:tt),+) => {
         impl<$($name: View),+> View for ($($name,)+) {
-            fn mount(self, cx: &mut Cx<'_>) {
+            fn mount(self, cx: &mut Cx) {
                 $(self.$index.mount(cx);)+
             }
         }

@@ -33,7 +33,7 @@ fn captioned(caption: impl View, control: impl View) -> impl View {
 /// `disabled` unavailable, and invalid when `invalid` is true. The name
 /// and options are catalog keys.
 fn radios(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     name: &'static str,
     options: [&'static str; 3],
     disabled: Option<usize>,
@@ -62,7 +62,7 @@ fn radios(
 struct RadioPage;
 
 impl View for RadioPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         column((
             radios(
                 cx,
@@ -102,7 +102,7 @@ const TAB_CONTENT: [(&str, &str); 3] = [
 
 /// A tab list in `variant` over the panel of the selected tab, or beside
 /// it for vertical tabs; the last tab is disabled.
-fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant, orientation: Orientation) -> AnyView {
+fn tab_set(cx: &mut Cx, variant: TabsVariant, orientation: Orientation) -> AnyView {
     let selected = cx.state(0usize);
     let tabs = Configured::try_custom(ControlKind::Tabs, move |env| {
         let labels = TAB_CONTENT.map(|(label, _)| env.text(label, &[]));
@@ -144,7 +144,7 @@ fn tab_set(cx: &mut Cx<'_>, variant: TabsVariant, orientation: Orientation) -> A
 struct TabsPage;
 
 impl View for TabsPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let mut sets = Vec::new();
         for orientation in [Orientation::Horizontal, Orientation::Vertical] {
             for variant in TabsVariant::ALL {
@@ -184,7 +184,7 @@ fn city_items() -> Vec<ComboItem> {
 /// is true; the read-only one starts on Huế. The caption names the
 /// selected city.
 fn city_combo(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     label: &'static str,
     editable: bool,
     mode: CompletionMode,
@@ -225,7 +225,7 @@ fn city_combo(
 struct ComboboxPage;
 
 impl View for ComboboxPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         column((
             city_combo(
                 cx,
@@ -269,7 +269,7 @@ const FALLBACK: &str = "Helvetica";
 struct FontChooserPage;
 
 impl View for FontChooserPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         // The chosen family's index; `None` while the typed family is
         // missing and the fallback renders.
         let chosen = cx.state(FAMILIES.iter().position(|family| *family == "Georgia"));

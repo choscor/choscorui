@@ -52,7 +52,7 @@ struct Sample {
 struct TextFieldPage;
 
 impl View for TextFieldPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let text = |key| env.text(key, &[]);
         let samples = [
@@ -94,7 +94,7 @@ impl View for TextFieldPage {
     }
 }
 
-fn sample_field(cx: &mut Cx<'_>, sample: Sample) -> AnyView {
+fn sample_field(cx: &mut Cx, sample: Sample) -> AnyView {
     let env = cx.env().clone();
     let Sample {
         label,
@@ -154,7 +154,7 @@ pub fn text_field(_: &PageCx) -> AnyView {
 struct TextEditorPage;
 
 impl View for TextEditorPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let sample = cx.env().text("text-editor.sample", &[]);
         let text = cx.state(sample);
         column(
@@ -196,7 +196,7 @@ fn verdict(env: &Env, validation: &ValidationState) -> String {
 struct RuleFields(Vec<RuleField>);
 
 impl View for RuleFields {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         VStack::new(
             self.0
                 .iter()
@@ -208,7 +208,7 @@ impl View for RuleFields {
     }
 }
 
-fn rule_field(cx: &mut Cx<'_>, field: RuleField) -> AnyView {
+fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
     let RuleField {
         label,
         raw,
@@ -288,7 +288,7 @@ fn rule_field(cx: &mut Cx<'_>, field: RuleField) -> AnyView {
 struct RulePage(fn(&Env) -> Vec<RuleField>);
 
 impl View for RulePage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let fields = self.0;
         column(Dynamic::new(move || RuleFields(fields(&env))))

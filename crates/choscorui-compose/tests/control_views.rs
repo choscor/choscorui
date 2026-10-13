@@ -169,7 +169,7 @@ struct GoToLine {
 }
 
 impl View for GoToLine {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let text = cx.state("42".to_owned());
         let accepted = self.accepted.clone();
         InputDialog::new(
@@ -224,7 +224,7 @@ fn the_input_dialog_accepts_only_valid_values() {
 struct Fonts;
 
 impl View for Fonts {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let style = cx.state(TextStyle::new("Georgia", 22.0));
         let families = ["Helvetica", "Georgia", "Menlo"].map(String::from).to_vec();
         VStack::new((
@@ -296,7 +296,7 @@ fn a_missing_family_falls_back_and_stays_in_the_field() {
 struct Shell;
 
 impl View for Shell {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let open = cx.state(true);
         let selected = cx.state(None);
         HStack::new((
@@ -355,7 +355,7 @@ fn command_b_toggles_the_sidebar_view_while_another_view_has_focus() {
 struct Consent;
 
 impl View for Consent {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let on = cx.state(true);
         let invalid = cx.state(true);
         VStack::new((
@@ -388,7 +388,7 @@ fn a_form_view_shows_the_invalid_state_and_follows_its_change() {
 struct Mail;
 
 impl View for Mail {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let (runs, checked) = (cx.state(0_usize), cx.state(Vec::new()));
         let group = choscorui_controls::ButtonGroup::from_members(
             vec![

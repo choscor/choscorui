@@ -196,7 +196,7 @@ fn toolbar_window(env: &Env, state: ToolbarState) -> impl View + use<> {
 struct ToolbarPage;
 
 impl View for ToolbarPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let state = ToolbarState {
             area: cx.state(0),
             narrow: cx.state(false),
@@ -332,7 +332,7 @@ impl CustomControl for TimedStatus {
 struct StatusBarPage;
 
 impl View for StatusBarPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let words = cx.state(120usize);
         let message = cx.state(false);
         let bar = Configured::custom(ControlKind::StatusBar, move |env| {
@@ -444,7 +444,7 @@ fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View +
 struct MainWindowPage;
 
 impl View for MainWindowPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let top = cx.state(true);
         let side = cx.state(true);
         let status = cx.state(true);

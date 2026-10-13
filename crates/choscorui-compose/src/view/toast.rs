@@ -56,7 +56,7 @@ impl Env {
 
 /// Mounts the toast stack of `spec` above the window content, until the
 /// view unmounts.
-pub(super) fn mount_toaster(cx: &mut Cx<'_>, env: &Env, spec: ToasterSpec) {
+pub(super) fn mount_toaster(cx: &mut Cx, env: &Env, spec: ToasterSpec) {
     let root = cx.inner.tree.root();
     let root_fragment = cx.inner.fragments.root_of(root);
     let fragment = cx.inner.fragments.child(root_fragment);
@@ -88,7 +88,7 @@ pub(super) fn mount_toaster(cx: &mut Cx<'_>, env: &Env, spec: ToasterSpec) {
 
 /// Posts the toast of `make` each time `presented` becomes true, and sets
 /// `presented` back to false.
-pub(super) fn post(cx: &mut Cx<'_>, env: &Env, presented: Binding<bool>, make: MakeToast) {
+pub(super) fn post(cx: &mut Cx, env: &Env, presented: Binding<bool>, make: MakeToast) {
     let env = env.clone();
     cx.react(move |inner| {
         if !presented.try_get().unwrap_or(false) {

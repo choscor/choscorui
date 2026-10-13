@@ -104,17 +104,17 @@ struct Body<F>(F);
 
 impl<F, V> View for Body<F>
 where
-    F: Fn(&mut Cx<'_>) -> V + 'static,
+    F: Fn(&mut Cx) -> V + 'static,
     V: View,
 {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         (self.0)(cx)
     }
 }
 
 /// A page view that creates its state from the mount context:
 /// `stateful(|cx| { let open = cx.state(false); … })`.
-pub fn stateful<V: View>(build: impl Fn(&mut Cx<'_>) -> V + 'static) -> AnyView {
+pub fn stateful<V: View>(build: impl Fn(&mut Cx) -> V + 'static) -> AnyView {
     Body(build).into_any()
 }
 

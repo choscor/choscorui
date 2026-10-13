@@ -322,7 +322,7 @@ fn alignment(placement: Placement) -> Alignment {
 /// records its bounds in `panel_bounds`. Returns the layer node, the
 /// panel node, and the motion of both.
 fn mount_layer(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     (presentation, title): (Presentation, Option<Live<TextContent>>),
     panel_bounds: Rc<Cell<Rect>>,
     content: impl View,
@@ -555,7 +555,7 @@ fn unfocus(inner: &mut Inner, layer: NodeId) {
 /// records its bounds in `panel_bounds`. The closed layer stays, without
 /// input or semantics, until its close motion ends.
 pub(crate) fn mount_presentation(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     anchor: Anchor,
     presented: Binding<bool>,
     (presentation, title): (Presentation, Option<Live<TextContent>>),

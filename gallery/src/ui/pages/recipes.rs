@@ -49,7 +49,7 @@ impl Recipe for Square {
 struct ButtonRecipesPage;
 
 impl View for ButtonRecipesPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let text = |key| env.text(key, &[]);
         let last = cx.state(text("button-recipes.intro"));

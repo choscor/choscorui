@@ -83,7 +83,7 @@ impl<R: View> Form<R> {
 }
 
 impl<R: View> View for Form<R> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = form_node(cx, self.row_spacing, self.column_spacing);
         let mut env = cx.env.clone();
         env.set_value(self.look);
@@ -93,11 +93,7 @@ impl<R: View> View for Form<R> {
 
 /// A new form grid node. Rows fill it two children at a time.
 #[inline(never)]
-fn form_node(
-    cx: &mut Cx<'_>,
-    rows: Option<Metric>,
-    columns: Option<Metric>,
-) -> choscorui_core::NodeId {
+fn form_node(cx: &mut Cx, rows: Option<Metric>, columns: Option<Metric>) -> choscorui_core::NodeId {
     let tokens = parent_tokens(cx);
     let gap = |spacing: Option<Metric>, slot: Slot| match spacing {
         Some(metric) => metric.resolve(&tokens),
@@ -132,7 +128,7 @@ impl<F: View> FormRow<F> {
 }
 
 impl<F: View> View for FormRow<F> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let cell = row_cells(cx, self.label);
         let env = cx.env.clone();
         cx.within(cell, env).mount(self.field);
@@ -142,7 +138,7 @@ impl<F: View> View for FormRow<F> {
 /// Mounts the label of a row and the cell of its field, and returns the
 /// field cell.
 #[inline(never)]
-fn row_cells(cx: &mut Cx<'_>, label: super::widgets::Label) -> choscorui_core::NodeId {
+fn row_cells(cx: &mut Cx, label: super::widgets::Label) -> choscorui_core::NodeId {
     let look = cx.env.value::<RowLook>().copied().unwrap_or_default();
     let fragment = cx.inner.fragments.child(cx.fragment);
     {

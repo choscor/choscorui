@@ -250,7 +250,7 @@ impl Canvas {
 }
 
 impl View for Canvas {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let hidden = self.label.is_empty();
         let node = cx.control(Box::new(CanvasLeaf {
             draw: self.draw,

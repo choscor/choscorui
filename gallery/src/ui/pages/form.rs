@@ -21,7 +21,7 @@ fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-fn switch(cx: &mut Cx<'_>, key: &'static str, on: bool, size: ControlSize) -> Switch {
+fn switch(cx: &mut Cx, key: &'static str, on: bool, size: ControlSize) -> Switch {
     Switch::new(t!(key), cx.state(on).binding()).with(move |switch| switch.with_size(size))
 }
 
@@ -62,7 +62,7 @@ const TOGGLE_SIZES: [ControlSize; 3] = [ControlSize::Sm, ControlSize::Default, C
 
 pub fn toggle(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let line = |cx: &mut Cx<'_>, variant: ToggleVariant| {
+        let line = |cx: &mut Cx, variant: ToggleVariant| {
             let toggles: Vec<_> = TOGGLE_SIZES
                 .into_iter()
                 .zip([
@@ -220,7 +220,7 @@ const ZONES: [&str; 12] = [
 
 pub fn select(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let fruit = |cx: &mut Cx<'_>, key: &'static str, selected: Option<usize>| {
+        let fruit = |cx: &mut Cx, key: &'static str, selected: Option<usize>| {
             let placeholder = text(cx.env(), "select.fruit_placeholder");
             Select::new(t!(key), fruits, cx.state(selected).binding())
                 .with(move |select| select.with_placeholder(placeholder.clone()))
@@ -300,7 +300,7 @@ pub fn native_select_page(_: &PageCx) -> AnyView {
 }
 
 /// The invalid username sample of the input and field pages.
-fn invalid_username(cx: &mut Cx<'_>) -> impl View {
+fn invalid_username(cx: &mut Cx) -> impl View {
     let error = text(cx.env(), "input.username_error");
     Input::new(t!("input.username"), cx.state("a".to_owned()).binding()).with(move |mut input| {
         input.set_validation(ValidationState::Invalid(error.clone()));
@@ -309,7 +309,7 @@ fn invalid_username(cx: &mut Cx<'_>) -> impl View {
 }
 
 /// An empty input named by the catalog string `key`, with `placeholder`.
-fn input(cx: &mut Cx<'_>, key: &'static str, placeholder: &'static str) -> impl View {
+fn input(cx: &mut Cx, key: &'static str, placeholder: &'static str) -> impl View {
     Input::new(t!(key), cx.state(String::new()).binding())
         .with(move |input| input.with_placeholder(placeholder))
 }
@@ -460,7 +460,7 @@ pub fn textarea(_: &PageCx) -> AnyView {
 
 pub fn input_otp(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let code = |cx: &mut Cx<'_>, key: &'static str| {
+        let code = |cx: &mut Cx, key: &'static str| {
             InputOtp::new(t!(key), 6, cx.state(String::new()).binding())
         };
         column((
@@ -570,10 +570,10 @@ pub fn date_picker(_: &PageCx) -> AnyView {
                 .with_placeholder(placeholder.clone())
                 .with_today(today)
         };
-        let single = |cx: &mut Cx<'_>, key: &'static str, date: Option<CivilDate>| {
+        let single = |cx: &mut Cx, key: &'static str, date: Option<CivilDate>| {
             DatePicker::new(t!(key), today, cx.state(date).binding()).with(pick.clone())
         };
-        let dates = |cx: &mut Cx<'_>, key: &'static str, mode: CalendarMode| {
+        let dates = |cx: &mut Cx, key: &'static str, mode: CalendarMode| {
             DatePicker::dates(t!(key), today, mode, cx.state(Vec::new()).binding())
                 .with(pick.clone())
         };

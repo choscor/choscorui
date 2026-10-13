@@ -17,7 +17,7 @@ use std::rc::Rc;
 struct Panels(Property<Vec<f64>>);
 
 impl View for Panels {
-    fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, _cx: &mut Cx) -> impl View {
         let (get, set) = (self.0.clone(), self.0.clone());
         let sizes = Binding::new(move || get.get(), move |value| set.set(value));
         Resizable::new(
@@ -37,7 +37,7 @@ impl View for Panels {
 struct Pair(Property<Vec<f64>>);
 
 impl View for Pair {
-    fn body(&self, _cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, _cx: &mut Cx) -> impl View {
         let (get, set) = (self.0.clone(), self.0.clone());
         let sizes = Binding::new(move || get.get(), move |value| set.set(value));
         Resizable::new(

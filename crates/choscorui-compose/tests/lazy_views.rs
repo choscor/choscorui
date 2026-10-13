@@ -150,7 +150,7 @@ fn scrolling_mounts_the_items_that_come_into_view_and_unmounts_the_rest() {
 struct Counted(usize);
 
 impl View for Counted {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let presses = cx.state(0);
         let index = self.0;
         Button::new(

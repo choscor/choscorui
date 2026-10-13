@@ -140,7 +140,7 @@ struct CanvasPage {
 }
 
 impl View for CanvasPage {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let canvas = Rc::new(RefCell::new(
             CanvasView::new(cx.env().text("canvas.canvas", &[]), Rect::default())
                 .hosted(scene(cx.env())),

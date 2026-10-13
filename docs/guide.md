@@ -52,7 +52,7 @@ use choscorui::prelude::*;
 struct Counter;
 
 impl View for Counter {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let count = cx.state(0);
         VStack::new((
             Text::new(move || format!("Count: {}", count.get())),
@@ -118,7 +118,7 @@ use choscorui::prelude::*;
 struct Settings;
 
 impl View for Settings {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let wifi = cx.state(true);
         let volume = cx.state(40);
         let range = IntegerRange::new(0, 100, 40, 1, 10).expect("a valid range");
@@ -169,7 +169,7 @@ use choscorui::prelude::*;
 struct Account;
 
 impl View for Account {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let name = cx.state(String::new());
         let alerts = cx.state(true);
         Form::new((
@@ -214,7 +214,7 @@ use choscorui::prelude::*;
 struct Inbox;
 
 impl View for Inbox {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let count = cx.state(10_000_usize);
         ScrollView::new(
             LazyVStack::new(move || count.get(), 32.0, |index| {
@@ -253,7 +253,7 @@ use choscorui::prelude::*;
 struct Profile;
 
 impl View for Profile {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let name = cx.state(String::new());
         let news = cx.state(false);
         FieldSet::new(
@@ -289,7 +289,7 @@ use choscorui::prelude::*;
 struct Workspace;
 
 impl View for Workspace {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let sizes = cx.state(vec![200.0, 400.0]);
         Resizable::new(
             t!("workspace.panels"),
@@ -360,7 +360,7 @@ use choscorui::prelude::*;
 struct Delete;
 
 impl View for Delete {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let asking = cx.state(false);
         Button::new("Delete", move || asking.set(true))
             .variant(ButtonVariant::Destructive)
@@ -408,7 +408,7 @@ use choscorui::prelude::*;
 struct File;
 
 impl View for File {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let options = cx.state(false);
         let rows = move || {
             vec![
@@ -440,7 +440,7 @@ use choscorui::prelude::*;
 struct Editor;
 
 impl View for Editor {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let saved = cx.state(false);
         Button::new(t!("editor.save"), move || saved.set(true))
             .toast(saved.binding(), |env| Toast::new(env.text("editor.saved", &[])))
@@ -650,7 +650,7 @@ use std::rc::Rc;
 struct Counter;
 
 impl View for Counter {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+    fn body(&self, cx: &mut Cx) -> impl View {
         let count = cx.state(0);
         VStack::new((
             Text::new(move || format!("Count: {}", count.get())),

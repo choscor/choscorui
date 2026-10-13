@@ -110,7 +110,7 @@ impl Default for Alignment {
 pub(super) const DEFAULT_SPACING: Space = Space::S2;
 
 /// The tokens that apply where a new node mounts, before it exists.
-pub(crate) fn parent_tokens(cx: &Cx<'_>) -> DesignTokens {
+pub(crate) fn parent_tokens(cx: &Cx) -> DesignTokens {
     cx.inner
         .themes
         .resolve(&cx.inner.tree, cx.parent)
@@ -119,7 +119,7 @@ pub(crate) fn parent_tokens(cx: &Cx<'_>) -> DesignTokens {
 
 /// Mounts `children` in a stack node along `axis`.
 fn stack<C: View>(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     axis: Axis,
     children: C,
     spacing: Metric,
@@ -138,7 +138,7 @@ fn stack<C: View>(
 /// A new stack node along `axis`.
 #[inline(never)]
 pub(super) fn stack_node(
-    cx: &mut Cx<'_>,
+    cx: &mut Cx,
     axis: Axis,
     spacing: Metric,
     cross: ItemAlign,
@@ -198,7 +198,7 @@ impl<C: View> VStack<C> {
 }
 
 impl<C: View> View for VStack<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         stack(
             cx,
             Axis::Vertical,
@@ -249,7 +249,7 @@ impl<C: View> HStack<C> {
 }
 
 impl<C: View> View for HStack<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         stack(
             cx,
             Axis::Horizontal,
@@ -283,7 +283,7 @@ impl<C: View> ZStack<C> {
 }
 
 impl<C: View> View for ZStack<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = overlay_node(cx, self.alignment);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.children);
@@ -292,7 +292,7 @@ impl<C: View> View for ZStack<C> {
 
 /// A new node that places its children on top of each other.
 #[inline(never)]
-pub(super) fn overlay_node(cx: &mut Cx<'_>, alignment: Alignment) -> NodeId {
+pub(super) fn overlay_node(cx: &mut Cx, alignment: Alignment) -> NodeId {
     let style = LayoutStyle {
         kind: LayoutKind::Overlay,
         ..LayoutStyle::default()
@@ -322,7 +322,7 @@ impl Spacer {
 }
 
 impl View for Spacer {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let style = LayoutStyle {
             min: Size::new(self.min, self.min),
             shrink: true,
@@ -358,7 +358,7 @@ fn stack_axis(inner: &Inner, parent: NodeId) -> Option<Axis> {
 pub struct Divider;
 
 impl View for Divider {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         divider_node(cx);
     }
 }
@@ -366,7 +366,7 @@ impl View for Divider {
 /// A new separator control across the parent stack. The `Separator`
 /// recipe gives its thickness and color.
 #[inline(never)]
-fn divider_node(cx: &mut Cx<'_>) {
+fn divider_node(cx: &mut Cx) {
     let vertical = stack_axis(cx.inner, cx.parent) == Some(Axis::Horizontal);
     let orientation = if vertical {
         SeparatorOrientation::Vertical
@@ -438,7 +438,7 @@ impl<C: View> Grid<C> {
 }
 
 impl<C: View> View for Grid<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let node = grid_node(cx, &self.columns, self.spacing);
         let env = cx.env.clone();
         cx.within(node, env).mount(self.children);
@@ -447,7 +447,7 @@ impl<C: View> View for Grid<C> {
 
 /// A new grid node with `columns`.
 #[inline(never)]
-fn grid_node(cx: &mut Cx<'_>, columns: &[GridItem], spacing: Metric) -> NodeId {
+fn grid_node(cx: &mut Cx, columns: &[GridItem], spacing: Metric) -> NodeId {
     let tokens = parent_tokens(cx);
     let gap = spacing.resolve(&tokens);
     let columns: Vec<Track> = columns.iter().map(|item| item.track()).collect();
@@ -469,7 +469,7 @@ impl<C: View> Group<C> {
 }
 
 impl<C: View> View for Group<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         cx.mount(self.0);
     }
 }
@@ -717,7 +717,7 @@ impl<C: View> ScrollView<C> {
 }
 
 impl<C: View> View for ScrollView<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let (node, content) = scroll_nodes(cx, self.axis);
         let env = cx.env.clone();
         let mut inside = cx.within(node, env);
@@ -729,7 +729,7 @@ impl<C: View> View for ScrollView<C> {
 /// A new scroll node along `axis`, and the column node inside it for the
 /// content.
 #[inline(never)]
-fn scroll_nodes(cx: &mut Cx<'_>, axis: Axis) -> (NodeId, NodeId) {
+fn scroll_nodes(cx: &mut Cx, axis: Axis) -> (NodeId, NodeId) {
     let shared = Rc::new(ScrollShared::default());
     let orientation = match axis {
         Axis::Vertical => ScrollOrientation::Vertical,

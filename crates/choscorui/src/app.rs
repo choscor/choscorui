@@ -87,7 +87,7 @@ impl Scene {
 /// struct Counter;
 ///
 /// impl View for Counter {
-///     fn body(&self, cx: &mut Cx<'_>) -> impl View {
+///     fn body(&self, cx: &mut Cx) -> impl View {
 ///         let count = cx.state(0);
 ///         VStack::new((
 ///             Text::new(move || format!("Count: {}", count.get())),

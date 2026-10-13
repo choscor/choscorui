@@ -247,7 +247,7 @@ fn menu_content(
 /// The modifier that shows a menu of `items` below the view.
 pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoice>) -> Modifier {
     let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
-    Modifier::Present(Rc::new(move |cx: &mut Cx<'_>, anchor| {
+    Modifier::Present(Rc::new(move |cx: &mut Cx, anchor| {
         let name = name_of(cx.inner, anchor);
         let content = menu_content(name, items.clone(), presented, Rc::default());
         mount_presentation(
@@ -352,7 +352,7 @@ pub(super) fn context_menu(items: impl Items<MenuChoice>) -> Modifier {
                 keyboard: control_keyboard,
             })
         }),
-        mount: Box::new(move |cx: &mut Cx<'_>, wrapper, view| {
+        mount: Box::new(move |cx: &mut Cx, wrapper, view| {
             let open = cx.state(false).binding();
             let disabled = cx.env.disabled.clone();
             let live = enabled.clone();

@@ -171,7 +171,7 @@ impl<C: CustomControl + 'static> Configured<C> {
 }
 
 impl<C: CustomControl + 'static> View for Configured<C> {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Self {
             kind,
             build,

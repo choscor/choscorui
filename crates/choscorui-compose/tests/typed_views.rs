@@ -25,8 +25,8 @@ use std::rc::Rc;
 /// A component whose body `build` makes.
 struct Screen<F>(F);
 
-impl<F: Fn(&mut Cx<'_>) -> AnyView + 'static> View for Screen<F> {
-    fn body(&self, cx: &mut Cx<'_>) -> impl View {
+impl<F: Fn(&mut Cx) -> AnyView + 'static> View for Screen<F> {
+    fn body(&self, cx: &mut Cx) -> impl View {
         (self.0)(cx)
     }
 }
@@ -35,11 +35,7 @@ fn en() -> Locale {
     Locale::parse("en").unwrap()
 }
 
-fn host_with(
-    env: Env,
-    runtime: Runtime,
-    build: impl Fn(&mut Cx<'_>) -> AnyView + 'static,
-) -> ViewHost {
+fn host_with(env: Env, runtime: Runtime, build: impl Fn(&mut Cx) -> AnyView + 'static) -> ViewHost {
     let mut host = ViewHost::new(
         Size::new(400.0, 300.0),
         DesignTokens::light(),
@@ -53,7 +49,7 @@ fn host_with(
     host
 }
 
-fn host(build: impl Fn(&mut Cx<'_>) -> AnyView + 'static) -> ViewHost {
+fn host(build: impl Fn(&mut Cx) -> AnyView + 'static) -> ViewHost {
     host_with(
         Env::new(Rc::new(Catalog::new()), en()),
         Runtime::new(),

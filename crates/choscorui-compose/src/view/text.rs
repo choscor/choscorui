@@ -322,7 +322,7 @@ impl CustomControl for TextLeaf {
 }
 
 impl View for Text {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let env = cx.env.clone();
         let data = Rc::new(RefCell::new(TextData {
             content: String::new(),

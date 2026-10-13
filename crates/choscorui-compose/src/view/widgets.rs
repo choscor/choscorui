@@ -184,7 +184,7 @@ impl Button {
 }
 
 impl View for Button {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let Self {
             label,
             action,

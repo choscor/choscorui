@@ -274,7 +274,7 @@ pub(super) fn tooltip(text: Live<TextContent>) -> Modifier {
                 motion_ms: 0,
             })
         }),
-        mount: Box::new(move |cx: &mut Cx<'_>, wrapper, view| {
+        mount: Box::new(move |cx: &mut Cx, wrapper, view| {
             node.set(Some(wrapper));
             // The node that publishes the tooltip covers the view, but
             // presses go through it.

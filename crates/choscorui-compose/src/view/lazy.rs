@@ -68,7 +68,7 @@ impl LazyVStack {
 }
 
 impl View for LazyVStack {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         self.lazy.mount(cx, Axis::Vertical, self.alignment.item());
     }
 }
@@ -108,7 +108,7 @@ impl LazyHStack {
 }
 
 impl View for LazyHStack {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         self.lazy.mount(cx, Axis::Horizontal, self.alignment.item());
     }
 }
@@ -138,7 +138,7 @@ impl Lazy {
     /// Mounts a stack node with one track node inside. The track is as
     /// long as all items, and its leading padding puts the first mounted
     /// item at its place.
-    fn mount(self, cx: &mut Cx<'_>, axis: Axis, cross: ItemAlign) {
+    fn mount(self, cx: &mut Cx, axis: Axis, cross: ItemAlign) {
         let tokens = parent_tokens(cx);
         let extent = self.extent.resolve(&tokens);
         let spacing = self.spacing.resolve(&tokens);
@@ -372,7 +372,7 @@ struct Cell {
 }
 
 impl View for Cell {
-    fn mount(self, cx: &mut Cx<'_>) {
+    fn mount(self, cx: &mut Cx) {
         let mut style = stack_style(self.axis, 0.0, self.cross);
         match self.axis {
             Axis::Vertical => style.height = Length::Points(self.extent),
