@@ -475,10 +475,17 @@ impl CustomControl for DatePicker {
         let calendar = cx.style(StyleQuery::new(ControlKind::Calendar, Slot::Root));
         let slide = (0.0, -cx.tokens.spacing * 2.0);
         let frame = self.frame;
+        // The day or caption ring shows only while the last input is the
+        // keyboard: a pointer open shows no ring.
+        let focus = if cx.state.focus_visible() {
+            self.focus
+        } else {
+            CalendarFocus::None
+        };
         Reveal::paint(cx, frame, progress, slide, |cx| {
             cx.slot(frame, &content, |cx, _| {
                 cx.slot(frame, &calendar, |_, _| {});
-                self.calendar.paint(cx, layout, self.today, self.focus);
+                self.calendar.paint(cx, layout, self.today, focus);
             });
         });
         self.calendar.paint_caption_list(cx);

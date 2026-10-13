@@ -494,6 +494,28 @@ fn toolbar_and_status_bar_paint_from_recipes() {
         "the separator is a 1 pt border line"
     );
 
+    // Keyboard focus on the embedded control rings its rect.
+    let mut bar = bar;
+    bar.handle_key(Key::End, &layout, &commands, LayoutDirection::Ltr);
+    let (_, search) = *layout.items.last().unwrap();
+    let mut list = DisplayList::new();
+    bar.paint(
+        &mut PaintContext::new(&mut list, bounds, &tokens, &styles, &EstimatedText),
+        &layout,
+        &commands,
+        true,
+    );
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::StrokeRoundedRect { rect, color, .. }
+                if *color == ring && rect.contains(search.center())
+                    && rect.size.width > search.size.width
+        )),
+        "the ring goes around the embedded control"
+    );
+
     let mut status = StatusBar::new();
     status.set_default_text("Ready");
     status.set_section("line", "Ln 4", 80.0);

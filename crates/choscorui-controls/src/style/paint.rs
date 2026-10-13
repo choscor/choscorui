@@ -688,6 +688,33 @@ impl<'a> PaintContext<'a> {
         }
     }
 
+    /// Paints the theme focus ring just inside `rect` with corner
+    /// `radius`, while the node shows keyboard focus. The ring is the one
+    /// of a focused `Button` `Root`. It stays inside `rect`, so a control
+    /// that rings its whole bounds is not clipped.
+    pub fn focus_ring(&mut self, rect: Rect, radius: f64) {
+        if !self.state.focus_visible() {
+            return;
+        }
+        let query =
+            StyleQuery::new(ControlKind::Button, Slot::Root).state(VisualState::FOCUS_VISIBLE);
+        let mut style = self.style(query);
+        style.radius = Corners::all(radius);
+        self.ring_inside(rect, &style);
+    }
+
+    /// Paints the ring of `style`, if it has one, just inside `rect` with
+    /// the start corner radius of the style. Use it for a ring that the
+    /// clip of the control or a neighbouring part would cut.
+    pub fn ring_inside(&mut self, rect: Rect, style: &ResolvedStyle) {
+        if let Some(ring) = style.ring.filter(|ring| ring.width > 0.0) {
+            let radius = style.radius.top_start;
+            let _ = self
+                .list
+                .draw_ring(rect.inset(ring.width), radius, ring.width, ring.color);
+        }
+    }
+
     /// Draws one line of text in the style's type and color.
     pub fn label(
         &mut self,

@@ -805,7 +805,7 @@ For a new interactive control, implement the `CustomControl` trait in safe Rust 
 
 `Reveal` gives the open and close motion of the built-in popups. `progress` gives the eased share at a time, and `paint` or `transform` zooms from 95% and slides. Reduced motion skips the motion.
 
-`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags.
+`MeasureContext` and `PaintContext` give the resolved `DesignTokens` of the node, the `Styles` registry, the text measurement, and the direction. `cx.style(query)` resolves a recipe slot. In `paint`, `cx.state` holds the `HOVERED`, `FOCUSED`, `FOCUS_VISIBLE`, and `DISABLED` flags. `cx.focus_ring(rect, radius)` paints the theme focus ring just inside `rect` while focus is visible, so the clip of the node does not cut it. `cx.ring_inside(rect, &style)` paints the ring of a resolved style in the same way.
 
 The `ControlContext` lets the control do these things during `event` and `perform`:
 

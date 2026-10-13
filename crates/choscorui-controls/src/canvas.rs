@@ -456,7 +456,7 @@ impl CanvasView {
     }
 
     /// Paints visible items (culled through the spatial index), selection
-    /// outlines, focus ring, and rubber band. The outlines and the band
+    /// outlines, focus outline or ring, and rubber band. The outlines and the band
     /// come from the `Canvas` recipe. Returns items painted.
     pub fn paint(
         &self,
@@ -468,6 +468,7 @@ impl CanvasView {
             cx.style(query(Slot::Indicator)),
             cx.style(query(Slot::Range)),
         );
+        let focused = cx.state.focused();
         let list = &mut *cx.list;
         list.push_clip(self.viewport);
         list.push_transform(self.transform())?;
@@ -489,9 +490,10 @@ impl CanvasView {
                 outline(list, self.transform().apply_rect(bounds), false)?;
             }
         }
-        if let Some(focus) = self.focus
-            && let Some(bounds) = scene.world_bounds(focus)
-        {
+        // The focused item shows a dashed outline while the canvas has
+        // focus. With no focused item, keyboard focus rings the canvas.
+        let item = self.focus.and_then(|focus| scene.world_bounds(focus));
+        if let Some(bounds) = item.filter(|_| focused) {
             outline(list, self.transform().apply_rect(bounds).inset(-2.0), true)?;
         }
         if let Some(band) = self.rubber_band() {
@@ -499,6 +501,9 @@ impl CanvasView {
             outline(list, band.inset(2.0), false)?;
         }
         list.pop_clip()?;
+        if item.is_none() {
+            cx.focus_ring(self.viewport, 0.0);
+        }
         Ok(painted)
     }
 

@@ -1232,6 +1232,37 @@ fn a_press_on_the_track_pages_and_keys_scroll_a_focused_scroll_view() {
 }
 
 #[test]
+fn a_focusable_scroll_view_shows_the_ring_on_keyboard_focus() {
+    let tokens = DesignTokens::light();
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    // Paints at `time` and again a second later, when the ring has
+    // eased in.
+    let rings = |host: &mut ViewHost, time: f64| {
+        host.advance(time);
+        host.paint();
+        host.advance(time + 1.0);
+        let list = host.paint();
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                choscorui_core::DisplayCommand::StrokeRoundedRect {
+                    rect, color, width, ..
+                } if *color == ring && *width == tokens.ring_width => Some(*rect),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut host = host(scroll_rows(60).focusable(true));
+    let scroll = scroll_node(&mut host);
+    assert!(rings(&mut host, 0.0).is_empty());
+    assert_eq!(host.focus_next(false), Some(scroll));
+    let viewport = host.tree().bounds(scroll).unwrap();
+    let shown = rings(&mut host, 2.0);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(viewport.union(shown[0]), viewport, "inside the clip");
+}
+
+#[test]
 fn a_divider_paints_with_the_separator_recipe() {
     use choscorui_compose::view::Divider;
     use choscorui_controls::{ControlKind, Slot};

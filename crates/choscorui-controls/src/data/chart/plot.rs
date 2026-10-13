@@ -737,6 +737,8 @@ impl Chart {
             ChartKind::Radial => self.paint_radial(cx),
         }
         self.paint_legend(cx);
+        let radius = cx.style(Self::query(Slot::Root)).radius.top_start;
+        cx.focus_ring(cx.bounds, radius);
     }
 
     pub(super) fn paint_tooltip(&self, cx: &mut PaintContext<'_>, category: usize) {

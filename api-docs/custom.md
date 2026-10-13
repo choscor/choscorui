@@ -933,6 +933,17 @@ both layout directions: its border stays on the inner edge. With
 `mirror`, they resolve right to left, so a recipe for a left panel
 also serves a right panel.
 
+#### `PaintContext::focus_ring`
+
+```rust
+pub fn focus_ring(&mut self, rect: Rect, radius: f64)
+```
+
+Paints the theme focus ring just inside `rect` with corner
+`radius`, while the node shows keyboard focus. The ring is the one
+of a focused `Button` `Root`. It stays inside `rect`, so a control
+that rings its whole bounds is not clipped.
+
 #### `PaintContext::icon`
 
 ```rust
@@ -966,6 +977,16 @@ pub fn new(list: &'a mut DisplayList, bounds: Rect, tokens: &'a DesignTokens, st
 A context that paints into `list` inside `bounds`, left-to-right,
 with no visual state, at time zero, with the built-in English
 messages.
+
+#### `PaintContext::ring_inside`
+
+```rust
+pub fn ring_inside(&mut self, rect: Rect, style: &ResolvedStyle)
+```
+
+Paints the ring of `style`, if it has one, just inside `rect` with
+the start corner radius of the style. Use it for a ring that the
+clip of the control or a neighbouring part would cut.
 
 #### `PaintContext::rtl`
 

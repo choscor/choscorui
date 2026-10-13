@@ -255,10 +255,8 @@ fn attachment(cx: &Cx) -> ResolvedStyle {
             };
             style.gap = cx.sp(gap);
             style.padding = Edges::axes(cx.sp(pad.0), cx.sp(pad.1));
+            // Focus goes to the remove button, which shows the one ring.
             style.min_width = if vertical { cx.sp(24.0) } else { cx.sp(40.0) };
-            if s.focused() {
-                style.ring = cx.ring(1.0, cx.t.ring_color(cx.c(ColorRole::Ring)));
-            }
             if AttachmentState::from_variant(cx.q.variant) == AttachmentState::Error {
                 style.border = cx.c(ColorRole::Destructive);
             }

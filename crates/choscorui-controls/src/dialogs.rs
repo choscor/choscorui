@@ -678,7 +678,10 @@ impl CustomControl for ColorPicker {
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
-        let root = cx.style(StyleQuery::new(ControlKind::ColorPicker, Slot::Root).state(host));
+        // The picker box rings the whole control just inside its bounds,
+        // which clip it.
+        let mut root = cx.style(StyleQuery::new(ControlKind::ColorPicker, Slot::Root).state(host));
+        let ring = root.ring.take();
         cx.slot(cx.bounds, &root, |cx, _| {
             self.paint_swatch(&mut cx.at(self.swatch));
             for (channel, strip) in ColorChannel::ALL.into_iter().zip(self.strips) {
@@ -690,6 +693,8 @@ impl CustomControl for ColorPicker {
                 self.paint_channel(&mut cx.at(strip), channel, state);
             }
         });
+        root.ring = ring;
+        cx.ring_inside(cx.bounds, &root);
     }
 
     fn semantics(&self) -> SemanticNode {

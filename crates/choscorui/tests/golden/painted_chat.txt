@@ -280,16 +280,6 @@ slot progress: progress
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -300,7 +290,7 @@ text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -342,16 +332,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
@@ -362,7 +342,7 @@ text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -406,16 +386,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -426,7 +396,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -468,16 +438,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -488,7 +448,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -530,16 +490,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -550,7 +500,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -592,16 +542,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -612,7 +552,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -654,16 +594,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -674,7 +604,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -716,16 +646,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -736,7 +656,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment idle icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -778,16 +698,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -798,7 +708,7 @@ text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -846,16 +756,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
@@ -866,7 +766,7 @@ text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -916,16 +816,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -936,7 +826,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -984,16 +874,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1004,7 +884,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1052,16 +932,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1072,7 +942,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1120,16 +990,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1140,7 +1000,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1188,16 +1048,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1208,7 +1058,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1256,16 +1106,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1276,7 +1116,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment uploading icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1324,16 +1164,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1344,7 +1174,7 @@ text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1392,16 +1222,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
@@ -1412,7 +1232,7 @@ text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1462,16 +1282,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1482,7 +1292,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1530,16 +1340,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1550,7 +1350,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1598,16 +1398,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1618,7 +1408,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1666,16 +1456,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1686,7 +1466,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1734,16 +1514,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1754,7 +1524,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1802,16 +1572,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -1822,7 +1582,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment processing icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1870,16 +1630,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -1890,7 +1640,7 @@ text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1938,16 +1688,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r9.5 w1 #e7000bff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e7000bff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e7000bff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r9.5 w1 #e7000bff
@@ -1958,7 +1698,7 @@ text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r9.5 w1 #e7000bff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2008,16 +1748,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2028,7 +1758,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2076,16 +1806,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2096,7 +1816,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2144,16 +1864,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2164,7 +1874,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2212,16 +1922,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2232,7 +1932,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2280,16 +1980,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2300,7 +1990,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2348,16 +2038,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e7000bff
@@ -2368,7 +2048,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment error icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2416,16 +2096,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2436,7 +2106,7 @@ text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2478,16 +2148,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r10.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
-stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r9.5 w1 #e5e5e5ff
@@ -2498,7 +2158,7 @@ text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2542,16 +2202,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2562,7 +2212,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2604,16 +2254,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2624,7 +2264,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2666,16 +2306,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2686,7 +2316,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2728,16 +2358,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2748,7 +2368,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2790,16 +2410,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2810,7 +2420,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2852,16 +2462,6 @@ text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focused
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-# focus-visible
-stroke 9.5,9.5 161x37 r14.5 w1 #a1a1a180
-stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
-stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke 10.5,10.5 159x35 r13.5 w1 #e5e5e5ff
@@ -2872,7 +2472,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
-= rest: hovered pressed invalid checked indeterminate selected highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
 ### attachment done icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]

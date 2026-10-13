@@ -1007,11 +1007,14 @@ impl Dial {
     pub fn paint(&self, cx: &mut PaintContext<'_>, state: VisualState) {
         let bounds = cx.bounds;
         let query = |slot| StyleQuery::new(ControlKind::Dial, slot).state(state);
-        let (root, track, range, thumb) = (
+        // The root shows the one focus ring, so the thumb takes no
+        // focus flag.
+        let knob_state = state.without(VisualState::FOCUS_VISIBLE);
+        let (mut root, track, range, thumb) = (
             cx.style(query(Slot::Root)),
             cx.style(query(Slot::Track)),
             cx.style(query(Slot::Range)),
-            cx.style(query(Slot::Thumb)),
+            cx.style(StyleQuery::new(ControlKind::Dial, Slot::Thumb).state(knob_state)),
         );
         let radius = bounds.size.width.min(bounds.size.height) / 2.0;
         let center = Point::new(
@@ -1024,7 +1027,11 @@ impl Dial {
             radius * 2.0,
             radius * 2.0,
         );
+        // The ring goes inside the circle, which touches the bounds.
+        let ring = root.ring.take();
         cx.slot(circle, &root, |_, _| {});
+        root.ring = ring;
+        cx.ring_inside(circle, &root);
         let arc_radius = (radius - thumb.min_width / 2.0).max(0.0);
         let start = if self.wrapping { 0.0 } else { -0.75 * PI };
         let at = |angle: f64| {

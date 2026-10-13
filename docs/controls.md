@@ -567,7 +567,9 @@ semantics.
 itself, because the host has no `CommandRegistry`. In right-to-left
 layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
 node for the whole group, with a label for each member. It paints the
-`Root` slot, then each member. That node publishes the focused member.
+`Root` slot, then each member. While focus is visible, the focused member
+paints last, so no neighbour covers its ring. That node publishes the
+focused member.
 Arrow keys, Home, and End move the focus among the enabled toggle and
 button members. They skip disabled members, separators, and text parts.
 In an exclusive group, a toggle member that gets the focus also gets the
@@ -1362,15 +1364,15 @@ directions. It formats numbers in the locale of the environment.
   stops its input.
 - **Look.** `paint` uses the `Dial` recipe. A 6 pt `muted` track arc follows
   the sweep, and a 6 pt `primary` arc runs to the value. A 16 pt white thumb
-  with a `primary` border sits at the value. Hover or keyboard focus rings
-  the thumb.
+  with a `primary` border sits at the value. Hover rings the thumb.
+  Keyboard focus rings only the face, just inside the circle.
 
 | Part | Slot | Value |
 | --- | --- | --- |
 | Face | `Root` | no fill, no border, radius full; focus ring while focus is visible |
 | Track | `Track` | 6 pt `muted` arc |
 | Value arc | `Range` | 6 pt `primary` arc |
-| Thumb | `Thumb` | the `Slider` thumb and ring |
+| Thumb | `Thumb` | the `Slider` thumb; the ring only while hovered |
 | Value text | `Value` | xl2 medium mono `foreground` text |
 
 | Field | `Dial::semantics` |
@@ -1531,6 +1533,8 @@ scroll view use the same bar.
 - With `.focusable(true)`, the view takes focus. Then the arrow keys
   scroll 40 pt, PageUp, PageDown, and Space scroll one page, and Home and
   End go to the ends. Shift+Space scrolls one page back.
+- Keyboard focus shows the ring of the `ScrollArea` `Root` slot just
+  inside the viewport, above the content.
 - A page is the viewport less 40 pt of overlap. Semantic `Increment` and
   `Decrement` page forward and back.
 - A press does not focus the view.
@@ -1914,9 +1918,10 @@ pin this behavior.
   bottom `border` line. Each `HeaderCell` draws its title in sm medium
   `foreground` text with 8 pt inline padding. The sorted column shows a
   16 pt `muted-foreground` chevron at the end. A 1 pt `border` divider marks
-  each resize edge. `focus_visible` rings the focused column. In a control
-  host, the cell under the pointer gets a `muted` fill at 50%. A press
-  near a resize edge presses no cell.
+  each resize edge. `focus_visible` rings the focused column just inside
+  its cell, so the next cell and the clip do not cut the ring. In a
+  control host, the cell under the pointer gets a `muted` fill at 50%. A
+  press near a resize edge presses no cell.
 
 | Field | `HeaderView::column_semantics` |
 | --- | --- |
@@ -1998,9 +2003,11 @@ These types have no semantic node. Show the rows in an `ItemView`.
 `HostedColumnBrowser` that owns the model and mounts as one node. It paints
 one column for each level, and each column shows the rows that fit. A
 column scrolls to keep the path item visible. A press selects the row under
-the pointer. The row under the pointer shows the `ListView` hover fill. Columns follow reading order, so ArrowLeft and ArrowRight
-mirror in right-to-left layouts. The node has the `Tree` role, the name,
-and the focused path item as its value. Its only action is `Focus`.
+the pointer. The row under the pointer shows the `ListView` hover fill.
+Columns follow reading order, so ArrowLeft and ArrowRight mirror in
+right-to-left layouts. Keyboard focus rings the focused column just inside
+its edges. The node has the `Tree` role, the name, and the focused path
+item as its value. Its only action is `Focus`.
 
 **As a view.** `ColumnBrowser::new(name, model, path)` mounts a
 `HostedColumnBrowser`. `model` makes the tree model in the view's
@@ -2292,8 +2299,8 @@ index through `.on_item`, and Escape runs `.on_dismiss`.
   checkerboard.
 - **In a control host.** `ColorPicker` shows the swatch and one strip for
   each channel in its picker box. `with_name` sets its accessible name.
-- The picker box shows the focus ring while focus is visible. The thumb
-  of the focused channel also shows its ring.
+- The picker box shows the focus ring just inside its bounds while focus
+  is visible. The thumb of the focused channel also shows its ring.
 - ArrowUp and ArrowDown move between the channels. ArrowLeft and
   ArrowRight change the channel by 1%. Right-to-left layouts swap them.
 - PageUp and PageDown change the channel by 10%, and Home and End go to
@@ -2376,7 +2383,8 @@ through the `Text` value in both directions. Accept runs `on_activate`.
   separators are 1 pt `border` lines. A checked command has the `muted`
   fill.
 - The overflow chevron is a ghost button. The host paints the embedded
-  controls.
+  controls. While focus is visible, the `Item` ring goes around the rect
+  of a focused embedded control.
 - **In a control host.** `hosted` makes a `HostedToolbar` with its own
   command states. A command reports `Command`. Focus that enters the
   toolbar goes to the first item.
@@ -2558,9 +2566,11 @@ These types have no semantic node.
 - **Semantic actions.** `perform` with `Focus` focuses the item and
   scrolls it into view. `Activate` focuses the item and selects it alone.
 - **Look.** `paint` outlines each selected item with the `Canvas`
-  `Indicator` border, 1 pt `primary`, 2 pt outside the item. The focused
-  item gets a dashed outline. The rubber band fills with the `Range`
-  background, `primary` at 15%.
+  `Indicator` border, 1 pt `primary`, 2 pt outside the item. While the
+  canvas has focus, the focused item gets a dashed outline. With no
+  focused item, keyboard focus shows the focus ring just inside the
+  viewport. The rubber band fills with the `Range` background, `primary`
+  at 15%.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -2587,7 +2597,8 @@ the scene. The hosted node publishes only the container.
 **In a view.** The `Canvas` view of `choscorui-compose` holds a
 `CanvasView` with no scene items and draws with a closure. Its node is an
 `Image` with the `.label` name, and it is hidden without a label. With
-`.zoomable(true)`, the node takes focus and has the `Focus` action. A drag
+`.zoomable(true)`, the node takes focus and has the `Focus` action, and
+keyboard focus shows the focus ring just inside the node. A drag
 pans, the wheel pans, and Command makes the wheel zoom. The arrow keys pan,
 and `+`, `-`, and `0` zoom.
 
@@ -2984,6 +2995,7 @@ returns false.
   `Activated`.
 - While focused, the first empty slot (or the last slot) shows the `ring`
   border and the focus ring. An empty active slot shows a 1 × 16 pt caret.
+  The active slot paints last, so no neighbour covers its ring.
 
 | Part | Value |
 | --- | --- |
@@ -3074,6 +3086,9 @@ character that the code does not accept. `set_open` returns false.
 - **Keys while open.** The calendar keys move the cursor and do not choose.
   Enter or Space chooses the cursor day. Escape closes and emits
   `Dismissed`. Tab closes and moves focus.
+- The ring on the cursor day or a caption dropdown shows only while the
+  last input is the keyboard. A popover that a press opens shows no ring
+  until a key.
 - A press on a day chooses it, and the month buttons change the shown
   month.
 - A `Single` picker closes after a choice and emits `Changed(Date)`.
@@ -3721,6 +3736,7 @@ behavior.
   shows the category and its values beside the pick. Escape hides it.
   `place_popup` puts the tooltip 10 pt after the pick, and before it when
   only that side fits.
+- Keyboard focus shows the focus ring just inside the chart bounds.
 - `with_legend()` shows the series names, or the category names for pie
   and radial charts, under the chart. The entries go in centered rows.
   An entry that does not fit in the row starts a new row, and the chart
@@ -4070,6 +4086,7 @@ behavior.
   error shows the destructive border and detail text.
 - `with_remove(label)` adds a ghost remove button at the end. It is the
   only tab stop. Enter, Space, a click, or `Dismiss` emits `Dismissed`.
+  Keyboard focus rings only the remove button.
 - The size is `Default`, `Sm`, or `Xs`.
 
 | Part | Slot | Value |

@@ -366,17 +366,10 @@ fn attachment_matches_its_reference_table() {
             ),
         );
         assert_eq!((bg(&bar), bar.min_height), (c(ColorRole::Primary), 2.0));
-        let focused = get(
-            &tokens,
-            query(AttachmentState::Idle, Slot::Root, VisualState::FOCUSED),
-        );
-        assert_eq!(
-            focused.ring,
-            Some(Ring {
-                width: 1.0,
-                color: c(ColorRole::Ring).with_alpha(0.5),
-            })
-        );
+        // The remove button shows the one focus ring, not the box.
+        let focus = VisualState::FOCUSED.with(VisualState::FOCUS_VISIBLE);
+        let focused = get(&tokens, query(AttachmentState::Idle, Slot::Root, focus));
+        assert_eq!(focused.ring, None);
         let disabled = get(
             &tokens,
             query(AttachmentState::Idle, Slot::Root, VisualState::DISABLED),

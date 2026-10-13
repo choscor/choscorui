@@ -240,14 +240,7 @@ impl CustomControl for StarRating {
                 color,
             );
         }
-        if cx.state.focus_visible() {
-            let _ = cx.list.stroke_rounded_rect(
-                bounds.inset(1.0),
-                4.0,
-                tokens.color(ColorRole::Primary),
-                2.0,
-            );
-        }
+        cx.focus_ring(bounds, 4.0);
     }
 
     fn semantics(&self) -> SemanticNode {

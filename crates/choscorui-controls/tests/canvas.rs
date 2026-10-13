@@ -1,4 +1,6 @@
-use choscorui_controls::{CanvasInput, CanvasView, EstimatedText, MAX_ZOOM, PaintContext, Styles};
+use choscorui_controls::{
+    CanvasInput, CanvasView, EstimatedText, MAX_ZOOM, PaintContext, Styles, VisualState,
+};
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key,
     Localizer, Paint, Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction, SemanticRole,
@@ -11,7 +13,9 @@ fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
 
 fn paint(view: &CanvasView, scene: &mut Scene, list: &mut DisplayList) -> usize {
     let (tokens, styles) = (DesignTokens::light(), Styles::new());
-    let mut cx = PaintContext::new(list, view.viewport(), &tokens, &styles, &EstimatedText);
+    // The canvas has focus, so the focused item shows its outline.
+    let mut cx = PaintContext::new(list, view.viewport(), &tokens, &styles, &EstimatedText)
+        .state(VisualState::FOCUSED);
     view.paint(&mut cx, scene).unwrap()
 }
 

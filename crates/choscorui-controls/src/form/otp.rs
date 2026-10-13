@@ -258,7 +258,6 @@ impl CustomControl for InputOtp {
         ));
         let radius = group.radius.top_start;
         let active = self.active();
-        let mut index = 0;
         if group.ring.is_some() {
             let ring = ResolvedStyle {
                 border_width: 0.0,
@@ -274,38 +273,46 @@ impl CustomControl for InputOtp {
                 first += size;
             }
         }
+        // Each slot with its position in its group and the group size.
+        // The active slot paints last, so that no neighbour covers its
+        // ring.
+        let mut slots = Vec::with_capacity(self.slots.len());
         for size in &self.groups {
-            for position in 0..*size {
-                let Some(rect) = self.slots.get(index).copied() else {
-                    return;
-                };
-                let state = base.set(VisualState::SELECTED, focused && index == active);
-                let mut style = cx.style(Self::query(Slot::Item, state));
-                if position == 0 {
-                    style.border_sides.inline_start = true;
-                    (style.radius.top_start, style.radius.bottom_start) = (radius, radius);
-                }
-                if position + 1 == *size {
-                    (style.radius.top_end, style.radius.bottom_end) = (radius, radius);
-                }
-                let character = self.value.get(index).map(|c| c.to_string());
-                let caret = focused && index == active && character.is_none();
-                let indicator = cx.style(Self::query(Slot::Indicator, state));
-                cx.slot(rect, &style, |cx, inner| {
-                    if let Some(character) = &character {
-                        cx.label(inner, character, &style, TextAlign::Center);
-                    } else if caret {
-                        let line = Rect::from_xywh(
-                            rect.center().x - indicator.min_width / 2.0,
-                            rect.center().y - indicator.min_height / 2.0,
-                            indicator.min_width,
-                            indicator.min_height,
-                        );
-                        cx.slot(line, &indicator, |_, _| {});
-                    }
-                });
-                index += 1;
+            let first = slots.len();
+            slots.extend((0..*size).map(|position| (first + position, position, *size)));
+        }
+        slots.truncate(self.slots.len());
+        if let Some(at) = slots.iter().position(|(index, ..)| *index == active) {
+            let slot = slots.remove(at);
+            slots.push(slot);
+        }
+        for (index, position, size) in slots {
+            let rect = self.slots[index];
+            let state = base.set(VisualState::SELECTED, focused && index == active);
+            let mut style = cx.style(Self::query(Slot::Item, state));
+            if position == 0 {
+                style.border_sides.inline_start = true;
+                (style.radius.top_start, style.radius.bottom_start) = (radius, radius);
             }
+            if position + 1 == size {
+                (style.radius.top_end, style.radius.bottom_end) = (radius, radius);
+            }
+            let character = self.value.get(index).map(|c| c.to_string());
+            let caret = focused && index == active && character.is_none();
+            let indicator = cx.style(Self::query(Slot::Indicator, state));
+            cx.slot(rect, &style, |cx, inner| {
+                if let Some(character) = &character {
+                    cx.label(inner, character, &style, TextAlign::Center);
+                } else if caret {
+                    let line = Rect::from_xywh(
+                        rect.center().x - indicator.min_width / 2.0,
+                        rect.center().y - indicator.min_height / 2.0,
+                        indicator.min_width,
+                        indicator.min_height,
+                    );
+                    cx.slot(line, &indicator, |_, _| {});
+                }
+            });
         }
         let separator = cx.style(Self::query(Slot::Separator, base));
         for rect in &self.separators {

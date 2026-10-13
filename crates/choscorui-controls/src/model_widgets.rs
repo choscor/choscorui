@@ -317,9 +317,11 @@ impl HeaderView {
                 bounds.size.height,
             );
             cx.cursor(edge, handle.cursor);
+            // The ring stays inside the cell: the control clips its
+            // bounds, and the next cell paints over the cell's end.
             if state.focus_visible() {
-                let ring = cx.style(query(Slot::Root).state(state));
-                cx.slot(rect, &ring, |_, _| {});
+                let root = cx.style(query(Slot::Root).state(state));
+                cx.ring_inside(rect, &root);
             }
             offset += column.width;
         }
@@ -1208,6 +1210,13 @@ impl CustomControl for HostedColumnBrowser {
                 );
             }
         }
+        // Keyboard focus rings the focused column.
+        let column = self.column_rect(self.browser.focused_column());
+        let radius = cx
+            .style(StyleQuery::new(ControlKind::ListView, Slot::Root))
+            .radius
+            .top_start;
+        cx.focus_ring(column, radius);
     }
 
     fn semantics(&self) -> SemanticNode {

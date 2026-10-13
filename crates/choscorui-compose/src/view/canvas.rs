@@ -163,6 +163,7 @@ impl CustomControl for CanvasLeaf {
         };
         (self.draw)(&mut canvas, cx.bounds.size);
         let _ = cx.list.pop_transform();
+        cx.focus_ring(cx.bounds, 0.0);
     }
 
     fn semantics(&self) -> SemanticNode {

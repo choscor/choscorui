@@ -577,7 +577,12 @@ impl CustomControl for HostedButtonGroup {
         let bounds = cx.bounds;
         let root = cx.style(StyleQuery::new(ControlKind::ButtonGroup, Slot::Root).state(host));
         cx.slot(bounds, &root, |_, _| {});
-        for (index, rect) in self.rects.iter().enumerate() {
+        // While it shows the ring, the focused member paints last, so
+        // that no neighbour covers the ring.
+        let count = self.rects.len();
+        let last = (host.focus_visible() && self.focus < count).then_some(self.focus);
+        for index in (0..count).filter(|index| Some(*index) != last).chain(last) {
+            let rect = &self.rects[index];
             let own = self.parts.state(index, host).set(
                 VisualState::FOCUS_VISIBLE,
                 host.focus_visible() && self.focus == index,

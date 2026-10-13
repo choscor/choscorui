@@ -6,8 +6,9 @@ use super::View;
 use super::env::Metric;
 use super::host::{Cx, Flex, Inner};
 use choscorui_controls::{
-    ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
-    OverlayScrollBar, PaintContext, ScrollOrientation, Separator, SeparatorOrientation,
+    ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
+    MeasureContext, OverlayScrollBar, PaintContext, ScrollOrientation, Separator,
+    SeparatorOrientation, Slot, StyleQuery,
 };
 use choscorui_core::{
     Axis, ChildMeasure, Constraints, CustomLayout, DesignTokens, Dirty, EventPhase, EventReply,
@@ -808,6 +809,10 @@ impl CustomControl for ScrollControl {
         let mut bar = self.bar.clone();
         bar.set_scroll(content, offset);
         bar.paint(cx);
+        // The `ScrollArea` root rings the viewport on keyboard focus,
+        // inside the bounds that clip the control.
+        let root = cx.style(StyleQuery::new(ControlKind::ScrollArea, Slot::Root).state(cx.state));
+        cx.ring_inside(cx.bounds, &root);
     }
 
     /// The value is the position along the axis in whole percent.

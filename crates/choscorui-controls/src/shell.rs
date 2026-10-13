@@ -397,7 +397,8 @@ impl Toolbar {
     /// Paints the toolbar in `layout`: the bar with a border on the edge
     /// that faces the content, ghost buttons for commands, 1 pt
     /// separators, and the overflow chevron. The host paints embedded
-    /// controls. `focus_visible` rings the focused item.
+    /// controls; `focus_visible` rings the focused item, an embedded
+    /// control too.
     pub fn paint(
         &self,
         cx: &mut PaintContext<'_>,
@@ -458,6 +459,18 @@ impl Toolbar {
                         )
                     };
                     fill_area(cx.list, line, cx.rtl, &rule.background);
+                }
+                ToolbarItemKind::Control { .. }
+                    if focus_visible && self.focused == Some(*index) =>
+                {
+                    // The host paints the control over its rect, so the
+                    // ring of the item goes around the rect.
+                    let state = VisualState::FOCUS_VISIBLE;
+                    let style = cx.style(query(Slot::Item).state(state));
+                    if let Some(ring) = style.ring {
+                        let radius = style.radius.top_start;
+                        let _ = cx.list.draw_ring(*rect, radius, ring.width, ring.color);
+                    }
                 }
                 ToolbarItemKind::Control { .. } | ToolbarItemKind::FlexibleSpace => {}
             }
