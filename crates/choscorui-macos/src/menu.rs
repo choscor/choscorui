@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+/// The number that identifies one menu command.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct MenuCommandId(pub u64);
 
@@ -17,6 +18,7 @@ pub struct MenuShortcut {
     pub modifiers: MenuShortcutModifiers,
 }
 
+/// The title, enabled and checked state, and shortcut of a menu item.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuItemState {
     pub title: String,
@@ -26,6 +28,7 @@ pub struct MenuItemState {
 }
 
 impl MenuItemState {
+    /// An enabled item with `title`, no check mark, and no shortcut.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
@@ -36,6 +39,7 @@ impl MenuItemState {
     }
 }
 
+/// One entry of a menu: a command or a separator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MenuEntry {
     Command {
@@ -46,15 +50,18 @@ pub enum MenuEntry {
 }
 
 impl MenuEntry {
+    /// A command item with its state.
     pub fn command(command: MenuCommandId, state: MenuItemState) -> Self {
         Self::Command { command, state }
     }
 
+    /// A separator line between items.
     pub const fn separator() -> Self {
         Self::Separator
     }
 }
 
+/// One menu of the menu bar: its title and its entries.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuSpec {
     pub title: String,
@@ -62,6 +69,7 @@ pub struct MenuSpec {
 }
 
 impl MenuSpec {
+    /// A menu with `title` and `entries`.
     pub fn new(title: impl Into<String>, entries: Vec<MenuEntry>) -> Self {
         Self {
             title: title.into(),
@@ -93,6 +101,7 @@ impl std::fmt::Display for MenuError {
 
 impl std::error::Error for MenuError {}
 
+/// The menus of the menu bar, with each command at one known place.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MenuBarModel {
     menus: Vec<MenuSpec>,
@@ -100,6 +109,8 @@ pub struct MenuBarModel {
 }
 
 impl MenuBarModel {
+    /// A menu bar with `menus`. Returns an error when a command
+    /// appears twice or a text contains a NUL character.
     pub fn new(menus: Vec<MenuSpec>) -> Result<Self, MenuError> {
         let mut locations = HashMap::new();
         for (menu_index, menu) in menus.iter().enumerate() {
@@ -119,10 +130,12 @@ impl MenuBarModel {
         Ok(Self { menus, locations })
     }
 
+    /// The menus, in order.
     pub fn menus(&self) -> &[MenuSpec] {
         &self.menus
     }
 
+    /// The state of the item for `command`.
     pub fn state(&self, command: MenuCommandId) -> Result<&MenuItemState, MenuError> {
         let &(menu, entry) = self
             .locations
@@ -134,6 +147,7 @@ impl MenuBarModel {
         }
     }
 
+    /// Replaces the state of the item for `command`.
     pub fn set_state(
         &mut self,
         command: MenuCommandId,

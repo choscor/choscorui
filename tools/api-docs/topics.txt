@@ -166,6 +166,7 @@ presentation choscorui::prelude::FontDialog
 presentation choscorui::prelude::InputDialog
 presentation choscorui::prelude::Popover
 presentation choscorui::prelude::ContextMenu
+presentation choscorui::prelude::DropdownMenu
 presentation choscorui::prelude::MenuChoice
 presentation choscorui::prelude::SheetSide
 presentation choscorui::prelude::Toast

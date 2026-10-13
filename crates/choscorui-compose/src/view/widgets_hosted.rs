@@ -53,6 +53,7 @@ fn as_bool(value: &ControlValue) -> Option<bool> {
 pub type AvatarGroup = Configured<controls::AvatarGroup>;
 
 impl Configured<controls::AvatarGroup> {
+    /// A group named `name` that shows `avatars` in an overlapped row.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         avatars: impl Items<controls::Avatar>,
@@ -89,6 +90,7 @@ impl Configured<controls::AvatarGroup> {
 pub type StackedContainer = Configured<controls::HostedStack>;
 
 impl Configured<controls::HostedStack> {
+    /// A stack named `name` with `pages` pages that shows page `current`.
     pub fn new<M, N>(
         name: impl IntoLive<TextContent, M>,
         pages: usize,
@@ -122,6 +124,7 @@ impl Configured<controls::HostedStack> {
 pub type GroupBox = Configured<controls::HostedGroupBox>;
 
 impl Configured<controls::HostedGroupBox> {
+    /// A group box with `title`.
     pub fn new<M>(title: impl IntoLive<TextContent, M>) -> Self {
         let title = label(title);
         Configured::custom(ControlKind::Card, move |env| {
@@ -152,6 +155,7 @@ impl Configured<controls::HostedGroupBox> {
 pub type ToolBox = Configured<controls::ToolBox>;
 
 impl Configured<controls::ToolBox> {
+    /// A tool box with a page for each title, and `open` as the open page.
     pub fn new(titles: impl Items<String>, open: Binding<usize>) -> Self {
         Configured::custom(ControlKind::Accordion, move |env| {
             controls::ToolBox::new(titles.items(env))
@@ -183,6 +187,7 @@ impl Configured<controls::ToolBox> {
 pub type ScrollBar = Configured<controls::ScrollBar>;
 
 impl Configured<controls::ScrollBar> {
+    /// A scroll bar named `name` for `content` in a `viewport`, with its position in `offset`.
     pub fn new<M>(
         name: impl IntoLive<TextContent, M>,
         orientation: ScrollOrientation,
@@ -228,6 +233,7 @@ impl Configured<controls::ScrollBar> {
 pub type Toaster = Configured<controls::Toaster>;
 
 impl Configured<controls::Toaster> {
+    /// A toaster named `name` that shows `toasts`, with `close` as the name of each close button.
     pub fn new<M, N>(
         name: impl IntoLive<TextContent, M>,
         toasts: Toasts,
@@ -266,6 +272,7 @@ impl Configured<controls::Toaster> {
 pub type ToolButton = Configured<controls::HostedToolButton>;
 
 impl Configured<controls::HostedToolButton> {
+    /// A tool button with `label` that runs `action`.
     pub fn new<M>(label: impl IntoLive<TextContent, M>, action: impl Fn() + 'static) -> Self {
         let label = self::label(label);
         Configured::custom(ControlKind::Toggle, move |env| {
@@ -304,6 +311,7 @@ impl Configured<controls::HostedToolButton> {
 pub type CommandLink = Configured<controls::HostedCommandLink>;
 
 impl Configured<controls::HostedCommandLink> {
+    /// A command link with `title` and `description` that runs `action`.
     pub fn new<M, N>(
         title: impl IntoLive<TextContent, M>,
         description: impl IntoLive<TextContent, N>,
@@ -346,6 +354,7 @@ impl Configured<controls::HostedCommandLink> {
 pub type AlertDialog = Configured<controls::HostedAlertDialog>;
 
 impl Configured<controls::HostedAlertDialog> {
+    /// An alert with `title`, `message`, and `buttons` that shows while `presented` is true.
     pub fn new<M, N>(
         title: impl IntoLive<TextContent, M>,
         message: impl IntoLive<TextContent, N>,
@@ -393,6 +402,7 @@ impl Configured<controls::HostedAlertDialog> {
 pub type DropdownMenu = Configured<controls::HostedDropdownMenu>;
 
 impl Configured<controls::HostedDropdownMenu> {
+    /// A menu named `name` that shows `items`.
     pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<MenuItem>) -> Self {
         let name = label(name);
         Configured::custom(ControlKind::Menu, move |env| {
@@ -423,6 +433,7 @@ impl Configured<controls::HostedDropdownMenu> {
 pub type FontChooser = Configured<controls::FontChooser>;
 
 impl Configured<controls::FontChooser> {
+    /// A font list of `families`, with `fallback` as the default family and `selected` as the selected row.
     pub fn new(
         families: impl Items<String>,
         fallback: impl Into<String>,

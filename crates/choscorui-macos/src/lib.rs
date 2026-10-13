@@ -521,12 +521,15 @@ fn view_key_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<
     }
 }
 
+/// The title and the content size of a new window.
 pub struct WindowOptions {
     title: String,
     width: f64,
     height: f64,
 }
 impl WindowOptions {
+    /// A window with `title` and a content area of `width` by `height`
+    /// points.
     pub fn new(title: impl Into<String>, width: f64, height: f64) -> Self {
         Self {
             title: title.into(),

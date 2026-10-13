@@ -62,6 +62,14 @@ pub struct Scene {
 
 impl Scene {
     /// A window with `options` that shows the view that `root` makes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let scene = Scene::new(WindowOptions::new("Notes", 640.0, 480.0), || Text::new("Notes"));
+    /// let app = App::new().scene(scene);
+    /// ```
     pub fn new<V: View>(options: WindowOptions, root: impl Fn() -> V + 'static) -> Self {
         Self {
             options,
@@ -71,6 +79,16 @@ impl Scene {
     }
 
     /// Keeps the window title equal to `title`, which can read state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new();
+    /// let count = app.runtime().property(0);
+    /// let scene = Scene::new(WindowOptions::new("Inbox", 640.0, 480.0), || Text::new("Inbox"))
+    ///     .title(move || format!("Inbox ({})", count.get()));
+    /// ```
     #[must_use]
     pub fn title<M>(mut self, title: impl IntoLive<String, M>) -> Self {
         self.title = Some(title.into_live());
@@ -80,6 +98,8 @@ impl Scene {
 
 /// A view-based application. All windows share one reactive runtime, so
 /// state made with [`App::runtime`] reaches every window.
+///
+/// # Examples
 ///
 /// ```no_run
 /// use choscorui::prelude::*;
@@ -123,6 +143,17 @@ impl Default for App {
 impl App {
     /// An application with light tokens and an environment in the root
     /// locale with no catalog.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// fn main() -> Result<(), choscorui::AppError> {
+    ///     App::new()
+    ///         .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///         .run()
+    /// }
+    /// ```
     pub fn new() -> Self {
         Self {
             runtime: Runtime::new(),
@@ -136,12 +167,34 @@ impl App {
     }
 
     /// The reactive runtime that every window's state uses.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new();
+    /// // One state for all windows.
+    /// let signed_in = app.runtime().property(false);
+    /// let app = app.window(WindowOptions::new("Home", 400.0, 300.0), move || {
+    ///     let signed_in = signed_in.clone();
+    ///     Text::new(move || if signed_in.get() { "Welcome" } else { "Sign in" })
+    /// });
+    /// ```
     pub fn runtime(&self) -> &Runtime {
         &self.runtime
     }
 
     /// The root environment of every window: the catalog, the locale,
     /// and environment values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// # use std::rc::Rc;
+    /// let env = Env::new(Rc::new(Catalog::new()), Locale::root());
+    /// let app = App::new().env(env);
+    /// ```
     #[must_use]
     pub fn env(mut self, env: Env) -> Self {
         self.env = env;
@@ -150,6 +203,15 @@ impl App {
 
     /// The application tokens that themes start from. When state that
     /// `tokens` reads changes, every window takes the new tokens.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new();
+    /// let dark = app.runtime().property(false);
+    /// let app = app.tokens(move || if dark.get() { DesignTokens::dark() } else { DesignTokens::light() });
+    /// ```
     #[must_use]
     pub fn tokens<M>(mut self, tokens: impl IntoLive<DesignTokens, M>) -> Self {
         self.tokens = tokens.into_live();
@@ -158,12 +220,30 @@ impl App {
 
     /// Opens a window with `options` that shows the view that `root`
     /// makes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new()
+    ///     .window(WindowOptions::new("Main", 800.0, 600.0), || Text::new("Main"))
+    ///     .window(WindowOptions::new("Tools", 240.0, 400.0), || Text::new("Tools"));
+    /// ```
     #[must_use]
     pub fn window<V: View>(self, options: WindowOptions, root: impl Fn() -> V + 'static) -> Self {
         self.scene(Scene::new(options, root))
     }
 
     /// Opens the window that `scene` describes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let scene = Scene::new(WindowOptions::new("Main", 800.0, 600.0), || Text::new("Main"))
+    ///     .title("Untitled");
+    /// let app = App::new().scene(scene);
+    /// ```
     #[must_use]
     pub fn scene(mut self, scene: Scene) -> Self {
         self.scenes.push(scene);
@@ -174,6 +254,23 @@ impl App {
     /// each command that the user chooses. When state that `menu` read
     /// changes, the menu bar is made again, for example for check marks
     /// or another language.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// const QUIT: MenuCommandId = MenuCommandId(1);
+    /// let app = App::new().commands(
+    ///     || MenuBarModel::new(vec![MenuSpec::new("File", vec![
+    ///         MenuEntry::command(QUIT, MenuItemState::new("Quit")),
+    ///     ])]),
+    ///     |cx, command| {
+    ///         if command == QUIT {
+    ///             cx.quit();
+    ///         }
+    ///     },
+    /// );
+    /// ```
     #[must_use]
     pub fn commands(
         mut self,
@@ -186,6 +283,17 @@ impl App {
 
     /// Calls `tick` once each turn of the event loop, after input and
     /// before drawing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if cx.windows().is_empty() {
+    ///         cx.quit();
+    ///     }
+    /// });
+    /// ```
     #[must_use]
     pub fn on_tick(mut self, tick: impl Fn(&mut AppContext) + 'static) -> Self {
         self.on_tick = Some(Rc::new(tick));
@@ -194,6 +302,15 @@ impl App {
 
     /// Calls `handler` with each error that a window's views report. By
     /// default the errors go to standard error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_error(|window, error| {
+    ///     eprintln!("window {window:?}: {error}");
+    /// });
+    /// ```
     #[must_use]
     pub fn on_error(mut self, handler: impl Fn(WindowId, &ViewError) + 'static) -> Self {
         self.on_error = Rc::new(handler);
@@ -202,6 +319,19 @@ impl App {
 
     /// Starts the platform, opens the windows, and installs the menu bar.
     /// Drive the result with [`AppContext::pump`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// fn main() -> Result<(), choscorui::AppError> {
+    ///     let mut cx = App::new()
+    ///         .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///         .start()?;
+    ///     while cx.pump() {}
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn start(self) -> Result<AppContext, AppError> {
         let application = Application::new().map_err(AppError::Platform)?;
         let rebuild = Rc::new(Cell::new(false));
@@ -251,6 +381,17 @@ impl App {
 
     /// Runs the application until the user quits or closes the last
     /// window.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// fn main() -> Result<(), choscorui::AppError> {
+    ///     App::new()
+    ///         .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///         .run()
+    /// }
+    /// ```
     pub fn run(self) -> Result<(), AppError> {
         let mut context = self.start()?;
         while context.pump() {}
@@ -301,16 +442,46 @@ fn shortcut_modifiers(modifiers: Modifiers) -> ShortcutModifiers {
 
 impl AppContext {
     /// The platform application, for dialogs, the clipboard, and timers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _platform = cx.application();
+    /// });
+    /// ```
     pub fn application(&self) -> &Application {
         &self.application
     }
 
     /// The reactive runtime that every window's state uses.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _count = cx.runtime().property(0);
+    /// });
+    /// ```
     pub fn runtime(&self) -> &Runtime {
         &self.runtime
     }
 
     /// Opens the window that `scene` describes and makes it active.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if cx.windows().is_empty() {
+    ///         let scene = Scene::new(WindowOptions::new("New", 400.0, 300.0), || Text::new("New"));
+    ///         let _ = cx.open(scene);
+    ///     }
+    /// });
+    /// ```
     pub fn open(&mut self, scene: Scene) -> Result<WindowId, PlatformError> {
         let Scene {
             options,
@@ -341,6 +512,17 @@ impl AppContext {
     }
 
     /// Closes window `id`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active() {
+    ///         cx.close(id);
+    ///     }
+    /// });
+    /// ```
     pub fn close(&mut self, id: WindowId) {
         let Some(index) = self.index(id) else {
             return;
@@ -353,27 +535,84 @@ impl AppContext {
     }
 
     /// Ends the event loop after this turn.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if cx.elapsed().as_secs() > 60 {
+    ///         cx.quit();
+    ///     }
+    /// });
+    /// ```
     pub fn quit(&mut self) {
         self.quit = true;
     }
 
     /// The window that last had focus.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _front = cx.active();
+    /// });
+    /// ```
     pub fn active(&self) -> Option<WindowId> {
         self.active
     }
 
     /// The open windows, oldest first.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     for id in cx.windows() {
+    ///         let _ = id;
+    ///     }
+    /// });
+    /// ```
     pub fn windows(&self) -> Vec<WindowId> {
         self.windows.iter().map(|entry| entry.id).collect()
     }
 
     /// The native window `id`, for its geometry or paint timing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active()
+    ///         && let Some(window) = cx.window(id)
+    ///     {
+    ///         let _size = window.content_size();
+    ///     }
+    /// });
+    /// ```
     pub fn window(&mut self, id: WindowId) -> Option<&mut Window> {
         let index = self.index(id)?;
         Some(&mut self.windows[index].window)
     }
 
     /// The view runtime of window `id`, for scripted checks.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     if let Some(id) = cx.active()
+    ///         && let Some(host) = cx.host(id)
+    ///     {
+    ///         let _errors = host.take_errors();
+    ///     }
+    /// });
+    /// ```
     pub fn host(&mut self, id: WindowId) -> Option<&mut ViewHost> {
         let index = self.index(id)?;
         Some(&mut self.windows[index].host)
@@ -381,6 +620,17 @@ impl AppContext {
 
     /// Runs the `commands` handler for `command`, as if the user chose
     /// it in the menu bar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// const QUIT: MenuCommandId = MenuCommandId(1);
+    /// let app = App::new().on_tick(|cx| {
+    ///     // Runs the menu handler as if the user chose Quit.
+    ///     cx.command(QUIT);
+    /// });
+    /// ```
     pub fn command(&mut self, command: MenuCommandId) {
         if let Some((_, handler, _)) = &self.menu {
             let handler = handler.clone();
@@ -389,16 +639,43 @@ impl AppContext {
     }
 
     /// The tokens that the windows have now.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _tokens = cx.tokens();
+    /// });
+    /// ```
     pub fn tokens(&self) -> DesignTokens {
         self.current
     }
 
     /// The installed menu bar, for its item states.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _installed = cx.menu().is_some();
+    /// });
+    /// ```
     pub fn menu(&self) -> Option<&MainMenu> {
         self.installed.as_ref()
     }
 
     /// The time since the application started.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui::prelude::*;
+    /// let app = App::new().on_tick(|cx| {
+    ///     let _seconds = cx.elapsed().as_secs_f64();
+    /// });
+    /// ```
     pub fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }
@@ -424,6 +701,19 @@ impl AppContext {
     /// Waits for native events up to the next due frame or timer, handles
     /// them, and draws what changed. Returns false when the application
     /// should stop.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// fn main() -> Result<(), choscorui::AppError> {
+    ///     let mut cx = App::new()
+    ///         .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///         .start()?;
+    ///     while cx.pump() {}
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn pump(&mut self) -> bool {
         let wait = self.wait();
         self.application.dispatch_next_event(wait);
