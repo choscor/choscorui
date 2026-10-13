@@ -216,7 +216,7 @@ pub trait CustomControl {
     fn event(&mut self, context: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply;
 
     /// Paints into `cx.bounds`. The host clips the control to its bounds
-    /// and sets `cx.state` to the hover, focus, and disabled flags.
+    /// and sets `cx.state` to the hover, focus, disabled, and invalid flags.
     fn paint(&self, cx: &mut PaintContext<'_>);
 
     /// The rectangle of an open popup in window coordinates. The host
@@ -303,6 +303,9 @@ pub trait CustomControl {
 pub struct ControlHost {
     controls: HashMap<NodeId, Box<dyn CustomControl>>,
     disabled: HashSet<NodeId>,
+    /// Controls that a host marks invalid, for example from a form field
+    /// with an error.
+    invalid: HashSet<NodeId>,
     hovered: Vec<NodeId>,
     messages: Vec<(NodeId, ControlMessage)>,
     time: f64,
@@ -341,6 +344,7 @@ impl ControlHost {
     pub fn unmount(&mut self, tree: &mut Tree, node: NodeId) -> Option<Box<dyn CustomControl>> {
         let control = self.controls.remove(&node)?;
         self.disabled.remove(&node);
+        self.invalid.remove(&node);
         self.hovered.retain(|id| *id != node);
         self.unarranged.remove(&node);
         self.transitions.remove(node);
@@ -374,6 +378,7 @@ impl ControlHost {
         let before = self.controls.len();
         self.controls.retain(|node, _| tree.contains(*node));
         self.disabled.retain(|node| tree.contains(*node));
+        self.invalid.retain(|node| tree.contains(*node));
         self.hovered.retain(|node| tree.contains(*node));
         self.unarranged.retain(|node| tree.contains(*node));
         self.transitions.retain(|node| tree.contains(node));
@@ -428,6 +433,35 @@ impl ControlHost {
 
     pub fn is_enabled(&self, node: NodeId) -> bool {
         !self.disabled.contains(&node)
+    }
+
+    /// Marks a mounted control invalid or valid, for example while the
+    /// form field around it shows an error. The control paints with the
+    /// invalid state, and its node gets the invalid semantic state. A
+    /// control that is not a field ignores the state.
+    pub fn set_invalid(
+        &mut self,
+        tree: &mut Tree,
+        node: NodeId,
+        invalid: bool,
+    ) -> Result<(), TreeError> {
+        if !self.controls.contains_key(&node) {
+            return Err(TreeError::MissingNode);
+        }
+        let changed = if invalid {
+            self.invalid.insert(node)
+        } else {
+            self.invalid.remove(&node)
+        };
+        if changed {
+            tree.invalidate(node, Dirty::PAINT)?;
+            tree.invalidate(node, Dirty::SEMANTICS)?;
+        }
+        Ok(())
+    }
+
+    pub fn is_invalid(&self, node: NodeId) -> bool {
+        self.invalid.contains(&node)
     }
 
     /// Measures a mounted node outside a layout pass.
@@ -896,13 +930,15 @@ impl ControlHost {
         order
     }
 
-    /// The host's view of a node's state: hover, focus, and disabled.
+    /// The host's view of a node's state: hover, focus, disabled, and
+    /// invalid.
     pub fn visual_state(&self, tree: &Tree, node: NodeId) -> VisualState {
         VisualState::NONE
             .set(VisualState::HOVERED, self.hovered.first() == Some(&node))
             .set(VisualState::FOCUSED, tree.focus() == Some(node))
             .set(VisualState::FOCUS_VISIBLE, tree.focus_visible(node))
             .set(VisualState::DISABLED, self.disabled.contains(&node))
+            .set(VisualState::INVALID, self.invalid.contains(&node))
     }
 
     /// Paints visible mounted controls in tree order, each clipped to its
@@ -1077,6 +1113,7 @@ impl ControlHost {
                     semantic.state.disabled = true;
                     semantic.actions.clear();
                 }
+                semantic.state.invalid |= self.invalid.contains(node);
                 let change = semantics.set(*node, semantic, tree)?;
                 if change != SemanticChange::None {
                     changes.push(change);

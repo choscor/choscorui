@@ -950,7 +950,10 @@ impl CustomControl for FontChooser {
 
     /// The trigger shows the invalid look while the family is missing.
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let host = cx.state.set(VisualState::INVALID, self.is_missing());
+        let host = cx.state.set(
+            VisualState::INVALID,
+            cx.state.invalid() || self.is_missing(),
+        );
         self.combo.paint(cx, host, "");
     }
 

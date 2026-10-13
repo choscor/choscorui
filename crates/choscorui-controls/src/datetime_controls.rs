@@ -341,7 +341,7 @@ impl DateTimeEdit {
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(
             VisualState::INVALID,
-            self.validation() != ValidationState::Valid,
+            host.invalid() || self.validation() != ValidationState::Valid,
         )
     }
 

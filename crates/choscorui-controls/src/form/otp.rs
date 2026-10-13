@@ -194,7 +194,7 @@ impl CustomControl for InputOtp {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
         let base = VisualState::NONE
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, host.invalid() || self.invalid)
             .set(VisualState::DISABLED, host.disabled());
         let focused = host.focused();
         // The active slot shows the focus ring while the control has

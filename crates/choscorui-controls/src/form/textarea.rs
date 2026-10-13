@@ -66,7 +66,7 @@ impl Textarea {
 
     fn state(&self, host: VisualState) -> VisualState {
         host.set(VisualState::FOCUS_VISIBLE, host.focused())
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, host.invalid() || self.invalid)
             .set(
                 VisualState::DISABLED,
                 host.disabled() || !self.editor.is_enabled(),

@@ -154,6 +154,10 @@ impl Access {
     }
 }
 
+/// The rounds of message delivery after one input: a message, and the
+/// messages that its handlers make controls emit.
+const MESSAGE_ROUNDS: usize = 4;
+
 /// A message handler for a control node.
 pub(crate) type Handler = Rc<dyn Fn(&ControlMessage)>;
 
@@ -1322,19 +1326,27 @@ impl ViewHost {
 
     /// Delivers control messages to their handlers, then runs reactions.
     fn after_input(&mut self) {
-        let messages = self.inner.controls.take_messages();
-        for (node, message) in messages {
-            let (handlers, internal) = self
-                .inner
-                .nodes
-                .get(&node)
-                .map(|data| (data.handlers.clone(), data.internal.clone()))
-                .unwrap_or_default();
-            if let Some(internal) = internal {
-                internal(&mut self.inner, &message);
+        // A handler can make a control emit, as a field label toggles its
+        // checkbox. Those messages go out in a next round. The bound keeps
+        // handlers that answer each other from holding the window.
+        for _ in 0..MESSAGE_ROUNDS {
+            let messages = self.inner.controls.take_messages();
+            if messages.is_empty() {
+                break;
             }
-            for handler in handlers {
-                handler(&message);
+            for (node, message) in messages {
+                let (handlers, internal) = self
+                    .inner
+                    .nodes
+                    .get(&node)
+                    .map(|data| (data.handlers.clone(), data.internal.clone()))
+                    .unwrap_or_default();
+                if let Some(internal) = internal {
+                    internal(&mut self.inner, &message);
+                }
+                for handler in handlers {
+                    handler(&message);
+                }
             }
         }
         let open = self.inner.menu_press.borrow_mut().take();

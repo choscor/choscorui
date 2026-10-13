@@ -2533,6 +2533,10 @@ character that the code does not accept. `set_open` returns false.
 
 - `FieldText` shows one text part of a field: `Legend`, `Label`, `Title`,
   `Description`, `Error`, or `Separator`. It takes no focus.
+- A primary click on a `Label` emits `Activated`. The `Field` view then
+  focuses the control, and toggles a checkbox or a switch.
+- A `Label` that the host marks invalid uses `destructive` text. A
+  disabled part has 50% opacity.
 - Descriptions and other parts wrap to the width they are given, and
   break after spaces. Without a width, they take one line.
 - A `Separator` paints a 1 pt rule across its width. Its text, if any,
@@ -2562,7 +2566,7 @@ character that the code does not accept. `set_open` returns false.
 | Part | Value |
 | --- | --- |
 | `Legend` | base medium text (`Sm`: small), 12 pt below |
-| `Label` | small medium `foreground` text |
+| `Label` | small medium `foreground` text; `destructive` while invalid |
 | `Title` | small medium `foreground` text |
 | `Description` | small `muted-foreground` text |
 | `Error` | small `destructive` text |
@@ -3686,6 +3690,10 @@ behavior.
   and focus traversal stays inside its subtree.
 - A disabled control gets no input, leaves keyboard traversal, paints with
   `DISABLED`, and publishes no actions.
+- `set_invalid` marks a control invalid, for example while the form field
+  around it shows an error. The control paints with `INVALID`, and its
+  node has the invalid state. Only the recipes of fields and labels read
+  `INVALID`, so a control that is not a field keeps its look.
 - `paint` clips each control to its bounds in tree order. Then it paints
   each open overlay without a clip. It also paints the overlay of a control
   that animates, so a closing popup can fade out.

@@ -617,7 +617,7 @@ impl Questionnaire {
             let state = VisualState::NONE
                 .set(VisualState::HOVERED, self.hovered == Some(index))
                 .set(VisualState::CHECKED, checked)
-                .set(VisualState::INVALID, self.invalid)
+                .set(VisualState::INVALID, host.invalid() || self.invalid)
                 .set(
                     VisualState::FOCUS_VISIBLE,
                     host.focus_visible() && self.focus == Stop::Answer && self.choice == index,
@@ -758,7 +758,7 @@ impl CustomControl for Questionnaire {
                     let state = editor.state(
                         host.set(VisualState::FOCUSED, focused)
                             .set(VisualState::FOCUS_VISIBLE, focused && host.focus_visible())
-                            .set(VisualState::INVALID, self.invalid),
+                            .set(VisualState::INVALID, host.invalid() || self.invalid),
                     );
                     let style = cx.style(Self::query(Slot::Input).state(state));
                     cx.slot(self.geometry.input, &style, |_, _| {});

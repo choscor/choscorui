@@ -133,7 +133,7 @@ impl DatePicker {
     /// The flags the trigger recipe reads: `host` with open and invalid.
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(VisualState::OPEN, self.reveal.open)
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, host.invalid() || self.invalid)
     }
 
     fn query(slot: Slot, state: VisualState) -> StyleQuery {

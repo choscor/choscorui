@@ -239,7 +239,10 @@ A `Field` shows a label, a control, and optional help text. The field takes the 
 
 - `Field::new(label, control)` stacks the label above the control.
 - `.description(text)` adds muted help text below the control.
-- `.error(message, shown)` shows `message` while `shown` is true. The control is then invalid, and the message is its accessibility description.
+- `.error(message, shown)` shows `message` while `shown` is true. The control then shows its invalid look, and the label uses the destructive color. A switch or a toggle has no invalid look, so only the message and the label change.
+- While the error shows, the control gets a `DescribedBy` relation to it. Its accessibility description gives the error and then the help text.
+- A click on the label focuses the control. On a checkbox or a switch, it also toggles the control.
+- `.disabled(true)` on a field disables its control and dims its label.
 - `.orientation(FieldOrientation::Horizontal)` puts the label at the leading edge, and the other parts beside it.
 - `FieldOrientation::Responsive` is horizontal when the field gets 448 points or more, and vertical when it gets less. A window resize can change it.
 

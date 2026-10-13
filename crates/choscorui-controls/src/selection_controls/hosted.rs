@@ -309,7 +309,7 @@ impl HostedRadioGroup {
     pub fn option_state(&self, host: VisualState, index: usize) -> VisualState {
         self.choices
             .part_state(host, index, VisualState::CHECKED)
-            .set(VisualState::INVALID, self.invalid)
+            .set(VisualState::INVALID, host.invalid() || self.invalid)
     }
 
     /// Disables the option at `index`. Fails for an index out of range or

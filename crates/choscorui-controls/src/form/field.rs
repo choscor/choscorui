@@ -2,15 +2,15 @@
 //! descriptions, errors, and separators, stacked or side by side.
 
 use super::measured::{measured_layout, paint_wrapped};
-use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
+use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::hosted;
 use crate::style::{
     ControlKind, ControlSize, FieldOrientation, PaintContext, ResolvedStyle, Slot, StyleQuery,
     Styles, TextAlign, VisualState,
 };
 use choscorui_core::{
-    ChildMeasure, Constraints, CustomLayout, DesignTokens, EventReply, LayoutDirection, Measured,
-    Point, Rect, SemanticNode, SemanticRole, Size,
+    ChildMeasure, Constraints, CustomLayout, DesignTokens, EventPhase, EventReply, LayoutDirection,
+    Measured, Point, PointerButton, PointerEvent, Rect, SemanticNode, SemanticRole, Size,
 };
 
 /// Which text part of a field a [`FieldText`] is.
@@ -45,11 +45,17 @@ impl FieldPart {
 
 /// One text part of a form field. Descriptions and errors wrap to the
 /// width they are given. A field text takes no focus.
+///
+/// A primary click on a label emits `Activated`, so the field can focus
+/// or toggle its control. A label in the host's invalid state uses the
+/// destructive foreground.
 #[derive(Clone, Debug)]
 pub struct FieldText {
     part: FieldPart,
     text: String,
     size: ControlSize,
+    /// A primary press on a label that has not ended.
+    armed: bool,
 }
 
 impl FieldText {
@@ -58,6 +64,7 @@ impl FieldText {
             part,
             text: text.into(),
             size: ControlSize::Default,
+            armed: false,
         }
     }
 
@@ -113,12 +120,44 @@ impl CustomControl for FieldText {
         }
     }
 
-    fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
-        EventReply::Continue
+    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if self.part != FieldPart::Label || cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                self.armed = true;
+                cx.capture_pointer(true);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up {
+                position,
+                button: PointerButton::Primary,
+            }) if self.armed => {
+                self.armed = false;
+                cx.capture_pointer(false);
+                if cx.bounds().contains(*position) {
+                    cx.emit(ControlMessage::Activated);
+                }
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.armed = false;
+        }
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = VisualState::NONE.set(VisualState::DISABLED, cx.state.disabled());
+        let state = VisualState::NONE
+            .set(VisualState::DISABLED, cx.state.disabled())
+            .set(VisualState::INVALID, cx.state.invalid());
         let style = cx.style(self.query(state));
         let bounds = cx.bounds;
         if self.part == FieldPart::Separator {

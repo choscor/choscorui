@@ -5,11 +5,12 @@
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
     Field, FieldContent, FieldGroup, FieldSeparator, FieldSet, FieldTitle, Input, Switch, VStack,
-    View, ViewHost,
+    View, ViewExt, ViewHost,
 };
-use choscorui_controls::{EstimatedText, FieldOrientation};
+use choscorui_controls::{EstimatedText, FieldOrientation, ShortcutModifiers};
 use choscorui_core::{
-    Catalog, DesignTokens, Locale, NodeId, Rect, SemanticRelation, SemanticRole, Size,
+    Catalog, Color, ColorRole, DesignTokens, DisplayCommand, Locale, NodeId, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticRelation, SemanticRole, Size,
 };
 use std::rc::Rc;
 
@@ -143,7 +144,8 @@ fn an_error_shows_and_marks_the_control_invalid() {
     let input = node(&mut host, "name");
     let semantic = host.semantic(input).unwrap();
     assert!(semantic.state.invalid);
-    assert_eq!(semantic.description, "Too short");
+    // The error does not replace the help text: both describe the input.
+    assert_eq!(semantic.description, "Too short\nPick a name");
     let label = node(&mut host, "Username");
     let help = node(&mut host, "Pick a name");
     assert!(
@@ -157,6 +159,11 @@ fn an_error_shows_and_marks_the_control_invalid() {
             .contains(&SemanticRelation::DescribedBy(help))
     );
     let error = node(&mut host, "Too short");
+    assert!(
+        semantic
+            .relations
+            .contains(&SemanticRelation::DescribedBy(error))
+    );
     let error_node = host.semantic(error).unwrap();
     assert_eq!(error_node.role, SemanticRole::StaticText);
     assert!(error_node.state.invalid);
@@ -175,6 +182,122 @@ fn an_error_shows_and_marks_the_control_invalid() {
     let semantic = host.semantic(input).unwrap();
     assert!(!semantic.state.invalid);
     assert_eq!(semantic.description, "Pick a name");
+    assert_eq!(
+        semantic.relations,
+        [
+            SemanticRelation::LabelledBy(label),
+            SemanticRelation::DescribedBy(help)
+        ]
+    );
+}
+
+/// The color of the painted text `text`.
+fn text_color(host: &mut ViewHost, text: &str) -> Option<Color> {
+    host.paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawText {
+                text: drawn, color, ..
+            } if drawn == text => Some(*color),
+            _ => None,
+        })
+}
+
+/// True when the paint strokes an edge in `color`.
+fn strokes(host: &mut ViewHost, color: Color) -> bool {
+    host.paint().commands().iter().any(|command| {
+        matches!(command, DisplayCommand::StrokeRoundedRect { color: stroke, .. } if *stroke == color)
+    })
+}
+
+#[test]
+fn an_error_gives_the_control_the_invalid_look_and_the_label_the_destructive_color() {
+    let mut host = host(Username, 600.0, "en");
+    let tokens = DesignTokens::light();
+    let destructive = tokens.color(ColorRole::Destructive);
+    let input = node(&mut host, "name");
+    let label = node(&mut host, "Username");
+    let state = |host: &ViewHost, node| host.controls().visual_state(host.tree(), node);
+    assert!(state(&host, input).invalid());
+    assert!(state(&host, label).invalid());
+    assert_eq!(text_color(&mut host, "Username"), Some(destructive));
+    assert!(strokes(&mut host, destructive), "the destructive edge");
+
+    let switch = node(&mut host, "Invalid");
+    assert!(host.perform(switch, SemanticAction::Activate, None));
+    host.layout();
+    assert!(!state(&host, input).invalid());
+    assert_eq!(
+        text_color(&mut host, "Username"),
+        Some(tokens.color(ColorRole::Foreground))
+    );
+    assert!(!strokes(&mut host, destructive));
+}
+
+/// A required switch in a field with an error.
+struct Consent;
+
+impl View for Consent {
+    fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
+        let on = cx.state(false);
+        Field::new("Consent", Switch::new("Share data", on.binding()))
+            .error("Required", move || !on.get())
+    }
+}
+
+#[test]
+fn a_field_around_a_switch_shows_the_error_and_keeps_the_switch_look() {
+    let mut host = host(Consent, 600.0, "en");
+    let destructive = DesignTokens::light().color(ColorRole::Destructive);
+    assert_eq!(text_color(&mut host, "Consent"), Some(destructive));
+    assert!(host.find("Required").is_some());
+    assert!(
+        !strokes(&mut host, destructive),
+        "the switch stays the same"
+    );
+}
+
+#[test]
+fn a_click_on_the_label_focuses_the_control_or_toggles_a_switch() {
+    let mut host = host(email(FieldOrientation::Vertical), 600.0, "en");
+    let click = |host: &mut ViewHost, at: Rect| {
+        let position = at.center();
+        let button = PointerButton::Primary;
+        let modifiers = ShortcutModifiers::default();
+        host.pointer(PointerEvent::Down { position, button }, modifiers);
+        host.pointer(PointerEvent::Up { position, button }, modifiers);
+        host.layout();
+    };
+    let label = bounds(&mut host, "Email");
+    click(&mut host, label);
+    assert_eq!(host.tree().focus(), Some(node(&mut host, "address")));
+
+    let mut consent = self::host(Consent, 600.0, "en");
+    let switch = node(&mut consent, "Share data");
+    let label = bounds(&mut consent, "Consent");
+    click(&mut consent, label);
+    assert_eq!(consent.tree().focus(), Some(switch));
+    assert_eq!(consent.semantic(switch).unwrap().state.checked, Some(true));
+    assert_eq!(consent.find("Required"), None, "the binding took the value");
+}
+
+#[test]
+fn a_disabled_field_disables_its_control_and_dims_its_label() {
+    struct Off;
+    impl View for Off {
+        fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
+            let text = cx.state(String::new());
+            Field::new("Email", Input::new("address", text.binding())).disabled(true)
+        }
+    }
+    let mut host = host(Off, 600.0, "en");
+    let input = node(&mut host, "address");
+    let label = node(&mut host, "Email");
+    assert!(host.semantic(input).unwrap().state.disabled);
+    assert!(!host.controls().is_enabled(label));
+    let state = host.controls().visual_state(host.tree(), label);
+    assert!(state.disabled(), "the label paints with half opacity");
 }
 
 #[test]

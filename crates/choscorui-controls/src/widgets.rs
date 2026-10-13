@@ -532,7 +532,7 @@ impl DecimalSpinBox {
     pub fn visual_state(&self, host: VisualState) -> VisualState {
         host.set(
             VisualState::INVALID,
-            matches!(self.validation(), ValidationState::Invalid(_)),
+            host.invalid() || matches!(self.validation(), ValidationState::Invalid(_)),
         )
     }
 

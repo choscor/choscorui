@@ -6,16 +6,18 @@
 
 use super::View;
 use super::dynamic::Dynamic;
-use super::host::Cx;
+use super::host::{Cx, InternalHandler};
 use super::layout::{parent_tokens, stack_node};
 use super::state::{IntoLive, Live};
 use super::text::TextContent;
 use super::widgets::{FieldText, Label, label, text};
-use choscorui_controls::{self as controls, FieldGap, FieldOrientation, FieldPart};
+use choscorui_controls::{self as controls, ControlMessage, FieldGap, FieldOrientation, FieldPart};
 use choscorui_core::{
-    Axis, Dirty, ItemAlign, LayoutKind, LayoutStyle, MainAlign, NodeId, SemanticRelation,
-    SharedLayout,
+    Axis, Dirty, ItemAlign, LayoutKind, LayoutStyle, MainAlign, NodeId, SemanticAction,
+    SemanticRelation, SemanticRole, SharedLayout,
 };
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// One form field: a label, a control, and an optional description and
 /// error. A `Vertical` field, the default, stacks them. A `Horizontal`
@@ -26,9 +28,13 @@ use choscorui_core::{
 /// right-to-left layouts.
 ///
 /// The control gets a `LabelledBy` relation to the label and a
-/// `DescribedBy` relation to the description. The description text, or
-/// the error while it shows, becomes its accessibility description. While
-/// the error shows, the control is invalid.
+/// `DescribedBy` relation to the description. While the error shows, the
+/// control also gets a `DescribedBy` relation to the error, and its
+/// accessibility description gives the error and then the description.
+/// While the error shows, the control and the label are invalid: a field
+/// control shows its invalid look, and the label uses the destructive
+/// color. A press on the label focuses the control, and toggles a
+/// checkbox or a switch.
 pub struct Field<C> {
     label: Label,
     control: C,
@@ -65,7 +71,7 @@ impl<C: View> Field<C> {
     }
 
     /// A validation message below the control, shown while `shown` is
-    /// true. While it shows, the control is invalid.
+    /// true. While it shows, the control and the label are invalid.
     #[must_use]
     pub fn error<M, N>(
         mut self,
@@ -86,37 +92,96 @@ impl<C: View> View for Field<C> {
             &mut inside,
             FieldText::new(FieldPart::Label, self.label.clone()),
         );
-        let control = part(&mut inside, self.control);
+        let control = part(&mut inside, self.control)
+            .into_iter()
+            .find_map(|node| first_control(&inside, node));
         let description = self
             .description
             .clone()
             .map(|text| part(&mut inside, FieldText::new(FieldPart::Description, text)));
+        let relations: Rc<[SemanticRelation]> = label
+            .first()
+            .copied()
+            .map(SemanticRelation::LabelledBy)
+            .into_iter()
+            .chain(
+                description
+                    .and_then(|nodes| nodes.first().copied())
+                    .map(SemanticRelation::DescribedBy),
+            )
+            .collect();
+        let shown_error = Rc::new(Cell::new(None));
         if let Some((message, shown)) = self.error.clone() {
+            let (tracked, relations) = (shown_error.clone(), relations.clone());
             inside.mount(Dynamic::new(move || {
-                shown
-                    .get()
-                    .then(|| FieldText::new(FieldPart::Error, message.clone()))
+                shown.get().then(|| ErrorText {
+                    message: message.clone(),
+                    node: tracked.clone(),
+                    control,
+                    relations: relations.clone(),
+                })
             }));
         }
-        let control = control
-            .into_iter()
-            .find_map(|node| first_control(&inside, node));
         if let Some(control) = control {
-            let relations = label
-                .first()
-                .copied()
-                .map(SemanticRelation::LabelledBy)
-                .into_iter()
-                .chain(
-                    description
-                        .and_then(|nodes| nodes.first().copied())
-                        .map(SemanticRelation::DescribedBy),
-                )
-                .collect();
-            inside.inner.data(control).access.relations = relations;
-            describe(&mut inside, control, self.description, self.error);
+            inside.inner.data(control).access.relations = relations.to_vec();
+            for label in &label {
+                inside.inner.data(*label).internal = Some(label_press(control));
+            }
+            let parts = Parts {
+                control,
+                label,
+                relations,
+                error: shown_error,
+            };
+            describe(&mut inside, parts, self.description, self.error);
         }
     }
+}
+
+/// The error text of a field. It records its node, and relates the
+/// control to it while it shows.
+struct ErrorText {
+    message: Label,
+    node: Rc<Cell<Option<NodeId>>>,
+    control: Option<NodeId>,
+    relations: Rc<[SemanticRelation]>,
+}
+
+impl View for ErrorText {
+    fn mount(self, cx: &mut Cx) {
+        let error = part(cx, FieldText::new(FieldPart::Error, self.message))
+            .first()
+            .copied();
+        self.node.set(error);
+        if let (Some(control), Some(error)) = (self.control, error) {
+            let mut relations = self.relations.to_vec();
+            relations.push(SemanticRelation::DescribedBy(error));
+            cx.inner.data(control).access.relations = relations;
+            cx.inner.touch(control, Dirty::SEMANTICS);
+        }
+    }
+}
+
+/// A press on the label of a field focuses its control. A checkbox or a
+/// switch also toggles, as a click on its own label does.
+fn label_press(control: NodeId) -> InternalHandler {
+    Rc::new(move |inner, message| {
+        if *message != ControlMessage::Activated || !inner.controls.is_enabled(control) {
+            return;
+        }
+        inner.controls.move_focus(&mut inner.tree, Some(control));
+        let toggles = inner
+            .controls
+            .get(control)
+            .is_some_and(|control| control.semantics().role == SemanticRole::Checkbox);
+        if toggles {
+            inner
+                .controls
+                .perform(&mut inner.tree, control, SemanticAction::Activate, None);
+        }
+        inner.needs_paint = true;
+        inner.touch(control, Dirty::SEMANTICS);
+    })
 }
 
 /// A new custom layout node that the controls' field layout places.
@@ -162,11 +227,23 @@ fn first_control(cx: &Cx, node: NodeId) -> Option<NodeId> {
         .find_map(|child| first_control(cx, child))
 }
 
-/// Keeps the accessibility description and the invalid state of
-/// `control` in step with the field's description and error.
+/// The nodes of a field that follow its error.
+struct Parts {
+    control: NodeId,
+    label: Vec<NodeId>,
+    /// The label and description relations of the control.
+    relations: Rc<[SemanticRelation]>,
+    /// The error text node while the error shows.
+    error: Rc<Cell<Option<NodeId>>>,
+}
+
+/// Keeps the accessibility description, the relations, and the invalid
+/// state of the control in step with the field's description and error.
+/// While the error shows, the control and the label are invalid, and the
+/// description gives the error and then the help text.
 fn describe(
     cx: &mut Cx,
-    control: NodeId,
+    parts: Parts,
     description: Option<Label>,
     error: Option<(Label, Live<bool>)>,
 ) {
@@ -174,17 +251,33 @@ fn describe(
     cx.react(move |inner| {
         let failed = error.as_ref().filter(|(_, shown)| shown.get());
         let invalid = failed.is_some();
-        let field = failed
-            .map(|(message, _)| message)
-            .or(description.as_ref())
-            .map(|content| text(content, &env));
-        let access = &mut inner.data(control).access;
-        if access.invalid == invalid && access.field == field {
+        let field = [failed.map(|(message, _)| message), description.as_ref()]
+            .into_iter()
+            .flatten()
+            .map(|content| text(content, &env))
+            .reduce(|error, help| format!("{error}\n{help}"));
+        let mut relations = parts.relations.to_vec();
+        let shown = parts
+            .error
+            .get()
+            .filter(|node| invalid && inner.tree.contains(*node));
+        if let Some(node) = shown {
+            relations.push(SemanticRelation::DescribedBy(node));
+        }
+        for node in parts.label.iter().chain([&parts.control]) {
+            if inner.controls.is_invalid(*node) != invalid {
+                let _ = inner.controls.set_invalid(&mut inner.tree, *node, invalid);
+                inner.touch(*node, Dirty::PAINT);
+            }
+        }
+        let access = &mut inner.data(parts.control).access;
+        if access.invalid == invalid && access.field == field && access.relations == relations {
             return;
         }
         access.invalid = invalid;
         access.field = field;
-        inner.touch(control, Dirty::SEMANTICS);
+        access.relations = relations;
+        inner.touch(parts.control, Dirty::SEMANTICS);
     });
 }
 
