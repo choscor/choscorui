@@ -62,7 +62,8 @@ status.windows[other] = {count} windows open
 
 A lookup uses the fallback chain of the locale, for example `vi-VN`,
 then `vi`, then the root. If no locale in the chain has the message, the
-lookup returns `LocaleError::MissingMessage`. It does not panic. If a
+lookup uses the [built-in messages](#built-in-messages). If they do not
+have it either, the lookup returns `LocaleError::MissingMessage`. It does not panic. If a
 placeholder has no value in `args`, the lookup returns
 `LocaleError::MissingArgument`.
 
@@ -81,6 +82,70 @@ catalog
 let localizer = Localizer::new(english, catalog);
 let title = localizer.text("window.title", &[("number", "3")])?; // "Note 3"
 ```
+
+## Built-in messages
+
+The controls take their user-visible text from the built-in catalog,
+`Catalog::builtin()`. It has the `choscorui.*` message ids in English and
+Vietnamese. English is also the root fallback. Each `Localizer` uses the
+built-in messages when its own catalog does not have a message. Thus an
+application message replaces the built-in message with the same id:
+
+```text
+# resources/strings/en.lang of the application
+choscorui.validation.number = Type digits only
+```
+
+The window locale selects the language. `ViewHost` gives the `Localizer` of
+its `Env` to the controls. A control reads it from `PaintContext::strings`,
+`ControlContext::strings`, or the `strings` argument of
+`CustomControl::semantics_in`. `Localizer::message(id, args)` returns the
+id itself when no catalog has the message.
+
+A validation error is a `ValidationError` value, not text.
+`ValidationError::message(&localizer)` formats it, and formats numbers in
+the locale of the localizer. A `Condition` of a backend capability gives
+its text with `Condition::message`.
+
+| Message id | Arguments | English text |
+| --- | --- | --- |
+| `choscorui.validation.number` | | Enter a number |
+| `choscorui.validation.whole_number` | | Enter a whole number |
+| `choscorui.validation.decimals` | `count` (plural) | Use at most {count} decimal places |
+| `choscorui.validation.minimum` | `min` | Must be at least {min} |
+| `choscorui.validation.maximum` | `max` | Must be at most {max} |
+| `choscorui.validation.range` | `min`, `max` | Enter a number from {min} to {max} |
+| `choscorui.validation.date` | | Enter a valid date |
+| `choscorui.validation.date_range` | | Date is outside the allowed range |
+| `choscorui.validation.format` | | Contains characters this format does not allow |
+| `choscorui.validation.choice` | | Choose one of the options |
+| `choscorui.validation.color` | `example` | Enter a hex color such as {example} |
+| `choscorui.validation.yes_no` | | Enter yes or no |
+| `choscorui.validation.email` | `example` | Enter an email address such as {example} |
+| `choscorui.validation.url` | `example` | Enter a web address such as {example} |
+| `choscorui.validation.tel` | | Enter a phone number |
+| `choscorui.validation.read_only` | | This cell is read-only |
+| `choscorui.validation.missing_row` | | The row no longer exists |
+| `choscorui.validation.rejected` | | The value was rejected |
+| `choscorui.switch` | | switch (the description of a Switch) |
+| `choscorui.toggle` | | toggle (the description of a Toggle) |
+| `choscorui.dial` | | Dial |
+| `choscorui.modal` | | Modal (the description of a modal dialog) |
+| `choscorui.status` | | Status (the name of a StatusBar) |
+| `choscorui.font` | | Font (the name of a FontChooser) |
+| `choscorui.font.fallback` | `font` | Not installed; using {font} |
+| `choscorui.color.channels` | `red`, `green`, `blue`, `opacity` | Red {red}, Green {green}, Blue {blue}, Opacity {opacity}% |
+| `choscorui.range` | `min`, `max` | Range {min} to {max} |
+| `choscorui.zoom` | `percent` | Zoom {percent}% |
+| `choscorui.overflow` | | Value too large to display |
+| `choscorui.shortcut.recording` | | Recording shortcut; press Escape to cancel |
+| `choscorui.column.ascending` | | ascending |
+| `choscorui.column.descending` | | descending |
+| `choscorui.column.width` | `width` | {width} points wide |
+| `choscorui.dock.left`, `.right`, `.top`, `.bottom` | | Left panel size, and so on |
+| `choscorui.dock.floating` | | Floating |
+| `choscorui.field.day`, `.month`, `.year`, `.hour`, `.minute`, `.second` | | Day field, and so on |
+| `choscorui.condition.app_bundle` | | Needs an app bundle with a bundle identifier |
 
 ## Plural forms
 

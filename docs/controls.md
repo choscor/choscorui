@@ -1187,7 +1187,13 @@ These limits are the defaults. Invalid limits and values clamp and report a
   and down chevrons in `muted-foreground` in the stepper column.
 - ArrowUp and ArrowDown step. Home and End go to the bounds. PageUp and
   PageDown do nothing.
-- Values clamp and do not wrap.
+- Values clamp and do not wrap. A step past a bound beeps.
+- **In a control host.** The field is editable, with a caret and a
+  selection as in `Input`. Focus selects the text. The integer rule
+  refuses other keys, and a refused key beeps.
+- Return and a loss of focus commit the typed number. The commit clamps
+  it to the range. Escape restores the text of the value. A step first
+  commits the typed number.
 - Semantic `SetValue(v)`, `Increment`, and `Decrement` set or step the
   value.
 - The spin box has no `Cancel` input, and `set_enabled` has no press to
@@ -1197,7 +1203,7 @@ These limits are the defaults. Invalid limits and values clamp and report a
 | --- | --- |
 | Role | `SpinButton` (AXIncrementor) |
 | Name / value | label / the integer value |
-| State | disabled; the description is "Range min to max" |
+| State | disabled; the description is `choscorui.range` ("Range min to max") |
 | Actions | `SetValue`, `Increment`, `Decrement`, `Focus` while enabled |
 
 **As a view.** `SpinBox::new(name, value).range(1..=99).step(1).page(10)`
@@ -1209,10 +1215,15 @@ this behavior.
 
 ### DecimalSpinBox
 
+- `DecimalSpinBox::new` returns `RangeError::NotANumber` for a NaN bound,
+  `RangeError::Reversed` when the minimum is greater than the maximum, and
+  `RangeError::ZeroStep` for a step of 0 or less.
 - ArrowUp and ArrowDown step. PageUp and PageDown step ten times. Home and
-  End go to the bounds.
-- Results clamp and round to `fraction_digits`.
-- A step starts from the committed value and replaces the edited text.
+  End go to the bounds. A step past a bound beeps.
+- Results round to `fraction_digits` and then clamp, so a value stays in
+  the range.
+- A step first commits valid typed text, and then steps from the committed
+  value.
 - `set_text` changes only the text. Enter, or `commit`, applies the text
   only when it is valid. Invalid text stays for correction.
 - Escape restores the text of the committed value.
@@ -1220,9 +1231,11 @@ this behavior.
   `SetValue` replaces the text, then commits.
 - `set_locale` formats the text again and keeps the value.
 - **In a control host.** A press on the upper or the lower half of the
-  steppers steps the value. Typed text replaces the text after focus or a
-  step, and then adds to it. Backspace deletes the last character. A loss
-  of focus commits valid text.
+  steppers steps the value. The field shows a caret and a selection as in
+  `Input`, and focus selects the text. The `NumberInput` filter refuses
+  other keys, and a refused key beeps.
+- A loss of focus commits valid text. It restores the text of the
+  committed value when the text is not valid.
 - The control has no disabled state.
 - **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
   start and the steppers at the end. `stepper_rect` returns the stepper
@@ -1797,13 +1810,18 @@ pin this behavior.
   `None` for a cell that the model cannot edit.
 - `DefaultEditorFactory` chooses the editor from the cell's `Role::Edit`
   value type.
-- `parse` validates the text for the editor kind and the locale. `commit`
-  writes only a valid value. On an error, the edit stays open.
+- `parse` validates the text for the editor kind and the locale, and
+  returns a `ValidationError`. `commit` writes only a valid value. On an
+  error, the edit stays open.
+- `filter` gives the `InputFilter` of the editor text: the number rule for
+  a number column and the date rule for a date column.
+- A bool column edits with a checkbox and takes no typed text. `checked`
+  and `set_checked` read and set its value. Space toggles the checkbox.
 - `DataMapper` binds form fields to columns of the current item. `edit`
   keeps pending text for each item and column.
 - `values` returns the pending text, or the model value. `submit` writes
   the valid fields and keeps the invalid fields pending with their
-  messages.
+  `ValidationError` values.
 - `retain_existing` drops pending text for items that the model removed.
 
 These types have no semantic node. The form fields publish their own
@@ -2048,8 +2066,11 @@ behavior.
 - For the text, integer, and decimal kinds, empty text is `Intermediate`.
   A lone `-` in an integer field is also `Intermediate`.
 - The text kind accepts empty text only with `allow_empty`.
-- An integer outside the range is `Invalid`. A choice must match one
-  option exactly.
+- The integer and decimal kinds use the same `NumberInput` rule and the
+  same messages. `filter` gives the rule's filter. While the user types, a
+  value below the minimum is `Intermediate`. `commit` makes it `Invalid`.
+  A value above the maximum is `Invalid`.
+- A choice must match one option exactly.
 
 | Field | `AlertDialog::semantics` |
 | --- | --- |
@@ -2069,8 +2090,11 @@ message. It edits a `Binding<String>` and validates the text in the
 locale of the environment.
 
 - The accept button is enabled only while `can_accept` is true.
-- Return in the field and the accept button call `handle_key` with Enter.
-  The view runs its action only with a valid value.
+- The field refuses keys that cannot make a number in the integer and
+  decimal kinds.
+- Return in the field and the accept button call `commit`. The view runs
+  its action only with a valid value. It formats an accepted number in
+  the locale.
 - The field shows the validation state. The message line shows only the
   message of an `Invalid` state.
 - The view is a group with the title as its name. The title and prompt
@@ -2395,7 +2419,14 @@ behavior.
 ### NumberInput, InputMask, and DateInput
 
 These types validate text. They hold no focus and no value, and have no
-semantic node. A `TextField` shows their `ValidationState`.
+semantic node. A `TextField` shows their `ValidationState`. An `Invalid`
+state holds a `ValidationError`; the control shows its message from the
+[built-in catalog](localization.md#built-in-messages).
+
+Each rule also gives an `InputFilter`. A field with a filter refuses an
+edit that cannot become valid. The filter checks typed keys, a paste, an
+input method commit, and `SetValue`. A refused edit keeps the text, the
+caret, and the selection. It adds no undo step, and it beeps.
 
 They have no recipe. They get the `Input` look through the hosted control
 that shows their verdict:
@@ -2412,16 +2443,26 @@ time field, use `DateTimeEdit`.
 
 - **`NumberInput`** uses the locale separators. Empty or partial numeric
   text is `Intermediate`.
+- `accepts` allows digits and the group separator in the whole part. It
+  allows one decimal separator when fractions are allowed. It allows one
+  leading minus when the minimum is negative or absent. It refuses `1-2`,
+  `1.2.3`, and `--`.
 - Too many fraction digits, or a value above the maximum, is `Invalid`.
-- A value below the minimum is `Invalid`, with one exception. For a
-  positive minimum, a non-negative value with no decimal separator is
-  `Intermediate`.
+- While the user types, a value below the minimum is `Intermediate`.
+  `commit`, for Return or a loss of focus, makes it `Invalid`.
 - **`InputMask`** inserts literals. It skips an optional slot when the
-  next character fits only a later slot.
-- A rejected character makes the text `Invalid`. An empty required slot
-  makes it `Intermediate`.
+  next character fits only a later slot. `>` uppercases the letters after
+  it, and `<` lowercases them.
+- A character that fits no slot makes the text `Invalid`. An empty
+  required slot makes it `Intermediate`.
 - **`DateInput`** uses the locale's short date order. Empty or partial
   dates are `Intermediate`. A date outside the range is `Invalid`.
+- `accepts` allows digits and the locale date separator, at most the
+  field lengths of the locale order. It refuses an impossible partial
+  date, such as `13/` or `1234/` for month, day, and year.
+- A complete text that is no date is `Invalid`, also in a year, month,
+  and day locale such as the root locale. `commit` gives the date and its
+  text in the locale format.
 
 | Mask symbol | Accepts | Required |
 | --- | --- | --- |
@@ -2431,10 +2472,15 @@ time field, use `DateTimeEdit`.
 | `X` / `x` | any character | yes / no |
 | `\c` | the literal `c` | - |
 
-**As a view.** `Input::masked(name, mask, raw)` shows the masked text of
-`raw` and the mask placeholder. `raw` keeps the typed characters without the
-literals. A deletion at the end removes typed characters until the shown
-text fits. Use `InputMask::validate` to check the value.
+| `>` / `<` | uppercase / lowercase for the letters after it | - |
+
+**As a view.** `Input::masked(name, mask, value)` edits `value` with the
+mask literals, for example `(090) 512-3456`, and shows the mask
+placeholder. A key that fits no slot changes nothing and beeps, also when
+the bound value stays equal. A paste keeps the characters that fit.
+The caret keeps its place among the typed characters. A deletion of only
+literals deletes the typed character before them. Use
+`InputMask::validate` to check the value.
 
 [input_rules.rs](../crates/choscorui-controls/tests/input_rules.rs) and
 [properties.rs](../crates/choscorui-controls/tests/properties.rs) pin this
@@ -2636,6 +2682,23 @@ and closes the list, but not while the select is disabled.
 - Committed text from `ControlHost::dispatch_text` is typed in.
 - Each edit emits `Changed(Text)`. Enter on a valid value emits
   `Activated`.
+- **Filters.** `max_length(n)` allows at most `n` grapheme clusters. A
+  paste longer than the room is cut to the room, and an edit with no room
+  is refused. `filter(CharClass)` allows only `Digits`,
+  `AsciiAlphanumeric`, or the characters of a `Custom` predicate.
+  `with_filter(InputFilter)` sets a full filter.
+- A refused edit keeps the text, the caret, and the selection, adds no
+  undo step, and beeps. A paste is refused as a whole when one character
+  is not allowed.
+- **Kinds.** `with_type(InputType)` sets the kind: `Text`, `Email`, `Url`,
+  `Tel`, `Search`, or `Number`. `Tel` and `Number` set a filter. Return and
+  a loss of focus check an `Email` or `Url` value. `Search` gives the
+  `SearchField` role.
+- **Rules.** `with_number(NumberInput)` and `with_date(DateInput)` set the
+  rule's filter and validation. Return and a loss of focus commit the text
+  in the locale format and emit `Changed(Text)`. Return then emits
+  `Activated` for a valid value.
+- A password input does not cut or copy.
 - `set_validation` marks the input invalid. The border and ring become
   `destructive`, and the message becomes the semantic description.
 - Without a width constraint, an input is 60 spacing units (240 pt) wide.
@@ -2669,7 +2732,11 @@ and closes the list, but not while the select is disabled.
 `set_value` takes `Text`, also while the input is disabled, and drops line
 breaks. `set_open` returns false.
 
-**As a view.** `InputGroup::new(name, addons, value)` edits a
+**As a view.** `Input::email`, `url`, `tel`, `search`, and `number` make
+an input of that kind. The `max_length(n)` and `filter(CharClass)`
+modifiers set the filters.
+
+`InputGroup::new(name, addons, value)` edits a
 `Binding<String>` through the `Text` value in both directions. A button
 addon reports its index through `on_item`. `InputGroup::with_placeholder`
 sets the text that shows while the field is empty.
@@ -2711,9 +2778,11 @@ returns false.
 - `InputOtp::new` makes a code of a given length in one group.
   `with_groups` splits the slots into groups with a minus separator
   between them.
-- Typed text fills the empty slots in order. Paste replaces the code from
-  the first slot. Characters that are
-  not digits are ignored, or not letters or digits after `alphanumeric`.
+- A typed character fills the next empty slot. A paste replaces the code
+  from the first slot, cut to the length, and skips white space.
+- The code takes ASCII digits, or ASCII letters and digits after
+  `alphanumeric`. Full-width digits become ASCII digits. An edit with
+  another character is refused as a whole and beeps.
 - Backspace or Delete clears the last character. The caret is always after
   the last character.
 - Each change emits `Changed(Text)`. Filling the last slot also emits
@@ -2736,7 +2805,7 @@ returns false.
 | State | invalid, disabled |
 | Actions | `SetValue` and `Focus` while enabled |
 
-`SetValue` keeps the accepted characters of the value, cut to the length.
+`SetValue` follows the paste rules.
 
 `set_value` takes `Text`. It rejects text longer than the code, or with a
 character that the code does not accept. `set_open` returns false.
@@ -3977,8 +4046,15 @@ behavior.
   application to a control. The control emits no message, and focus does
   not move. The host invalidates the node.
 
-The semantics come from the control's own `semantics`. The
-[guide](guide.md) shows how to write a custom control.
+- `set_strings` sets the `Localizer` of the controls and repaints them.
+  `ViewHost` sets the `Localizer` of its `Env`. Controls read it from
+  `PaintContext::strings` and `ControlContext::strings`.
+
+The semantics come from the control's own `semantics_in(strings)`, which
+gets the host `Localizer`. Its default calls `semantics`. A control with
+user-visible text in its semantics overrides `semantics_in`, and a
+wrapper control forwards it. The [guide](guide.md) shows how to write a
+custom control.
 
 [custom.rs](../crates/choscorui-controls/tests/custom.rs) pins this behavior.
 [protocol.rs](../crates/choscorui-controls/tests/protocol.rs) pins `set_value`

@@ -797,6 +797,7 @@ For a new interactive control, implement the `CustomControl` trait in safe Rust 
 | `paint_overlay(cx)` | After every control paints, for each control with an overlay | Draws the popup without a clip |
 | `modal()` | During routing | Returns `true` while a modal overlay is open. The default is `false` |
 | `semantics()` | When the control asked for a semantics update | Returns the role, name, value, state, and supported actions as a `SemanticNode` |
+| `semantics_in(strings)` | As `semantics()`, with the `Localizer` of the host | Override it when the semantics show text: take the text from `strings`. The default calls `semantics()` |
 | `perform(context, action, value)` | When assistive technology asks for an action | Runs only for an action that `semantics()` lists. Returns `true` when it applied the action |
 | `focusable()` | At mount time | Defaults to `true`. A focusable control takes focus when the user presses it |
 | `set_enabled(enabled)` | When `.disabled` changes | Updates the control state. A disabled control gets no input |
