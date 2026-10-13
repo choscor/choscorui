@@ -20,3 +20,8 @@ choscorui-render = { path = "../choscorui-render" }
 name = "app_smoke"
 path = "tests/app_smoke.rs"
 harness = false
+
+[[test]]
+name = "metal_parity_smoke"
+path = "tests/metal_parity_smoke.rs"
+harness = false
