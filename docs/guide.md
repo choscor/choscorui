@@ -1,6 +1,6 @@
 # Build an application
 
-This guide tells how to build a desktop application with ChoscorUI. You describe each window as a tree of views, and the toolkit updates only what the changed state affects. Each section names the types to use and links to a working example. The [gallery](../gallery/src/main.rs) is a complete application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md).
+This guide tells how to build a desktop application with ChoscorUI. You describe each window as a tree of views, and the toolkit updates only what the changed state affects. Each section names the types to use and links to a working example. The [gallery](../gallery/src/main.rs) is a complete application that uses only the facade. To learn how the toolkit works inside, read [architecture.md](architecture.md). The generated [API reference](../api-docs/README.md) gives the signature, the documentation, and an example for each item of the application API.
 
 ## Requirements
 

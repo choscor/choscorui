@@ -15,6 +15,8 @@ Read the documents in this order:
 7. [platform-macos.md](platform-macos.md): the macOS backend and its desktop integration.
 8. [versioning.md](versioning.md): the stable surface, deprecation, capability queries, and errors.
 
+The generated [API reference](../api-docs/README.md) gives each type, method, and modifier of the application API, with an example.
+
 ## For maintainers
 
 1. [architecture.md](architecture.md): the crates, the layering rules, the frame pipeline, threads, and the dependency rule.

@@ -118,12 +118,15 @@ Dependencies: `choscorui-core` only.
 
 Dependencies: none.
 
-### Gallery and benchmark
+### Gallery and tools
 
 - `gallery` (`choscorui-gallery`) shows each public control on a page. It also shows large data, a large canvas, docking, and settings restore. See [main.rs](../gallery/src/main.rs).
 - `tools/bench` (`choscorui-bench`) runs the benchmark scenarios. See [performance.md](performance.md).
+- `tools/api-docs` (`choscorui-api-docs`) generates the [API reference](../api-docs/README.md) for application authors. It runs rustdoc from a pinned nightly toolchain and reads the JSON output. [CONTRIBUTING.md](../CONTRIBUTING.md#api-reference) tells how to use it.
 
 The gallery depends only on the facade, as an external application does. A test in [coverage.rs](../gallery/src/coverage.rs) reads `gallery/Cargo.toml` and makes sure that `choscorui` is the only dependency. The gallery also has `#![forbid(unsafe_code)]`.
+
+The API reference tool uses only the standard library. It has its own JSON parser, and it depends on no crate.
 
 The benchmark depends directly on `choscorui-core`, `choscorui-controls`, `choscorui-compose`, and `choscorui-macos`, for macOS targets only. The `views` scenario uses compose to measure view updates.
 
@@ -136,6 +139,7 @@ The benchmark depends directly on `choscorui-core`, `choscorui-controls`, `chosc
 - `choscorui-compose` can depend only on core and controls. Its views configure and mount controls.
 - The facade can depend only on core, controls, compose, and macos.
 - No library crate depends on the gallery.
+- `choscorui-api-docs` depends on no library crate.
 - The workspace crates have no dependency cycles.
 
 The graph shows the dependencies that the `Cargo.toml` files declare. A dotted arrow is a target-specific (macOS) dependency.
@@ -232,7 +236,7 @@ Runtime code uses only these sources:
 
 The UAX #29 segmentation tables are versioned Unicode data. The toolkit does not keep a copy of these tables by hand, so it uses `unicode-segmentation`. That crate has no dependencies of its own.
 
-The workspace has no build scripts, no binding generators, and no procedural macro crates. A `choscorui-macos` test makes Objective-C++ checks from the `ffi` declarations and compiles them against the SDK headers with `xcrun clang++`. This step runs only in the test, outside the build graph. Test code uses the standard library and the built-in Cargo test harness. The developer tools (clippy, rustquty, cargo-machete, and cargo-bylaw) run outside the build graph and are never crate dependencies.
+The workspace has no build scripts, no binding generators, and no procedural macro crates. A `choscorui-macos` test makes Objective-C++ checks from the `ffi` declarations and compiles them against the SDK headers with `xcrun clang++`. This step runs only in the test, outside the build graph. Test code uses the standard library and the built-in Cargo test harness. The developer tools (clippy, rustquty, cargo-machete, and cargo-bylaw) run outside the build graph and are never crate dependencies. The pinned nightly toolchain of `choscorui-api-docs` is also a developer and CI tool outside the build graph. It only writes rustdoc JSON, and no crate needs it to build.
 
 To add a crate to the build graph, do these steps:
 

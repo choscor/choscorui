@@ -25,11 +25,13 @@ Install these tools:
 - the Xcode Command Line Tools: `xcode-select --install`. `cargo test` uses their `xcrun clang++` to compile the SDK header check of `choscorui-macos`.
 - Rust stable with `rustfmt` and `clippy`
 - Rust 1.88 for the minimum version check: `rustup toolchain install 1.88`
+- the nightly toolchain that `tools/api-docs/nightly.txt` names, for the [API reference](#api-reference). Install it with `rustup toolchain install <nightly> --profile minimal --target aarch64-apple-darwin`.
 
 Run the fast checks from the CI `check` job. CI supports only macOS, so it leaves out the Windows and Linux backend crates:
 
 ```sh
 scripts/check-docs.sh
+cargo run -p choscorui-api-docs --locked -- --check
 cargo fmt --all --check
 cargo clippy --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked -- -D warnings
 cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
@@ -56,6 +58,36 @@ CHOSCORUI_GALLERY_SETTINGS=/tmp/gallery.txt CHOSCORUI_GALLERY_AUTOPILOT=1 cargo 
 For changes to paint, layout, text, the display list, or the run loop, also run the benchmark check in [docs/performance.md](docs/performance.md).
 
 The [CI workflow](.github/workflows/ci.yml) and the commands in this document are the reference.
+
+## API reference
+
+`api-docs/` is the reference for application authors. The `choscorui-api-docs` tool generates it from the doc comments, so do not edit it by hand. The tool reads the rustdoc JSON of the pinned nightly toolchain. The JSON format is not stable, so the tool accepts only one `format_version`.
+
+After a change to the public API or to a doc comment, do these steps:
+
+1. Run `cargo run -p choscorui-api-docs --locked`.
+2. If the tool names an item with no topic, add a line for it to `tools/api-docs/topics.txt`.
+3. If the tool names an item with no summary or no example, add it to the doc comment.
+4. Commit the changes in `api-docs/` with the code change.
+
+The tool requires a doc summary on each item. It also requires an `# Examples` section with a Rust code block on these items:
+
+- each view type
+- each `ViewExt` method
+- each public method of `App`, `AppContext`, and `Scene`
+
+The examples are doctests in the crate that defines the item. Start an example that opens a window with `no_run`.
+
+The `--check` option writes nothing. It exits 1 and lists each stale, missing, or extra file. The tool exits 2 when the toolchain or rustdoc fails.
+
+To change the nightly toolchain, do these steps:
+
+1. Write the new toolchain name in `tools/api-docs/nightly.txt`.
+2. Install the toolchain.
+3. Set `FORMAT_VERSION` in `tools/api-docs/src/model.rs` to the version that the tool reports.
+4. Run `tools/api-docs/tests/fixture/generate.sh`.
+5. Run `cargo test -p choscorui-api-docs`.
+6. Run `cargo run -p choscorui-api-docs --locked`, and examine the changes in `api-docs/`.
 
 ## Static analysis
 
