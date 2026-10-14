@@ -2332,7 +2332,8 @@ its command through `.on_command`. The `dropdown_menu` modifier of
   view host, so the grace time applies between views. Keyboard focus in
   the view shows the tooltip at once. Escape hides the tooltip and
   stops there, wherever the focus is. The bubble is not a hit-test
-  target: the pointer on it is off the view. `tooltip_on(text, side)`
+  target: the pointer on it is off the view. A disabled view keeps its
+  tooltip, so the tooltip can tell why it is disabled. `tooltip_on(text, side)`
   puts the bubble on `side` of the view.
   The bubble fades in, zooms from 95%, and slides 8 pt from its anchor,
   in the motion time of the `Tooltip` recipe. It goes out the same way.

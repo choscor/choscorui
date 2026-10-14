@@ -41,6 +41,7 @@ const PAGES: &[(&str, ControlKind)] = &[
     ("textarea", ControlKind::Textarea),
     ("tool-box", ControlKind::Accordion),
     ("tool-button", ControlKind::Toggle),
+    ("tooltip", ControlKind::Button),
 ];
 
 /// Every node under `node`, depth first.

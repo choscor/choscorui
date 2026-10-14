@@ -1,12 +1,12 @@
 //! Popups: a command-backed popup menu with a submenu, and hover tooltips.
 
-use crate::ui::page::{Build, PageCx, caption, column, stateful};
+use crate::ui::page::{Build, PageCx, caption, column, section, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, DropdownMenu, Env, HStack, State, Text, View, ViewExt,
+    AnyView, Button, DropdownMenu, Env, HStack, State, Text, Toggle, View, ViewExt,
 };
 use choscorui::controls::{ButtonVariant, CommandId, CommandState, MenuCheck, MenuItem, Placement};
-use choscorui::core::{ColorRole, Space, TextPreset};
+use choscorui::core::{ColorRole, FontWeight, Space, TextPreset};
 
 const CUT: CommandId = CommandId(1);
 const COPY: CommandId = CommandId(2);
@@ -131,21 +131,72 @@ pub fn dropdown_menu(_: &PageCx) -> AnyView {
     })
 }
 
-/// Buttons with tooltips: a delay before the first, a grace period
+/// The styles that are on, as a readout line in `env`'s language.
+fn applied_styles(env: &Env, styles: [(bool, &str); 3]) -> String {
+    let names: Vec<String> = styles
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, key)| env.text(key, &[]))
+        .collect();
+    if names.is_empty() {
+        env.text("tooltip.no_style", &[])
+    } else {
+        let list = names
+            .into_iter()
+            .rev()
+            .reduce(|rest, first| {
+                env.text("tooltip.list_pair", &[("first", &first), ("rest", &rest)])
+            })
+            .unwrap_or_default();
+        env.text("tooltip.applied", &[("styles", &list)])
+    }
+}
+
+/// Toggle buttons with tooltips: a delay before the first, a grace period
 /// between neighbours, hiding on press, and at once on keyboard focus.
-/// The last tooltip shows below its button.
+/// The last tooltip shows below its button. Each toggle sets a style of
+/// the sample, and a disabled button keeps its tooltip.
 pub fn tooltip(_: &PageCx) -> AnyView {
-    let button = |label| Button::new(label, || {}).variant(ButtonVariant::Outline);
-    column((
-        caption(t!("tooltip.caption")),
-        HStack::new((
-            button(t!("tooltip.bold")).tooltip(t!("tooltip.bold_tip")),
-            button(t!("tooltip.italic")).tooltip(t!("tooltip.italic_tip")),
-            button(t!("tooltip.underline"))
-                .tooltip_on(t!("tooltip.underline_tip"), Placement::Below),
+    stateful(|cx| {
+        let (bold, italic, underline) = (cx.state(false), cx.state(false), cx.state(false));
+        let env = cx.env().clone();
+        let weight = move || {
+            if bold.get() {
+                FontWeight::BOLD
+            } else {
+                FontWeight::REGULAR
+            }
+        };
+        column((
+            caption(t!("tooltip.caption")),
+            HStack::new((
+                Toggle::new(t!("tooltip.bold"), bold.binding()).tooltip(t!("tooltip.bold_tip")),
+                Toggle::new(t!("tooltip.italic"), italic.binding())
+                    .tooltip(t!("tooltip.italic_tip")),
+                Toggle::new(t!("tooltip.underline"), underline.binding())
+                    .tooltip_on(t!("tooltip.underline_tip"), Placement::Below),
+            ))
+            .spacing(Space::S3),
+            Text::new(t!("tooltip.sample")).font_weight(weight),
+            Text::new(move || {
+                let styles = [
+                    (bold.get(), "tooltip.bold"),
+                    (italic.get(), "tooltip.italic"),
+                    (underline.get(), "tooltip.underline"),
+                ];
+                applied_styles(&env, styles)
+            })
+            .text_style(TextPreset::Small)
+            .foreground(ColorRole::MutedForeground),
+            section(
+                t!("tooltip.disabled"),
+                Button::new(t!("tooltip.share"), || {})
+                    .variant(ButtonVariant::Outline)
+                    .disabled(true)
+                    .tooltip(t!("tooltip.share_tip")),
+            ),
         ))
-        .spacing(Space::S3),
-    ))
+    })
 }
 
 /// The view of page `id`, when this module has it.
@@ -213,6 +264,31 @@ mod tests {
         assert!(!showing(&mut page, "Make the selection bold (⌘B)"));
         page.host.advance(3.0);
         assert!(showing(&mut page, "Make the selection bold (⌘B)"));
+    }
+
+    #[test]
+    fn the_style_toggles_change_the_sample_and_the_readout() {
+        let mut page = Harness::new("tooltip");
+        assert!(page.host.find("No style applied").is_some());
+        assert!(page.act("Bold", SemanticAction::Activate));
+        assert!(page.act("Underline", SemanticAction::Activate));
+        assert!(page.host.find("Applied: Bold, Underline").is_some());
+        let bold = page.node("Bold");
+        assert_eq!(page.host.semantic(bold).unwrap().state.checked, Some(true));
+    }
+
+    #[test]
+    fn a_disabled_button_shows_its_tooltip_on_hover() {
+        let mut page = Harness::new("tooltip");
+        let share = page.node("Share");
+        assert!(page.host.semantic(share).unwrap().state.disabled);
+        let center = page.host.tree().bounds(share).unwrap().center();
+        page.host.pointer(
+            PointerEvent::Move { position: center },
+            ShortcutModifiers::default(),
+        );
+        page.host.advance(3.0);
+        assert!(showing(&mut page, "Sign in to share this file"));
     }
 
     #[test]
