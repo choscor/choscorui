@@ -3,18 +3,13 @@
 
 use crate::ui::page::{PageCx, column, section, stateful};
 use choscorui::compose::view::{
-    AnyView, Button, Configured, Dynamic, Env, Frame, HStack, Text, ViewExt,
+    AnyView, Binding, Button, Dock, Dynamic, Env, Frame, HStack, Text, ViewExt,
 };
 use choscorui::compose::{Property, t};
 use choscorui::controls::{
-    ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
-    CustomControl, DockArea, DockLayout, DockPanel, DockTarget, MeasureContext, PaintContext,
-    PanelId, PanelLocation, Slot, StyleQuery, TextAlign,
+    ButtonVariant, DockArea, DockLayout, DockPanel, DockTarget, PanelId, PanelLocation,
 };
-use choscorui::core::{
-    ColorRole, EventReply, Localizer, Measured, Point, Rect, SemanticAction, SemanticNode,
-    SemanticParts, Size, Space, TextPreset,
-};
+use choscorui::core::{ColorRole, Space, TextPreset};
 
 const FILES: PanelId = PanelId(1);
 const OUTLINE: PanelId = PanelId(2);
@@ -25,17 +20,23 @@ const CONSOLE: PanelId = PanelId(4);
 /// keys, which the saved text holds; [`titled_dock`] titles them for
 /// display.
 pub(crate) fn default_dock() -> DockLayout {
-    arranged(str::to_owned)
+    arranged(|key| DockPanel::new(key, key))
 }
 
-/// The default arrangement with its panels titled in `env`.
+/// The default arrangement with its panels titled in `env`, the editor
+/// caption in the center, and a caption in each panel.
 fn titled_dock(env: &Env) -> DockLayout {
-    arranged(|key| env.text(&format!("dock.{key}"), &[]))
+    arranged(|key| {
+        let title = env.text(&format!("dock.{key}"), &[]);
+        let text = env.text("dock.panel", &[("title", &title)]);
+        DockPanel::new(key, title).with_text(text)
+    })
+    .with_center_text(env.text("dock.editor", &[]))
 }
 
-/// The default arrangement, with the panel stored under `key` titled
-/// `title(key)`.
-fn arranged(title: impl Fn(&str) -> String) -> DockLayout {
+/// The default arrangement, with `panel(key)` as the panel stored under
+/// `key`.
+fn arranged(panel: impl Fn(&str) -> DockPanel) -> DockLayout {
     let mut dock = DockLayout::new(24.0);
     let tab = |area| DockTarget::Tab { area, group: 0 };
     for (id, key, target) in [
@@ -44,7 +45,7 @@ fn arranged(title: impl Fn(&str) -> String) -> DockLayout {
         (INSPECTOR, "inspector", tab(DockArea::Right)),
         (CONSOLE, "console", tab(DockArea::Bottom)),
     ] {
-        let _ = dock.add(id, DockPanel::new(key, title(key)), target);
+        let _ = dock.add(id, panel(key), target);
     }
     dock.set_extent(DockArea::Left, 180.0);
     dock.set_extent(DockArea::Right, 170.0);
@@ -115,124 +116,6 @@ fn edit(saved: &Property<String>, change: fn(&mut DockLayout) -> bool) {
     }
 }
 
-/// The dock control with the page's content in its frames: the editor in
-/// the center and a caption in each panel. It reports every change of
-/// the arrangement as `Changed(Text)` with the saved text, and takes
-/// saved text as its value.
-struct DockView {
-    dock: DockLayout,
-    /// The center's caption.
-    editor: String,
-    /// Each panel's caption.
-    captions: Vec<(PanelId, String)>,
-}
-
-impl DockView {
-    /// `dock`, whose panels have titles in `env`, captioned in `env`.
-    fn new(env: &Env, dock: DockLayout) -> Self {
-        let captions = [FILES, OUTLINE, INSPECTOR, CONSOLE]
-            .into_iter()
-            .filter_map(|id| {
-                let title = &dock.panel(id)?.title;
-                Some((id, env.text("dock.panel", &[("title", title)])))
-            })
-            .collect();
-        Self {
-            dock,
-            editor: env.text("dock.editor", &[]),
-            captions,
-        }
-    }
-}
-
-impl DockView {
-    /// Reports the arrangement when it is no longer `before`.
-    fn report(&self, cx: &mut ControlContext<'_>, before: &str) {
-        let after = self.dock.save();
-        if after != before {
-            cx.emit(ControlMessage::Changed(ControlValue::Text(after)));
-        }
-    }
-}
-
-impl CustomControl for DockView {
-    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        self.dock.measure(cx)
-    }
-
-    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
-        CustomControl::arrange(&mut self.dock, cx, bounds);
-    }
-
-    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        let before = self.dock.save();
-        let reply = self.dock.event(cx, event);
-        self.report(cx, &before);
-        reply
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        let style = cx.style(StyleQuery::new(ControlKind::Card, Slot::Description));
-        let center = self.dock.arrange(cx.bounds).center;
-        cx.label(center, &self.editor, &style, TextAlign::Center);
-        self.dock.paint_hosted(cx, &mut |cx, panel, content| {
-            let caption = self
-                .captions
-                .iter()
-                .find(|(id, _)| *id == panel)
-                .map_or("", |(_, caption)| caption.as_str());
-            let inner = content.inset(8.0);
-            let line = Rect::new(
-                Point::new(inner.origin.x, inner.origin.y),
-                Size::new(inner.size.width, style.text.line_height),
-            );
-            cx.label(line, caption, &style, TextAlign::Start);
-        });
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        CustomControl::semantics(&self.dock)
-    }
-
-    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        self.dock.semantics_in(strings)
-    }
-
-    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
-        self.dock.semantic_parts(strings, parts);
-    }
-
-    fn perform(
-        &mut self,
-        cx: &mut ControlContext<'_>,
-        action: SemanticAction,
-        value: Option<&str>,
-    ) -> bool {
-        let before = self.dock.save();
-        let performed = self.dock.perform(cx, action, value);
-        self.report(cx, &before);
-        performed
-    }
-
-    fn set_enabled(&mut self, enabled: bool) {
-        CustomControl::set_enabled(&mut self.dock, enabled);
-    }
-
-    /// Takes saved text; empty text is the default arrangement. Text that
-    /// does not restore keeps the current arrangement.
-    fn set_value(&mut self, value: &ControlValue) -> bool {
-        let ControlValue::Text(saved) = value else {
-            return false;
-        };
-        let saved = if saved.is_empty() {
-            default_dock().save()
-        } else {
-            saved.clone()
-        };
-        saved == self.dock.save() || self.dock.restore(&saved).is_ok()
-    }
-}
-
 /// Four dockable panels around an editor. Tabs activate; the buttons move
 /// and close panels; splitters resize areas from the keyboard. The
 /// arrangement persists in the page store.
@@ -255,7 +138,19 @@ pub fn dock(cx: &PageCx) -> AnyView {
                 saved.set(default_dock().save());
             })
         };
+        // Empty saved text is the default arrangement.
         let (value, written) = (saved.clone(), saved.clone());
+        let arrangement = Binding::new(
+            move || {
+                let saved = value.get();
+                if saved.is_empty() {
+                    default_dock().save()
+                } else {
+                    saved
+                }
+            },
+            move |text| written.set(text),
+        );
         column((
             HStack::new((
                 button("dock.move_console", move_console),
@@ -264,16 +159,9 @@ pub fn dock(cx: &PageCx) -> AnyView {
             ))
             .spacing(Space::S2)
             .button_variant(ButtonVariant::Outline),
-            Configured::custom(ControlKind::Dock, move |env| {
-                DockView::new(env, initial.clone())
-            })
-            .value(move || ControlValue::Text(value.get()))
-            .on_message(move |message| {
-                if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                    written.set(text.clone());
-                }
-            })
-            .frame(Frame::new().max_width(760.0).height(440.0)),
+            Dock::new(move |_| initial.clone())
+                .arrangement(arrangement)
+                .frame(Frame::new().max_width(760.0).height(440.0)),
             Dynamic::new(move || {
                 note.get().map(|note| {
                     let text = match note {
@@ -288,11 +176,9 @@ pub fn dock(cx: &PageCx) -> AnyView {
             // A locked arrangement: it shows its panels and takes no input.
             section(
                 t!("dock.disabled"),
-                Configured::custom(ControlKind::Dock, |env| {
-                    DockView::new(env, titled_dock(env))
-                })
-                .frame(Frame::new().max_width(760.0).height(220.0))
-                .disabled(true),
+                Dock::new(titled_dock)
+                    .frame(Frame::new().max_width(760.0).height(220.0))
+                    .disabled(true),
             ),
         ))
     })

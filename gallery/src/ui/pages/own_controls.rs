@@ -7,18 +7,11 @@ use std::path::Path;
 
 /// Each file that mounts a gallery control, how many mounts it has, and
 /// which controls they are.
-const OWN: [(&str, usize, &str); 2] = [
-    (
-        "pages/containers/dock.rs",
-        2,
-        "DockView draws the dock layout",
-    ),
-    (
-        "pages/recipes.rs",
-        1,
-        "StarRating is the application-defined control of the custom control page",
-    ),
-];
+const OWN: [(&str, usize, &str); 1] = [(
+    "pages/recipes.rs",
+    1,
+    "StarRating is the application-defined control of the custom control page",
+)];
 
 /// The count of `Configured::custom` and `Configured::try_custom` calls in
 /// each file under `dir`, by path from `root`.
