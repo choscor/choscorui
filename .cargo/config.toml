@@ -1,0 +1,15 @@
+# Smaller unwind tables on Apple targets, with the same unwinding.
+#
+# - `force-unwind-tables=no` keeps unwind tables only on functions that can
+#   unwind. A function that cannot unwind has no table. A panic or a foreign
+#   exception still unwinds through each function that it can pass.
+# - Without the LLVM option, each function with a cleanup gets a DWARF
+#   unwind entry, because the Rust personality is not the C++ one. With
+#   it, the function gets a compact unwind entry.
+#
+# The `RUSTFLAGS` environment variable replaces these flags.
+[target.'cfg(target_vendor = "apple")']
+rustflags = [
+    "-C", "force-unwind-tables=no",
+    "-C", "llvm-args=-emit-compact-unwind-non-canonical=true",
+]
