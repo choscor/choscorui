@@ -10,16 +10,16 @@ mod products;
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, ColumnBrowser, Configured, Cx, Env, ForEach, Frame, HStack,
-    HorizontalAlignment, State, Text, VStack, VerticalAlignment, View, ViewExt,
+    Alignment, AnyView, Binding, Button, ColumnBrowser, Configured, Cx, Env, Frame, HStack,
+    HorizontalAlignment, List, State, Text, VStack, VerticalAlignment, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonVariant, ControlKind, ControlMessage, ControlSize, ControlValue, ItemView,
-    ShortcutModifiers, TextItemDelegate, ViewLayout, undo_history, undo_steps_to,
+    self, ButtonVariant, ControlKind, ControlMessage, ControlValue, ItemView, ShortcutModifiers,
+    TextItemDelegate, ViewLayout, undo_history, undo_steps_to,
 };
 use choscorui::core::{
-    ColorRole, ItemKey, ItemModel, Key, SemanticRole, Space, StringListModel, TextFilter,
-    TextPreset, TreeStore, UndoStack,
+    ColorRole, ItemKey, ItemModel, Key, SelectionMode, SemanticRole, Space, StringListModel,
+    TextFilter, TextPreset, TreeStore, UndoStack,
 };
 use hosting::{Handle, SharedModel};
 use std::cell::RefCell;
@@ -372,30 +372,61 @@ impl Step {
 struct Counter {
     value: i64,
     stack: UndoStack<i64>,
+    /// The value before each group of the stack, so that the first row
+    /// shows the oldest value that the stack can go back to.
+    before: Vec<i64>,
+    /// True after the stack dropped its oldest group.
+    trimmed: bool,
     env: Env,
 }
 
 impl Counter {
+    /// Runs `step`. A step that changes nothing, or whose value does not
+    /// fit, records no row.
     fn apply(&mut self, step: Step) {
         let delta = match step {
-            Step::Add1 => 1,
-            Step::Add10 => 10,
-            Step::Double => self.value,
-            Step::Reset => -self.value,
+            Step::Add1 => Some(1),
+            Step::Add10 => Some(10),
+            Step::Double => Some(self.value),
+            Step::Reset => self.value.checked_neg(),
         };
-        self.value += delta;
+        let Some((delta, next)) = delta
+            .filter(|delta| *delta != 0)
+            .and_then(|delta| Some((delta, self.value.checked_add(delta)?)))
+        else {
+            return;
+        };
+        self.before.truncate(self.stack.applied());
+        self.before.push(self.value);
+        if self.before.len() > HISTORY_LIMIT {
+            self.before.remove(0);
+            self.trimmed = true;
+        }
+        self.value = next;
         self.stack.push(self.env.text(step.key(), &[]), delta);
     }
 
     fn undo(&mut self) {
         if let Some(group) = self.stack.undo() {
-            self.value -= group.entries.iter().sum::<i64>();
+            let sum = group
+                .entries
+                .iter()
+                .try_fold(0_i64, |sum, delta| sum.checked_add(*delta));
+            self.value = sum
+                .and_then(|sum| self.value.checked_sub(sum))
+                .unwrap_or(self.value);
         }
     }
 
     fn redo(&mut self) {
         if let Some(group) = self.stack.redo() {
-            self.value += group.entries.iter().sum::<i64>();
+            let sum = group
+                .entries
+                .iter()
+                .try_fold(0_i64, |sum, delta| sum.checked_add(*delta));
+            self.value = sum
+                .and_then(|sum| self.value.checked_add(sum))
+                .unwrap_or(self.value);
         }
     }
 
@@ -409,6 +440,34 @@ impl Counter {
                 self.redo();
             }
         }
+    }
+
+    /// The text of each history row. The first row is the start, or the
+    /// oldest kept state after the stack dropped groups. A row that redo
+    /// can reach says so.
+    fn rows(&self) -> Vec<String> {
+        let first = self
+            .before
+            .first()
+            .copied()
+            .unwrap_or(self.value)
+            .to_string();
+        let start = if self.trimmed {
+            "undo-history.oldest"
+        } else {
+            "undo-history.start"
+        };
+        let start = self.env.text(start, &[("value", first.as_str())]);
+        undo_history(&self.stack, &start)
+            .into_iter()
+            .map(|row| match row.redoable {
+                true => self.env.text(
+                    "undo-history.redoable_row",
+                    &[("label", row.label.as_str())],
+                ),
+                false => row.label,
+            })
+            .collect()
     }
 }
 
@@ -441,19 +500,28 @@ impl View for UndoHistoryPage {
             counter: Rc::new(RefCell::new(Counter {
                 value: 0,
                 stack: UndoStack::new(HISTORY_LIMIT),
+                before: Vec::new(),
+                trimmed: false,
                 env: cx.env().clone(),
             })),
             version: cx.state(0),
         };
-        let start = cx.env().text("undo-history.start", &[]);
-        let redoable = cx.env().text("undo-history.redoable", &[]);
         let push = |label: &'static str, change: fn(&mut Counter)| {
             let history = history.clone();
             Button::new(t!(label), move || history.change(change)).variant(ButtonVariant::Outline)
         };
-        let shown = history.clone();
-        let listed = history.clone();
-        let chosen = history.clone();
+        // Undo and Redo are off at the ends of the stack.
+        let end = |at_end: fn(&Counter) -> bool| {
+            let history = history.clone();
+            move || history.read(at_end)
+        };
+        let (shown, listed, current, chosen, said) = (
+            history.clone(),
+            history.clone(),
+            history.clone(),
+            history.clone(),
+            history.clone(),
+        );
         let (undo, redo) = (history.clone(), history.clone());
         let command = ShortcutModifiers {
             command: true,
@@ -463,6 +531,14 @@ impl View for UndoHistoryPage {
             shift: true,
             ..command
         };
+        let rows = Binding::new(
+            move || vec![current.read(|counter| counter.stack.applied())],
+            move |rows: Vec<usize>| {
+                if let Some(row) = rows.first().copied() {
+                    chosen.change(|counter| counter.go_to(row));
+                }
+            },
+        );
         column((
             Text::new(t!(
                 "undo-history.value",
@@ -476,40 +552,26 @@ impl View for UndoHistoryPage {
             ))
             .spacing(Space::S2),
             HStack::new((
-                push("undo-history.undo", Counter::undo),
-                push("undo-history.redo", Counter::redo),
+                push("undo-history.undo", Counter::undo)
+                    .disabled(end(|counter| !counter.stack.can_undo())),
+                push("undo-history.redo", Counter::redo)
+                    .disabled(end(|counter| !counter.stack.can_redo())),
             ))
             .spacing(Space::S2),
-            VStack::new(ForEach::new(
+            List::new(
+                t!("undo-history.list"),
                 move || {
-                    listed
-                        .read(|counter| undo_history(&counter.stack, &start))
-                        .into_iter()
-                        .enumerate()
-                        .collect::<Vec<_>>()
+                    let rows = listed.read(Counter::rows);
+                    Box::new(StringListModel::from_strings(rows)) as Box<dyn ItemModel>
                 },
-                |(row, entry)| (*row, entry.label.clone(), entry.current, entry.redoable),
-                move |(row, entry)| {
-                    let (row, history) = (*row, chosen.clone());
-                    // Redoable rows are muted; the current row is selected.
-                    Button::new(entry.label.clone(), move || {
-                        history.change(|counter| counter.go_to(row))
-                    })
-                    .variant(if entry.current {
-                        ButtonVariant::Secondary
-                    } else {
-                        ButtonVariant::Ghost
-                    })
-                    .size(ControlSize::Sm)
-                    .accessibility_hint(if entry.redoable {
-                        redoable.clone()
-                    } else {
-                        String::new()
-                    })
-                    .opacity(if entry.redoable { 0.5 } else { 1.0 })
-                },
-            ))
-            .alignment(HorizontalAlignment::Leading),
+                rows,
+            )
+            .selection_mode(SelectionMode::Single)
+            // The list reads out the current row.
+            .accessibility_value(move || {
+                said.read(|counter| counter.rows().swap_remove(counter.stack.applied()))
+            })
+            .frame(Frame::new().width(320.0).height(320.0)),
         ))
         .keyboard_shortcut(Key::Character('z'), command, move || {
             undo.change(Counter::undo)
@@ -542,7 +604,7 @@ pub fn page(id: &str) -> Option<Build> {
 pub(crate) mod tests {
     use super::*;
     use crate::ui::pages::tests::Harness;
-    use choscorui::core::{KeyEvent, NodeId, SemanticAction};
+    use choscorui::core::{KeyEvent, SemanticAction};
 
     /// The most rows that may have nodes at once.
     const REALIZED_ROW_LIMIT: usize = 200;
@@ -564,16 +626,6 @@ pub(crate) mod tests {
                 .perform(node, SemanticAction::SetValue, Some(value))
         );
         page.host.layout();
-    }
-
-    /// Every published node named `name`, in tree order.
-    fn named(page: &mut Harness, name: &str) -> Vec<NodeId> {
-        let (snapshot, _) = page.host.semantics();
-        snapshot
-            .into_iter()
-            .filter(|entry| entry.node.name == name)
-            .map(|entry| entry.id)
-            .collect()
     }
 
     /// The record count that the item view readout shows.
@@ -707,18 +759,27 @@ pub(crate) mod tests {
     #[test]
     fn undo_history_jumps_back_and_forward_through_the_stack() {
         let mut page = Harness::new("undo-history");
+        let disabled = |page: &mut Harness, name: &str| {
+            let node = page.node(name);
+            page.host.semantic(node).unwrap().state.disabled
+        };
+        assert!(disabled(&mut page, "Undo") && disabled(&mut page, "Redo"));
+        assert!(page.act("Reset", SemanticAction::Activate));
+        assert!(page.act("Double", SemanticAction::Activate));
+        assert!(
+            disabled(&mut page, "Undo"),
+            "a step that changes nothing adds no row"
+        );
         assert!(page.act("Add 10", SemanticAction::Activate));
         assert!(page.act("Add 10", SemanticAction::Activate));
         assert!(page.host.find("Value: 20").is_some());
-        assert!(page.act("Start (0)", SemanticAction::Activate));
+        assert!(!disabled(&mut page, "Undo") && disabled(&mut page, "Redo"));
+        assert!(page.act("History", SemanticAction::Focus));
+        press(&mut page, Key::Home, ShortcutModifiers::default());
         assert!(page.host.find("Value: 0").is_some());
-        let rows = named(&mut page, "Add 10");
-        assert_eq!(rows.len(), 3, "the button and two history rows");
-        let last = rows[2];
-        let row = page.host.semantic(last).unwrap();
-        assert_eq!(row.description, "Redoable");
-        assert!(page.host.perform(last, SemanticAction::Activate, None));
-        page.host.layout();
+        assert_eq!(page.value("History").as_deref(), Some("Start (0)"));
+        assert!(disabled(&mut page, "Undo"));
+        press(&mut page, Key::End, ShortcutModifiers::default());
         assert!(page.host.find("Value: 20").is_some());
         let command = ShortcutModifiers {
             command: true,
@@ -731,6 +792,18 @@ pub(crate) mod tests {
             ..command
         };
         press(&mut page, Key::Character('z'), shifted);
+        assert!(page.host.find("Value: 20").is_some());
+        for _ in 0..12 {
+            assert!(page.act("Add 1", SemanticAction::Activate));
+        }
+        assert!(page.host.find("Value: 32").is_some());
+        assert!(page.act("History", SemanticAction::Focus));
+        press(&mut page, Key::Home, ShortcutModifiers::default());
+        assert_eq!(
+            page.value("History").as_deref(),
+            Some("Oldest kept (20)"),
+            "the first row names the oldest value it goes back to"
+        );
         assert!(page.host.find("Value: 20").is_some());
     }
 }
