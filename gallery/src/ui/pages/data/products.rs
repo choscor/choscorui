@@ -872,6 +872,40 @@ mod tests {
     }
 
     #[test]
+    fn a_header_width_change_keeps_the_item_view() {
+        let mut page = Harness::new("header-view");
+        assert!(page.act("Products", SemanticAction::Focus));
+        press_key(&mut page, Key::ArrowDown);
+        // Command moves the current row and keeps the selection, so only
+        // the view itself knows the current row.
+        let command = ShortcutModifiers {
+            command: true,
+            ..ShortcutModifiers::default()
+        };
+        for _ in 0..3 {
+            press(&mut page, Key::ArrowDown, command);
+        }
+        let current = page.focused_part("Products");
+        assert!(current.is_some());
+        let width = |page: &mut Harness| {
+            let (snapshot, _) = page.host.semantics();
+            (snapshot.into_iter())
+                .find(|entry| entry.part.is_some() && entry.node.name == "Name")
+                .map(|entry| entry.bounds.size.width)
+        };
+        let before = width(&mut page);
+        assert!(page.act("Name", SemanticAction::Focus));
+        press_key(&mut page, Key::Character('+'));
+        assert!(width(&mut page) > before, "the column is wider");
+        assert!(page.act("Products", SemanticAction::Focus));
+        assert_eq!(
+            page.focused_part("Products"),
+            current,
+            "the same view keeps its current row"
+        );
+    }
+
+    #[test]
     fn cell_edit_rejects_text_in_a_number_column_and_commits_a_number() {
         let mut page = Harness::new("cell-edit");
         assert!(page.act("Editable products", SemanticAction::Focus));

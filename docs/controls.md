@@ -2030,6 +2030,9 @@ pin this behavior.
   `Collapse`, and `ShowMenu` act on the item.
 - The view keeps the selection by `ItemKey` across sort and filter. It has
   no disabled state.
+- `set_value(Indices)` with the selection that the view has already
+  keeps the current item. A host pushes the value again with each new
+  configuration, for example new column widths.
 - A view whose rows have no children reserves no disclosure area, so
   its text starts at the cell padding.
 - **Look.** `paint` calls the delegate once per realized cell with a

@@ -1463,6 +1463,15 @@ impl CustomControl for ItemView {
         if !fits || indices.iter().any(|index| *index >= self.order.len()) {
             return false;
         }
+        // The same selection again, as a host pushes it with each new
+        // configuration, keeps the current row.
+        let keys: std::collections::BTreeSet<ItemKey> =
+            indices.iter().map(|index| self.order[*index]).collect();
+        if keys.len() == self.selection.len()
+            && keys.iter().all(|key| self.selection.is_selected(*key))
+        {
+            return true;
+        }
         self.selection.clear();
         for index in indices {
             let key = self.order[*index];
