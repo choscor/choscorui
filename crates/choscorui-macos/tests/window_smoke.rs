@@ -131,6 +131,28 @@ fn main() {
         .unwrap();
     window.set_display_list(paint);
     let before_paint = window.paint_count();
+    eprintln!(
+        "DIAG set: painter {:?} occluded {} visible {} paints {} displays {} scale {}",
+        window.painter(),
+        window.is_occluded(),
+        window.is_visible(),
+        window.paint_count(),
+        window.display_count(),
+        window.backing_scale_factor()
+    );
+    {
+        let start = Instant::now();
+        pump_until(&app, Duration::from_secs(3), Duration::from_millis(10), || {
+            window.paint_count() > before_paint
+        });
+        eprintln!(
+            "DIAG after pump {:?}: paints {} displays {} occluded {}",
+            start.elapsed(),
+            window.paint_count(),
+            window.display_count(),
+            window.is_occluded()
+        );
+    }
     window.take_events();
     send_native_mouse_event(window.content_size().height, 1, c"mouseDown:", 0);
     assert!(window.take_events().iter().any(|event| matches!(event,
@@ -499,6 +521,28 @@ fn main() {
         .unwrap();
     app.run();
     assert!(!stop.is_active());
+    eprintln!(
+        "DIAG run: painter {:?} occluded {} visible {} paints {} (before {}) displays {}",
+        window.painter(),
+        window.is_occluded(),
+        window.is_visible(),
+        window.paint_count(),
+        before_paint,
+        window.display_count()
+    );
+    if window.paint_count() <= before_paint {
+        let start = Instant::now();
+        pump_until(&app, Duration::from_secs(5), Duration::from_millis(10), || {
+            window.paint_count() > before_paint
+        });
+        eprintln!(
+            "DIAG late: {:?} paints {} displays {} occluded {}",
+            start.elapsed(),
+            window.paint_count(),
+            window.display_count(),
+            window.is_occluded()
+        );
+    }
     assert!(window.paint_count() > before_paint);
     assert!(!injected.is_active());
     assert!(!injected_key.is_active());
