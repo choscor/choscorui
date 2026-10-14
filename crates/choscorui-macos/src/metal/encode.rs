@@ -122,6 +122,26 @@ pub(super) fn encode(
         targets.atlases.push(atlas);
     }
     let atlases = targets.atlases[..slots].to_vec();
+    let fix = std::env::var("DIAG_FIX").unwrap_or_default();
+    if fix.contains("texleak") {
+        for _ in 0..10 {
+            drop(gpu.target_texture(PIXEL_FORMAT_R16_FLOAT, 1, 1));
+        }
+    }
+    if fix.contains("shared_empty") {
+        thread_local! {
+            static EMPTY: std::cell::RefCell<(Option<Retained<MTLTexture>>, Option<Retained<MTLTexture>>)> = const { std::cell::RefCell::new((None, None)) };
+        }
+        EMPTY.with(|e| {
+            let mut e = e.borrow_mut();
+            if e.0.is_none() {
+                e.0 = gpu.upload_texture(PIXEL_FORMAT_RGBA8, 1, 1);
+                e.1 = gpu.target_texture(PIXEL_FORMAT_R16_FLOAT, 1, 1);
+            }
+            targets.empty_color = e.0.clone();
+            targets.empty_coverage = e.1.clone();
+        });
+    }
     let empty_color = texture_in(&mut targets.empty_color, || {
         gpu.upload_texture(PIXEL_FORMAT_RGBA8, 1, 1)
     })?
