@@ -3692,9 +3692,14 @@ false.
   shortcut works from anywhere in the window. A focused control that uses
   Command+B, such as a text editor, gets it first. A disabled sidebar, or
   one with `SidebarCollapse::None` in a wide window, leaves the key unused.
+  This is also true when the sidebar has focus.
 - **`SidebarCollapse`.** `Offcanvas` collapses to the toggle alone.
   `Icon` collapses to 48 pt with the item icons. `None` never collapses
   and shows no toggle.
+- **Icon rail.** The rail centers the toggle and the items. A floating or
+  inset rail adds its 8 pt padding on each side, so it is 64 pt wide.
+  Rest the pointer on a rail item for `TOOLTIP_DELAY` to show its label in
+  a tooltip beside the item. A press or a key hides the label.
 - **Narrow window.** Below `SIDEBAR_MOBILE_BREAKPOINT` (768 pt), only the
   toggle shows. Opening the sidebar shows it as a modal sheet, 288 pt wide,
   at its side. Tab cycles inside the sheet. Choosing an item, Escape, or a
@@ -3711,16 +3716,20 @@ false.
   item. The children of a sub-item do not show.
 - Enter, Space, or a click on an item with a sub-menu opens or closes the
   sub-menu. It does not select the item. On the icon rail, it expands the
-  sidebar with the sub-menu open.
+  sidebar with the sub-menu open. Focus stays on the item.
 - ArrowRight opens the focused sub-menu, then moves focus to its first
   sub-item. ArrowLeft closes it, or moves focus from a sub-item to its
   item. Right to left, the two arrows change places.
-- A selected sub-item opens its sub-menu. Sub-menu changes emit no
-  message.
+- A selected sub-item opens its sub-menu. When its sub-menu is closed,
+  or on the icon rail, its item takes the selected look. Sub-menu changes
+  emit no message.
+- `with_selected` and `set_value` take an item without a sub-menu. An
+  index past the items, or of an item with a sub-menu, selects nothing.
 
 | Part | Slot | Value |
 | --- | --- | --- |
 | Panel | `Root` | `sidebar` fill, 256 pt wide (48 pt collapsed to icons); 1 pt `sidebar-border` at the inner edge |
+| Rail tooltip | `Tooltip` `Root` | the tooltip bubble, one `Tooltip` `Indicator` height from the item |
 | Floating panel | `Root` | 1 pt `sidebar-border` ring, radius lg, shadow sm, 8 pt padding |
 | Toggle | `Button` `Root` | ghost icon-sm button with the panel icon |
 | Header | `Header` | 8 pt padding |

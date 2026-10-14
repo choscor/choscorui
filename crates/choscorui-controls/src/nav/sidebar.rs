@@ -149,6 +149,13 @@ pub struct Sidebar {
     sheet: Rect,
     reveal: Reveal,
     motion_ms: u32,
+    /// The part that takes focus after the next arrange.
+    keep: Option<Part>,
+    /// The hovered item on the icon rail, the time its label shows, and
+    /// whether it shows.
+    tip: Option<(usize, f64, bool)>,
+    /// The label bubble of each rail item, by part index.
+    tips: Vec<Rect>,
     rtl: bool,
     enabled: bool,
 }
@@ -180,6 +187,9 @@ impl Sidebar {
             sheet: Rect::default(),
             reveal: Reveal::default(),
             motion_ms: 0,
+            keep: None,
+            tip: None,
+            tips: Vec::new(),
             rtl: false,
             enabled: true,
         }
@@ -219,11 +229,15 @@ impl Sidebar {
         self
     }
 
-    /// Selects `item` and opens the sub-menu that holds it.
+    /// Selects `item` and opens the sub-menu that holds it. An index past
+    /// the items, or of an item with a sub-menu, selects nothing.
     #[must_use]
     pub fn with_selected(mut self, item: usize) -> Self {
-        self.selected = Some(item);
-        self.open_parent(item);
+        let fits = self.entries().get(item).is_some_and(|entry| !entry.has_menu());
+        self.selected = fits.then_some(item);
+        if fits {
+            self.open_parent(item);
+        }
         self
     }
 
@@ -386,7 +400,9 @@ impl Sidebar {
         let mut y = inner.origin.y;
         if self.collapsible() {
             let side = toggle.min_width.max(toggle.min_height);
-            let x = if cx.rtl() {
+            let x = if compact {
+                panel.center().x - side / 2.0
+            } else if cx.rtl() {
                 inner.max_x() - header.padding.inline_start - side
             } else {
                 inner.origin.x + header.padding.inline_start
@@ -414,10 +430,15 @@ impl Sidebar {
                 y += label.min_height;
             }
             for entry in entries {
-                let row_width = if compact { item.min_width } else { width };
+                // The icon rail centers its rows.
+                let (row_x, row_width) = if compact {
+                    (panel.center().x - item.min_width / 2.0, item.min_width)
+                } else {
+                    (x, width)
+                };
                 parts.push((
                     Part::Item(index),
-                    Rect::from_xywh(x, y, row_width, item.min_height),
+                    Rect::from_xywh(row_x, y, row_width, item.min_height),
                 ));
                 y += item.min_height + group.gap;
                 let parent = index;
@@ -507,11 +528,12 @@ impl Sidebar {
                     self.set_menu_open(cx, index, open);
                 } else {
                     // On the icon rail: expand the sidebar with the
-                    // sub-menu open.
+                    // sub-menu open, and keep focus on the item.
                     if !self.open.contains(&index) {
                         self.open.push(index);
                     }
                     self.set_expanded(cx, true);
+                    self.keep = Some(Part::Item(index));
                 }
             }
             Some(Part::Item(index)) => {
@@ -572,6 +594,9 @@ impl Sidebar {
         let stops = self.stops();
         match key {
             Key::Character('b') if modifiers.command => {
+                if !self.collapsible() {
+                    return EventReply::Continue;
+                }
                 let expanded = !self.is_expanded();
                 self.set_expanded(cx, expanded);
             }
@@ -691,8 +716,7 @@ impl Sidebar {
                     } else {
                         (Slot::Item, size)
                     };
-                    let state =
-                        state.set(VisualState::SELECTED, self.selected == Some(*item_index));
+                    let state = state.set(VisualState::SELECTED, self.marked(*item_index, compact));
                     let variant = item.variant.into();
                     let style = cx.style(Self::item_query(slot, variant, size, state));
                     let badge = cx.style(Self::item_query(Slot::Badge, variant, size, state));
@@ -752,6 +776,85 @@ impl Sidebar {
         }
     }
 
+    /// True when the row of `item` takes the selected look: the selected
+    /// item, or the item whose hidden sub-menu holds it.
+    fn marked(&self, item: usize, compact: bool) -> bool {
+        let Some(selected) = self.selected else {
+            return false;
+        };
+        let parent = self.entries().get(selected).and_then(|entry| entry.parent);
+        selected == item || (parent == Some(item) && (compact || !self.open.contains(&item)))
+    }
+
+    /// True while the sidebar shows as an icon rail.
+    fn rail(&self) -> bool {
+        !self.mobile && !self.is_expanded() && self.collapse == SidebarCollapse::Icon
+    }
+
+    /// The label bubble beside each item on the icon rail, by part index.
+    fn tip_rects(&self, cx: &MeasureContext<'_>) -> Vec<Rect> {
+        if !self.rail() {
+            return Vec::new();
+        }
+        let style = cx.style(StyleQuery::new(ControlKind::Tooltip, Slot::Root));
+        let gap = cx
+            .style(StyleQuery::new(ControlKind::Tooltip, Slot::Indicator))
+            .min_height;
+        let entries = self.entries();
+        // The bubble sits toward the content, away from the window edge.
+        let before = (self.side == SheetSide::Right) != self.rtl;
+        self.parts
+            .iter()
+            .map(|(part, row)| {
+                let Part::Item(index) = part else {
+                    return Rect::default();
+                };
+                let label = entries.get(*index).map_or("", |entry| &entry.item.label);
+                let width = (cx.text.width(label, &style.text) + style.padding.horizontal())
+                    .min(style.max_width);
+                let height = (style.text.line_height + style.padding.vertical()).max(style.min_height);
+                let x = if before {
+                    row.origin.x - gap - width
+                } else {
+                    row.max_x() + gap
+                };
+                Rect::from_xywh(x, row.center().y - height / 2.0, width, height)
+            })
+            .collect()
+    }
+
+    /// Follows the hovered rail item: its label shows after the tooltip
+    /// delay, and hides when the pointer leaves it.
+    fn follow_tip(&mut self, cx: &mut ControlContext<'_>) {
+        let hovered = self.tracked.hovered.filter(|part| {
+            self.rail() && matches!(self.parts.get(*part), Some((Part::Item(_), _)))
+        });
+        match (hovered, self.tip) {
+            (Some(part), Some((tip, ..))) if part == tip => {}
+            (Some(part), _) => {
+                let at = cx.time() + crate::popup::TOOLTIP_DELAY.as_secs_f64();
+                self.tip = Some((part, at, false));
+            }
+            (None, Some(_)) => {
+                self.tip = None;
+                cx.request_paint();
+            }
+            (None, None) => {}
+        }
+    }
+
+    /// The shown label bubble and its text.
+    fn shown_tip(&self) -> Option<(Rect, &str)> {
+        let (part, _, true) = self.tip? else {
+            return None;
+        };
+        let Part::Item(index) = self.parts.get(part)?.0 else {
+            return None;
+        };
+        let label = &self.entries().get(index)?.item.label;
+        Some((*self.tips.get(part)?, label.as_str()))
+    }
+
     /// Paints the sidebar box with its border on the inner edge.
     fn paint_root(&self, cx: &mut PaintContext<'_>, rect: Rect, compact: bool) {
         let style = cx.style(self.query(Slot::Root, self.size(compact), VisualState::NONE));
@@ -771,6 +874,9 @@ impl CustomControl for Sidebar {
             || (!self.is_expanded() && self.collapse == SidebarCollapse::Offcanvas)
         {
             toggle.min_width + header.padding.horizontal()
+        } else if compact {
+            // A floating or inset rail keeps room for its padding.
+            root.min_width + root.padding.horizontal()
         } else {
             root.min_width
         };
@@ -793,6 +899,10 @@ impl CustomControl for Sidebar {
         self.mobile = cx.viewport.size.width < SIDEBAR_MOBILE_BREAKPOINT;
         let compact = self.compact();
         self.parts = self.layout(cx, bounds, compact);
+        if let Some(part) = self.keep.take() {
+            self.focus_part(part);
+        }
+        self.tips = self.tip_rects(cx);
         let root = cx.style(self.query(Slot::Root, ControlSize::Default, VisualState::NONE));
         self.motion_ms = root.motion_ms;
         let width = MOBILE_WIDTH.min(cx.viewport.size.width);
@@ -813,7 +923,31 @@ impl CustomControl for Sidebar {
         let mut tracked = self.tracked;
         tracked.track(cx, event, |point| self.part_at(point));
         self.tracked = tracked;
+        self.follow_tip(cx);
         match event {
+            ControlEvent::Timer => {
+                if let Some((_, at, shown)) = &mut self.tip
+                    && !*shown
+                    && cx.time() >= *at
+                {
+                    *shown = true;
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
+            ControlEvent::Pointer(PointerEvent::Down { .. }) | ControlEvent::Key(_)
+                if self.tip.is_some_and(|(_, _, shown)| shown) =>
+            {
+                // A press or a key hides the label until the pointer
+                // moves to another item.
+                self.tip = self.tip.map(|(part, _, _)| (part, f64::INFINITY, false));
+                cx.request_paint();
+                match event {
+                    ControlEvent::Pointer(pointer) => self.pointer(cx, pointer, pressed),
+                    ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
+                    _ => EventReply::Continue,
+                }
+            }
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::Shortcut(_) if self.collapse != SidebarCollapse::None || self.mobile => {
@@ -839,7 +973,15 @@ impl CustomControl for Sidebar {
     }
 
     fn overlay(&self) -> Option<Rect> {
-        (self.mobile && self.reveal.open).then_some(self.viewport)
+        (self.mobile && self.reveal.open)
+            .then_some(self.viewport)
+            .or_else(|| self.shown_tip().map(|(rect, _)| rect))
+    }
+
+    fn deadline(&self) -> Option<f64> {
+        self.tip
+            .filter(|(_, at, shown)| !shown && at.is_finite())
+            .map(|(_, at, _)| at)
     }
 
     fn modal(&self) -> bool {
@@ -851,6 +993,12 @@ impl CustomControl for Sidebar {
     }
 
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        if let Some((rect, label)) = self.shown_tip() {
+            let style = cx.style(StyleQuery::new(ControlKind::Tooltip, Slot::Root));
+            cx.slot(rect, &style, |cx, inner| {
+                cx.label(inner, label, &style, TextAlign::Center);
+            });
+        }
         if !self.mobile {
             return;
         }

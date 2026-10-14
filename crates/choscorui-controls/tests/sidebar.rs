@@ -4,7 +4,7 @@ mod hosted;
 
 use choscorui_controls::{
     ControlMessage, ControlSize, ControlValue, Input, ShortcutModifiers, Sidebar, SidebarCollapse,
-    SidebarItem, SidebarItemVariant, SidebarVariant,
+    SidebarItem, SidebarItemVariant, SidebarVariant, TOOLTIP_DELAY,
 };
 use choscorui_core::{
     ColorRole, DesignTokens, Icon, Key, KeyEvent, LayoutDirection, Rect, SemanticAction,
@@ -335,4 +335,66 @@ fn a_sub_menu_item_on_the_icon_rail_expands_the_sidebar() {
     relayout(&mut h);
     assert_eq!(h.measure().width, 256.0);
     assert!(texts(&h.paint()).contains(&"Design".to_string()));
+    assert_eq!(h.semantics().description, "Projects", "focus stays on it");
+}
+
+#[test]
+fn command_b_on_a_fixed_focused_sidebar_stays_unused() {
+    let mut h = Harness::new(sidebar().with_collapse(SidebarCollapse::None));
+    h.focus();
+    h.modifiers(ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    });
+    let used = h.host.dispatch_key(
+        &mut h.tree,
+        KeyEvent::Down {
+            key: Key::Character('b'),
+            repeat: false,
+        },
+    );
+    assert!(!used);
+}
+
+fn accent() -> choscorui_core::Color {
+    DesignTokens::light().color(ColorRole::SidebarAccent)
+}
+
+#[test]
+fn a_floating_icon_rail_centers_its_items_and_shows_labels_as_tooltips() {
+    let mut h = Harness::new(
+        sidebar()
+            .with_variant(SidebarVariant::Floating)
+            .with_collapse(SidebarCollapse::Icon)
+            .with_selected(0),
+    );
+    h.focus();
+    h.key(Key::Enter);
+    relayout(&mut h);
+    assert_eq!(h.measure().width, 64.0, "the rail keeps its padding");
+    let bounds = h.bounds();
+    let selected = rounded_fills(&h.paint(), accent());
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0].center().x, bounds.center().x);
+    h.hover(selected[0].center());
+    assert!(!texts(&h.paint()).contains(&"Inbox".to_string()));
+    assert!(h.host.advance(&mut h.tree, TOOLTIP_DELAY.as_secs_f64()));
+    assert!(texts(&h.paint()).contains(&"Inbox".to_string()));
+}
+
+#[test]
+fn a_closed_sub_menu_marks_the_parent_of_the_selected_item() {
+    let mut h = Harness::new(with_menu().with_selected(2));
+    assert_eq!(rounded_fills(&h.paint(), accent()).len(), 1, "Design");
+    h.focus();
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowLeft);
+    relayout(&mut h);
+    assert_eq!(rounded_fills(&h.paint(), accent()).len(), 1, "Projects");
+
+    let none = Harness::new(with_menu().with_selected(1));
+    assert_eq!(none.semantics().value, None, "an item with a sub-menu");
+    let none = Harness::new(with_menu().with_selected(9));
+    assert_eq!(none.semantics().value, None, "past the items");
 }
