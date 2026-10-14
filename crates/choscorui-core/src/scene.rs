@@ -8,10 +8,36 @@ use crate::{
     SemanticRole, Size, StrokeStyle, SvgDocument, Transform,
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SceneItemId(pub u64);
+
+/// Hashes an item id with one multiply. The scene numbers its own items,
+/// so its maps do not need the flooding resistance of the default hasher,
+/// which painting a large scene would pay for on every item.
+#[derive(Default)]
+struct IdHasher(u64);
+
+impl Hasher for IdHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.write_u64(u64::from(*byte));
+        }
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        self.0 = (self.0.rotate_left(5) ^ value).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+type IdMap<V> = HashMap<SceneItemId, V, BuildHasherDefault<IdHasher>>;
+type IdSet = HashSet<SceneItemId, BuildHasherDefault<IdHasher>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ItemShape {
@@ -213,14 +239,13 @@ const STROKE_SLOP: f64 = 2.0;
 
 #[derive(Default)]
 pub struct Scene {
-    nodes: HashMap<SceneItemId, Node>,
+    nodes: IdMap<Node>,
     roots: Vec<SceneItemId>,
     grid: HashMap<(i32, i32), BTreeSet<SceneItemId>>,
     large: BTreeSet<SceneItemId>,
     next_id: u64,
     order: Vec<SceneItemId>,
-    sorted_roots: Vec<SceneItemId>,
-    rank: HashMap<SceneItemId, usize>,
+    rank: IdMap<usize>,
     order_dirty: bool,
     /// The accessible items in paint order, and the index of each.
     accessible: Vec<SceneItemId>,
@@ -595,7 +620,6 @@ impl Scene {
         }
         self.rank = order.iter().enumerate().map(|(i, id)| (*id, i)).collect();
         self.order = order;
-        self.sorted_roots = roots;
         self.order_dirty = false;
         self.accessible_dirty = true;
     }
@@ -765,9 +789,12 @@ impl Scene {
         visible: Rect,
     ) -> Result<usize, DisplayListError> {
         let ids = self.items_in_rect(visible);
-        let set: HashSet<_> = ids.into_iter().collect();
+        let set: IdSet = ids.iter().copied().collect();
         let mut painted = 0;
-        for root in &self.sorted_roots {
+        // `ids` is in paint order, so its roots come in sibling order. A
+        // root outside `visible` is never visited, so the cost follows
+        // the visible items, not the scene size.
+        for root in ids.iter().filter(|id| self.nodes[id].parent.is_none()) {
             painted += self.paint_subtree(list, *root, &set)?;
         }
         Ok(painted)
@@ -783,7 +810,7 @@ impl Scene {
         &self,
         list: &mut DisplayList,
         id: SceneItemId,
-        visible: &HashSet<SceneItemId>,
+        visible: &IdSet,
     ) -> Result<usize, DisplayListError> {
         // Groups and their descendants are culled together by bounds.
         if !visible.contains(&id) {
