@@ -251,6 +251,9 @@ pub struct Scene {
     accessible: Vec<SceneItemId>,
     accessible_rank: HashMap<SceneItemId, usize>,
     accessible_dirty: bool,
+    /// The selectable items with bounds, in paint order.
+    selectable: Vec<SceneItemId>,
+    selectable_dirty: bool,
     changes: Vec<SceneChange>,
     revision: u64,
 }
@@ -390,6 +393,15 @@ impl Scene {
         }
         if node.item.visible != before.visible || node.item.role != before.role {
             self.accessible_dirty = true;
+        }
+        // These fields decide whether an item, or a group around it, has
+        // bounds and so can take the selection.
+        if node.item.selectable != before.selectable
+            || node.item.visible != before.visible
+            || node.item.shape != before.shape
+            || node.item.clip_children != before.clip_children
+        {
+            self.selectable_dirty = true;
         }
         self.refresh(id);
         self.revision += 1;
@@ -622,6 +634,23 @@ impl Scene {
         self.order = order;
         self.order_dirty = false;
         self.accessible_dirty = true;
+        self.selectable_dirty = true;
+    }
+
+    /// Rebuilds the selectable items after a change of order, or of a
+    /// field that decides the bounds. A move does not rebuild them.
+    fn ensure_selectable(&mut self) {
+        self.ensure_order();
+        if !self.selectable_dirty {
+            return;
+        }
+        self.selectable = (self.order.iter().copied())
+            .filter(|id| {
+                let node = &self.nodes[id];
+                node.item.selectable && node.bounds.is_some()
+            })
+            .collect();
+        self.selectable_dirty = false;
     }
 
     /// Rebuilds the accessible items after a change of order, visibility,
@@ -901,6 +930,27 @@ impl Scene {
     pub fn accessible_index(&mut self, id: SceneItemId) -> Option<usize> {
         self.ensure_accessible();
         self.accessible_rank.get(&id).copied()
+    }
+
+    /// Selectable items that have bounds, in paint order. The list is
+    /// kept between changes of order, visibility, or shape.
+    pub fn selectable_items(&mut self) -> &[SceneItemId] {
+        self.ensure_selectable();
+        &self.selectable
+    }
+
+    /// The place of `id` in [`selectable_items`](Self::selectable_items),
+    /// as [`slice::binary_search`] gives it: `Ok` with its index when it
+    /// is selectable, or `Err` with the index of the next selectable item
+    /// in paint order. `None` when the scene has no item `id`. The cost
+    /// is a binary search.
+    pub fn selectable_position(&mut self, id: SceneItemId) -> Option<Result<usize, usize>> {
+        self.ensure_selectable();
+        let rank = *self.rank.get(&id)?;
+        Some(
+            self.selectable
+                .binary_search_by_key(&rank, |item| self.rank[item]),
+        )
     }
 
     /// Debug/statistics: number of occupied grid cells.

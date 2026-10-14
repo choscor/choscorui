@@ -20,7 +20,6 @@ use choscorui_core::{
 };
 use std::cell::RefCell;
 use std::collections::BTreeSet;
-use std::ops::Range;
 
 /// Points that one wheel line pans in a control host.
 const WHEEL_LINE: f64 = 20.0;
@@ -421,13 +420,7 @@ impl CanvasView {
                 }
             }
             CanvasInput::SelectAll => {
-                let len = scene.paint_order().len();
-                let all: BTreeSet<_> = (0..len)
-                    .filter_map(|position| {
-                        let id = *scene.paint_order().get(position)?;
-                        Self::selectable(scene, id).then_some(id)
-                    })
-                    .collect();
+                let all: BTreeSet<_> = scene.selectable_items().iter().copied().collect();
 
                 response.selection_changed = all != self.selection;
                 response.repaint = response.selection_changed;
@@ -437,43 +430,25 @@ impl CanvasView {
         response
     }
 
-    /// Whether `id` is a selectable item that shows.
-    fn selectable(scene: &Scene, id: SceneItemId) -> bool {
-        scene.item(id).is_some_and(|item| item.selectable) && scene.world_bounds(id).is_some()
-    }
-
     /// The selectable item after (or before) the focused item in paint
-    /// order. The search starts at the focused item, so its cost follows
-    /// the distance to the next item, not the size of the scene.
+    /// order. The scene keeps an index of the selectable items, so the
+    /// cost does not follow the size of the scene.
     fn step_focus(&self, scene: &mut Scene, forward: bool) -> Option<SceneItemId> {
-        let at = self.focus.and_then(|id| scene.paint_index(id));
-        let len = scene.paint_order().len();
-        match (at, forward) {
-            (Some(at), true) => Self::find(scene, at + 1..len, false),
-            (None, true) => Self::find(scene, 0..len, false),
-            (Some(at), false) => Self::find(scene, 0..at, true),
-            (None, false) => None,
-        }
+        let at = self.focus.and_then(|id| scene.selectable_position(id));
+        let index = match (at, forward) {
+            (Some(Ok(at)), true) => at + 1,
+            (Some(Err(next)), true) => next,
+            (None, true) => 0,
+            (Some(Ok(at) | Err(at)), false) => at.checked_sub(1)?,
+            (None, false) => return None,
+        };
+        scene.selectable_items().get(index).copied()
     }
 
     /// The first (or the last) selectable item, for a cycle that wraps.
     fn wrap(scene: &mut Scene, forward: bool) -> Option<SceneItemId> {
-        let len = scene.paint_order().len();
-        Self::find(scene, 0..len, !forward)
-    }
-
-    /// The first selectable item at the paint positions `range`, or the
-    /// last when `back`.
-    fn find(scene: &mut Scene, range: Range<usize>, back: bool) -> Option<SceneItemId> {
-        let mut positions: Box<dyn Iterator<Item = usize>> = if back {
-            Box::new(range.rev())
-        } else {
-            Box::new(range)
-        };
-        positions.find_map(|position| {
-            let id = *scene.paint_order().get(position)?;
-            Self::selectable(scene, id).then_some(id)
-        })
+        let items = scene.selectable_items();
+        if forward { items.first() } else { items.last() }.copied()
     }
 
     /// Focuses and selects `id`, and scrolls it into view.

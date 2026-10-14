@@ -67,7 +67,11 @@ cells. The bounds include the stroke width. The scene keeps an item that covers
 more than 1024 cells in a separate list.
 
 `items_in_rect` and `hit_test` use the index. Thus the time of a query
-follows the queried area, not the size of the scene. The test
+follows the queried area, not the size of the scene. The scene also keeps the
+selectable items that have bounds, in paint order. `selectable_items` returns
+them, and `selectable_position` finds the place of an item with a binary
+search. A change of order, visibility, shape, or the `selectable` flag
+rebuilds the list. A move does not. The test
 `large_scene_queries_scale_with_area` in
 [scene.rs](../crates/choscorui-core/tests/scene.rs) compares a small query
 with a full query on a large scene.

@@ -2912,8 +2912,8 @@ These types have no semantic node.
 - Tab and Shift+Tab move focus and selection through the selectable items
   that show, in paint order, and scroll the item into view. Tab past the
   last item leaves the canvas. Shift+Tab from the first item goes back to
-  the canvas itself, and then leaves it. The search starts at the focused
-  item, so it does not walk the whole scene.
+  the canvas itself, and then leaves it. The scene keeps an index of the
+  selectable items, so a step does not walk the whole scene.
 - `Cycle` moves focus to the next or the previous item, and wraps at the
   ends. `SelectAll` selects every selectable item.
 - Space toggles the focused item. Enter activates it. Escape with no drag

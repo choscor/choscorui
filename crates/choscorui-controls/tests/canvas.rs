@@ -484,3 +484,46 @@ fn an_intersect_band_selects_the_items_it_touches() {
         .with_band_mode(BandMode::Intersect);
     assert_eq!(band(&mut view, &mut scene), vec![ids[0], ids[1]]);
 }
+
+#[test]
+fn tab_in_a_large_scene_steps_through_the_selectable_index() {
+    let mut scene = Scene::new();
+    let ids: Vec<SceneItemId> = (0..100_000)
+        .map(|i| {
+            let mut item = SceneItem::new(
+                ItemShape::Rect(rect(
+                    f64::from(i % 400) * 10.0,
+                    f64::from(i / 400) * 10.0,
+                    8.0,
+                    8.0,
+                )),
+                ItemStyle::filled(Color::rgba8(0, 128, 0, 255)),
+            );
+            item.selectable = i % 25_000 == 0;
+            scene.add(item).unwrap()
+        })
+        .collect();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 300.0));
+    view.handle(&mut scene, key(Key::Tab));
+    assert_eq!(view.focus(), Some(ids[0]));
+    view.handle(&mut scene, key(Key::Tab));
+    assert_eq!(view.focus(), Some(ids[25_000]), "Tab skips the other items");
+    // The focused item stops being selectable: Tab goes on from its place.
+    scene
+        .update(ids[25_000], |item| item.selectable = false)
+        .unwrap();
+    view.handle(&mut scene, key(Key::Tab));
+    assert_eq!(view.focus(), Some(ids[50_000]));
+    // A hidden item has no bounds, so it takes no focus.
+    scene
+        .update(ids[75_000], |item| item.visible = false)
+        .unwrap();
+    let past = view.handle(&mut scene, key(Key::Tab));
+    assert_eq!(past, CanvasResponse::default(), "Tab leaves the canvas");
+    view.handle(&mut scene, CanvasInput::Cycle { forward: false });
+    assert_eq!(view.focus(), Some(ids[0]), "the cycle wraps backward");
+    view.handle(&mut scene, CanvasInput::Cycle { forward: false });
+    assert_eq!(view.focus(), Some(ids[50_000]), "the last selectable item");
+    view.handle(&mut scene, CanvasInput::SelectAll);
+    assert_eq!(view.selection().len(), 2);
+}
