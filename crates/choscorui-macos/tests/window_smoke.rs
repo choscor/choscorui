@@ -499,7 +499,14 @@ fn main() {
         .unwrap();
     app.run();
     assert!(!stop.is_active());
-    assert!(window.paint_count() > before_paint);
+    // Both painters paint the shown window: Core Graphics in `drawRect:`,
+    // and Metal on the GPU, also while the new window reports occlusion.
+    assert!(
+        window.paint_count() > before_paint,
+        "no paint with {:?} (occluded: {})",
+        window.painter(),
+        window.is_occluded()
+    );
     assert!(!injected.is_active());
     assert!(!injected_key.is_active());
     let routed_events = window.take_events();

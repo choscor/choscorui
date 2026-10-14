@@ -79,7 +79,7 @@ A `Key` event names the navigation and editing keys, F1 to F20, and the Menu key
 
 An identical display list schedules no frame. Each window paints its display list with one of two painters:
 
-- **Metal**, the default. The content view hosts a `CAMetalLayer`, and the GPU draws the full display list into each frame. The display link of the view paces the frames at the refresh rate of the display, and it stops when no frame waits. An occluded or minimized window draws no frames. At startup and during a live resize, the frame goes inside the Core Animation transaction, so the content and the window frame change together.
+- **Metal**, the default. The content view hosts a `CAMetalLayer`, and the GPU draws the full display list into each frame. The display link of the view paces the frames at the refresh rate of the display, and it stops when no frame waits. After its first frame, an occluded or minimized window draws no frames. The first frame draws when the window is visible, because the window server can report a window without content as occluded. At startup and during a live resize, the frame goes inside the Core Animation transaction, so the content and the window frame change together.
 - **Core Graphics**, the fallback. `Window::set_display_list` invalidates only the region that changed, and Core Graphics paints that region on the CPU in `drawRect:`.
 
 A window uses Core Graphics when one of these conditions is true:

@@ -375,8 +375,11 @@ fn drive(window: usize) {
             return false;
         };
         let _pool = Pool::new();
+        // A window that never presented has an empty layer. The window
+        // server can report such a window as occluded until it has
+        // content, so its first frame draws when the window is visible.
         let visible = VIEW_WINDOW.send(&surface.view, ()).is_some_and(|window| {
-            if surface.occlusion_reported {
+            if surface.occlusion_reported && surface.presented_once {
                 OCCLUSION_STATE.send(window, ()) & OCCLUSION_STATE_VISIBLE != 0
             } else {
                 IS_WINDOW_VISIBLE.send(window, ())
