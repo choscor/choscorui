@@ -7,7 +7,7 @@ use choscorui_compose::Runtime;
 use choscorui_compose::view::{
     AlertDialog, AnyView, AvatarGroup, Calendar, Checkbox, Command, CommandLink, Configured, Cx,
     DropdownMenu, Env, FontChooser, GroupBox, Kbd, NumericDisplay, ScrollBar, StackedContainer,
-    State, Toaster, ToolBox, ToolButton, View, ViewHost,
+    State, Switch, Text, Toaster, ToolBox, ToolButton, View, ViewExt, ViewHost,
 };
 use choscorui_controls as controls;
 use choscorui_controls::{
@@ -17,7 +17,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     Catalog, CivilDate, DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticEntry,
-    Size,
+    SemanticRole, Size,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -119,42 +119,60 @@ fn an_avatar_group_keeps_the_configured_semantics() {
 }
 
 #[test]
-fn a_stacked_container_shows_the_current_page() {
-    same_as_configured(
-        |_| StackedContainer::new("Pages", 3, 1_usize).into_any(),
-        |_| {
-            Configured::try_custom(ControlKind::Card, |_| {
-                controls::StackedContainer::hosted("Pages", 3, 0)
-            })
-            .value(ControlValue::Index(Some(1)))
-            .into_any()
-        },
-    );
+fn a_stacked_container_holds_the_current_page() {
     let page = slot();
     let shared = page.clone();
     let mut host = host(move |cx| {
         let current = cx.state(0_usize);
         shared.set(Some(current));
-        StackedContainer::new("Pages", 3, current).into_any()
+        let titles = strings(&["General", "Network", "Advanced"]);
+        StackedContainer::new("Pages", titles, current, |page| {
+            Text::new(format!("Body {}", page + 1))
+        })
+        .into_any()
     });
     let node = host.find("Pages").unwrap();
-    let before = host.semantic(node).unwrap();
+    assert_eq!(
+        host.semantic(node).unwrap().value.as_deref(),
+        Some("General")
+    );
+    let body = host.find("Body 1").unwrap();
+    assert!(
+        host.tree().is_within(body, node),
+        "the stack holds its page"
+    );
     take(&page).set(2);
     host.flush();
-    assert_ne!(host.semantic(node).unwrap(), before);
+    assert_eq!(
+        host.semantic(node).unwrap().value.as_deref(),
+        Some("Advanced")
+    );
+    assert!(host.find("Body 3").is_some() && host.find("Body 1").is_none());
+    // Without titles, the value counts the pages.
+    let stack = controls::StackedContainer::hosted("Pages", 3, 1).unwrap();
+    use choscorui_controls::CustomControl;
+    assert_eq!(stack.semantics().value.as_deref(), Some("Page 2 of 3"));
 }
 
 #[test]
-fn a_group_box_keeps_the_configured_semantics() {
-    same_as_configured(
-        |_| GroupBox::new("Shipping").into_any(),
-        |_| {
-            Configured::custom(ControlKind::Card, |_| {
-                controls::GroupBox::hosted("Shipping")
-            })
-            .into_any()
-        },
-    );
+fn a_group_box_holds_its_members_and_disables_them() {
+    let mut host = host(|cx| {
+        let express = cx.state(false);
+        GroupBox::new(
+            "Shipping options for this order",
+            Switch::new("Express", express.binding()),
+        )
+        .disabled(true)
+        .into_any()
+    });
+    let group = host.find("Shipping options for this order").unwrap();
+    let member = host.find("Express").unwrap();
+    assert_eq!(host.semantic(group).unwrap().role, SemanticRole::Group);
+    assert!(host.tree().is_within(member, group), "members are children");
+    assert!(host.semantic(member).unwrap().state.disabled);
+    // The group is wider than the switch, to hold its title.
+    let (group, member) = (host.tree().bounds(group), host.tree().bounds(member));
+    assert!(group.unwrap().size.width > member.unwrap().size.width + 100.0);
 }
 
 #[test]

@@ -135,7 +135,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`EmptyState`](controls--type-aliases-1.md#emptystate) type alias: A centered empty state.
 - [`FieldText`](controls--type-aliases-1.md#fieldtext) type alias: A legend, label, description, or error line of a form field.
 - [`FontChooser`](controls--type-aliases-1.md#fontchooser) type alias: A font family combobox over `families`; `selected` edits the index of the chosen family.
-- [`GroupBox`](controls--type-aliases-1.md#groupbox) type alias: A titled frame around related controls, named by `title`.
+- [`GroupBox`](controls--structs.md#groupbox) struct: A titled frame around related controls.
 - [`HeaderView`](controls--structs.md#headerview) struct: A table header over `columns`.
 - [`Input`](controls--type-aliases-1.md#input) type alias: A single-line text input that edits `value`.
 - [`InputGroup`](controls--type-aliases-1.md#inputgroup) type alias: A text input with addons: text, icons, and buttons before, after, above, or below the text.
@@ -159,14 +159,14 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`RadioGroup`](controls--type-aliases-1.md#radiogroup) type alias: Radio buttons, one for each option; `selected` edits the chosen option.
 - [`RangeSlider`](controls--type-aliases-1.md#rangeslider) type alias: Low and high values along one track; `values` edits both.
 - [`ScrollBar`](controls--type-aliases-1.md#scrollbar) type alias: A standalone scroll bar named `name` over `content` points, of which `viewport` show; `offset` edits the scroll position.
-- [`Select`](controls--type-aliases-2.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
+- [`Select`](controls--type-aliases-1.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
 - [`Sidebar`](controls--type-aliases-2.md#sidebar) type alias: Grouped navigation items; `selected` edits the chosen item.
 - [`SizeGrip`](controls--type-aliases-2.md#sizegrip) type alias: A grip in the bottom trailing corner that resizes its window.
 - [`Skeleton`](controls--type-aliases-2.md#skeleton) type alias: A pulsing placeholder block of `width` by `height` points.
 - [`Slider`](controls--type-aliases-2.md#slider) type alias: A slider that edits `value`.
 - [`SpinBox`](controls--type-aliases-2.md#spinbox) type alias: An integer field with steppers that edits `value`.
 - [`Spinner`](controls--type-aliases-2.md#spinner) type alias: A spinning loader.
-- [`StackedContainer`](controls--type-aliases-2.md#stackedcontainer) type alias: The semantics of a stack of `pages` pages, which shows page `current`.
+- [`StackedContainer`](controls--structs.md#stackedcontainer) struct: A stack of pages that shows one page at a time: the view that `page` makes for `current` fills the stack, as a child of the stack node.
 - [`StatusBar`](controls--type-aliases-2.md#statusbar) type alias: A status bar that shows `message` at the start and `sections` at the end.
 - [`Switch`](controls--type-aliases-2.md#switch) type alias: An on or off switch that edits `on`.
 - [`Tabs`](controls--type-aliases-2.md#tabs) type alias: A tab list, one tab for each label; `selected` edits the chosen tab.

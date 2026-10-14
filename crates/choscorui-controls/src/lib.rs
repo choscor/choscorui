@@ -112,7 +112,7 @@ pub use dialogs::{
 mod canvas;
 pub use canvas::HostedCanvas;
 pub use canvas::{CanvasInput, CanvasResponse, CanvasView, DRAG_THRESHOLD, MAX_ZOOM, MIN_ZOOM};
-pub use containers::{HostedGroupBox, HostedResizable, HostedStack};
+pub use containers::{GroupLayout, HostedGroupBox, HostedResizable, HostedStack};
 pub use dialogs::HostedAlertDialog;
 pub use menu::HostedDropdownMenu;
 pub use model_widgets::HostedColumnBrowser;

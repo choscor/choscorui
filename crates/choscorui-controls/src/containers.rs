@@ -353,16 +353,14 @@ impl GroupBox {
         Ok(())
     }
 
+    /// The group semantics. The members are children of the container in
+    /// the tree, so they need no relations; the title node labels it.
     pub fn semantics(&self) -> SemanticNode {
-        let mut relations: Vec<_> = self
-            .members
-            .iter()
-            .copied()
-            .map(SemanticRelation::Controls)
+        let relations: Vec<_> = self
+            .title
+            .into_iter()
+            .map(SemanticRelation::LabelledBy)
             .collect();
-        if let Some(title) = self.title {
-            relations.insert(0, SemanticRelation::LabelledBy(title));
-        }
         SemanticNode {
             role: SemanticRole::Group,
             name: self.label.clone(),
@@ -395,6 +393,86 @@ impl GroupBox {
             label: label.into(),
             content: Rect::default(),
         }
+    }
+
+    /// The layout of a group node whose first child is the hosted card
+    /// and whose other children are the members. See [`GroupLayout`].
+    pub fn layout(styles: &Styles, tokens: &DesignTokens) -> GroupLayout {
+        let (inline_start, top, chrome) = group_chrome(styles, tokens);
+        let gap = styles
+            .resolve(
+                tokens,
+                StyleQuery::new(ControlKind::Card, Slot::Content).size(ControlSize::Sm),
+            )
+            .gap;
+        GroupLayout {
+            inline_start,
+            top,
+            chrome,
+            gap,
+        }
+    }
+}
+
+/// Places a group box: the first child, the hosted card, fills the
+/// group, and the other children, the members, stack under the title
+/// with the card content gap between them. The group is as wide as the
+/// widest member with the card padding, and at least as wide as the
+/// card's natural width, which holds the title. A right-to-left layout
+/// mirrors the members.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GroupLayout {
+    inline_start: f64,
+    top: f64,
+    chrome: Size,
+    gap: f64,
+}
+
+impl choscorui_core::CustomLayout for GroupLayout {
+    fn layout(
+        &self,
+        space: choscorui_core::Constraints,
+        direction: choscorui_core::LayoutDirection,
+        children: &mut dyn choscorui_core::ChildMeasure,
+    ) -> (Size, Vec<Rect>) {
+        use choscorui_core::Constraints;
+        let count = children.len();
+        if count == 0 {
+            return (space.min, Vec::new());
+        }
+        let title = children.measure(0, Constraints::UNBOUNDED).size.width;
+        let room = Size::new(
+            (space.max.width - self.chrome.width).max(0.0),
+            f64::INFINITY,
+        );
+        let members: Vec<Size> = (1..count)
+            .map(|index| children.measure(index, Constraints::loose(room)).size)
+            .collect();
+        let width = members.iter().map(|size| size.width).fold(0.0, f64::max);
+        let height = members.iter().map(|size| size.height).sum::<f64>()
+            + self.gap * members.len().saturating_sub(1) as f64;
+        let size = space.constrain(Size::new(
+            (width + self.chrome.width).max(title),
+            height + self.chrome.height,
+        ));
+        let mut rects = vec![Rect::new(Point::new(0.0, 0.0), size)];
+        let inner = (size.width - self.chrome.width).max(0.0);
+        let mut y = self.top;
+        for member in members {
+            let x = if direction == choscorui_core::LayoutDirection::Rtl {
+                size.width - self.inline_start - member.width
+            } else {
+                self.inline_start
+            };
+            rects.push(Rect::from_xywh(
+                x,
+                y,
+                member.width.min(inner),
+                member.height,
+            ));
+            y += member.height + self.gap;
+        }
+        (size, rects)
     }
 }
 
@@ -484,9 +562,12 @@ impl HostedGroupBox {
 }
 
 impl crate::CustomControl for HostedGroupBox {
+    /// The natural width holds the title inside the card padding.
     fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> choscorui_core::Measured {
         let (_, _, chrome) = group_chrome(cx.styles, cx.tokens);
-        offered(cx, chrome)
+        let title = cx.style(StyleQuery::new(ControlKind::Card, Slot::Title).size(ControlSize::Sm));
+        let width = cx.text.width(&self.label, &title.text);
+        offered(cx, Size::new(chrome.width + width, chrome.height))
     }
 
     fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
@@ -1327,6 +1408,7 @@ impl StackedContainer {
             label: label.into(),
             pages,
             current,
+            titles: Vec::new(),
         })
     }
 }
@@ -1338,12 +1420,22 @@ pub struct HostedStack {
     label: String,
     pages: usize,
     current: usize,
+    /// The title of each page, which names the page in the value.
+    titles: Vec<String>,
 }
 
 impl HostedStack {
     /// The page shown, from 0.
     pub fn current(&self) -> usize {
         self.current
+    }
+
+    /// Names the pages: the value is then the title of the current page.
+    /// A page without a title takes the value "Page n of N".
+    #[must_use]
+    pub fn with_titles(mut self, titles: Vec<String>) -> Self {
+        self.titles = titles;
+        self
     }
 }
 
@@ -1363,8 +1455,22 @@ impl crate::CustomControl for HostedStack {
     fn paint(&self, _cx: &mut PaintContext<'_>) {}
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(choscorui_core::Localizer::builtin())
+    }
+
+    /// The value is the title of the current page, or "Page n of N".
+    fn semantics_in(&self, strings: &choscorui_core::Localizer) -> SemanticNode {
         let mut node = crate::hosted::node(SemanticRole::Group, &self.label, Vec::new());
-        node.value = Some((self.current + 1).to_string());
+        node.value = Some(match self.titles.get(self.current) {
+            Some(title) => title.clone(),
+            None => {
+                let (page, count) = ((self.current + 1).to_string(), self.pages.to_string());
+                strings.message(
+                    "choscorui.stack.page",
+                    &[("page", &page), ("count", &count)],
+                )
+            }
+        });
         node
     }
 

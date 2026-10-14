@@ -26,6 +26,7 @@ choscorui.toggle = nút bật tắt
 choscorui.dial = Núm xoay
 choscorui.modal = Hộp thoại chặn
 choscorui.cancel = Hủy
+choscorui.stack.page = Trang {page} / {count}
 choscorui.status = Trạng thái
 choscorui.font = Phông chữ
 choscorui.font.fallback = Chưa cài đặt; đang dùng {font}

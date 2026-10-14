@@ -76,6 +76,42 @@ pub fn variant<M>(self, variant: impl IntoLive<ButtonVariant, M>) -> Self
 
 The look of the button, instead of the environment's.
 
+## `GroupBox`
+
+struct in `choscorui::prelude::GroupBox`
+
+```rust
+pub struct GroupBox<C> { /* private fields */ }
+```
+
+A titled frame around related controls. The group is named by
+`title`, and `members` are its children in the tree. Each top-level
+view of `members` stacks under the title. The group is as wide as its
+widest member, and at least as wide as its title. `.disabled(true)` on
+the group dims the frame and disables every member.
+
+#### Examples
+
+```rust
+use choscorui_compose::view::{Binding, GroupBox, Switch, View};
+
+fn shipping(express: Binding<bool>) -> impl View {
+    GroupBox::new("Shipping", Switch::new("Express", express))
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `GroupBox::new`
+
+```rust
+pub fn new<M>(title: impl IntoLive<TextContent, M>, members: C) -> Self
+```
+
+A group box with `title` around `members`.
+
 ## `HeaderView`
 
 struct in `choscorui::prelude::HeaderView`
@@ -233,3 +269,50 @@ pub const fn value(&self) -> i32
 ```
 
 The current value.
+
+## `StackedContainer`
+
+struct in `choscorui::prelude::StackedContainer`
+
+```rust
+pub struct StackedContainer<F> { /* private fields */ }
+```
+
+A stack of pages that shows one page at a time: the view that `page`
+makes for `current` fills the stack, as a child of the stack node.
+There is a page for each of `titles`. The stack is a `Group` named
+`name`, and its value is the title of the current page. No pages
+report a build error, and a page past the end keeps the page that it
+shows. Put a `Tabs` view with the same titles next to it to select the
+page.
+
+#### Examples
+
+```rust
+use choscorui_compose::view::{Cx, StackedContainer, Text, View};
+
+struct Wizard;
+
+impl View for Wizard {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let step = cx.state(0_usize);
+        let titles = vec!["Account".to_owned(), "Profile".to_owned()];
+        StackedContainer::new("Steps", titles, step, |page| {
+            Text::new(format!("Step {}", page + 1))
+        })
+    }
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `StackedContainer::new`
+
+```rust
+pub fn new<M, N>(name: impl IntoLive<TextContent, M>, titles: impl Items<String>, current: impl IntoLive<usize, N>, page: F) -> Self
+```
+
+A stack named `name` with a page for each of `titles`, which shows
+page `current`, made by `page`.

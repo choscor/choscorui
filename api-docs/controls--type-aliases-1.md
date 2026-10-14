@@ -1024,44 +1024,6 @@ pub fn new(families: impl Items<String>, fallback: impl Into<String>, selected: 
 
 A font list of `families`, with `fallback` as the default family and `selected` as the selected row.
 
-## `GroupBox`
-
-type alias in `choscorui::prelude::GroupBox`
-
-```rust
-pub type GroupBox = Configured<HostedGroupBox>;
-```
-
-A titled frame around related controls, named by `title`. It paints
-the frame and the title, and takes no input: put the members over it
-in a `ZStack`, with padding that clears the title.
-
-#### Examples
-
-```rust
-use choscorui_compose::view::{Binding, GroupBox, Switch, View, ViewExt, ZStack};
-use choscorui_core::Space;
-
-fn shipping(express: Binding<bool>) -> impl View {
-    ZStack::new((
-        GroupBox::new("Shipping"),
-        Switch::new("Express", express).padding(Space::S8),
-    ))
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `GroupBox::new`
-
-```rust
-pub fn new<M>(title: impl IntoLive<TextContent, M>) -> Self
-```
-
-A group box with `title`.
-
 ## `Input`
 
 type alias in `choscorui::prelude::Input`
@@ -1979,3 +1941,48 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, orientation: ScrollOrientatio
 ```
 
 A scroll bar named `name` for `content` in a `viewport`, with its position in `offset`.
+
+## `Select`
+
+type alias in `choscorui::prelude::Select`
+
+```rust
+pub type Select = Configured<Select>;
+```
+
+A trigger with a popup list; `selected` edits the chosen option.
+
+#### Examples
+
+```rust
+struct Fruit;
+
+impl View for Fruit {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selected = cx.state(None);
+        let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
+        Select::new("Fruit", entries, selected.binding())
+    }
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `Select::native`
+
+```rust
+pub fn native<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
+```
+
+A select with the native-select look: a plain input box with a
+chevron. It behaves like [`Select::new`](controls--type-aliases-2.md#slidernew).
+
+#### `Select::new`
+
+```rust
+pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
+```
+
+A select named `name` with `entries`; `selected` edits the chosen entry.

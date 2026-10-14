@@ -157,10 +157,8 @@ fn group_box_validates_members_and_exposes_title_relationships() {
     assert_eq!(semantics.name, "Account");
     assert_eq!(
         semantics.relations,
-        vec![
-            choscorui_core::SemanticRelation::LabelledBy(title),
-            choscorui_core::SemanticRelation::Controls(member),
-        ]
+        vec![choscorui_core::SemanticRelation::LabelledBy(title)],
+        "the members are children, not related nodes"
     );
 
     let outsider = tree

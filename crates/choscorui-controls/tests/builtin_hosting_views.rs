@@ -1297,13 +1297,13 @@ fn a_hosted_group_box_paints_its_title_and_reports_its_content_area() {
 #[test]
 fn a_hosted_stack_takes_its_page_from_the_application() {
     let mut h = Harness::new(StackedContainer::hosted("Pages", 3, 0).unwrap());
-    assert_eq!(h.semantics().value.as_deref(), Some("1"));
+    assert_eq!(h.semantics().value.as_deref(), Some("Page 1 of 3"));
     assert!(!h.host.get(h.node).unwrap().focusable());
     assert!(
         h.host
             .set_value(&mut h.tree, h.node, &ControlValue::Index(Some(1)))
     );
-    assert_eq!(h.semantics().value.as_deref(), Some("2"));
+    assert_eq!(h.semantics().value.as_deref(), Some("Page 2 of 3"));
     for bad in [ControlValue::Index(Some(3)), ControlValue::Index(None)] {
         assert!(!h.host.set_value(&mut h.tree, h.node, &bad));
     }

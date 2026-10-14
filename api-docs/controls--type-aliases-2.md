@@ -3,51 +3,6 @@
 
 > Generated from the source doc comments. Do not edit by hand. Regenerate with `cargo run -p choscorui-api-docs --locked`. The [index](README.md) lists every item. Every example assumes `use choscorui::prelude::*;`.
 
-## `Select`
-
-type alias in `choscorui::prelude::Select`
-
-```rust
-pub type Select = Configured<Select>;
-```
-
-A trigger with a popup list; `selected` edits the chosen option.
-
-#### Examples
-
-```rust
-struct Fruit;
-
-impl View for Fruit {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let selected = cx.state(None);
-        let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
-        Select::new("Fruit", entries, selected.binding())
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `Select::native`
-
-```rust
-pub fn native<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select with the native-select look: a plain input box with a
-chevron. It behaves like [`Select::new`](#slidernew).
-
-#### `Select::new`
-
-```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select named `name` with `entries`; `selected` edits the chosen entry.
-
 ## `Sidebar`
 
 type alias in `choscorui::prelude::Sidebar`
@@ -335,49 +290,6 @@ pub fn size(self, size: ControlSize) -> Self
 ```
 
 The icon size: `Xs`, `Sm`, `Default`, or `Lg`.
-
-## `StackedContainer`
-
-type alias in `choscorui::prelude::StackedContainer`
-
-```rust
-pub type StackedContainer = Configured<HostedStack>;
-```
-
-The semantics of a stack of `pages` pages, which shows page `current`.
-It paints nothing: put it in a `ZStack` with the view of the current
-page, as a `Tabs` view sits next to its panel. No pages report a build
-error, and a page past the end keeps the page that it shows.
-
-#### Examples
-
-```rust
-use choscorui_compose::view::{Cx, Dynamic, StackedContainer, Text, View, ZStack};
-
-struct Wizard;
-
-impl View for Wizard {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let step = cx.state(0_usize);
-        ZStack::new((
-            StackedContainer::new("Steps", 3, step),
-            Dynamic::new(move || Text::new(format!("Step {}", step.get() + 1))),
-        ))
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `StackedContainer::new`
-
-```rust
-pub fn new<M, N>(name: impl IntoLive<TextContent, M>, pages: usize, current: impl IntoLive<usize, N>) -> Self
-```
-
-A stack named `name` with `pages` pages that shows page `current`.
 
 ## `StatusBar`
 

@@ -281,6 +281,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("HostedCanvas", "canvas"),
     ("GroupBox", "group-box"),
     ("HostedGroupBox", "group-box"),
+    ("GroupLayout", "group-box"),
     ("Resizable", "resizable"),
     ("HostedResizable", "resizable"),
     ("SplitOrientation", "resizable"),

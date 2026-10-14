@@ -9,9 +9,9 @@ mod tool_box;
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Checkbox, Cx, Dynamic, Edges, Env, FocusFrame, Frame, GroupBox,
-    HStack, HorizontalAlignment, RadioGroup, Resizable, Spacer, StackedContainer, Tabs, Text,
-    VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Checkbox, Cx, Env, FocusFrame, Frame, GroupBox, HStack,
+    HorizontalAlignment, RadioGroup, Resizable, Spacer, StackedContainer, Tabs, Text, VStack, View,
+    ViewExt, ZStack,
 };
 use choscorui::controls::{ButtonVariant, SplitOrientation};
 use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space};
@@ -39,15 +39,9 @@ fn fill() -> Frame {
 // ---------------------------------------------------------------------------
 // Group box
 
-/// `members` in a group box titled by the catalog string `title`, clear
-/// of the title.
+/// `members` in a group box titled by the catalog string `title`.
 fn group(title: &'static str, members: impl View) -> impl View {
-    ZStack::new((
-        GroupBox::new(t!(title)),
-        members.padding(Edges::new(Space::S10, Space::S4, Space::S4, Space::S4)),
-    ))
-    .alignment(Alignment::TOP_LEADING)
-    .frame(
+    GroupBox::new(t!(title), members).frame(
         Frame::new()
             .min_width(400.0)
             .alignment(Alignment::TOP_LEADING),
@@ -192,12 +186,11 @@ pub fn stacked(_: &PageCx) -> AnyView {
         let current = cx.state(0usize);
         let env = cx.env().clone();
         let titles = |env: &Env| STACK_PAGES.map(|(title, _)| env.text(title, &[])).to_vec();
-        let stack = ZStack::new((
-            StackedContainer::new(t!("stacked.settings_pages"), STACK_PAGES.len(), current),
-            Dynamic::new(move || stack_page(&env, current.get())),
-        ))
-        .alignment(Alignment::FILL)
-        .frame(Frame::size(420.0, 160.0));
+        let stack =
+            StackedContainer::new(t!("stacked.settings_pages"), titles, current, move |page| {
+                stack_page(&env, page)
+            })
+            .frame(Frame::size(420.0, 160.0));
         column((
             Tabs::new(t!("stacked.selector"), titles, current.binding()),
             stack,
@@ -293,6 +286,10 @@ mod tests {
         }
         // The locked group's options take no input.
         assert!(!page.act("Payment method", SemanticAction::Increment));
+        // The members are children of their group node.
+        let (group, member) = (page.node("Notifications"), page.node("Email"));
+        assert_eq!(page.host.semantic(group).unwrap().role, SemanticRole::Group);
+        assert!(page.host.tree().is_within(member, group));
     }
 
     #[test]
@@ -337,14 +334,18 @@ mod tests {
     #[test]
     fn the_selectors_show_one_stack_page_at_a_time() {
         let mut page = Harness::new("stacked");
-        assert_eq!(page.value("Settings pages").as_deref(), Some("1"));
+        assert_eq!(page.value("Settings pages").as_deref(), Some("General"));
+        // The stack node holds its page.
+        let stack = page.node("Settings pages");
+        let shown = page.node("Name, language, and startup behavior.");
+        assert!(page.host.tree().is_within(shown, stack));
         assert!(
             page.host
                 .find("Name, language, and startup behavior.")
                 .is_some()
         );
         assert!(page.act("Settings page", SemanticAction::Increment));
-        assert_eq!(page.value("Settings pages").as_deref(), Some("2"));
+        assert_eq!(page.value("Settings pages").as_deref(), Some("Network"));
         assert!(
             page.host
                 .find("Name, language, and startup behavior.")

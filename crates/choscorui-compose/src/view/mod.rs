@@ -6,6 +6,7 @@ mod builtins;
 mod canvas;
 pub(crate) mod commands;
 mod configured;
+mod containers;
 mod control;
 mod dialogs;
 mod dynamic;
@@ -45,6 +46,7 @@ pub use builtins::{
 pub use canvas::{Canvas, CanvasContext};
 pub use commands::CommandMenu;
 pub use configured::Configured;
+pub use containers::{GroupBox, StackedContainer};
 pub use control::{ControlView, CustomView};
 pub use dialogs::{FontDialog, InputDialog};
 pub use dynamic::{Branch, Dynamic, ForEach};
@@ -78,8 +80,8 @@ pub use widgets_form::{
     NumericDisplay,
 };
 pub use widgets_hosted::{
-    AlertDialog, AvatarGroup, CommandLink, DropdownMenu, FontChooser, GroupBox, ScrollBar,
-    StackedContainer, Toaster, ToolBox, ToolButton,
+    AlertDialog, AvatarGroup, CommandLink, DropdownMenu, FontChooser, ScrollBar, Toaster, ToolBox,
+    ToolButton,
 };
 pub use widgets_shell::{Dock, SizeGrip, StatusBar, Toolbar};
 

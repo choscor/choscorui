@@ -906,30 +906,43 @@ string, and `.clear_button()` shows the clear button.
 | Field | `GroupBox` | `StackedContainer` | Page |
 | --- | --- | --- | --- |
 | Role | `Group` (AXGroup) | `Group` (AXGroup) | `Group` (AXGroup) |
-| Name / value | label / - | label / page number, from 1 | - / - |
+| Name / value | label / - | label / page number, from 1 (hosted: page title, or "Page n of N") | - / - |
 | State | - | - | hidden when not current |
 | Actions | - | - | - |
 
-A group box has a `LabelledBy` relation to its title and a `Controls`
-relation to each member. A stack has a `Controls` relation to each page.
+A group box has a `LabelledBy` relation to its title. Its members are
+its children in the tree, so it has no relation to them. A stack has a
+`Controls` relation to each page.
 
 **In a control host.** `GroupBox::hosted(label)` makes a group box with
 no member nodes. It paints the card and the title, and it takes no input
-or focus. `content_rect` gives the members' area from the last arranged
-bounds, and the view layer places the members there.
+or focus. Its natural width holds the title inside the card padding.
+`content_rect` gives the members' area from the last arranged bounds.
+`GroupBox::layout(styles, tokens)` gives the `GroupLayout` of a group
+node. The first child of that node is the hosted card, and it fills the
+node. The other children are the members. They stack under the title,
+with the card content gap between them. The node is as wide as the
+widest member with the card padding, and at least as wide as the card's
+natural width.
 `StackedContainer::hosted(label, pages, current)` makes a stack with no
 page nodes. It paints nothing and takes no focus. `set_value` with
 `Index(Some(page))` selects the page, and the view layer shows page
-`current` in the stack's bounds.
+`current` in the stack's bounds. `with_titles` names the pages. The
+value is then the title of the current page. Without a title, the value
+is "Page n of N" in the window language.
 
 [containers.rs](../crates/choscorui-controls/tests/containers.rs) pins this
 behavior.
 
-**As a view.** `GroupBox::new(title)` mounts a `HostedGroupBox`. Put the
-members over it in a `ZStack`, with padding that clears the title.
-`StackedContainer::new(name, pages, current)` mounts a `HostedStack` and
-gives it the live page as `Index`. Show the view of the current page next
-to it in a `ZStack`. No pages report a build error.
+**As a view.** `GroupBox::new(title, members)` makes a group node with
+the `GroupLayout`. The node has the `Group` role and the title as its
+name. The hosted card is its first child, hidden from assistive
+technology, and the member views follow. `.disabled(true)` on the group
+dims the card and disables every member.
+`StackedContainer::new(name, titles, current, page)` mounts a
+`HostedStack` with a page for each title, and gives it the live page as
+`Index`. The view that `page` makes for the current page fills the stack
+node as its child. No pages report a build error.
 
 ### ToolBox
 
