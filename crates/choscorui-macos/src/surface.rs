@@ -12,7 +12,7 @@ use crate::ffi::appkit::{
     RESIZE_UP_DOWN_CURSOR, SET_NEEDS_DISPLAY_IN_RECT, VIEW_WINDOW,
 };
 use crate::ffi::retained::{Retained, alloc};
-use choscorui_core::{CursorShape, Image, ImageError, Rect, damage};
+use choscorui_core::{CursorShape, Image, ImageError, Rect};
 
 pub(crate) fn window_did_change_occlusion(
     _: &Obj<ChoscoruiV2WindowDelegate>,
@@ -96,25 +96,32 @@ fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {
 }
 
 impl Window {
-    /// Replaces the display list. A list equal to the current one
-    /// schedules no frame. With Metal, a changed list schedules a full
-    /// frame, which starts before the damage is computed; with Core
-    /// Graphics, only the region whose drawing changed is invalidated.
+    /// Replaces the display list. A frame is drawn only when the new list
+    /// draws other content than the current one. With Metal, the frame
+    /// draws the whole list; with Core Graphics, only the region whose
+    /// drawing changed is invalidated.
     pub fn set_display_list(&self, list: DisplayList) {
         let _pool = Pool::new();
-        let mut paint = self.paint.lock().unwrap();
-        if *paint.list == list {
+        if *self.paint.lock().unwrap().list == list {
             return;
         }
-        let new = Arc::new(list);
-        let old = std::mem::replace(&mut paint.list, Arc::clone(&new));
-        drop(paint);
-        let metal = metal::surface::request_frame(self.ns_window().addr());
-        let Some(region) = damage(&old, &new) else {
+        // The window keeps the sorted draw regions of its list, so the
+        // damage computes the regions of the new list only. The lock is
+        // not held meanwhile, because the frame handlers take it.
+        let regions = list.sorted_draw_regions();
+        let mut paint = self.paint.lock().unwrap();
+        let damage = paint.regions.damage(&regions);
+        // The old list and regions drop at the end, after the frame starts.
+        let _replaced = (
+            std::mem::replace(&mut paint.list, Arc::new(list)),
+            std::mem::replace(&mut paint.regions, regions),
+        );
+        let Some(region) = damage else {
             return;
         };
-        self.paint.lock().unwrap().last_damage = Some(region);
-        if metal {
+        paint.last_damage = Some(region);
+        drop(paint);
+        if metal::surface::request_frame(self.ns_window().addr()) {
             return;
         }
         // Round out and pad one point so antialiased edges repaint too.
@@ -173,7 +180,7 @@ impl Window {
     /// offscreen and the capture is not a paint. With Core Graphics,
     /// capturing runs `drawRect:` and counts as a paint.
     pub fn capture(&self) -> Result<Image, ImageError> {
-        if let Some(result) = metal::surface::capture(self.ns_window().addr()) {
+        if let Some(result) = metal::surface::capture(self.ns_window().addr(), None) {
             return result;
         }
         let _pool = Pool::new().map_err(|_| ImageError::DecodeFailed)?;
@@ -189,5 +196,44 @@ impl Window {
             .send(&rep, ())
             .ok_or(ImageError::DecodeFailed)?;
         imaging::image_from_cg(cg)
+    }
+
+    /// Renders the display list of the window into straight-alpha sRGB
+    /// pixels at `scale` pixels per point, whatever the scale of its
+    /// display. The painter of the window draws the image: Metal draws it
+    /// offscreen, and Core Graphics draws it into a bitmap. Neither is a
+    /// paint. Use it for an image at another scale, such as a 2x image on
+    /// a 1x display.
+    pub fn capture_at_scale(&self, scale: f64) -> Result<Image, ImageError> {
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err(ImageError::InvalidDimensions);
+        }
+        if let Some(result) = metal::surface::capture(self.ns_window().addr(), Some(scale)) {
+            return result;
+        }
+        let _pool = Pool::new().map_err(|_| ImageError::DecodeFailed)?;
+        let view = CONTENT_VIEW
+            .send(self.ns_window(), ())
+            .ok_or(ImageError::DecodeFailed)?;
+        let bounds = BOUNDS.send(view, ());
+        let width = (bounds.size.width * scale).round();
+        let height = (bounds.size.height * scale).round();
+        if !(1.0..=f64::from(u32::MAX)).contains(&width)
+            || !(1.0..=f64::from(u32::MAX)).contains(&height)
+        {
+            return Err(ImageError::InvalidDimensions);
+        }
+        let (width, height) = (width as u32, height as u32);
+        let list = Arc::clone(&self.paint.lock().unwrap().list);
+        let bitmap = MacBitmap::render(&list, width, height, scale)
+            .map_err(|_| ImageError::InvalidDimensions)?;
+        let pixels = bitmap
+            .pixels()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(imaging::unpremultiply)
+            .collect();
+        Image::from_rgba8(width, height, pixels)
     }
 }

@@ -74,6 +74,12 @@ struct Fragment {
     float4 position [[position]];
     float2 local;
     uint instance [[flat]];
+    // A solid fill without clip shapes reads these and not the instance.
+    bool solid_fill [[flat]];
+    float4 shape [[flat]];
+    float4 radii [[flat]];
+    float4 color [[flat]];
+    float4 clip [[flat]];
 };
 
 vertex Fragment ui_vertex(uint vertex_id [[vertex_id]],
@@ -91,6 +97,11 @@ vertex Fragment ui_vertex(uint vertex_id [[vertex_id]],
                           1.0 - device_point.y / viewport.y * 2.0, 0.0, 1.0);
     out.local = local;
     out.instance = instance_id;
+    out.solid_fill = item.info.x == KIND_FILL && item.paint.x == PAINT_SOLID && item.info.w == 0;
+    out.shape = item.shape;
+    out.radii = item.radii;
+    out.color = float4(item.color.rgb * item.color.a, item.color.a);
+    out.clip = item.clip;
     return out;
 }
 
@@ -214,11 +225,21 @@ fragment float4 ui_fragment(Fragment in [[stage_in]],
                             texture2d<float> coverage [[texture(1)]],
                             sampler linear_sampler [[sampler(0)]],
                             sampler nearest_sampler [[sampler(1)]]) {
-    device const Instance &item = instances[in.instance];
     float2 p = in.local;
     float2 step = fwidth(p);
     float pixel = max(0.5 * (step.x + step.y), 1e-6);
     float2 center = in.position.xy;
+    if (in.solid_fill) {
+        float4 c = in.clip;
+        float x = clamp(min(center.x + 0.5, c.z) - max(center.x - 0.5, c.x), 0.0, 1.0);
+        float y = clamp(min(center.y + 0.5, c.w) - max(center.y - 0.5, c.y), 0.0, 1.0);
+        float box = x * y;
+        if (box <= 0.0) {
+            discard_fragment();
+        }
+        return in.color * (box * coverage_of(rounded_rect_distance(p, in.shape, in.radii), pixel));
+    }
+    device const Instance &item = instances[in.instance];
     float alpha = clip_coverage(item, center, clips, coverage);
     if (alpha <= 0.0) {
         discard_fragment();

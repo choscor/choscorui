@@ -4,8 +4,9 @@
 //! A glyph is keyed by font, glyph, pixel size, offset in the pixel, and
 //! dark or light ink. Outline glyphs keep their coverage in
 //! an alpha atlas; glyphs of color fonts keep premultiplied colors in a
-//! color atlas. A full atlas starts over in a new texture, so frames that
-//! still read the old one keep their glyphs.
+//! color atlas. A full atlas moves the glyphs that plans used most
+//! recently, up to half of the atlas, into a new texture and drops the
+//! others. Frames that still read the old texture keep their glyphs.
 
 use super::Gpu;
 use super::coverage::Shelves;
@@ -18,7 +19,8 @@ use crate::ffi::graphics::{
     CGContextSetShouldSubpixelQuantizeFonts, PREMULTIPLIED_RGBA, bitmap_context,
 };
 use crate::ffi::metal::{
-    MTLOrigin, MTLRegion, MTLSize, MTLTexture, PIXEL_FORMAT_R8, PIXEL_FORMAT_RGBA8, replace_region,
+    MTLOrigin, MTLRegion, MTLSize, MTLTexture, PIXEL_FORMAT_R8, PIXEL_FORMAT_RGBA8, read_region,
+    replace_region,
 };
 use crate::ffi::retained::Retained;
 use crate::ffi::text::{
@@ -27,6 +29,7 @@ use crate::ffi::text::{
 };
 use crate::text_layout::run_font;
 use choscorui_core::{FontSlant, Point, TextRun};
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
@@ -189,6 +192,30 @@ enum Ink {
 /// A glyph in the atlas: font, glyph, pixel size bits, offset, and ink.
 type GlyphKey = (FontId, u16, u64, [u8; 2], Ink);
 
+/// A glyph lookup: the atlas entry, or `None` for a glyph that draws
+/// nothing, and the plan that used it last.
+#[derive(Clone, Copy)]
+struct GlyphSlot {
+    entry: Option<GlyphEntry>,
+    used: u64,
+}
+
+/// The indices of the glyphs to keep when an atlas of `capacity` texels
+/// is full: the most recently used first, up to half of the capacity.
+/// Each glyph is its texel count and the plan that used it last.
+fn glyphs_to_keep(glyphs: &[(u32, u64)], capacity: u64) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..glyphs.len()).collect();
+    order.sort_by_key(|&index| Reverse(glyphs[index].1));
+    let mut area = 0u64;
+    order
+        .into_iter()
+        .take_while(|&index| {
+            area += u64::from(glyphs[index].0);
+            area <= capacity / 2
+        })
+        .collect()
+}
+
 /// The text caches of the process. Only the main thread uses them.
 pub(super) struct Text {
     fonts: Vec<(CfRetained<CTFont>, bool)>,
@@ -197,7 +224,9 @@ pub(super) struct Text {
     /// because a PostScript name does not always find the font of a line.
     run_font_ids: HashMap<String, HashMap<u64, FontId>>,
     lines: Lines,
-    glyphs: HashMap<GlyphKey, Option<GlyphEntry>>,
+    glyphs: HashMap<GlyphKey, GlyphSlot>,
+    /// The number of plans so far, which [`GlyphSlot::used`] counts in.
+    plan: u64,
     mono: Atlas,
     color: Atlas,
 }
@@ -210,9 +239,15 @@ impl Text {
             run_font_ids: HashMap::new(),
             lines: Lines::default(),
             glyphs: HashMap::new(),
+            plan: 0,
             mono: Atlas::new(MONO_ATLAS, PIXEL_FORMAT_R8, 1),
             color: Atlas::new(COLOR_ATLAS, PIXEL_FORMAT_RGBA8, 4),
         }
+    }
+
+    /// Starts the glyph lookups of a new plan.
+    pub(super) fn start_plan(&mut self) {
+        self.plan += 1;
     }
 
     /// The atlas texture of outline glyphs or of color glyphs.
@@ -326,11 +361,17 @@ impl Text {
             (false, false) => Ink::Dark,
         };
         let key = (font, glyph, scale.to_bits(), subpixel, ink);
-        if let Some(entry) = self.glyphs.get(&key) {
-            return *entry;
+        let plan = self.plan;
+        if let Some(slot) = self.glyphs.get_mut(&key) {
+            slot.used = plan;
+            return slot.entry;
         }
         let Some(bitmap) = rasterize(ct_font, glyph, scale, subpixel, ink) else {
-            self.glyphs.insert(key, None);
+            let slot = GlyphSlot {
+                entry: None,
+                used: plan,
+            };
+            self.glyphs.insert(key, slot);
             return None;
         };
         let atlas = if color {
@@ -341,10 +382,7 @@ impl Text {
         let corner = match atlas.insert(gpu, bitmap.width, bitmap.height, &bitmap.bytes) {
             Some(corner) => corner,
             None => {
-                // A full atlas starts over; the entries of the old one go.
-                atlas.reset();
-                self.glyphs
-                    .retain(|_, entry| entry.is_none_or(|e| e.color != color));
+                self.evict(gpu, color);
                 let atlas = if color {
                     &mut self.color
                 } else {
@@ -364,8 +402,74 @@ impl Text {
             left: bitmap.left,
             top: bitmap.top,
         };
-        self.glyphs.insert(key, Some(entry));
+        let slot = GlyphSlot {
+            entry: Some(entry),
+            used: plan,
+        };
+        self.glyphs.insert(key, slot);
         Some(entry)
+    }
+
+    /// Makes room in the full atlas of color or of outline glyphs. The
+    /// glyphs that plans used most recently move into a new texture, and
+    /// the others go. The old texture stays with the plans that read it.
+    fn evict(&mut self, gpu: &Gpu, color: bool) {
+        let atlas = if color {
+            &mut self.color
+        } else {
+            &mut self.mono
+        };
+        let old = atlas.texture.take();
+        atlas.shelves.clear();
+        let mut entries: Vec<(GlyphKey, GlyphEntry, u64)> = Vec::new();
+        self.glyphs.retain(|key, slot| match slot.entry {
+            Some(entry) if entry.color == color => {
+                entries.push((*key, entry, slot.used));
+                false
+            }
+            _ => true,
+        });
+        let Some(old) = old else {
+            return;
+        };
+        let sizes: Vec<(u32, u64)> = entries
+            .iter()
+            .map(|(_, entry, used)| {
+                let [left, top, right, bottom] = entry.texels;
+                ((right - left) * (bottom - top), *used)
+            })
+            .collect();
+        let capacity = u64::from(atlas.size) * u64::from(atlas.size);
+        let mut keep = glyphs_to_keep(&sizes, capacity);
+        // Taller glyphs first fill the shelves of the new atlas better.
+        keep.sort_by_key(|&index| {
+            let [_, top, _, bottom] = entries[index].1.texels;
+            Reverse(bottom - top)
+        });
+        for index in keep {
+            let (key, entry, used) = entries[index];
+            let [left, top, right, bottom] = entry.texels;
+            let (width, height) = (right - left, bottom - top);
+            let region = MTLRegion {
+                origin: MTLOrigin::new(left as usize, top as usize),
+                size: MTLSize::new(width as usize, height as usize),
+            };
+            let Some(bytes) = read_region(&old, region, atlas.bytes_per_pixel) else {
+                continue;
+            };
+            let Some((x, y)) = atlas.insert(gpu, width, height, &bytes) else {
+                continue;
+            };
+            let entry = GlyphEntry {
+                texels: [x, y, x + width, y + height],
+                ..entry
+            };
+            let slot = GlyphSlot {
+                entry: Some(entry),
+                used,
+            };
+            self.glyphs.insert(key, slot);
+        }
     }
 }
 
@@ -457,4 +561,23 @@ fn rasterize(font: &CTFont, glyph: u16, scale: f64, subpixel: [u8; 2], ink: Ink)
         top: top as i32,
         bytes,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glyphs_to_keep;
+
+    #[test]
+    fn a_full_atlas_keeps_the_most_recently_used_half() {
+        // Texel counts and the plan of last use.
+        let glyphs = [(30, 1), (30, 9), (30, 5), (30, 7), (30, 2)];
+        // Half of 200 texels holds three glyphs of 30.
+        assert_eq!(glyphs_to_keep(&glyphs, 200), vec![1, 3, 2]);
+    }
+
+    #[test]
+    fn a_glyph_larger_than_half_the_atlas_is_not_kept() {
+        assert!(glyphs_to_keep(&[(150, 3)], 200).is_empty());
+        assert!(glyphs_to_keep(&[], 200).is_empty());
+    }
 }

@@ -5,7 +5,7 @@ use super::block::Block;
 use super::class::{AnyClass, AnyProtocol, Obj, Receiver, ReceiverKind, Sel};
 use super::encode::Bool;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
-use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize};
 use super::msg::{Autoreleased, Init, Shared, Utf8};
 use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
@@ -118,6 +118,7 @@ header_as!(Typed:
     MTLOrigin => "MTLOrigin",
     MTLSize => "MTLSize",
     MTLRegion => "MTLRegion",
+    MTLScissorRect => "MTLScissorRect",
     CAFrameRateRange => "CAFrameRateRange",
     &AnyClass => "Class",
     &AnyProtocol => "Protocol *",
@@ -131,6 +132,13 @@ impl<T> Header for *const T {
     const CHECK: Check = Check::AnyPointer;
     fn header(out: &mut String) {
         out.push_str("const void *");
+    }
+}
+
+impl<T> Header for *mut T {
+    const CHECK: Check = Check::AnyPointer;
+    fn header(out: &mut String) {
+        out.push_str("void *");
     }
 }
 

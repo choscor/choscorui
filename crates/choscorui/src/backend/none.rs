@@ -9,7 +9,7 @@ use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel,
     MenuCommandId, MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services,
-    Size, WindowGeometry, WindowOptions,
+    Size, Support, WindowGeometry, WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -21,6 +21,11 @@ pub mod platform {}
 /// Without a backend, every capability is unsupported.
 pub(crate) fn capabilities() -> BackendCapabilities {
     BackendCapabilities::none("headless")
+}
+
+/// The `multiple_windows` capability of [`capabilities`].
+pub(crate) fn window_support() -> Support {
+    capabilities().multiple_windows
 }
 
 /// The headless platform.

@@ -55,10 +55,12 @@ mod native {
             .map_or(0, |window| window.paint_count())
     }
 
-    /// When window `id` finished its last frame.
-    pub fn last_paint(cx: &mut AppContext, id: WindowId) -> Option<Instant> {
+    /// When window `id` finished its first frame. A later frame may end
+    /// before the caller looks: a Metal frame ends on another thread,
+    /// which does not end the event wait of `AppContext::pump`.
+    pub fn first_paint(cx: &mut AppContext, id: WindowId) -> Option<Instant> {
         cx.native_window(id)
-            .and_then(|window| window.last_paint())
+            .and_then(|window| window.first_paint())
             .map(|paint| paint.finished)
     }
 
@@ -87,7 +89,7 @@ mod native {
         0
     }
 
-    pub fn last_paint(_: &mut AppContext, _: WindowId) -> Option<Instant> {
+    pub fn first_paint(_: &mut AppContext, _: WindowId) -> Option<Instant> {
         None
     }
 
@@ -105,7 +107,7 @@ use native::paint_count;
 pub fn first_frame(gallery: &Gallery, cx: &mut AppContext, entered: Instant) -> Option<Duration> {
     loop {
         let main = (*gallery.main.borrow())?;
-        if let Some(finished) = native::last_paint(cx, main) {
+        if let Some(finished) = native::first_paint(cx, main) {
             return Some(finished - entered);
         }
         if !cx.pump() {

@@ -6,7 +6,7 @@ use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
     Feedback, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry,
-    Services, Size, WindowGeometry, WindowOptions,
+    Services, Size, Support, WindowGeometry, WindowOptions,
 };
 use choscorui_macos::{
     Application, CoreTextShaper, Error, ImeEvent, MainMenu, Modifiers, NativeServices,
@@ -57,6 +57,13 @@ impl NativeAccess for AppContext {
 /// What the AppKit backend provides on the running system.
 pub(crate) fn capabilities() -> BackendCapabilities {
     choscorui_macos::capabilities()
+}
+
+/// The `multiple_windows` capability of [`capabilities`], without its
+/// GPU probe, so that `App::start` does not wait for the GPU: the probe
+/// then overlaps the start of the application.
+pub(crate) fn window_support() -> Support {
+    Support::Supported
 }
 
 fn app_error(error: Error) -> AppError {

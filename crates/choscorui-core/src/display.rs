@@ -1,7 +1,7 @@
 use crate::{
     FillRule, Image, ImageSampling, Paint, Path, Point, Rect, Size, StrokeStyle, Transform,
 };
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 /// Straight-alpha sRGB color, stored as eight-bit channels.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -754,7 +754,7 @@ impl DisplayList {
     /// points after transforms and clips, paired with a fingerprint of the
     /// command and the state it is drawn under.
     pub fn draw_regions(&self) -> Vec<(u64, Rect)> {
-        let mut regions = Vec::new();
+        let mut regions = Vec::with_capacity(self.commands.len());
         let mut transforms = vec![Transform::IDENTITY];
         let mut clips: Vec<Option<Rect>> = vec![None];
         let mut state_hash: Vec<u64> = vec![0];
@@ -763,7 +763,7 @@ impl DisplayList {
             let clip = *clips.last().expect("root clip");
             let state = *state_hash.last().expect("root state");
             let push_state = |stack: &mut Vec<u64>, command: &DisplayCommand| {
-                let mut hasher = DefaultHasher::new();
+                let mut hasher = FingerprintHasher::default();
                 state.hash(&mut hasher);
                 hash_command(command, &mut hasher);
                 stack.push(hasher.finish());
@@ -820,7 +820,7 @@ impl DisplayList {
                             None => continue,
                         }
                     }
-                    let mut hasher = DefaultHasher::new();
+                    let mut hasher = FingerprintHasher::default();
                     state.hash(&mut hasher);
                     hash_command(draw, &mut hasher);
                     regions.push((hasher.finish(), device));
@@ -828,6 +828,75 @@ impl DisplayList {
             }
         }
         regions
+    }
+
+    /// The draw regions of [`DisplayList::draw_regions`], sorted so that
+    /// [`DrawRegions::damage`] can compare them with those of another
+    /// list. A window keeps them for its current list, so a new list
+    /// computes only its own.
+    pub fn sorted_draw_regions(&self) -> DrawRegions {
+        let regions = self.draw_regions();
+        // Sorting small (fingerprint, index) pairs moves less memory than
+        // sorting the regions themselves.
+        let mut order: Vec<(u64, u32)> = regions
+            .iter()
+            .enumerate()
+            .map(|(index, (hash, _))| (*hash, index as u32))
+            .collect();
+        order.sort_unstable();
+        DrawRegions {
+            order,
+            rects: regions.into_iter().map(|(_, rect)| rect).collect(),
+        }
+    }
+}
+
+/// The draw regions of a display list, sorted by fingerprint. Make them
+/// with [`DisplayList::sorted_draw_regions`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DrawRegions {
+    /// Each fingerprint with the index of its region in `rects`, sorted.
+    order: Vec<(u64, u32)>,
+    rects: Vec<Rect>,
+}
+
+impl DrawRegions {
+    /// Region that must be repainted to turn the list of `self` into the
+    /// list of `new`, or None when they draw identical content. Commands
+    /// are matched as a multiset, as in [`damage`].
+    pub fn damage(&self, new: &DrawRegions) -> Option<Rect> {
+        let mut region: Option<Rect> = None;
+        let mut add = |rect: Rect| {
+            region = Some(match region {
+                None => rect,
+                Some(existing) => existing.union(rect),
+            });
+        };
+        let (old_order, new_order) = (&self.order, &new.order);
+        let (mut i, mut j) = (0, 0);
+        while i < old_order.len() && j < new_order.len() {
+            match old_order[i].0.cmp(&new_order[j].0) {
+                std::cmp::Ordering::Equal => {
+                    i += 1;
+                    j += 1;
+                }
+                std::cmp::Ordering::Less => {
+                    add(self.rects[old_order[i].1 as usize]);
+                    i += 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    add(new.rects[new_order[j].1 as usize]);
+                    j += 1;
+                }
+            }
+        }
+        for (_, index) in &old_order[i..] {
+            add(self.rects[*index as usize]);
+        }
+        for (_, index) in &new_order[j..] {
+            add(new.rects[*index as usize]);
+        }
+        region
     }
 }
 
@@ -838,40 +907,7 @@ pub fn damage(old: &DisplayList, new: &DisplayList) -> Option<Rect> {
     if old == new {
         return None;
     }
-    // Multiset difference of (hash, region) pairs via a sorted merge: two
-    // allocations regardless of list size.
-    let mut old = old.draw_regions();
-    let mut new = new.draw_regions();
-    old.sort_unstable_by_key(|(hash, _)| *hash);
-    new.sort_unstable_by_key(|(hash, _)| *hash);
-    let mut region: Option<Rect> = None;
-    let mut add = |rect: Rect| {
-        region = Some(match region {
-            None => rect,
-            Some(existing) => existing.union(rect),
-        });
-    };
-    let (mut i, mut j) = (0, 0);
-    while i < old.len() && j < new.len() {
-        match old[i].0.cmp(&new[j].0) {
-            std::cmp::Ordering::Equal => {
-                i += 1;
-                j += 1;
-            }
-            std::cmp::Ordering::Less => {
-                add(old[i].1);
-                i += 1;
-            }
-            std::cmp::Ordering::Greater => {
-                add(new[j].1);
-                j += 1;
-            }
-        }
-    }
-    for (_, rect) in old[i..].iter().chain(&new[j..]) {
-        add(*rect);
-    }
-    region
+    old.sorted_draw_regions().damage(&new.sorted_draw_regions())
 }
 
 /// Untransformed bounds of a draw command, inflated for stroke width,
@@ -917,6 +953,78 @@ fn draw_bounds(command: &DisplayCommand) -> Option<Rect> {
         }
         _ => return None,
     })
+}
+
+/// Hashes draw fingerprints with one folded multiply per two words, as
+/// foldhash does. A display list is not adversarial input, so damage does
+/// not need the flooding resistance of the default hasher, which cost
+/// more than the rest of the comparison for a list of many draws.
+struct FingerprintHasher {
+    state: u64,
+    /// A word that waits for the next one, to share its multiply.
+    pending: Option<u64>,
+}
+
+impl Default for FingerprintHasher {
+    fn default() -> Self {
+        Self {
+            state: 0x243f_6a88_85a3_08d3,
+            pending: None,
+        }
+    }
+}
+
+const FOLD_SEED: u64 = 0x9e37_79b9_7f4a_7c15;
+
+/// The high and low halves of the 128-bit product, combined.
+fn folded_multiply(a: u64, b: u64) -> u64 {
+    let product = u128::from(a) * u128::from(b);
+    (product as u64) ^ ((product >> 64) as u64)
+}
+
+impl Hasher for FingerprintHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        let (words, rest) = bytes.as_chunks::<8>();
+        for word in words {
+            self.write_u64(u64::from_le_bytes(*word));
+        }
+        let mut word = [0u8; 8];
+        word[..rest.len()].copy_from_slice(rest);
+        // The length keeps a short tail apart from one padded with zeros.
+        self.write_u64(u64::from_le_bytes(word) ^ ((rest.len() as u64) << 59));
+    }
+
+    fn write_u8(&mut self, value: u8) {
+        self.write_u64(u64::from(value));
+    }
+
+    fn write_u16(&mut self, value: u16) {
+        self.write_u64(u64::from(value));
+    }
+
+    fn write_u32(&mut self, value: u32) {
+        self.write_u64(u64::from(value));
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        match self.pending.take() {
+            Some(first) => {
+                self.state = folded_multiply(self.state ^ first, value ^ FOLD_SEED);
+            }
+            None => self.pending = Some(value),
+        }
+    }
+
+    fn write_usize(&mut self, value: usize) {
+        self.write_u64(value as u64);
+    }
+
+    fn finish(&self) -> u64 {
+        // A word without a partner pairs with the length tag 1, and an
+        // even count of words with 0, so the two never meet.
+        let (last, tag) = self.pending.map_or((0, 0), |word| (word, 1));
+        folded_multiply(self.state ^ last, tag ^ 0x2d35_8dcc_aa6c_78a5)
+    }
 }
 
 fn hash_f64(value: f64, hasher: &mut impl Hasher) {

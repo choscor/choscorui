@@ -51,8 +51,14 @@ const CLIP_COVERAGE: u32 = 1;
 
 /// The flattening tolerance of paths, in device pixels.
 const TOLERANCE: f64 = 0.05;
-/// The cached image textures. A full cache starts over.
+/// The cached image textures. A full cache drops the image that a frame
+/// used least recently.
 const IMAGE_LIMIT: usize = 256;
+/// The most coverage atlas textures that a frame uses. A frame that
+/// needs more atlases uses the texture slots again in order.
+pub(super) const ATLAS_LIMIT: u32 = 4;
+/// A clip box that clips nothing, for instances that the scissor clips.
+const NO_CLIP: [f32; 4] = [-1.0e9, -1.0e9, 1.0e9, 1.0e9];
 
 /// The texture that a pass draws into.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,14 +84,20 @@ pub(super) enum Source {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Op {
     /// Draws `count` instances from `first`. `coverage` is the coverage
-    /// atlas that they read.
+    /// atlas that they read. `scissor` is the pixel box outside which
+    /// the GPU draws no pixel.
     Draw {
         target: Target,
         source: Source,
         coverage: Option<u32>,
+        scissor: PixelBox,
         first: u32,
         count: u32,
     },
+    /// Adds the edges of an atlas into its texture slot, which is the
+    /// atlas modulo [`ATLAS_LIMIT`]. The draws before it read the
+    /// earlier atlas of that slot.
+    Coverage(u32),
     /// The next pass into the group at this depth clears it first.
     ClearGroup(u32),
     /// Blurs a region of the frame, by index into [`Plan::blurs`].
@@ -156,7 +168,8 @@ impl Instance {
     }
 
     fn write(&self, out: &mut Vec<u32>) {
-        for value in [
+        let mut words = [0u32; INSTANCE_WORDS];
+        let floats = [
             self.bounds,
             self.xform,
             self.origin,
@@ -168,11 +181,14 @@ impl Instance {
             self.params,
             self.params2,
             self.clip,
-        ] {
-            out.extend(value.map(f32::to_bits));
+        ];
+        for (slot, value) in words.as_chunks_mut::<4>().0.iter_mut().zip(floats) {
+            *slot = value.map(f32::to_bits);
         }
-        out.extend(self.info);
-        out.extend(self.paint);
+        words[44..48].copy_from_slice(&self.info);
+        words[48..52].copy_from_slice(&self.paint);
+        // One copy of the whole instance, not one growth check per field.
+        out.extend_from_slice(&words);
     }
 }
 
@@ -207,7 +223,24 @@ enum ClipShape {
         id: usize,
         polygons: Rc<Vec<Vec<Point>>>,
         bounds: PixelBox,
+        /// The coverage samples per pixel side of each region of it.
+        samples: u32,
     },
+}
+
+impl ClipShape {
+    /// True for a path clip wider or taller than one atlas holds.
+    fn oversized(&self) -> bool {
+        match self {
+            Self::Shape { .. } => false,
+            Self::Path {
+                bounds, samples, ..
+            } => {
+                let side = max_side(*samples) as i32;
+                bounds[2] - bounds[0] > side || bounds[3] - bounds[1] > side
+            }
+        }
+    }
 }
 
 /// The clips of an instance in [`Plan::clips`], and the coverage atlas
@@ -217,6 +250,46 @@ struct ClipList {
     atlas: Option<u32>,
     start: u32,
     count: u32,
+}
+
+/// An instance to record, with the clip box, the device bounds, and the
+/// pixels of the whole instance.
+struct Draw {
+    instance: Instance,
+    source: Source,
+    clip: [f64; 4],
+    bounds: [f64; 4],
+    whole: PixelBox,
+}
+
+/// One part of an instance: the pixels that it covers, the coverage
+/// region of its path when it fills one, the atlas of that region, and
+/// its clips.
+#[derive(Clone, Copy)]
+struct Part {
+    pixels: PixelBox,
+    region: Option<Region>,
+    coverage: Option<u32>,
+    list: ClipList,
+}
+
+/// The result of an attempt to give a part its regions in one atlas.
+enum Placed {
+    Part(Part),
+    /// The clips hide the whole part.
+    Hidden,
+    /// The regions of the part do not fit in one atlas together.
+    NoRoom,
+}
+
+/// The result of an attempt to list the clips of the state.
+enum Listed {
+    List(ClipList),
+    /// The cut leaves nothing of a path clip.
+    Hidden,
+    /// A clip region did not fit, and the next region goes in a new
+    /// atlas.
+    Moved,
 }
 
 #[derive(Clone)]
@@ -229,7 +302,9 @@ struct State {
     /// bottom.
     clip: [f64; 4],
     clips: Rc<Vec<ClipShape>>,
-    clip_list: Cell<Option<ClipList>>,
+    /// The last clip list of `clips`, with the pixel box that cuts its
+    /// path clips.
+    clip_list: Cell<Option<(Option<PixelBox>, ClipList)>>,
     target: Target,
 }
 
@@ -241,8 +316,14 @@ struct Saved {
 
 /// The process-wide texture caches. Only the main thread uses them.
 struct Caches {
-    images: HashMap<u64, Retained<MTLTexture>>,
+    /// Image textures by image id, with the plan that used each last.
+    images: HashMap<u64, (Retained<MTLTexture>, u64)>,
+    /// The number of plans so far.
+    plans: u64,
     text: Text,
+    /// The emptied vectors of the last plan, so the next plan does not
+    /// grow its vectors again.
+    spare: Option<Plan>,
 }
 
 thread_local! {
@@ -272,9 +353,17 @@ pub(super) fn build(
         let mut caches = caches.borrow_mut();
         let caches = caches.get_or_insert_with(|| Caches {
             images: HashMap::new(),
+            plans: 0,
             text: Text::new(),
+            spare: None,
         });
+        caches.plans += 1;
+        caches.text.start_plan();
         let mut builder = Builder::new(gpu, caches, width, height, scale);
+        builder
+            .plan
+            .instances
+            .reserve(list.len().saturating_mul(INSTANCE_WORDS));
         builder.plan.reads_frame = list.commands().iter().any(|command| {
             matches!(
                 command,
@@ -291,6 +380,26 @@ pub(super) fn build(
     })
 }
 
+/// Keeps the vectors of `plan`, after its frame is encoded, for the next
+/// plan.
+pub(super) fn recycle(mut plan: Plan) {
+    plan.instances.clear();
+    plan.stops.clear();
+    plan.clips.clear();
+    plan.edges.truncate(1);
+    if let Some(edges) = plan.edges.first_mut() {
+        edges.clear();
+    }
+    plan.ops.clear();
+    plan.textures.clear();
+    plan.blurs.clear();
+    CACHES.with(|caches| {
+        if let Some(caches) = caches.borrow_mut().as_mut() {
+            caches.spare = Some(plan);
+        }
+    });
+}
+
 struct Builder<'a> {
     gpu: &'a Gpu,
     caches: &'a mut Caches,
@@ -302,7 +411,11 @@ struct Builder<'a> {
     texture_ids: HashMap<usize, u32>,
     shelves: Shelves,
     atlas: u32,
-    clip_regions: HashMap<(usize, u32), Region>,
+    /// The atlases that have an [`Op::Coverage`] so far.
+    announced: u32,
+    /// Path clip regions by clip, atlas, and the pixel box that cuts
+    /// the clip.
+    clip_regions: HashMap<(usize, u32, Option<PixelBox>), Region>,
     next_clip: usize,
     /// The device bounds of what each open group holds.
     group_bounds: Vec<Option<[f64; 4]>>,
@@ -312,10 +425,15 @@ impl<'a> Builder<'a> {
     fn new(gpu: &'a Gpu, caches: &'a mut Caches, width: usize, height: usize, scale: f64) -> Self {
         let viewport = [0.0, 0.0, width as f64, height as f64];
         let device = Transform::scale(scale, scale);
-        Self {
-            gpu,
-            caches,
-            plan: Plan {
+        let plan = match caches.spare.take() {
+            Some(spare) => Plan {
+                width,
+                height,
+                groups: 0,
+                reads_frame: false,
+                ..spare
+            },
+            None => Plan {
                 width,
                 height,
                 instances: Vec::new(),
@@ -328,6 +446,11 @@ impl<'a> Builder<'a> {
                 groups: 0,
                 reads_frame: false,
             },
+        };
+        Self {
+            gpu,
+            caches,
+            plan,
             scale,
             viewport,
             state: State {
@@ -342,6 +465,7 @@ impl<'a> Builder<'a> {
             texture_ids: HashMap::new(),
             shelves: Shelves::new(ATLAS_SIZE),
             atlas: 0,
+            announced: 0,
             clip_regions: HashMap::new(),
             next_clip: 0,
             group_bounds: Vec::new(),
@@ -544,11 +668,21 @@ impl<'a> Builder<'a> {
         self.visible(band).is_some()
     }
 
-    /// Records an instance with the current clips.
-    fn add(&mut self, instance: Instance, source: Source, coverage: Option<u32>, bounds: [f64; 4]) {
-        let list = self.clip_list();
+    /// Records an instance with the current clips. Path clips can cut
+    /// the instance into parts, each with its clip regions in one atlas.
+    fn add(&mut self, instance: Instance, source: Source, bounds: [f64; 4]) {
         let clip = self.state.clip;
-        self.push_instance(instance, source, coverage, list, clip, bounds);
+        let Some(pixels) = intersect(round_out(bounds), round_out(clip)) else {
+            return;
+        };
+        let draw = Draw {
+            instance,
+            source,
+            clip,
+            bounds,
+            whole: pixels,
+        };
+        self.place(pixels, None, &draw);
     }
 
     fn push_instance(
@@ -560,7 +694,17 @@ impl<'a> Builder<'a> {
         clip: [f64; 4],
         bounds: [f64; 4],
     ) {
-        instance.clip = clip.map(|v| v as f32);
+        let viewport = round_out(self.viewport);
+        let Some(scissor) = intersect(round_out(clip), viewport) else {
+            return;
+        };
+        // The scissor clips to whole pixels. The shader clips only the
+        // part of a pixel that a fractional edge leaves.
+        instance.clip = if clip.iter().all(|edge| edge.fract() == 0.0) {
+            NO_CLIP
+        } else {
+            clip.map(|v| v as f32)
+        };
         instance.info[2] = list.start;
         instance.info[3] = list.count;
         let coverage = coverage.or(list.atlas);
@@ -572,9 +716,11 @@ impl<'a> Builder<'a> {
                 target: last_target,
                 source: last_source,
                 coverage: last_coverage,
+                scissor: last_scissor,
                 first,
                 count,
             }) if *last_target == target
+                && *last_scissor == scissor
                 && *first + *count == index
                 && (*last_source == source
                     || *last_source == Source::None
@@ -599,6 +745,7 @@ impl<'a> Builder<'a> {
                 target,
                 source,
                 coverage,
+                scissor,
                 first: index,
                 count: 1,
             });
@@ -698,7 +845,7 @@ impl<'a> Builder<'a> {
         instance.shape = rect_words(rect);
         instance.radii = radii.map(|v| v as f32);
         self.set_paint(&mut instance, paint, Transform::IDENTITY);
-        self.add(instance, Source::None, None, bounds);
+        self.add(instance, Source::None, bounds);
     }
 
     fn stroke(&mut self, path: &Path, paint: &Paint, style: &StrokeStyle) {
@@ -787,7 +934,7 @@ impl<'a> Builder<'a> {
         };
         instance.params = inner_radii.map(|v| v as f32);
         self.set_paint(&mut instance, paint, Transform::IDENTITY);
-        self.add(instance, Source::None, None, bounds);
+        self.add(instance, Source::None, bounds);
     }
 
     /// Fills closed polygons in device pixels through coverage atlases.
@@ -803,48 +950,131 @@ impl<'a> Builder<'a> {
         let width = (bounds[2] - bounds[0]) as u32;
         let height = (bounds[3] - bounds[1]) as u32;
         let samples = samples_for(width, height).max(2);
+        let mut instance = Instance::device(KIND_PATH);
+        instance.paint[3] = samples;
+        if rule == FillRule::EvenOdd {
+            instance.info[1] = FLAG_EVEN_ODD;
+        }
+        self.set_paint(&mut instance, paint, to_paint);
+        let clip = self.state.clip;
         for tile in tiles(bounds, max_side(samples)) {
-            let Some((region, list)) = self.allocate_with_clips(tile, samples, &polygons) else {
-                continue;
+            let draw = Draw {
+                instance,
+                source: Source::None,
+                clip,
+                bounds: tile.map(f64::from),
+                whole: tile,
             };
-            let mut instance = Instance::device(KIND_PATH);
-            let words = tile.map(|v| v as f32);
-            instance.bounds = words;
-            instance.shape = words;
-            instance.params = [region.offset.0 as f32, region.offset.1 as f32, 0.0, 0.0];
-            instance.paint[3] = samples;
-            if rule == FillRule::EvenOdd {
-                instance.info[1] = FLAG_EVEN_ODD;
-            }
-            self.set_paint(&mut instance, paint, to_paint);
-            let clip = self.state.clip;
-            let tile_bounds = tile.map(f64::from);
-            let atlas = self.atlas;
-            self.push_instance(instance, Source::None, Some(atlas), list, clip, tile_bounds);
+            self.place(tile, Some((&polygons, samples)), &draw);
         }
     }
 
-    /// A coverage region for `tile` and the clip list, both in the same
-    /// atlas.
-    fn allocate_with_clips(
-        &mut self,
-        tile: PixelBox,
-        samples: u32,
-        polygons: &[Vec<Point>],
-    ) -> Option<(Region, ClipList)> {
-        for _ in 0..3 {
-            let region = self.allocate(tile, samples, polygons)?;
-            let atlas = self.atlas;
-            let list = self.clip_list();
-            if self.atlas == atlas {
-                return Some((region, list));
+    /// Records `draw` for `pixels`, in parts whose coverage regions fit
+    /// in one atlas. With `fill`, each part also gets a region with the
+    /// edges of the polygons at the given samples per pixel side.
+    fn place(&mut self, pixels: PixelBox, fill: Option<(&[Vec<Point>], u32)>, draw: &Draw) {
+        if !self.state.clips.iter().any(ClipShape::oversized) {
+            self.place_part(pixels, None, fill, draw);
+            return;
+        }
+        // Clips wider than an atlas get one region in each cell of a grid
+        // of atlas-sized cells, which instances of all sizes share.
+        for cell in grid_cells(pixels, ATLAS_SIZE as i32) {
+            if let Some(part) = intersect(pixels, cell) {
+                self.place_part(part, Some(cell), fill, draw);
             }
         }
-        None
+    }
+
+    /// Records `draw` for `pixels`, with path clips cut to `cut`. When
+    /// the regions do not fit in one atlas, each quarter of `pixels`
+    /// goes on its own, so no part of the draw is lost.
+    fn place_part(
+        &mut self,
+        pixels: PixelBox,
+        cut: Option<PixelBox>,
+        fill: Option<(&[Vec<Point>], u32)>,
+        draw: &Draw,
+    ) {
+        match self.try_place(pixels, cut, fill) {
+            Placed::Part(part) => self.draw_part(part, draw),
+            Placed::Hidden => {}
+            // The regions of one pixel are at most 4 × 4 samples each, so
+            // an atlas holds them for all but absurd clip depths.
+            Placed::NoRoom if pixels[2] - pixels[0] <= 1 && pixels[3] - pixels[1] <= 1 => {}
+            Placed::NoRoom => {
+                for quarter in quarters(pixels) {
+                    self.place_part(quarter, Some(quarter), fill, draw);
+                }
+            }
+        }
+    }
+
+    /// The clip list and the fill region of `pixels` in one atlas.
+    fn try_place(
+        &mut self,
+        pixels: PixelBox,
+        cut: Option<PixelBox>,
+        fill: Option<(&[Vec<Point>], u32)>,
+    ) -> Placed {
+        // A failed attempt moves to a new atlas, so the second attempt
+        // starts with an atlas that holds almost nothing.
+        for _ in 0..2 {
+            let list = match self.clip_list(cut) {
+                Listed::List(list) => list,
+                Listed::Hidden => return Placed::Hidden,
+                Listed::Moved => continue,
+            };
+            let Some((polygons, samples)) = fill else {
+                return Placed::Part(Part {
+                    pixels,
+                    region: None,
+                    coverage: None,
+                    list,
+                });
+            };
+            if let Some(region) = self.allocate(pixels, samples, polygons)
+                && list.atlas.is_none_or(|atlas| atlas == self.atlas)
+            {
+                return Placed::Part(Part {
+                    pixels,
+                    region: Some(region),
+                    coverage: Some(self.atlas),
+                    list,
+                });
+            }
+        }
+        Placed::NoRoom
+    }
+
+    fn draw_part(&mut self, part: Part, draw: &Draw) {
+        let mut instance = draw.instance;
+        let mut bounds = draw.bounds;
+        let mut clip = draw.clip;
+        if part.pixels != draw.whole {
+            bounds = cut(bounds, part.pixels);
+            clip = cut(clip, part.pixels);
+        }
+        if let Some(region) = part.region {
+            let words = part.pixels.map(|v| v as f32);
+            instance.bounds = words;
+            instance.shape = words;
+            instance.params[0] = region.offset.0 as f32;
+            instance.params[1] = region.offset.1 as f32;
+        }
+        self.push_instance(
+            instance,
+            draw.source,
+            part.coverage,
+            part.list,
+            clip,
+            bounds,
+        );
     }
 
     /// A region of the current atlas for `pixels`, with the edges of
-    /// `polygons` in it. A full atlas moves to the next one.
+    /// `polygons` in it. A full atlas moves to the next one. `None`
+    /// means that the region is larger than an atlas.
     fn allocate(
         &mut self,
         pixels: PixelBox,
@@ -862,6 +1092,11 @@ impl<'a> Builder<'a> {
                 self.shelves.allocate(width, height)?
             }
         };
+        if self.announced <= self.atlas {
+            // The draws before this op read the earlier atlas of the slot.
+            self.plan.ops.push(Op::Coverage(self.atlas));
+            self.announced = self.atlas + 1;
+        }
         let region = Region {
             pixels,
             offset,
@@ -871,77 +1106,77 @@ impl<'a> Builder<'a> {
         Some(region)
     }
 
-    /// The clips of the state in [`Plan::clips`]. Path clips get regions
-    /// in the current atlas.
-    fn clip_list(&mut self) -> ClipList {
-        if let Some(list) = self.state.clip_list.get()
+    /// The clips of the state in [`Plan::clips`], with path clips cut to
+    /// `cut`. Path clips get regions in the current atlas.
+    fn clip_list(&mut self, cut: Option<PixelBox>) -> Listed {
+        if let Some((key, list)) = self.state.clip_list.get()
+            && key == cut
             && list.atlas.is_none_or(|atlas| atlas == self.atlas)
         {
-            return list;
+            return Listed::List(list);
         }
         let clips = Rc::clone(&self.state.clips);
-        loop {
-            let atlas = self.atlas;
-            let start = self.plan.clips.len();
-            let mut uses_atlas = false;
-            for clip in clips.iter() {
-                match clip {
-                    ClipShape::Shape {
-                        rect,
-                        radii,
-                        inverse,
-                        offset,
-                    } => {
-                        let mut words = Vec::with_capacity(CLIP_WORDS);
-                        words.extend(rect.map(f32::to_bits));
-                        words.extend(radii.map(f32::to_bits));
-                        words.extend(inverse.map(f32::to_bits));
-                        words.extend(offset.map(f32::to_bits));
-                        words.extend([0, 0]);
-                        self.plan.clips.extend(words);
-                    }
-                    ClipShape::Path {
-                        id,
-                        polygons,
-                        bounds,
-                    } => {
-                        uses_atlas = true;
-                        let region = match self.clip_regions.get(&(*id, self.atlas)) {
-                            Some(region) => *region,
-                            None => {
-                                let width = (bounds[2] - bounds[0]) as u32;
-                                let height = (bounds[3] - bounds[1]) as u32;
-                                let samples = samples_for(width, height);
-                                let Some(region) = self.allocate(*bounds, samples, polygons) else {
-                                    continue;
-                                };
-                                self.clip_regions.insert((*id, self.atlas), region);
+        let atlas = self.atlas;
+        let start = self.plan.clips.len();
+        let mut uses_atlas = false;
+        for clip in clips.iter() {
+            match clip {
+                ClipShape::Shape {
+                    rect,
+                    radii,
+                    inverse,
+                    offset,
+                } => {
+                    let mut words = [0u32; CLIP_WORDS];
+                    words[0..4].copy_from_slice(&rect.map(f32::to_bits));
+                    words[4..8].copy_from_slice(&radii.map(f32::to_bits));
+                    words[8..12].copy_from_slice(&inverse.map(f32::to_bits));
+                    words[12..14].copy_from_slice(&offset.map(f32::to_bits));
+                    self.plan.clips.extend_from_slice(&words);
+                }
+                ClipShape::Path {
+                    id,
+                    polygons,
+                    bounds,
+                    samples,
+                } => {
+                    uses_atlas = true;
+                    let Some(area) = cut.map_or(Some(*bounds), |cut| intersect(*bounds, cut))
+                    else {
+                        self.plan.clips.truncate(start);
+                        return Listed::Hidden;
+                    };
+                    let key = (*id, atlas, cut);
+                    let region = match self.clip_regions.get(&key) {
+                        Some(region) => *region,
+                        None => match self.allocate(area, *samples, polygons) {
+                            Some(region) if self.atlas == atlas => {
+                                self.clip_regions.insert(key, region);
                                 region
                             }
-                        };
-                        let rect = region.pixels.map(|v| v as f32);
-                        self.plan.clips.extend(rect.map(f32::to_bits));
-                        self.plan.clips.extend([0u32; 8]);
-                        self.plan.clips.extend(
-                            [region.offset.0 as f32, region.offset.1 as f32].map(f32::to_bits),
-                        );
-                        self.plan.clips.extend([CLIP_COVERAGE, region.samples]);
-                    }
+                            _ => {
+                                self.plan.clips.truncate(start);
+                                return Listed::Moved;
+                            }
+                        },
+                    };
+                    let mut words = [0u32; CLIP_WORDS];
+                    words[0..4].copy_from_slice(&region.pixels.map(|v| (v as f32).to_bits()));
+                    words[12] = (region.offset.0 as f32).to_bits();
+                    words[13] = (region.offset.1 as f32).to_bits();
+                    words[14] = CLIP_COVERAGE;
+                    words[15] = region.samples;
+                    self.plan.clips.extend_from_slice(&words);
                 }
             }
-            if self.atlas != atlas {
-                // An allocation moved to a new atlas: list the clips again.
-                self.plan.clips.truncate(start);
-                continue;
-            }
-            let list = ClipList {
-                atlas: uses_atlas.then_some(atlas),
-                start: (start / CLIP_WORDS) as u32,
-                count: ((self.plan.clips.len() - start) / CLIP_WORDS) as u32,
-            };
-            self.state.clip_list.set(Some(list));
-            return list;
         }
+        let list = ClipList {
+            atlas: uses_atlas.then_some(atlas),
+            start: (start / CLIP_WORDS) as u32,
+            count: ((self.plan.clips.len() - start) / CLIP_WORDS) as u32,
+        };
+        self.state.clip_list.set(Some((cut, list)));
+        Listed::List(list)
     }
 
     /// Clips to `rect` with corner `radii` in the local space.
@@ -987,14 +1222,6 @@ impl<'a> Builder<'a> {
             self.state.clip = [0.0; 4];
             return;
         };
-        // One region holds a clip, so it is at most one atlas wide.
-        let limit = ATLAS_SIZE as i32;
-        let bounds = [
-            bounds[0],
-            bounds[1],
-            bounds[2].min(bounds[0] + limit),
-            bounds[3].min(bounds[1] + limit),
-        ];
         let clip = &mut self.state.clip;
         clip[0] = clip[0].max(f64::from(bounds[0]));
         clip[1] = clip[1].max(f64::from(bounds[1]));
@@ -1002,10 +1229,13 @@ impl<'a> Builder<'a> {
         clip[3] = clip[3].min(f64::from(bounds[3]));
         let id = self.next_clip;
         self.next_clip += 1;
+        let width = (bounds[2] - bounds[0]) as u32;
+        let height = (bounds[3] - bounds[1]) as u32;
         self.add_clip(ClipShape::Path {
             id,
             polygons: Rc::new(polygons),
             bounds,
+            samples: samples_for(width, height),
         });
     }
 
@@ -1035,12 +1265,14 @@ impl<'a> Builder<'a> {
         if sampling == ImageSampling::Nearest {
             instance.info[1] = FLAG_NEAREST;
         }
-        self.add(instance, source, None, bounds);
+        self.add(instance, source, bounds);
     }
 
     /// The texture of `image`, with premultiplied alpha.
     fn image_texture(&mut self, image: &Image) -> Option<Retained<MTLTexture>> {
-        if let Some(texture) = self.caches.images.get(&image.id()) {
+        let plan = self.caches.plans;
+        if let Some((texture, used)) = self.caches.images.get_mut(&image.id()) {
+            *used = plan;
             return Some(texture.clone());
         }
         let (width, height) = (image.width() as usize, image.height() as usize);
@@ -1063,10 +1295,20 @@ impl<'a> Builder<'a> {
         if !replace_region(&texture, region, &pixels, width * 4, 4) {
             return None;
         }
-        if self.caches.images.len() >= IMAGE_LIMIT {
-            self.caches.images.clear();
+        if self.caches.images.len() >= IMAGE_LIMIT
+            && let Some(oldest) = self
+                .caches
+                .images
+                .iter()
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(id, _)| *id)
+        {
+            // A plan that drew the image keeps its own reference.
+            self.caches.images.remove(&oldest);
         }
-        self.caches.images.insert(image.id(), texture.clone());
+        self.caches
+            .images
+            .insert(image.id(), (texture.clone(), plan));
         Some(texture)
     }
 
@@ -1112,7 +1354,7 @@ impl<'a> Builder<'a> {
         if shadow.inset {
             instance.info[1] = FLAG_INSET;
         }
-        self.add(instance, Source::None, None, bounds);
+        self.add(instance, Source::None, bounds);
     }
 
     /// Blurs the frame under `rect` and draws it inside the rounded
@@ -1152,7 +1394,7 @@ impl<'a> Builder<'a> {
         instance.shape = rect_words(rect);
         instance.radii = radii.map(|v| v as f32);
         instance.params = [-(x0 as f32), -(y0 as f32), 0.0, 0.0];
-        self.add(instance, Source::Blur(index), None, bounds);
+        self.add(instance, Source::Blur(index), bounds);
     }
 
     /// Draws one glyph whose origin is at `pen` in the local space.
@@ -1231,7 +1473,7 @@ impl<'a> Builder<'a> {
             instance.info[0] = KIND_COLOR_GLYPH;
         }
         instance.color = color_words(color);
-        self.add(instance, source, None, visible);
+        self.add(instance, source, visible);
     }
 }
 
@@ -1262,6 +1504,50 @@ fn split_pixel(value: f64, steps: u8) -> (f64, u8) {
 }
 
 /// The whole pixels that a device box touches.
+/// `bounds` cut to the pixel box `pixels`.
+fn cut(bounds: [f64; 4], pixels: PixelBox) -> [f64; 4] {
+    [
+        bounds[0].max(f64::from(pixels[0])),
+        bounds[1].max(f64::from(pixels[1])),
+        bounds[2].min(f64::from(pixels[2])),
+        bounds[3].min(f64::from(pixels[3])),
+    ]
+}
+
+/// The cells of a grid of `side` pixels from the device origin that
+/// `pixels` touches.
+fn grid_cells(pixels: PixelBox, side: i32) -> Vec<PixelBox> {
+    let first = [pixels[0].div_euclid(side), pixels[1].div_euclid(side)];
+    let last = [
+        (pixels[2] - 1).div_euclid(side),
+        (pixels[3] - 1).div_euclid(side),
+    ];
+    let mut cells = Vec::new();
+    for row in first[1]..=last[1] {
+        for column in first[0]..=last[0] {
+            let (x, y) = (column * side, row * side);
+            cells.push([x, y, x + side, y + side]);
+        }
+    }
+    cells
+}
+
+/// The four quarters of `pixels`, without the empty ones of a box one
+/// pixel wide or tall.
+fn quarters(pixels: PixelBox) -> Vec<PixelBox> {
+    let x = pixels[0] + (pixels[2] - pixels[0]) / 2;
+    let y = pixels[1] + (pixels[3] - pixels[1]) / 2;
+    [
+        [pixels[0], pixels[1], x, y],
+        [x, pixels[1], pixels[2], y],
+        [pixels[0], y, x, pixels[3]],
+        [x, y, pixels[2], pixels[3]],
+    ]
+    .into_iter()
+    .filter(|quarter| quarter[0] < quarter[2] && quarter[1] < quarter[3])
+    .collect()
+}
+
 fn round_out(bounds: [f64; 4]) -> PixelBox {
     let clamp = |value: f64| value.clamp(-1.0e6, 1.0e6) as i32;
     [

@@ -27,7 +27,8 @@ use crate::ffi::metal::{
     new_pipeline,
 };
 use crate::ffi::retained::{Retained, alloc_init};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Once, OnceLock};
 
 pub use surface::Painter;
 
@@ -66,15 +67,47 @@ fn core_graphics_requested() -> bool {
         .get_or_init(|| std::env::var(PAINTER_VARIABLE).is_ok_and(|value| value == "core-graphics"))
 }
 
+/// The shared GPU objects, created once.
+static GPU: OnceLock<Option<Gpu>> = OnceLock::new();
+
+/// Set when a command buffer failed: the GPU may be gone, so new windows
+/// paint with Core Graphics for the rest of the process.
+static LOST: AtomicBool = AtomicBool::new(false);
+
 /// The shared GPU objects, or `None` when the process paints with Core
-/// Graphics: no Metal device, a library or pipeline failure, or the
-/// `CHOSCORUI_PAINTER` override.
+/// Graphics: no Metal device, a library or pipeline failure, a lost GPU,
+/// or the `CHOSCORUI_PAINTER` override. The first call waits for
+/// [`prepare`] when it runs.
 pub(crate) fn gpu() -> Option<&'static Gpu> {
-    static GPU: OnceLock<Option<Gpu>> = OnceLock::new();
-    if core_graphics_requested() {
+    if core_graphics_requested() || LOST.load(Ordering::Acquire) {
         return None;
     }
     GPU.get_or_init(Gpu::new).as_ref()
+}
+
+/// Starts to create the device, the library, and the pipelines on another
+/// thread, so that the work overlaps the start of the application and not
+/// its first frame.
+pub(crate) fn prepare() {
+    static STARTED: Once = Once::new();
+    if core_graphics_requested() {
+        return;
+    }
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("choscorui-metal-setup".into())
+            .spawn(|| {
+                gpu();
+            });
+        // Without a thread, the first window creates the objects.
+        drop(spawned);
+    });
+}
+
+/// Records that a command buffer failed, so `gpu_painting` reports
+/// unsupported and new windows paint with Core Graphics.
+pub(crate) fn lose() {
+    LOST.store(true, Ordering::Release);
 }
 
 impl Gpu {

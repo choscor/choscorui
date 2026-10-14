@@ -12,7 +12,7 @@ use super::class::{AnyClass, AnyProtocol, ClassType, IsA, Obj, Receiver, Sel};
 use super::encode::Bool;
 use super::encode::Encode;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
-use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize};
 use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
 use super::runtime;
@@ -241,6 +241,7 @@ plain_value!(
     MTLOrigin,
     MTLSize,
     MTLRegion,
+    MTLScissorRect,
     CAFrameRateRange
 );
 
@@ -474,6 +475,17 @@ impl<T: 'static> Arg for *const T {
     }
 }
 
+/// A pointer to `count` values that the callee writes, which a helper in
+/// `ffi` passes with its length. A descriptor with this argument stays
+/// private to `ffi`.
+impl<T: 'static> Arg for *mut T {
+    type In<'a> = *mut T;
+    type Raw<'a> = *mut T;
+    fn raw<'a>(value: Self::In<'a>) -> Self::Raw<'a> {
+        value
+    }
+}
+
 /// A pointer result that a helper in `ffi` reads before it returns.
 impl<T: 'static> Ret for *const T {
     type Raw<'a> = *const T;
@@ -486,6 +498,13 @@ impl<T: 'static> Ret for *const T {
 }
 
 impl<T: Encode> Encode for *const T {
+    fn encode(out: &mut String) {
+        out.push('^');
+        T::encode(out);
+    }
+}
+
+impl<T: Encode> Encode for *mut T {
     fn encode(out: &mut String) {
         out.push('^');
         T::encode(out);

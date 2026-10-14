@@ -84,12 +84,22 @@ ffi_struct! {
         pub(crate) origin: MTLOrigin,
         pub(crate) size: MTLSize,
     }
+
+    /// `MTLScissorRect`.
+    #[derive(Clone, Copy, Debug, Default, PartialEq)]
+    pub(crate) struct MTLScissorRect = MTLScissorRect {
+        pub(crate) x: usize,
+        pub(crate) y: usize,
+        pub(crate) width: usize,
+        pub(crate) height: usize,
+    }
 }
 
 encode_as!(MTLClearColor, "{?=dddd}");
 encode_as!(MTLOrigin, "{?=QQQ}");
 encode_as!(MTLSize, "{?=QQQ}");
 encode_as!(MTLRegion, "{?={?=QQQ}{?=QQQ}}");
+encode_as!(MTLScissorRect, "{?=QQQQ}");
 
 impl MTLOrigin {
     /// The origin `(x, y, 0)` of a 2D texture.
@@ -195,6 +205,8 @@ messages! {
     pub(crate) DRAW_PRIMITIVES: instance MTLRenderCommandEncoder,
         c"drawPrimitives:vertexStart:vertexCount:instanceCount:baseInstance:",
         (usize, usize, usize, usize, usize) -> ();
+    pub(crate) SET_SCISSOR_RECT: instance MTLRenderCommandEncoder, c"setScissorRect:",
+        (MTLScissorRect) -> ();
     pub(crate) END_RENDER_ENCODING: instance MTLRenderCommandEncoder, c"endEncoding", () -> ();
 
     pub(crate) COPY_TEXTURE: instance MTLBlitCommandEncoder,
@@ -209,6 +221,8 @@ messages! {
 
     REPLACE_REGION: instance MTLTexture, c"replaceRegion:mipmapLevel:withBytes:bytesPerRow:",
         (MTLRegion, usize, *const c_void, usize) -> ();
+    GET_BYTES: instance MTLTexture, c"getBytes:bytesPerRow:fromRegion:mipmapLevel:",
+        (*mut c_void, usize, MTLRegion, usize) -> ();
     pub(crate) TEXTURE_WIDTH: instance MTLTexture, c"width", () -> usize;
     pub(crate) TEXTURE_HEIGHT: instance MTLTexture, c"height", () -> usize;
     BUFFER_CONTENTS: instance MTLBuffer, c"contents", () -> *const c_void;
@@ -408,6 +422,31 @@ pub(crate) fn replace_region(
     }
     REPLACE_REGION.send(texture, (region, 0, bytes.as_ptr().cast(), bytes_per_row));
     true
+}
+
+/// A copy of `region` of `texture`, whose pixels are `bytes_per_pixel`
+/// bytes, in rows without padding. Returns `None` when the region leaves
+/// the texture. Call it only for a texture that no GPU work writes.
+pub(crate) fn read_region(
+    texture: &Obj<MTLTexture>,
+    region: MTLRegion,
+    bytes_per_pixel: usize,
+) -> Option<Vec<u8>> {
+    let (origin, size) = (region.origin, region.size);
+    let fits = origin.x.checked_add(size.width) <= Some(TEXTURE_WIDTH.send(texture, ()))
+        && origin.y.checked_add(size.height) <= Some(TEXTURE_HEIGHT.send(texture, ()))
+        && size.depth == 1
+        && origin.z == 0;
+    let row = size.width.checked_mul(bytes_per_pixel)?;
+    let length = row.checked_mul(size.height)?;
+    if !fits {
+        return None;
+    }
+    let mut bytes = vec![0u8; length];
+    // `getBytes` writes `row` bytes for each of the `size.height` rows,
+    // which is the length of `bytes`.
+    GET_BYTES.send(texture, (bytes.as_mut_ptr().cast(), row, region, 0));
+    Some(bytes)
 }
 
 /// A copy of the first `length` bytes of a shared buffer, or `None` when

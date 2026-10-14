@@ -232,8 +232,11 @@ struct PaintState {
     list: Arc<DisplayList>,
     count: usize,
     last_paint: Option<PaintTiming>,
+    first_paint: Option<PaintTiming>,
     displays: usize,
     last_display: Option<std::time::Instant>,
+    /// The sorted draw regions of `list`, for the damage of the next list.
+    regions: choscorui_core::DrawRegions,
     last_damage: Option<choscorui_core::Rect>,
     cursor: choscorui_core::CursorShape,
     drop_formats: Vec<choscorui_core::DragFormat>,
@@ -241,6 +244,16 @@ struct PaintState {
     drag_inside: bool,
     source_operations: choscorui_core::DragOperations,
 }
+
+impl PaintState {
+    /// Counts a finished paint.
+    fn record_paint(&mut self, timing: PaintTiming) {
+        self.count += 1;
+        self.last_paint = Some(timing);
+        self.first_paint.get_or_insert(timing);
+    }
+}
+
 type PaintHandle = Arc<Mutex<PaintState>>;
 static PAINT_STATES: OnceLock<Mutex<HashMap<usize, PaintHandle>>> = OnceLock::new();
 fn window_queues() -> &'static Mutex<HashMap<usize, WindowQueue>> {
@@ -271,9 +284,7 @@ fn view_draw_rect(view: &Obj<ChoscoruiV2ContentView>, dirty: NSRect) {
     };
     if paint::paint_commands(context, dirty, &list) {
         let finished = std::time::Instant::now();
-        let mut paint = paint.lock().unwrap();
-        paint.count += 1;
-        paint.last_paint = Some(PaintTiming {
+        paint.lock().unwrap().record_paint(PaintTiming {
             finished,
             duration: finished - started,
         });
@@ -612,6 +623,7 @@ impl Application {
         if !ffi::is_main_thread() {
             return Err(Error::WrongThread);
         }
+        metal::prepare();
         let _pool = Pool::new()?;
         let application = SHARED_APPLICATION
             .class_send(())?
@@ -700,8 +712,10 @@ impl Application {
             list: Arc::new(DisplayList::new()),
             count: 0,
             last_paint: None,
+            first_paint: None,
             displays: 0,
             last_display: None,
+            regions: choscorui_core::DrawRegions::default(),
             last_damage: None,
             cursor: Default::default(),
             drop_formats: Vec::new(),
@@ -925,6 +939,13 @@ impl Window {
     /// [`Window::last_display`].
     pub fn last_paint(&self) -> Option<PaintTiming> {
         self.paint.lock().unwrap().last_paint
+    }
+
+    /// When the first paint of the window finished and how long it took,
+    /// as for [`Window::last_paint`]. Startup benchmarks use it, because
+    /// later frames may end before the caller looks.
+    pub fn first_paint(&self) -> Option<PaintTiming> {
+        self.paint.lock().unwrap().first_paint
     }
 
     /// The number of Metal frames that reached the display. It stays 0

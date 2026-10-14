@@ -2,10 +2,16 @@
 //! software renderer, and text like the Core Graphics painter. It runs
 //! only with `CHOSCORUI_RUN_MACOS_SMOKE=1`, because it opens windows.
 //!
-//! The window draws at the backing scale of its display, so each run
-//! checks the scales of the connected displays. The text captures of Core
-//! Graphics come from a child process with `CHOSCORUI_PAINTER=core-graphics`,
-//! which also checks the fallback painter.
+//! Each fixture draws through an explicit target at 1x and at 2x, so a
+//! Mac with displays of one scale checks both scales. The window also
+//! paints each fixture at the backing scale of its display. The text
+//! captures of Core Graphics come from a child process with
+//! `CHOSCORUI_PAINTER=core-graphics`, which also checks the fallback
+//! painter.
+//!
+//! Two fixtures draw at a scale that makes the window wider than a
+//! coverage atlas: a path clip of that width, and more path fills than
+//! the atlases that a frame keeps.
 //!
 //! A Mac without a usable Metal device, such as some virtual machines,
 //! reports `gpu_painting` as unsupported. There the test checks that each
@@ -44,17 +50,72 @@ mod smoke {
     use super::CHILD_FLAG;
     use super::parity::{HEIGHT, WIDTH, background, fixtures};
     use choscorui::platform::{Application, CoreTextShaper, Painter, Window, WindowOptions};
+    use choscorui_core::Path;
     use choscorui_core::{
-        Color, DisplayList, FontSlant, FontWeight, Image, Point, Rect, Support, TextRun,
-        TextShaper, TextStyle,
+        Color, DisplayList, FillRule, FontSlant, FontWeight, Image, Paint, Point, Rect, Support,
+        TextRun, TextShaper, TextStyle,
     };
     use choscorui_render::{Raster, compare};
-    use std::path::Path;
     use std::time::{Duration, Instant};
 
     /// The share of pixels that may differ by more than the tolerance.
     const SHARE: f64 = 0.005;
     const TOLERANCE: u8 = 24;
+    /// The scales of the explicit targets.
+    const SCALES: [f64; 2] = [1.0, 2.0];
+    /// A scale that makes the fixture window 2,560 pixels wide, wider
+    /// than the 2,048 samples of a coverage atlas.
+    const LARGE_SCALE: f64 = 40.0;
+
+    /// A polygon through `points`, in points.
+    fn polygon(points: &[(f64, f64)]) -> Path {
+        let points: Vec<Point> = points.iter().map(|&(x, y)| Point::new(x, y)).collect();
+        Path::polygon(&points)
+    }
+
+    /// Fixtures whose coverage needs more than one atlas at
+    /// [`LARGE_SCALE`]. Their paths have few edges, so the software
+    /// renderer draws them fast at that scale.
+    fn large_fixtures() -> Vec<(&'static str, DisplayList)> {
+        let mut out = Vec::new();
+
+        let mut list = background();
+        let diamond = polygon(&[(32.0, 1.0), (63.0, 24.0), (32.0, 47.0), (1.0, 24.0)]);
+        list.push_clip_path(diamond).unwrap();
+        list.fill_rect(
+            Rect::from_xywh(0.0, 0.0, WIDTH, HEIGHT),
+            Color::rgb8(40, 120, 200),
+        );
+        list.fill_path(
+            polygon(&[(20.0, 4.0), (60.0, 10.0), (30.0, 34.0)]),
+            Paint::Solid(Color::rgb8(220, 60, 80)),
+            FillRule::NonZero,
+        )
+        .unwrap();
+        list.pop_clip().unwrap();
+        out.push(("clip-path-wider-than-an-atlas", list));
+
+        let mut list = background();
+        for (index, color) in [
+            Color::rgba8(220, 60, 80, 120),
+            Color::rgba8(40, 160, 90, 120),
+            Color::rgba8(40, 90, 220, 120),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let inset = index as f64 * 3.0;
+            let triangle = polygon(&[
+                (inset, inset),
+                (WIDTH - inset, 2.0 * inset),
+                (2.0 * inset, HEIGHT - inset),
+            ]);
+            list.fill_path(triangle, Paint::Solid(color), FillRule::NonZero)
+                .unwrap();
+        }
+        out.push(("more-paths-than-atlas-slots", list));
+        out
+    }
 
     fn text_fixtures() -> Vec<(&'static str, DisplayList)> {
         let ink = Color::rgba8(20, 24, 36, 255);
@@ -161,6 +222,13 @@ mod smoke {
         window.capture().expect("capture")
     }
 
+    /// Paints `list` in the window, then draws it through a target at
+    /// `scale`.
+    fn capture_at(app: &Application, window: &Window, list: &DisplayList, scale: f64) -> Image {
+        present(app, window, list.clone());
+        window.capture_at_scale(scale).expect("capture")
+    }
+
     pub(super) fn metal_parent() {
         let app = Application::new().expect("AppKit must initialize on the main thread");
         let screens = choscorui::platform::screen_visible_frames().unwrap().len();
@@ -176,7 +244,6 @@ mod smoke {
     /// a line to `failures` for each fixture that differs too much.
     fn check_screen(app: &Application, index: usize, failures: &mut Vec<String>) {
         let window = window(app, index);
-        let scale = window.backing_scale_factor();
         match choscorui::capabilities().gpu_painting {
             Support::Supported => assert_eq!(window.painter(), Painter::Metal),
             Support::Unsupported => {
@@ -184,12 +251,12 @@ mod smoke {
                 println!(
                     "screen {index}: no Metal device, so the window paints with Core Graphics"
                 );
-                fallback_draws(app, &window, scale);
+                fallback_draws(app, &window, window.backing_scale_factor());
                 return;
             }
             other => panic!("gpu_painting must be supported or not, not {other:?}"),
         }
-        let mut check = |name: &str, expected: &[u8], actual: &Image| {
+        let mut check = |name: &str, scale: f64, expected: &[u8], actual: &Image| {
             let (worst, share) =
                 compare(expected, actual.pixels(), TOLERANCE).expect("captures of one size");
             println!("{name} @{scale}x: worst {worst}, share {share:.4}");
@@ -201,17 +268,31 @@ mod smoke {
             }
         };
 
-        for (name, list) in fixtures() {
-            let metal = capture(app, &window, &list);
-            let software = Raster::render(&list, metal.width(), metal.height(), scale).unwrap();
-            check(name, software.pixels(), &metal);
+        let fixtures = fixtures();
+        for scale in SCALES {
+            for (name, list) in &fixtures {
+                let metal = capture_at(app, &window, list, scale);
+                let software = Raster::render(list, metal.width(), metal.height(), scale).unwrap();
+                check(name, scale, software.pixels(), &metal);
+            }
+            backdrop_blur_softens_what_is_beneath(app, &window, scale);
         }
-        backdrop_blur_softens_what_is_beneath(app, &window, scale);
+        for (name, list) in large_fixtures() {
+            let metal = capture_at(app, &window, &list, LARGE_SCALE);
+            let software =
+                Raster::render(&list, metal.width(), metal.height(), LARGE_SCALE).unwrap();
+            check(name, LARGE_SCALE, software.pixels(), &metal);
+        }
 
         let texts = text_fixtures();
-        let metal: Vec<Image> = texts
+        let metal: Vec<(f64, Image)> = SCALES
             .iter()
-            .map(|(_, list)| capture(app, &window, list))
+            .flat_map(|&scale| {
+                let window = &window;
+                texts
+                    .iter()
+                    .map(move |(_, list)| (scale, capture_at(app, window, list, scale)))
+            })
             .collect();
         drop(window);
         let directory =
@@ -225,9 +306,13 @@ mod smoke {
             .status()
             .expect("the Core Graphics child must start");
         assert!(status.success(), "the Core Graphics child failed");
-        for ((name, _), metal) in texts.iter().zip(&metal) {
-            let core_graphics = std::fs::read(directory.join(format!("{name}.rgba"))).unwrap();
-            check(name, &core_graphics, metal);
+        let names = SCALES
+            .iter()
+            .flat_map(|_| texts.iter().map(|(name, _)| *name));
+        for (name, (scale, metal)) in names.zip(&metal) {
+            let file = directory.join(format!("{name}@{scale}x.rgba"));
+            let core_graphics = std::fs::read(file).unwrap();
+            check(name, *scale, &core_graphics, metal);
         }
         std::fs::remove_dir_all(&directory).unwrap();
     }
@@ -254,7 +339,7 @@ mod smoke {
         list.fill_rect(Rect::from_xywh(0.0, 0.0, 32.0, HEIGHT), Color::BLACK);
         list.backdrop_blur(Rect::from_xywh(16.0, 8.0, 32.0, 32.0), 0.0, 4.0)
             .unwrap();
-        let metal = capture(app, window, &list);
+        let metal = capture_at(app, window, &list, scale);
         let width = metal.width() as usize;
         let at = |x: f64, y: f64| ((y * scale) as usize * width + (x * scale) as usize) * 4;
         let pixels = metal.pixels();
@@ -270,14 +355,17 @@ mod smoke {
 
     /// Captures the text fixtures with Core Graphics into `directory`, in a
     /// window on the screen at `screen`.
-    pub(super) fn core_graphics_child(directory: &Path, screen: usize) {
+    pub(super) fn core_graphics_child(directory: &std::path::Path, screen: usize) {
         let app = Application::new().expect("AppKit must initialize on the main thread");
         let window = window(&app, screen);
         assert_eq!(window.painter(), Painter::CoreGraphics);
         assert_eq!(choscorui::capabilities().gpu_painting, Support::Unsupported);
-        for (name, list) in text_fixtures() {
-            let image = capture(&app, &window, &list);
-            std::fs::write(directory.join(format!("{name}.rgba")), image.pixels()).unwrap();
+        for scale in SCALES {
+            for (name, list) in text_fixtures() {
+                let image = capture_at(&app, &window, &list, scale);
+                let file = directory.join(format!("{name}@{scale}x.rgba"));
+                std::fs::write(file, image.pixels()).unwrap();
+            }
         }
     }
 }

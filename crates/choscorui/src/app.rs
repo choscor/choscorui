@@ -3,13 +3,11 @@
 //! restore use. The same source compiles on every target; on a target
 //! without a backend, [`App::start`] returns [`AppError::Unsupported`].
 
-use crate::backend::{Platform, capabilities};
+use crate::backend::{self, Platform};
 use crate::context::{AppContext, Commands, ErrorHandler, Hook, Root};
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{CommandMenu, Env, IntoLive, Live, Storage, View, ViewError};
-use choscorui_core::{
-    BackendCapabilities, DesignTokens, Locale, MenuError, SettingsSchema, Support, WindowOptions,
-};
+use choscorui_core::{DesignTokens, Locale, MenuError, SettingsSchema, Support, WindowOptions};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -442,14 +440,15 @@ impl App {
     /// # Ok::<(), AppError>(())
     /// ```
     pub fn start(self) -> Result<AppContext, AppError> {
-        self.start_on(capabilities())
+        self.start_on(backend::window_support())
     }
 
-    /// Starts the platform of a backend with `capabilities`. A backend
-    /// that cannot show windows, such as the `none` backend of a target
-    /// without a backend, gives [`AppError::Unsupported`].
-    fn start_on(self, capabilities: BackendCapabilities) -> Result<AppContext, AppError> {
-        if capabilities.multiple_windows != Support::Supported {
+    /// Starts the platform of a backend whose `multiple_windows`
+    /// capability is `windows`. A backend that cannot show windows, such
+    /// as the `none` backend of a target without a backend, gives
+    /// [`AppError::Unsupported`].
+    fn start_on(self, windows: Support) -> Result<AppContext, AppError> {
+        if windows != Support::Supported {
             return Err(AppError::Unsupported);
         }
         let platform = Platform::new()?;
@@ -518,7 +517,7 @@ mod tests {
             .window(WindowOptions::new("Hello", 320.0, 200.0), || {
                 Text::new("Hello")
             })
-            .start_on(BackendCapabilities::none("headless"));
+            .start_on(BackendCapabilities::none("headless").multiple_windows);
         assert!(matches!(result, Err(AppError::Unsupported)));
     }
 }

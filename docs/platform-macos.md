@@ -88,7 +88,7 @@ A window uses Core Graphics when one of these conditions is true:
 2. The shader library or a render pipeline does not load.
 3. The environment variable `CHOSCORUI_PAINTER` is `core-graphics`. Use it to find a problem in a painter, and in tests.
 
-When the GPU fails a frame, the window paints with Core Graphics for the rest of its life and paints all of its content again. `Window::painter()` returns the `Painter` of the window: `Painter::Metal` or `Painter::CoreGraphics`. Both painters draw text from the same Core Text glyph runs at the same positions.
+When the GPU fails a frame, the window paints with Core Graphics for the rest of its life and paints all of its content again. The GPU can be gone, so `gpu_painting` then reports unsupported. New windows, and the other Metal windows when they next draw, also use Core Graphics. `Window::painter()` returns the `Painter` of the window: `Painter::Metal` or `Painter::CoreGraphics`. Both painters draw text from the same Core Text glyph runs at the same positions.
 
 The Metal shaders are in a precompiled library in the crate, so the build does not need the Metal toolchain. [CONTRIBUTING.md](../CONTRIBUTING.md) tells how to compile the shaders again after a change.
 
@@ -98,6 +98,7 @@ Other window operations:
 - `set_cursor` sets the pointer shape over the content.
 - `is_occluded` tells you when no part of the window is visible. Pause animations in that case.
 - `capture` renders the content view to an `Image` at the backing scale. With Metal, the GPU draws the current display list again and reads it back.
+- `capture_at_scale` renders the display list to an `Image` at a scale that you give, for example a 2x image on a 1x display. Metal draws it offscreen, and Core Graphics draws it into a bitmap.
 - `geometry`, `set_geometry`, and `screen_visible_frames` save and restore the window placement. See [Settings storage](#settings-storage).
 
 `Window::close` closes the window but keeps the native object. A drop of the `Window` closes it if necessary and releases the native object once. `Application::window_count` returns the number of native windows that AppKit still has.

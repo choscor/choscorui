@@ -1,19 +1,20 @@
-//! Records a [`Plan`] into a command buffer: coverage passes first, then
-//! the frame, its opacity groups, and its blurs in list order.
+//! Records a [`Plan`] into a command buffer: the coverage passes of the
+//! first atlases, then the frame, its opacity groups, its blurs, and the
+//! coverage passes of later atlases in list order.
 
-use super::coverage::{ATLAS_SIZE, EDGE_WORDS};
-use super::plan::{BlurPass, Op, Plan, Source, Target};
+use super::coverage::{ATLAS_SIZE, EDGE_WORDS, PixelBox};
+use super::plan::{ATLAS_LIMIT, BlurPass, Op, Plan, Source, Target};
 use super::{COLOR_FORMAT, Gpu};
 use crate::ffi::Obj;
 use crate::ffi::metal::{
     BLIT_ENCODER, COPY_TEXTURE, DRAW_PRIMITIVES, END_BLIT_ENCODING, END_RENDER_ENCODING,
     LOAD_ACTION_CLEAR, LOAD_ACTION_DONT_CARE, LOAD_ACTION_LOAD, MTLBuffer, MTLClearColor,
-    MTLCommandBuffer, MTLOrigin, MTLRenderCommandEncoder, MTLSize, MTLTexture, PASS_ATTACHMENT_AT,
-    PASS_COLOR_ATTACHMENTS, PIXEL_FORMAT_R16_FLOAT, PIXEL_FORMAT_RGBA8, PRIMITIVE_TRIANGLE,
-    PRIMITIVE_TRIANGLE_STRIP, RENDER_ENCODER, RENDER_PASS_DESCRIPTOR, SET_ATTACHMENT_TEXTURE,
-    SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER, SET_FRAGMENT_SAMPLER, SET_FRAGMENT_TEXTURE,
-    SET_LOAD_ACTION, SET_PIPELINE, SET_STORE_ACTION, SET_VERTEX_BUFFER, STORE_ACTION_STORE,
-    new_buffer, set_fragment_ints, set_vertex_floats,
+    MTLCommandBuffer, MTLOrigin, MTLRenderCommandEncoder, MTLScissorRect, MTLSize, MTLTexture,
+    PASS_ATTACHMENT_AT, PASS_COLOR_ATTACHMENTS, PIXEL_FORMAT_R16_FLOAT, PIXEL_FORMAT_RGBA8,
+    PRIMITIVE_TRIANGLE, PRIMITIVE_TRIANGLE_STRIP, RENDER_ENCODER, RENDER_PASS_DESCRIPTOR,
+    SET_ATTACHMENT_TEXTURE, SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER, SET_FRAGMENT_SAMPLER,
+    SET_FRAGMENT_TEXTURE, SET_LOAD_ACTION, SET_PIPELINE, SET_SCISSOR_RECT, SET_STORE_ACTION,
+    SET_VERTEX_BUFFER, STORE_ACTION_STORE, new_buffer, set_fragment_ints, set_vertex_floats,
 };
 use crate::ffi::retained::Retained;
 use std::collections::HashMap;
@@ -27,6 +28,7 @@ pub(super) struct Targets {
     size: (usize, usize),
     frame: Option<Retained<MTLTexture>>,
     groups: Vec<Retained<MTLTexture>>,
+    /// The coverage atlas texture slots, at most [`ATLAS_LIMIT`].
     atlases: Vec<Retained<MTLTexture>>,
     blurs: HashMap<(usize, usize), [Retained<MTLTexture>; 2]>,
     empty_color: Option<Retained<MTLTexture>>,
@@ -43,8 +45,8 @@ impl Targets {
         }
     }
 
-    /// Releases the coverage atlases past the first after a frame that
-    /// needed more of them.
+    /// Releases the coverage atlas slots past the first after a frame
+    /// that needed more of them.
     fn trim(&mut self) {
         self.atlases.truncate(1);
     }
@@ -65,6 +67,9 @@ fn texture_in(
 struct Pass {
     encoder: Retained<MTLRenderCommandEncoder>,
     target: Target,
+    /// The scissor box that the pass has, or `None` for the whole
+    /// target.
+    scissor: Option<PixelBox>,
 }
 
 struct Encoder<'a> {
@@ -76,7 +81,7 @@ struct Encoder<'a> {
     clips: Retained<MTLBuffer>,
     frame: Retained<MTLTexture>,
     groups: Vec<Retained<MTLTexture>>,
-    atlases: Vec<Option<Retained<MTLTexture>>>,
+    atlases: Vec<Retained<MTLTexture>>,
     blur_results: Vec<Option<Retained<MTLTexture>>>,
     empty_color: Retained<MTLTexture>,
     empty_coverage: Retained<MTLTexture>,
@@ -110,20 +115,13 @@ pub(super) fn encode(
         let group = gpu.target_texture(COLOR_FORMAT, plan.width, plan.height)?;
         targets.groups.push(group);
     }
-    let used_atlases = used_atlases(plan);
-    let mut atlases = Vec::with_capacity(plan.edges.len());
-    for (index, used) in used_atlases.iter().enumerate() {
-        if !used {
-            atlases.push(None);
-            continue;
-        }
-        while targets.atlases.len() <= index {
-            let size = ATLAS_SIZE as usize;
-            let atlas = gpu.target_texture(PIXEL_FORMAT_R16_FLOAT, size, size)?;
-            targets.atlases.push(atlas);
-        }
-        atlases.push(Some(targets.atlases[index].clone()));
+    let slots = atlas_slots(plan);
+    while targets.atlases.len() < slots {
+        let size = ATLAS_SIZE as usize;
+        let atlas = gpu.target_texture(PIXEL_FORMAT_R16_FLOAT, size, size)?;
+        targets.atlases.push(atlas);
     }
+    let atlases = targets.atlases[..slots].to_vec();
     let empty_color = texture_in(&mut targets.empty_color, || {
         gpu.upload_texture(PIXEL_FORMAT_RGBA8, 1, 1)
     })?
@@ -151,18 +149,32 @@ pub(super) fn encode(
         frame_started: false,
         clear_groups: vec![false; plan.groups as usize + 1],
     };
-    encoder.coverage()?;
+    // The first atlas of each slot needs no draw before it, so its
+    // coverage pass goes first and does not split the frame pass.
+    for op in &plan.ops {
+        if let Op::Coverage(atlas) = *op
+            && atlas < ATLAS_LIMIT
+        {
+            encoder.coverage(atlas)?;
+        }
+    }
     for op in &plan.ops {
         match *op {
             Op::Draw {
                 target,
                 source,
                 coverage,
+                scissor,
                 first,
                 count,
-            } => encoder.draw(target, source, coverage, first, count)?,
+            } => encoder.draw(target, source, coverage, scissor, first, count)?,
             Op::ClearGroup(depth) => encoder.clear_groups[depth as usize] = true,
             Op::Blur(index) => encoder.blur(targets, index)?,
+            Op::Coverage(atlas) if atlas >= ATLAS_LIMIT => {
+                encoder.end_pass();
+                encoder.coverage(atlas)?;
+            }
+            Op::Coverage(_) => {}
         }
     }
     encoder.end_pass();
@@ -177,26 +189,24 @@ pub(super) fn encode(
         DRAW_PRIMITIVES.send(&pass, (PRIMITIVE_TRIANGLE, 0, 3, 1, 0));
         END_RENDER_ENCODING.send(&pass, ());
     }
-    if used_atlases.len() > 1 {
+    if slots > 1 {
         targets.trim();
     }
     Some(())
 }
 
-/// Which coverage atlases the draws of `plan` read.
-fn used_atlases(plan: &Plan) -> Vec<bool> {
-    let mut used = vec![false; plan.edges.len()];
-    for op in &plan.ops {
-        if let Op::Draw {
-            coverage: Some(atlas),
-            ..
-        } = op
-            && let Some(slot) = used.get_mut(*atlas as usize)
-        {
-            *slot = true;
-        }
-    }
-    used
+/// The coverage atlas texture slots that `plan` uses.
+fn atlas_slots(plan: &Plan) -> usize {
+    let atlases = plan
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            Op::Coverage(atlas) => Some(atlas + 1),
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0);
+    atlases.min(ATLAS_LIMIT) as usize
 }
 
 /// A render pass into `texture` with `load` for its one attachment.
@@ -216,28 +226,29 @@ fn begin_render(
 }
 
 impl Encoder<'_> {
-    /// Adds the edges of each used atlas into it.
-    fn coverage(&mut self) -> Option<()> {
-        for (index, atlas) in self.atlases.iter().enumerate() {
-            let Some(atlas) = atlas else {
-                continue;
-            };
-            let pass = begin_render(self.command_buffer, atlas, LOAD_ACTION_CLEAR)?;
-            let edges = &self.plan.edges[index];
-            if !edges.is_empty() {
-                let words: Vec<u32> = edges.iter().map(|value| value.to_bits()).collect();
-                let buffer = new_buffer(&self.gpu.device, &words)?;
-                SET_PIPELINE.send(&pass, (&self.gpu.edges,));
-                SET_VERTEX_BUFFER.send(&pass, (Some(&*buffer), 0, 0));
-                SET_FRAGMENT_BUFFER.send(&pass, (Some(&*buffer), 0, 0));
-                let size = ATLAS_SIZE as f32;
-                set_vertex_floats(&pass, &[size, size], 1);
-                let count = edges.len() / EDGE_WORDS;
-                DRAW_PRIMITIVES.send(&pass, (PRIMITIVE_TRIANGLE_STRIP, 0, 4, count, 0));
-            }
-            END_RENDER_ENCODING.send(&pass, ());
+    /// Adds the edges of `atlas` into its texture slot.
+    fn coverage(&mut self, atlas: u32) -> Option<()> {
+        let texture = self.slot(atlas)?;
+        let pass = begin_render(self.command_buffer, texture, LOAD_ACTION_CLEAR)?;
+        let edges = self.plan.edges.get(atlas as usize)?;
+        if !edges.is_empty() {
+            let words: Vec<u32> = edges.iter().map(|value| value.to_bits()).collect();
+            let buffer = new_buffer(&self.gpu.device, &words)?;
+            SET_PIPELINE.send(&pass, (&self.gpu.edges,));
+            SET_VERTEX_BUFFER.send(&pass, (Some(&*buffer), 0, 0));
+            SET_FRAGMENT_BUFFER.send(&pass, (Some(&*buffer), 0, 0));
+            let size = ATLAS_SIZE as f32;
+            set_vertex_floats(&pass, &[size, size], 1);
+            let count = edges.len() / EDGE_WORDS;
+            DRAW_PRIMITIVES.send(&pass, (PRIMITIVE_TRIANGLE_STRIP, 0, 4, count, 0));
         }
+        END_RENDER_ENCODING.send(&pass, ());
         Some(())
+    }
+
+    /// The texture slot of `atlas`.
+    fn slot(&self, atlas: u32) -> Option<&Retained<MTLTexture>> {
+        self.atlases.get((atlas % ATLAS_LIMIT) as usize)
     }
 
     fn target_texture(&self, target: Target) -> &Retained<MTLTexture> {
@@ -276,7 +287,11 @@ impl Encoder<'_> {
         SET_FRAGMENT_BUFFER.send(&encoder, (Some(&*self.clips), 0, 3));
         SET_FRAGMENT_SAMPLER.send(&encoder, (Some(&*self.gpu.linear), 0));
         SET_FRAGMENT_SAMPLER.send(&encoder, (Some(&*self.gpu.nearest), 1));
-        self.pass = Some(Pass { encoder, target });
+        self.pass = Some(Pass {
+            encoder,
+            target,
+            scissor: None,
+        });
         Some(())
     }
 
@@ -285,6 +300,7 @@ impl Encoder<'_> {
         target: Target,
         source: Source,
         coverage: Option<u32>,
+        scissor: PixelBox,
         first: u32,
         count: u32,
     ) -> Option<()> {
@@ -303,9 +319,23 @@ impl Encoder<'_> {
             Source::Blur(index) => self.blur_results[index as usize].as_ref()?,
         };
         let coverage = coverage
-            .and_then(|atlas| self.atlases.get(atlas as usize)?.as_ref())
+            .and_then(|atlas| self.atlases.get((atlas % ATLAS_LIMIT) as usize))
             .unwrap_or(&self.empty_coverage);
-        let encoder = &self.pass.as_ref()?.encoder;
+        let pass = self.pass.as_mut()?;
+        let encoder = &pass.encoder;
+        if pass.scissor != Some(scissor) {
+            // The plan keeps each scissor box inside the frame, and the
+            // group textures have the size of the frame.
+            let [left, top, right, bottom] = scissor.map(|v| v.max(0) as usize);
+            let rect = MTLScissorRect {
+                x: left,
+                y: top,
+                width: right.saturating_sub(left),
+                height: bottom.saturating_sub(top),
+            };
+            SET_SCISSOR_RECT.send(encoder, (rect,));
+            pass.scissor = Some(scissor);
+        }
         SET_FRAGMENT_TEXTURE.send(encoder, (Some(&**source), 0));
         SET_FRAGMENT_TEXTURE.send(encoder, (Some(&**coverage), 1));
         DRAW_PRIMITIVES.send(

@@ -180,6 +180,7 @@ impl ObjectHandler<MTLCommandBuffer> for Completed {
         shared.in_flight.fetch_sub(1, Ordering::AcqRel);
         let failed = COMMAND_BUFFER_STATUS.send(buffer, ()) == COMMAND_BUFFER_STATUS_ERROR;
         if failed {
+            super::lose();
             if !shared.failed.swap(true, Ordering::AcqRel) {
                 let window = shared.window;
                 // Without an application, no window remains to repaint.
@@ -194,9 +195,7 @@ impl ObjectHandler<MTLCommandBuffer> for Completed {
         } else {
             Instant::now()
         };
-        let mut paint = paint.lock().unwrap();
-        paint.count += 1;
-        paint.last_paint = Some(PaintTiming {
+        paint.lock().unwrap().record_paint(PaintTiming {
             finished,
             duration: finished.saturating_duration_since(started),
         });
@@ -365,6 +364,9 @@ pub(crate) fn display_link_fired(
 /// and runs the display link only while a frame waits.
 fn drive(window: usize) {
     let Some(gpu) = gpu() else {
+        // A command buffer of some window failed, and the GPU may be gone,
+        // so each Metal window moves to Core Graphics when it next draws.
+        fall_back(window);
         return;
     };
     let failed = SURFACES.with(|surfaces| {
@@ -439,7 +441,11 @@ enum Frame {
 /// The size of the view's backing store in pixels, and the scale.
 fn backing_size(view: &Obj<NSView>) -> Option<((usize, usize), f64)> {
     let window = VIEW_WINDOW.send(view, ())?;
-    let scale = BACKING_SCALE_FACTOR.send(window, ());
+    view_size(view, BACKING_SCALE_FACTOR.send(window, ()))
+}
+
+/// The pixel size of `view` at `scale` pixels per point, and the scale.
+fn view_size(view: &Obj<NSView>, scale: f64) -> Option<((usize, usize), f64)> {
     let bounds = BOUNDS.send(view, ());
     let width = (bounds.size.width * scale).round();
     let height = (bounds.size.height * scale).round();
@@ -483,7 +489,9 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
     let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) else {
         return Frame::Failed;
     };
-    if encode(gpu, &mut surface.targets, &plan, &command_buffer, texture).is_none() {
+    let encoded = encode(gpu, &mut surface.targets, &plan, &command_buffer, texture);
+    plan::recycle(plan);
+    if encoded.is_none() {
         return Frame::Failed;
     }
     let drawable = drawable.as_drawable();
@@ -523,23 +531,31 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
 /// it back as straight-alpha sRGB pixels at the backing scale. Returns
 /// `None` when the window paints with Core Graphics. A capture is not a
 /// paint.
-pub(crate) fn capture(window: usize) -> Option<Result<Image, ImageError>> {
+/// Draws the display list of the Metal surface of `window` offscreen, at
+/// `scale` pixels per point or at the backing scale. `None` means that
+/// the window does not paint with Metal.
+pub(crate) fn capture(window: usize, scale: Option<f64>) -> Option<Result<Image, ImageError>> {
     let gpu = gpu()?;
     SURFACES.with(|surfaces| {
         let mut surfaces = surfaces.borrow_mut();
         let surface = surfaces.get_mut(&window)?;
-        Some(read_back(gpu, surface).ok_or(ImageError::DecodeFailed))
+        Some(read_back(gpu, surface, scale).ok_or(ImageError::DecodeFailed))
     })
 }
 
-fn read_back(gpu: &Gpu, surface: &mut Surface) -> Option<Image> {
+fn read_back(gpu: &Gpu, surface: &mut Surface, scale: Option<f64>) -> Option<Image> {
     let _pool = Pool::new().ok()?;
-    let ((width, height), scale) = backing_size(&surface.view)?;
+    let ((width, height), scale) = match scale {
+        Some(scale) => view_size(&surface.view, scale)?,
+        None => backing_size(&surface.view)?,
+    };
     let list = Arc::clone(&surface.paint.lock().unwrap().list);
     let plan = plan::build(gpu, &list, width, height, scale);
     let texture = gpu.target_texture(COLOR_FORMAT, width, height)?;
     let command_buffer = COMMAND_BUFFER.send(&gpu.queue, ())?;
-    encode(gpu, &mut surface.targets, &plan, &command_buffer, &texture)?;
+    let encoded = encode(gpu, &mut surface.targets, &plan, &command_buffer, &texture);
+    plan::recycle(plan);
+    encoded?;
     let row = width * 4;
     let length = row * height;
     let buffer = NEW_BUFFER_WITH_LENGTH.send(&gpu.device, (length, RESOURCE_STORAGE_SHARED))?;

@@ -52,6 +52,7 @@ None of these sources measures GPU against CPU rasterization directly. The desig
 | Q9 | Rollout: replace Core Graphics as the default window painter in one change | settled | Follows from Q6 |
 | Q10 | 8.3 ms p95 for scroll, resize, views, theme; document stays ≤ 33 ms | settled | User answer |
 | Q11 | 2026-10-14: the 8.3 ms budgets measure frame cost to the GPU end time; the bench reports the on-display latency (`presentedTime`) without a budget, and display sync stays on | settled | Maintainer decision |
+| Q12 | 2026-10-14: capture re-renders the current display list offscreen on Metal, because `framebufferOnly` is YES | settled | Maintainer decision |
 | D1 | Path rasterization technique (CPU flattening plus stencil-then-cover, or tessellation) | deferred | Minor: the implementer chooses; parity tests bound the result |
 | D2 | Atlas packing, instance-buffer layout, number of pipelines | deferred | Minor: internal; bench budgets and parity bound the result |
 
@@ -99,9 +100,9 @@ None of these sources measures GPU against CPU rasterization directly. The desig
 - When a command buffer fails or the device is removed (an external GPU on Intel), the window switches to Core Graphics for the rest of its life and schedules a full repaint. No panic, and no lost frame beyond the failed one.
 - Add `Window::painter() -> Painter`, where `Painter` is a `#[non_exhaustive]` enum with `Metal` and `CoreGraphics`. It reports the active painter of that window. Expose it through `choscorui::platform` as for the other window types.
 - `capabilities().gpu_painting` is `Supported` when a Metal device and pipelines exist and the override is absent. Otherwise it is `Unsupported`. Branch on it, not on the OS.
-- `Window::capture` returns the presented Metal frame when the painter is Metal, read back from the last rendered texture, with straight-alpha sRGB pixels as today. When the painter is Core Graphics, it keeps today's behavior.
+- `Window::capture` re-renders the current display list offscreen when the painter is Metal, because `framebufferOnly` is YES and the drawable cannot be read (Q12). It returns straight-alpha sRGB pixels as today. When the painter is Core Graphics, it keeps today's behavior.
 - `MacBitmap` and `Scene::export` keep Core Graphics. Offscreen export is out of scope.
-- `Window::last_paint` and `PaintTiming` end each sample at the drawable's presented time (`addPresentedHandler:` / `presentedTime`) for Metal, and at `drawRect:` completion for Core Graphics. The bench keeps using `Window::last_paint`.
+- `Window::last_paint` and `PaintTiming` end each sample at the GPU end time of the frame (`addCompletedHandler:` / `GPUEndTime`) for Metal, and at `drawRect:` completion for Core Graphics (Q11). The presented time (`addPresentedHandler:` / `presentedTime`) goes to `Window::last_display`. The bench keeps using `Window::last_paint`.
 
 ### R6. Budgets and docs (Q8, Q10)
 
