@@ -801,8 +801,8 @@ shows work of unknown length while the value is `None`.
   `digits` shows as dashes, and `overflow` is true.
 - **Look.** `paint` draws the `NumericDisplay` box: the input border, radius
   lg, and 12 pt padding. Lit segments use the `Value` color, `foreground`.
-  Unlit segments use the `Track` color, `muted`. Keyboard focus adds the
-  focus ring.
+  Unlit segments use the `Track` color, `muted`. Only a counter takes
+  focus, so only a counter shows the focus ring, while focus is visible.
 - In a control host, `NumericDisplay::hosted` adds the name. The hosted
   node does not take focus. It takes and reports the value as `Text` with
   the decimal digits, so that each `i64` value stays exact. It also takes
@@ -810,7 +810,7 @@ shows work of unknown length while the value is `None`.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Box | `Root` | input box: `input` border, shadow xs, radius lg, 12 pt padding; focus ring while focus is visible |
+| Box | `Root` | input box: `input` border, shadow xs, radius lg, 12 pt padding; focus ring on a counter while focus is visible |
 | Lit segment | `Value` | `foreground`, xl2 medium mono text |
 | Unlit segment | `Track` | `muted` |
 
@@ -2381,7 +2381,9 @@ behavior.
 
 - **Button keys.** Enter triggers the `Accept` button and Escape triggers
   the `Reject` button (`dialog_key_button`). Enter never triggers a
-  `Destructive` button.
+  `Destructive` button. Without a button of that role,
+  `dialog_key_button` returns `None`. The hosted alert then uses the
+  fallbacks that follow.
 - **Button order.** `order_dialog_buttons` follows macOS. Help is at the
   far left, then Discard, a flexible gap, other actions, Reject, and the
   default button.
@@ -3486,6 +3488,11 @@ false.
   the pointer leaves the link and the panel. Focus loss closes it, but
   not while the pointer is on it. A disabled hover card ignores the
   pointer.
+- Escape closes an open hover card and emits `Dismissed`. The card then
+  stays closed until the pointer comes back or the link gets focus
+  again. A press outside the card closes it with no message and goes on
+  to the control under the pointer.
+- Only keyboard focus opens a hover card. Focus from a click does not.
 - `with_size` sets the trigger size: `Xs`, `Sm`, `Default`, or `Lg`.
 - **In a view.** The `hover_card` view modifier shows view content in a
   `HoverCard` panel with the same delays. See the
