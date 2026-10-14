@@ -190,7 +190,7 @@ changes as `ControlMessage` values:
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
 | `ColorPicker` | `Changed(Text)` with the hex value, `Activated` on Enter | `Text` with a hex value |
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu | - |
-| `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Dismissed` when a panel closes | - |
+| `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
 | `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
 | `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle; `active` names that handle | `Number` |
 | `HostedStack` | - | `Index(Some(page))` |
@@ -2518,52 +2518,82 @@ default text and the sections at the end. It has no binding.
 
 ### DockLayout
 
-- `close` hides a closable panel and remembers its place. It returns the
-  panel that gets focus next. A panel that is not closable fails.
+- `close` hides a closable panel and remembers its area and group, or its
+  floating frame. It returns the panel that gets focus next. A panel that
+  is not closable fails.
 - `show` restores a hidden panel at its place and makes it active.
 - `dock` moves a panel and makes it visible and active.
 - **Splitter keys.** The arrow keys move the area's edge by 10 points in
   the arrow's direction. For example, ArrowRight grows the left area.
-- Home shrinks the area to 80 points. End does nothing.
-- `arrange` keeps the center at least 80 points wide and high.
-- `save` and `restore` keep the layout as text. `restore` reports unknown
-  keys and changes nothing on an error.
+- Home shrinks the area to 80 points. End grows the area to the largest
+  extent that the dock shows.
+- `arrange` keeps the center at least 80 points wide and high. In a
+  control host, `set_extent`, a drag, and the keys stop at the largest
+  extent that `arrange` shows. The opposite area keeps its extent.
+- A floating rectangle is relative to the origin of the bounds.
+  `arrange` moves and shrinks it to stay inside the bounds.
+  `floating_content` returns the part below its title bar.
+- `save` and `restore` keep the layout as text, with the place of each
+  hidden panel. `restore` reports unknown keys and changes nothing on an
+  error.
 - **Look.** `paint` draws each group with the `Dock` frame, a `card` fill
-  and a `border` outline, and a line-variant `Tabs` bar. The active tab is underlined. Splitters use
-  the `Resizable` handle. `DockFocus` names the part that rings.
+  and a `border` outline, and a line-variant `Tabs` bar. The active tab is
+  underlined. A closable panel's tab has a close button at its end.
+  Splitters use the `Resizable` handle. A floating panel has the popover
+  surface and its title as one tab. `DockFocus` names the part that rings.
 - `GroupFrame::tab_rect` shares the tab bar equally, in reading order.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
 | Frame | `Dock` `Root` | `card` fill, `card-foreground` text, 1 pt `border` outline |
 | Tab bar | `Tabs` `Trigger`, `Indicator`, `Line` | line-variant tabs |
+| Close button | `Dock` `Close` | ghost icon button, 12 pt X icon |
+| Floating panel | `Dock` `Panel` | popover surface, md radius, md shadow |
+| Drop target | `Dock` `Indicator` | `primary` fill at 15%, 1 pt `primary` border |
 | Splitter | `Resizable` `Handle` | the resizable handle, with its cursor |
 
 | Field | `DockLayout::panel_semantics` | `DockLayout::splitter_semantics` |
 | --- | --- | --- |
 | Role | `TabPanel` (AXGroup) | `Slider` (AXSlider) |
-| Name / value | panel title / - | area name and "panel size" / extent in points |
+| Name / value | panel title / - | area name and "panel size" / extent in points that the dock shows |
 | State | selected when active; the description is "Floating" for a floating panel | - |
 | Actions | `Focus`, and `Dismiss` when closable | `Increment`, `Decrement` |
 
 **In a control host.** The dock's node covers its whole area. It paints
-the frames, the tab bars, and the splitters. The view layer places the
-center and the panel contents in the frames of `arrange` for the node's
-bounds. Each group and each splitter is a tab stop, and Tab moves between
-them. The tabs and the splitters show hover and press. A press or the
-arrow keys select a tab and send
-`ItemActivated(panel)`, with the `PanelId` number. A splitter drag, the
-splitter keys, and `Increment` or `Decrement` send
-`Changed(Number(extent))`. A double click on a splitter collapses the
-area to its 80 pt minimum, and the next double click restores the extent.
-`Dismiss` closes the focused panel and sends `Dismissed`. The node's semantics are those of the focused tab's panel or
-splitter.
+the frames, the tab bars, the splitters, and the floating panels. A
+floating panel is above the docked groups, and the last pressed floating
+panel is on top.
+
+- **Tab stops.** The active tab of each group and each splitter are tab
+  stops in reading order, by their position. Each floating panel follows
+  them. Tab moves between the stops.
+- **Tabs.** A press or the arrow keys select a tab and send
+  `ItemActivated(panel)`, with the `PanelId` number. A press on a
+  floating panel selects it.
+- **Close.** A click on the close button, Cmd+W, or `Dismiss` closes the
+  focused closable panel and sends `Dismissed`.
+- **Tab drag.** A drag of a tab, or of the title bar of a floating panel,
+  shows the drop target under the pointer. An edge zone of 24 points
+  starts a new group in that area. A group adds the panel as a tab.
+  Another place makes a floatable panel float under the pointer. The drop
+  sends `Changed(Text)` with the `save` text. Escape cancels the drag.
+- **Splitters.** A splitter drag, the splitter keys, and `Increment` or
+  `Decrement` send `Changed(Number(extent))`. Escape during a drag
+  restores the extent from the press. A double click on a splitter
+  collapses the area to its 80 pt minimum, and the next double click
+  restores the extent.
+- The tabs, the close buttons, and the splitters show hover and press.
+- The node's semantics are those of the focused panel or splitter.
 
 **As a view.** `Dock::new(layout)` mounts the `DockLayout` that `layout`
 makes from the environment. `on_item` receives the id of an activated panel.
-`on_dismiss` runs when a panel closes.
+`on_dismiss` runs when a panel closes. The view paints the dock only, and
+it does not place panel content. To show content, wrap the `DockLayout`
+in a `CustomControl` and paint with `DockLayout::paint_hosted`. It calls
+back with the content rectangle of each shown panel, in paint order.
 
-[shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
+[shell.rs](../crates/choscorui-controls/tests/shell.rs) and
+[dock.rs](../crates/choscorui-controls/tests/dock.rs) pin this behavior.
 
 ### FocusFrame and SizeGrip
 

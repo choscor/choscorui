@@ -2544,14 +2544,24 @@ PopClip
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## dock
 sizes default
-slot root: root track range thumb indicator icon label content header description footer trigger value placeholder item-indicator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot root: root track range thumb icon label content header description footer trigger value placeholder item-indicator shortcut group group-label overlay handle caption cell row header-cell media fallback badge input addon text ellipsis link previous next day weekday legend error viewport scrollbar bar avatar choice progress
+slot indicator: indicator
 slot title: title
 slot action: action item
 slot separator: separator
+slot close: close
+slot panel: panel
 ### dock default default root
 # rest
 fill-rect 10,10 120x36 #ffffffff
 stroke 10.5,10.5 119x35 r0 w1 #e5e5e5ff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### dock default default indicator
+# rest
+fill 10,10 120x36 r6 #17171726
+stroke 10.5,10.5 119x35 r5.5 w1 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
@@ -2597,4 +2607,39 @@ stroke-path M27.333333333333332,12 L20,19.333333333333332 L16.666666666666668,16
 PushClip(Rect { origin: Point { x: 14.0, y: 6.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 14,20.9 system-ui 14 w400 t0 #0a0a0aff
 PopClip
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### dock default default close
+# rest
+stroke-path M20,19 L14.5,24.5 L12,22 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,26.9 system-ui 14 w500 t0 #0a0a0aff
+# hovered
+fill 10,10 24x24 r8 #f5f5f5ff
+stroke-path M20,19 L14.5,24.5 L12,22 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,26.9 system-ui 14 w500 t0 #0a0a0aff
+# pressed
+stroke-path M20,20 L14.5,25.5 L12,23 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,27.9 system-ui 14 w500 t0 #0a0a0aff
+# focus-visible
+stroke 8.5,8.5 27x27 r9.5 w3 #a1a1a180
+stroke 10.5,10.5 23x23 r7.5 w1 #a1a1a1ff
+stroke-path M20,19 L14.5,24.5 L12,22 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,26.9 system-ui 14 w500 t0 #0a0a0aff
+# disabled
+opacity 0.5 {
+stroke-path M20,19 L14.5,24.5 L12,22 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,26.9 system-ui 14 w500 t0 #0a0a0aff
+}
+# open
+fill 10,10 24x24 r8 #f5f5f5ff
+stroke-path M20,19 L14.5,24.5 L12,22 #0a0a0aff w1 Round Round dash[]
+text "…" at 22,26.9 system-ui 14 w500 t0 #0a0a0aff
+= rest: focused invalid checked indeterminate selected highlighted
+### dock default default panel
+# rest
+shadow 10,10 120x36 r8 offset 0,4 blur6 spread-1 #0000001a
+shadow 10,10 120x36 r8 offset 0,2 blur4 spread-2 #0000001a
+stroke 9.5,9.5 121x37 r8.5 w1 #0a0a0a1a
+fill 10,10 120x36 r8 #ffffffff
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted

@@ -438,6 +438,22 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
             style.gap = cx.sp(3.0);
             style
         }
+        // A floating panel: the popover surface.
+        (ControlKind::Dock, Slot::Panel) => surface(cx, RadiusScale::Md),
+        // The drop target of a tab drag.
+        (ControlKind::Dock, Slot::Indicator) => {
+            let mut style = cx.base();
+            style.background = cx.a(ColorRole::Primary, 0.15).into();
+            style.border = cx.c(ColorRole::Primary);
+            style.border_width = cx.t.border_width;
+            style.radius = Corners::all(cx.r(RadiusScale::Sm));
+            style
+        }
+        (ControlKind::Dock, Slot::Close) => {
+            let mut style = super::form::button(cx, ButtonVariant::Ghost, ControlSize::IconXs);
+            style.icon_size = 12.0;
+            style
+        }
         (ControlKind::Dock, _) => {
             let mut style = cx.base();
             style.background = cx.c(ColorRole::Card).into();

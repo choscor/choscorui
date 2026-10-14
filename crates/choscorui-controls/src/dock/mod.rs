@@ -6,16 +6,12 @@
 //! provided. Documents use tabs in the central area or separate native
 //! windows, which is what macOS users expect.
 
-use crate::SplitOrientation;
-use crate::hosted::Parts;
-use crate::style::fill_area;
-use crate::style::{
-    ControlKind, PaintContext, Slot, StyleQuery, TabsVariant, TextAlign, VisualState,
-};
+mod host;
+
 use choscorui_core::{
-    EventReply, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    Key, Localizer, Point, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
+use host::HostState;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -434,16 +430,73 @@ impl DockLayout {
         self.areas[area.index()].extent
     }
 
-    /// Sets an area's width (left/right) or height (top/bottom). It is
-    /// clamped during `arrange` so the center keeps `MIN_EXTENT`.
+    /// Sets an area's width (left/right) or height (top/bottom). In a
+    /// control host the extent is clamped to the largest value that
+    /// `arrange` can show in the last bounds. `arrange` also clamps it, so
+    /// that the center keeps `MIN_EXTENT`.
     pub fn set_extent(&mut self, area: DockArea, extent: f64) {
         if extent.is_finite() {
-            self.areas[area.index()].extent = extent.max(MIN_EXTENT);
+            self.areas[area.index()].extent = extent.min(self.limit(area)).max(MIN_EXTENT);
         }
     }
 
-    /// Keyboard resizing of an area's splitter (arrows by 10 points,
-    /// Home = minimum). Returns whether the extent changed.
+    /// The largest extent of `area` that `arrange` shows in the bounds of
+    /// the last host arrange, with the opposite area kept as it shows.
+    /// Infinite before a host arranges the dock.
+    fn limit(&self, area: DockArea) -> f64 {
+        let bounds = self.hosted.bounds;
+        if bounds.size.width <= 0.0 || bounds.size.height <= 0.0 {
+            return f64::INFINITY;
+        }
+        let (length, opposite) = match area {
+            DockArea::Left => (bounds.size.width, DockArea::Right),
+            DockArea::Right => (bounds.size.width, DockArea::Left),
+            DockArea::Top => (bounds.size.height, DockArea::Bottom),
+            DockArea::Bottom => (bounds.size.height, DockArea::Top),
+        };
+        let other = if self.areas[opposite.index()].groups.is_empty() {
+            0.0
+        } else {
+            self.extents(bounds)[opposite.index()] + SPLITTER
+        };
+        (length - MIN_EXTENT - SPLITTER - other).max(MIN_EXTENT)
+    }
+
+    /// The extent that `arrange` shows for each area in `bounds`, by area
+    /// index. An empty area shows nothing.
+    fn extents(&self, bounds: Rect) -> [f64; 4] {
+        let mut center = bounds;
+        let mut shown = [0.0; 4];
+        for area in ARRANGE_ORDER {
+            if self.areas[area.index()].groups.is_empty() {
+                continue;
+            }
+            let available = if area.horizontal() {
+                center.size.width
+            } else {
+                center.size.height
+            } - MIN_EXTENT
+                - SPLITTER;
+            let extent = self.areas[area.index()].extent.min(available).max(0.0);
+            shown[area.index()] = extent;
+            center = split_edge(center, area, extent).2;
+        }
+        shown
+    }
+
+    /// The extent of `area` as the last host arrange shows it, or the set
+    /// extent before a host arranges the dock.
+    fn shown_extent(&self, area: DockArea) -> f64 {
+        if self.limit(area).is_finite() && !self.areas[area.index()].groups.is_empty() {
+            self.extents(self.hosted.bounds)[area.index()]
+        } else {
+            self.extent(area)
+        }
+    }
+
+    /// Keyboard resizing of an area's splitter: the arrows move the edge
+    /// by 10 points, Home goes to the minimum, and End goes to the largest
+    /// extent that the host shows. Returns whether the extent changed.
     pub fn handle_splitter_key(&mut self, area: DockArea, key: Key) -> bool {
         let grow = match (area, key) {
             (DockArea::Left, Key::ArrowRight)
@@ -455,10 +508,20 @@ impl DockLayout {
             | (DockArea::Top, Key::ArrowUp)
             | (DockArea::Bottom, Key::ArrowDown) => -KEY_STEP,
             (_, Key::Home) => f64::NEG_INFINITY,
+            (_, Key::End) => f64::INFINITY,
             _ => return false,
         };
         let before = self.extent(area);
-        let after = (before + grow).max(MIN_EXTENT);
+        let limit = self.limit(area);
+        let after = if grow == f64::INFINITY {
+            limit
+        } else {
+            (before + grow).min(limit)
+        }
+        .max(MIN_EXTENT);
+        if !after.is_finite() {
+            return false;
+        }
         self.areas[area.index()].extent = after;
         after != before
     }
@@ -475,28 +538,20 @@ impl DockLayout {
 
     /// Computes frames. Top and bottom areas span the full width; left and
     /// right areas sit between them. Extents are clamped so the center
-    /// keeps at least `MIN_EXTENT` in each direction.
+    /// keeps at least `MIN_EXTENT` in each direction. A floating rectangle
+    /// is relative to the origin of `bounds`, and it is moved and shrunk
+    /// to stay inside `bounds`.
     pub fn arrange(&self, bounds: Rect) -> DockArrangement {
         let mut center = bounds;
         let mut groups = Vec::new();
         let mut splitters = Vec::new();
-        for area in [
-            DockArea::Top,
-            DockArea::Bottom,
-            DockArea::Left,
-            DockArea::Right,
-        ] {
+        let extents = self.extents(bounds);
+        for area in ARRANGE_ORDER {
             let state = &self.areas[area.index()];
             if state.groups.is_empty() {
                 continue;
             }
-            let available = if area.horizontal() {
-                center.size.width
-            } else {
-                center.size.height
-            } - MIN_EXTENT
-                - SPLITTER;
-            let extent = state.extent.min(available).max(0.0);
+            let extent = extents[area.index()];
             let (area_rect, splitter, rest) = split_edge(center, area, extent);
             center = rest;
             splitters.push((area, splitter));
@@ -542,91 +597,22 @@ impl DockLayout {
             center,
             groups,
             splitters,
-            floating: self.floating.clone(),
+            floating: self
+                .floating
+                .iter()
+                .map(|(panel, rect)| (*panel, inside(*rect, bounds)))
+                .collect(),
         }
     }
 
-    /// Paints the groups and splitters of `arrangement`. Each group gets
-    /// the `Dock` frame and a line-variant `Tabs` bar; the active tab is
-    /// underlined. Splitters use the `Resizable` handle. The host paints
-    /// the center and the panel contents.
-    pub fn paint(
-        &self,
-        cx: &mut PaintContext<'_>,
-        arrangement: &DockArrangement,
-        focus: DockFocus,
-    ) {
-        let (parts, host) = (self.hosted.parts, cx.state);
-        let tabs = |slot, state| {
-            StyleQuery::new(ControlKind::Tabs, slot)
-                .variant(TabsVariant::Line)
-                .state(state)
-        };
-        let border = cx
-            .style(StyleQuery::new(ControlKind::Separator, Slot::Root))
-            .background;
-        let frame = cx.style(StyleQuery::new(ControlKind::Dock, Slot::Root));
-        for group in &arrangement.groups {
-            cx.slot(group.rect, &frame, |_, _| {});
-            let bar = group.tab_bar;
-            fill_area(
-                cx.list,
-                Rect::new(
-                    Point::new(bar.origin.x, bar.max_y() - 1.0),
-                    Size::new(bar.size.width, 1.0),
-                ),
-                cx.rtl,
-                &border,
-            );
-            for (index, panel) in group.tabs.iter().enumerate() {
-                let rect = group.tab_rect(index, cx.rtl);
-                let state = parts
-                    .state(DockFocus::Tab(*panel), host)
-                    .set(VisualState::SELECTED, *panel == group.active)
-                    .set(VisualState::FOCUS_VISIBLE, focus == DockFocus::Tab(*panel));
-                let trigger = cx.style(tabs(Slot::Trigger, state));
-                let title = self.panel(*panel).map_or("", |panel| panel.title.as_str());
-                cx.slot(rect, &trigger, |cx, inner| {
-                    cx.label(inner, title, &trigger, TextAlign::Center);
-                });
-                let indicator = cx.style(tabs(Slot::Indicator, state));
-                let line = Rect::new(
-                    Point::new(rect.origin.x, rect.max_y() - indicator.min_height),
-                    Size::new(rect.size.width, indicator.min_height),
-                );
-                fill_area(cx.list, line, cx.rtl, &indicator.background);
-            }
-        }
-        for (area, rect) in &arrangement.splitters {
-            let part = DockFocus::Splitter(*area);
-            let state = parts
-                .state(part, host)
-                .set(VisualState::FOCUS_VISIBLE, focus == part);
-            let orientation = if area.horizontal() {
-                SplitOrientation::Horizontal
-            } else {
-                SplitOrientation::Vertical
-            };
-            crate::containers::paint_divider(cx, *rect, orientation, false, state);
-        }
-    }
-
-    /// The tab or splitter under `point`, as a [`DockFocus`] part.
-    fn part_at(&self, point: Point) -> Option<DockFocus> {
-        let arrangement = self.arrange(self.hosted.bounds);
-        let rtl = self.hosted.rtl;
-        for group in &arrangement.groups {
-            let tab =
-                (0..group.tabs.len()).find(|index| group.tab_rect(*index, rtl).contains(point));
-            if let Some(index) = tab {
-                return Some(DockFocus::Tab(group.tabs[index]));
-            }
-        }
-        arrangement
-            .splitters
-            .iter()
-            .find(|(_, rect)| rect.contains(point))
-            .map(|(area, _)| DockFocus::Splitter(*area))
+    /// The content part of a floating panel at `rect` in an arrangement:
+    /// the rectangle below its title bar.
+    pub fn floating_content(&self, rect: Rect) -> Rect {
+        let title = self.tab_height.min(rect.size.height);
+        Rect::new(
+            Point::new(rect.origin.x, rect.origin.y + title),
+            Size::new(rect.size.width, rect.size.height - title),
+        )
     }
 
     /// Splitter semantics: an adjustable value in points, named in the
@@ -642,7 +628,7 @@ impl DockLayout {
             role: SemanticRole::Slider,
             name: strings.message(id, &[]),
             description: String::new(),
-            value: Some(format!("{}", self.extent(area).round())),
+            value: Some(format!("{}", self.shown_extent(area).round())),
             state: SemanticState::default(),
             relations: Vec::new(),
             actions: vec![SemanticAction::Increment, SemanticAction::Decrement],
@@ -704,8 +690,17 @@ impl DockLayout {
                 rect.size.height
             ));
         }
-        for panel in self.hidden.keys() {
-            out.push_str(&format!("hidden {}\n", self.panels[panel].key));
+        for (panel, location) in &self.hidden {
+            let key = &self.panels[panel].key;
+            match location {
+                PanelLocation::Docked { area, group } => {
+                    out.push_str(&format!("hidden {key} {} {group}\n", area.name()));
+                }
+                PanelLocation::Floating(rect) => out.push_str(&format!(
+                    "hidden {key} float {:?} {:?} {:?} {:?}\n",
+                    rect.origin.x, rect.origin.y, rect.size.width, rect.size.height
+                )),
+            }
         }
         out
     }
@@ -794,8 +789,25 @@ impl DockLayout {
                 }
                 Some("hidden") => {
                     let key = words.next().ok_or_else(|| error("missing panel key"))?;
+                    // The saved place, when the text has one.
+                    let saved = match words.next() {
+                        None => None,
+                        Some("float") => Some(PanelLocation::Floating(Rect::new(
+                            Point::new(number(words.next())?, number(words.next())?),
+                            Size::new(number(words.next())?, number(words.next())?),
+                        ))),
+                        Some(area) => Some(PanelLocation::Docked {
+                            area: DockArea::parse(area).ok_or_else(|| error("unknown area"))?,
+                            group: words
+                                .next()
+                                .and_then(|group| group.parse().ok())
+                                .ok_or_else(|| error("expected a group"))?,
+                        }),
+                    };
                     if let Some(id) = resolve(&next, &mut placed, key, &mut report) {
-                        let location = self.location(id).or_else(|| self.hidden.get(&id).copied());
+                        let location = saved
+                            .or_else(|| self.location(id))
+                            .or_else(|| self.hidden.get(&id).copied());
                         next.hidden.insert(
                             id,
                             location.unwrap_or(PanelLocation::Docked {
@@ -848,6 +860,26 @@ fn resolve(
             None
         }
     }
+}
+
+/// The order in which `arrange` takes space for the areas.
+const ARRANGE_ORDER: [DockArea; 4] = [
+    DockArea::Top,
+    DockArea::Bottom,
+    DockArea::Left,
+    DockArea::Right,
+];
+
+/// `rect`, relative to the origin of `bounds`, moved and shrunk so that
+/// it stays inside `bounds`.
+fn inside(rect: Rect, bounds: Rect) -> Rect {
+    let size = Size::new(
+        rect.size.width.min(bounds.size.width).max(0.0),
+        rect.size.height.min(bounds.size.height).max(0.0),
+    );
+    let x = rect.origin.x.clamp(0.0, bounds.size.width - size.width);
+    let y = rect.origin.y.clamp(0.0, bounds.size.height - size.height);
+    Rect::new(Point::new(bounds.origin.x + x, bounds.origin.y + y), size)
 }
 
 fn split_edge(rect: Rect, area: DockArea, extent: f64) -> (Rect, Rect, Rect) {
@@ -903,335 +935,5 @@ fn split_edge(rect: Rect, area: DockArea, extent: f64) -> (Rect, Rect, Rect) {
                 Size::new(size.width, size.height - extent - SPLITTER),
             ),
         ),
-    }
-}
-
-/// The dock's focus, splitter drag, and geometry in a control host.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct HostState {
-    /// The tab stop that has keyboard focus.
-    focus: DockFocus,
-    /// The splitter being dragged: its area, the pointer position along
-    /// the drag axis at the press, and the area's extent then.
-    drag: Option<(DockArea, f64, f64)>,
-    /// The bounds and the direction from the last arrange.
-    bounds: Rect,
-    rtl: bool,
-    /// The extent of each area before a double click on its splitter
-    /// collapsed it, by area index.
-    collapsed: [Option<f64>; 4],
-    /// Hover and press of the tabs and splitters.
-    parts: Parts<DockFocus>,
-}
-
-impl DockLayout {
-    /// The tab stops of `arrangement`: one per group, on its active tab,
-    /// then one per splitter.
-    fn stops(arrangement: &DockArrangement) -> Vec<DockFocus> {
-        arrangement
-            .groups
-            .iter()
-            .map(|group| DockFocus::Tab(group.active))
-            .chain(
-                arrangement
-                    .splitters
-                    .iter()
-                    .map(|(area, _)| DockFocus::Splitter(*area)),
-            )
-            .collect()
-    }
-
-    /// The focused stop in `bounds`, or the first one when the focused
-    /// part is gone.
-    fn host_focus(&self, bounds: Rect) -> DockFocus {
-        let arrangement = self.arrange(bounds);
-        let stops = Self::stops(&arrangement);
-        let focus = match self.hosted.focus {
-            DockFocus::Tab(panel) => arrangement
-                .groups
-                .iter()
-                .find(|group| group.tabs.contains(&panel))
-                .map(|group| DockFocus::Tab(group.active)),
-            other => Some(other).filter(|focus| stops.contains(focus)),
-        };
-        focus.or_else(|| stops.first().copied()).unwrap_or_default()
-    }
-
-    /// Selects `panel` and reports it when it was not active.
-    fn host_activate(&mut self, cx: &mut crate::ControlContext<'_>, panel: PanelId) {
-        self.hosted.focus = DockFocus::Tab(panel);
-        cx.request_paint();
-        cx.request_semantics();
-        if !self.is_active(panel) && self.activate(panel).is_ok() {
-            cx.request_layout();
-            cx.emit(crate::ControlMessage::ItemActivated(panel.0 as usize));
-        }
-    }
-
-    /// Sets the extent of `area` and reports a change.
-    /// Collapses `area` to the minimum extent, or restores the extent that
-    /// it had before a collapse.
-    fn toggle_collapse(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea) {
-        let current = self.extent(area);
-        let saved = &mut self.hosted.collapsed[area.index()];
-        let target = match saved.take() {
-            Some(extent) if current <= MIN_EXTENT => extent,
-            _ if current > MIN_EXTENT => {
-                *saved = Some(current);
-                MIN_EXTENT
-            }
-            _ => return,
-        };
-        self.host_resize(cx, area, target);
-    }
-
-    fn host_resize(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea, extent: f64) {
-        let before = self.extent(area);
-        self.set_extent(area, extent);
-        self.report_extent(cx, area, before);
-    }
-
-    fn report_extent(&mut self, cx: &mut crate::ControlContext<'_>, area: DockArea, before: f64) {
-        let after = self.extent(area);
-        if after != before {
-            cx.request_layout();
-            cx.request_paint();
-            cx.request_semantics();
-            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
-                after,
-            )));
-        }
-    }
-
-    fn host_key(&mut self, cx: &mut crate::ControlContext<'_>, key: Key) -> EventReply {
-        let arrangement = self.arrange(cx.bounds());
-        let focus = self.host_focus(cx.bounds());
-        if key == Key::Tab {
-            let stops = Self::stops(&arrangement);
-            let current = stops.iter().position(|stop| *stop == focus).unwrap_or(0);
-            let back = cx.modifiers().shift;
-            return match crate::hosted::tab_stop(current, stops.len(), back) {
-                Some(next) => {
-                    self.hosted.focus = stops[next];
-                    cx.request_paint();
-                    cx.request_semantics();
-                    EventReply::Stop
-                }
-                None => EventReply::Continue,
-            };
-        }
-        match focus {
-            DockFocus::Tab(panel) => {
-                let Some(group) = arrangement
-                    .groups
-                    .iter()
-                    .find(|group| group.tabs.contains(&panel))
-                else {
-                    return EventReply::Continue;
-                };
-                let current = group.tabs.iter().position(|tab| *tab == panel).unwrap_or(0);
-                let rtl = self.hosted.rtl;
-                match crate::hosted::rove(key, current, group.tabs.len(), true, rtl) {
-                    Some(next) => {
-                        self.host_activate(cx, group.tabs[next]);
-                        EventReply::Stop
-                    }
-                    None => EventReply::Continue,
-                }
-            }
-            DockFocus::Splitter(area) => {
-                let before = self.extent(area);
-                if self.handle_splitter_key(area, key) {
-                    self.report_extent(cx, area, before);
-                    EventReply::Stop
-                } else {
-                    EventReply::Continue
-                }
-            }
-            DockFocus::None => EventReply::Continue,
-        }
-    }
-
-    fn host_pointer(
-        &mut self,
-        cx: &mut crate::ControlContext<'_>,
-        event: PointerEvent,
-    ) -> EventReply {
-        let along = |area: DockArea, point: Point| {
-            if area.horizontal() { point.x } else { point.y }
-        };
-        match event {
-            PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            } => {
-                let arrangement = self.arrange(cx.bounds());
-                let rtl = self.hosted.rtl;
-                for group in &arrangement.groups {
-                    let tab = (0..group.tabs.len())
-                        .find(|index| group.tab_rect(*index, rtl).contains(position));
-                    if let Some(index) = tab {
-                        self.host_activate(cx, group.tabs[index]);
-                        return EventReply::Stop;
-                    }
-                }
-                let splitter = arrangement
-                    .splitters
-                    .iter()
-                    .find(|(_, rect)| rect.contains(position));
-                if let Some((area, _)) = splitter
-                    && cx.click_count() >= 2
-                {
-                    self.hosted.focus = DockFocus::Splitter(*area);
-                    self.toggle_collapse(cx, *area);
-                    return EventReply::Stop;
-                }
-                if let Some((area, _)) = splitter {
-                    self.hosted.focus = DockFocus::Splitter(*area);
-                    self.hosted.drag = Some((*area, along(*area, position), self.extent(*area)));
-                    cx.capture_pointer(true);
-                    cx.request_paint();
-                    cx.request_semantics();
-                    return EventReply::Stop;
-                }
-                EventReply::Continue
-            }
-            PointerEvent::Move { position } => {
-                let Some((area, start, extent)) = self.hosted.drag else {
-                    return EventReply::Continue;
-                };
-                let delta = along(area, position) - start;
-                let grow = match area {
-                    DockArea::Left | DockArea::Top => delta,
-                    DockArea::Right | DockArea::Bottom => -delta,
-                };
-                self.host_resize(cx, area, extent + grow);
-                EventReply::Stop
-            }
-            PointerEvent::Up { .. } if self.hosted.drag.is_some() => {
-                self.hosted.drag = None;
-                cx.capture_pointer(false);
-                cx.request_paint();
-                EventReply::Stop
-            }
-            _ => EventReply::Continue,
-        }
-    }
-}
-
-/// In a control host the dock's node covers its whole area. It paints the
-/// group frames, the tab bars, and the splitters, and the view layer
-/// places the center and the panel contents in the frames that
-/// [`DockLayout::arrange`] returns for the node's bounds.
-impl crate::CustomControl for DockLayout {
-    fn measure(&mut self, cx: &crate::MeasureContext<'_>) -> Measured {
-        let max = cx.constraints.max;
-        let size = Size::new(
-            if max.width.is_finite() {
-                max.width
-            } else {
-                cx.tokens.spacing * 120.0
-            },
-            if max.height.is_finite() {
-                max.height
-            } else {
-                cx.tokens.spacing * 96.0
-            },
-        );
-        Measured::new(cx.constraints.constrain(size))
-    }
-
-    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
-        self.hosted.bounds = bounds;
-        self.hosted.rtl = cx.rtl();
-    }
-
-    fn event(
-        &mut self,
-        cx: &mut crate::ControlContext<'_>,
-        event: &crate::ControlEvent,
-    ) -> EventReply {
-        let mut parts = self.hosted.parts;
-        parts.track(cx, event, |point| self.part_at(point));
-        self.hosted.parts = parts;
-        match crate::hosted::route(cx, event) {
-            Some(crate::hosted::Routed::Pointer(event)) => self.host_pointer(cx, event),
-            Some(crate::hosted::Routed::Key(KeyEvent::Down { key, .. })) => self.host_key(cx, key),
-            Some(crate::hosted::Routed::Cancel) => {
-                if self.hosted.drag.take().is_some() {
-                    cx.capture_pointer(false);
-                }
-                cx.request_paint();
-                EventReply::Continue
-            }
-            _ => {
-                if let crate::ControlEvent::FocusChanged(_) = event {
-                    cx.request_paint();
-                }
-                EventReply::Continue
-            }
-        }
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        let arrangement = self.arrange(cx.bounds);
-        let focus = if cx.state.focus_visible() {
-            self.host_focus(cx.bounds)
-        } else {
-            DockFocus::None
-        };
-        DockLayout::paint(self, cx, &arrangement, focus);
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        self.semantics_in(Localizer::builtin())
-    }
-
-    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        let group = || crate::hosted::node(SemanticRole::Group, "", Vec::new());
-        match self.host_focus(self.hosted.bounds) {
-            DockFocus::Tab(panel) => self.panel_semantics(panel, strings).unwrap_or_else(group),
-            DockFocus::Splitter(area) => {
-                let mut node = self.splitter_semantics(area, strings);
-                node.actions.push(SemanticAction::Focus);
-                node
-            }
-            DockFocus::None => group(),
-        }
-    }
-
-    fn perform(
-        &mut self,
-        cx: &mut crate::ControlContext<'_>,
-        action: SemanticAction,
-        _value: Option<&str>,
-    ) -> bool {
-        match (action, self.host_focus(cx.bounds())) {
-            (SemanticAction::Focus, _) => cx.request_focus(),
-            (SemanticAction::Increment, DockFocus::Splitter(area)) => {
-                self.host_resize(cx, area, self.extent(area) + KEY_STEP);
-            }
-            (SemanticAction::Decrement, DockFocus::Splitter(area)) => {
-                self.host_resize(cx, area, self.extent(area) - KEY_STEP);
-            }
-            (SemanticAction::Dismiss, DockFocus::Tab(panel)) => {
-                let Ok(next) = self.close(panel) else {
-                    return false;
-                };
-                self.hosted.focus = next.map_or(DockFocus::None, DockFocus::Tab);
-                cx.request_layout();
-                cx.request_paint();
-                cx.request_semantics();
-                cx.emit(crate::ControlMessage::Dismissed);
-            }
-            _ => return false,
-        }
-        true
-    }
-
-    fn set_enabled(&mut self, enabled: bool) {
-        if !enabled {
-            self.hosted.drag = None;
-        }
     }
 }

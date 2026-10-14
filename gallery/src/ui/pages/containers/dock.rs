@@ -172,23 +172,22 @@ impl CustomControl for DockView {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        CustomControl::paint(&self.dock, cx);
-        let arrangement = self.dock.arrange(cx.bounds);
         let style = cx.style(StyleQuery::new(ControlKind::Card, Slot::Description));
-        cx.label(arrangement.center, &self.editor, &style, TextAlign::Center);
-        for group in &arrangement.groups {
+        let center = self.dock.arrange(cx.bounds).center;
+        cx.label(center, &self.editor, &style, TextAlign::Center);
+        self.dock.paint_hosted(cx, &mut |cx, panel, content| {
             let caption = self
                 .captions
                 .iter()
-                .find(|(id, _)| *id == group.active)
+                .find(|(id, _)| *id == panel)
                 .map_or("", |(_, caption)| caption.as_str());
-            let inner = group.content.inset(8.0);
+            let inner = content.inset(8.0);
             let line = Rect::new(
                 Point::new(inner.origin.x, inner.origin.y),
                 Size::new(inner.size.width, style.text.line_height),
             );
             cx.label(line, caption, &style, TextAlign::Start);
-        }
+        });
     }
 
     fn semantics(&self) -> SemanticNode {
