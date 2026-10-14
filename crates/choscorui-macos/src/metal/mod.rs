@@ -24,7 +24,7 @@ use crate::ffi::metal::{
     SET_SOURCE_RGB_BLEND_FACTOR, SET_TEXTURE_STORAGE_MODE, SET_TEXTURE_USAGE, SET_VERTEX_FUNCTION,
     STORAGE_MANAGED, STORAGE_PRIVATE, STORAGE_SHARED, TEXTURE_2D_DESCRIPTOR,
     TEXTURE_USAGE_RENDER_TARGET, TEXTURE_USAGE_SHADER_READ, ThreadSafe, new_function, new_library,
-    new_pipeline,
+    new_pipeline, run_in_background,
 };
 use crate::ffi::retained::{Retained, alloc_init};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -85,22 +85,19 @@ pub(crate) fn gpu() -> Option<&'static Gpu> {
     GPU.get_or_init(Gpu::new).as_ref()
 }
 
-/// Starts to create the device, the library, and the pipelines on another
-/// thread, so that the work overlaps the start of the application and not
-/// its first frame.
+/// Starts to create the device, the library, and the pipelines on a
+/// libdispatch queue, so that the work overlaps the start of the
+/// application and not its first frame.
 pub(crate) fn prepare() {
     static STARTED: Once = Once::new();
     if core_graphics_requested() {
         return;
     }
     STARTED.call_once(|| {
-        let spawned = std::thread::Builder::new()
-            .name("choscorui-metal-setup".into())
-            .spawn(|| {
-                gpu();
-            });
-        // Without a thread, the first window creates the objects.
-        drop(spawned);
+        // Without the queue, the first window creates the objects.
+        run_in_background(|| {
+            gpu();
+        });
     });
 }
 

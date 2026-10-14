@@ -120,6 +120,7 @@ impl MTLSize {
 }
 
 sdk_const! {
+    QOS_USER_INITIATED: isize = 0x19, sdk = QOS_CLASS_USER_INITIATED;
     pub(crate) PIXEL_FORMAT_R8: usize = 10, sdk = MTLPixelFormatR8Unorm;
     pub(crate) PIXEL_FORMAT_R16_FLOAT: usize = 25, sdk = MTLPixelFormatR16Float;
     pub(crate) PIXEL_FORMAT_RGBA8: usize = 70, sdk = MTLPixelFormatRGBA8Unorm;
@@ -296,7 +297,41 @@ c_functions! {
             queue: *const c_void,
             destructor: *const c_void,
         ) -> Option<Retained<DispatchData>>;
+        safe fn dispatch_get_global_queue(identifier: isize, flags: usize) -> *const c_void;
+        unsafe fn dispatch_async_f(
+            queue: *const c_void,
+            context: *mut c_void,
+            work: unsafe extern "C" fn(*mut c_void),
+        );
     }
+}
+
+/// Runs `work` once on a global queue of libdispatch, which reuses its
+/// threads. Returns false, and does not run `work`, when the queue is
+/// not available.
+pub(crate) fn run_in_background(work: fn()) -> bool {
+    let queue = dispatch_get_global_queue(QOS_USER_INITIATED, 0);
+    if queue.is_null() {
+        return false;
+    }
+    // SAFETY: `queue` is a global queue, which is never released. The
+    // context is a function pointer, which is valid for the whole
+    // process, and `run_work` reads it back as that type.
+    unsafe { dispatch_async_f(queue, work as *mut c_void, run_work) };
+    true
+}
+
+/// The work function of [`run_in_background`]. It catches a panic, so no
+/// panic crosses into libdispatch.
+///
+/// # Safety
+///
+/// `context` is the `fn()` that `run_in_background` passed.
+unsafe extern "C" fn run_work(context: *mut c_void) {
+    // SAFETY: `context` is a `fn()`, as the caller guarantees, and a
+    // function pointer has the size of a data pointer.
+    let work = unsafe { std::mem::transmute::<*mut c_void, fn()>(context) };
+    let _ = std::panic::catch_unwind(work);
 }
 
 /// A Metal object that any thread may use. Metal documents devices,

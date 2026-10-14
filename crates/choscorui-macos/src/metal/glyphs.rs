@@ -29,7 +29,7 @@ use crate::ffi::text::{
 };
 use crate::text_layout::run_font;
 use choscorui_core::{FontSlant, Point, TextRun};
-use std::cmp::Reverse;
+
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
@@ -204,16 +204,24 @@ struct GlyphSlot {
 /// is full: the most recently used first, up to half of the capacity.
 /// Each glyph is its texel count and the plan that used it last.
 fn glyphs_to_keep(glyphs: &[(u32, u64)], capacity: u64) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..glyphs.len()).collect();
-    order.sort_by_key(|&index| Reverse(glyphs[index].1));
+    let mut order = descending(glyphs.iter().map(|&(_, used)| used));
     let mut area = 0u64;
+    order.retain(|&index| {
+        area += u64::from(glyphs[index].0);
+        area <= capacity / 2
+    });
     order
-        .into_iter()
-        .take_while(|&index| {
-            area += u64::from(glyphs[index].0);
-            area <= capacity / 2
-        })
-        .collect()
+}
+
+/// The indices of `keys`, largest key first, and on equal keys the lower
+/// index first.
+fn descending(keys: impl Iterator<Item = u64>) -> Vec<usize> {
+    // The complement sorts the largest key first. The sort of `(u64, u32)`
+    // pairs is the one that the damage of a display list uses, so the
+    // binary holds one copy of it.
+    let mut order: Vec<(u64, u32)> = keys.zip(0u32..).map(|(key, index)| (!key, index)).collect();
+    order.sort_unstable();
+    order.into_iter().map(|(_, index)| index as usize).collect()
 }
 
 /// The text caches of the process. Only the main thread uses them.
@@ -440,13 +448,13 @@ impl Text {
             })
             .collect();
         let capacity = u64::from(atlas.size) * u64::from(atlas.size);
-        let mut keep = glyphs_to_keep(&sizes, capacity);
+        let keep = glyphs_to_keep(&sizes, capacity);
         // Taller glyphs first fill the shelves of the new atlas better.
-        keep.sort_by_key(|&index| {
+        let heights = keep.iter().map(|&index| {
             let [_, top, _, bottom] = entries[index].1.texels;
-            Reverse(bottom - top)
+            u64::from(bottom - top)
         });
-        for index in keep {
+        for index in descending(heights).into_iter().map(|at| keep[at]) {
             let (key, entry, used) = entries[index];
             let [left, top, right, bottom] = entry.texels;
             let (width, height) = (right - left, bottom - top);
