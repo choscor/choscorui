@@ -253,6 +253,65 @@ fn a_press_on_the_trail_outside_the_ellipsis_menu_only_closes_it() {
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(0)]);
 }
 
+/// Clicks across the trail until the ellipsis opens its menu, and
+/// returns the point.
+fn open_ellipsis(h: &mut Harness) -> Point {
+    let bounds = h.bounds();
+    let mut x = bounds.origin.x;
+    while x < bounds.max_x() {
+        let point = Point::new(x, bounds.center().y);
+        h.click(point);
+        if h.messages().contains(&ControlMessage::OpenChanged(true)) {
+            return point;
+        }
+        x += 2.0;
+    }
+    panic!("no ellipsis");
+}
+
+#[test]
+fn the_ellipsis_toggles_its_menu_and_arrow_down_opens_it() {
+    let mut h = Harness::new(trail());
+    let ellipsis = open_ellipsis(&mut h);
+    h.click(ellipsis);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::OpenChanged(false),
+            ControlMessage::Dismissed
+        ],
+        "a second press on the ellipsis closes the menu"
+    );
+    assert_eq!(h.semantics().state.expanded, Some(false));
+    let mut h = Harness::new(trail());
+    h.focus();
+    assert!(tab(&mut h));
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+}
+
+#[test]
+fn a_breadcrumb_of_one_item_has_no_actions() {
+    let h = Harness::new(Breadcrumb::new("Breadcrumb", vec!["Home".to_string()]));
+    assert!(h.semantics().actions.is_empty());
+}
+
+#[test]
+fn a_narrow_breadcrumb_collapses_its_middle_items() {
+    let items = ["Home", "Components", "Navigation", "Docs", "Breadcrumb"];
+    let mut h = Harness::new(Breadcrumb::new(
+        "Breadcrumb",
+        items.map(String::from).to_vec(),
+    ));
+    let size = h.bounds().size;
+    h.place(hosted::rect(0.0, 0.0, size.width * 0.6, size.height));
+    let painted = texts(&h.paint());
+    assert_eq!(painted.first().map(String::as_str), Some("Home"));
+    assert_eq!(painted.last().map(String::as_str), Some("Breadcrumb"));
+    assert!(painted.len() < items.len(), "{painted:?}");
+    assert_eq!(h.semantics().state.expanded, Some(false));
+}
+
 #[test]
 fn a_navigation_panel_stays_in_the_window_and_disabling_closes_it() {
     let mut h = Harness::new(site());

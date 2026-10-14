@@ -26,7 +26,10 @@ enum Part {
 pub struct Breadcrumb {
     name: String,
     items: Vec<String>,
-    /// Items hidden behind the ellipsis.
+    /// The items that `with_collapsed` hides.
+    collapsed: std::ops::Range<usize>,
+    /// Items hidden behind the ellipsis: the collapsed items, and more
+    /// when the trail does not fit.
     hidden: std::ops::Range<usize>,
     parts: Vec<(Part, Rect)>,
     /// The focused tab stop.
@@ -43,6 +46,7 @@ impl Breadcrumb {
         Self {
             name: name.into(),
             items,
+            collapsed: 0..0,
             hidden: 0..0,
             parts: Vec::new(),
             focus: 0,
@@ -60,13 +64,53 @@ impl Breadcrumb {
         let last = self.items.len().saturating_sub(1);
         let start = range.start.clamp(1, last.max(1));
         let end = range.end.clamp(start, last.max(start));
-        self.hidden = start..end;
+        self.collapsed = start..end;
+        self.hide(start..end);
+        self
+    }
+
+    /// Hides the items in `range` and rebuilds the ellipsis menu.
+    fn hide(&mut self, range: std::ops::Range<usize>) {
+        if self.hidden == range {
+            return;
+        }
+        self.hidden = range;
         let items = self
             .hidden
             .clone()
             .map(|index| MenuItem::action(self.items[index].clone(), CommandId(index as u64)));
         self.menu = MenuPopup::new(items.collect());
-        self
+    }
+
+    /// The width of the trail with its gaps.
+    fn total(&self, cx: &MeasureContext<'_>) -> f64 {
+        let gap = cx.style(Self::query(Slot::Root, VisualState::NONE)).gap;
+        let parts = self.sequence();
+        let widths: f64 = parts.iter().map(|part| self.width(cx, *part)).sum();
+        widths + gap * parts.len().saturating_sub(1) as f64
+    }
+
+    /// Hides more middle items until the trail fits in `width`. The first
+    /// and the last item always show.
+    fn collapse_to(&mut self, cx: &MeasureContext<'_>, width: f64) {
+        if self.menu.is_open() {
+            return;
+        }
+        let mut hidden = self.collapsed.clone();
+        self.hide(hidden.clone());
+        let last = self.items.len().saturating_sub(1);
+        while self.total(cx) > width && last > 1 {
+            hidden = if hidden.is_empty() {
+                1..2
+            } else if hidden.end < last {
+                hidden.start..hidden.end + 1
+            } else if hidden.start > 1 {
+                hidden.start - 1..hidden.end
+            } else {
+                break;
+            };
+            self.hide(hidden.clone());
+        }
     }
 
     fn query(slot: Slot, state: VisualState) -> StyleQuery {
@@ -212,6 +256,7 @@ impl CustomControl for Breadcrumb {
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let root = cx.style(Self::query(Slot::Root, VisualState::NONE));
         self.rtl = cx.rtl();
+        self.collapse_to(cx, bounds.size.width);
         let mut x = if self.rtl {
             bounds.max_x()
         } else {
@@ -219,8 +264,8 @@ impl CustomControl for Breadcrumb {
         };
         let parts = self.sequence();
         let widths: Vec<f64> = parts.iter().map(|part| self.width(cx, *part)).collect();
-        // When the trail is wider than the bounds, each label gives up
-        // room in proportion to its width, and truncates.
+        // When the trail is still wider than the bounds, each label gives
+        // up room in proportion to its width, and truncates.
         let gaps = root.gap * parts.len().saturating_sub(1) as f64;
         let labels: f64 = parts
             .iter()
@@ -339,6 +384,14 @@ impl CustomControl for Breadcrumb {
                     }
                     EventReply::Stop
                 }
+                Key::ArrowDown
+                    if stops
+                        .get(self.focus)
+                        .is_some_and(|stop| self.parts[*stop].0 == Part::Ellipsis) =>
+                {
+                    self.activate(cx, stops[self.focus]);
+                    EventReply::Stop
+                }
                 _ => EventReply::Continue,
             },
             ControlEvent::FocusChanged(true) => {
@@ -418,7 +471,7 @@ impl CustomControl for Breadcrumb {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let actions = if self.enabled {
+        let actions = if self.enabled && self.focusable() {
             vec![SemanticAction::Activate, SemanticAction::Focus]
         } else {
             Vec::new()
@@ -441,6 +494,9 @@ impl CustomControl for Breadcrumb {
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
+        if !self.focusable() {
+            return false;
+        }
         match action {
             SemanticAction::Activate => match self.stops().get(self.focus) {
                 Some(part) => {

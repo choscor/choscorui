@@ -3550,7 +3550,9 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 - Every item but the last is a link. The last item is the current page and
   is not a link. Chevrons separate the items and point along the reading
   order.
-- In less width than the trail needs, each label gives up width in
+- In less width than the trail needs, the trail first hides more middle
+  items behind the ellipsis. If the first and the last item still do
+  not fit, each label gives up width in
   proportion to its width, and truncates.
 - Each link is a tab stop inside the control. Tab and Shift+Tab move
   between the links, and leave the control after the last or the first.
@@ -3558,8 +3560,10 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
   `ItemActivated(index)`.
 - `with_collapsed(range)` hides those items behind an ellipsis. The first
   and the last item always show. Activating the ellipsis opens a menu of
-  the hidden items. A choice emits `ItemActivated(index)`.
-- A press on the trail outside the open menu only closes the menu, and
+  the hidden items. A choice emits `ItemActivated(index)`. ArrowDown on
+  the ellipsis also opens the menu.
+- A press on the trail outside the open menu, or a second press on the
+  ellipsis, only closes the menu, and
   emits `OpenChanged(false)` and `Dismissed`. Escape, Tab, and focus loss
   also emit `Dismissed`.
 
@@ -3577,10 +3581,10 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 | Name / value | name / current page |
 | Description | the focused link, or the hidden items for the ellipsis |
 | State | expanded with a collapsed range, disabled |
-| Actions | `Activate` and `Focus` while enabled |
+| Actions | `Activate` and `Focus` while enabled, with two or more items |
 
 `set_open` opens and closes the ellipsis menu. It returns false when no
-item is collapsed. `set_value` returns false.
+item is hidden. `set_value` returns false.
 
 [nav.rs](../crates/choscorui-controls/tests/nav.rs) pins this behavior.
 
