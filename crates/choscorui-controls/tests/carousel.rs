@@ -105,6 +105,8 @@ fn a_drag_snaps_to_the_nearest_slide() {
         [changed(1)],
         "past half a slide snaps forward"
     );
+    // A drag starts from the shown position: let the snap end first.
+    h.set_time(1.0);
     pointer(
         &mut h,
         PointerEvent::Down {
@@ -144,6 +146,61 @@ fn a_wheel_scrolls_and_snaps_after_a_pause() {
     assert!(h.host.advance(&mut h.tree, deadline));
     assert_eq!(h.messages(), [changed(1)]);
     assert_eq!(h.host.next_deadline(&h.tree), None);
+}
+
+#[test]
+fn a_flick_moves_one_slide_and_home_and_end_go_to_the_ends() {
+    let mut h = Harness::new(slides());
+    let center = h.bounds().center();
+    let at = |dx: f64| Point::new(center.x + dx, center.y);
+    let primary = PointerButton::Primary;
+    pointer(
+        &mut h,
+        PointerEvent::Down {
+            position: at(0.0),
+            button: primary,
+        },
+    );
+    h.set_time(0.05);
+    pointer(&mut h, PointerEvent::Move { position: at(-40.0) });
+    pointer(
+        &mut h,
+        PointerEvent::Up {
+            position: at(-40.0),
+            button: primary,
+        },
+    );
+    assert_eq!(h.messages(), [changed(1)], "a short fast drag flicks");
+    h.focus();
+    h.key(Key::End);
+    assert_eq!(h.messages(), [changed(4)]);
+    h.key(Key::Home);
+    assert_eq!(h.messages(), [changed(0)]);
+}
+
+#[test]
+fn a_wheel_during_an_animation_starts_from_the_shown_position() {
+    let mut h = Harness::new(slides());
+    h.focus();
+    h.key(Key::End);
+    h.messages();
+    // Mid-way through the move to the last slide, a wheel scrolls from
+    // the shown slide.
+    h.set_time(0.1);
+    let center = h.bounds().center();
+    pointer(
+        &mut h,
+        PointerEvent::Wheel {
+            position: center,
+            delta: Point::new(1.0, 0.0),
+            unit: WheelUnit::Points,
+        },
+    );
+    let deadline = h.host.next_deadline(&h.tree).expect("a snap waits");
+    assert!(h.host.advance(&mut h.tree, deadline));
+    let messages = h.messages();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_ne!(messages[0], changed(4), "it does not jump to the target");
 }
 
 #[test]

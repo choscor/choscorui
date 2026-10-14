@@ -9,12 +9,20 @@ use crate::style::{
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
+    MotionTokens, Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
 };
 
 /// How long the carousel waits after the last wheel event before it snaps
 /// to the nearest slide, in seconds.
 const SNAP_DELAY: f64 = 0.15;
+
+/// The release speed of a drag, in points per second, from which the
+/// carousel moves one slide in the drag direction.
+const FLICK_SPEED: f64 = 300.0;
+
+/// A drag that rests longer than this before the release, in seconds, is
+/// not a flick.
+const FLICK_REST: f64 = 0.1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Button {
@@ -43,6 +51,10 @@ pub struct Carousel {
     free: Option<f64>,
     /// The pointer position and the scroll position where a drag started.
     drag: Option<(Point, f64)>,
+    /// The scroll position and the time of the last drag move, and the
+    /// drag speed there in slides per second.
+    flick: (f64, f64, f64),
+    motion: MotionTokens,
     snap_at: Option<f64>,
     /// The focused button, and the hovered and pressed one.
     focus: Button,
@@ -77,6 +89,8 @@ impl Carousel {
             changed_at: f64::NEG_INFINITY,
             free: None,
             drag: None,
+            flick: (0.0, 0.0, 0.0),
+            motion: MotionTokens::default(),
             snap_at: None,
             focus: Button::Next,
             parts: Parts::default(),
@@ -131,17 +145,17 @@ impl Carousel {
         &self.labels[button as usize]
     }
 
-    /// The scroll position in slides at `time`.
-    fn position(&self, tokens: &choscorui_core::DesignTokens, time: f64) -> f64 {
+    /// The shown scroll position in slides at `time`.
+    fn position(&self, motion: &MotionTokens, time: f64) -> f64 {
         if let Some(free) = self.free {
             return free;
         }
-        let linear = if tokens.motion.reduced || self.duration_ms == 0 {
+        let linear = if motion.reduced || self.duration_ms == 0 {
             1.0
         } else {
             ((time - self.changed_at) * 1000.0 / f64::from(self.duration_ms)).clamp(0.0, 1.0)
         };
-        let eased = tokens.motion.easing.solve(linear);
+        let eased = motion.easing.solve(linear);
         self.from + (self.current as f64 - self.from) * eased
     }
 
@@ -175,10 +189,9 @@ impl Carousel {
         cx.request_paint();
     }
 
-    /// The current scroll position without the animation, for starting a
-    /// new move.
-    fn settled(&self) -> f64 {
-        self.free.unwrap_or(self.current as f64)
+    /// The shown scroll position now, where a new move starts.
+    fn shown(&self, cx: &ControlContext<'_>) -> f64 {
+        self.position(&self.motion, cx.time())
     }
 
     fn step_by(&mut self, cx: &mut ControlContext<'_>, forward: bool) -> bool {
@@ -195,15 +208,33 @@ impl Carousel {
         } else {
             self.current - 1
         };
-        let from = self.settled();
+        let from = self.shown(cx);
         self.show(cx, target, from);
         true
     }
 
     fn snap(&mut self, cx: &mut ControlContext<'_>) {
-        let from = self.settled();
+        let from = self.shown(cx);
         let slide = from.round().clamp(0.0, self.last() as f64) as usize;
         self.show(cx, slide, from);
+    }
+
+    /// Ends a drag that started at slide position `start`: a flick moves
+    /// one slide in its direction, else the nearest slide shows.
+    fn release(&mut self, cx: &mut ControlContext<'_>, start: f64) {
+        let (_, at, speed) = self.flick;
+        let fast = cx.time() - at <= FLICK_REST && speed.abs() * self.step >= FLICK_SPEED;
+        if !fast {
+            self.snap(cx);
+            return;
+        }
+        let target = if speed > 0.0 {
+            start.floor() + 1.0
+        } else {
+            start.ceil() - 1.0
+        };
+        let from = self.shown(cx);
+        self.show(cx, target.clamp(0.0, self.last() as f64) as usize, from);
     }
 
     fn button_at(&self, point: Point) -> Option<Button> {
@@ -264,9 +295,10 @@ impl Carousel {
                 if !self.viewport.contains(*position) {
                     return EventReply::Continue;
                 }
-                let from = self.settled();
+                let from = self.shown(cx);
                 self.drag = Some((*position, from));
                 self.free = Some(from);
+                self.flick = (from, cx.time(), 0.0);
                 cx.capture_pointer(true);
                 EventReply::Stop
             }
@@ -277,6 +309,14 @@ impl Carousel {
                 let moved = Point::new(position.x - start.x, position.y - start.y);
                 let free = (from + self.slides_for(moved)).clamp(0.0, self.last() as f64);
                 self.free = Some(free);
+                let (last, at, speed) = self.flick;
+                let elapsed = cx.time() - at;
+                let speed = if elapsed > 0.0 {
+                    (free - last) / elapsed
+                } else {
+                    speed
+                };
+                self.flick = (free, cx.time(), speed);
                 cx.request_paint();
                 EventReply::Stop
             }
@@ -288,8 +328,8 @@ impl Carousel {
                     return EventReply::Stop;
                 }
                 cx.capture_pointer(false);
-                if self.drag.take().is_some() {
-                    self.snap(cx);
+                if let Some((_, start)) = self.drag.take() {
+                    self.release(cx, start);
                     return EventReply::Stop;
                 }
                 EventReply::Continue
@@ -312,11 +352,12 @@ impl Carousel {
                 if along == 0.0 || self.step <= 0.0 {
                     return EventReply::Continue;
                 }
-                let free =
-                    (self.settled() + along * scale / self.step).clamp(0.0, self.last() as f64);
+                // A wheel during an animation starts from the shown position.
+                let base = self.shown(cx);
+                let free = (base + along * scale / self.step).clamp(0.0, self.last() as f64);
                 // At the first or last slide the wheel goes on to an outer
                 // scroll view.
-                if free == self.settled() {
+                if free == base {
                     return EventReply::Continue;
                 }
                 self.free = Some(free);
@@ -332,7 +373,7 @@ impl Carousel {
         let item = cx.style(Self::query(Slot::Item));
         let surface = cx.style(StyleQuery::new(ControlKind::Card, Slot::Root));
         let title = cx.style(StyleQuery::new(ControlKind::Card, Slot::Title));
-        let position = self.position(cx.tokens, cx.time);
+        let position = self.position(&cx.tokens.motion, cx.time);
         let viewport = self.viewport;
         let pad = item.padding.inline_start;
         let extent = self.step - pad;
@@ -403,6 +444,7 @@ impl CustomControl for Carousel {
         let side = cx.style(Self::query(Slot::Previous)).min_height;
         self.rtl = cx.rtl();
         self.duration_ms = root.motion_ms;
+        self.motion = cx.tokens.motion;
         self.line = root.text.line_height;
         let pad = item.padding.inline_start;
         let outer = side + root.gap;
@@ -454,6 +496,12 @@ impl CustomControl for Carousel {
                 }
                 key if key == next => {
                     self.step_by(cx, true);
+                    EventReply::Stop
+                }
+                Key::Home | Key::End => {
+                    let slide = if *key == Key::Home { 0 } else { self.last() };
+                    let from = self.shown(cx);
+                    self.show(cx, slide, from);
                     EventReply::Stop
                 }
                 Key::Tab => {

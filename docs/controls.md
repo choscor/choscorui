@@ -3917,7 +3917,8 @@ and the size with `.with(|group| group.with_count(count))` and
   constraints, the slides are 320 pt wide.
 - Arrow keys along the orientation, the buttons, `Increment`, and
   `Decrement` move one slide. Horizontal keys and buttons follow the
-  reading order. Each move emits `Changed(Index(slide))` and animates.
+  reading order. Home and End go to the first and the last slide. Each
+  move emits `Changed(Index(slide))` and animates.
 - The enabled buttons are tab stops inside the carousel. Enter or Space
   activates the focused button.
 - A drag moves the slides with the pointer. A wheel scrolls them. A
@@ -3925,6 +3926,11 @@ and the size with `.with(|group| group.with_count(count))` and
   the drag ends, or 0.15 s after the last wheel event, the carousel snaps
   to the nearest slide. At the first or the last slide, the carousel does
   not use the wheel, so an outer scroll view scrolls.
+- **Flick.** A drag that ends at 300 pt/s or faster moves one slide in
+  its direction, even when it is shorter than half a slide. A drag that
+  rests for more than 0.1 s before the release is not a flick.
+- A drag, a wheel, or a key during an animation starts from the shown
+  position, not from the target slide.
 
 | Part | Slot | Value |
 | --- | --- | --- |
