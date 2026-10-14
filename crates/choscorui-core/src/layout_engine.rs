@@ -1548,10 +1548,15 @@ impl LayoutEngine {
                     );
                     let offset = Point::new(offset.x.clamp(0.0, max.x), offset.y.clamp(0.0, max.y));
                     self.scroll_offsets.insert(node, offset);
-                    let child_rect = Rect::new(
-                        Point::new(content.min_x() - offset.x, content.min_y() - offset.y),
-                        size,
-                    );
+                    // The horizontal offset is in reading order: a
+                    // right-to-left scroll starts at the right edge of
+                    // its content.
+                    let x = if direction == LayoutDirection::Rtl {
+                        content.max_x() - size.width + offset.x
+                    } else {
+                        content.min_x() - offset.x
+                    };
+                    let child_rect = Rect::new(Point::new(x, content.min_y() - offset.y), size);
                     self.arrange_node(tree, child, child_rect, direction, leaves, out)?;
                 }
             }

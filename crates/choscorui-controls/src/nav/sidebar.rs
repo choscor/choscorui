@@ -613,7 +613,7 @@ impl Sidebar {
                 }
             }
             Key::ArrowRight | Key::ArrowLeft if self.is_expanded() => {
-                let forward = (key == Key::ArrowRight) != self.rtl;
+                let forward = key.in_reading_order(self.rtl) == Key::ArrowRight;
                 return self.menu_key(cx, forward);
             }
             Key::Tab if self.mobile && self.reveal.open && !stops.is_empty() => {

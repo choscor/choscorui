@@ -474,10 +474,18 @@ impl Inner {
                 } else if target.max_y() > view.max_y() {
                     next.y += (target.max_y() - view.max_y()).min(target.min_y() - view.min_y());
                 }
+                // A right-to-left offset runs from the right edge.
+                let rtl = self
+                    .nodes
+                    .get(&id)
+                    .and_then(|data| data.scroll.as_ref())
+                    .is_some_and(|shared| shared.rtl.get());
+                let sign = if rtl { -1.0 } else { 1.0 };
                 if target.min_x() < view.min_x() {
-                    next.x -= view.min_x() - target.min_x();
+                    next.x -= sign * (view.min_x() - target.min_x());
                 } else if target.max_x() > view.max_x() {
-                    next.x += (target.max_x() - view.max_x()).min(target.min_x() - view.min_x());
+                    next.x +=
+                        sign * (target.max_x() - view.max_x()).min(target.min_x() - view.min_x());
                 }
                 if next != offset {
                     super::layout::set_scroll(self, id, next);

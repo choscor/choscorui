@@ -582,12 +582,7 @@ impl ColorPicker {
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
         let channel = self.focus;
         let value = self.channel(channel);
-        let (forward, back) = if self.rtl {
-            (Key::ArrowLeft, Key::ArrowRight)
-        } else {
-            (Key::ArrowRight, Key::ArrowLeft)
-        };
-        let target = match key {
+        let target = match key.in_reading_order(self.rtl) {
             Key::ArrowUp | Key::ArrowDown => {
                 let current = Self::channel_index(channel);
                 if let Some(next) =
@@ -603,8 +598,8 @@ impl ColorPicker {
                 cx.emit(ControlMessage::Activated);
                 return EventReply::Stop;
             }
-            k if k == forward => value + CHANNEL_STEP,
-            k if k == back => value - CHANNEL_STEP,
+            Key::ArrowRight => value + CHANNEL_STEP,
+            Key::ArrowLeft => value - CHANNEL_STEP,
             Key::PageUp => value + CHANNEL_PAGE,
             Key::PageDown => value - CHANNEL_PAGE,
             Key::Home => 0.0,

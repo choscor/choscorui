@@ -3,8 +3,8 @@
 //! item model.
 
 use choscorui_compose::view::{
-    Binding, Button, Cx, Env, LazyHStack, LazyVStack, List, ScrollView, Text, View, ViewExt,
-    ViewHost,
+    Binding, Button, Cx, Env, HStack, LazyHStack, LazyVStack, List, ScrollView, Text, View,
+    ViewExt, ViewHost,
 };
 use choscorui_compose::{Property, Runtime};
 use choscorui_controls::{EstimatedText, ShortcutModifiers};
@@ -258,14 +258,74 @@ fn a_lazy_hstack_mirrors_in_right_to_left_layouts() {
     assert_eq!(bounds(&mut ltr, "Col 1").min_x(), 50.0);
     // In right-to-left layouts each column sits left of the one before,
     // and the text of a column sits at its leading (right) edge.
-    let low = first_index(&mut rtl);
-    assert_eq!(right_edges(&mut rtl, low, 8), steps(400.0, 8));
-    // A scroll by 2.4 columns shows parts of two more columns.
+    // The view starts at the right edge, with the first column.
+    assert_eq!(first_index(&mut rtl), 0);
+    assert_eq!(right_edges(&mut rtl, 0, 8), steps(400.0, 8));
+    // A scroll by 2.4 columns goes on in the reading order: the content
+    // moves to the right, and parts of nine columns show.
     wheel(&mut rtl, 120.0);
-    let low = first_index(&mut rtl);
+    assert_eq!(first_index(&mut rtl), 2);
     assert_eq!(shown(&mut rtl, "Col ").len(), 9);
-    assert_eq!(right_edges(&mut rtl, low, 9), steps(430.0, 9));
+    assert_eq!(right_edges(&mut rtl, 2, 9), steps(420.0, 9));
     assert_eq!(rtl.take_errors(), Vec::new());
+}
+
+#[test]
+fn horizontal_scroll_keys_follow_the_reading_order() {
+    let columns = || {
+        ScrollView::new(
+            LazyHStack::new(100_usize, 50.0, |index| Text::new(format!("Col {index}")))
+                .spacing(0.0),
+        )
+        .axis(Axis::Horizontal)
+        .focusable(true)
+    };
+    // The right edge of the text of a middle column, then after each
+    // key.
+    let edges = |tag: &str, keys: [Key; 2]| {
+        let mut host = host_with(columns(), env(tag), Runtime::new());
+        key(&mut host, Key::Tab);
+        let column = format!("Col {}", first_index(&mut host) + 3);
+        let mut edges = vec![bounds(&mut host, &column).max_x()];
+        for pressed in keys {
+            key(&mut host, pressed);
+            host.layout();
+            edges.push(bounds(&mut host, &column).max_x());
+        }
+        edges
+    };
+    // One line is 40 points. The key toward the end of the reading order
+    // scrolls forward, and the other key scrolls back.
+    let moves = |edges: Vec<f64>| [edges[1] - edges[0], edges[2] - edges[1]];
+    assert_eq!(
+        moves(edges("en", [Key::ArrowRight, Key::ArrowLeft])),
+        [-40.0, 40.0]
+    );
+    assert_eq!(
+        moves(edges("he", [Key::ArrowLeft, Key::ArrowRight])),
+        [40.0, -40.0]
+    );
+}
+
+#[test]
+fn focus_scrolls_a_right_to_left_row_to_the_focused_button() {
+    let buttons = (0..20)
+        .map(|index| Button::new(format!("Button {index}"), || {}).into_any())
+        .collect::<Vec<_>>();
+    let row = ScrollView::new(HStack::new(buttons)).axis(Axis::Horizontal);
+    let mut host = host_with(row, env("he"), Runtime::new());
+    let window = Rect::new(Point::new(0.0, 0.0), Size::new(400.0, 300.0));
+    let first = bounds(&mut host, "Button 0");
+    assert!(first.max_x() <= 400.0 && first.max_x() > 350.0, "{first:?}");
+    for index in 0..20 {
+        host.focus_next(false);
+        host.layout();
+        let focused = bounds(&mut host, &format!("Button {index}"));
+        assert!(
+            focused.min_x() > window.min_x() - 1e-6 && focused.max_x() < window.max_x() + 1e-6,
+            "Button {index} at {focused:?}"
+        );
+    }
 }
 
 /// The smallest index among the mounted columns.

@@ -99,6 +99,9 @@ pub struct Resizable {
     grip: bool,
     /// The pointer's offset from the handle start during a drag.
     drag: Option<f64>,
+    /// A horizontal split in a right-to-left layout puts the first pane
+    /// at the right, and the arrow keys follow the reading order.
+    rtl: bool,
 }
 
 impl Resizable {
@@ -147,6 +150,7 @@ impl Resizable {
             position,
             grip: false,
             drag: None,
+            rtl: false,
         })
     }
 
@@ -154,6 +158,15 @@ impl Resizable {
     #[must_use]
     pub fn with_grip(mut self, grip: bool) -> Self {
         self.grip = grip;
+        self
+    }
+
+    /// Mirrors a horizontal split in a right-to-left `direction`: the
+    /// first pane is at the right, and the drag and the arrow keys follow
+    /// the reading order. Call it before `install`.
+    #[must_use]
+    pub fn with_direction(mut self, direction: choscorui_core::LayoutDirection) -> Self {
+        self.rtl = direction == choscorui_core::LayoutDirection::Rtl;
         self
     }
 
@@ -234,7 +247,7 @@ impl Resizable {
             ResizableInput::Key(KeyEvent::Down { key, .. })
                 if tree.focus() == Some(self.handle) =>
             {
-                match (self.orientation, key) {
+                match (self.orientation, key.in_reading_order(self.rtl)) {
                     (_, Key::Home) => self.minimum_first,
                     (_, Key::End) => self.maximum(),
                     (SplitOrientation::Horizontal, Key::ArrowLeft)
@@ -300,6 +313,7 @@ impl Resizable {
     /// The distance of `point` from the start of the bounds along the split.
     fn along(&self, point: Point) -> f64 {
         match self.orientation {
+            SplitOrientation::Horizontal if self.rtl => self.bounds.max_x() - point.x,
             SplitOrientation::Horizontal => point.x - self.bounds.origin.x,
             SplitOrientation::Vertical => point.y - self.bounds.origin.y,
         }
@@ -308,6 +322,15 @@ impl Resizable {
     fn arrange(&self, tree: &mut Tree, position: f64) -> Result<(), ContainerError> {
         let (first, handle, second) =
             split_rects(self.bounds, self.orientation, position, self.handle_extent);
+        let mirror = |rect: Rect| {
+            if self.rtl && self.orientation == SplitOrientation::Horizontal {
+                let x = self.bounds.origin.x + self.bounds.max_x() - rect.max_x();
+                Rect::new(Point::new(x, rect.origin.y), rect.size)
+            } else {
+                rect
+            }
+        };
+        let (first, handle, second) = (mirror(first), mirror(handle), mirror(second));
         tree.set_bounds(self.first, first)?;
         tree.set_bounds(self.handle, handle)?;
         tree.set_bounds(self.second, second)?;
@@ -1101,10 +1124,10 @@ impl HostedResizable {
         key: Key,
     ) -> choscorui_core::EventReply {
         use choscorui_core::EventReply;
-        let (back, forward) = match (self.orientation, self.rtl) {
-            (SplitOrientation::Horizontal, false) => (Key::ArrowLeft, Key::ArrowRight),
-            (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
-            (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
+        let key = key.in_reading_order(self.rtl);
+        let (back, forward) = match self.orientation {
+            SplitOrientation::Horizontal => (Key::ArrowLeft, Key::ArrowRight),
+            SplitOrientation::Vertical => (Key::ArrowUp, Key::ArrowDown),
         };
         if key == Key::Escape && self.drag.is_some_and(|(dragged, _)| dragged == index) {
             // Escape puts the panes back where the drag started.

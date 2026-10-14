@@ -398,12 +398,9 @@ impl Toolbar {
             .focused
             .and_then(|focused| order.iter().position(|index| *index == focused));
         let rtl = direction == LayoutDirection::Rtl && self.area.horizontal();
+        let key = key.in_reading_order(rtl);
         let (next, previous) = if self.area.horizontal() {
-            if rtl {
-                (Key::ArrowLeft, Key::ArrowRight)
-            } else {
-                (Key::ArrowRight, Key::ArrowLeft)
-            }
+            (Key::ArrowRight, Key::ArrowLeft)
         } else {
             (Key::ArrowDown, Key::ArrowUp)
         };

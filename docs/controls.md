@@ -1675,6 +1675,9 @@ scroll view use the same bar.
 - A page is the viewport less 40 pt of overlap. Semantic `Increment` and
   `Decrement` page forward and back.
 - A press does not focus the view.
+- In a right-to-left layout, a horizontal view starts at the right edge of
+  its content. ArrowLeft scrolls toward the end of the reading order, and
+  the scroll bar and a sideways wheel follow the same order.
 
 | Field | `ScrollView` semantics |
 | --- | --- |
@@ -1697,6 +1700,10 @@ scroll view use the same bar.
   the position.
 - A press on a pane does not start a drag.
 - The arrow keys along the split axis move the handle by 10 points.
+- `with_direction(LayoutDirection::Rtl)` mirrors a horizontal split. The
+  first pane is at the right, and a drag to the left makes it larger.
+  ArrowLeft moves toward the end of the reading order, as ArrowRight does
+  in a left-to-right layout.
 - Home and End go to the smallest and the largest position that both pane
   minimums allow.
 - Positions clamp to that range. `set_position` outside the range fails

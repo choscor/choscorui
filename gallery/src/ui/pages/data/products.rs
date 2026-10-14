@@ -364,7 +364,7 @@ impl View for CellEditPage {
                 .with_keys(
                     &[Key::ArrowLeft, Key::ArrowRight],
                     Rc::new(move |key| {
-                        let next = (key == Key::ArrowRight) != rtl;
+                        let next = key.in_reading_order(rtl) == Key::ArrowRight;
                         column.update(|column| {
                             *column = if next {
                                 (*column + 1).min(COLUMNS.len() - 1)

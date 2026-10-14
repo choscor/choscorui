@@ -90,6 +90,67 @@ fn splitter_resizes_by_keyboard_and_reports_an_accessible_range() {
 }
 
 #[test]
+fn a_right_to_left_splitter_mirrors_its_panes_drag_and_keys() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 500.0, 200.0));
+    let mut node = || tree.attach(tree.root(), rect(0.0, 0.0, 1.0, 1.0)).unwrap();
+    let (first, handle, second) = (node(), node(), node());
+    let mut splitter = Resizable::new(
+        "Sidebar width",
+        SplitOrientation::Horizontal,
+        first,
+        handle,
+        second,
+        rect(0.0, 0.0, 500.0, 200.0),
+        100.0,
+        120.0,
+        8.0,
+        240.0,
+    )
+    .unwrap()
+    .with_direction(LayoutDirection::Rtl);
+    splitter.install(&mut tree).unwrap();
+    // The first pane is at the right.
+    assert_eq!(tree.bounds(first), Some(rect(260.0, 0.0, 240.0, 200.0)));
+    assert_eq!(tree.bounds(handle), Some(rect(252.0, 0.0, 8.0, 200.0)));
+    assert_eq!(tree.bounds(second), Some(rect(0.0, 0.0, 252.0, 200.0)));
+    tree.set_focus(Some(handle)).unwrap();
+    let key = |key| ResizableInput::Key(KeyEvent::Down { key, repeat: false });
+    // ArrowLeft goes toward the end of the reading order: the first pane
+    // grows.
+    assert_eq!(
+        splitter.handle(&mut tree, key(Key::ArrowLeft)).unwrap(),
+        Some(250.0)
+    );
+    assert_eq!(tree.bounds(first), Some(rect(250.0, 0.0, 250.0, 200.0)));
+    assert_eq!(
+        splitter.handle(&mut tree, key(Key::ArrowRight)).unwrap(),
+        Some(240.0)
+    );
+    // A drag to the left also makes the first pane larger.
+    let press = Point::new(256.0, 100.0);
+    splitter
+        .handle(
+            &mut tree,
+            ResizableInput::Pointer(PointerEvent::Down {
+                position: press,
+                button: PointerButton::Primary,
+            }),
+        )
+        .unwrap();
+    assert_eq!(
+        splitter
+            .handle(
+                &mut tree,
+                ResizableInput::Pointer(PointerEvent::Move {
+                    position: Point::new(206.0, 100.0),
+                }),
+            )
+            .unwrap(),
+        Some(290.0)
+    );
+}
+
+#[test]
 fn splitter_rejects_invalid_changes_atomically_and_clamps_actions() {
     let mut tree = Tree::new(rect(0.0, 0.0, 300.0, 400.0));
     let first = tree

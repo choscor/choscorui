@@ -667,6 +667,9 @@ impl<C: View> View for Group<C> {
 pub(crate) struct ScrollShared {
     pub offset: Cell<Point>,
     pub content: Cell<Size>,
+    /// True in a right-to-left layout, where the horizontal offset runs
+    /// from the right edge.
+    pub rtl: Cell<bool>,
 }
 
 /// How far one wheel line or arrow key scrolls, in points.
@@ -720,6 +723,9 @@ impl ScrollControl {
         let amount = match self.axis {
             Axis::Vertical => delta.y,
             Axis::Horizontal if delta.x == 0.0 => delta.y,
+            // A sideways wheel moves the content with it; in a
+            // right-to-left layout that is the other way along the offset.
+            Axis::Horizontal if self.shared.rtl.get() => -delta.x,
             Axis::Horizontal => delta.x,
         };
         amount * scale
@@ -738,7 +744,7 @@ impl ScrollControl {
             Axis::Horizontal => (Key::ArrowLeft, Key::ArrowRight),
         };
         let offset = self.bar.offset();
-        match key {
+        match key.in_reading_order(self.shared.rtl.get()) {
             key if key == back => Some(offset - WHEEL_LINE),
             key if key == forward => Some(offset + WHEEL_LINE),
             Key::Space if shift => Some(offset - self.page()),
@@ -807,6 +813,7 @@ impl CustomControl for ScrollControl {
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.shared.rtl.set(cx.rtl());
         self.bar.arrange(cx, bounds);
         self.sync();
     }

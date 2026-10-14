@@ -258,11 +258,12 @@ impl Carousel {
         along / self.step
     }
 
+    /// The previous and the next key, in reading order.
     fn keys(&self) -> (Key, Key) {
-        match (self.horizontal(), self.rtl) {
-            (true, false) => (Key::ArrowLeft, Key::ArrowRight),
-            (true, true) => (Key::ArrowRight, Key::ArrowLeft),
-            (false, _) => (Key::ArrowUp, Key::ArrowDown),
+        if self.horizontal() {
+            (Key::ArrowLeft, Key::ArrowRight)
+        } else {
+            (Key::ArrowUp, Key::ArrowDown)
         }
     }
 
@@ -497,44 +498,46 @@ impl CustomControl for Carousel {
                 }
                 EventReply::Stop
             }
-            ControlEvent::Key(KeyEvent::Down { key, repeat }) => match *key {
-                key if key == previous => {
-                    self.step_by(cx, false);
-                    EventReply::Stop
-                }
-                key if key == next => {
-                    self.step_by(cx, true);
-                    EventReply::Stop
-                }
-                Key::Home | Key::End => {
-                    let slide = if *key == Key::Home { 0 } else { self.last() };
-                    let from = self.shown(cx);
-                    self.show(cx, slide, from);
-                    EventReply::Stop
-                }
-                Key::Tab => {
-                    let back = cx.modifiers().shift;
-                    let other = match (self.focus, back) {
-                        (Button::Previous, false) => Some(Button::Next),
-                        (Button::Next, true) => Some(Button::Previous),
-                        _ => None,
-                    };
-                    match other.filter(|button| self.can(*button)) {
-                        Some(button) => {
-                            self.focus = button;
-                            cx.request_paint();
-                            cx.request_semantics();
-                            EventReply::Stop
-                        }
-                        None => EventReply::Continue,
+            ControlEvent::Key(KeyEvent::Down { key, repeat }) => {
+                match key.in_reading_order(self.rtl) {
+                    key if key == previous => {
+                        self.step_by(cx, false);
+                        EventReply::Stop
                     }
+                    key if key == next => {
+                        self.step_by(cx, true);
+                        EventReply::Stop
+                    }
+                    Key::Home | Key::End => {
+                        let slide = if *key == Key::Home { 0 } else { self.last() };
+                        let from = self.shown(cx);
+                        self.show(cx, slide, from);
+                        EventReply::Stop
+                    }
+                    Key::Tab => {
+                        let back = cx.modifiers().shift;
+                        let other = match (self.focus, back) {
+                            (Button::Previous, false) => Some(Button::Next),
+                            (Button::Next, true) => Some(Button::Previous),
+                            _ => None,
+                        };
+                        match other.filter(|button| self.can(*button)) {
+                            Some(button) => {
+                                self.focus = button;
+                                cx.request_paint();
+                                cx.request_semantics();
+                                EventReply::Stop
+                            }
+                            None => EventReply::Continue,
+                        }
+                    }
+                    Key::Enter | Key::Space if !repeat => {
+                        self.step_by(cx, self.focus == Button::Next);
+                        EventReply::Stop
+                    }
+                    _ => EventReply::Continue,
                 }
-                Key::Enter | Key::Space if !repeat => {
-                    self.step_by(cx, self.focus == Button::Next);
-                    EventReply::Stop
-                }
-                _ => EventReply::Continue,
-            },
+            }
             ControlEvent::FocusChanged(true) => {
                 // Shift+Tab arrives at Next, Tab at Previous, when enabled.
                 let preferred = if cx.modifiers().shift {
