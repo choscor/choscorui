@@ -20,18 +20,12 @@ jobs:
       - name: Build
         run: cargo test -p choscorui-macos --test lifetime_smoke --locked --no-run
       - name: churn base
-        run: DIAG_ONLY=churn DIAG_FIX= cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn early
-        run: DIAG_ONLY=churn DIAG_FIX=early cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn early-unhost
-        run: DIAG_ONLY=churn DIAG_FIX=early,unhost cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn early-contents-flush
-        run: DIAG_ONLY=churn DIAG_FIX=early,contents,flush cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn early-device
-        run: DIAG_ONLY=churn DIAG_FIX=early,device cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn notx
-        run: DIAG_ONLY=churn DIAG_FIX=notx cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn late-all
-        run: DIAG_ONLY=churn DIAG_FIX=forget,contents,device,unhost,flush cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn early-all
-        run: DIAG_ONLY=churn DIAG_FIX=early,forget,contents,device,unhost,flush cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
+        run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|IOSurface|panicked'
+      - name: churn cg
+        run: DIAG_ONLY=churn CHOSCORUI_PAINTER=core-graphics cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|IOSurface|panicked'
+      - name: churn noshow
+        run: DIAG_ONLY=churn DIAG_NOSHOW=1 cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|IOSurface|panicked'
+      - name: churn noshow-cg
+        run: DIAG_ONLY=churn DIAG_NOSHOW=1 CHOSCORUI_PAINTER=core-graphics cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|IOSurface|panicked'
+      - name: churn all-cg
+        run: DIAG_ONLY=churn CHOSCORUI_PAINTER=core-graphics DIAG_ONLY= cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|IOSurface|panicked'

@@ -102,7 +102,10 @@ fn window_churn(app: &Application, count: usize) {
             &DesignTokens::light(),
             i % 2 == 0,
         ));
-        window.show();
+        let noshow = std::env::var_os("DIAG_NOSHOW").is_some();
+        if !noshow {
+            window.show();
+        }
         let before = window.paint_count();
         let _ = window.set_content_size(Size::new(260.0, 180.0));
         window.set_display_list(themed(
@@ -110,7 +113,9 @@ fn window_churn(app: &Application, count: usize) {
             &DesignTokens::dark(),
             false,
         ));
-        assert!(wait_for_paint(app, &window, before), "churn window paints");
+        if !noshow {
+            assert!(wait_for_paint(app, &window, before), "churn window paints");
+        }
         open.push(window);
     }
     // Replacing the main menu (as a language switch does) while windows are
