@@ -6,6 +6,11 @@
 //! checks the scales of the connected displays. The text captures of Core
 //! Graphics come from a child process with `CHOSCORUI_PAINTER=core-graphics`,
 //! which also checks the fallback painter.
+//!
+//! A Mac without a usable Metal device, such as some virtual machines,
+//! reports `gpu_painting` as unsupported. There the test checks that each
+//! window paints with Core Graphics and draws, because no Metal frame
+//! exists to compare.
 
 #[cfg(target_os = "macos")]
 mod parity;
@@ -165,9 +170,19 @@ mod smoke {
     /// a line to `failures` for each fixture that differs too much.
     fn check_screen(app: &Application, index: usize, failures: &mut Vec<String>) {
         let window = window(app, index);
-        assert_eq!(window.painter(), Painter::Metal);
-        assert_eq!(choscorui::capabilities().gpu_painting, Support::Supported);
         let scale = window.backing_scale_factor();
+        match choscorui::capabilities().gpu_painting {
+            Support::Supported => assert_eq!(window.painter(), Painter::Metal),
+            Support::Unsupported => {
+                assert_eq!(window.painter(), Painter::CoreGraphics);
+                println!(
+                    "screen {index}: no Metal device, so the window paints with Core Graphics"
+                );
+                fallback_draws(app, &window, scale);
+                return;
+            }
+            other => panic!("gpu_painting must be supported or not, not {other:?}"),
+        }
         let mut check = |name: &str, expected: &[u8], actual: &Image| {
             let (worst, share) =
                 compare(expected, actual.pixels(), TOLERANCE).expect("captures of one size");
@@ -209,6 +224,23 @@ mod smoke {
             check(name, &core_graphics, metal);
         }
         std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// Checks that a window without Metal still shows its display list.
+    fn fallback_draws(app: &Application, window: &Window, scale: f64) {
+        let mut list = background();
+        list.fill_rect(Rect::from_xywh(0.0, 0.0, 32.0, HEIGHT), Color::BLACK);
+        let image = capture(app, window, &list);
+        let width = image.width() as usize;
+        let at = |x: f64, y: f64| ((y * scale) as usize * width + (x * scale) as usize) * 4;
+        assert_eq!(
+            &image.pixels()[at(8.0, 8.0)..at(8.0, 8.0) + 4],
+            &[0, 0, 0, 255]
+        );
+        assert_eq!(
+            &image.pixels()[at(48.0, 8.0)..at(48.0, 8.0) + 4],
+            &[255, 255, 255, 255]
+        );
     }
 
     fn backdrop_blur_softens_what_is_beneath(app: &Application, window: &Window, scale: f64) {

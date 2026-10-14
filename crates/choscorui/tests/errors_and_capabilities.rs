@@ -88,11 +88,19 @@ fn capabilities_describe_the_running_backend() {
         assert_eq!(capabilities.backend, "macos");
         assert!(capabilities.multiple_windows.is_supported());
         assert!(capabilities.accessibility.is_supported());
-        // Windows paint with Metal unless the environment selects Core
-        // Graphics.
+        // Windows paint with Metal when the Mac has a Metal device that
+        // runs the painter, which a virtual machine may lack. The
+        // environment can select Core Graphics instead.
         let core_graphics =
             std::env::var("CHOSCORUI_PAINTER").is_ok_and(|painter| painter == "core-graphics");
-        assert_eq!(capabilities.gpu_painting.is_supported(), !core_graphics);
+        if core_graphics {
+            assert_eq!(capabilities.gpu_painting, choscorui::Support::Unsupported);
+        } else {
+            assert!(matches!(
+                capabilities.gpu_painting,
+                choscorui::Support::Supported | choscorui::Support::Unsupported
+            ));
+        }
         // Test binaries are not app bundles, so notifications are
         // conditional here.
         assert!(matches!(
