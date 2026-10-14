@@ -7,8 +7,8 @@ use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext}
 use crate::hosted;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Locale, Localizer, Measured,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 use plot::Plot;
 
@@ -70,7 +70,10 @@ pub struct Chart {
     series: Vec<ChartSeries>,
     legend: bool,
     donut: bool,
-    format: Box<dyn Fn(f64) -> String>,
+    /// The app's value format, or `None` for the number format of
+    /// `locale`.
+    format: Option<Box<dyn Fn(f64) -> String>>,
+    locale: Locale,
     /// The picked category, and whether its tooltip shows.
     active: Option<usize>,
     tooltip: bool,
@@ -79,12 +82,19 @@ pub struct Chart {
 }
 
 impl Chart {
+    /// A chart of `kind`. A radar needs three categories, so a radar with
+    /// fewer shows as a bar chart.
     pub fn new(
         name: impl Into<String>,
         kind: ChartKind,
         categories: Vec<String>,
         series: Vec<ChartSeries>,
     ) -> Self {
+        let kind = if kind == ChartKind::Radar && categories.len() < 3 {
+            ChartKind::Bar
+        } else {
+            kind
+        };
         Self {
             name: name.into(),
             kind,
@@ -92,7 +102,8 @@ impl Chart {
             series,
             legend: false,
             donut: false,
-            format: Box::new(|value| value.to_string()),
+            format: None,
+            locale: Localizer::builtin().locale().clone(),
             active: None,
             tooltip: false,
             plot: Plot::default(),
@@ -117,8 +128,28 @@ impl Chart {
     /// Formats values in the tooltip and in semantics.
     #[must_use]
     pub fn with_format(mut self, format: impl Fn(f64) -> String + 'static) -> Self {
-        self.format = Box::new(format);
+        self.format = Some(Box::new(format));
         self
+    }
+
+    /// The locale whose number format shows the values when the app
+    /// gives no format: whole numbers with digit groups, and others with
+    /// two decimals.
+    #[must_use]
+    pub fn with_locale(mut self, locale: Locale) -> Self {
+        self.locale = locale;
+        self
+    }
+
+    /// `value` as the tooltip and the semantics show it.
+    fn formatted(&self, value: f64) -> String {
+        if let Some(format) = &self.format {
+            return format(value);
+        }
+        if value.fract() == 0.0 && value.abs() < 1e15 {
+            return self.locale.format_integer(value as i64);
+        }
+        (self.locale.format_decimal(value, 2)).unwrap_or_else(|_| value.to_string())
     }
 
     fn query(slot: Slot) -> StyleQuery {
@@ -145,7 +176,7 @@ impl Chart {
     fn rows(&self, category: usize) -> Vec<(usize, String, String)> {
         if self.per_category() {
             let label = self.categories.get(category).cloned().unwrap_or_default();
-            vec![(category, label, (self.format)(self.value(0, category)))]
+            vec![(category, label, self.formatted(self.value(0, category)))]
         } else {
             self.series
                 .iter()
@@ -154,7 +185,7 @@ impl Chart {
                     (
                         index,
                         series.label.clone(),
-                        (self.format)(self.value(index, category)),
+                        self.formatted(self.value(index, category)),
                     )
                 })
                 .collect()
@@ -176,6 +207,13 @@ impl Chart {
                 .map(|(index, series)| (index, series.label.as_str()))
                 .collect()
         }
+    }
+
+    /// The pointer left the marks: the tooltip hides, and an unfocused
+    /// chart drops its highlight.
+    fn leave(&mut self, cx: &mut ControlContext<'_>) {
+        let active = self.active.filter(|_| cx.is_focused());
+        self.pick(cx, active, false);
     }
 
     fn pick(&mut self, cx: &mut ControlContext<'_>, active: Option<usize>, tooltip: bool) {
@@ -200,26 +238,22 @@ impl Chart {
                 self.kind,
                 ChartKind::Pie | ChartKind::Radar | ChartKind::Radial
             );
-        let (next, previous) = if mirrored {
-            (Key::ArrowLeft, Key::ArrowRight)
-        } else {
-            (Key::ArrowRight, Key::ArrowLeft)
-        };
-        let target = match key {
-            Key::Escape if self.tooltip => {
-                self.pick(cx, self.active, false);
+        let target = match key.in_reading_order(mirrored) {
+            // Escape clears the highlight and the tooltip.
+            Key::Escape if self.active.is_some() => {
+                self.pick(cx, None, false);
                 return EventReply::Stop;
             }
             Key::Home => 0,
             Key::End => count - 1,
-            key if key == next || key == Key::ArrowDown => {
+            Key::ArrowRight | Key::ArrowDown => {
                 if self.active.is_some() {
                     (current + 1).min(count - 1)
                 } else {
                     0
                 }
             }
-            key if key == previous || key == Key::ArrowUp => current.saturating_sub(1),
+            Key::ArrowLeft | Key::ArrowUp => current.saturating_sub(1),
             _ => return EventReply::Continue,
         };
         self.pick(cx, Some(target), true);
@@ -230,7 +264,7 @@ impl Chart {
     fn summary(&self, category: usize) -> String {
         let label = self.categories.get(category).cloned().unwrap_or_default();
         if self.per_category() {
-            return format!("{label}: {}", (self.format)(self.value(0, category)));
+            return format!("{label}: {}", self.formatted(self.value(0, category)));
         }
         let values: Vec<String> = self
             .rows(category)
@@ -259,20 +293,22 @@ impl CustomControl for Chart {
             return EventReply::Continue;
         }
         match event {
+            // Off the marks, or out of the chart, the tooltip hides. A
+            // focused chart keeps its highlight for the keys.
             ControlEvent::Pointer(PointerEvent::Move { position }) => {
-                let hit = self.category_at(*position);
-                if hit.is_some() || !cx.is_focused() {
-                    self.pick(cx, hit, true);
+                match self.category_at(*position) {
+                    Some(hit) => self.pick(cx, Some(hit), true),
+                    None => self.leave(cx),
                 }
                 EventReply::Continue
             }
-            ControlEvent::Hover(false) if !cx.is_focused() => {
-                self.pick(cx, None, false);
+            ControlEvent::Hover(false) => {
+                self.leave(cx);
                 EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::FocusChanged(false) | ControlEvent::Dismiss => {
-                self.pick(cx, self.active, false);
+                self.pick(cx, None, false);
                 EventReply::Continue
             }
             _ => EventReply::Continue,

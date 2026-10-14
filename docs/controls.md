@@ -4127,14 +4127,21 @@ behavior.
     bottom in reading order, and a grid marks the value axis.
   - `Pie` shows a slice per category from the first series. `donut()`
     cuts a hole.
-  - `Radar` shows a polygon per series over an axis per category.
+  - `Radar` shows a polygon per series over an axis per category. A radar
+    needs three categories, so with fewer it shows as `Bar`.
   - `Radial` shows an arc per category from the first series.
 - Series colors are `chart-1` through `chart-5`, then again from
   `chart-1`. Pie and radial charts color each category.
 - The value axis goes from zero to a round value above the largest value.
+  When a cartesian chart has a negative value, the axis goes down to a
+  round value below the smallest value. A 1 pt `muted-foreground` line
+  marks zero, and bars and areas grow from it, up or down.
 - **Tooltip.** Hover picks the category under the pointer. Arrow keys,
   Home, and End pick a category while the chart has focus. The tooltip
-  shows the category and its values beside the pick. Escape hides it.
+  shows the category and its values beside the pick.
+- The tooltip hides when the pointer leaves the marks, also while the
+  chart has focus. A focused chart keeps the pick for the keys. Escape
+  and a loss of focus clear the pick and hide the tooltip.
   `place_popup` puts the tooltip 10 pt after the pick, and before it when
   only that side fits.
 - Keyboard focus shows the focus ring just inside the chart bounds.
@@ -4143,6 +4150,10 @@ behavior.
   An entry that does not fit in the row starts a new row, and the chart
   grows for each row.
 - `with_format(format)` formats values in the tooltip and in semantics.
+  Without it, the number format of the locale shows them: whole numbers
+  with digit groups, and others with two decimals. `with_locale` sets the
+  locale, and the compose `Chart` gives it the view locale.
+
 - Polar charts go clockwise from the top in both directions.
 
 | Part | Slot | Value |

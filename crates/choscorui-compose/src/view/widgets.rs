@@ -1392,6 +1392,7 @@ impl Configured<controls::Chart> {
                 categories.items(env),
                 series.items(env),
             )
+            .with_locale(env.locale())
         })
     }
 }

@@ -26,8 +26,10 @@ pub(super) struct Plot {
     /// The category labels under a cartesian chart.
     axis: Rect,
     legend: Rect,
-    /// The value at the top of the value axis.
+    /// The values at the top and the bottom of the value axis. The
+    /// bottom is below zero only when a value is.
     top: f64,
+    bottom: f64,
     center: Point,
     radius: f64,
     inner: f64,
@@ -162,7 +164,8 @@ impl Chart {
         rows
     }
 
-    fn max_value(&self) -> f64 {
+    /// Every value that the chart shows.
+    fn values(&self) -> impl Iterator<Item = f64> + '_ {
         let series = if self.per_category() {
             1
         } else {
@@ -171,7 +174,6 @@ impl Chart {
         (0..series)
             .flat_map(|series| (0..self.categories.len()).map(move |category| (series, category)))
             .map(|(series, category)| self.value(series, category))
-            .fold(0.0, f64::max)
     }
 
     pub(super) fn layout(&self, cx: &MeasureContext<'_>, bounds: Rect) -> Plot {
@@ -201,7 +203,15 @@ impl Chart {
         let top = if self.kind == ChartKind::Pie {
             1.0
         } else {
-            nice(self.max_value())
+            nice(self.values().fold(0.0, f64::max))
+        };
+        // A cartesian chart with a negative value shows values below a
+        // zero baseline.
+        let lowest = self.values().fold(0.0, f64::min);
+        let bottom = if self.cartesian() && lowest < 0.0 {
+            -nice(-lowest)
+        } else {
+            0.0
         };
         let tooltips = (0..self.categories.len())
             .map(|category| self.tooltip_size(cx, category))
@@ -216,6 +226,7 @@ impl Chart {
                 legend,
             ),
             top,
+            bottom,
             center: area.center(),
             radius,
             inner,
@@ -242,7 +253,9 @@ impl Chart {
     /// The position of `value` along the value axis.
     fn y(&self, value: f64) -> f64 {
         let area = self.plot.area;
-        area.max_y() - (value / self.plot.top).clamp(0.0, 1.0) * area.size.height
+        let span = (self.plot.top - self.plot.bottom).max(f64::MIN_POSITIVE);
+        let share = ((value - self.plot.bottom) / span).clamp(0.0, 1.0);
+        area.max_y() - share * area.size.height
     }
 
     fn total(&self) -> f64 {
@@ -405,15 +418,22 @@ impl Chart {
     fn grid(&self, cx: &mut PaintContext<'_>, track: &ResolvedStyle) {
         let area = self.plot.area;
         let thickness = track.min_height;
-        for tick in 0..=TICKS {
-            let y = area.max_y() - area.size.height * tick as f64 / TICKS as f64;
-            let line = Rect::from_xywh(
+        let line = |y: f64| {
+            Rect::from_xywh(
                 area.origin.x,
                 y - thickness / 2.0,
                 area.size.width,
                 thickness,
-            );
-            fill_area(cx.list, line, cx.rtl, &track.background);
+            )
+        };
+        for tick in 0..=TICKS {
+            let y = area.max_y() - area.size.height * tick as f64 / TICKS as f64;
+            fill_area(cx.list, line(y), cx.rtl, &track.background);
+        }
+        if self.plot.bottom < 0.0 {
+            // The zero baseline, in the label color.
+            let baseline = cx.style(Self::query(Slot::Label)).foreground;
+            cx.list.fill_rect(line(self.y(0.0)), baseline);
         }
     }
 
@@ -458,11 +478,19 @@ impl Chart {
                         } else {
                             point.x + offset
                         };
-                        let rect = Rect::from_xywh(x, point.y, width, area.max_y() - point.y);
+                        // A bar grows from the baseline, up or down.
+                        let base = self.y(0.0);
+                        let (top, bottom) = (point.y.min(base), point.y.max(base));
+                        let rect = Rect::from_xywh(x, top, width, bottom - top);
                         if rect.size.height <= 0.0 {
                             continue;
                         }
-                        let path = Path::rounded_rect_corners(rect, [radius, radius, 0.0, 0.0]);
+                        let corners = if point.y <= base {
+                            [radius, radius, 0.0, 0.0]
+                        } else {
+                            [0.0, 0.0, radius, radius]
+                        };
+                        let path = Path::rounded_rect_corners(rect, corners);
                         let _ = cx
                             .list
                             .fill_path(path, Paint::Solid(color), FillRule::NonZero);
@@ -474,8 +502,10 @@ impl Chart {
                     }
                     if self.kind == ChartKind::Area {
                         let mut outline = points.clone();
-                        outline.push(Point::new(points[points.len() - 1].x, area.max_y()));
-                        outline.push(Point::new(points[0].x, area.max_y()));
+                        let base = self.y(0.0);
+                        outline.push(Point::new(points[points.len() - 1].x, base));
+                        outline.push(Point::new(points[0].x, base));
+
                         let fill = color.with_alpha(mark.opacity);
                         let _ = cx.list.fill_path(
                             Path::polygon(&outline),
