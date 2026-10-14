@@ -319,9 +319,18 @@ fn main() {
         if label == "end" {
             if let Ok(out) = std::process::Command::new("sudo").args(["-n", "footprint", "--unmapped", "-v", &pid]).output() {
                 let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-                for line in text.lines().filter(|l| l.contains("nmapped") || l.contains("owned") || l.contains("Owned") || l.contains("[")).take(150) {
+                let mut keep = false;
+                for line in text.lines() {
+                    if line.contains("Footprint:") || line.contains("Dirty") {
+                        keep = true;
+                    }
+                    let region = line.trim_start().split_whitespace().nth(1) == Some("-");
+                    if !keep || (region && !line.contains("nmapped") && !line.contains("graphics") && !line.contains("IOSurface")) {
+                        continue;
+                    }
                     eprintln!("DIAG {label} unmapped | {line}");
                 }
+                eprintln!("DIAG {label} unmapped total lines {}", text.lines().count());
             }
         }
         if let Ok(out) = std::process::Command::new("heap").arg(&pid).output() {

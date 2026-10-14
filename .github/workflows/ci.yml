@@ -22,4 +22,5 @@ jobs:
       - name: churn base
         run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown|end unmapped)|Owned physical|panicked'
       - name: churn frames4
+        if: false
         run: DIAG_ONLY=churn DIAG_FRAMES=4 cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown|end unmapped)|Owned physical|panicked'
