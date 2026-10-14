@@ -396,6 +396,7 @@ impl EditorFactory for DefaultEditorFactory {
             Value::Int(_) => EditorKind::Integer,
             Value::Float(_) => EditorKind::Decimal { fraction_digits: 2 },
             Value::Bool(_) | Value::Check(_) => EditorKind::Bool,
+            Value::Text(text) if CivilDate::parse_iso(&text).is_ok() => EditorKind::Date,
             _ => EditorKind::Text,
         })
     }
@@ -439,7 +440,16 @@ impl CellEdit {
             EditorKind::Decimal { fraction_digits } => fraction_digits,
             _ => 0,
         };
-        let text = edit_text(&model.data(key, column, Role::Edit), digits, &locale);
+        let value = model.data(key, column, Role::Edit);
+        // A date edits in the short date format of the locale.
+        let date = match (&kind, &value) {
+            (EditorKind::Date, Value::Text(text)) => CivilDate::parse_iso(text).ok(),
+            _ => None,
+        };
+        let text = match date {
+            Some(date) => date.format_short(&locale),
+            None => edit_text(&value, digits, &locale),
+        };
         Some(Self {
             key,
             column,
@@ -520,8 +530,10 @@ impl CellEdit {
                 "false" | "no" | "0" | "off" => Ok(Value::Bool(false)),
                 _ => Err(ValidationError::YesNo),
             },
+            // The model keeps the date in ISO 8601 form, whatever the
+            // locale of the editor.
             EditorKind::Date => CivilDate::parse_short(text, &self.locale)
-                .map(|date| Value::Text(date.format_short(&self.locale)))
+                .map(|date| Value::Text(date.iso()))
                 .map_err(|_| DateError::NotADate.into()),
         }
     }

@@ -2136,7 +2136,11 @@ this behavior.
 - `CellEdit::begin` asks an `EditorFactory` for an `EditorKind`. It returns
   `None` for a cell that the model cannot edit.
 - `DefaultEditorFactory` chooses the editor from the cell's `Role::Edit`
-  value type.
+  value type. A text value in ISO 8601 date form, such as `2026-10-14`,
+  gets the date editor.
+- The date editor shows the date in the short date format of the locale.
+  `commit` writes it back as ISO 8601 text, so the model value does not
+  change with the locale.
 - `parse` validates the text for the editor kind and the locale, and
   returns a `ValidationError`. `commit` writes only a valid value. On an
   error, the edit stays open.

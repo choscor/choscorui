@@ -413,3 +413,45 @@ fn a_bool_cell_edits_with_a_checkbox() {
     edit.commit(&mut store).unwrap();
     assert_eq!(store.data(key, 0, Role::Edit), Value::Bool(false));
 }
+
+/// A row with one date column, kept as ISO 8601 text.
+struct Due(String);
+
+impl ItemData for Due {
+    fn data(&self, _: usize, role: Role) -> Value {
+        match role {
+            Role::Display | Role::Edit => Value::Text(self.0.clone()),
+            _ => Value::None,
+        }
+    }
+    fn set_data(&mut self, _: usize, _: Role, value: Value) -> Result<(), ModelError> {
+        let Value::Text(due) = value else {
+            return Err(ModelError::InvalidValue);
+        };
+        self.0 = due;
+        Ok(())
+    }
+    fn editable(&self, _: usize) -> bool {
+        true
+    }
+}
+
+#[test]
+fn a_date_cell_edits_in_the_locale_and_keeps_iso() {
+    let mut store = ListStore::new(1);
+    let key = store.push(None, Due("2026-10-14".into())).unwrap();
+    let Some(mut edit) = CellEdit::begin(&store, &DefaultEditorFactory, key, 0, locale("vi"))
+    else {
+        panic!("a date column has an editor");
+    };
+    assert_eq!(edit.kind, EditorKind::Date);
+    assert_eq!(edit.text, "14/10/2026");
+    edit.set_text("01/12/2026");
+    edit.commit(&mut store).unwrap();
+    assert_eq!(
+        store.data(key, 0, Role::Edit),
+        Value::Text("2026-12-01".into())
+    );
+    edit.set_text("31/02/2026");
+    assert!(edit.commit(&mut store).is_err(), "not a date");
+}
