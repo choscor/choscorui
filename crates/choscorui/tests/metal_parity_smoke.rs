@@ -139,7 +139,7 @@ mod smoke {
         panic!("other windows cover every corner of the screen");
     }
 
-    /// Sets `list` and waits until the window presents it.
+    /// Sets `list` and waits until the window paints it.
     fn present(app: &Application, window: &Window, list: DisplayList) {
         let before = window.paint_count();
         window.set_display_list(list);
@@ -147,7 +147,13 @@ mod smoke {
         while window.paint_count() == before && Instant::now() < deadline {
             app.dispatch_next_event(Duration::from_millis(5));
         }
-        assert!(window.paint_count() > before, "the window never presented");
+        // A paint ends when the GPU finishes the frame, so it does not wait
+        // for the window server. An occluded window draws no frames.
+        assert!(
+            window.paint_count() > before,
+            "the window never painted (occluded: {})",
+            window.is_occluded()
+        );
     }
 
     fn capture(app: &Application, window: &Window, list: &DisplayList) -> Image {

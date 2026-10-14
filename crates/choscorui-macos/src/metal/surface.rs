@@ -23,16 +23,16 @@ use crate::ffi::graphics::srgb;
 use crate::ffi::metal::{
     ADD_COMPLETED_HANDLER, ADD_PRESENTED_HANDLER, BLIT_ENCODER, COMMAND_BUFFER,
     COMMAND_BUFFER_STATUS, COMMAND_BUFFER_STATUS_ERROR, COMMIT, COPY_TEXTURE_TO_BUFFER,
-    CommandBufferArgs, DrawableArgs, END_BLIT_ENCODING, MTLCommandBuffer, MTLDrawable, MTLOrigin,
-    MTLSize, NEW_BUFFER_WITH_LENGTH, PRESENT, PRESENT_DRAWABLE, PRESENTED_TIME,
-    RESOURCE_STORAGE_SHARED, WAIT_UNTIL_COMPLETED, WAIT_UNTIL_SCHEDULED, completed_block,
-    presented_block, read_buffer,
+    CommandBufferArgs, DrawableArgs, END_BLIT_ENCODING, GPU_END_TIME, MTLCommandBuffer,
+    MTLDrawable, MTLOrigin, MTLSize, NEW_BUFFER_WITH_LENGTH, PRESENT, PRESENT_DRAWABLE,
+    PRESENTED_TIME, RESOURCE_STORAGE_SHARED, WAIT_UNTIL_COMPLETED, WAIT_UNTIL_SCHEDULED,
+    completed_block, presented_block, read_buffer,
 };
 use crate::ffi::quartz::{
     ADD_TO_RUN_LOOP, CACurrentMediaTime, CADisplayLink, CAFrameRateRange, CAMetalLayer,
-    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DISPLAY_SYNC_ENABLED,
-    SET_DRAWABLE_SIZE, SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE,
-    SET_LAYER_OPAQUE, SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
+    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DRAWABLE_SIZE,
+    SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE, SET_LAYER_OPAQUE,
+    SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
     SET_PREFERRED_FRAME_RATE_RANGE, SET_PRESENTS_WITH_TRANSACTION, SET_VIEW_LAYER, SET_WANTS_LAYER,
     view_display_link,
 };
@@ -101,21 +101,34 @@ thread_local! {
 struct Presentation {
     paint: PaintHandle,
     shared: Arc<Shared>,
+}
+
+/// A frame on the GPU.
+struct Submitted {
+    paint: PaintHandle,
+    shared: Arc<Shared>,
     started: Instant,
 }
 
 /// The frames waiting for their presented handler, by drawable.
 static PRESENTATIONS: LazyLock<Mutex<HashMap<usize, Presentation>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-/// The command buffers waiting for their completed handler.
-static COMMANDS: LazyLock<Mutex<HashMap<usize, Arc<Shared>>>> =
+/// The frames waiting for their completed handler, by command buffer.
+static COMMANDS: LazyLock<Mutex<HashMap<usize, Submitted>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static PRESENTED: LazyLock<GlobalBlock<DrawableArgs>> = LazyLock::new(presented_block::<Presented>);
 static COMPLETED: LazyLock<GlobalBlock<CommandBufferArgs>> =
     LazyLock::new(completed_block::<Completed>);
 
-/// Records the paint when a frame reaches the display.
+/// The instant of a host time on the clock of `CACurrentMediaTime`.
+fn host_instant(host: f64) -> Instant {
+    let now = Instant::now();
+    let age = (CACurrentMediaTime() - host).max(0.0);
+    now.checked_sub(Duration::from_secs_f64(age)).unwrap_or(now)
+}
+
+/// Records when a frame reached the display.
 struct Presented;
 
 impl ObjectHandler<MTLDrawable> for Presented {
@@ -129,31 +142,23 @@ impl ObjectHandler<MTLDrawable> for Presented {
         let Some(presentation) = presentation else {
             return;
         };
-        // `presentedTime` is on the clock of `CACurrentMediaTime`, and it
-        // is 0 for a frame that the display never showed.
-        let presented = PRESENTED_TIME.send(drawable, ());
-        let now = Instant::now();
-        let finished = if presented > 0.0 {
-            let age = (CACurrentMediaTime() - presented).max(0.0);
-            now.checked_sub(Duration::from_secs_f64(age)).unwrap_or(now)
-        } else {
-            now
-        };
         presentation
             .shared
             .unpresented
             .fetch_sub(1, Ordering::AcqRel);
-        let mut paint = presentation.paint.lock().unwrap();
-        paint.count += 1;
-        paint.last_paint = Some(PaintTiming {
-            finished,
-            duration: finished.saturating_duration_since(presentation.started),
-        });
+        // `presentedTime` is 0 for a frame that the display never showed,
+        // and for a frame presented inside a Core Animation transaction.
+        let presented = PRESENTED_TIME.send(drawable, ());
+        if presented > 0.0 {
+            let mut paint = presentation.paint.lock().unwrap();
+            paint.displays += 1;
+            paint.last_display = Some(host_instant(presented));
+        }
     }
 }
 
-/// Frees a frame slot, and moves the window to Core Graphics when the
-/// GPU failed the frame.
+/// Frees a frame slot and records the paint when the GPU finished the
+/// frame, or moves the window to Core Graphics when the GPU failed it.
 struct Completed;
 
 impl ObjectHandler<MTLCommandBuffer> for Completed {
@@ -163,17 +168,38 @@ impl ObjectHandler<MTLCommandBuffer> for Completed {
         let Some(buffer) = buffer else {
             return;
         };
-        let shared = COMMANDS.lock().unwrap().remove(&buffer.addr());
-        let Some(shared) = shared else {
+        let submitted = COMMANDS.lock().unwrap().remove(&buffer.addr());
+        let Some(Submitted {
+            paint,
+            shared,
+            started,
+        }) = submitted
+        else {
             return;
         };
         shared.in_flight.fetch_sub(1, Ordering::AcqRel);
         let failed = COMMAND_BUFFER_STATUS.send(buffer, ()) == COMMAND_BUFFER_STATUS_ERROR;
-        if failed && !shared.failed.swap(true, Ordering::AcqRel) {
-            let window = shared.window;
-            // Without an application, no window remains to repaint.
-            let _ = shared.poster.post(move || fall_back(window));
+        if failed {
+            if !shared.failed.swap(true, Ordering::AcqRel) {
+                let window = shared.window;
+                // Without an application, no window remains to repaint.
+                let _ = shared.poster.post(move || fall_back(window));
+            }
+            return;
         }
+        // `GPUEndTime` is on the clock of `CACurrentMediaTime`.
+        let end = GPU_END_TIME.send(buffer, ());
+        let finished = if end > 0.0 {
+            host_instant(end)
+        } else {
+            Instant::now()
+        };
+        let mut paint = paint.lock().unwrap();
+        paint.count += 1;
+        paint.last_paint = Some(PaintTiming {
+            finished,
+            duration: finished.saturating_duration_since(started),
+        });
     }
 }
 
@@ -439,15 +465,10 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         surface.scale = scale;
     }
     // Startup and live resize present inside the Core Animation
-    // transaction, so the content matches the window frame. Otherwise
-    // display sync is off: a frame goes to the window server as soon as
-    // the GPU finishes it, not at the next display refresh, which takes
-    // one refresh off the latency. The window server still composites
-    // the window at a refresh.
+    // transaction, so the content matches the window frame.
     let transaction = !surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ());
     if transaction != surface.transaction {
         SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (transaction,));
-        SET_DISPLAY_SYNC_ENABLED.send(&surface.layer, (transaction,));
         surface.transaction = transaction;
     }
     let started = Instant::now();
@@ -471,14 +492,17 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         Presentation {
             paint: Arc::clone(&surface.paint),
             shared: Arc::clone(&surface.shared),
-            started,
         },
     );
     ADD_PRESENTED_HANDLER.send(drawable, (PRESENTED.as_block(),));
-    COMMANDS
-        .lock()
-        .unwrap()
-        .insert(command_buffer.addr(), Arc::clone(&surface.shared));
+    COMMANDS.lock().unwrap().insert(
+        command_buffer.addr(),
+        Submitted {
+            paint: Arc::clone(&surface.paint),
+            shared: Arc::clone(&surface.shared),
+            started,
+        },
+    );
     ADD_COMPLETED_HANDLER.send(&command_buffer, (COMPLETED.as_block(),));
     surface.shared.in_flight.fetch_add(1, Ordering::AcqRel);
     surface.shared.unpresented.fetch_add(1, Ordering::AcqRel);

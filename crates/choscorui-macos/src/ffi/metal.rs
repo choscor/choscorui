@@ -176,6 +176,7 @@ messages! {
     pub(crate) ADD_COMPLETED_HANDLER: instance MTLCommandBuffer, c"addCompletedHandler:",
         (&Block<CommandBufferArgs>) -> ();
     pub(crate) COMMAND_BUFFER_STATUS: instance MTLCommandBuffer, c"status", () -> usize;
+    pub(crate) GPU_END_TIME: instance MTLCommandBuffer, c"GPUEndTime", () -> f64;
 
     pub(crate) SET_PIPELINE: instance MTLRenderCommandEncoder, c"setRenderPipelineState:",
         (&Obj<MTLRenderPipelineState>) -> ();

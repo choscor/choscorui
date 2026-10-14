@@ -51,6 +51,7 @@ None of these sources measures GPU against CPU rasterization directly. The desig
 | Q8 | Gallery size budget: raise to measured plus one 16 KiB page, capped at 3.25 MiB. The cap is shared with the portable declarative app spec | settled | User answer; shared cap from the cross-spec review |
 | Q9 | Rollout: replace Core Graphics as the default window painter in one change | settled | Follows from Q6 |
 | Q10 | 8.3 ms p95 for scroll, resize, views, theme; document stays ≤ 33 ms | settled | User answer |
+| Q11 | 2026-10-14: the 8.3 ms budgets measure frame cost to the GPU end time; the bench reports the on-display latency (`presentedTime`) without a budget, and display sync stays on | settled | Maintainer decision |
 | D1 | Path rasterization technique (CPU flattening plus stencil-then-cover, or tessellation) | deferred | Minor: the implementer chooses; parity tests bound the result |
 | D2 | Atlas packing, instance-buffer layout, number of pipelines | deferred | Minor: internal; bench budgets and parity bound the result |
 

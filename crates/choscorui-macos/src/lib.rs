@@ -191,10 +191,14 @@ pub enum WindowEvent {
     DragEnded(choscorui_core::DragOperation),
 }
 
-/// Timing of one paint that reached the display.
+/// Timing of one paint. With Metal, a paint finishes when the GPU
+/// finishes the frame; with Core Graphics, when `drawRect:` completes.
+/// [`Window::last_display`] tells when a Metal frame reached the display.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PaintTiming {
+    /// When the paint finished.
     pub finished: std::time::Instant,
+    /// The time from the start of the paint to `finished`.
     pub duration: std::time::Duration,
 }
 
@@ -225,6 +229,8 @@ struct PaintState {
     list: Arc<DisplayList>,
     count: usize,
     last_paint: Option<PaintTiming>,
+    displays: usize,
+    last_display: Option<std::time::Instant>,
     last_damage: Option<choscorui_core::Rect>,
     cursor: choscorui_core::CursorShape,
     drop_formats: Vec<choscorui_core::DragFormat>,
@@ -691,6 +697,8 @@ impl Application {
             list: Arc::new(DisplayList::new()),
             count: 0,
             last_paint: None,
+            displays: 0,
+            last_display: None,
             last_damage: None,
             cursor: Default::default(),
             drop_formats: Vec::new(),
@@ -907,12 +915,27 @@ impl Window {
         self.paint.lock().unwrap().count
     }
 
-    /// When the most recent paint reached the display and how long it
-    /// took. With Metal it ends when the frame is presented; with Core
-    /// Graphics, when `drawRect:` completes. Benchmarks use this as the
-    /// present point.
+    /// When the most recent paint finished and how long it took. With
+    /// Metal it ends when the GPU finishes the frame; with Core Graphics,
+    /// when `drawRect:` completes. Benchmarks use this as the end of the
+    /// frame cost. The frame reaches the display later; see
+    /// [`Window::last_display`].
     pub fn last_paint(&self) -> Option<PaintTiming> {
         self.paint.lock().unwrap().last_paint
+    }
+
+    /// The number of Metal frames that reached the display. It stays 0
+    /// with Core Graphics. Frames presented inside a Core Animation
+    /// transaction, at startup and during a live resize, do not count.
+    pub fn display_count(&self) -> usize {
+        self.paint.lock().unwrap().displays
+    }
+
+    /// When the most recent counted Metal frame reached the display, from
+    /// its `presentedTime`. Benchmarks report this as the latency to the
+    /// display.
+    pub fn last_display(&self) -> Option<std::time::Instant> {
+        self.paint.lock().unwrap().last_display
     }
 
     pub fn take_events(&mut self) -> Vec<WindowEvent> {
