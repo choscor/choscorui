@@ -4,10 +4,10 @@ mod hosted;
 
 use choscorui_controls::{ControlMessage, ControlValue, DataTable, ShortcutModifiers};
 use choscorui_core::{
-    ItemData, Key, KeyEvent, LayoutDirection, ListStore, Point, Role, SemanticAction, SemanticRole,
-    Value,
+    Icon, ItemData, Key, KeyEvent, LayoutDirection, ListStore, Point, Role, SemanticAction,
+    SemanticRole, Value,
 };
-use hosted::{Harness, texts};
+use hosted::{Harness, draws_icon, texts};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -271,6 +271,25 @@ fn a_selection_change_in_a_large_table_does_not_read_every_row() {
         reads.get() < 100,
         "{} reads: a click reads the changed rows, not the model",
         reads.get()
+    );
+}
+
+#[test]
+fn sortable_headers_show_a_neutral_icon_until_they_sort() {
+    let mut h = Harness::new(table());
+    let list = h.paint();
+    assert!(draws_icon(&list, Icon::ChevronsUpDown), "the neutral icon");
+    assert!(!draws_icon(&list, Icon::ArrowUp));
+    h.focus();
+    tab(&mut h);
+    tab(&mut h);
+    h.key(Key::End);
+    h.key(Key::Enter);
+    let list = h.paint();
+    assert!(draws_icon(&list, Icon::ArrowUp), "the sort column");
+    assert!(
+        draws_icon(&list, Icon::ChevronsUpDown),
+        "the other columns stay neutral"
     );
 }
 

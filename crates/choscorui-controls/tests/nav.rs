@@ -158,6 +158,35 @@ fn pagination_bounds_fail_alike_and_zero_pages_is_empty() {
 }
 
 #[test]
+fn pagination_clears_the_hover_when_the_slots_change() {
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    let settled = |h: &mut Harness| {
+        let time = h.time + 1.0;
+        h.paint();
+        h.set_time(time);
+        rounded_fills(&h.paint(), muted)
+    };
+    let mut h = Harness::new(pages(0));
+    let parts = h.parts();
+    let four = parts
+        .parts()
+        .iter()
+        .find(|part| part.node.name == "4")
+        .unwrap()
+        .bounds;
+    h.hover(four.center());
+    let hovered = settled(&mut h);
+    assert_eq!(hovered.len(), 1, "page 4 shows hover");
+    // Page 6 shows "1, …, 5, 6, 7, …, 10", so the slots change and
+    // another page is under the pointer.
+    for _ in 0..5 {
+        assert!(h.perform(SemanticAction::Increment, None));
+    }
+    assert_eq!(h.semantics().value.as_deref(), Some("6"));
+    assert!(settled(&mut h).is_empty(), "no slot keeps the old hover");
+}
+
+#[test]
 fn pagination_slots_grow_to_fit_long_page_numbers() {
     let mut short = Harness::new(pages(0));
     let mut long = Harness::new(Pagination::new("Pages", "Previous", "Next", 10_000_000, 0));

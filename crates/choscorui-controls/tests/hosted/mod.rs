@@ -357,3 +357,66 @@ pub fn rounded_fills(list: &DisplayList, color: choscorui_core::Color) -> Vec<Re
 pub fn paints(list: &DisplayList, color: choscorui_core::Color) -> bool {
     format!("{:?}", list.commands()).contains(&format!("{color:?}"))
 }
+
+/// True when `list` draws `icon` at any place and size: a run of paths
+/// that are the paths of the icon after one move and one scale.
+pub fn draws_icon(list: &DisplayList, icon: choscorui_core::Icon) -> bool {
+    use choscorui_core::{Path, PathElement, Transform};
+    fn path(command: &DisplayCommand) -> Option<&Path> {
+        match command {
+            DisplayCommand::FillPath { path, .. } | DisplayCommand::StrokePath { path, .. } => {
+                Some(path)
+            }
+            _ => None,
+        }
+    }
+    fn near(a: Point, b: Point) -> bool {
+        (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3
+    }
+    fn same(a: &Path, b: &Path) -> bool {
+        a.elements().len() == b.elements().len()
+            && a.elements()
+                .iter()
+                .zip(b.elements())
+                .all(|pair| match pair {
+                    (PathElement::MoveTo(a), PathElement::MoveTo(b))
+                    | (PathElement::LineTo(a), PathElement::LineTo(b)) => near(*a, *b),
+                    (PathElement::QuadTo(a, c), PathElement::QuadTo(b, d)) => {
+                        near(*a, *b) && near(*c, *d)
+                    }
+                    (PathElement::CubicTo(a, c, e), PathElement::CubicTo(b, d, f)) => {
+                        near(*a, *b) && near(*c, *d) && near(*e, *f)
+                    }
+                    (PathElement::Close, PathElement::Close) => true,
+                    _ => false,
+                })
+    }
+    let mut probe = DisplayList::new();
+    let unit = Rect::new(Point::new(0.0, 0.0), Size::new(24.0, 24.0));
+    if icon
+        .draw(&mut probe, unit, choscorui_core::Color::BLACK)
+        .is_err()
+    {
+        return false;
+    }
+    let shapes: Vec<&Path> = probe.commands().iter().filter_map(path).collect();
+    let drawn: Vec<&Path> = list.commands().iter().filter_map(path).collect();
+    if shapes.is_empty() {
+        return false;
+    }
+    drawn.windows(shapes.len()).any(|run| {
+        let (from, to) = (shapes[0].bounds(), run[0].bounds());
+        let scale = if from.size.width > 0.0 {
+            to.size.width / from.size.width
+        } else {
+            to.size.height / from.size.height
+        };
+        let place = Transform::scale(scale, scale).then(Transform::translate(
+            to.origin.x - from.origin.x * scale,
+            to.origin.y - from.origin.y * scale,
+        ));
+        run.iter()
+            .zip(&shapes)
+            .all(|(drawn, shape)| same(&shape.transformed(place), drawn))
+    })
+}
