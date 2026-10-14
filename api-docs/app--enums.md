@@ -28,6 +28,41 @@ What can stop an application from starting.
 - `Unavailable`: The native platform could not start or open a window.
 - `Menu(MenuError)`: The menu bar model is not valid or could not be installed.
 
+## `DesktopEvent`
+
+enum in `choscorui::prelude::DesktopEvent`
+
+```rust
+#[non_exhaustive]
+pub enum DesktopEvent {
+    Activated,
+    Deactivated,
+    Reopen { has_visible_windows: bool },
+    OpenFiles(Vec<PathBuf>),
+    OpenUrls(Vec<String>),
+    NotificationActivated { identifier: String, action: String },
+    NotificationPosted { identifier: String, result: Result<(), ServiceError> },
+    StatusMenu(MenuCommandId),
+}
+```
+
+An event that the desktop sends after the call that caused it, or
+without a call. [`Services::listen`](app--structs.md#serviceslisten) receives them.
+
+### Variants
+
+- `Activated`: The application became active.
+- `Deactivated`: The application stopped being active.
+- `Reopen { has_visible_windows: bool }`: The user asked to reopen the running application, for example
+  with a click on its Dock icon. Show a window when
+  `has_visible_windows` is false.
+- `OpenFiles(Vec<PathBuf>)`: The system asked the application to open these files.
+- `OpenUrls(Vec<String>)`: The system asked the application to open these URLs.
+- `NotificationActivated { identifier: String, action: String }`: The user clicked a notification or one of its actions.
+- `NotificationPosted { identifier: String, result: Result<(), ServiceError> }`: A notification that waited for permission is posted, or failed
+  with the error.
+- `StatusMenu(MenuCommandId)`: The user chose the command of the status item menu.
+
 ## `Either`
 
 enum in `choscorui::prelude::Either`
@@ -76,6 +111,25 @@ What a file dialog chooses.
 - `OpenMany`: One or more existing files.
 - `Directory`: One directory.
 - `Save`: A path to save to.
+
+## `NotificationDelivery`
+
+enum in `choscorui::prelude::NotificationDelivery`
+
+```rust
+pub enum NotificationDelivery {
+    Posted,
+    AwaitingPermission,
+}
+```
+
+What [`Services::post_notification`](app--structs.md#servicespost_notification) did with a notification.
+
+### Variants
+
+- `Posted`: The notification is posted.
+- `AwaitingPermission`: The notification waits for the user's answer to the permission
+  request. `DesktopEvent::NotificationPosted` gives the outcome.
 
 ## `NotificationPermission`
 

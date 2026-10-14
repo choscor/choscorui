@@ -540,7 +540,8 @@ pub fn pump(&mut self) -> bool
 ```
 
 Waits for native events up to the next due frame or timer, handles
-them, and draws what changed. Returns false when the application
+them and the desktop events of the services, and draws what
+changed. Returns false when the application
 should stop; the settings are then saved.
 
 ##### Examples
@@ -957,6 +958,15 @@ pub fn clipboard_text(&self) -> Result<Option<String>, ServiceError>
 
 The text on the clipboard, if any.
 
+#### `Services::listen`
+
+```rust
+pub fn listen(&self, listener: &DesktopListener)
+```
+
+Calls `listener` with each desktop event, while the caller keeps
+`listener`. Drop the last clone of `listener` to stop.
+
 #### `Services::new`
 
 ```rust
@@ -982,14 +992,27 @@ pub fn notification_permission(&self) -> Result<NotificationPermission, ServiceE
 
 Whether the user lets the application post notifications.
 
+#### `Services::poll`
+
+```rust
+pub fn poll(&self)
+```
+
+Posts the waiting notifications whose permission answer arrived,
+takes the backend's events, and gives all of them to the
+listeners. The application loop calls it each turn.
+
 #### `Services::post_notification`
 
 ```rust
-pub fn post_notification(&self, notification: &SystemNotification) -> Result<(), ServiceError>
+pub fn post_notification(&self, notification: &SystemNotification) -> Result<NotificationDelivery, ServiceError>
 ```
 
-Posts `notification`. When permission was never requested, asks
-for it first.
+Posts `notification`. Before the user answers the permission
+request, the notification waits: this call asks for permission
+when nobody asked yet, and [`Services::poll`](#servicespoll) posts the
+notification after the answer. A waiting notification replaces
+the one with the same identifier.
 
 #### `Services::request_notification_permission`
 
@@ -1067,12 +1090,28 @@ struct in `choscorui::prelude::StatusItemSpec`
 pub struct StatusItemSpec {
     pub title: String,
     pub tooltip: Option<String>,
+    pub menu: Option<MenuSpec>,
 }
 ```
 
 The item that an application shows in the system status area.
 
+### Fields
+
+- `title`
+- `tooltip`
+- `menu`: The menu that opens on a click. Its commands arrive as
+  `DesktopEvent::StatusMenu`.
+
 ### Methods
+
+#### `StatusItemSpec::menu`
+
+```rust
+pub fn menu(self, menu: MenuSpec) -> Self
+```
+
+The menu that opens on a click.
 
 #### `StatusItemSpec::new`
 
@@ -1080,7 +1119,7 @@ The item that an application shows in the system status area.
 pub fn new(title: impl Into<String>) -> Self
 ```
 
-An item that shows `title`, without a tooltip.
+An item that shows `title`, without a tooltip or a menu.
 
 #### `StatusItemSpec::tooltip`
 

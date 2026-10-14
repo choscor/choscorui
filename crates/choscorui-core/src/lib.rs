@@ -57,8 +57,9 @@ pub use app_model::{
 };
 mod services;
 pub use services::{
-    FileDialogKind, FileDialogRequest, NotificationPermission, Service, ServiceBackend,
-    ServiceError, Services, StatusItemSpec, SystemNotification,
+    DesktopEvent, DesktopListener, FileDialogKind, FileDialogRequest, NotificationDelivery,
+    NotificationPermission, Service, ServiceBackend, ServiceError, Services, StatusItemSpec,
+    SystemNotification,
 };
 mod text;
 pub use text::{TextBuffer, TextError, TextMotion, UNDO_LIMIT, grapheme_boundaries};

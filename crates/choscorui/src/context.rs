@@ -524,7 +524,8 @@ impl AppContext {
     }
 
     /// Waits for native events up to the next due frame or timer, handles
-    /// them, and draws what changed. Returns false when the application
+    /// them and the desktop events of the services, and draws what
+    /// changed. Returns false when the application
     /// should stop; the settings are then saved.
     ///
     /// # Examples
@@ -544,6 +545,7 @@ impl AppContext {
         for id in self.windows() {
             self.deliver(id);
         }
+        self.env.services().poll();
         if let Some(tick) = self.on_tick.clone() {
             tick(self);
         }

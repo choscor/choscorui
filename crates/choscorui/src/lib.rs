@@ -69,10 +69,10 @@ pub mod prelude {
         Toasts,
     };
     pub use choscorui_core::{
-        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, FileDialogKind,
-        FileDialogRequest, FontWeight, Icon, LayoutDirection, Locale, NotificationPermission,
-        Point, Rect, ServiceError, Services, Size, Space, StatusItemSpec, SystemNotification,
-        TextPreset, WindowOptions,
+        BaseColor, Catalog, Color, ColorRole, ColorScheme, DesignTokens, DesktopEvent,
+        DesktopListener, FileDialogKind, FileDialogRequest, FontWeight, Icon, LayoutDirection,
+        Locale, NotificationDelivery, NotificationPermission, Point, Rect, ServiceError, Services,
+        Size, Space, StatusItemSpec, SystemNotification, TextPreset, WindowOptions,
     };
 }
 

@@ -3,12 +3,14 @@
 //! file dialogs. A backend implements [`ServiceBackend`]. Applications
 //! use [`Services`], which checks the backend's capabilities before each
 //! call, so a service that the backend does not provide returns a
-//! [`ServiceError`] and never panics.
+//! [`ServiceError`] and never panics. Events that arrive later, such as
+//! a click on the status item menu, go to the listeners of
+//! [`Services::listen`].
 
-use crate::{BackendCapabilities, Condition, Support};
+use crate::{BackendCapabilities, Condition, MenuCommandId, MenuSpec, Support};
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 /// A desktop service, as an error names it.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -68,10 +70,11 @@ impl std::fmt::Display for ServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unsupported(service) => {
-                write!(f, "{} is not supported by this backend", service.name())
+                write!(f, "this backend does not support {}", service.name())
             }
+            // The condition is a sentence, such as "Needs an app bundle".
             Self::Unavailable { service, condition } => {
-                write!(f, "{} needs this condition: {condition}", service.name())
+                write!(f, "{condition} for {}", service.name())
             }
             Self::PermissionDenied => f.write_str("the user has not granted permission"),
             Self::InvalidText => f.write_str("text contains an interior NUL character"),
@@ -118,20 +121,70 @@ impl SystemNotification {
     }
 }
 
+/// What [`Services::post_notification`] did with a notification.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NotificationDelivery {
+    /// The notification is posted.
+    Posted,
+    /// The notification waits for the user's answer to the permission
+    /// request. [`DesktopEvent::NotificationPosted`] gives the outcome.
+    AwaitingPermission,
+}
+
+/// An event that the desktop sends after the call that caused it, or
+/// without a call. [`Services::listen`] receives them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum DesktopEvent {
+    /// The application became active.
+    Activated,
+    /// The application stopped being active.
+    Deactivated,
+    /// The user asked to reopen the running application, for example
+    /// with a click on its Dock icon. Show a window when
+    /// `has_visible_windows` is false.
+    Reopen { has_visible_windows: bool },
+    /// The system asked the application to open these files.
+    OpenFiles(Vec<PathBuf>),
+    /// The system asked the application to open these URLs.
+    OpenUrls(Vec<String>),
+    /// The user clicked a notification or one of its actions.
+    NotificationActivated { identifier: String, action: String },
+    /// A notification that waited for permission is posted, or failed
+    /// with the error.
+    NotificationPosted {
+        identifier: String,
+        result: Result<(), ServiceError>,
+    },
+    /// The user chose the command of the status item menu.
+    StatusMenu(MenuCommandId),
+}
+
 /// The item that an application shows in the system status area.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StatusItemSpec {
     pub title: String,
     pub tooltip: Option<String>,
+    /// The menu that opens on a click. Its commands arrive as
+    /// [`DesktopEvent::StatusMenu`].
+    pub menu: Option<MenuSpec>,
 }
 
 impl StatusItemSpec {
-    /// An item that shows `title`, without a tooltip.
+    /// An item that shows `title`, without a tooltip or a menu.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
             tooltip: None,
+            menu: None,
         }
+    }
+
+    /// The menu that opens on a click.
+    #[must_use]
+    pub fn menu(mut self, menu: MenuSpec) -> Self {
+        self.menu = Some(menu);
+        self
     }
 
     /// The text that shows when the pointer rests on the item.
@@ -253,7 +306,18 @@ pub trait ServiceBackend {
         let _ = request;
         Err(ServiceError::Unsupported(Service::FileDialogs))
     }
+
+    /// The desktop events since the last call, oldest first.
+    fn take_events(&self) -> Vec<DesktopEvent> {
+        Vec::new()
+    }
 }
+
+/// A function that [`Services::listen`] calls with each desktop event.
+pub type DesktopListener = Rc<dyn Fn(&DesktopEvent)>;
+
+/// A listener that [`Services`] holds without keeping it.
+type WeakListener = Weak<dyn Fn(&DesktopEvent)>;
 
 /// A backend without services.
 struct Headless;
@@ -273,6 +337,9 @@ pub struct Services {
     backend: Rc<dyn ServiceBackend>,
     capabilities: BackendCapabilities,
     status_item: Rc<RefCell<Option<StatusItemSpec>>>,
+    /// The notifications that wait for the permission answer.
+    waiting: Rc<RefCell<Vec<SystemNotification>>>,
+    listeners: Rc<RefCell<Vec<WeakListener>>>,
 }
 
 impl Default for Services {
@@ -297,6 +364,8 @@ impl Services {
             capabilities: backend.capabilities(),
             backend,
             status_item: Rc::default(),
+            waiting: Rc::default(),
+            listeners: Rc::default(),
         }
     }
 
@@ -343,14 +412,87 @@ impl Services {
             .request_notification_permission()
     }
 
-    /// Posts `notification`. When permission was never requested, asks
-    /// for it first.
-    pub fn post_notification(&self, notification: &SystemNotification) -> Result<(), ServiceError> {
+    /// Posts `notification`. Before the user answers the permission
+    /// request, the notification waits: this call asks for permission
+    /// when nobody asked yet, and [`Services::poll`] posts the
+    /// notification after the answer. A waiting notification replaces
+    /// the one with the same identifier.
+    pub fn post_notification(
+        &self,
+        notification: &SystemNotification,
+    ) -> Result<NotificationDelivery, ServiceError> {
         let backend = self.check(Service::Notifications)?;
-        if backend.notification_permission()? == NotificationPermission::NotRequested {
-            backend.request_notification_permission()?;
+        match backend.notification_permission()? {
+            NotificationPermission::Granted => backend
+                .post_notification(notification)
+                .map(|()| NotificationDelivery::Posted),
+            NotificationPermission::Denied => Err(ServiceError::PermissionDenied),
+            permission => {
+                if permission == NotificationPermission::NotRequested {
+                    backend.request_notification_permission()?;
+                }
+                let mut waiting = self.waiting.borrow_mut();
+                waiting.retain(|other| other.identifier != notification.identifier);
+                waiting.push(notification.clone());
+                Ok(NotificationDelivery::AwaitingPermission)
+            }
         }
-        backend.post_notification(notification)
+    }
+
+    /// Calls `listener` with each desktop event, while the caller keeps
+    /// `listener`. Drop the last clone of `listener` to stop.
+    pub fn listen(&self, listener: &DesktopListener) {
+        let mut listeners = self.listeners.borrow_mut();
+        listeners.retain(|kept| kept.strong_count() > 0);
+        listeners.push(Rc::downgrade(listener));
+    }
+
+    /// Posts the waiting notifications whose permission answer arrived,
+    /// takes the backend's events, and gives all of them to the
+    /// listeners. The application loop calls it each turn.
+    pub fn poll(&self) {
+        let mut events = self.post_waiting();
+        events.extend(self.backend.take_events());
+        if events.is_empty() {
+            return;
+        }
+        // A listener may call the services again, so no borrow stays.
+        let listeners: Vec<DesktopListener> = self
+            .listeners
+            .borrow()
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect();
+        for event in &events {
+            for listener in &listeners {
+                listener(event);
+            }
+        }
+    }
+
+    /// Posts the waiting notifications once the user answered, and
+    /// returns their outcomes.
+    fn post_waiting(&self) -> Vec<DesktopEvent> {
+        if self.waiting.borrow().is_empty() {
+            return Vec::new();
+        }
+        let refused = match self.backend.notification_permission() {
+            Ok(NotificationPermission::Granted) => None,
+            Ok(NotificationPermission::Denied) => Some(ServiceError::PermissionDenied),
+            Ok(_) => return Vec::new(),
+            Err(error) => Some(error),
+        };
+        let waiting = std::mem::take(&mut *self.waiting.borrow_mut());
+        waiting
+            .into_iter()
+            .map(|notification| DesktopEvent::NotificationPosted {
+                result: match &refused {
+                    Some(error) => Err(error.clone()),
+                    None => self.backend.post_notification(&notification),
+                },
+                identifier: notification.identifier,
+            })
+            .collect()
     }
 
     /// The name of the application that opens `url`, if any.

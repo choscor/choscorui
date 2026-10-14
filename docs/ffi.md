@@ -215,7 +215,7 @@ The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes th
 
 - **Delegate.** `desktop.rs` registers `ChoscoruiV2AppDelegate`. The process creates one instance and never releases it, because `NSApplication` and `UNUserNotificationCenter` hold their delegates weakly.
 - **Launch.** The crate installs the delegate before `finishLaunching`, so the application receives open-document events at launch.
-- **Callbacks.** Callbacks copy URL paths and strings into Rust and queue `AppEvent` values behind a `Mutex`.
+- **Callbacks.** Callbacks copy URL paths and strings into Rust and queue `AppEvent` values behind a `Mutex`. `NativeServices::take_events` empties the queue on each turn of the `choscorui` loop.
 - **Blocks.** The delegate calls each system completion block exactly one time, through the `invoke` pointer of the block ABI.
 - **Authorization block.** The authorization callback is a global block with no captures. It writes an `AtomicU8`, so any queue can call it.
 - **Delegate object.** A `ProcessObject` keeps the delegate. It lends the delegate only on the main thread.

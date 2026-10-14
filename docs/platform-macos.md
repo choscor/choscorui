@@ -178,7 +178,7 @@ Ranges are in UTF-16 units. After each edit, call `Window::set_text_input_state`
 
 ## Desktop integration
 
-`Application::take_app_events` returns the application events in AppKit callback order.
+`Application::take_app_events` returns the application events in AppKit callback order. The `Services` of `choscorui` take the same queue on each turn of the loop and send each event as a `DesktopEvent`. Thus a `choscorui` application reads the events through `Services::listen`.
 
 | Feature | API | Behavior |
 | --- | --- | --- |

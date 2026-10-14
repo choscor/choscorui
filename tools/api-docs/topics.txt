@@ -23,6 +23,9 @@ app choscorui::prelude::ServiceError
 app choscorui::prelude::SystemNotification
 app choscorui::prelude::NotificationPermission
 app choscorui::prelude::StatusItemSpec
+app choscorui::prelude::NotificationDelivery
+app choscorui::prelude::DesktopEvent
+app choscorui::prelude::DesktopListener
 app choscorui::prelude::FileDialogKind
 app choscorui::prelude::FileDialogRequest
 app choscorui::prelude::Storage

@@ -565,6 +565,12 @@ The UI types work only on the main thread. They are not `Send`.
 
 Each method checks the capability first. When the backend does not have the service, the method returns `ServiceError::Unsupported`. When the service needs a condition, it returns `ServiceError::Unavailable` with the condition. A method never panics. `Services::none` has no services; use it in tests.
 
+Some results arrive later. Give a `DesktopListener` to `Services::listen`, and keep the listener while you need its events. The application loop calls `Services::poll` on each turn, and each listener gets each `DesktopEvent`:
+
+- Before the user answers the permission request, `post_notification` returns `NotificationDelivery::AwaitingPermission`. After the answer, `DesktopEvent::NotificationPosted` gives the result.
+- A `StatusItemSpec` has a tooltip and an optional `MenuSpec`. A click on a menu command sends `DesktopEvent::StatusMenu` with the command id.
+- Activation, reopen, open-file, open-URL, and notification clicks also arrive as events.
+
 In a view, `.file_importer(presented, types, on_result)` shows an open dialog while `presented` is true. `.file_exporter(presented, name, on_result)` shows a save dialog. Each sets `presented` to false and gives the result to `on_result`.
 
 ## Stored state

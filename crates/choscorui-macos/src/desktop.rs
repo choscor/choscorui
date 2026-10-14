@@ -95,6 +95,14 @@ fn app_events() -> &'static Mutex<VecDeque<AppEvent>> {
     EVENTS.get_or_init(|| Mutex::new(VecDeque::new()))
 }
 
+/// Takes the queued application events, oldest first.
+pub(crate) fn take_app_events() -> Vec<AppEvent> {
+    app_events()
+        .lock()
+        .map(|mut events| events.drain(..).collect())
+        .unwrap_or_default()
+}
+
 fn push_event(event: AppEvent) {
     if let Ok(mut events) = app_events().lock() {
         events.push_back(event);
@@ -245,8 +253,9 @@ fn shared_application() -> Result<&'static Obj<NSApplication>, Error> {
 
 impl Application {
     /// Drains activation, reopen, open-document, and notification events.
+    /// The portable services of `choscorui` drain the same queue.
     pub fn take_app_events(&self) -> Vec<AppEvent> {
-        app_events().lock().unwrap().drain(..).collect()
+        take_app_events()
     }
 
     /// Delivers an open-URLs callback through the installed delegate, as

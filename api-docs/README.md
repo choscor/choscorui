@@ -8,7 +8,7 @@ Every example assumes `use choscorui::prelude::*;`.
 
 ## Topics
 
-- App: [app--enums.md](app--enums.md), [app--functions.md](app--functions.md), [app--structs.md](app--structs.md), [app--traits.md](app--traits.md)
+- App: [app--enums.md](app--enums.md), [app--functions.md](app--functions.md), [app--structs.md](app--structs.md), [app--traits.md](app--traits.md), [app--type-aliases.md](app--type-aliases.md)
 - State: [state.md](state.md)
 - Layout: [layout.md](layout.md)
 - Controls: [controls--enums.md](controls--enums.md), [controls--structs.md](controls--structs.md), [controls--traits.md](controls--traits.md), [controls--type-aliases-1.md](controls--type-aliases-1.md), [controls--type-aliases-2.md](controls--type-aliases-2.md)
@@ -26,10 +26,13 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`AppError`](app--enums.md#apperror) enum: What can stop an application from starting.
 - [`BackendCapabilities`](app--structs.md#backendcapabilities) struct: What the running backend can do.
 - [`CommandMenu`](app--structs.md#commandmenu) struct: One menu of the menu bar, with `MenuChoice` rows: actions, check and radio rows, submenus, and separators.
+- [`DesktopEvent`](app--enums.md#desktopevent) enum: An event that the desktop sends after the call that caused it, or without a call.
+- [`DesktopListener`](app--type-aliases.md#desktoplistener) type alias: A function that `Services::listen` calls with each desktop event.
 - [`Either`](app--enums.md#either) enum: One of two views, for a branch whose sides have different types.
 - [`Empty`](app--structs.md#empty) struct: A view that shows nothing.
 - [`FileDialogKind`](app--enums.md#filedialogkind) enum: What a file dialog chooses.
 - [`FileDialogRequest`](app--structs.md#filedialogrequest) struct: A file dialog to show.
+- [`NotificationDelivery`](app--enums.md#notificationdelivery) enum: What `Services::post_notification` did with a notification.
 - [`NotificationPermission`](app--enums.md#notificationpermission) enum: Whether the user lets the application post notifications.
 - [`Scene`](app--structs.md#scene) struct: A window to open: its options, its root view, an optional title that follows state, and an optional key that keeps its place between launches.
 - [`ServiceError`](app--enums.md#serviceerror) enum: Why a service call failed.

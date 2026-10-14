@@ -1,10 +1,11 @@
 //! The portable desktop services of `choscorui_core` on AppKit: each
 //! method maps a core description to the safe API of this crate.
 
-use crate::{Clipboard, DesktopError, Error, FileDialogSpec, StatusItem};
+use crate::{AppEvent, Clipboard, ContextMenu, DesktopError, Error, FileDialogSpec, StatusItem};
 use choscorui_core::{
-    BackendCapabilities, Condition, FileDialogKind, FileDialogRequest, NotificationPermission,
-    Service, ServiceBackend, ServiceError, StatusItemSpec, SystemNotification,
+    BackendCapabilities, Condition, DesktopEvent, FileDialogKind, FileDialogRequest,
+    NotificationPermission, Service, ServiceBackend, ServiceError, StatusItemSpec,
+    SystemNotification,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -91,7 +92,7 @@ impl ServiceBackend for NativeServices {
             *slot = None;
             return Ok(());
         };
-        let status = match slot.take() {
+        let mut status = match slot.take() {
             Some(status) => status,
             None => StatusItem::new(&spec.title).map_err(failed(Service::StatusItem))?,
         };
@@ -101,8 +102,44 @@ impl ServiceBackend for NativeServices {
         status
             .set_tooltip(spec.tooltip.as_deref().unwrap_or(""))
             .map_err(failed(Service::StatusItem))?;
+        if status.menu().map(ContextMenu::spec) != spec.menu.as_ref() {
+            let menu = spec.menu.clone().map(ContextMenu::new).transpose();
+            status.set_menu(menu.map_err(|_| ServiceError::Failed(Service::StatusItem))?);
+        }
         *slot = Some(status);
         Ok(())
+    }
+
+    /// The application events of the delegate, then the commands of the
+    /// status item menu.
+    fn take_events(&self) -> Vec<DesktopEvent> {
+        let mut events: Vec<DesktopEvent> = crate::desktop::take_app_events()
+            .into_iter()
+            .map(|event| match event {
+                AppEvent::Activated => DesktopEvent::Activated,
+                AppEvent::Deactivated => DesktopEvent::Deactivated,
+                AppEvent::Reopen {
+                    has_visible_windows,
+                } => DesktopEvent::Reopen {
+                    has_visible_windows,
+                },
+                AppEvent::OpenFiles(files) => DesktopEvent::OpenFiles(files),
+                AppEvent::OpenUrls(urls) => DesktopEvent::OpenUrls(urls),
+                AppEvent::NotificationActivated { identifier, action } => {
+                    DesktopEvent::NotificationActivated { identifier, action }
+                }
+            })
+            .collect();
+        if let Some(menu) = self
+            .status_item
+            .borrow()
+            .as_ref()
+            .and_then(StatusItem::menu)
+        {
+            let chosen = menu.take_activations().into_iter();
+            events.extend(chosen.map(DesktopEvent::StatusMenu));
+        }
+        events
     }
 
     fn choose_files(&self, request: &FileDialogRequest) -> Result<Vec<PathBuf>, ServiceError> {

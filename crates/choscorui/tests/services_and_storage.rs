@@ -7,8 +7,8 @@ use choscorui::compose::Runtime;
 use choscorui::compose::view::{Storage, StorageError};
 use choscorui::controls::EstimatedText;
 use choscorui::core::{
-    BackendCapabilities, SemanticAction, Service, ServiceBackend, SettingValue, SettingsSchema,
-    Support,
+    BackendCapabilities, MenuCommandId, SemanticAction, Service, ServiceBackend, SettingValue,
+    SettingsSchema, Support,
 };
 use choscorui::prelude::*;
 use std::cell::RefCell;
@@ -74,7 +74,7 @@ fn every_service_reports_its_error_when_the_backend_lacks_it() {
     );
     assert_eq!(
         ServiceError::Unsupported(Service::FileDialogs).to_string(),
-        "file dialogs is not supported by this backend"
+        "this backend does not support file dialogs"
     );
 }
 
@@ -95,7 +95,128 @@ fn a_conditional_service_names_its_condition() {
     );
     assert_eq!(
         error.to_string(),
-        "notifications needs this condition: Needs an app bundle with a bundle identifier"
+        "Needs an app bundle with a bundle identifier for notifications"
+    );
+}
+
+/// A backend with notifications and a status item, whose permission
+/// answer and events the test sets.
+#[derive(Default)]
+struct Desk {
+    permission: RefCell<Option<NotificationPermission>>,
+    posted: RefCell<Vec<String>>,
+    events: RefCell<Vec<DesktopEvent>>,
+}
+
+impl ServiceBackend for Desk {
+    fn capabilities(&self) -> BackendCapabilities {
+        let mut capabilities = BackendCapabilities::none("test");
+        capabilities.notifications = Support::Supported;
+        capabilities.status_items = Support::Supported;
+        capabilities
+    }
+
+    fn notification_permission(&self) -> Result<NotificationPermission, ServiceError> {
+        Ok(self
+            .permission
+            .borrow()
+            .unwrap_or(NotificationPermission::NotRequested))
+    }
+
+    fn request_notification_permission(&self) -> Result<(), ServiceError> {
+        *self.permission.borrow_mut() = Some(NotificationPermission::Pending);
+        Ok(())
+    }
+
+    fn post_notification(&self, notification: &SystemNotification) -> Result<(), ServiceError> {
+        self.posted
+            .borrow_mut()
+            .push(notification.identifier.clone());
+        Ok(())
+    }
+
+    fn set_status_item(&self, _: Option<&StatusItemSpec>) -> Result<(), ServiceError> {
+        Ok(())
+    }
+
+    fn take_events(&self) -> Vec<DesktopEvent> {
+        self.events.borrow_mut().drain(..).collect()
+    }
+}
+
+#[test]
+fn a_notification_waits_for_permission_and_events_reach_the_listeners() {
+    let desk = Rc::new(Desk::default());
+    let services = Services::new(desk.clone());
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let listener: DesktopListener = {
+        let heard = heard.clone();
+        Rc::new(move |event: &DesktopEvent| heard.borrow_mut().push(event.clone()))
+    };
+    services.listen(&listener);
+    for identifier in ["a", "b", "a"] {
+        let notification = SystemNotification::new(identifier, "Title", "Body");
+        assert_eq!(
+            services.post_notification(&notification),
+            Ok(NotificationDelivery::AwaitingPermission)
+        );
+    }
+    services.poll();
+    assert!(
+        desk.posted.borrow().is_empty(),
+        "nothing posts before the answer"
+    );
+    *desk.permission.borrow_mut() = Some(NotificationPermission::Granted);
+    desk.events
+        .borrow_mut()
+        .push(DesktopEvent::StatusMenu(MenuCommandId(7)));
+    services.poll();
+    assert_eq!(
+        *desk.posted.borrow(),
+        ["b", "a"],
+        "a newer one replaces its id"
+    );
+    let posted = |identifier: &str| DesktopEvent::NotificationPosted {
+        identifier: identifier.into(),
+        result: Ok(()),
+    };
+    assert_eq!(
+        *heard.borrow(),
+        [
+            posted("b"),
+            posted("a"),
+            DesktopEvent::StatusMenu(MenuCommandId(7))
+        ]
+    );
+    assert_eq!(
+        services.post_notification(&SystemNotification::new("c", "Title", "Body")),
+        Ok(NotificationDelivery::Posted)
+    );
+
+    // A dropped listener hears nothing, and the backend queue drains.
+    drop(listener);
+    desk.events.borrow_mut().push(DesktopEvent::Activated);
+    services.poll();
+    assert_eq!(heard.borrow().len(), 3);
+    assert!(desk.events.borrow().is_empty());
+
+    *desk.permission.borrow_mut() = Some(NotificationPermission::Pending);
+    let late = SystemNotification::new("d", "Title", "Body");
+    assert!(services.post_notification(&late).is_ok());
+    *desk.permission.borrow_mut() = Some(NotificationPermission::Denied);
+    let refused = Rc::new(RefCell::new(None));
+    let listener: DesktopListener = {
+        let refused = refused.clone();
+        Rc::new(move |event: &DesktopEvent| *refused.borrow_mut() = Some(event.clone()))
+    };
+    services.listen(&listener);
+    services.poll();
+    assert_eq!(
+        *refused.borrow(),
+        Some(DesktopEvent::NotificationPosted {
+            identifier: "d".into(),
+            result: Err(ServiceError::PermissionDenied),
+        })
     );
 }
 
