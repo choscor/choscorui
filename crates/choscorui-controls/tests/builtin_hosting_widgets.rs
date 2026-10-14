@@ -12,8 +12,8 @@ use choscorui_controls::{
     ToolButtonMenu,
 };
 use choscorui_core::{
-    DisplayCommand, Feedback, ItemKey, Key, KeyEvent, LayoutDirection, Locale, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
+    ColorRole, DesignTokens, DisplayCommand, Feedback, ItemKey, Key, KeyEvent, LayoutDirection,
+    Locale, Paint, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, fills, texts};
 use std::cell::Cell;
@@ -405,6 +405,129 @@ fn a_hosted_tool_button_runs_toggles_and_opens_its_menu() {
     assert!(!h.host.set_open(&mut h.tree, h.node, true));
     assert!(h.messages().is_empty());
     assert_eq!(h.semantics().state.expanded, Some(false));
+}
+
+fn split_paste() -> Harness {
+    let mut paste = ToolButton::new("Paste", CommandId(8));
+    paste.menu = ToolButtonMenu::Split;
+    let items = vec![MenuItem::action("Paste as text", CommandId(9))];
+    Harness::new(paste.hosted().with_items(items))
+}
+
+#[test]
+fn a_press_on_the_split_arrow_that_ends_on_the_label_does_nothing() {
+    let mut h = split_paste();
+    let bounds = h.bounds();
+    let arrow = Point::new(bounds.max_x() - 4.0, bounds.center().y);
+    let label = Point::new(bounds.origin.x + 4.0, bounds.center().y);
+    let button = PointerButton::Primary;
+    for (down, up) in [(arrow, label), (label, arrow)] {
+        h.host.dispatch_pointer(
+            &mut h.tree,
+            PointerEvent::Down {
+                position: down,
+                button,
+            },
+        );
+        h.host
+            .dispatch_pointer(&mut h.tree, PointerEvent::Move { position: up });
+        h.host.dispatch_pointer(
+            &mut h.tree,
+            PointerEvent::Up {
+                position: up,
+                button,
+            },
+        );
+    }
+    assert!(h.messages().is_empty());
+    assert_eq!(h.semantics().state.expanded, Some(false));
+}
+
+#[test]
+fn a_split_tool_button_menu_closes_on_an_outside_press_and_on_focus_loss() {
+    let mut h = split_paste();
+    let bounds = h.bounds();
+    let arrow = Point::new(bounds.max_x() - 4.0, bounds.center().y);
+    h.focus();
+    h.click(arrow);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    h.click(Point::new(bounds.max_x() + 300.0, bounds.max_y() + 300.0));
+    assert_eq!(h.semantics().state.expanded, Some(false), "outside press");
+    h.focus();
+    h.click(arrow);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    h.host.move_focus(&mut h.tree, None);
+    assert_eq!(h.semantics().state.expanded, Some(false), "focus loss");
+    let messages = h.messages();
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| **message == ControlMessage::OpenChanged(false))
+            .count(),
+        2,
+        "{messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, ControlMessage::Command(_))),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn a_split_tool_button_paints_the_pressed_and_the_open_segment() {
+    let mut h = split_paste();
+    let bounds = h.bounds();
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    // Each segment fill has square corners on its inner side, so it is a
+    // path.
+    let segments = |h: &Harness| -> Vec<Rect> {
+        h.paint()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::FillPath {
+                    path,
+                    paint: Paint::Solid(color),
+                    ..
+                } if *color == muted => Some(path.bounds()),
+                _ => None,
+            })
+            .collect()
+    };
+    assert!(segments(&h).is_empty(), "no fill at rest");
+    let label = Point::new(bounds.origin.x + 4.0, bounds.center().y);
+    h.hover(label);
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Down {
+            position: label,
+            button: PointerButton::Primary,
+        },
+    );
+    let pressed = segments(&h);
+    assert_eq!(pressed.len(), 1, "the pressed label");
+    assert!(pressed[0].contains(label));
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Up {
+            position: label,
+            button: PointerButton::Primary,
+        },
+    );
+    // Move away so that no hover fill shows.
+    h.hover(Point::new(bounds.max_x() + 300.0, bounds.max_y() + 300.0));
+    h.messages();
+    let arrow = Point::new(bounds.max_x() - 4.0, bounds.center().y);
+    h.click(arrow);
+    h.hover(Point::new(bounds.max_x() + 300.0, bounds.max_y() + 300.0));
+    let open = segments(&h);
+    assert!(
+        open.iter()
+            .any(|segment| segment.contains(arrow) && !segment.contains(label)),
+        "the open arrow segment: {open:?}"
+    );
 }
 
 #[test]

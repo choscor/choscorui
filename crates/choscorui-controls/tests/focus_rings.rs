@@ -3,10 +3,12 @@
 mod hosted;
 
 use choscorui_controls::{
-    Breadcrumb, CanvasView, Chart, ChartKind, ChartSeries, ColumnBrowser, Toast, Toaster, Toasts,
+    Attachment, Breadcrumb, CalendarMode, CanvasView, Chart, ChartKind, ChartSeries, ColumnBrowser,
+    DatePicker, Dial, HeaderColumn, HeaderView, IntegerRange, Toast, Toaster, Toasts,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, Key, KeyEvent, Point, Rect, Scene, Size, TreeStore,
+    CivilDate, ColorRole, DesignTokens, DisplayCommand, Key, KeyEvent, Locale, Paint, Point, Rect,
+    Scene, Size, TreeStore,
 };
 use hosted::Harness;
 
@@ -129,4 +131,92 @@ fn a_canvas_rings_itself_until_an_item_has_focus() {
     let ring = rings(&mut h);
     assert_eq!(ring.len(), 1);
     assert!(inside(&h, &ring));
+}
+
+/// The commands of `h` in the ring color, of any shape, once its state
+/// transitions settle.
+fn ring_strokes(h: &mut Harness) -> Vec<DisplayCommand> {
+    h.paint();
+    h.set_time(h.time + 1.0);
+    let tokens = DesignTokens::light();
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    h.paint()
+        .commands()
+        .iter()
+        .filter(|command| match command {
+            DisplayCommand::StrokeRoundedRect { color, .. }
+            | DisplayCommand::StrokeRect { color, .. } => *color == ring,
+            DisplayCommand::StrokePath { paint, .. } => *paint == Paint::Solid(ring),
+            _ => false,
+        })
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn an_attachment_shows_one_ring_on_keyboard_focus() {
+    let mut h = Harness::new(Attachment::new("report.pdf").with_remove("Remove report.pdf"));
+    assert!(ring_strokes(&mut h).is_empty());
+    h.focus();
+    assert_eq!(ring_strokes(&mut h).len(), 1, "one ring, not two");
+}
+
+#[test]
+fn a_dial_shows_one_ring_on_keyboard_focus() {
+    let range = IntegerRange::new(0, 100, 10, 1, 10).unwrap();
+    let mut h = Harness::new(Dial::new(range, false).hosted("Volume"));
+    assert!(ring_strokes(&mut h).is_empty());
+    h.focus();
+    assert_eq!(ring_strokes(&mut h).len(), 1, "one ring, not two");
+}
+
+#[test]
+fn a_header_view_insets_the_ring_of_the_focused_column() {
+    let column = |title: &str| HeaderColumn {
+        title: title.into(),
+        width: 100.0,
+        min_width: 40.0,
+    };
+    let mut h = Harness::new(HeaderView::new(vec![column("Name"), column("Size")]));
+    assert!(rings(&mut h).is_empty());
+    h.focus();
+    let ring = rings(&mut h);
+    assert_eq!(ring.len(), 1);
+    let bounds = h.bounds();
+    // The cells clip, so the ring is inside the first cell.
+    assert!(inside(&h, &ring), "{ring:?} in {bounds:?}");
+    assert!(ring[0].max_x() <= bounds.origin.x + 100.0, "{ring:?}");
+}
+
+fn due_date() -> DatePicker {
+    let day = CivilDate::new(2026, 10, 12).unwrap();
+    DatePicker::new("Due date", Locale::parse("en").unwrap(), day)
+        .with_mode(CalendarMode::Single)
+        .with_today(day)
+}
+
+#[test]
+fn a_date_picker_rings_the_day_only_after_a_keyboard_open() {
+    let mut pointer = Harness::new(due_date());
+    let bounds = pointer.bounds();
+    pointer.click(bounds.center());
+    assert!(pointer.host.get(pointer.node).unwrap().overlay().is_some());
+    assert!(rings(&mut pointer).is_empty(), "no ring after a click");
+
+    let mut keyboard = Harness::new(due_date());
+    keyboard.focus();
+    let trigger = rings(&mut keyboard);
+    assert_eq!(trigger.len(), 1, "the trigger ring");
+    keyboard.key(Key::Enter);
+    let frame = keyboard
+        .host
+        .get(keyboard.node)
+        .unwrap()
+        .overlay()
+        .expect("the calendar is open");
+    let open = rings(&mut keyboard);
+    assert!(
+        open.iter().any(|ring| frame.union(*ring) == frame),
+        "a ring on the day in the calendar: {open:?} in {frame:?}"
+    );
 }
