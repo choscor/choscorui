@@ -71,6 +71,7 @@ jobs:
           # The footprint check needs freed memory back, so zombies are freed.
           NSDeallocateZombies=YES cargo test -p choscorui-macos --test lifetime_smoke --locked
           cargo test -p choscorui --test app_smoke --locked
+          cargo test -p choscorui --test metal_parity_smoke --locked
           CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
       - name: Gallery first frame
         run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
