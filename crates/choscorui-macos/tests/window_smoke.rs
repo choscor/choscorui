@@ -38,6 +38,17 @@ fn main() {
         .expect("window creation must succeed");
     window.show();
     assert!(window.is_visible());
+    // The virtual GPU of a new CI machine can need seconds to finish its
+    // first command buffers; later frames take milliseconds. The checks
+    // below give each paint a short run, so they start after the first
+    // paint. The limit only stops a test that never paints.
+    pump_until(
+        &app,
+        Duration::from_secs(30),
+        Duration::from_millis(10),
+        || window.paint_count() > 0,
+    );
+    assert!(window.paint_count() > 0, "the shown window never painted");
     assert_eq!(window.title(), "choscorui smoke");
     assert_eq!(window.content_size(), Size::new(320.0, 240.0));
     let mut retained = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(320.0, 240.0)));
