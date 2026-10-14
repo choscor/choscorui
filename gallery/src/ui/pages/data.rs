@@ -10,18 +10,18 @@ mod products;
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Binding, Button, ColumnBrowser, Configured, Cx, Env, Frame, HStack,
-    HorizontalAlignment, List, State, Text, VStack, VerticalAlignment, View, ViewExt,
+    Alignment, AnyView, Binding, Button, ColumnBrowser, Cx, Env, Frame, HStack,
+    HorizontalAlignment, Input, List, State, Text, VStack, VerticalAlignment, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonVariant, ControlKind, ControlMessage, ControlValue, ItemView, ShortcutModifiers,
-    TextItemDelegate, ViewLayout, undo_history, undo_steps_to,
+    ButtonVariant, ItemView, ShortcutModifiers, TextItemDelegate, ViewLayout, undo_history,
+    undo_steps_to,
 };
 use choscorui::core::{
     ColorRole, ItemKey, ItemModel, Key, SelectionMode, SemanticRole, Space, StringListModel,
     TextFilter, TextPreset, TreeStore, UndoStack,
 };
-use hosting::{Handle, SharedModel};
+use hosting::SharedModel;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -47,55 +47,26 @@ fn item_view<M: ItemModel + 'static>(
     ItemView::new(name, role, ROW).with_model(Box::new(model.clone()), Box::new(delegate))
 }
 
-/// An item view that a page keeps while it builds its hosted control
-/// again, so the view keeps its scroll offset, selection, and expansion.
-/// A new locale makes a new view, for the new names.
-#[derive(Clone, Default)]
-struct Kept(Rc<RefCell<Option<(String, SharedView)>>>);
-
-/// An item view that the page and its hosted control share.
-type SharedView = Rc<RefCell<ItemView>>;
-
-impl Kept {
-    /// The kept view, or the view that `make` makes for a new locale.
-    fn get(&self, env: &Env, make: impl FnOnce() -> ItemView) -> SharedView {
-        let tag = env.locale().tag();
-        let mut kept = self.0.borrow_mut();
-        match &*kept {
-            Some((locale, view)) if *locale == tag => view.clone(),
-            _ => {
-                let view = Rc::new(RefCell::new(make()));
-                *kept = Some((tag, view.clone()));
-                view
-            }
-        }
-    }
-}
-
-/// The hosted item view that `build` makes. It builds again when
-/// `revision` changes; `selected` keeps the selection by key, so it
-/// survives sorting, filtering, and rebuilds.
+/// The list of the item view that `build` makes. `selected` keeps the
+/// selection by key, so it survives sorting and filtering. A change of
+/// `revision` says that the rows changed: the view reads them again and
+/// keeps its scroll offset.
 fn rows<M: ItemModel + 'static>(
-    kind: ControlKind,
     model: &SharedModel<M>,
     revision: State<u64>,
     selected: State<Vec<ItemKey>>,
-    build: impl Fn(&Env) -> Handle<ItemView> + 'static,
-) -> Configured<Handle<ItemView>> {
+    build: impl Fn(&Env) -> ItemView + 'static,
+) -> List {
     let (shown, chosen) = (model.clone(), model.clone());
-    Configured::custom(kind, move |env| {
-        // Reading the revision builds the view again after the rows change.
+    let selection = Binding::new(
+        move || {
+            revision.get();
+            shown.positions(&selected.get())
+        },
+        move |rows: Vec<usize>| selected.set(chosen.keys(&rows)),
+    );
+    List::from_view(build, selection).update(move |_, _| {
         revision.get();
-        build(env)
-    })
-    .value(move || {
-        revision.get();
-        ControlValue::Indices(shown.positions(&selected.get()))
-    })
-    .on_message(move |message| {
-        if let ControlMessage::Changed(ControlValue::Indices(rows)) = message {
-            selected.set(chosen.keys(rows));
-        }
     })
 }
 
@@ -150,28 +121,17 @@ impl View for ItemViewPage {
                 search.set(text);
             })
         };
-        let on_key: Rc<dyn Fn(Key)> = {
-            let filter = filter.clone();
-            Rc::new(move |key| match key {
-                Key::Escape => filter(String::new()),
-                _ => list_focused.set(true),
-            })
-        };
-        let field = Configured::custom(ControlKind::Input, move |env| {
-            Handle::keyed(
-                controls::Input::new(env.text("item-view.search", &[]), "")
-                    .with_placeholder(env.text("item-view.search_placeholder", &[])),
-                &[Key::Escape, Key::ArrowDown],
-                on_key.clone(),
-            )
+        let cleared = filter.clone();
+        let field = Input::new(
+            t!("item-view.search"),
+            Binding::new(move || search.get(), move |text| filter(text)),
+        )
+        .with_env(|input, env| {
+            input.with_placeholder(env.text("item-view.search_placeholder", &[]))
         })
-        .value(move || ControlValue::Text(search.get()))
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                filter(text.clone());
-            }
-        })
-        .on_activate(move || list_focused.set(true));
+        .on_activate(move || list_focused.set(true))
+        .on_key_press(Key::Escape, move || cleared(String::new()))
+        .on_key_press(Key::ArrowDown, move || list_focused.set(true));
         let layout = Button::new(
             move || {
                 if grid.get() {
@@ -183,31 +143,24 @@ impl View for ItemViewPage {
             move || grid.update(|grid| *grid = !*grid),
         )
         .variant(ButtonVariant::Outline);
-        let (shown, named, kept) = (model.clone(), model.clone(), Kept::default());
-        let list = rows(
-            ControlKind::ListView,
-            &model,
-            revision,
-            selected,
-            move |env| {
-                // A search or a layout change keeps the view, so it keeps
-                // its scroll offset and shows the current record.
-                let view = kept.get(env, || {
-                    item_view(
-                        &env.text("item-view.records", &[]),
-                        SemanticRole::List,
-                        &shown,
-                        TextItemDelegate::default(),
-                    )
-                });
-                view.borrow_mut().set_layout(if grid.get() {
-                    ViewLayout::Grid { item_width: 300.0 }
-                } else {
-                    ViewLayout::List
-                });
-                Handle::shared(view)
-            },
-        )
+        let (shown, named) = (model.clone(), model.clone());
+        let list = rows(&model, revision, selected, move |env| {
+            item_view(
+                &env.text("item-view.records", &[]),
+                SemanticRole::List,
+                &shown,
+                TextItemDelegate::default(),
+            )
+        })
+        // A search or a layout change keeps the view, so it keeps its
+        // scroll offset and shows the current record.
+        .update(move |view, _| {
+            view.set_layout(if grid.get() {
+                ViewLayout::Grid { item_width: 300.0 }
+            } else {
+                ViewLayout::List
+            });
+        })
         .focused(list_focused.binding())
         .accessibility_value(move || first_selected(&named, &selected.get()));
         VStack::new((

@@ -1,18 +1,18 @@
 //! The typed product table and the pages built on it: a sortable,
 //! resizable header, cell editing, and a form mapped to the selected row.
 
-use super::hosting::{Handle, SharedModel};
-use super::{Kept, fill, first_selected, item_view, rows};
+use super::hosting::SharedModel;
+use super::{fill, first_selected, item_view, rows};
 use crate::ui::page::PageCx;
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    self, Alignment, AnyView, Binding, Button, Configured, Cx, Dynamic, Edges, Either, Env, Frame,
-    HStack, HorizontalAlignment, Input, Spacer, State, Text, VStack, VerticalAlignment, View,
-    ViewExt, ZStack,
+    self, Alignment, AnyView, Binding, Button, Checkbox, ControlRef, Cx, Dynamic, Edges, Either,
+    Env, Frame, HStack, HorizontalAlignment, Input, Spacer, State, Text, VStack, VerticalAlignment,
+    View, ViewExt, ZStack,
 };
 use choscorui::controls::{
-    self, CellEdit, ControlKind, ControlMessage, ControlValue, DataMapper, DefaultEditorFactory,
-    HeaderColumn, HeaderView, ItemDelegate, ItemState, ItemView, PaintContext, Slot, StyleQuery,
+    CellEdit, ControlKind, ControlMessage, ControlValue, DataMapper, DefaultEditorFactory,
+    HeaderColumn, ItemDelegate, ItemState, ItemView, PaintContext, Slot, StyleQuery,
     TextItemDelegate, ValidationError, ValidationState, VisualState,
 };
 use choscorui::core::{
@@ -156,27 +156,6 @@ fn product_columns(env: &Env) -> Vec<HeaderColumn> {
         .collect()
 }
 
-fn product_header(env: &Env) -> Rc<RefCell<HeaderView>> {
-    Rc::new(RefCell::new(HeaderView::new(product_columns(env))))
-}
-
-/// The hosted `header`. A resize writes the new widths to `widths`;
-/// `on_sort` runs after a sort change.
-fn header_bar(
-    header: Rc<RefCell<HeaderView>>,
-    widths: State<Vec<f64>>,
-    on_sort: impl Fn(&HeaderView) + 'static,
-) -> impl View {
-    let mounted = header.clone();
-    Configured::custom(ControlKind::Table, move |_| Handle::shared(mounted.clone())).on_message(
-        move |message| match message {
-            ControlMessage::ItemActivated(_) => on_sort(&header.borrow()),
-            ControlMessage::Changed(ControlValue::Index(_)) => widths.set(header.borrow().widths()),
-            _ => {}
-        },
-    )
-}
-
 // ---------------------------------------------------------------------------
 // Header view
 
@@ -206,24 +185,23 @@ impl View for HeaderViewPage {
         );
         let bar = view::HeaderView::new(product_columns, sorting)
             .on_resize(move |sizes| widths.set(sizes));
-        let (shown, named, kept) = (model.clone(), model.clone(), Kept::default());
-        let list = rows(ControlKind::Table, &model, revision, selected, move |env| {
-            // New widths or a sort keep the view and its scroll offset.
-            let view = kept.get(env, || {
-                item_view(
-                    &env.text("header-view.products", &[]),
-                    SemanticRole::Table,
-                    &shown,
-                    TextItemDelegate::table(),
-                )
-                .with_footer(vec![vec![
-                    env.text("header-view.total", &[]),
-                    total.to_string(),
-                ]])
-                .with_caption(env.text("header-view.caption", &[]))
-            });
-            view.borrow_mut().set_column_widths(widths.get());
-            Handle::shared(view)
+        let (shown, named) = (model.clone(), model.clone());
+        let list = rows(&model, revision, selected, move |env| {
+            item_view(
+                &env.text("header-view.products", &[]),
+                SemanticRole::Table,
+                &shown,
+                TextItemDelegate::table(),
+            )
+            .with_footer(vec![vec![
+                env.text("header-view.total", &[]),
+                total.to_string(),
+            ]])
+            .with_caption(env.text("header-view.caption", &[]))
+        })
+        // New widths or a sort keep the view and its scroll offset.
+        .update(move |view, _| {
+            view.set_column_widths(widths.get());
         })
         .accessibility_value(move || first_selected(&named, &selected.get()));
         VStack::new((bar, list.frame(fill())))
@@ -269,18 +247,18 @@ impl ItemDelegate for CellDelegate {
     }
 }
 
-/// The table view of the cell editing page, once it mounts.
-type TableView = Rc<RefCell<Option<Rc<RefCell<ItemView>>>>>;
-
 /// The rectangle of the cell of `key` and `column` in the table, from its
 /// top-left corner, or `None` when the row is not in the view.
-fn cell_rect(table: &TableView, widths: &[f64], key: ItemKey, column: usize) -> Option<Rect> {
-    let table = table.borrow();
-    let view = table.as_ref()?.borrow();
-    let index = view.index_of(key)?;
+fn cell_rect(
+    table: &ControlRef<ItemView>,
+    widths: &[f64],
+    key: ItemKey,
+    column: usize,
+) -> Option<Rect> {
+    let (index, height, offset) =
+        table.with(|view| Some((view.index_of(key)?, view.row_height(), view.offset())))??;
     let x = widths.iter().take(column).sum();
-    let height = view.row_height();
-    let y = index as f64 * height - view.offset();
+    let y = index as f64 * height - offset;
     Some(Rect::from_xywh(x, y, *widths.get(column)?, height))
 }
 
@@ -293,8 +271,10 @@ struct CellEditPage;
 impl View for CellEditPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let model = SharedModel::new(products(cx.env(), 30));
-        let header = product_header(cx.env());
-        let widths = cx.state(header.borrow().widths());
+        let columns = product_columns(cx.env());
+        let widths = cx.state(columns.iter().map(|column| column.width).collect());
+        // The header shows a sort, which the edited rows do not follow.
+        let sort = cx.state(None::<(usize, SortOrder)>);
         // Edits change cells, never rows, so the view never builds again
         // for them.
         let revision = cx.state(0_u64);
@@ -347,45 +327,31 @@ impl View for CellEditPage {
                 blurred.commit();
             }
         });
-        let bar = header_bar(header, widths, |_| {});
-        let table_view: TableView = Rc::default();
-        let (shown, named, mounted) = (model.clone(), model.clone(), table_view.clone());
-        let kept = Kept::default();
-        let table = rows(ControlKind::Table, &model, revision, selected, move |env| {
-            let view = kept.get(env, || {
-                let name = env.text("cell-edit.products", &[]);
-                ItemView::new(name, SemanticRole::Table, super::ROW)
-                    .with_model(Box::new(shown.clone()), Box::new(CellDelegate { column }))
+        let bar = view::HeaderView::new(product_columns, sort.binding())
+            .on_resize(move |sizes| widths.set(sizes));
+        let table_view = ControlRef::new();
+        let (shown, named) = (model.clone(), model.clone());
+        let rtl = cx.env().direction() == LayoutDirection::Rtl;
+        // Left and Right step the column in reading order.
+        let step = move |key: Key| {
+            let next = key.in_reading_order(rtl) == Key::ArrowRight;
+            column.update(|column| {
+                *column = if next {
+                    (*column + 1).min(COLUMNS.len() - 1)
+                } else {
+                    column.saturating_sub(1)
+                }
             });
-            view.borrow_mut().set_column_widths(widths.get());
-            *mounted.borrow_mut() = Some(view.clone());
-            let rtl = env.direction() == LayoutDirection::Rtl;
-            Handle::shared(view)
-                .with_keys(
-                    &[Key::ArrowLeft, Key::ArrowRight],
-                    Rc::new(move |key| {
-                        let next = key.in_reading_order(rtl) == Key::ArrowRight;
-                        column.update(|column| {
-                            *column = if next {
-                                (*column + 1).min(COLUMNS.len() - 1)
-                            } else {
-                                column.saturating_sub(1)
-                            }
-                        });
-                    }),
-                )
-                .with_press(Rc::new(move |point, bounds| {
-                    let x = point.x - bounds.origin.x;
-                    let widths = widths.get_untracked().unwrap_or_default();
-                    let mut end = 0.0;
-                    if let Some(picked) = widths.iter().position(|width| {
-                        end += width;
-                        x < end
-                    }) {
-                        column.set(picked);
-                    }
-                }))
+        };
+        let table = rows(&model, revision, selected, move |env| {
+            let name = env.text("cell-edit.products", &[]);
+            ItemView::new(name, SemanticRole::Table, super::ROW)
+                .with_model(Box::new(shown.clone()), Box::new(CellDelegate { column }))
         })
+        .update(move |view, _| {
+            view.set_column_widths(widths.get());
+        })
+        .control_ref(&table_view)
         .focused(table_focused.binding())
         .on_message({
             let editor = editor.clone();
@@ -406,6 +372,19 @@ impl View for CellEditPage {
                     ],
                 ),
                 None => first_selected(&named, &selected.get()),
+            }
+        })
+        .on_key_press(Key::ArrowLeft, move || step(Key::ArrowLeft))
+        .on_key_press(Key::ArrowRight, move || step(Key::ArrowRight))
+        // A press picks the column under it.
+        .on_press(move |point| {
+            let widths = widths.get_untracked().unwrap_or_default();
+            let mut end = 0.0;
+            if let Some(picked) = widths.iter().position(|width| {
+                end += width;
+                point.x < end
+            }) {
+                column.set(picked);
             }
         });
         let cell = cx.memo(move || edit.get().map(|edit| (edit.key, edit.column)));
@@ -494,10 +473,12 @@ impl Editor {
 
     /// The editor of the open edit, in a cell of `size`, named after
     /// `column`. A bool column edits with a checkbox that Space toggles.
+    /// Return commits, and Escape cancels.
     fn field(self, column: usize, size: Size) -> impl View {
         let edit = self.edit.get_untracked().ok().flatten();
         let boolean = edit.is_some_and(|edit| edit.checked().is_some());
         let focused = self.edit_focused.binding();
+        let (committed, cancel) = (self.clone(), self.clone());
         let editor = if boolean {
             Either::Left(self.checkbox(column))
         } else {
@@ -505,23 +486,27 @@ impl Editor {
         };
         editor
             .focused(focused)
+            .on_key_press(Key::Enter, move || committed.commit())
+            .on_key_press(Key::Escape, move || cancel.close())
             .frame(Frame::new().width(size.width).height(size.height))
     }
 
     /// The text field of a text or number column. A number column takes
     /// only the keys that can make a number.
     fn input(self, column: usize) -> impl View {
-        let (built, cancel, shown, typed, committed) = (
-            self.clone(),
-            self.clone(),
-            self.clone(),
-            self.clone(),
-            self.clone(),
+        let (built, shown, typed) = (self.clone(), self.clone(), self.clone());
+        let text = Binding::new(
+            move || shown.edit.get().map(|edit| edit.text).unwrap_or_default(),
+            move |text: String| {
+                typed.edit.update(|edit| {
+                    if let Some(edit) = edit {
+                        edit.set_text(text.clone());
+                    }
+                });
+                typed.error.set(None);
+            },
         );
-        let cancel: Rc<dyn Fn(Key)> = Rc::new(move |_| cancel.close());
-        Configured::custom(ControlKind::Input, move |env| {
-            let title = column_title(env, column);
-            let name = env.text("cell-edit.editing", &[("column", &title)]);
+        Input::new(editing_name(&self.env, column), text).with(move |input| {
             let filter = built
                 .edit
                 .get_untracked()
@@ -529,61 +514,37 @@ impl Editor {
                 .flatten()
                 .map(|edit| edit.filter())
                 .unwrap_or_default();
-            let mut input = controls::Input::new(name, "").with_filter(filter);
+            let mut input = input.with_filter(filter);
             input.set_validation(built.validation());
-            Handle::keyed(input, &[Key::Escape], cancel.clone())
+            input
         })
-        .value(move || {
-            ControlValue::Text(shown.edit.get().map(|edit| edit.text).unwrap_or_default())
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Text(text)) = message {
-                typed.edit.update(|edit| {
-                    if let Some(edit) = edit {
-                        edit.set_text(text.clone());
-                    }
-                });
-                typed.error.set(None);
-            }
-        })
-        .on_activate(move || committed.commit())
     }
 
-    /// The checkbox of a bool column: Space toggles, Return commits, and
-    /// Escape cancels.
+    /// The checkbox of a bool column.
     fn checkbox(self, column: usize) -> impl View {
-        let (keys, shown, toggled) = (self.clone(), self.clone(), self.clone());
-        let keys: Rc<dyn Fn(Key)> = Rc::new(move |key| {
-            if key == Key::Enter {
-                keys.commit();
-            } else {
-                keys.close();
-            }
-        });
-        Configured::custom(ControlKind::Checkbox, move |env| {
-            let title = column_title(env, column);
-            let name = env.text("cell-edit.editing", &[("column", &title)]);
-            Handle::keyed(
-                controls::Checkbox::new(name, false),
-                &[Key::Escape, Key::Enter],
-                keys.clone(),
-            )
-        })
-        .value(move || {
-            let checked = shown.edit.get().and_then(|edit| edit.checked());
-            ControlValue::Bool(checked.unwrap_or(false))
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Bool(checked)) = message {
+        let (shown, toggled) = (self.clone(), self.clone());
+        let checked = Binding::new(
+            move || {
+                let checked = shown.edit.get().and_then(|edit| edit.checked());
+                checked.unwrap_or(false)
+            },
+            move |checked: bool| {
                 toggled.edit.update(|edit| {
                     if let Some(edit) = edit {
-                        edit.set_checked(*checked);
+                        edit.set_checked(checked);
                     }
                 });
                 toggled.error.set(None);
-            }
-        })
+            },
+        );
+        Checkbox::new(editing_name(&self.env, column), checked)
     }
+}
+
+/// The name of the editor of column `column` in `env`.
+fn editing_name(env: &Env, column: usize) -> String {
+    let title = column_title(env, column);
+    env.text("cell-edit.editing", &[("column", &title)])
 }
 
 /// A validation message under a field.
@@ -786,22 +747,15 @@ impl View for DataMapperPage {
         let version = form.version;
         let (shown, named, following, submitted) =
             (model.clone(), model.clone(), form.clone(), form.clone());
-        let list = rows(
-            ControlKind::ListView,
-            &model,
-            revision,
-            selected,
-            move |env| {
-                let mut view = item_view(
-                    &env.text("header-view.products", &[]),
-                    SemanticRole::List,
-                    &shown,
-                    TextItemDelegate::default(),
-                );
-                view.set_selection_mode(SelectionMode::Single);
-                Handle::new(view)
-            },
-        )
+        let list = rows(&model, revision, selected, move |env| {
+            item_view(
+                &env.text("header-view.products", &[]),
+                SemanticRole::List,
+                &shown,
+                TextItemDelegate::default(),
+            )
+        })
+        .selection_mode(SelectionMode::Single)
         .on_message(move |message| {
             if let ControlMessage::Changed(ControlValue::Indices(rows)) = message {
                 following.follow(rows.first().copied());
