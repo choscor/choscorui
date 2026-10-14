@@ -282,6 +282,14 @@ pub(crate) fn painter(window: usize) -> Painter {
 /// Stops the display link of a window that closes for good.
 pub(crate) fn detach(window: usize) {
     let surface = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window));
+    eprintln!(
+        "TRACEX detach presentations {} commands {} unpresented {:?}",
+        PRESENTATIONS.lock().unwrap().len(),
+        COMMANDS.lock().unwrap().len(),
+        surface
+            .as_ref()
+            .map(|s| s.shared.unpresented.load(Ordering::Acquire))
+    );
     if let Some(Surface {
         link: Some(link), ..
     }) = &surface

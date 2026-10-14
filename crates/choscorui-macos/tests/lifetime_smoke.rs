@@ -129,6 +129,11 @@ fn window_churn(app: &Application, count: usize) {
         .unwrap();
     drop(menu);
     for mut window in open {
+        eprintln!(
+            "TRACEX churn paints {} displays {}",
+            window.paint_count(),
+            window.display_count()
+        );
         window.close();
     }
     pump(app, Duration::from_millis(300));
@@ -293,6 +298,7 @@ fn main() {
     for _ in 0..6 {
         round(&app, &mut window);
         samples.push(footprint());
+        eprintln!("TRACEX round footprint {} KiB", footprint() >> 10);
     }
     let early = samples[..2].iter().min().copied().unwrap();
     let late = samples[4..].iter().min().copied().unwrap();
