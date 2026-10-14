@@ -310,6 +310,28 @@ pub(crate) fn detach(window: usize) {
     }
     let fix = std::env::var("DIAG_FIX").unwrap_or_default();
     let has = |n: &str| fix.split(',').any(|x| x == n);
+    if let Some(s) = surface.as_ref().filter(|_| has("shrink")) {
+        let _pool = Pool::new();
+        if let Some(gpu) = gpu() {
+            SET_PRESENTS_WITH_TRANSACTION.send(&s.layer, (false,));
+            SET_DRAWABLE_SIZE.send(&s.layer, (NSSize { width: 1.0, height: 1.0 },));
+            if let Some(drawable) = NEXT_DRAWABLE.send(&s.layer, ()) {
+                if let Some(texture) = DRAWABLE_TEXTURE.send(&drawable, ()) {
+                    let list = choscorui_core::DisplayList::new();
+                    let plan = plan::build(gpu, &list, 1, 1, 1.0);
+                    if let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) {
+                        let mut targets = Targets::default();
+                        if encode(gpu, &mut targets, &plan, &command_buffer, texture).is_some() {
+                            PRESENT_DRAWABLE.send(&command_buffer, (drawable.as_drawable(),));
+                            COMMIT.send(&command_buffer, ());
+                            WAIT_UNTIL_SCHEDULED.send(&command_buffer, ());
+                        }
+                    }
+                    plan::recycle(plan);
+                }
+            }
+        }
+    }
     if let Some(s) = &surface {
         let _pool = Pool::new();
         if has("forget") {
@@ -327,6 +349,9 @@ pub(crate) fn detach(window: usize) {
         }
         if has("flush") {
             let _ = crate::ffi::quartz::TRANSACTION_FLUSH.class_send(());
+        }
+        if has("sleep") {
+            std::thread::sleep(Duration::from_millis(50));
         }
     }
 }

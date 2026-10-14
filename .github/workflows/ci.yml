@@ -20,7 +20,12 @@ jobs:
       - name: Build
         run: cargo test -p choscorui-macos --test lifetime_smoke --locked --no-run
       - name: churn base
-        run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown|end unmapped)|Owned physical|panicked'
-      - name: churn frames4
-        if: false
-        run: DIAG_ONLY=churn DIAG_FRAMES=4 cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown|end unmapped)|Owned physical|panicked'
+        run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-shrink
+        run: DIAG_ONLY=churn DIAG_FIX=early,shrink cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-shrink-sleep
+        run: DIAG_ONLY=churn DIAG_FIX=early,shrink,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-unhost-flush-sleep
+        run: DIAG_ONLY=churn DIAG_FIX=early,unhost,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-all-sleep
+        run: DIAG_ONLY=churn DIAG_FIX=early,forget,contents,device,unhost,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
