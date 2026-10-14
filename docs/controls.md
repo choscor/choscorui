@@ -199,7 +199,7 @@ changes as `ControlMessage` values:
 | `TextEditor` | `Changed(Text)` | `Text` |
 | `ScrollBar`, `DecimalSpinBox` | `Changed(Number)` | `Number` |
 | `HostedDial` | `Changed(Number)` | `Number`, rounded |
-| `HostedToolButton` | `Command(id)`, `Changed(Bool)` when checkable, `OpenChanged` for a menu | `Bool` when checkable |
+| `HostedToolButton` | `Command(id)` of the button or of a menu row, `Changed(Bool)` when checkable, `OpenChanged` for a menu, `Dismissed` on a close without a choice | `Bool` when checkable |
 | `HostedButtonGroup` | `Changed(Indices)` of toggle members, `ItemActivated(member)` for a button member | `Indices` of toggle members, exactly one when exclusive |
 | `HostedCommandLink` | `Activated` | - |
 | `ToolBox` | `Changed(Index)` | `Index` |
@@ -520,14 +520,16 @@ pins this behavior.
   ArrowDown opens the menu of a button that has one.
 - The button runs only a known command that is enabled. A checkable button flips
   the command's checked state and returns `Toggled`.
-- Menu opening does not read the command state.
+- A disabled command does nothing. Its menu does not open.
 - **`ToolButton` look.** `paint` uses the `Toggle` look: transparent, and
-  `muted` on hover or while checked. `visual_state` adds the command's
-  checked and disabled state to the host's flags.
+  `muted` on hover, on press, while the menu is open, or while checked.
+  `visual_state` adds the command's checked and disabled state to the
+  host's flags.
 - An `Instant` menu adds a chevron at the end. A `Split` menu adds a 1 pt
   divider and a chevron in `arrow_width`.
 - In a control host, the label and the split arrow of a `Split` button
-  show the hover fill one at a time.
+  show the hover and press fill one at a time. The split arrow shows the
+  open fill. A press that ends on the other segment does nothing.
 - **`ButtonGroup` members.** `ButtonGroup::new` makes one `Toggle`
   member for each command. `from_members` takes `ButtonGroupMember`
   values: `Toggle(command)`, `Button(command, variant)`, `Separator`, and
@@ -609,12 +611,23 @@ check, and focus enters the group at the checked member.
 pin this behavior.
 
 `HostedToolButton::with_checkable` and `HostedToolButton::with_menu` set the
-check state and the menu of a hosted button.
+check state and the menu of a hosted button. `with_items` gives the menu
+its rows, and `set_command` sets the state of a row.
+
+- The menu opens below the button as a dropdown menu, with the menu keys,
+  hover, and type-ahead. A keyboard open highlights the first row.
+- A chosen row reports its `Command(id)` and closes the menu.
+- Escape, a press outside, Tab, and focus loss close the menu and report
+  `Dismissed`.
+- The node adds `Focus` to the actions. With a menu, it publishes
+  `expanded`, and the highlighted row in `description` while the menu is
+  open.
 
 **As a view.** `ToolButton::new(label, action)` runs `action` when the
-button reports `Command`. `.checked(binding)` makes it checkable and edits
-a `Binding<bool>` through the `Bool` value. `.menu(menu)` adds an instant
-or a split menu, which reports `OpenChanged`.
+button reports its own `Command`. `.checked(binding)` makes it checkable
+and edits a `Binding<bool>` through the `Bool` value. `.menu(menu, items)`
+adds an instant or a split menu of `MenuChoice` rows, which reports
+`OpenChanged`.
 
 ### CommandRegistry and shortcuts
 

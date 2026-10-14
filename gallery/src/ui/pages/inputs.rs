@@ -4,7 +4,7 @@ use crate::ui::page::{Build, PageCx, caption, column, row, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Button, ButtonGroup, Checkbox, Cx, Env, Frame, HStack, HorizontalAlignment,
-    KeySequenceEdit, Localized, State, Text, ToolButton, VStack, View, ViewExt,
+    KeySequenceEdit, Localized, MenuChoice, State, Text, ToolButton, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     self, ButtonGroupMember, ButtonVariant, CommandId, ControlMessage, ControlSize, ControlValue,
@@ -126,20 +126,38 @@ impl View for ToolButtonPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(env.text("tool-button.none", &[]));
-        let mut tool = |key: &'static str, checkable: bool, menu, width: f64| {
+        let chose = |key: &'static str| {
+            let env = env.clone();
+            MenuChoice::action(t!(key), move || {
+                let item = env.text(key, &[]);
+                last.set(env.text("tool-button.chose", &[("item", &item)]));
+            })
+        };
+        let recent = vec![chose("tool-button.report"), chose("tool-button.notes")];
+        let undo = vec![
+            chose("tool-button.undo_typing"),
+            chose("tool-button.undo_paste"),
+        ];
+        let mut tool = |key: &'static str, checkable: bool, menu, items: Vec<MenuChoice>| {
             let checked = cx.state(false);
             let name = env.text(key, &[]);
             let reported = env.clone();
             let report = move |key: &str| last.set(reported.text(key, &[("name", &name)]));
             let activated = report.clone();
             let button = ToolButton::new(t!(key), move || activated("tool-button.activated"))
-                .menu(menu)
+                .menu(menu, items)
                 .on_message(move |message| match message {
                     ControlMessage::Changed(ControlValue::Bool(true)) => report("tool-button.on"),
                     ControlMessage::Changed(ControlValue::Bool(false)) => report("tool-button.off"),
                     ControlMessage::OpenChanged(true) => report("tool-button.menu_opened"),
+                    ControlMessage::Dismissed => report("tool-button.menu_closed"),
                     _ => {}
                 });
+            let width = if menu == ToolButtonMenu::None {
+                72.0
+            } else {
+                96.0
+            };
             if checkable {
                 button.checked(checked.binding())
             } else {
@@ -149,10 +167,10 @@ impl View for ToolButtonPage {
         };
         column((
             HStack::new((
-                tool("tool-button.cut", false, ToolButtonMenu::None, 72.0),
-                tool("tool-button.bold", true, ToolButtonMenu::None, 72.0),
-                tool("tool-button.recent", false, ToolButtonMenu::Instant, 96.0),
-                tool("tool-button.undo", false, ToolButtonMenu::Split, 96.0),
+                tool("tool-button.cut", false, ToolButtonMenu::None, Vec::new()),
+                tool("tool-button.bold", true, ToolButtonMenu::None, Vec::new()),
+                tool("tool-button.recent", false, ToolButtonMenu::Instant, recent),
+                tool("tool-button.undo", false, ToolButtonMenu::Split, undo),
             ))
             .spacing(Space::S2),
             readout(t!("tool-button.last", action = last)),
@@ -403,7 +421,7 @@ pub fn page(id: &str) -> Option<Build> {
 mod tests {
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, Point, PointerButton, PointerEvent, SemanticAction};
 
     fn press_with(page: &mut Harness, key: Key, modifiers: ShortcutModifiers) {
         page.host
@@ -458,6 +476,74 @@ mod tests {
         assert!(page.host.find("Last action: Recent menu opened").is_some());
         assert!(page.act("Cut", SemanticAction::Activate));
         assert!(page.host.find("Last action: Cut activated").is_some());
+    }
+
+    #[test]
+    fn tool_button_menus_open_choose_and_close() {
+        let mut page = Harness::new("tool-button");
+        let expanded = |page: &mut Harness| {
+            let node = page.node("Recent");
+            page.host.semantic(node).unwrap().state.expanded
+        };
+        assert_eq!(expanded(&mut page), Some(false));
+        assert!(page.act("Recent", SemanticAction::Focus));
+        press(&mut page, Key::Enter);
+        assert_eq!(expanded(&mut page), Some(true));
+        // The keyboard open highlights the first row; Return chooses it.
+        press(&mut page, Key::Enter);
+        assert!(page.host.find("Last action: Chose Report.pdf").is_some());
+        assert_eq!(expanded(&mut page), Some(false));
+        press(&mut page, Key::Enter);
+        press(&mut page, Key::Escape);
+        assert!(page.host.find("Last action: Recent menu closed").is_some());
+        assert_eq!(expanded(&mut page), Some(false));
+        // A press on the split arrow that ends on the label does nothing.
+        let node = page.node("Undo");
+        let bounds = page.host.tree().bounds(node).unwrap();
+        let (y, none) = (bounds.center().y, ShortcutModifiers::default());
+        let arrow = Point::new(bounds.max_x() - 4.0, y);
+        let label = Point::new(bounds.origin.x + 8.0, y);
+        page.host.pointer(
+            PointerEvent::Down {
+                position: arrow,
+                button: PointerButton::Primary,
+            },
+            none,
+        );
+        page.host.pointer(
+            PointerEvent::Up {
+                position: label,
+                button: PointerButton::Primary,
+            },
+            none,
+        );
+        assert!(page.host.find("Last action: Chose Report.pdf").is_none());
+        assert!(page.host.find("Last action: Recent menu closed").is_some());
+        // A press outside closes the open split menu.
+        page.host.pointer(
+            PointerEvent::Down {
+                position: arrow,
+                button: PointerButton::Primary,
+            },
+            none,
+        );
+        page.host.pointer(
+            PointerEvent::Up {
+                position: arrow,
+                button: PointerButton::Primary,
+            },
+            none,
+        );
+        assert!(page.host.find("Last action: Undo menu opened").is_some());
+        let outside = Point::new(bounds.origin.x, bounds.max_y() + 300.0);
+        page.host.pointer(
+            PointerEvent::Down {
+                position: outside,
+                button: PointerButton::Primary,
+            },
+            none,
+        );
+        assert!(page.host.find("Last action: Undo menu closed").is_some());
     }
 
     #[test]

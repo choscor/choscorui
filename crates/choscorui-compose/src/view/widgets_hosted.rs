@@ -6,6 +6,7 @@
 //! an action where it fires one.
 
 use super::configured::Configured;
+use super::menus::{Actions, MenuChoice};
 use super::state::{Binding, IntoLive};
 use super::text::TextContent;
 use super::widgets::{Items, as_index, as_position, label, text, to_position};
@@ -15,6 +16,7 @@ use choscorui_controls::{
     CommandId, ControlKind, ControlValue, DialogButton, MenuItem, ScrollOrientation, ToastPosition,
     Toasts, ToolButtonMenu,
 };
+use std::rc::Rc;
 
 /// The command id that view buttons report; views run closures instead.
 const NO_COMMAND: CommandId = CommandId(0);
@@ -278,7 +280,11 @@ impl Configured<controls::HostedToolButton> {
         Configured::custom(ControlKind::Toggle, move |env| {
             controls::ToolButton::new(text(&label, env), NO_COMMAND).hosted()
         })
-        .on_command(move |_| action())
+        .on_command(move |command| {
+            if command == NO_COMMAND {
+                action();
+            }
+        })
     }
 
     /// Makes the button a toggle whose state `checked` edits.
@@ -288,11 +294,31 @@ impl Configured<controls::HostedToolButton> {
             .bind(checked, ControlValue::Bool, as_bool)
     }
 
-    /// Gives the button a menu: an instant menu opens on a press, and a
-    /// split menu opens from its arrow.
+    /// Gives the button a menu of `items` below it: an instant menu opens
+    /// on a press, and a split menu opens from its arrow or the Down key.
+    /// Escape, a press outside, and focus loss close the menu.
     #[must_use]
-    pub fn menu(self, menu: ToolButtonMenu) -> Self {
-        self.with(move |button| button.with_menu(menu))
+    pub fn menu(self, menu: ToolButtonMenu, items: impl Items<MenuChoice>) -> Self {
+        let actions: Actions = Rc::default();
+        let built = actions.clone();
+        self.with_env(move |button, env| {
+            let (mut list, mut states) = (Vec::new(), Vec::new());
+            let rows = super::menus::build(&items.items(env), env, &mut list, &mut states);
+            *built.borrow_mut() = list;
+            let mut button = button.with_menu(menu).with_items(rows);
+            for (command, state) in states {
+                // Each row of the menu has a command, so this cannot fail.
+                let _ = button.set_command(command, state);
+            }
+            button
+        })
+        .on_command(move |CommandId(id)| {
+            let index = usize::try_from(id).ok().and_then(|id| id.checked_sub(1));
+            let action = index.and_then(|index| actions.borrow().get(index).cloned());
+            if let Some(action) = action {
+                action();
+            }
+        })
     }
 }
 

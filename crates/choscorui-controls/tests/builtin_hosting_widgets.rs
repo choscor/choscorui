@@ -7,8 +7,8 @@ mod hosted;
 use choscorui_controls::{
     ButtonGroup, ButtonGroupMember, ButtonVariant, ComboItem, Combobox, CommandId, CommandLink,
     ControlMessage, ControlSize, ControlValue, DecimalSpinBox, Dial, FontChooser, IntegerRange,
-    KeySequenceEdit, NumberBase, NumericDisplay, ScrollBar, ScrollOrientation, ShortcutModifiers,
-    SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
+    KeySequenceEdit, MenuItem, NumberBase, NumericDisplay, ScrollBar, ScrollOrientation,
+    ShortcutModifiers, SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
 };
 use choscorui_core::{
     Feedback, ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent,
@@ -367,23 +367,43 @@ fn a_hosted_tool_button_runs_toggles_and_opens_its_menu() {
 
     let mut paste = ToolButton::new("Paste", CommandId(8));
     paste.menu = ToolButtonMenu::Split;
-    let mut h = Harness::new(paste.hosted());
+    let items = vec![MenuItem::action("Paste as text", CommandId(9))];
+    let mut h = Harness::new(paste.hosted().with_items(items));
     let bounds = h.bounds();
+    let arrow = Point::new(bounds.max_x() - 4.0, bounds.center().y);
     h.click(Point::new(bounds.origin.x + 4.0, bounds.center().y));
-    h.click(Point::new(bounds.max_x() - 4.0, bounds.center().y));
+    h.click(arrow);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    h.focus();
+    // The open menu takes the keys: ArrowDown highlights its first row.
+    h.key(Key::ArrowDown);
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().state.expanded, Some(false));
     h.focus();
     h.key(Key::ArrowDown);
+    h.key(Key::Escape);
     assert_eq!(
         h.messages(),
         vec![
             ControlMessage::Command(CommandId(8)),
             ControlMessage::OpenChanged(true),
+            ControlMessage::Command(CommandId(9)),
+            ControlMessage::OpenChanged(false),
+            ControlMessage::OpenChanged(true),
+            ControlMessage::Dismissed,
             ControlMessage::OpenChanged(false),
         ]
     );
     assert!(h.host.set_open(&mut h.tree, h.node, true));
     assert!(h.messages().is_empty());
     assert!(!set_value(&mut h, ControlValue::Bool(true)));
+    assert!(h.host.set_open(&mut h.tree, h.node, false));
+    // A disabled command never opens its menu.
+    h.set_enabled(false);
+    h.click(arrow);
+    assert!(!h.host.set_open(&mut h.tree, h.node, true));
+    assert!(h.messages().is_empty());
+    assert_eq!(h.semantics().state.expanded, Some(false));
 }
 
 #[test]

@@ -143,12 +143,12 @@ impl MenuChoice {
 }
 
 /// The actions of a built menu, by command id less one.
-type Actions = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
+pub(super) type Actions = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
 
 /// Converts `choices` to menu items in `env`. Each action and check row
 /// gets the next command id; `actions` collects their actions, and
 /// `states` the commands that are disabled or checked.
-fn build(
+pub(super) fn build(
     choices: &[MenuChoice],
     env: &Env,
     actions: &mut Vec<Rc<dyn Fn()>>,

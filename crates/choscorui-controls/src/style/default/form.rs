@@ -516,7 +516,8 @@ fn toggle(cx: &Cx) -> ResolvedStyle {
         style.border = cx.c(ColorRole::Input);
         style.shadow = cx.shadow(ShadowScale::Xs);
     }
-    if s.interactive_hover() {
+    // A press, or the open menu of a tool button, looks like hover.
+    if (s.interactive_hover() || s.pressed() || s.open()) && !s.disabled() {
         style.background = cx.c(ColorRole::Muted).into();
         style.foreground = cx.c(ColorRole::Foreground);
     }

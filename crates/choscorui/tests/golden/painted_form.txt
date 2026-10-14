@@ -5035,6 +5035,12 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 39x39 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 35x35 r7.5 w1 #a1a1a1ff
@@ -5055,7 +5061,13 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default default group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5073,6 +5085,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5093,7 +5111,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default xs group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5111,6 +5135,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5131,7 +5161,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default sm group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5149,6 +5185,12 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 43x43 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 39x39 r7.5 w1 #a1a1a1ff
@@ -5169,7 +5211,13 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default lg group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5187,6 +5235,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5207,7 +5261,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default icon-xs group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5225,6 +5285,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5245,7 +5311,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default icon-sm group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5258,6 +5330,12 @@ PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, hei
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
 # hovered
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+# pressed
 fill 10,10 40x40 r8 #f5f5f5ff
 stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
@@ -5283,7 +5361,13 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle default icon-lg group
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5305,6 +5389,14 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke 10.5,10.5 35x35 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 39x39 r9.5 w3 #a1a1a180
@@ -5330,7 +5422,15 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke 10.5,10.5 35x35 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline default group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5353,6 +5453,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -5378,7 +5486,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline xs group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5401,6 +5517,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -5426,7 +5550,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline sm group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5449,6 +5581,14 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 43x43 r9.5 w3 #a1a1a180
@@ -5474,7 +5614,15 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline lg group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5497,6 +5645,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -5522,7 +5678,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline icon-xs group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5545,6 +5709,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -5570,7 +5742,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline icon-sm group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5586,6 +5766,14 @@ PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, hei
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
 # hovered
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+# pressed
 shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
 fill 10,10 40x40 r8 #f5f5f5ff
 stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
@@ -5618,7 +5806,15 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle outline icon-lg group
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5646,6 +5842,12 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 39x39 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 35x35 r7.5 w1 #a1a1a1ff
@@ -5666,7 +5868,13 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default xs root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5684,6 +5892,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5704,7 +5918,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default sm root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5722,6 +5942,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5742,7 +5968,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default lg root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5760,6 +5992,12 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 43x43 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 39x39 r7.5 w1 #a1a1a1ff
@@ -5780,7 +6018,13 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default icon-xs root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5798,6 +6042,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5818,7 +6068,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default icon-sm root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5836,6 +6092,12 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 31x31 r7.5 w1 #a1a1a1ff
@@ -5856,7 +6118,13 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group default icon-lg root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -5869,6 +6137,12 @@ PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, hei
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
 # hovered
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+# pressed
 fill 10,10 40x40 r8 #f5f5f5ff
 stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
@@ -5894,7 +6168,13 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline default root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5917,6 +6197,14 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke 10.5,10.5 35x35 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 39x39 r9.5 w3 #a1a1a180
@@ -5942,7 +6230,15 @@ stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 
 PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 36x36 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 36x36 r8 #f5f5f5ff
+stroke 10.5,10.5 35x35 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 36.0, y: 18.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 36,32.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline xs root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -5965,6 +6261,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -5990,7 +6294,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline sm root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -6013,6 +6325,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -6038,7 +6358,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline lg root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -6061,6 +6389,14 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 43x43 r9.5 w3 #a1a1a180
@@ -6086,7 +6422,15 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline icon-xs root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -6109,6 +6453,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -6134,7 +6486,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline icon-sm root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -6157,6 +6517,14 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
+# pressed
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
 # focus-visible
 shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
 stroke 8.5,8.5 35x35 r9.5 w3 #a1a1a180
@@ -6182,7 +6550,15 @@ stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 
 PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 32x32 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 32x32 r8 #f5f5f5ff
+stroke 10.5,10.5 31x31 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,22 L26,29.333333333333332 L22.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 32.0, y: 16.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 32,30.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ### toggle-group outline icon-lg root
 # rest
 shadow 10,10 120x36 r8 offset 0,1 blur2 spread0 #0000000d
@@ -6198,6 +6574,14 @@ PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, hei
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
 # hovered
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+# pressed
 shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
 fill 10,10 40x40 r8 #f5f5f5ff
 stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
@@ -6230,7 +6614,15 @@ stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #
 PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
 PopClip
-= rest: pressed focused invalid indeterminate selected open highlighted
+# open
+shadow 10,10 40x40 r8 offset 0,1 blur2 spread0 #0000000d
+fill 10,10 40x40 r8 #f5f5f5ff
+stroke 10.5,10.5 39x39 r7.5 w1 #e5e5e5ff
+stroke-path M33.33333333333333,26 L26,33.33333333333333 L22.666666666666668,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
+PushClip(Rect { origin: Point { x: 40.0, y: 20.0 }, size: Size { width: 0.0, height: 20.0 } })
+text "…" at 40,34.9 system-ui 14 w500 t0 #0a0a0aff
+PopClip
+= rest: focused invalid indeterminate selected highlighted
 ## field
 sizes default sm
 slot root: root

@@ -705,11 +705,12 @@ Makes the button a toggle whose state `checked` edits.
 #### `ToolButton::menu`
 
 ```rust
-pub fn menu(self, menu: ToolButtonMenu) -> Self
+pub fn menu(self, menu: ToolButtonMenu, items: impl Items<MenuChoice>) -> Self
 ```
 
-Gives the button a menu: an instant menu opens on a press, and a
-split menu opens from its arrow.
+Gives the button a menu of `items` below it: an instant menu opens
+on a press, and a split menu opens from its arrow or the Down key.
+Escape, a press outside, and focus loss close the menu.
 
 #### `ToolButton::new`
 

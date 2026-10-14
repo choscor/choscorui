@@ -5,6 +5,9 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
 use crate::hosted::{self, Parts, Press, PressOutcome};
+use crate::menu::MenuItem;
+use crate::overlay::menu_popup::{CommandResult, MenuPopup};
+use crate::popup::gap_anchor;
 use crate::style::fill_area;
 use crate::style::{
     ControlKind, ItemVariant, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
@@ -56,13 +59,16 @@ impl ToolButton {
         }
     }
 
+    fn enabled(&self, commands: &CommandRegistry) -> bool {
+        commands
+            .state(self.command)
+            .is_ok_and(|state| state.enabled)
+    }
+
     fn run(&self, commands: &mut CommandRegistry) -> ToolButtonAction {
         let Ok(state) = commands.state(self.command) else {
             return ToolButtonAction::None;
         };
-        if !state.enabled {
-            return ToolButtonAction::None;
-        }
         if self.checkable {
             let checked = !state.checked;
             let _ = commands.set_checked(self.command, checked);
@@ -72,8 +78,12 @@ impl ToolButton {
         }
     }
 
-    /// A completed click at `x` within `bounds`.
+    /// A completed click at `x` within `bounds`. A disabled command does
+    /// nothing, and does not open the menu.
     pub fn click(&self, bounds: Rect, x: f64, commands: &mut CommandRegistry) -> ToolButtonAction {
+        if !self.enabled(commands) {
+            return ToolButtonAction::None;
+        }
         match self.menu {
             ToolButtonMenu::Instant => ToolButtonAction::OpenMenu,
             ToolButtonMenu::Split
@@ -85,7 +95,11 @@ impl ToolButton {
         }
     }
 
+    /// The action of `key`. A disabled command does nothing.
     pub fn handle_key(&self, key: Key, commands: &mut CommandRegistry) -> ToolButtonAction {
+        if !self.enabled(commands) {
+            return ToolButtonAction::None;
+        }
         match key {
             Key::Space | Key::Enter if self.menu == ToolButtonMenu::Instant => {
                 ToolButtonAction::OpenMenu
@@ -152,7 +166,8 @@ impl ToolButton {
         let split = self.menu == ToolButtonMenu::Split;
         let pointer = VisualState::HOVERED.with(VisualState::PRESSED);
         let state = match segments {
-            Some(_) if split => state.without(pointer),
+            // The split arrow shows the open menu.
+            Some(_) if split => state.without(pointer.with(VisualState::OPEN)),
             Some([label, _]) => state
                 .without(pointer)
                 .with(label.without(VisualState::DISABLED)),
@@ -205,7 +220,7 @@ impl ToolButton {
                     (label_bounds, segments[0], true),
                     (arrow, segments[1], false),
                 ] {
-                    if !segment.interactive_hover() {
+                    if !segment.interactive_hover() && !segment.open() {
                         continue;
                     }
                     let query = StyleQuery::new(ControlKind::Toggle, Slot::Root).state(segment);
@@ -267,7 +282,8 @@ impl ToolButton {
             commands,
             press: Press::default(),
             segments: Parts::default(),
-            open: false,
+            popup: MenuPopup::new(Vec::new()),
+            anchor: Rect::default(),
             rtl: false,
         }
     }
@@ -276,15 +292,19 @@ impl ToolButton {
 /// A [`ToolButton`] mounted in a control host. `ToolButton` reads its
 /// state from an application `CommandRegistry` that the host does not
 /// have, so this type keeps the command state itself. It reports
-/// `Command(id)`, `Changed(Bool)` when checkable, and `OpenChanged` for
-/// its menu.
+/// `Command(id)` for its own command and for each menu action,
+/// `Changed(Bool)` when checkable, and `OpenChanged` for its menu. A menu
+/// that closes without a choice also reports `Dismissed`.
 pub struct HostedToolButton {
     button: ToolButton,
     commands: CommandRegistry,
     press: Press,
     /// Hover and press of the label and of the split arrow.
     segments: Parts<Segment>,
-    open: bool,
+    /// The menu below the button.
+    popup: MenuPopup,
+    /// The button's bounds, grown by the menu gap.
+    anchor: Rect,
     rtl: bool,
 }
 
@@ -312,20 +332,93 @@ impl HostedToolButton {
         self
     }
 
-    fn act(&mut self, cx: &mut ControlContext<'_>, action: ToolButtonAction) {
+    /// The rows of the menu. Each action reports its own command, so give
+    /// the actions ids other than the button's command.
+    #[must_use]
+    pub fn with_items(mut self, items: Vec<MenuItem>) -> Self {
+        self.popup = MenuPopup::new(items);
+        self
+    }
+
+    /// Sets the enabled and checked state of a menu command.
+    pub fn set_command(&mut self, command: CommandId, state: CommandState) -> CommandResult {
+        self.popup.set_command(command, state)
+    }
+
+    /// True while the menu is open.
+    pub fn is_open(&self) -> bool {
+        self.popup.is_open()
+    }
+
+    fn act(&mut self, cx: &mut ControlContext<'_>, action: ToolButtonAction, keyboard: bool) {
         match action {
             ToolButtonAction::Activated(id) => cx.emit(ControlMessage::Command(id)),
             ToolButtonAction::Toggled(_, checked) => {
                 cx.emit(ControlMessage::Changed(ControlValue::Bool(checked)));
             }
+            ToolButtonAction::OpenMenu if self.popup.is_open() => {
+                self.close(cx);
+            }
             ToolButtonAction::OpenMenu => {
-                self.open = !self.open;
-                cx.emit(ControlMessage::OpenChanged(self.open));
+                self.popup.open(self.anchor, cx.time(), keyboard);
+                cx.emit(ControlMessage::OpenChanged(true));
             }
             ToolButtonAction::None => {}
         }
         cx.request_paint();
         cx.request_semantics();
+    }
+
+    /// Closes an open menu without a choice: reports `OpenChanged(false)`
+    /// and `Dismissed`.
+    fn close(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
+        let open = self.popup.is_open();
+        if open {
+            self.popup.close(cx.time());
+            cx.emit(ControlMessage::OpenChanged(false));
+            cx.request_paint();
+            cx.request_semantics();
+        }
+        hosted::dismissed(cx, open)
+    }
+
+    /// Input while the menu is open: the menu takes the pointer over its
+    /// panels and the keys. `None` means that the button handles the
+    /// event.
+    fn menu_event(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        event: &ControlEvent,
+    ) -> Option<EventReply> {
+        let response = match event {
+            ControlEvent::Pointer(pointer) => {
+                let released = matches!(pointer, PointerEvent::Up { .. });
+                let response = self.popup.pointer(pointer.position(), released)?;
+                if matches!(pointer, PointerEvent::Move { .. }) {
+                    cx.request_paint();
+                    return Some(EventReply::Continue);
+                }
+                response
+            }
+            ControlEvent::Key(KeyEvent::Down { key: Key::Tab, .. }) => {
+                self.close(cx);
+                return Some(EventReply::Continue);
+            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
+                self.popup.menu.handle_key(*key, &self.popup.commands)
+            }
+            ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
+                self.press = Press::default();
+                return Some(self.close(cx));
+            }
+            _ => return None,
+        };
+        if self.popup.finish(cx, response) {
+            cx.emit(ControlMessage::OpenChanged(false));
+        }
+        cx.request_paint();
+        cx.request_semantics();
+        Some(EventReply::Stop)
     }
 
     /// The x of `point` in reading order, with the split arrow at the end.
@@ -369,31 +462,47 @@ impl CustomControl for HostedToolButton {
         Measured::new(Size::new(width.max(style.min_width), height))
     }
 
-    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.rtl = cx.rtl();
+        let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
+        self.popup.arrange(cx, content.min_width);
+        self.anchor = gap_anchor(bounds, cx.tokens.spacing, None);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() == EventPhase::Target
+            && self.popup.is_open()
+            && let Some(reply) = self.menu_event(cx, event)
+        {
+            return reply;
+        }
         let bounds = cx.bounds();
+        let pressed = self.segments.pressed;
         let mut segments = self.segments;
         segments.track(cx, event, |point| self.segment_at(bounds, point));
         self.segments = segments;
-        let action = match self.press.event(cx, event) {
-            PressOutcome::Activated(Some(point)) => self.click(cx.bounds(), point),
-            PressOutcome::Activated(None) => self.button.handle_key(Key::Enter, &mut self.commands),
+        let (action, keyboard) = match self.press.event(cx, event) {
+            // A press that ends on the other segment does nothing.
+            PressOutcome::Activated(Some(point)) if self.segment_at(bounds, point) != pressed => {
+                return EventReply::Stop;
+            }
+            PressOutcome::Activated(Some(point)) => (self.click(bounds, point), false),
+            PressOutcome::Activated(None) => {
+                (self.button.handle_key(Key::Enter, &mut self.commands), true)
+            }
             PressOutcome::Handled => return EventReply::Stop,
             PressOutcome::Ignored => {
                 if cx.phase() != EventPhase::Target
                     || hosted::key_down(event) != Some(Key::ArrowDown)
                     || cx.modifiers().is_chord()
-                    || self.button.menu == ToolButtonMenu::None
                 {
                     return EventReply::Continue;
                 }
-                ToolButtonAction::OpenMenu
+                let action = self.button.handle_key(Key::ArrowDown, &mut self.commands);
+                (action, true)
             }
         };
-        self.act(cx, action);
+        self.act(cx, action, keyboard);
         EventReply::Stop
     }
 
@@ -401,14 +510,38 @@ impl CustomControl for HostedToolButton {
         let state = self
             .button
             .visual_state(&self.commands, cx.state)
-            .set(VisualState::OPEN, self.open);
-        let segments =
-            [Segment::Label, Segment::Arrow].map(|part| self.segments.state(part, state));
+            .set(VisualState::OPEN, self.popup.is_open());
+        let segments = [Segment::Label, Segment::Arrow].map(|part| {
+            let open = part == Segment::Arrow && state.open();
+            self.segments
+                .state(part, state)
+                .set(VisualState::OPEN, open)
+        });
         self.button.paint_segments(cx, state, Some(segments));
     }
 
+    fn overlay(&self) -> Option<Rect> {
+        self.popup.frame()
+    }
+
+    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
+        self.popup.paint(cx);
+    }
+
+    fn animating(&self, time: f64) -> bool {
+        self.popup.animating(time)
+    }
+
     fn semantics(&self) -> SemanticNode {
-        self.button.semantics(&self.commands)
+        let mut node = self.button.semantics(&self.commands);
+        node.actions.push(SemanticAction::Focus);
+        if self.button.menu != ToolButtonMenu::None {
+            node.state.expanded = Some(self.popup.is_open());
+            if let Some(label) = self.popup.highlighted_label().filter(|_| self.is_open()) {
+                node.description = label.to_string();
+            }
+        }
+        node
     }
 
     fn perform(
@@ -419,11 +552,17 @@ impl CustomControl for HostedToolButton {
     ) -> bool {
         let action = match action {
             SemanticAction::Activate => self.button.handle_key(Key::Enter, &mut self.commands),
-            SemanticAction::ShowMenu if !self.open => ToolButtonAction::OpenMenu,
+            SemanticAction::ShowMenu if !self.popup.is_open() => {
+                self.button.handle_key(Key::ArrowDown, &mut self.commands)
+            }
             SemanticAction::ShowMenu => ToolButtonAction::None,
+            SemanticAction::Focus => {
+                cx.request_focus();
+                return true;
+            }
             _ => return false,
         };
-        self.act(cx, action);
+        self.act(cx, action, true);
         true
     }
 
@@ -431,6 +570,8 @@ impl CustomControl for HostedToolButton {
         let _ = self.commands.set_enabled(self.button.command, enabled);
         if !enabled {
             self.press = Press::default();
+            self.segments.clear();
+            self.popup.reveal = Default::default();
         }
     }
 
@@ -444,11 +585,16 @@ impl CustomControl for HostedToolButton {
         }
     }
 
-    fn set_open(&mut self, open: bool, _time: f64) -> bool {
-        if self.button.menu == ToolButtonMenu::None {
+    fn set_open(&mut self, open: bool, time: f64) -> bool {
+        if self.button.menu == ToolButtonMenu::None || open && !self.button.enabled(&self.commands)
+        {
             return false;
         }
-        self.open = open;
+        if open {
+            self.popup.open(self.anchor, time, true);
+        } else {
+            self.popup.close(time);
+        }
         true
     }
 }
