@@ -893,6 +893,12 @@ impl Configured<controls::Popover> {
             )
         })
     }
+
+    /// The size of the trigger: `Xs`, `Sm`, `Default`, or `Lg`.
+    #[must_use]
+    pub fn size(self, size: ControlSize) -> Self {
+        self.with(move |popover| popover.with_size(size))
+    }
 }
 
 /// A trigger button with a modal panel; `open` edits whether it shows.

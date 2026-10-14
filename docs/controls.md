@@ -3342,16 +3342,19 @@ false.
   side fits. The panel is no wider than the window. It fades, zooms, and slides in like a select list.
 - **`Popover::hover_card`.** The trigger is a link. Enter or Space emits
   `Activated`. The panel opens when the pointer rests on the link for
-  `HOVER_CARD_OPEN_DELAY` (0.7 s). It closes
-  `HOVER_CARD_CLOSE_DELAY` (0.3 s) after the pointer leaves the link and
-  the panel.
+  `HOVER_CARD_OPEN_DELAY` (0.7 s), or when the link gets keyboard focus
+  for the same delay. It closes `HOVER_CARD_CLOSE_DELAY` (0.3 s) after
+  the pointer leaves the link and the panel. Focus loss closes it, but
+  not while the pointer is on it. A disabled hover card ignores the
+  pointer.
+- `with_size` sets the trigger size: `Xs`, `Sm`, `Default`, or `Lg`.
 - **In a view.** The `hover_card` view modifier shows view content in a
   `HoverCard` panel with the same delays. See the
   [guide](guide.md#hover-cards).
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
-| Trigger | `Button` `Root` | outline, or link for a hover card; default size |
+| Trigger | `Button` `Root` | outline, or link for a hover card; `with_size` size, default size |
 | Panel | `Popover` `Content` | `popover` fill, 1 pt ring at 10% `foreground`, radius md, shadow md, 288 pt wide, 16 pt padding |
 | Hover card panel | `HoverCard` `Content` | as the popover panel, radius lg, 256 pt wide |
 | Title | `Title` | sm medium `foreground` text |

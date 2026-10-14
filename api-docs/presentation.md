@@ -450,6 +450,14 @@ pub fn new<M, N, O>(trigger: impl IntoLive<TextContent, M>, title: impl IntoLive
 
 A popover with a `trigger` button, a `title`, and a `description`; `open` edits whether it shows.
 
+#### `Popover::size`
+
+```rust
+pub fn size(self, size: ControlSize) -> Self
+```
+
+The size of the trigger: `Xs`, `Sm`, `Default`, or `Lg`.
+
 ## `SheetSide`
 
 enum in `choscorui::prelude::SheetSide`

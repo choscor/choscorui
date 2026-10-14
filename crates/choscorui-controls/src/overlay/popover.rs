@@ -9,7 +9,8 @@ use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Key, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, InputModality, Key, Measured, Rect, SemanticAction, SemanticNode,
+    SemanticRole, Size,
 };
 
 /// How long the pointer rests on a hover card's link before it opens, in
@@ -26,6 +27,7 @@ pub struct Popover {
     trigger: String,
     text: PanelText,
     hover_card: bool,
+    size: ControlSize,
     reveal: Reveal,
     frame: Rect,
     /// True when the panel opens above the trigger.
@@ -34,6 +36,8 @@ pub struct Popover {
     press: Press,
     /// True while the pointer is on the trigger or the panel.
     hovered: bool,
+    /// True while a hover card's link has keyboard focus.
+    focused: bool,
     deadline: Option<f64>,
     enabled: bool,
 }
@@ -48,12 +52,14 @@ impl Popover {
             trigger: trigger.into(),
             text: PanelText::new(title, description),
             hover_card: false,
+            size: ControlSize::Default,
             reveal: Reveal::default(),
             frame: Rect::default(),
             above: false,
             motion_ms: 0,
             press: Press::default(),
             hovered: false,
+            focused: false,
             deadline: None,
             enabled: true,
         }
@@ -71,6 +77,13 @@ impl Popover {
             hover_card: true,
             ..Self::new(trigger, title, description)
         }
+    }
+
+    /// The size of the trigger button: `Xs`, `Sm`, `Default`, or `Lg`.
+    #[must_use]
+    pub fn with_size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
     }
 
     pub fn is_open(&self) -> bool {
@@ -93,7 +106,7 @@ impl Popover {
         };
         StyleQuery::new(ControlKind::Button, Slot::Root)
             .variant(variant)
-            .size(ControlSize::Default)
+            .size(self.size)
             .state(state)
     }
 
@@ -127,10 +140,10 @@ impl Popover {
         hosted::dismissed(cx, closed && !self.hover_card)
     }
 
-    /// Starts the open or close delay of a hover card.
-    fn hover(&mut self, cx: &mut ControlContext<'_>, hovered: bool) {
-        self.hovered = hovered;
-        self.deadline = match (hovered, self.reveal.open) {
+    /// Starts the open or close delay of a hover card. The card wants to
+    /// show while the pointer rests on it or its link has keyboard focus.
+    fn schedule(&mut self, cx: &mut ControlContext<'_>) {
+        self.deadline = match (self.hovered || self.focused, self.reveal.open) {
             (true, false) => Some(cx.time() + HOVER_CARD_OPEN_DELAY),
             (false, true) => Some(cx.time() + HOVER_CARD_CLOSE_DELAY),
             _ => None,
@@ -180,13 +193,25 @@ impl CustomControl for Popover {
             {
                 return EventReply::Stop;
             }
-            ControlEvent::Hover(hovered) if self.hover_card => {
-                self.hover(cx, *hovered);
+            // A disabled card ignores the pointer, so that no deadline
+            // stays that the host never delivers.
+            ControlEvent::Hover(hovered) if self.hover_card && self.enabled => {
+                self.hovered = *hovered;
+                self.schedule(cx);
                 return EventReply::Continue;
+            }
+            ControlEvent::FocusChanged(true) if self.hover_card => {
+                self.focused = cx.input_modality() == InputModality::Keyboard;
+                self.schedule(cx);
+            }
+            // The card stays while the pointer is still on it.
+            ControlEvent::FocusChanged(false) if self.hover_card && self.hovered => {
+                self.focused = false;
+                self.schedule(cx);
             }
             ControlEvent::Timer => {
                 self.deadline = None;
-                let open = self.hovered;
+                let open = self.hovered || self.focused;
                 self.change_open(cx, open);
                 return EventReply::Stop;
             }
@@ -203,6 +228,7 @@ impl CustomControl for Popover {
                 return reply;
             }
             ControlEvent::FocusChanged(false) => {
+                self.focused = false;
                 self.dismiss(cx);
             }
             _ => {}
@@ -329,6 +355,7 @@ impl CustomControl for Popover {
             self.reveal = Reveal::default();
             self.deadline = None;
             self.hovered = false;
+            self.focused = false;
         }
     }
 

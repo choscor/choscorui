@@ -3,7 +3,7 @@
 mod hosted;
 
 use choscorui_controls::{
-    ButtonVariant, ControlMessage, Dialog, HOVER_CARD_OPEN_DELAY, Popover, SheetSide,
+    ButtonVariant, ControlMessage, ControlSize, Dialog, HOVER_CARD_OPEN_DELAY, Popover, SheetSide,
     ShortcutModifiers,
 };
 use choscorui_core::{
@@ -135,6 +135,43 @@ fn a_hover_card_opens_after_the_delay_and_closes_after_leaving() {
             ControlMessage::Activated,
         ]
     );
+}
+
+#[test]
+fn a_hover_card_opens_on_keyboard_focus_and_closes_on_blur() {
+    let mut h = Harness::new(Popover::hover_card("@ana", "Ana", "Designer"));
+    h.focus();
+    assert_eq!(
+        h.host.next_deadline(&h.tree),
+        Some(HOVER_CARD_OPEN_DELAY),
+        "keyboard focus starts the open delay"
+    );
+    assert!(h.host.advance(&mut h.tree, 0.7));
+    assert!(overlay(&h).is_some(), "open after the delay");
+    h.host.move_focus(&mut h.tree, None);
+    assert!(overlay(&h).is_none(), "blur closes the card");
+    // A pointer focus does not open the card.
+    h.click(h.bounds().center());
+    h.hover(Point::new(790.0, 590.0));
+    h.host.advance(&mut h.tree, 2.0);
+    assert!(overlay(&h).is_none());
+}
+
+#[test]
+fn a_disabled_hover_card_keeps_no_deadline() {
+    let mut h = Harness::new(Popover::hover_card("@ana", "Ana", "Designer"));
+    h.set_enabled(false);
+    h.hover(h.bounds().center());
+    assert_eq!(h.host.next_deadline(&h.tree), None);
+    assert!(!h.host.advance(&mut h.tree, 5.0), "nothing wakes the host");
+}
+
+#[test]
+fn a_popover_trigger_takes_a_size() {
+    let mut small = Harness::new(Popover::new("Open", "Title", "Text").with_size(ControlSize::Sm));
+    let mut regular = Harness::new(Popover::new("Open", "Title", "Text"));
+    let (small, regular) = (small.measure(), regular.measure());
+    assert!(small.height < regular.height);
 }
 
 fn dialog() -> Dialog {
