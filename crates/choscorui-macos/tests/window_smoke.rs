@@ -142,9 +142,12 @@ fn main() {
     );
     {
         let start = Instant::now();
-        pump_until(&app, Duration::from_secs(3), Duration::from_millis(10), || {
-            window.paint_count() > before_paint
-        });
+        pump_until(
+            &app,
+            Duration::from_secs(3),
+            Duration::from_millis(10),
+            || window.paint_count() > before_paint,
+        );
         eprintln!(
             "DIAG after pump {:?}: paints {} displays {} occluded {}",
             start.elapsed(),
@@ -532,9 +535,12 @@ fn main() {
     );
     if window.paint_count() <= before_paint {
         let start = Instant::now();
-        pump_until(&app, Duration::from_secs(5), Duration::from_millis(10), || {
-            window.paint_count() > before_paint
-        });
+        pump_until(
+            &app,
+            Duration::from_secs(5),
+            Duration::from_millis(10),
+            || window.paint_count() > before_paint,
+        );
         eprintln!(
             "DIAG late: {:?} paints {} displays {} occluded {}",
             start.elapsed(),
