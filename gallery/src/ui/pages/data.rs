@@ -47,6 +47,31 @@ fn item_view<M: ItemModel + 'static>(
     ItemView::new(name, role, ROW).with_model(Box::new(model.clone()), Box::new(delegate))
 }
 
+/// An item view that a page keeps while it builds its hosted control
+/// again, so the view keeps its scroll offset, selection, and expansion.
+/// A new locale makes a new view, for the new names.
+#[derive(Clone, Default)]
+struct Kept(Rc<RefCell<Option<(String, SharedView)>>>);
+
+/// An item view that the page and its hosted control share.
+type SharedView = Rc<RefCell<ItemView>>;
+
+impl Kept {
+    /// The kept view, or the view that `make` makes for a new locale.
+    fn get(&self, env: &Env, make: impl FnOnce() -> ItemView) -> SharedView {
+        let tag = env.locale().tag();
+        let mut kept = self.0.borrow_mut();
+        match &*kept {
+            Some((locale, view)) if *locale == tag => view.clone(),
+            _ => {
+                let view = Rc::new(RefCell::new(make()));
+                *kept = Some((tag, view.clone()));
+                view
+            }
+        }
+    }
+}
+
 /// The hosted item view that `build` makes. It builds again when
 /// `revision` changes; `selected` keeps the selection by key, so it
 /// survives sorting, filtering, and rebuilds.
@@ -158,23 +183,29 @@ impl View for ItemViewPage {
             move || grid.update(|grid| *grid = !*grid),
         )
         .variant(ButtonVariant::Outline);
-        let (shown, named) = (model.clone(), model.clone());
+        let (shown, named, kept) = (model.clone(), model.clone(), Kept::default());
         let list = rows(
             ControlKind::ListView,
             &model,
             revision,
             selected,
             move |env| {
-                let mut view = item_view(
-                    &env.text("item-view.records", &[]),
-                    SemanticRole::List,
-                    &shown,
-                    TextItemDelegate::default(),
-                );
-                if grid.get() {
-                    view.set_layout(ViewLayout::Grid { item_width: 300.0 });
-                }
-                Handle::new(view)
+                // A search or a layout change keeps the view, so it keeps
+                // its scroll offset and shows the current record.
+                let view = kept.get(env, || {
+                    item_view(
+                        &env.text("item-view.records", &[]),
+                        SemanticRole::List,
+                        &shown,
+                        TextItemDelegate::default(),
+                    )
+                });
+                view.borrow_mut().set_layout(if grid.get() {
+                    ViewLayout::Grid { item_width: 300.0 }
+                } else {
+                    ViewLayout::List
+                });
+                Handle::shared(view)
             },
         )
         .focused(list_focused.binding())
@@ -580,6 +611,68 @@ pub(crate) mod tests {
             current.starts_with("Record ") && current.contains('7'),
             "{current}"
         );
+    }
+
+    /// The texts that `page` paints.
+    pub fn painted(page: &mut Harness) -> Vec<String> {
+        page.host
+            .paint()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                choscorui::core::DisplayCommand::DrawText { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn item_view_search_keeps_the_current_record_in_view() {
+        let mut page = Harness::new("item-view");
+        assert!(page.act("Records", SemanticAction::Focus));
+        press(&mut page, Key::End, ShortcutModifiers::default());
+        let last = |page: &mut Harness| {
+            painted(page)
+                .iter()
+                .any(|text| text.starts_with("Record 099999"))
+        };
+        assert!(last(&mut page));
+        // The search keeps the view, so the current record stays in view
+        // and the list does not jump back to the first match.
+        set_value(&mut page, "Search records", "9");
+        assert!(last(&mut page));
+        assert!(page.act("Grid layout", SemanticAction::Activate));
+        assert!(last(&mut page), "the layout change keeps it in view");
+    }
+
+    #[test]
+    fn item_view_layout_change_keeps_the_scroll_offset() {
+        let mut page = Harness::new("item-view");
+        let first = |page: &mut Harness| {
+            painted(page)
+                .iter()
+                .any(|text| text.starts_with("Record 000000"))
+        };
+        assert!(first(&mut page));
+        let list = page.node("Records");
+        let center = page
+            .host
+            .tree()
+            .bounds(list)
+            .expect("the list has bounds")
+            .center();
+        page.host.pointer(
+            choscorui::core::PointerEvent::Wheel {
+                position: center,
+                delta: choscorui::core::Point::new(0.0, 2_000.0),
+                unit: choscorui::core::WheelUnit::Points,
+            },
+            ShortcutModifiers::default(),
+        );
+        page.host.layout();
+        assert!(!first(&mut page));
+        assert!(page.act("Grid layout", SemanticAction::Activate));
+        assert!(!first(&mut page), "the view did not scroll back to the top");
     }
 
     #[test]

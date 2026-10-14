@@ -425,3 +425,50 @@ pub(crate) fn routed_reply(routed: Routed) -> EventReply {
         _ => EventReply::Continue,
     }
 }
+
+/// Type-ahead over rows: the characters typed within a second form a
+/// prefix, compared after `fold_for_search`. Repeating one character
+/// cycles through the rows that start with it. A space never reaches the
+/// search, because the Space key selects or activates.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TypeAhead {
+    typed: String,
+    at: f64,
+}
+
+impl TypeAhead {
+    /// Adds `text` typed at `time` (in seconds) and finds the matching row
+    /// among `count` rows, from the row after `current` for a new or a
+    /// repeated character and from `current` for a longer prefix.
+    pub fn find(
+        &mut self,
+        text: &str,
+        time: f64,
+        current: Option<usize>,
+        count: usize,
+        label: impl Fn(usize) -> String,
+    ) -> Option<usize> {
+        if time - self.at > crate::TYPE_AHEAD_TIMEOUT.as_secs_f64() {
+            self.typed.clear();
+        }
+        let before = self.typed.chars().count();
+        self.typed
+            .extend(text.chars().filter(|c| !c.is_control() && *c != ' '));
+        if self.typed.chars().count() == before || count == 0 {
+            return None;
+        }
+        self.at = time;
+        let folded = choscorui_core::fold_for_search(&self.typed);
+        let first = folded.chars().next()?;
+        let repeated = folded.chars().all(|c| c == first);
+        let (needle, after) = if repeated {
+            (first.to_string(), true)
+        } else {
+            (folded, false)
+        };
+        let start = current.map_or(0, |index| index + usize::from(after));
+        (0..count)
+            .map(|step| (start + step) % count)
+            .find(|index| choscorui_core::fold_for_search(&label(*index)).starts_with(&needle))
+    }
+}

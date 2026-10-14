@@ -532,7 +532,11 @@ fn data_table_takes_rows_and_a_filter_and_opens_its_column_menu() {
     assert!(!take(&mut h, ControlValue::Index(Some(0))));
     assert_eq!(value(&h).as_deref(), Some("2 of 3"));
     assert!(take(&mut h, ControlValue::Text("ken".into())));
-    assert_eq!(value(&h).as_deref(), Some("2 of 1"));
+    assert_eq!(
+        value(&h).as_deref(),
+        Some("1 of 1"),
+        "only rows in the filter count"
+    );
 
     assert!(open(&mut h, true));
     assert_eq!(expanded(&h), Some(true));

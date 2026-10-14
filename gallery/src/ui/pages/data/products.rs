@@ -2,7 +2,7 @@
 //! resizable header, cell editing, and a form mapped to the selected row.
 
 use super::hosting::{Handle, SharedModel};
-use super::{fill, first_selected, item_view, rows};
+use super::{Kept, fill, first_selected, item_view, rows};
 use crate::ui::page::PageCx;
 use choscorui::compose::t;
 use choscorui::compose::view::{
@@ -196,21 +196,24 @@ impl View for HeaderViewPage {
             sorted.reproxy(|proxy| proxy.set_sort(sort));
             revision.update(|revision| *revision += 1);
         });
-        let (shown, named) = (model.clone(), model.clone());
+        let (shown, named, kept) = (model.clone(), model.clone(), Kept::default());
         let list = rows(ControlKind::Table, &model, revision, selected, move |env| {
-            let mut view = item_view(
-                &env.text("header-view.products", &[]),
-                SemanticRole::Table,
-                &shown,
-                TextItemDelegate::table(),
-            )
-            .with_footer(vec![vec![
-                env.text("header-view.total", &[]),
-                total.to_string(),
-            ]])
-            .with_caption(env.text("header-view.caption", &[]));
-            view.set_column_widths(widths.get());
-            Handle::new(view)
+            // New widths or a sort keep the view and its scroll offset.
+            let view = kept.get(env, || {
+                item_view(
+                    &env.text("header-view.products", &[]),
+                    SemanticRole::Table,
+                    &shown,
+                    TextItemDelegate::table(),
+                )
+                .with_footer(vec![vec![
+                    env.text("header-view.total", &[]),
+                    total.to_string(),
+                ]])
+                .with_caption(env.text("header-view.caption", &[]))
+            });
+            view.borrow_mut().set_column_widths(widths.get());
+            Handle::shared(view)
         })
         .accessibility_value(move || first_selected(&named, &selected.get()));
         VStack::new((bar, list.frame(fill())))
@@ -337,12 +340,14 @@ impl View for CellEditPage {
         let bar = header_bar(header, widths, |_| {});
         let table_view: TableView = Rc::default();
         let (shown, named, mounted) = (model.clone(), model.clone(), table_view.clone());
+        let kept = Kept::default();
         let table = rows(ControlKind::Table, &model, revision, selected, move |env| {
-            let name = env.text("cell-edit.products", &[]);
-            let mut view = ItemView::new(name, SemanticRole::Table, super::ROW)
-                .with_model(Box::new(shown.clone()), Box::new(CellDelegate { column }));
-            view.set_column_widths(widths.get());
-            let view = Rc::new(RefCell::new(view));
+            let view = kept.get(env, || {
+                let name = env.text("cell-edit.products", &[]);
+                ItemView::new(name, SemanticRole::Table, super::ROW)
+                    .with_model(Box::new(shown.clone()), Box::new(CellDelegate { column }))
+            });
+            view.borrow_mut().set_column_widths(widths.get());
             *mounted.borrow_mut() = Some(view.clone());
             let rtl = env.direction() == LayoutDirection::Rtl;
             Handle::shared(view)

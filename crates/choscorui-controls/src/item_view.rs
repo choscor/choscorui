@@ -18,8 +18,7 @@ use choscorui_core::{
     EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection, Measured,
     NodeId, Point, PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand,
     SelectionMode, SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode,
-    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, fold_for_search,
-    visible_keys,
+    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, visible_keys,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -143,8 +142,12 @@ pub struct ItemView {
     revision: Option<u64>,
     dirty: bool,
     realized: Vec<RealizedItem>,
-    type_ahead: String,
-    type_ahead_at: Option<Duration>,
+    type_ahead: crate::hosted::TypeAhead,
+    /// True when no row has children, so rows reserve no disclosure gap.
+    flat: bool,
+    /// Scroll the current item into view at the next arrange, after a
+    /// change of the rows or the layout.
+    reveal: bool,
     /// The model, delegate, and column widths of a hosted view.
     source: Option<ItemSource>,
     /// Whether a hosted view takes its row height from the `ListView` row
@@ -198,8 +201,9 @@ impl ItemView {
             revision: None,
             dirty: true,
             realized: Vec::new(),
-            type_ahead: String::new(),
-            type_ahead_at: None,
+            type_ahead: crate::hosted::TypeAhead::default(),
+            flat: true,
+            reveal: false,
             source: None,
             styled_rows: false,
             caption: String::new(),
@@ -289,8 +293,13 @@ impl ItemView {
         }
     }
 
+    /// Sets the list or grid layout. The view keeps its scroll offset and
+    /// shows the current item at the next arrange.
     pub fn set_layout(&mut self, layout: ViewLayout) {
-        self.layout = layout;
+        if self.layout != layout {
+            self.layout = layout;
+            self.reveal = true;
+        }
     }
     pub fn set_selection_mode(&mut self, mode: SelectionMode) {
         self.mode = mode;
@@ -330,7 +339,9 @@ impl ItemView {
     }
 
     /// Rebuilds the visible order when the model's revision changed. Keys
-    /// that disappeared are dropped from selection and expansion.
+    /// that disappeared are dropped from selection and expansion. The view
+    /// keeps its scroll offset, and when the rows change it shows the
+    /// current item at the next arrange.
     pub fn sync(&mut self, model: &dyn ItemModel) -> bool {
         let revision = model.revision();
         if !self.dirty && self.revision == Some(revision) {
@@ -340,7 +351,13 @@ impl ItemView {
         self.dirty = false;
         self.expanded.retain(|key| model.row(*key).is_some());
         let expanded = &self.expanded;
-        self.order = visible_keys(model, |key| expanded.contains(&key));
+        let order = visible_keys(model, |key| expanded.contains(&key));
+        self.reveal |= order != self.order;
+        self.order = order;
+        self.flat = self
+            .order
+            .iter()
+            .all(|key| !model.has_children(*key) && !model.can_fetch_more(Some(*key)));
         self.index_of = self
             .order
             .iter()
@@ -456,7 +473,32 @@ impl ItemView {
         }
         self.viewport = viewport;
         self.clamp_offset();
+        self.reveal_current();
         self.realize(tree, id)
+    }
+
+    /// Scrolls the current item into view after a change of the rows or
+    /// the layout.
+    fn reveal_current(&mut self) {
+        if std::mem::take(&mut self.reveal)
+            && let Some(index) = self.current().and_then(|key| self.index_of(key))
+        {
+            self.scroll_to_index(index);
+        }
+    }
+
+    /// Makes the first row in view current when no item is current, so a
+    /// view that gets focus shows where the keys start.
+    fn show_current(&mut self) -> bool {
+        if self.current().is_some() || self.order.is_empty() {
+            return false;
+        }
+        let line = (self.offset / self.row_height).ceil() as usize;
+        let index = (line * self.columns_per_row()).min(self.order.len() - 1);
+        let key = self.order[index];
+        self.selection
+            .apply(self.mode, SelectionCommand::CurrentOnly, key, &self.order);
+        true
     }
 
     /// The indices of the rows in the viewport, plus the overscan.
@@ -584,6 +626,11 @@ impl ItemView {
                 clicks,
             } => {
                 tree.set_focus(Some(id))?;
+                if self.index_at(position).is_none() && !self.selection.is_empty() {
+                    // A click on empty space clears the selection.
+                    self.selection.clear();
+                    response.selection_changed = true;
+                }
                 if let Some(index) = self.index_at(position) {
                     let key = self.order[index];
                     let disclosure = self.layout == ViewLayout::List
@@ -741,6 +788,11 @@ impl ItemView {
                 Key::ArrowUp | Key::ArrowLeft | Key::End | Key::PageUp => Some(last),
                 _ => None,
             },
+            // With no selection, the first vertical arrow selects the
+            // current item that focus showed.
+            (Key::ArrowDown | Key::ArrowUp, Some(index)) if self.selection.is_empty() => {
+                Some(index)
+            }
             (Key::ArrowDown, Some(index)) => Some((index + columns).min(last)),
             (Key::ArrowUp, Some(index)) => Some(index.saturating_sub(columns)),
             (Key::ArrowRight, Some(index)) => Some((index + 1).min(last)),
@@ -779,40 +831,21 @@ impl ItemView {
         at: Duration,
         response: &mut ItemViewResponse,
     ) {
-        if character.is_control() || self.order.is_empty() {
-            return;
-        }
-        if self
-            .type_ahead_at
-            .is_none_or(|last| at.saturating_sub(last) > TYPE_AHEAD_TIMEOUT)
-        {
-            self.type_ahead.clear();
-        }
-        self.type_ahead_at = Some(at);
-        self.type_ahead.push(character);
-        let needle = fold_for_search(&self.type_ahead);
-        let start = self
-            .selection
-            .current()
-            .and_then(|key| self.index_of(key))
-            .map_or(0, |index| {
-                // A fresh search starts after the current item; a growing
-                // prefix keeps matching the current item.
-                if self.type_ahead.chars().count() == 1 {
-                    index + 1
-                } else {
-                    index
-                }
-            });
-        let count = self.order.len();
-        for step in 0..count {
-            let index = (start + step) % count;
-            let key = self.order[index];
-            let text = model.data(key, 0, Role::Display).to_display_string();
-            if fold_for_search(&text).starts_with(&needle) {
-                self.select(key, SelectionCommand::Replace, response);
-                return;
-            }
+        let current = self.selection.current().and_then(|key| self.index_of(key));
+        let order = &self.order;
+        let found = self.type_ahead.find(
+            character.encode_utf8(&mut [0; 4]),
+            at.as_secs_f64(),
+            current,
+            order.len(),
+            |index| {
+                model
+                    .data(order[index], 0, Role::Display)
+                    .to_display_string()
+            },
+        );
+        if let Some(index) = found {
+            self.select(self.order[index], SelectionCommand::Replace, response);
         }
     }
 
@@ -966,7 +999,8 @@ impl ItemView {
                 focused: state.focused(),
                 focus_visible: state.focus_visible(),
                 depth,
-                indent: self.indent,
+                // Rows of a flat model reserve no disclosure gap.
+                indent: if self.flat { 0.0 } else { self.indent },
                 has_children: model.has_children(key),
                 expanded: self.expanded.contains(&key),
                 pointer: self.tracked.state(key, state),
@@ -1241,6 +1275,7 @@ impl CustomControl for ItemView {
         viewport.size.height = (bounds.size.height - below).max(0.0);
         self.viewport = viewport;
         self.clamp_offset();
+        self.reveal_current();
         self.bar.arrange(cx, viewport);
     }
 
@@ -1318,7 +1353,10 @@ impl CustomControl for ItemView {
                 }
                 EventReply::Stop
             }
-            ControlEvent::FocusChanged(_) => {
+            ControlEvent::FocusChanged(focused) => {
+                if *focused && self.show_current() {
+                    cx.request_semantics();
+                }
                 cx.request_paint();
                 EventReply::Continue
             }
@@ -1338,6 +1376,12 @@ impl CustomControl for ItemView {
         let Some(source) = &self.source else {
             return;
         };
+        if self.order.is_empty() {
+            // An empty view says that no row matches.
+            let style = cx.style(self.caption_query());
+            let text = cx.strings.message("choscorui.list.no_results", &[]);
+            cx.label(self.viewport, &text, &style, TextAlign::Center);
+        }
         let rows = self.visible_range().map(|index| {
             let key = self.order[index];
             let depth = self.depth.get(&key).copied().unwrap_or(0);

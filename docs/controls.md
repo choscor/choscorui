@@ -1862,6 +1862,7 @@ pin this behavior.
   row toggles expansion.
 - Any other press changes the selection. A plain press replaces it, Shift
   extends it, and Command toggles the row. `clicks >= 2` also activates.
+- A press on empty space below the rows clears the selection.
 - **Context menu** focuses the view and selects the row alone if it is not
   selected. It reports `context_menu`.
 - **Wheel** scrolls, clamps, and requests more rows near the end.
@@ -1885,12 +1886,19 @@ pin this behavior.
 - **Type-ahead.** Characters build a prefix that resets after
   `TYPE_AHEAD_TIMEOUT` (1 second). Matches ignore case and diacritics, and
   the search wraps.
-- A new search starts after the current item.
+- A new search starts after the current item. A repeated character cycles
+  through the items that start with it.
+- A space never goes into the prefix, because the Space key selects.
+- **Rows change.** `sync` keeps the scroll offset when the rows change, for
+  example after a filter. `set_layout` also keeps it. At the next arrange,
+  the view scrolls the current item into view.
 - **Semantic actions.** `Activate` selects the item and activates it.
   `Focus` focuses the view and moves only the current item. `Expand`,
   `Collapse`, and `ShowMenu` act on the item.
 - The view keeps the selection by `ItemKey` across sort and filter. It has
   no disabled state.
+- A view whose rows have no children reserves no disclosure area, so
+  its text starts at the cell padding.
 - **Look.** `paint` calls the delegate once per realized cell with a
   context for the cell. `TextItemDelegate` uses the `ListView` recipe, and
   `TextItemDelegate::table()` uses the `Table` recipe. `ItemState::pointer`
@@ -1928,6 +1936,11 @@ reports the context menu. Rows that the model must fetch are not reported.
 `with_styled_rows` makes a hosted view take its row height from the
 `ListView` row recipe each time that it measures and arranges.
 
+- When a hosted view gets focus with no current item, the first row in
+  view becomes current. The selection does not change. With no selection,
+  ArrowDown or ArrowUp then selects the current item.
+- A hosted view with no rows shows the built-in message
+  `choscorui.list.no_results` in the `Caption` style, centered.
 - A hosted view paints an [`OverlayScrollBar`](#overlayscrollbar) at the
   trailing edge of its rows. A thumb drag and a track press scroll the
   rows, and the press selects no row.
