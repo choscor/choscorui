@@ -278,6 +278,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("undo_history", "undo-history"),
     ("undo_steps_to", "undo-history"),
     ("CanvasView", "canvas"),
+    ("BandMode", "canvas"),
     ("HostedCanvas", "canvas"),
     ("GroupBox", "group-box"),
     ("HostedGroupBox", "group-box"),

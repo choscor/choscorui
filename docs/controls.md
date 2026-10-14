@@ -2848,6 +2848,9 @@ These types have no semantic node.
 - **Press on empty space.** A plain press clears the selection, then starts
   a rubber band. With `extend`, the band toggles items against the old
   selection.
+- `with_band_mode(mode)` sets which items the band selects.
+  `BandMode::Contain`, the default, selects the items fully inside it.
+  `BandMode::Intersect` selects the items that it touches.
 - **Drag** moves items after the pointer goes `DRAG_THRESHOLD` (3 pt) from
   the press, or changes the band at once. **Release** ends it.
 - Escape during a drag moves the items back, or restores the selection

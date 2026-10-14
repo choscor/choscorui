@@ -972,6 +972,7 @@ canvas.zoom_in = Zoom in
 canvas.zoom_out = Zoom out
 canvas.fit = Fit
 canvas.readout = Zoom {zoom}% · {selected} selected
+canvas.touching = Select touched shapes
 toolbar.editor = Editor
 toolbar.new = New
 toolbar.open = Open

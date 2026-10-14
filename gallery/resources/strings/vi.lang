@@ -966,6 +966,7 @@ canvas.zoom_in = Phóng to
 canvas.zoom_out = Thu nhỏ
 canvas.fit = Vừa khung
 canvas.readout = Thu phóng {zoom}% · đã chọn {selected}
+canvas.touching = Chọn hình chạm vào
 toolbar.editor = Trình soạn thảo
 toolbar.new = Mới
 toolbar.open = Mở

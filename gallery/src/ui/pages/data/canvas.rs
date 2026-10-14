@@ -4,12 +4,12 @@
 use super::fill;
 use crate::ui::page::PageCx;
 use choscorui::compose::view::{
-    AnyView, Button, ControlView, Cx, Env, HStack, HorizontalAlignment, Text, VStack,
-    VerticalAlignment, View, ViewExt,
+    AnyView, Binding, Button, ControlView, Cx, Env, HStack, HorizontalAlignment, Text, Toggle,
+    VStack, VerticalAlignment, View, ViewExt,
 };
 use choscorui::compose::{Property, t};
 use choscorui::controls::{
-    ButtonVariant, CanvasView, ControlContext, ControlEvent, ControlKind, ControlMessage,
+    BandMode, ButtonVariant, CanvasView, ControlContext, ControlEvent, ControlKind, ControlMessage,
     ControlValue, CustomControl, HostedCanvas, MAX_ZOOM, MIN_ZOOM, MeasureContext, PaintContext,
 };
 use choscorui::core::{
@@ -161,6 +161,24 @@ impl View for CanvasPage {
             fit_zoom.set(canvas.view().zoom());
         })
         .variant(ButtonVariant::Outline);
+        // The rubber band selects the shapes that it touches, not only the
+        // ones fully inside it.
+        let (touch, banded) = (cx.state(false), canvas.clone());
+        let touching = Toggle::new(
+            t!("canvas.touching"),
+            Binding::new(
+                move || touch.get(),
+                move |on| {
+                    touch.set(on);
+                    let mode = if on {
+                        BandMode::Intersect
+                    } else {
+                        BandMode::Contain
+                    };
+                    banded.borrow_mut().view_mut().set_band_mode(mode);
+                },
+            ),
+        );
         let (shown, valued, reported) = (zoom.clone(), zoom.clone(), zoom.clone());
         let view = ControlView::new(ZoomCanvas { canvas })
             .kind(ControlKind::Canvas)
@@ -175,6 +193,7 @@ impl View for CanvasPage {
                 step("canvas.zoom_in", 1.25),
                 step("canvas.zoom_out", 1.0 / 1.25),
                 fit,
+                touching,
                 Text::new(t!(
                     "canvas.readout",
                     zoom = move || (shown.get() * 100.0).round(),

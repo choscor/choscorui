@@ -109,6 +109,16 @@ enum Gesture {
     },
 }
 
+/// Which items a rubber band selects.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BandMode {
+    /// Items that lie fully inside the band.
+    #[default]
+    Contain,
+    /// Items that the band touches.
+    Intersect,
+}
+
 #[derive(Clone, Debug)]
 pub struct CanvasView {
     pub name: String,
@@ -118,6 +128,7 @@ pub struct CanvasView {
     origin: Point,
     selection: BTreeSet<SceneItemId>,
     band_base: BTreeSet<SceneItemId>,
+    band_mode: BandMode,
     focus: Option<SceneItemId>,
     gesture: Gesture,
 }
@@ -131,9 +142,26 @@ impl CanvasView {
             origin: Point::new(0.0, 0.0),
             selection: BTreeSet::new(),
             band_base: BTreeSet::new(),
+            band_mode: BandMode::Contain,
             focus: None,
             gesture: Gesture::None,
         }
+    }
+
+    /// Sets which items a rubber band selects. The default is
+    /// [`BandMode::Contain`].
+    #[must_use]
+    pub fn with_band_mode(mut self, mode: BandMode) -> Self {
+        self.band_mode = mode;
+        self
+    }
+
+    pub fn band_mode(&self) -> BandMode {
+        self.band_mode
+    }
+
+    pub fn set_band_mode(&mut self, mode: BandMode) {
+        self.band_mode = mode;
     }
 
     pub fn viewport(&self) -> Rect {
@@ -337,7 +365,12 @@ impl CanvasView {
                         extend,
                     };
                     let band = rect_from(self.view_to_scene(anchor), self.view_to_scene(at));
-                    let inside: BTreeSet<_> = scene.items_within(band).into_iter().collect();
+                    let inside: BTreeSet<_> = match self.band_mode {
+                        BandMode::Contain => scene.items_within(band),
+                        BandMode::Intersect => scene.items_touching(band),
+                    }
+                    .into_iter()
+                    .collect();
                     let next: BTreeSet<_> = if extend {
                         self.band_base
                             .symmetric_difference(&inside)

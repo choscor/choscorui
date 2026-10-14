@@ -770,6 +770,14 @@ impl Scene {
         true
     }
 
+    /// Selectable items whose bounds touch `rect`, in paint order.
+    pub fn items_touching(&mut self, rect: Rect) -> Vec<SceneItemId> {
+        self.items_in_rect(rect)
+            .into_iter()
+            .filter(|id| self.nodes[id].item.selectable)
+            .collect()
+    }
+
     /// Selectable items whose bounds lie fully inside `rect` (rubber band).
     pub fn items_within(&mut self, rect: Rect) -> Vec<SceneItemId> {
         self.items_in_rect(rect)

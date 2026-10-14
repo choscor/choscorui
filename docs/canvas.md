@@ -118,7 +118,7 @@ user asked for.
 | --- | --- |
 | `Press` on an item | Focuses the item. If the item is not selected, it becomes the only selected item. |
 | `Press` with `extend: true` | Toggles the item in the selection, for example on Command-click or Shift-click. |
-| `Press` on empty space, then `Drag` | Draws a rubber band. Items fully inside the band become the selection. With `extend: true`, the band toggles them. |
+| `Press` on empty space, then `Drag` | Draws a rubber band. Items fully inside the band become the selection, or with `BandMode::Intersect`, items that the band touches. With `extend: true`, the band toggles them. |
 | `Drag` after a press on a selected item | Moves the selected movable items. The item follows the pointer at each zoom. |
 | `Wheel` | Pans the view. With `zoom: true`, for example on Command-scroll, it zooms about the pointer. |
 | `Magnify` | Zooms about the pointer by the gesture factor. |

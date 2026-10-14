@@ -1,8 +1,9 @@
 mod hosted;
 
 use choscorui_controls::{
-    CanvasInput, CanvasResponse, CanvasView, ControlMessage, ControlValue, DRAG_THRESHOLD,
-    EditCommand, EstimatedText, MAX_ZOOM, PaintContext, ShortcutModifiers, Styles, VisualState,
+    BandMode, CanvasInput, CanvasResponse, CanvasView, ControlMessage, ControlValue,
+    DRAG_THRESHOLD, EditCommand, EstimatedText, MAX_ZOOM, PaintContext, ShortcutModifiers, Styles,
+    VisualState,
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, GestureEvent, ItemShape,
@@ -453,4 +454,33 @@ fn a_hosted_canvas_zooms_with_a_pinch_cycles_with_option_and_selects_all() {
         h.messages(),
         [ControlMessage::Changed(ControlValue::Indices(all))]
     );
+}
+
+#[test]
+fn an_intersect_band_selects_the_items_it_touches() {
+    // The band covers box 0 and the start of box 1.
+    let band = |view: &mut CanvasView, scene: &mut Scene| {
+        view.handle(
+            scene,
+            CanvasInput::Press {
+                at: Point::new(125.0, 70.0),
+                extend: false,
+            },
+        );
+        view.handle(
+            scene,
+            CanvasInput::Drag {
+                at: Point::new(-5.0, -5.0),
+            },
+        );
+        view.selection().iter().copied().collect::<Vec<_>>()
+    };
+    let (mut scene, ids) = scene();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 300.0));
+    assert_eq!(view.band_mode(), BandMode::Contain);
+    let contained = band(&mut view, &mut scene);
+    assert_eq!(contained, vec![ids[0]]);
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 300.0))
+        .with_band_mode(BandMode::Intersect);
+    assert_eq!(band(&mut view, &mut scene), vec![ids[0], ids[1]]);
 }
