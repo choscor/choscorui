@@ -3140,6 +3140,9 @@ group. `set_open` returns false for both.
 
 - `Kbd::new` shows one key cap. `Kbd::group` shows one cap for each key,
   4 pt apart.
+- `with_icon` shows an icon in place of the text of the first cap, at
+  12 pt. The text stays the name of the cap, so `↑` with an arrow icon
+  reads "Up Arrow".
 - A `Kbd` takes no focus and gets no input.
 - The measure reports the baseline of the text in the caps, so a row
   with baseline alignment lines the caps up with text.

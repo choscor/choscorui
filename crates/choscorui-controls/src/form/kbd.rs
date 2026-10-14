@@ -6,7 +6,9 @@ use crate::style::{
     Content, ControlKind, KbdVariant, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign,
     TextMeasure, content_rect,
 };
-use choscorui_core::{EventReply, Localizer, Measured, Rect, SemanticNode, SemanticRole, Size};
+use choscorui_core::{
+    EventReply, Icon, Localizer, Measured, Rect, SemanticNode, SemanticRole, Size,
+};
 
 /// The key symbols that assistive technology reads by name, with the id
 /// of the name in the built-in messages.
@@ -62,6 +64,7 @@ fn spoken(key: &str, strings: &Localizer) -> String {
 pub struct Kbd {
     keys: Vec<String>,
     variant: KbdVariant,
+    icon: Option<Icon>,
 }
 
 impl Kbd {
@@ -75,7 +78,16 @@ impl Kbd {
         Self {
             keys: keys.into_iter().collect(),
             variant: KbdVariant::Default,
+            icon: None,
         }
+    }
+
+    /// Shows `icon` in place of the text of the first cap, such as an
+    /// arrow for `↑`. The text of the cap stays its name.
+    #[must_use]
+    pub fn with_icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 
     #[must_use]
@@ -94,10 +106,23 @@ impl Kbd {
         (cap, group.gap)
     }
 
-    fn cap_sizes(&self, cap: &ResolvedStyle, text: &dyn TextMeasure) -> Vec<Size> {
+    /// The content of each cap: the icon replaces the first text.
+    fn contents(&self) -> impl Iterator<Item = Content<'_>> {
         self.keys
             .iter()
-            .map(|key| Content::label(key).size(cap, text))
+            .enumerate()
+            .map(|(index, key)| match self.icon.filter(|_| index == 0) {
+                Some(icon) => Content {
+                    leading: Some(icon),
+                    ..Content::default()
+                },
+                None => Content::label(key),
+            })
+    }
+
+    fn cap_sizes(&self, cap: &ResolvedStyle, text: &dyn TextMeasure) -> Vec<Size> {
+        self.contents()
+            .map(|content| content.size(cap, text))
             .collect()
     }
 }
@@ -133,12 +158,12 @@ impl CustomControl for Kbd {
         } else {
             bounds.origin.x
         };
-        for (key, size) in self.keys.iter().zip(self.cap_sizes(&cap, cx.text)) {
+        for (content, size) in self.contents().zip(self.cap_sizes(&cap, cx.text)) {
             let left = if cx.rtl { x - size.width } else { x };
             let y = bounds.origin.y + (bounds.size.height - size.height) / 2.0;
             let rect = Rect::from_xywh(left, y, size.width, size.height);
             cx.slot(rect, &cap, |cx, inner| {
-                cx.label(inner, key, &cap, TextAlign::Center);
+                content.draw(cx, inner, &cap, TextAlign::Center);
             });
             let step = size.width + gap;
             x += if cx.rtl { -step } else { step };

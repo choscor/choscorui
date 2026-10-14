@@ -693,6 +693,8 @@ pub fn kbd(_: &PageCx) -> AnyView {
             row((
                 Kbd::new("Esc"),
                 Kbd::new("⇧"),
+                // An icon cap: the arrow text stays its name.
+                Kbd::new("↑").with(|kbd: controls::Kbd| kbd.with_icon(Icon::ArrowUp)),
                 keys(&["⌘", "K"]),
                 keys(&["Ctrl", "Shift", "P"]),
             )),

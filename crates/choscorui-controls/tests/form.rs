@@ -206,6 +206,30 @@ fn kbd_paints_one_cap_per_key_and_takes_no_focus() {
 }
 
 #[test]
+fn a_kbd_icon_replaces_the_first_text_and_keeps_its_name() {
+    let keys = ["↑".to_string(), "K".to_string()];
+    let mut h = Harness::new(Kbd::group(keys.clone()).with_icon(Icon::ArrowUp));
+    let plain = Harness::new(Kbd::group(keys)).measure();
+    let size = h.measure();
+    assert_eq!(size.height, 20.0, "the cap height stays");
+    assert!(
+        size.width >= plain.width,
+        "a 12 pt icon is at least as wide"
+    );
+    let list = h.paint();
+    assert_eq!(texts(&list), ["K"], "the icon replaces the arrow text");
+    let strokes = list
+        .commands()
+        .iter()
+        .filter(|command| matches!(command, DisplayCommand::StrokePath { .. }))
+        .count();
+    assert!(strokes > 0, "the icon paints");
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    assert_eq!(rounded_fills(&list, muted).len(), 2, "two caps");
+    assert_eq!(h.semantics().name, "Up Arrow K");
+}
+
+#[test]
 fn disabled_switch_and_toggle_refuse_the_focus_action() {
     let mut switch = Harness::new(Switch::new("Wi-Fi", false));
     switch.set_enabled(false);
