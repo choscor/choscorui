@@ -96,20 +96,25 @@ fn custom_cursor(image: &Image, hotspot: Point) -> Option<Retained<NSCursor>> {
 }
 
 impl Window {
-    /// Replaces the display list. An identical list schedules no frame at
-    /// all. With Metal, damage schedules a full frame; with Core Graphics,
-    /// only the region whose drawing changed is invalidated.
+    /// Replaces the display list. A list equal to the current one
+    /// schedules no frame. With Metal, a changed list schedules a full
+    /// frame, which starts before the damage is computed; with Core
+    /// Graphics, only the region whose drawing changed is invalidated.
     pub fn set_display_list(&self, list: DisplayList) {
         let _pool = Pool::new();
         let mut paint = self.paint.lock().unwrap();
-        let region = damage(&paint.list, &list);
-        paint.list = Arc::new(list);
-        let Some(region) = region else {
+        if *paint.list == list {
+            return;
+        }
+        let new = Arc::new(list);
+        let old = std::mem::replace(&mut paint.list, Arc::clone(&new));
+        drop(paint);
+        let metal = metal::surface::request_frame(self.ns_window().addr());
+        let Some(region) = damage(&old, &new) else {
             return;
         };
-        paint.last_damage = Some(region);
-        drop(paint);
-        if metal::surface::request_frame(self.ns_window().addr()) {
+        self.paint.lock().unwrap().last_damage = Some(region);
+        if metal {
             return;
         }
         // Round out and pad one point so antialiased edges repaint too.

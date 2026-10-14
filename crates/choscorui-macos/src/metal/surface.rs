@@ -30,9 +30,9 @@ use crate::ffi::metal::{
 };
 use crate::ffi::quartz::{
     ADD_TO_RUN_LOOP, CACurrentMediaTime, CADisplayLink, CAFrameRateRange, CAMetalLayer,
-    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DRAWABLE_SIZE,
-    SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE, SET_LAYER_OPAQUE,
-    SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
+    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DISPLAY_SYNC_ENABLED,
+    SET_DRAWABLE_SIZE, SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE,
+    SET_LAYER_OPAQUE, SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
     SET_PREFERRED_FRAME_RATE_RANGE, SET_PRESENTS_WITH_TRANSACTION, SET_VIEW_LAYER, SET_WANTS_LAYER,
     view_display_link,
 };
@@ -58,6 +58,11 @@ pub enum Painter {
 /// The most frames of one window that the GPU works on at a time.
 const IN_FLIGHT: usize = 2;
 
+/// How long a visible window waits for the presented handler of a frame
+/// that the GPU finished. Sometimes the handler never runs, and the frame
+/// may not be on the display; the window then draws the frame again.
+const STALLED: Duration = Duration::from_millis(200);
+
 /// The state of a window that the Metal handlers share, on any thread.
 struct Shared {
     window: usize,
@@ -80,6 +85,8 @@ struct Surface {
     /// then, a window on screen counts as visible.
     occlusion_reported: bool,
     presented_once: bool,
+    /// When the last frame went to the GPU.
+    committed: Option<Instant>,
     transaction: bool,
     size: (usize, usize),
     scale: f64,
@@ -226,6 +233,7 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
         pending: true,
         occlusion_reported: false,
         presented_once: false,
+        committed: None,
         transaction: true,
         size: (0, 0),
         scale: 0.0,
@@ -347,6 +355,17 @@ fn drive(window: usize) {
             }
         });
         let mut wait = false;
+        let stalled = visible
+            && !surface.pending
+            && surface.shared.in_flight.load(Ordering::Acquire) == 0
+            && surface.shared.unpresented.load(Ordering::Acquire) > 0
+            && surface
+                .committed
+                .is_some_and(|committed| committed.elapsed() >= STALLED);
+        if stalled {
+            forget_presentations(&surface.shared);
+            surface.pending = true;
+        }
         if surface.pending && visible {
             if surface.shared.in_flight.load(Ordering::Acquire) >= IN_FLIGHT {
                 wait = true;
@@ -370,6 +389,16 @@ fn drive(window: usize) {
     if failed {
         fall_back(window);
     }
+}
+
+/// Stops waiting for the presented handlers of the frames of a window. A
+/// handler that runs later finds no frame and records no paint.
+fn forget_presentations(shared: &Arc<Shared>) {
+    let mut presentations = PRESENTATIONS.lock().unwrap();
+    let before = presentations.len();
+    presentations.retain(|_, presentation| !Arc::ptr_eq(&presentation.shared, shared));
+    let forgotten = before - presentations.len();
+    shared.unpresented.fetch_sub(forgotten, Ordering::AcqRel);
 }
 
 /// The outcome of one attempt to draw.
@@ -410,10 +439,15 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         surface.scale = scale;
     }
     // Startup and live resize present inside the Core Animation
-    // transaction, so the content matches the window frame.
+    // transaction, so the content matches the window frame. Otherwise
+    // display sync is off: a frame goes to the window server as soon as
+    // the GPU finishes it, not at the next display refresh, which takes
+    // one refresh off the latency. The window server still composites
+    // the window at a refresh.
     let transaction = !surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ());
     if transaction != surface.transaction {
         SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (transaction,));
+        SET_DISPLAY_SYNC_ENABLED.send(&surface.layer, (transaction,));
         surface.transaction = transaction;
     }
     let started = Instant::now();
@@ -457,6 +491,7 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         COMMIT.send(&command_buffer, ());
     }
     surface.presented_once = true;
+    surface.committed = Some(Instant::now());
     Frame::Presented
 }
 

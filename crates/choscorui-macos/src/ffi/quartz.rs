@@ -41,6 +41,8 @@ messages! {
     pub(crate) SET_DRAWABLE_SIZE: instance CAMetalLayer, c"setDrawableSize:", (NSSize) -> ();
     pub(crate) SET_PRESENTS_WITH_TRANSACTION: instance CAMetalLayer,
         c"setPresentsWithTransaction:", (bool) -> ();
+    pub(crate) SET_DISPLAY_SYNC_ENABLED: instance CAMetalLayer, c"setDisplaySyncEnabled:",
+        (bool) -> ();
     pub(crate) NEXT_DRAWABLE: instance CAMetalLayer, c"nextDrawable",
         () -> Autoreleased<CAMetalDrawable>;
     pub(crate) SET_CONTENTS_SCALE: instance CALayer, c"setContentsScale:", (f64) -> ();

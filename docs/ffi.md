@@ -121,7 +121,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Commands.** Each push command maps to exactly one `CGContextSaveGState`. Group opacity uses a transparency layer.
 - **Shadows.** A shadow draws the mask from `Shadow::mask` through `CGContextClipToMask`. Thus, it matches the software renderer.
 - **Backdrop blur.** `BackdropBlur` and `BackdropBlurCorners` read the pixels of a 32-bit bitmap context through `CGBitmapContextGetData`. They check the row stride before they read rows. They blur a copy with `blur_pixels` and draw the copy back in device space, clipped to the rounded rectangle. A context that is not a bitmap context gets no blur. [`render_parity.rs`](../crates/choscorui/tests/render_parity.rs) compares the result with the software renderer.
-- **Damage.** `set_display_list` compares the old and new lists with `choscorui_core::damage`. With Core Graphics, it calls `setNeedsDisplayInRect:` only for the changed area, so an idle window does not draw.
+- **Damage.** `set_display_list` compares the old and new lists. An equal list schedules no frame, so an idle window does not draw. With Metal, the frame starts first, and then `choscorui_core::damage` computes the changed area for `Window::last_damage`. With Core Graphics, `set_display_list` calls `setNeedsDisplayInRect:` only for the area that `damage` gives.
 
 ### Metal painter
 
@@ -130,7 +130,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Buffers and textures.** `new_buffer` and the `set*Bytes:` messages copy their Rust slices. `replace_region` checks that the region fits in the texture and that the slice holds all its rows. `read_buffer` checks the buffer length, and it reads only after the GPU work completes.
 - **Layer.** The content view hosts a `CAMetalLayer` that the surface owns. `nextDrawable` can return nil. Then the frame stays pending.
 - **Display link.** `displayLinkWithTarget:selector:` makes the link of the content view. The link sends `choscoruiDisplayLinkFired:` on the main thread. The link retains the view, so the drop of a `Window` invalidates its link.
-- **Handler blocks.** The presented handler and the completed handler are global blocks with no captures. Metal calls them on its own threads. They find the frame by the object address in a map behind a `Mutex`, and they change only atomics and that frame's paint state.
+- **Handler blocks.** The presented handler and the completed handler are global blocks with no captures. Metal calls them on its own threads. They find the frame by the object address in a map behind a `Mutex`, and they change only atomics and that frame's paint state. Sometimes the presented handler of a finished frame does not run. When a visible window waits 200 ms for it, the window removes the frame from the map and draws it again. A handler that runs later finds no frame and records no paint.
 - **Panics.** The display link callback is a method of the content view class, so its trampoline catches a panic. The blocks catch a panic and report it as "the Metal presented handler" or "the Metal completed handler".
 - **Tests.** The Metal parity smoke test compares each frame with the software renderer, and text with Core Graphics captures. The window, app, and lifetime smoke tests also paint with Metal.
 

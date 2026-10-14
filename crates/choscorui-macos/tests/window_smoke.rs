@@ -579,10 +579,17 @@ fn surface_list(accent: Color) -> DisplayList {
 fn check_surface(app: &Application, window: &choscorui_macos::Window) {
     use choscorui_core::{CursorShape, Image};
 
+    let before = window.paint_count();
     window.set_display_list(surface_list(Color::rgba8(220, 60, 80, 255)));
-    for _ in 0..5 {
-        app.pump_once(Duration::from_millis(20));
-    }
+    // A Metal frame reaches the display after the call returns, so wait
+    // for its paint before counting.
+    pump_until(
+        app,
+        Duration::from_secs(2),
+        Duration::from_millis(20),
+        || window.paint_count() > before,
+    );
+    assert!(window.paint_count() > before, "the new list never painted");
     // Idle: nothing changed, so AppKit is never asked for another frame.
     let idle = window.paint_count();
     window.set_display_list(surface_list(Color::rgba8(220, 60, 80, 255)));
