@@ -414,7 +414,9 @@ fn popup_combo_steps_selection_and_handles_accessibility() {
     );
     combo.handle(ComboInput::Semantic(SemanticAction::ShowMenu, None));
     assert!(combo.is_open());
-    assert_eq!(combo.suggestion_semantics().len(), 3);
+    let mut parts = SemanticParts::new();
+    combo.suggestion_parts(rect(0.0, 0.0, 200.0, 400.0), &mut parts);
+    assert_eq!(parts.len(), 4, "the list and three options");
     combo.handle(ComboInput::Choose(0));
     assert_eq!(combo.selected(), Some(text_key("Small")));
     combo.set_items(items(&["Medium"]));

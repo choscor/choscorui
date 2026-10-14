@@ -16,8 +16,8 @@ use crate::style::{
     choice_size, content_rect,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -269,6 +269,25 @@ impl Choices {
         node
     }
 
+    /// One part with `role` for each option, from the last arrange. The
+    /// selected option is checked, or selected for a tab, and has the
+    /// focus.
+    fn semantic_parts(&self, role: SemanticRole, parts: &mut SemanticParts) {
+        for (index, (item, rect)) in self.items.iter().zip(&self.rects).enumerate() {
+            let enabled = self.enabled && item.enabled;
+            let part = hosted::pressable(parts, None, role, &item.label, *rect, enabled);
+            let selected = index == self.selected;
+            if role == SemanticRole::Tab {
+                part.node.state.selected = Some(selected);
+            } else {
+                part.node.state.checked = Some(selected);
+            }
+            if selected {
+                parts.set_focused(Some(index));
+            }
+        }
+    }
+
     /// The recipe flags of the part at `index`. `current` marks the
     /// selected part, and only it shows the host's focus.
     fn part_state(&self, host: VisualState, index: usize, current: VisualState) -> VisualState {
@@ -410,6 +429,11 @@ impl CustomControl for HostedRadioGroup {
         let mut node = self.choices.semantics(SemanticRole::RadioGroup);
         node.state.invalid = self.invalid;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.choices
+            .semantic_parts(SemanticRole::RadioButton, parts);
     }
 
     fn perform(
@@ -590,6 +614,10 @@ impl CustomControl for HostedTabs {
 
     fn semantics(&self) -> SemanticNode {
         self.choices.semantics(SemanticRole::TabList)
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.choices.semantic_parts(SemanticRole::Tab, parts);
     }
 
     fn perform(

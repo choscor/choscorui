@@ -5,7 +5,8 @@ use crate::custom::MeasureContext;
 use crate::listbox::{ListEntry, ListPointer, ListPopup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    CivilDate, Icon, Key, Locale, PointerButton, PointerEvent, Rect, days_in_month, month_name,
+    CivilDate, Icon, Key, Locale, PointerButton, PointerEvent, Rect, SemanticParts, SemanticRole,
+    days_in_month, month_name,
 };
 
 /// One of the two caption dropdowns.
@@ -123,13 +124,44 @@ impl CaptionDropdowns {
         }
     }
 
-    /// The text that names a focused dropdown: the highlighted option
-    /// while its list is open, else the trigger text.
-    pub fn description(&self, part: CaptionPart, shown: (i32, u8)) -> String {
-        let list = self.list(part);
-        match list.highlighted {
-            Some(index) if self.open == Some(part) => list.entries[index].label().to_owned(),
-            _ => self.label(part, shown),
+    /// Adds the month and year triggers as `PopUpButton` parts under
+    /// `parent`, each with its open list. The trigger of the `focus`
+    /// dropdown has the focus, and the highlighted option of an open list
+    /// takes it.
+    pub fn semantic_parts(
+        &self,
+        shown: (i32, u8),
+        focus: Option<CaptionPart>,
+        parent: Option<usize>,
+        parts: &mut SemanticParts,
+    ) {
+        for (part, rect) in [
+            (CaptionPart::Month, self.month),
+            (CaptionPart::Year, self.year),
+        ] {
+            let label = self.label(part, shown);
+            let trigger = crate::hosted::pressable(
+                parts,
+                parent,
+                SemanticRole::PopUpButton,
+                &label,
+                rect,
+                true,
+            );
+            trigger.node.value = Some(label.clone());
+            trigger.node.state.expanded = Some(self.open == Some(part));
+            let position = parts.len() - 1;
+            if focus == Some(part) {
+                parts.set_focused(Some(position));
+            }
+            if self.open == Some(part) {
+                self.list(part).semantic_parts(
+                    &label,
+                    self.current(part, shown),
+                    Some(position),
+                    parts,
+                );
+            }
         }
     }
 

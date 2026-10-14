@@ -496,6 +496,10 @@ the `Mixed` value, where `None` is the mixed state. A press sets
   tab fills the list width. The list height fits the tabs. A vertical tab
   starts its label at the start edge. The line indicator is at the inline
   end, so right-to-left layouts mirror it.
+- **Parts.** `HostedRadioGroup` publishes a `RadioButton` part for each
+  option, checked when selected. `HostedTabs` publishes a `Tab` part for
+  each tab, selected when selected. The selected option has the focus. A
+  disabled option is a disabled part. `Activate` on a part clicks it.
 
 | Radio part | Slot | Value |
 | --- | --- | --- |
@@ -1203,12 +1207,15 @@ behavior.
 | Chip remove | `Close` | 12 pt icon at 50% opacity; full opacity while hovered |
 | Empty text | `Description` | sm `muted-foreground` text, 8 pt above and below |
 
-| Field | `Combobox::semantics` | Suggestion |
+| Field | `Combobox::semantics` | Suggestion part |
 | --- | --- | --- |
-| Role | `ComboBox` (AXComboBox) | `ListItem` (AXGroup) |
+| Role | `ComboBox` (AXComboBox) | `ListItem` (AXGroup) in a `List` part |
 | Name / value | label / text | item text / - |
-| State | disabled, expanded, invalid | selected when highlighted |
+| State | disabled, expanded, invalid | selected when chosen; the highlighted suggestion has the focus |
 | Actions | `ShowMenu`, `SetValue`, `Focus` while enabled | `Activate` |
+
+`Combobox::suggestion_parts(popup, parts)` adds the open list and the
+suggestions in view. Each suggestion part gives its index in the matches.
 
 For a missing family, `FontChooser::semantics` adds the invalid state and
 the description `choscorui.font.fallback` with the fallback name.
@@ -1819,7 +1826,7 @@ behavior.
 | --- | --- | --- | --- |
 | Role | `SpinButton` (AXIncrementor) | `Table` (AXTable) | `Cell` (AXCell) |
 | Name / value | name / long date, short time, or both | name / chosen long dates (a range joins its ends with an en dash) | long date / day number |
-| State | invalid when out of range; the description names the focused field | the description is the month title, or the month or year of a focused caption dropdown; expanded while a dropdown has focus | selected when chosen; disabled outside the range |
+| State | invalid when out of range; the description names the focused field | the description is the month title; expanded while a dropdown has focus | selected when chosen; disabled outside the range |
 | Actions | `Increment`, `Decrement`, `Focus` | `Focus`; `ShowMenu` and `Expand` or `Collapse` while a dropdown has focus | `Activate` when enabled |
 
 `DateTimeEdit` has no handler for these actions. The host maps them to
@@ -1841,13 +1848,20 @@ With a dropdown caption, a hosted `Calendar` has three tab stops: the month
 dropdown, the year dropdown, and the grid. Tab enters at the month and
 Shift+Tab at the grid. Tab and Shift+Tab leave the calendar at the ends.
 
+A hosted `Calendar` publishes the month buttons as `Button` parts with
+the `choscorui.month.previous` and `choscorui.month.next` names. It also
+publishes the caption dropdowns, and a `Row` part for each week with a
+`Cell` part for each day. The today cell has the `choscorui.today` description. The focused
+part has the focus. In the grid, the cursor day has it.
+
 - On a focused dropdown, Enter, Space, ArrowDown, or ArrowUp opens its list.
   A press on a trigger focuses it and opens or closes its list.
 - In the open list, Enter or Space chooses the highlight. Escape, Tab, a
   press outside the list, or a focus loss closes it.
-- The description names the focused dropdown with its month or year, or the
-  highlighted option while the list is open. `ShowMenu` and `Expand` open
-  the list, and `Collapse` closes it.
+- Each dropdown is a `PopUpButton` part with its month or year as the
+  value. The focused dropdown has the focus. Its open list is a `List`
+  part, and the highlighted option has the focus. `ShowMenu` and `Expand`
+  open the list, and `Collapse` closes it.
 
 **As a view.** `DateTimeEdit::new(name, kind, value)` edits a
 `Binding<CivilDateTime>` in both directions. A date editor uses the `Date`
@@ -3020,7 +3034,8 @@ shows the caps of a combination.
 | --- | --- |
 | Role | `ComboBox` (AXComboBox); `PopUpButton` (AXPopUpButton) for `Select::native` |
 | Name / value | name / chosen label, or empty with no choice |
-| Description | highlighted label while open; the placeholder while nothing is chosen |
+| Description | the placeholder while nothing is chosen |
+| Parts | while open, a `List` part with a `ListItem` part for each option in view, selected when chosen, and a `StaticText` part for each group label; the highlighted option has the focus |
 | State | expanded, invalid, disabled |
 | Actions | `ShowMenu`, `Expand` or `Collapse`, `SetValue`, and `Focus` while enabled |
 
@@ -3287,7 +3302,7 @@ character that the code does not accept. `set_open` returns false.
 | --- | --- |
 | Role | `Button` (AXButton) |
 | Name / value | name / chosen dates, or the placeholder |
-| Description | the cursor day while open; the month or year of a focused caption dropdown |
+| Parts | while open, a `Dialog` part with the parts of a hosted `Calendar` |
 | State | expanded, invalid, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
@@ -3531,8 +3546,9 @@ is disabled. `set_value` returns false.
 | --- | --- |
 | Role | `ComboBox` (AXComboBox); `Button` for a closed dialog form |
 | Name / value | name / search text |
-| Description | the highlighted command, or the empty text |
+| Description | the empty text while nothing matches |
 | State | expanded, disabled |
+| Parts | a `List` part with the match count, a `StaticText` part for each group label in view, and a `ListItem` part for each command in view, with its index; the highlighted command has the focus |
 | Actions | `Activate` while a command is highlighted, `SetValue`, `Focus`, and `Dismiss` in the dialog form |
 
 `set_value` takes `Text` as the search and filters the items. `set_open`

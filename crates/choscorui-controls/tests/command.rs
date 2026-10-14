@@ -37,19 +37,19 @@ fn typing_filters_and_enter_runs_the_highlighted_command() {
     let full = h.measure().height;
     let node = h.semantics();
     assert_eq!(node.role, SemanticRole::ComboBox);
-    assert_eq!(node.description, "Calendar", "the first enabled command");
+    assert_eq!(h.focused_part(), "Calendar", "the first enabled command");
     h.focus();
     assert!(h.text("s"));
     assert_eq!(
         h.messages(),
         [ControlMessage::Changed(ControlValue::Text("s".into()))]
     );
-    assert_eq!(h.semantics().description, "Search Emoji");
+    assert_eq!(h.focused_part(), "Search Emoji");
     assert!(h.measure().height < full, "fewer rows are shorter");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Settings");
+    assert_eq!(h.focused_part(), "Settings");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Settings", "it stops at the end");
+    assert_eq!(h.focused_part(), "Settings", "it stops at the end");
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(5)]);
     assert!(h.perform(SemanticAction::SetValue, Some("zzz")));
@@ -70,11 +70,7 @@ fn arrows_skip_disabled_commands_and_the_pointer_runs_commands() {
     h.focus();
     h.key(Key::ArrowDown);
     h.key(Key::ArrowDown);
-    assert_eq!(
-        h.semantics().description,
-        "Profile",
-        "Calculator is skipped"
-    );
+    assert_eq!(h.focused_part(), "Profile", "Calculator is skipped");
     let painted = texts(&h.paint());
     for text in ["Suggestions", "Calendar", "Settings", "⌘P"] {
         assert!(painted.contains(&text.to_string()), "{text}");
@@ -88,7 +84,7 @@ fn arrows_skip_disabled_commands_and_the_pointer_runs_commands() {
         bounds.origin.y + 4.0 + 32.0 + 4.0 + label + 16.0,
     );
     h.hover(calendar);
-    assert_eq!(h.semantics().description, "Calendar");
+    assert_eq!(h.focused_part(), "Calendar");
     h.messages();
     h.click(calendar);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(0)]);
@@ -137,4 +133,32 @@ fn the_dialog_form_opens_filters_and_closes() {
     h.key(Key::Space);
     h.click(Point::new(5.0, 590.0));
     assert_eq!(h.host.modal(&h.tree), None, "a press outside closes it");
+}
+
+#[test]
+fn a_large_palette_publishes_only_the_rows_in_view() {
+    let items = (0..10_000)
+        .map(|index| CommandItem::new(format!("Command {index}")))
+        .collect();
+    let mut h = Harness::new(Command::new(
+        "Commands",
+        "Search",
+        vec![(String::new(), items)],
+    ));
+    h.measure();
+    let parts = h.parts();
+    let list = &parts.parts()[0];
+    assert_eq!(list.node.role, SemanticRole::List);
+    assert_eq!(list.collection.unwrap().item_count, 10_000);
+    assert!(parts.len() < 20, "{} parts", parts.len());
+    assert_eq!(h.focused_part(), "Command 0");
+    h.focus();
+    for _ in 0..3 {
+        h.key(Key::ArrowDown);
+    }
+    let parts = h.parts();
+    let last = &parts.parts()[parts.focused().unwrap()];
+    assert_eq!(last.node.name, "Command 3");
+    assert_eq!(last.item_index, Some(3));
+    assert!(parts.len() < 20, "{} parts", parts.len());
 }

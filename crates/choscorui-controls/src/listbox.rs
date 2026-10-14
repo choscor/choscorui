@@ -7,7 +7,10 @@ use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
     Content, ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
 };
-use choscorui_core::{Icon, Key, Point, PointerButton, PointerEvent, Rect, Size, WheelUnit};
+use choscorui_core::{
+    Icon, Key, Point, PointerButton, PointerEvent, Rect, SemanticParts, SemanticRole, Size,
+    WheelUnit,
+};
 
 /// One row of a popup list.
 #[derive(Clone, Debug, PartialEq)]
@@ -397,6 +400,47 @@ impl ListPopup {
                     .to_lowercase()
                     .starts_with(&search)
             })
+    }
+
+    /// Adds the list as a `List` part named `name` under `parent`, with a
+    /// `ListItem` part for each option in view and a `StaticText` part for
+    /// each group label in view. The option at `selected` is selected. The
+    /// highlighted option has the focus, as the active descendant.
+    pub fn semantic_parts(
+        &self,
+        name: &str,
+        selected: Option<usize>,
+        parent: Option<usize>,
+        parts: &mut SemanticParts,
+    ) {
+        parts.push(parent, SemanticRole::List, name, self.frame);
+        let list = Some(parts.len() - 1);
+        for (index, (entry, row)) in self.entries.iter().zip(&self.rows).enumerate() {
+            let row = row.translate(0.0, -self.scroll);
+            if row.max_y() < self.viewport.origin.y || row.origin.y > self.viewport.max_y() {
+                continue;
+            }
+            let part = match entry {
+                ListEntry::Option { label, enabled } => {
+                    let part = crate::hosted::pressable(
+                        parts,
+                        list,
+                        SemanticRole::ListItem,
+                        label,
+                        row,
+                        *enabled,
+                    );
+                    part.node.state.selected = Some(selected == Some(index));
+                    part
+                }
+                ListEntry::Group(label) => parts.push(list, SemanticRole::StaticText, label, row),
+                ListEntry::Separator => continue,
+            };
+            part.item(index);
+            if self.highlighted == Some(index) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     /// The enabled option under `point`, if any.

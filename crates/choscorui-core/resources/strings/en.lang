@@ -52,6 +52,9 @@ choscorui.field.hour = Hour field
 choscorui.field.minute = Minute field
 choscorui.field.second = Second field
 choscorui.field.meridiem = AM/PM field
+choscorui.today = today
+choscorui.month.previous = Previous month
+choscorui.month.next = Next month
 
 # Conditions of the backend capabilities.
 choscorui.condition.app_bundle = Needs an app bundle with a bundle identifier

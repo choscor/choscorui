@@ -74,23 +74,19 @@ fn the_dropdowns_are_tab_stops_before_the_grid() {
     let mut h = Harness::new(calendar());
     h.focus();
     let node = h.semantics();
-    assert_eq!(node.description, "October", "Tab enters at the month");
+    assert_eq!(h.focused_part(), "October", "Tab enters at the month");
     assert_eq!(node.state.expanded, Some(false));
     assert!(node.actions.contains(&SemanticAction::ShowMenu));
     h.key(Key::Tab);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     h.key(Key::Tab);
     assert_eq!(h.semantics().description, "October 2026", "the grid");
     assert_eq!(h.semantics().state.expanded, None);
     shift_tab(&mut h);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     shift_tab(&mut h);
     shift_tab(&mut h);
-    assert_eq!(
-        h.semantics().description,
-        "October",
-        "focus left at the start"
-    );
+    assert_eq!(h.focused_part(), "October", "focus left at the start");
 }
 
 #[test]
@@ -107,14 +103,14 @@ fn keys_open_a_dropdown_and_a_choice_shows_its_month() {
     }
     h.key(Key::Enter);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "November", "the highlight");
+    assert_eq!(h.focused_part(), "November", "the highlight");
     h.key(Key::Enter);
     assert_eq!(h.semantics().state.expanded, Some(false));
-    assert_eq!(h.semantics().description, "November");
+    assert_eq!(h.focused_part(), "November");
 
     h.key(Key::Tab);
     h.key(Key::Space);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     h.key(Key::ArrowUp);
     h.key(Key::Enter);
     h.key(Key::Tab);
@@ -125,7 +121,7 @@ fn keys_open_a_dropdown_and_a_choice_shows_its_month() {
     shift_tab(&mut h);
     h.key(Key::Enter);
     h.text("2029");
-    assert_eq!(h.semantics().description, "2029");
+    assert_eq!(h.focused_part(), "2029");
     h.key(Key::Enter);
     h.key(Key::Tab);
     assert_eq!(h.semantics().description, "November 2029");
@@ -146,7 +142,7 @@ fn a_press_on_a_trigger_opens_its_list_and_a_press_on_an_option_chooses() {
         list.origin.y >= bounds.origin.y + 12.0 + 32.0,
         "below the caption"
     );
-    assert_eq!(h.semantics().description, "October");
+    assert_eq!(h.focused_part(), "October");
     assert_eq!(h.semantics().state.expanded, Some(true));
 
     // Eight 32 pt rows show, scrolled so that October is the last.
@@ -162,7 +158,7 @@ fn a_press_on_a_trigger_opens_its_list_and_a_press_on_an_option_chooses() {
     h.hover(june);
     h.click(june);
     assert!(overlay(&h).is_none());
-    assert_eq!(h.semantics().description, "June");
+    assert_eq!(h.focused_part(), "June");
 
     // A press outside the open list closes it.
     h.click(Point::new(month + 4.0, caption_y));
@@ -184,20 +180,16 @@ fn months_and_years_outside_the_range_are_disabled() {
     h.focus();
     h.key(Key::Enter);
     h.key(Key::Home);
-    assert_eq!(
-        h.semantics().description,
-        "October",
-        "earlier months are disabled"
-    );
+    assert_eq!(h.focused_part(), "October", "earlier months are disabled");
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "December");
+    assert_eq!(h.focused_part(), "December");
     h.key(Key::Escape);
     h.key(Key::Tab);
     h.key(Key::Enter);
     h.key(Key::Home);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "2027");
+    assert_eq!(h.focused_part(), "2027");
 }
 
 #[test]
@@ -210,9 +202,9 @@ fn the_year_list_takes_its_ends_in_either_order() {
     h.key(Key::Tab);
     h.key(Key::Enter);
     h.key(Key::Home);
-    assert_eq!(h.semantics().description, "2024");
+    assert_eq!(h.focused_part(), "2024");
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "2030");
+    assert_eq!(h.focused_part(), "2030");
 }
 
 #[test]
@@ -270,31 +262,31 @@ fn a_date_picker_passes_the_dropdown_caption_to_its_calendar() {
     let painted = texts(&h.paint());
     assert!(painted.contains(&"October".to_string()));
     assert!(painted.contains(&"2026".to_string()));
-    assert_eq!(h.semantics().description, "October 12, 2026", "the grid");
+    assert_eq!(h.focused_part(), "October 12, 2026", "the grid");
 
     // Shift+Tab reaches the year, then the month.
     shift_tab(&mut h);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     shift_tab(&mut h);
-    assert_eq!(h.semantics().description, "October");
+    assert_eq!(h.focused_part(), "October");
     h.key(Key::ArrowDown);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "November");
+    assert_eq!(h.focused_part(), "November");
     // Escape closes the list and keeps the popover open.
     h.key(Key::Escape);
     assert_eq!(h.semantics().state.expanded, Some(true));
     h.key(Key::Enter);
     h.key(Key::ArrowDown);
     h.key(Key::Enter);
-    assert_eq!(h.semantics().description, "November");
+    assert_eq!(h.focused_part(), "November");
     assert_eq!(h.semantics().state.expanded, Some(true));
     assert!(overlay(&h).is_some());
 
     // Tab goes to the year, the grid, then out, which closes the popover.
     h.key(Key::Tab);
-    assert_eq!(h.semantics().description, "2026");
+    assert_eq!(h.focused_part(), "2026");
     h.key(Key::Tab);
-    assert_ne!(h.semantics().description, "2026", "the grid");
+    assert_ne!(h.focused_part(), "2026", "the grid");
     h.messages();
     h.key(Key::Tab);
     assert_eq!(h.messages(), [ControlMessage::OpenChanged(false)]);

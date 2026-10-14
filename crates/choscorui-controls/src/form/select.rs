@@ -9,8 +9,8 @@ use crate::style::{
     ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 /// A select: a trigger that shows the chosen option, and a popup list
@@ -417,15 +417,20 @@ impl CustomControl for Select {
         let mut node = hosted::node(role, &self.name, actions);
         // No choice gives an empty value; the placeholder is a hint.
         node.value = Some(self.value().unwrap_or_default().to_string());
-        node.description = match self.list.highlighted {
-            Some(index) if self.reveal.open => self.list.entries[index].label().to_string(),
-            _ if self.selected.is_none() => self.placeholder.clone(),
-            _ => String::new(),
-        };
+        if self.selected.is_none() {
+            node.description.clone_from(&self.placeholder);
+        }
         node.state.expanded = Some(self.reveal.open);
         node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        if self.reveal.open {
+            self.list
+                .semantic_parts(&self.name, self.selected, None, parts);
+        }
     }
 
     fn perform(

@@ -267,7 +267,7 @@ fn control_semantics() {
     golden("control_semantics", &out);
 }
 
-/// One line for each semantic part: its key, parent, role, name, value,
+/// One line for each semantic part: its position, parent, role, name, value,
 /// the state flags that are set, and the actions.
 fn write_parts(out: &mut String, parts: &SemanticParts) {
     for (position, part) in parts.parts().iter().enumerate() {
@@ -306,7 +306,7 @@ fn write_parts(out: &mut String, parts: &SemanticParts) {
         writeln!(
             out,
             "  part {} in {:?}: {:?} {:?} value {:?} desc {:?} [{}] {:?}",
-            part.key,
+            position,
             part.parent,
             node.role,
             node.name,

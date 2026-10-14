@@ -13,8 +13,9 @@ use crate::style::{
     content_rect,
 };
 use choscorui_core::{
-    CivilDate, EventPhase, EventReply, Icon, Key, KeyEvent, Locale, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    CivilDate, EventPhase, EventReply, Icon, Key, KeyEvent, Locale, Localizer, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    Size,
 };
 
 /// A date picker: an outline button that shows the chosen date, and a
@@ -576,27 +577,22 @@ impl CustomControl for DatePicker {
         };
         let mut node = hosted::node(SemanticRole::Button, &self.name, actions);
         node.value = Some(self.text().unwrap_or_else(|| self.placeholder.clone()));
-        if let Some(part) = self
-            .calendar
-            .caption_part(self.focus)
-            .filter(|_| self.reveal.open)
-        {
-            // A focused caption dropdown names its month or year.
-            node.description = self.calendar.caption_description(part);
-        } else if self.reveal.open {
-            // The cursor day, as the grid would announce it.
-            node.description = self
-                .calendar
-                .cells()
-                .iter()
-                .find(|cell| cell.date == self.calendar.selected())
-                .map(|cell| self.calendar.cell_semantics(cell).name)
-                .unwrap_or_default();
-        }
         node.state.expanded = Some(self.reveal.open);
         node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// The open calendar is a `Dialog` part with the parts of a calendar.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let Some(layout) = self.layout.as_ref().filter(|_| self.reveal.open) else {
+            return;
+        };
+        let frame = self.overlay().unwrap_or(layout.caption);
+        parts.push(None, SemanticRole::Dialog, &self.name, frame);
+        let dialog = Some(parts.len() - 1);
+        self.calendar
+            .semantic_parts(layout, self.today, self.focus, strings, dialog, parts);
     }
 
     fn perform(

@@ -11,8 +11,9 @@ use crate::style::{
 };
 use crate::text_field::TextField;
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo, WheelUnit, fold_for_search,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticCollection, SemanticNode, SemanticParts, SemanticRole, Size,
+    TextInputInfo, WheelUnit, fold_for_search,
 };
 
 /// The tallest the list grows before it scrolls, in points.
@@ -101,6 +102,8 @@ pub struct Command {
     editor: TextField,
     empty: String,
     rows: Vec<Row>,
+    /// The number of items that match the search text.
+    matched: usize,
     /// The highlighted item, by its index across all groups.
     highlighted: Option<usize>,
     scroll: f64,
@@ -131,6 +134,7 @@ impl Command {
             editor: field,
             empty: String::new(),
             rows: Vec::new(),
+            matched: 0,
             highlighted: None,
             scroll: 0.0,
             metrics: Metrics::default(),
@@ -204,10 +208,15 @@ impl Command {
             .map(|(index, (group, item))| (index, group, item))
     }
 
-    fn item(&self, index: usize) -> Option<&CommandItem> {
-        self.items()
-            .find(|(at, _, _)| *at == index)
-            .map(|(_, _, item)| item)
+    /// The item at `index` across all groups, found group by group.
+    fn item(&self, mut index: usize) -> Option<&CommandItem> {
+        for (_, items) in &self.groups {
+            match items.get(index) {
+                Some(item) => return Some(item),
+                None => index -= items.len(),
+            }
+        }
+        None
     }
 
     /// The items that match the search text, in order.
@@ -236,7 +245,7 @@ impl Command {
         let mut first = 0;
         for (group, (label, items)) in self.groups.iter().enumerate() {
             let shown: Vec<usize> = (first..first + items.len())
-                .filter(|index| matches.contains(index))
+                .filter(|index| matches.binary_search(index).is_ok())
                 .collect();
             first += items.len();
             if shown.is_empty() {
@@ -270,6 +279,7 @@ impl Command {
             top += m.group_padding;
         }
         self.rows = rows;
+        self.matched = matches.len();
         self.highlighted = self.enabled_matches().first().copied();
         self.scroll = 0.0;
     }
@@ -774,14 +784,80 @@ impl CustomControl for Command {
         };
         let mut node = hosted::node(SemanticRole::ComboBox, &self.name, actions);
         node.value = Some(self.query().to_string());
-        node.description = match self.highlighted.and_then(|index| self.item(index)) {
-            Some(item) => item.label.clone(),
-            None if self.rows.is_empty() => self.empty.clone(),
-            None => String::new(),
-        };
+        if self.rows.is_empty() {
+            node.description.clone_from(&self.empty);
+        }
         node.state.expanded = Some(true);
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// The list is a `List` part with the matching item count. Only the
+    /// rows in view are parts, found by a binary search, so the work does
+    /// not grow with the number of commands. The highlighted item has the
+    /// focus, as the active descendant.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        if self
+            .dialog
+            .as_ref()
+            .is_some_and(|dialog| !dialog.reveal.open)
+        {
+            return;
+        }
+        let list = parts.push(None, SemanticRole::List, &self.name, self.list);
+        list.collection = Some(SemanticCollection {
+            item_count: self.matched,
+            column_count: None,
+        });
+        let list = Some(parts.len() - 1);
+        let first = self
+            .rows
+            .partition_point(|row| row.top + row.height < self.scroll);
+        let inset = self.metrics.group_padding;
+        for row in &self.rows[first..] {
+            if row.top - self.scroll > self.list.size.height {
+                break;
+            }
+            let bounds = Rect::from_xywh(
+                self.list.origin.x + inset,
+                self.list.origin.y + row.top - self.scroll,
+                self.list.size.width - 2.0 * inset,
+                row.height,
+            );
+            match row.kind {
+                RowKind::Label(group) => {
+                    parts.push(
+                        list,
+                        SemanticRole::StaticText,
+                        &self.groups[group].0,
+                        bounds,
+                    );
+                }
+                RowKind::Item(index) => {
+                    let Some(item) = self.item(index) else {
+                        continue;
+                    };
+                    let enabled = self.enabled && item.enabled;
+                    let part = hosted::pressable(
+                        parts,
+                        list,
+                        SemanticRole::ListItem,
+                        &item.label,
+                        bounds,
+                        enabled,
+                    );
+                    if let Some(shortcut) = &item.shortcut {
+                        part.node.description.clone_from(shortcut);
+                    }
+                    part.node.state.selected = Some(self.highlighted == Some(index));
+                    part.item(index);
+                    if self.highlighted == Some(index) {
+                        parts.set_focused(Some(parts.len() - 1));
+                    }
+                }
+                RowKind::Separator => {}
+            }
+        }
     }
 
     fn perform(

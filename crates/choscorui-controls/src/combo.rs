@@ -16,8 +16,9 @@ use crate::style::{
 use crate::text_field::TextField;
 use choscorui_core::{
     DesignTokens, EventPhase, EventReply, Icon, ItemKey, Key, KeyEvent, LayoutDirection, Localizer,
-    Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size, TextInputInfo, TypeSpec, WheelUnit, fold_for_search, grapheme_boundaries,
+    Measured, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticParts, SemanticRole, SemanticState, Size, TextInputInfo, TypeSpec, WheelUnit,
+    fold_for_search, grapheme_boundaries,
 };
 
 /// The most suggestions that the hosted popup shows.
@@ -759,24 +760,38 @@ impl Combobox {
         }
     }
 
-    /// Semantic nodes for the open popup's suggestions.
-    pub fn suggestion_semantics(&self) -> Vec<SemanticNode> {
-        self.suggestions()
-            .into_iter()
-            .map(|item| SemanticNode {
-                role: SemanticRole::ListItem,
-                name: item.text.clone(),
-                description: String::new(),
-                value: None,
-                state: SemanticState {
-                    selected: Some(self.highlighted == Some(item.key)),
-                    ..SemanticState::default()
-                },
-                relations: Vec::new(),
-                actions: vec![SemanticAction::Activate],
-                text: None,
-            })
-            .collect()
+    /// Adds the open popup at `popup` as a `List` part with a `ListItem`
+    /// part for each suggestion in view. The highlighted suggestion has
+    /// the focus, as the active descendant.
+    pub fn suggestion_parts(&self, popup: Rect, parts: &mut SemanticParts) {
+        if !self.open {
+            return;
+        }
+        parts.push(None, SemanticRole::List, &self.name, popup);
+        let list = Some(parts.len() - 1);
+        let rows = self.rows_in(popup);
+        let shown = self.suggestions().into_iter().enumerate();
+        for (row, (index, item)) in shown.skip(self.first).take(rows).enumerate() {
+            let bounds = Rect::from_xywh(
+                popup.origin.x,
+                popup.origin.y + self.metrics.inset + row as f64 * self.metrics.row,
+                popup.size.width,
+                self.metrics.row,
+            );
+            let part = crate::hosted::pressable(
+                parts,
+                list,
+                SemanticRole::ListItem,
+                &item.text,
+                bounds,
+                true,
+            );
+            part.node.state.selected = Some(self.selected == Some(item.key));
+            part.item(index);
+            if self.highlighted == Some(item.key) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 }
 
@@ -1115,6 +1130,10 @@ impl CustomControl for Combobox {
         Combobox::semantics(self)
     }
 
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.suggestion_parts(self.hosted_popup(), parts);
+    }
+
     fn text_input(&self) -> Option<TextInputInfo> {
         self.editable
             .then(|| self.editor.hosted_text_input())
@@ -1225,6 +1244,10 @@ impl CustomControl for FontChooser {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         FontChooser::semantics(self, strings)
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.combo.semantic_parts(strings, parts);
     }
 
     fn text_input(&self) -> Option<TextInputInfo> {

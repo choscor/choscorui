@@ -84,28 +84,20 @@ fn keys_open_move_over_enabled_options_choose_and_dismiss() {
     h.focus();
     h.key(Key::ArrowDown);
     assert!(h.semantics().state.expanded == Some(true));
-    assert_eq!(h.semantics().description, "Apple", "the first option");
+    assert_eq!(h.focused_part(), "Apple", "the first option");
     h.key(Key::ArrowUp);
-    assert_eq!(
-        h.semantics().description,
-        "Apple",
-        "arrows stop at the ends"
-    );
+    assert_eq!(h.focused_part(), "Apple", "arrows stop at the ends");
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "Carrot");
+    assert_eq!(h.focused_part(), "Carrot");
     h.key(Key::ArrowUp);
-    assert_eq!(h.semantics().description, "Blueberry", "Grapes is disabled");
+    assert_eq!(h.focused_part(), "Blueberry", "Grapes is disabled");
     h.key(Key::Enter);
     assert_eq!(h.semantics().value.as_deref(), Some("Blueberry"));
     assert_eq!(h.semantics().state.expanded, Some(false));
 
     h.messages();
     h.key(Key::Space);
-    assert_eq!(
-        h.semantics().description,
-        "Blueberry",
-        "opens at the choice"
-    );
+    assert_eq!(h.focused_part(), "Blueberry", "opens at the choice");
     h.key(Key::Escape);
     assert_eq!(
         h.messages(),
@@ -127,12 +119,12 @@ fn type_ahead_chooses_while_closed_and_highlights_while_open() {
     h.key(Key::Enter);
     // A repeated letter cycles through the options that start with it.
     h.text("b");
-    assert_eq!(h.semantics().description, "Banana");
+    assert_eq!(h.focused_part(), "Banana");
     h.text("b");
-    assert_eq!(h.semantics().description, "Blueberry");
+    assert_eq!(h.focused_part(), "Blueberry");
     h.set_time(7.0);
     h.text("a");
-    assert_eq!(h.semantics().description, "Apple", "the search restarts");
+    assert_eq!(h.focused_part(), "Apple", "the search restarts");
     assert_eq!(h.semantics().value.as_deref(), Some("Carrot"));
 }
 

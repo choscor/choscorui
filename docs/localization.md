@@ -134,6 +134,9 @@ its text with `Condition::message`.
 | `choscorui.font` | | Font (the name of a FontChooser) |
 | `choscorui.font.fallback` | `font` | Not installed; using {font} |
 | `choscorui.color.channels` | `red`, `green`, `blue`, `opacity` | Red {red}, Green {green}, Blue {blue}, Opacity {opacity}% |
+| `choscorui.today` | | today (the description of the today cell of a calendar) |
+| `choscorui.month.previous` | | Previous month |
+| `choscorui.month.next` | | Next month |
 | `choscorui.zoom` | `percent` | Zoom {percent}% |
 | `choscorui.overflow` | | Value too large to display |
 | `choscorui.shortcut.recording` | | Recording shortcut; press Escape to cancel |

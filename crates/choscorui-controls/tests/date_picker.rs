@@ -72,7 +72,7 @@ fn keys_move_the_cursor_without_choosing_until_enter() {
     h.key(Key::ArrowRight);
     h.key(Key::ArrowDown);
     assert!(h.messages().is_empty(), "the cursor moves without a choice");
-    assert_eq!(h.semantics().description, "October 20, 2026");
+    assert_eq!(h.focused_part(), "October 20, 2026");
     h.key(Key::Enter);
     assert_eq!(
         h.messages(),

@@ -307,7 +307,7 @@ DrawText { baseline: Point { x: 20.0, y: 32.9 }, text: "Edit", font_family: "sys
 PopClip
 # command Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 140.0 } }
-semantics SemanticNode { role: ComboBox, name: "Commands", description: "Calendar", value: Some(""), state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, SetValue, Focus], text: None }
+semantics SemanticNode { role: ComboBox, name: "Commands", description: "", value: Some(""), state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, SetValue, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 140.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 140.0 } }, radius: 14.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
 FillRoundedRect { rect: Rect { origin: Point { x: 14.0, y: 14.0 }, size: Size { width: 440.0, height: 32.0 } }, radius: 10.0, color: Color { red: 229, green: 229, blue: 229, alpha: 77 } }

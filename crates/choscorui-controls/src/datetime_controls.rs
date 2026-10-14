@@ -22,8 +22,8 @@ use crate::{STEPPER_WIDTH, ValidationState};
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, DateOrder, DesignTokens, EventPhase, EventReply, Icon,
     Key, KeyEvent, LayoutDirection, Locale, Localizer, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
-    days_in_month, month_grid, month_name, weekday_short_name,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, SemanticState,
+    Size, days_in_month, month_grid, month_name, weekday_short_name,
 };
 use std::ops::Range;
 
@@ -1421,12 +1421,57 @@ impl Calendar {
             .is_some_and(|caption| caption.step_scroll(time))
     }
 
-    /// The text that names the focused dropdown `part`.
-    pub(crate) fn caption_description(&self, part: CaptionPart) -> String {
-        self.caption
-            .as_ref()
-            .map(|caption| caption.description(part, self.shown))
-            .unwrap_or_default()
+    /// Adds the parts of the calendar in `layout` under `parent`: the
+    /// month buttons, the caption dropdowns, and a `Row` part for each
+    /// week with a `Cell` part for each day. The `today` cell says so in
+    /// its description. The `focus` part has the focus; in the grid, the
+    /// selected day has it.
+    pub(crate) fn semantic_parts(
+        &self,
+        layout: &CalendarLayout,
+        today: Option<CivilDate>,
+        focus: CalendarFocus,
+        strings: &Localizer,
+        parent: Option<usize>,
+        parts: &mut SemanticParts,
+    ) {
+        for (id, rect, part) in [
+            (
+                "choscorui.month.previous",
+                layout.previous,
+                CalendarFocus::Previous,
+            ),
+            ("choscorui.month.next", layout.next, CalendarFocus::Next),
+        ] {
+            let name = strings.message(id, &[]);
+            crate::hosted::pressable(parts, parent, SemanticRole::Button, &name, rect, true);
+            if focus == part {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
+        if let Some(caption) = &self.caption {
+            caption.semantic_parts(self.shown, focus.caption_part(), parent, parts);
+        }
+        let today_text = strings.message("choscorui.today", &[]);
+        let cells = self.cells();
+        for (week, (days, rects)) in cells.chunks(7).zip(layout.days.chunks(7)).enumerate() {
+            let Some(bounds) = rects.iter().copied().reduce(Rect::union) else {
+                continue;
+            };
+            let row = parts.push(parent, SemanticRole::Row, "", bounds);
+            row.item(week);
+            let row = Some(parts.len() - 1);
+            for (cell, rect) in days.iter().zip(rects) {
+                let part = parts.push(row, SemanticRole::Cell, "", *rect);
+                part.node = self.cell_semantics(cell);
+                if Some(cell.date) == today {
+                    part.node.description.clone_from(&today_text);
+                }
+                if focus == CalendarFocus::Grid && cell.date == self.selected {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
     }
 
     /// Follows hover and press of the month buttons and the enabled days
@@ -1706,13 +1751,12 @@ impl CustomControl for Calendar {
         self.caption_deadline()
     }
 
-    /// A focused dropdown names itself in the description, takes
-    /// `ShowMenu`, and reports whether its list is open.
+    /// A focused dropdown takes `ShowMenu` and reports whether its list
+    /// is open.
     fn semantics(&self) -> SemanticNode {
         let mut node = Calendar::semantics(self, &self.name);
         if let Some(part) = self.focus.caption_part() {
             let open = self.caption_open() == Some(part);
-            node.description = self.caption_description(part);
             node.state.expanded = Some(open);
             node.actions.extend([
                 SemanticAction::ShowMenu,
@@ -1724,6 +1768,12 @@ impl CustomControl for Calendar {
             ]);
         }
         node
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        if let Some(layout) = &self.layout {
+            Calendar::semantic_parts(self, layout, self.today, self.focus, strings, None, parts);
+        }
     }
 
     fn perform(

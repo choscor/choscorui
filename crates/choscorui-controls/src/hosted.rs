@@ -8,7 +8,8 @@ use crate::custom::{ControlContext, ControlEvent};
 use crate::style::{PaintContext, VisualState};
 use choscorui_core::{
     DesignTokens, EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Transform,
+    SemanticAction, SemanticNode, SemanticPart, SemanticParts, SemanticRole, SemanticState,
+    Transform,
 };
 
 /// What [`Press::event`] did with an event.
@@ -303,6 +304,25 @@ pub(crate) fn node(
         actions,
         text: None,
     }
+}
+
+/// Adds a part with `role`, `name`, and `bounds` under `parent`. While
+/// `enabled`, it lists `Activate`, which clicks it; otherwise it is
+/// disabled.
+pub(crate) fn pressable<'a>(
+    parts: &'a mut SemanticParts,
+    parent: Option<usize>,
+    role: SemanticRole,
+    name: &str,
+    bounds: Rect,
+    enabled: bool,
+) -> &'a mut SemanticPart {
+    let part = parts.push(parent, role, name, bounds);
+    part.node.state.disabled = !enabled;
+    if enabled {
+        part.node.actions.push(SemanticAction::Activate);
+    }
+    part
 }
 
 /// The open and close animation of a popup: fade, zoom from 95%, and a
