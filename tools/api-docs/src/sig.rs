@@ -137,6 +137,7 @@ fn receiver(input_ty: &Json) -> String {
         let lifetime = reference
             .get("lifetime")
             .as_str()
+            .filter(|l| !is_elided(l))
             .map(|l| format!("{l} "))
             .unwrap_or_default();
         let mutability = if reference.get("is_mutable").as_bool() {
@@ -446,8 +447,13 @@ fn generic_args(args: &Json) -> String {
     };
     match kind {
         "angle_bracketed" => {
-            let mut parts: Vec<String> =
-                inner.get("args").items().iter().map(generic_arg).collect();
+            let mut parts: Vec<String> = inner
+                .get("args")
+                .items()
+                .iter()
+                .filter(|arg| !is_elided_lifetime(arg))
+                .map(generic_arg)
+                .collect();
             for constraint in inner.get("constraints").items() {
                 let name = constraint.get("name").as_str().unwrap_or_default();
                 let own = generic_args(constraint.get("args"));
@@ -480,6 +486,16 @@ fn generic_args(args: &Json) -> String {
         "return_type_notation" => "(..)".into(),
         _ => String::new(),
     }
+}
+
+/// Tells whether a lifetime is the elided `'_`, which a signature leaves out.
+fn is_elided(lifetime: &str) -> bool {
+    lifetime == "'_"
+}
+
+/// Tells whether a generic argument is the elided lifetime `'_`.
+fn is_elided_lifetime(arg: &Json) -> bool {
+    matches!(arg.variant(), Some(("lifetime", value)) if value.as_str().is_some_and(is_elided))
 }
 
 fn generic_arg(arg: &Json) -> String {
@@ -519,7 +535,7 @@ pub fn ty(value: &Json) -> String {
                     )
                 })
                 .collect();
-            if let Some(lifetime) = inner.get("lifetime").as_str() {
+            if let Some(lifetime) = inner.get("lifetime").as_str().filter(|l| !is_elided(l)) {
                 parts.push(lifetime.to_owned());
             }
             format!("dyn {}", parts.join(" + "))
@@ -580,6 +596,7 @@ pub fn ty(value: &Json) -> String {
             let lifetime = inner
                 .get("lifetime")
                 .as_str()
+                .filter(|l| !is_elided(l))
                 .map(|l| format!("{l} "))
                 .unwrap_or_default();
             let mutability = if inner.get("is_mutable").as_bool() {
@@ -614,7 +631,11 @@ mod tests {
         let cases = [
             (
                 r#"{"borrowed_ref": {"lifetime": "'_", "is_mutable": true, "type": {"resolved_path": {"path": "crate::view::Cx", "id": 1, "args": {"angle_bracketed": {"args": [{"lifetime": "'_"}], "constraints": []}}}}}}"#,
-                "&'_ mut Cx<'_>",
+                "&mut Cx",
+            ),
+            (
+                r#"{"resolved_path": {"path": "Ref", "id": 4, "args": {"angle_bracketed": {"args": [{"lifetime": "'a"}, {"lifetime": "'_"}, {"type": {"generic": "T"}}], "constraints": []}}}}"#,
+                "Ref<'a, T>",
             ),
             (
                 r#"{"impl_trait": [{"trait_bound": {"trait": {"path": "FnMut", "id": 2, "args": {"parenthesized": {"inputs": [{"primitive": "u32"}], "output": null}}}, "generic_params": [], "modifier": "none"}}, {"outlives": "'static"}]}"#,

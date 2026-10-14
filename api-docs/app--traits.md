@@ -53,7 +53,7 @@ component mounts.
 #### `View::body`
 
 ```rust
-fn body(&self, cx: &mut Cx<'_>) -> impl View
+fn body(&self, cx: &mut Cx) -> impl View
 ```
 
 The component's content.

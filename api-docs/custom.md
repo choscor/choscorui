@@ -48,7 +48,7 @@ The name that assistive technology reads for the drawing.
 #### `Canvas::new`
 
 ```rust
-pub fn new(draw: impl Fn(&mut CanvasContext<'_>, Size) + 'static) -> Self
+pub fn new(draw: impl Fn(&mut CanvasContext, Size) + 'static) -> Self
 ```
 
 A canvas that `draw` paints, again after each change that it read.
@@ -643,7 +643,7 @@ True while the control animates at `time` and needs another frame.
 #### `CustomControl::arrange`
 
 ```rust
-fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect)
+fn arrange(&mut self, cx: &MeasureContext, bounds: Rect)
 ```
 
 Records the geometry of the control's parts for `bounds`, so event
@@ -671,7 +671,7 @@ for delays such as a hover card's.
 #### `CustomControl::event`
 
 ```rust
-fn event(&mut self, context: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply
+fn event(&mut self, context: &mut ControlContext, event: &ControlEvent) -> EventReply
 ```
 
 Handles routed input. Return `Stop` to consume it.
@@ -697,7 +697,7 @@ point that misses to the parent node. The default is true.
 #### `CustomControl::measure`
 
 ```rust
-fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured
+fn measure(&mut self, cx: &MeasureContext) -> Measured
 ```
 
 Preferred size within `cx.constraints` (used by the layout engine).
@@ -733,7 +733,7 @@ The default is true.
 #### `CustomControl::paint`
 
 ```rust
-fn paint(&self, cx: &mut PaintContext<'_>)
+fn paint(&self, cx: &mut PaintContext)
 ```
 
 Paints into `cx.bounds`. The host clips the control to its bounds
@@ -742,7 +742,7 @@ and sets `cx.state` to the hover, focus, disabled, and invalid flags.
 #### `CustomControl::paint_overlay`
 
 ```rust
-fn paint_overlay(&self, cx: &mut PaintContext<'_>)
+fn paint_overlay(&self, cx: &mut PaintContext)
 ```
 
 Paints the open popup above every control, without a clip. The
@@ -752,7 +752,7 @@ animate its close.
 #### `CustomControl::perform`
 
 ```rust
-fn perform(&mut self, context: &mut ControlContext<'_>, action: SemanticAction, value: Option<&str>) -> bool
+fn perform(&mut self, context: &mut ControlContext, action: SemanticAction, value: Option<&str>) -> bool
 ```
 
 Performs an assistive action listed in `semantics().actions`.
@@ -956,7 +956,7 @@ state.
 #### `PaintContext::at`
 
 ```rust
-pub fn at(&mut self, bounds: Rect) -> PaintContext<'_>
+pub fn at(&mut self, bounds: Rect) -> PaintContext
 ```
 
 The same context for another rectangle, such as a child part.
@@ -1067,7 +1067,7 @@ Sets the right-to-left layout direction.
 #### `PaintContext::slot`
 
 ```rust
-pub fn slot(&mut self, rect: Rect, style: &ResolvedStyle, content: impl FnOnce(&mut PaintContext<'_>, Rect))
+pub fn slot(&mut self, rect: Rect, style: &ResolvedStyle, content: impl FnOnce(&mut PaintContext, Rect))
 ```
 
 Paints a slot box like `paint_slot`, then calls `content` with
