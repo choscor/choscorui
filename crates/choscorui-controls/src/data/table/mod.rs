@@ -12,7 +12,7 @@ use crate::menu::{MenuCheck, MenuItem, MenuResponse};
 use crate::overlay::menu_popup::MenuPopup;
 use crate::popup::gap_anchor;
 use crate::style::PaintContext;
-use crate::{CommandState, TextField};
+use crate::{CommandState, EditCommand, TextField};
 use choscorui_core::{
     EventPhase, EventReply, InputModality, ItemKey, ItemModel, Key, KeyEvent, Measured,
     PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode,
@@ -345,14 +345,40 @@ impl DataTable {
         cx.request_semantics();
     }
 
-    fn toggle_row(&mut self, cx: &mut ControlContext<'_>, row: usize) {
+    /// Toggles `row` of the page. With `extend`, it adds every row from
+    /// the last toggled row to `row` and keeps the other selected rows.
+    fn toggle_row(&mut self, cx: &mut ControlContext<'_>, row: usize, extend: bool) {
         let Some(key) = self.page_keys().get(row).copied() else {
             return;
         };
-        let order = self.order.clone();
-        self.selection
-            .apply(SelectionMode::Multi, SelectionCommand::Toggle, key, &order);
+        let position = |key| self.order.iter().position(|item| *item == key);
+        let range = self
+            .selection
+            .anchor()
+            .filter(|_| extend)
+            .and_then(position)
+            .zip(position(key));
+        match range {
+            Some((anchor, end)) => {
+                let (low, high) = (anchor.min(end), anchor.max(end));
+                let keys = self.order[low..=high].to_vec();
+                self.selection.select_all(&keys);
+            }
+            None => {
+                let order = self.order.clone();
+                self.selection
+                    .apply(SelectionMode::Multi, SelectionCommand::Toggle, key, &order);
+            }
+        }
         self.emit_selection(cx);
+    }
+
+    /// Selects every row that the filter shows, on every page.
+    fn select_all_rows(&mut self, cx: &mut ControlContext<'_>) {
+        let order = self.order.clone();
+        if self.selection.select_all(&order) {
+            self.emit_selection(cx);
+        }
     }
 
     fn toggle_page(&mut self, cx: &mut ControlContext<'_>) {
@@ -419,7 +445,7 @@ impl DataTable {
         match (self.cell.row, column) {
             (None, Some(Column::Check)) => self.toggle_page(cx),
             (None, Some(Column::Data(column))) => self.cycle_sort(cx, column),
-            (Some(row), Some(_)) => self.toggle_row(cx, row),
+            (Some(row), Some(_)) => self.toggle_row(cx, row, cx.modifiers().shift),
             _ => {}
         }
     }
@@ -643,7 +669,7 @@ impl DataTable {
                         Part::Columns => self.open_menu(cx, false),
                         Part::Header(Column::Check) => self.toggle_page(cx),
                         Part::Header(Column::Data(column)) => self.cycle_sort(cx, column),
-                        Part::Check(row) => self.toggle_row(cx, row),
+                        Part::Check(row) => self.toggle_row(cx, row, cx.modifiers().shift),
                         Part::Row(_) => {}
                         Part::Previous => self.set_page(cx, self.page.saturating_sub(1)),
                         Part::Next => self.set_page(cx, self.page + 1),
@@ -739,6 +765,20 @@ impl DataTable {
                 self.open_menu(cx, true);
                 EventReply::Stop
             }
+            // Page Up and Page Down turn the pages and keep the cell.
+            Key::PageUp | Key::PageDown if self.focus == Stop::Grid => {
+                let page = if key == Key::PageUp {
+                    self.page.saturating_sub(1)
+                } else {
+                    self.page + 1
+                };
+                self.set_page(cx, page);
+                EventReply::Stop
+            }
+            Key::Character('a') if self.focus == Stop::Grid && cx.modifiers().command => {
+                self.select_all_rows(cx);
+                EventReply::Stop
+            }
             key if self.focus == Stop::Grid && self.grid_key(cx, key) => EventReply::Stop,
             _ => EventReply::Continue,
         }
@@ -808,6 +848,10 @@ impl CustomControl for DataTable {
         match event {
             ControlEvent::Pointer(pointer) => self.pointer(cx, pointer),
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => self.key(cx, *key, *repeat),
+            ControlEvent::Edit(EditCommand::SelectAll) if self.focus == Stop::Grid => {
+                self.select_all_rows(cx);
+                EventReply::Stop
+            }
             ControlEvent::Hover(false) => {
                 self.hovered = None;
                 cx.request_paint();

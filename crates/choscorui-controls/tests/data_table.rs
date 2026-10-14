@@ -308,3 +308,47 @@ fn numbers_use_the_locale_format() {
     let h = Harness::new(DataTable::new("Counts", Box::new(store), "P", "N"));
     assert!(texts(&h.paint()).contains(&"1,280".to_string()));
 }
+
+#[test]
+fn shift_extends_and_page_keys_and_command_a_reach_every_row() {
+    let mut h = Harness::new(table());
+    h.focus();
+    assert!(tab(&mut h));
+    assert!(tab(&mut h));
+    h.key(Key::ArrowDown);
+    h.key(Key::Space);
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(vec![0]))]
+    );
+    h.key(Key::ArrowDown);
+    h.key(Key::ArrowDown);
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    h.chord(shift, Key::Space);
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(vec![
+            0, 1, 2
+        ]))],
+        "Shift adds the range from the last toggled row"
+    );
+    h.key(Key::PageDown);
+    assert!(texts(&h.paint()).contains(&"silas22@example.com".to_string()));
+    h.key(Key::PageUp);
+    assert!(texts(&h.paint()).contains(&"ken99@example.com".to_string()));
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    h.chord(command, Key::Character('a'));
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(vec![
+            0, 1, 2, 3, 4
+        ]))],
+        "Command+A selects the rows on every page"
+    );
+}

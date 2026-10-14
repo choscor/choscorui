@@ -4081,8 +4081,14 @@ without an animation. `set_open` returns false.
   Space on a row, toggles the row. The header checkbox toggles every row
   on the page, and shows a mixed mark when some are selected. Each change
   emits `Changed(Indices(rows))` with the selected source rows.
+- Shift with a click on a row checkbox, or Shift+Space on a row, adds
+  every row from the last toggled row to that row. Other selected rows
+  stay selected.
+- In the grid, Command+A or the `SelectAll` edit command selects every
+  row that the filter shows, on all pages.
 - **Pages.** `with_page_size(rows)` sets the rows per page; the default is
-  10. Previous, Next, `Increment`, and `Decrement` change the page.
+  10. Previous, Next, `Increment`, and `Decrement` change the page. In the
+  grid, Page Up and Page Down change the page and keep the focused cell.
 - **Keys.** The filter, the column menu, the grid, and the enabled page
   buttons are tab stops. In the grid, arrow keys move between cells and
   follow the reading order. Home and End go to the first and the last
