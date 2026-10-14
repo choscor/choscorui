@@ -578,9 +578,11 @@ impl Resizable {
             sizes,
             grip: false,
             bounds: None,
+            basis: None,
             rtl: false,
             active: 0,
             drag: None,
+            drag_from: Vec::new(),
             collapsed: None,
             handle_nodes: false,
         })
@@ -613,11 +615,16 @@ pub struct HostedResizable {
     grip: bool,
     /// The bounds from the last arrange.
     bounds: Option<Rect>,
+    /// The space for the panes, without the handles, that `sizes` were
+    /// set for. Other bounds scale every pane in proportion.
+    basis: Option<f64>,
     rtl: bool,
     /// The handle that the keys and actions move.
     active: usize,
     /// The dragged handle and the pointer's offset from its start.
     drag: Option<(usize, f64)>,
+    /// The sizes when the drag started, which Escape restores.
+    drag_from: Vec<f64>,
     /// The handle whose pane a double click collapsed, and the pane's
     /// size before the collapse.
     collapsed: Option<(usize, f64)>,
@@ -728,7 +735,24 @@ impl HostedResizable {
             return false;
         }
         self.sizes = sizes.to_vec();
+        self.basis = self.bounds.map(|bounds| self.free(bounds));
         true
+    }
+
+    /// The space for the panes in `bounds`, without the handles.
+    fn free(&self, bounds: Rect) -> f64 {
+        primary_size(bounds, self.orientation)
+            - self.handle_extent * (self.minimums.len() - 1) as f64
+    }
+
+    /// The accessible name of handle `index`: the group label, with the
+    /// handle number when the group has more than one handle.
+    fn handle_name(&self, index: usize) -> String {
+        if self.handle_count() > 1 {
+            format!("{} {}", self.label, index + 1)
+        } else {
+            self.label.clone()
+        }
     }
 
     /// The smallest extent along the split: each pane minimum and each
@@ -748,15 +772,18 @@ impl HostedResizable {
     /// gives them. Without bounds the space has no limit.
     fn layout_in(&self, bounds: Option<Rect>) -> Vec<f64> {
         let count = self.minimums.len();
-        let mut free = bounds.map_or(f64::INFINITY, |bounds| {
-            primary_size(bounds, self.orientation) - self.handle_extent * (count - 1) as f64
-        });
+        let mut free = bounds.map_or(f64::INFINITY, |bounds| self.free(bounds));
+        // Bounds other than the basis scale every pane in proportion.
+        let scale = match self.basis {
+            Some(basis) if basis > 0.0 && free.is_finite() => free.max(0.0) / basis,
+            _ => 1.0,
+        };
         let mut reserved: f64 = self.minimums.iter().sum();
         let mut sizes = Vec::with_capacity(count);
         for (index, minimum) in self.minimums.iter().enumerate() {
             reserved -= minimum;
             let size = match self.sizes.get(index) {
-                Some(size) => size.min(free - reserved).max(*minimum),
+                Some(size) => (size * scale).min(free - reserved).max(*minimum),
                 None => free.max(0.0),
             };
             free -= size;
@@ -823,9 +850,12 @@ impl HostedResizable {
     }
 
     /// Stores `size` for the pane before handle `index`, and gives the
-    /// rest of the pair to the pane after it.
+    /// rest of the pair to the pane after it. Every pane keeps its laid
+    /// out size `sizes` for the current bounds.
     fn store(&mut self, sizes: &[f64], index: usize, size: f64) {
         let pair = sizes[index] + sizes[index + 1];
+        self.sizes = sizes[..sizes.len() - 1].to_vec();
+        self.basis = self.bounds.map(|bounds| self.free(bounds));
         self.sizes[index] = size;
         if let Some(next) = self.sizes.get_mut(index + 1) {
             *next = pair - size;
@@ -904,6 +934,7 @@ impl HostedResizable {
         index: usize,
         position: Point,
     ) -> choscorui_core::EventReply {
+        cx.request_focus();
         if cx.click_count() >= 2 {
             self.toggle_collapse(cx, index);
             return choscorui_core::EventReply::Stop;
@@ -911,6 +942,7 @@ impl HostedResizable {
         let start = self.pane_start(&self.layout(), index + 1) - self.handle_extent;
         self.active = index;
         self.drag = Some((index, self.along(bounds, position) - start));
+        self.drag_from = self.sizes.clone();
         cx.capture_pointer(true);
         cx.request_paint();
         cx.request_semantics();
@@ -970,7 +1002,8 @@ impl HostedResizable {
     }
 
     /// Moves handle `index` for an arrow key along the split, Home, or
-    /// End. Other keys continue.
+    /// End. Enter collapses or restores the pane before it, and Escape
+    /// cancels its drag. Other keys continue.
     fn step_key(
         &mut self,
         cx: &mut crate::ControlContext<'_>,
@@ -983,6 +1016,22 @@ impl HostedResizable {
             (SplitOrientation::Horizontal, true) => (Key::ArrowRight, Key::ArrowLeft),
             (SplitOrientation::Vertical, _) => (Key::ArrowUp, Key::ArrowDown),
         };
+        if key == Key::Escape && self.drag.is_some_and(|(dragged, _)| dragged == index) {
+            // Escape puts the panes back where the drag started.
+            self.sizes = std::mem::take(&mut self.drag_from);
+            self.end_drag(cx);
+            cx.request_layout();
+            cx.request_semantics();
+            let size = self.layout()[index];
+            cx.emit(crate::ControlMessage::Changed(crate::ControlValue::Number(
+                size,
+            )));
+            return EventReply::Stop;
+        }
+        if key == Key::Enter {
+            self.toggle_collapse(cx, index);
+            return EventReply::Stop;
+        }
         let current = self.layout()[index];
         let target = match key {
             Key::Home => self.minimums[index],
@@ -1066,7 +1115,7 @@ impl HostedResizable {
     pub fn handle_semantics(&self, index: usize) -> SemanticNode {
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
-            &self.label,
+            &self.handle_name(index),
             vec![
                 SemanticAction::Increment,
                 SemanticAction::Decrement,
@@ -1118,6 +1167,12 @@ impl crate::CustomControl for HostedResizable {
 
     fn arrange(&mut self, cx: &crate::MeasureContext<'_>, bounds: Rect) {
         self.bounds = Some(bounds);
+        // The first bounds that fit the sizes become their basis.
+        let free = self.free(bounds);
+        let needed = self.sizes.iter().sum::<f64>() + self.minimums[self.minimums.len() - 1];
+        if self.basis.is_none() && free >= needed {
+            self.basis = Some(free);
+        }
         self.rtl = cx.rtl();
         // The recipe padding gives the hit area around the line. The grip
         // also hits.
@@ -1193,7 +1248,7 @@ impl crate::CustomControl for HostedResizable {
         }
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
-            &self.label,
+            &self.handle_name(self.active),
             vec![
                 SemanticAction::Increment,
                 SemanticAction::Decrement,

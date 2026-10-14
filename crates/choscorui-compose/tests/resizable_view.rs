@@ -157,10 +157,15 @@ fn each_handle_is_a_slider_node_in_a_group() {
         Rect::from_xywh(100.0, 0.0, 4.0, 100.0)
     );
     assert_eq!(host.tree().bounds(second).unwrap().min_x(), 204.0);
-    for (node, value, range) in [(first, "100", "50–150"), (second, "100", "50–242")] {
+    // Each handle has its own name.
+    let rows = [
+        (first, "Panels 1", "100", "50–150"),
+        (second, "Panels 2", "100", "50–242"),
+    ];
+    for (node, name, value, range) in rows {
         let semantic = host.semantic(node).unwrap();
         assert_eq!(semantic.role, SemanticRole::Slider);
-        assert_eq!(semantic.name, "Panels");
+        assert_eq!(semantic.name, name);
         assert_eq!(semantic.value.as_deref(), Some(value));
         assert_eq!(semantic.description, range);
         assert_eq!(

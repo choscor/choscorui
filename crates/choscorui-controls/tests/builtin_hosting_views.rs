@@ -1558,6 +1558,68 @@ fn a_double_click_on_a_resizable_handle_collapses_and_restores_the_pane() {
 }
 
 #[test]
+fn a_resizable_collapses_with_enter_cancels_a_drag_and_scales_in_proportion() {
+    let resizable = Resizable::hosted(
+        "Sidebar",
+        SplitOrientation::Horizontal,
+        50.0,
+        50.0,
+        4.0,
+        100.0,
+    )
+    .unwrap();
+    let mut h = Harness::new(resizable);
+    h.place(rect(0.0, 0.0, 300.0, 100.0));
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().value.as_deref(), Some("50"), "collapsed");
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().value.as_deref(), Some("100"), "restored");
+    h.messages();
+
+    pointer(
+        &mut h,
+        PointerEvent::Down {
+            position: Point::new(102.0, 50.0),
+            button: PointerButton::Primary,
+        },
+    );
+    pointer(
+        &mut h,
+        PointerEvent::Move {
+            position: Point::new(152.0, 50.0),
+        },
+    );
+    assert_eq!(h.semantics().value.as_deref(), Some("150"));
+    h.key(Key::Escape);
+    assert_eq!(h.semantics().value.as_deref(), Some("100"), "cancelled");
+    assert_eq!(
+        h.messages().last(),
+        Some(&ControlMessage::Changed(ControlValue::Number(100.0)))
+    );
+
+    // A wider group gives each pane its share of the new space.
+    h.place(rect(0.0, 0.0, 600.0, 100.0));
+    let size: f64 = h.semantics().value.unwrap().parse().unwrap();
+    assert!((size - 100.0 * 596.0 / 296.0).abs() < 0.01, "{size}");
+}
+
+#[test]
+fn each_resizable_handle_has_its_own_name() {
+    let group = Resizable::hosted_group(
+        "Workspace",
+        SplitOrientation::Horizontal,
+        vec![50.0; 3],
+        4.0,
+        vec![100.0, 100.0],
+    )
+    .unwrap()
+    .with_handle_nodes(true);
+    assert_eq!(group.handle_semantics(0).name, "Workspace 1");
+    assert_eq!(group.handle_semantics(1).name, "Workspace 2");
+}
+
+#[test]
 fn a_double_click_on_a_dock_splitter_collapses_and_restores_the_area() {
     let bounds = rect(0.0, 0.0, 800.0, 600.0);
     let splitter = |dock: &DockLayout| {

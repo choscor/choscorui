@@ -1672,9 +1672,16 @@ layout, a horizontal split puts the first pane on the right. It also
 mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
 `Controls` relations.
 
-- **Double click.** A double click on a handle collapses the pane before
-  it to its minimum size. The next double click
-  restores the position.
+- **Collapse.** A double click on a handle, or Enter on the focused
+  handle, collapses the pane before it to its minimum size. The next
+  double click or Enter restores the position. A press on a handle also
+  focuses it.
+- **Escape.** Escape during a drag puts every pane back where the drag
+  started, ends the drag, and sends `Changed` with the restored size.
+- **Proportion.** The sizes keep their proportion of the space when the
+  bounds change. The first bounds that fit the sizes, and the bounds of
+  each later change, are the basis. Other bounds scale every pane in
+  proportion, within the pane minimums.
 
 - **Hit area.** A press hits a handle in its rectangle, widened to the
   recipe hit area and to the grip width.
@@ -1709,8 +1716,10 @@ mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
   Tab goes to the next focus stop, so each handle is a stop of its own.
 - **Handle node look.** `paint_handle` draws the divider and the grip in
   the bounds of the handle node, with the focus state of that node.
-- **Handle node semantics.** Each handle node is a `Slider` with the group
-  label. The value is the size of the pane before the handle. The
+- **Handle node semantics.** Each handle node is a `Slider`. With one
+  handle, the name is the group label. With more handles, the name is the
+  label and the handle number from 1, for example `Workspace 2`. The value
+  is the size of the pane before the handle. The
   description gives the range of that size, for example `50–150`.
 - **Pane geometry.** `rects_in` gives the pane and handle rectangles in
   other bounds, before the control arranges. `minimum_extent` gives the

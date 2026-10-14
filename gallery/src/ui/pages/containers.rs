@@ -133,7 +133,7 @@ pub fn resizable(_: &PageCx) -> AnyView {
         let columns = cx.state(vec![WIDTH * 0.25, WIDTH * 0.45]);
         let rows = cx.state(vec![HEIGHT * 0.6]);
         let editor = Resizable::new(
-            t!("resizable.console_height"),
+            t!("resizable.editor_height"),
             SplitOrientation::Vertical,
             (
                 pane(cx.env(), "resizable.editor"),
@@ -329,9 +329,9 @@ mod tests {
         assert!(press(&mut page, Key::ArrowLeft));
         assert_eq!(width(&mut page, "Inspector"), inspector + 10.0);
 
-        assert!(page.act("Console height", SemanticAction::Focus));
+        assert!(page.act("Editor height", SemanticAction::Focus));
         assert!(press(&mut page, Key::ArrowUp));
-        assert_eq!(page.value("Console height").as_deref(), Some("242"));
+        assert_eq!(page.value("Editor height").as_deref(), Some("242"));
     }
 
     #[test]
