@@ -591,7 +591,8 @@ pub fn with_variant(self, variant: ToastVariant) -> Self
 ```
 
 Sets the variant. A `Loading` toast stays until it is updated or
-dismissed.
+dismissed. Another variant after `Loading` closes after
+`TOAST_DURATION` again.
 
 ## `ToastPosition`
 

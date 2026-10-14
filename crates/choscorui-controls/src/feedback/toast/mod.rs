@@ -49,13 +49,16 @@ impl Toast {
     }
 
     /// Sets the variant. A `Loading` toast stays until it is updated or
-    /// dismissed.
+    /// dismissed. Another variant after `Loading` closes after
+    /// [`TOAST_DURATION`] again.
     #[must_use]
     pub fn with_variant(mut self, variant: ToastVariant) -> Self {
-        self.variant = variant;
         if variant == ToastVariant::Loading {
             self.duration = None;
+        } else if self.variant == ToastVariant::Loading && self.duration.is_none() {
+            self.duration = Some(TOAST_DURATION);
         }
+        self.variant = variant;
         self
     }
 

@@ -84,6 +84,10 @@ pub enum ControlMessage {
     OpenChanged(bool),
     /// The user dismissed an overlay, for example with Escape.
     Dismissed,
+    /// The item with this index or id closed without its action, for
+    /// example a toast that closed by its close button, Escape, or its
+    /// timer.
+    ItemDismissed(usize),
     /// A menu action ran its command.
     Command(crate::CommandId),
 }

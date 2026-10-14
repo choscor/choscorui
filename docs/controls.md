@@ -4277,14 +4277,20 @@ behavior.
   are 5% smaller per step and peek out by the gap. `expanded()` always
   lists every toast.
 - **Timers.** A toast closes after `TOAST_DURATION` (4 s) or its own
-  duration. A `Loading` toast stays until it is updated or dismissed. An
+  duration, and emits `ItemDismissed(id)`. A `Loading` toast stays until
+  it is updated or dismissed. `with_variant` with another variant after
+  `Loading` sets `TOAST_DURATION` again, unless a duration was set. An
   update starts the timer again.
+- The toaster gets no input about the window activity, so the timers do
+  not pause while the window is inactive or hidden.
 - **Hover and focus.** While the pointer rests on the stack, or the stack
   has focus, the stack expands and the timers pause. They resume with the
   time that was left.
 - **Keys.** The action and the close buttons are tab stops, top first.
   Enter, Space, or a click on an action emits `ItemActivated(id)` and
-  closes the toast. The close button emits `Dismissed`.
+  closes the toast. The close button, or Escape on a focused button,
+  closes its toast and emits `ItemDismissed(id)`. The close button hit
+  target is at least 20 pt (5 spacing units) on each side.
 - Toasts slide in from the window edge and fade. With reduced motion,
   they show and close at once.
 - The toaster takes focus only while it shows toasts.

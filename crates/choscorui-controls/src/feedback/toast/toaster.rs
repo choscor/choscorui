@@ -52,8 +52,8 @@ impl Entry {
 /// expands and the timers pause.
 ///
 /// The action and the close buttons are tab stops. An action emits
-/// `ItemActivated(id)` and closes its toast; a close button emits
-/// `Dismissed`.
+/// `ItemActivated(id)` and closes its toast. A close button, Escape on a
+/// focused toast, or the end of a toast's time emits `ItemDismissed(id)`.
 pub struct Toaster {
     name: String,
     toasts: Toasts,
@@ -68,6 +68,8 @@ pub struct Toaster {
     focus: usize,
     parts: Parts<(ToastId, Button)>,
     viewport: Rect,
+    /// The smallest close button hit target, from the spacing.
+    target: f64,
     motion_ms: u32,
     turn_ms: u32,
     rtl: bool,
@@ -89,6 +91,7 @@ impl Toaster {
             focus: 0,
             parts: Parts::default(),
             viewport: Rect::default(),
+            target: 0.0,
             motion_ms: 0,
             turn_ms: 0,
             rtl: false,
@@ -241,6 +244,9 @@ impl Toaster {
         if !self.paused() {
             for index in 0..self.entries.len() {
                 if self.entries[index].due().is_some_and(|due| due <= time) {
+                    cx.emit(ControlMessage::ItemDismissed(
+                        self.entries[index].id.0 as usize,
+                    ));
                     self.close(index, time);
                 }
             }
@@ -263,7 +269,7 @@ impl Toaster {
         let id = self.entries[index].id;
         match button {
             Button::Action => cx.emit(ControlMessage::ItemActivated(id.0 as usize)),
-            Button::Close => cx.emit(ControlMessage::Dismissed),
+            Button::Close => cx.emit(ControlMessage::ItemDismissed(id.0 as usize)),
         }
         self.close(index, cx.time());
         cx.request_paint();
@@ -275,9 +281,21 @@ impl Toaster {
             let entry = &self.entries[*index];
             match button {
                 Button::Action => entry.action.contains(point),
-                Button::Close => entry.close.contains(point),
+                Button::Close => self.close_target(entry.close).contains(point),
             }
         })
+    }
+
+    /// The hit target of the close button `rect`: at least `target` on
+    /// each side, around the icon.
+    fn close_target(&self, rect: Rect) -> Rect {
+        let grow = |size: f64| ((self.target - size) / 2.0).max(0.0);
+        Rect::from_xywh(
+            rect.origin.x - grow(rect.size.width),
+            rect.origin.y - grow(rect.size.height),
+            rect.size.width.max(self.target),
+            rect.size.height.max(self.target),
+        )
     }
 
     fn stack_rect(&self) -> Option<Rect> {
@@ -358,6 +376,14 @@ impl Toaster {
                 }
                 EventReply::Stop
             }
+            // Escape closes the toast of the focused button.
+            Key::Escape => match stops.get(self.focus).copied() {
+                Some((index, _)) => {
+                    self.activate(cx, index, Button::Close);
+                    EventReply::Stop
+                }
+                None => EventReply::Continue,
+            },
             _ => EventReply::Continue,
         }
     }
@@ -683,6 +709,8 @@ impl CustomControl for Toaster {
     fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
         self.viewport = cx.viewport;
         self.rtl = cx.rtl();
+        // Five spacing units: 20 pt at the default spacing.
+        self.target = cx.tokens.spacing * 5.0;
         self.motion_ms = cx.style(Self::query(Slot::Group)).motion_ms;
         self.turn_ms = cx
             .style(StyleQuery::new(ControlKind::Spinner, Slot::Root))
@@ -801,7 +829,7 @@ impl CustomControl for Toaster {
                     entry.toast.action.as_deref().unwrap_or_default(),
                     entry.action,
                 ),
-                Button::Close => (self.close_label.as_str(), entry.close),
+                Button::Close => (self.close_label.as_str(), self.close_target(entry.close)),
             };
             let parent = group.map(|(_, position)| position);
             hosted::pressable(parts, parent, SemanticRole::Button, label, rect, true);
