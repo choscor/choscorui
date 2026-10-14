@@ -4,18 +4,13 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, ForEach, Frame, HStack, Input,
-    IntoLive, Spacer, State, Text, TextContent, Toggle, Toolbar, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Cx, Dynamic, Edges, Env, ForEach, Frame, HStack, Input, IntoLive,
+    Spacer, State, StatusBar, Text, TextContent, Toggle, Toolbar, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
-    self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
-    ControlMessage, CustomControl, MeasureContext, PaintContext, StatusBar, ToolbarArea,
-    ToolbarItem,
+    self, ButtonVariant, CommandId, CommandState, StatusSection, ToolbarArea, ToolbarItem,
 };
-use choscorui::core::{
-    ColorRole, EventReply, LayoutDirection, Localizer, Measured, RadiusScale, Rect, SemanticNode,
-    Space, TextPreset, Tree,
-};
+use choscorui::core::{ColorRole, LayoutDirection, RadiusScale, Rect, Space, TextPreset, Tree};
 use std::time::Duration;
 
 const NEW: CommandId = CommandId(1);
@@ -243,89 +238,6 @@ pub fn toolbar(_: &PageCx) -> AnyView {
     ToolbarPage.into_any()
 }
 
-/// The status bar page's bar: a [`StatusBar`] that shows the saved
-/// message for three seconds. Only a control knows the host time, so a
-/// requested message shows at the first timer, and the bar reports
-/// `Dismissed` when it expires.
-struct TimedStatus {
-    bar: StatusBar,
-    /// The message is requested but not shown yet.
-    pending: bool,
-    /// The temporary message.
-    message: String,
-}
-
-impl TimedStatus {
-    fn new(env: &Env, words: usize, message: bool) -> Self {
-        let mut bar = StatusBar::new();
-        bar.set_default_text(env.text("status-bar.ready", &[]));
-        bar.set_section(
-            "words",
-            env.plural("status-bar.words", words as u64, &[]),
-            110.0,
-        );
-        bar.set_section("encoding", "UTF-8", 70.0);
-        let position = env.text("status-bar.position", &[("line", "4"), ("column", "12")]);
-        bar.set_section("position", position, 110.0);
-        Self {
-            bar,
-            pending: message,
-            message: env.text("status-bar.saved", &[("file", "Notes.txt")]),
-        }
-    }
-}
-
-impl CustomControl for TimedStatus {
-    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        self.bar.measure(cx)
-    }
-
-    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        if *event != ControlEvent::Timer {
-            return EventReply::Continue;
-        }
-        let now = Duration::from_secs_f64(cx.time().max(0.0));
-        if std::mem::take(&mut self.pending) {
-            self.bar
-                .show_message(self.message.clone(), Some(Duration::from_secs(3)), now);
-            self.bar.announce(cx);
-        } else {
-            let before = self.bar.text().to_owned();
-            self.bar.poll(now);
-            if self.bar.text() != before {
-                cx.emit(ControlMessage::Dismissed);
-            }
-        }
-        cx.request_paint();
-        cx.request_semantics();
-        EventReply::Stop
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        CustomControl::paint(&self.bar, cx);
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        CustomControl::semantics(&self.bar)
-    }
-
-    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        self.bar.semantics_in(strings)
-    }
-
-    fn focusable(&self) -> bool {
-        false
-    }
-
-    fn deadline(&self) -> Option<f64> {
-        if self.pending {
-            Some(0.0)
-        } else {
-            self.bar.deadline()
-        }
-    }
-}
-
 /// A status bar with permanent sections and a temporary message that
 /// expires after three seconds.
 struct StatusBarPage;
@@ -334,11 +246,39 @@ impl View for StatusBarPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let words = cx.state(120usize);
         let message = cx.state(false);
-        let bar = Configured::custom(ControlKind::StatusBar, move |env| {
-            TimedStatus::new(env, words.get(), message.get())
-        })
-        .on_dismiss(move || message.set(false))
-        .frame(Frame::new().width(680.0).alignment(Alignment::FILL));
+        let sections = move |env: &Env| {
+            let position = env.text("status-bar.position", &[("line", "4"), ("column", "12")]);
+            vec![
+                StatusSection {
+                    key: "words".into(),
+                    text: env.plural("status-bar.words", words.get() as u64, &[]),
+                    width: 110.0,
+                },
+                StatusSection {
+                    key: "encoding".into(),
+                    text: "UTF-8".into(),
+                    width: 70.0,
+                },
+                StatusSection {
+                    key: "position".into(),
+                    text: position,
+                    width: 110.0,
+                },
+            ]
+        };
+        // Only the bar knows the host time, so it shows the requested
+        // message at its first timer and reports `Dismissed` when the
+        // message expires.
+        let bar = StatusBar::new(t!("status-bar.ready"), sections)
+            .with_env(move |mut bar, env| {
+                if message.get() {
+                    let saved = env.text("status-bar.saved", &[("file", "Notes.txt")]);
+                    bar.request_message(saved, Duration::from_secs(3));
+                }
+                bar
+            })
+            .on_dismiss(move || message.set(false))
+            .frame(Frame::new().width(680.0).alignment(Alignment::FILL));
         column((
             HStack::new((
                 Button::new(t!("status-bar.show_message"), move || message.set(true))

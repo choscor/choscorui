@@ -1177,12 +1177,35 @@ fn a_hosted_status_bar_expires_its_message_on_the_host_timer() {
     assert!(h.host.advance(&mut h.tree, 2.0));
     assert_eq!(h.semantics().value.as_deref(), Some("Ready, Ln 1"));
     assert_eq!(h.host.next_deadline(&h.tree), None);
+    assert_eq!(h.messages(), vec![ControlMessage::Dismissed]);
 
     assert!(
         !h.perform(SemanticAction::Focus, None),
         "the bar takes no focus"
     );
     assert!(h.messages().is_empty());
+}
+
+#[test]
+fn a_requested_status_message_starts_at_the_host_time() {
+    let mut bar = StatusBar::new();
+    bar.set_default_text("Ready");
+    bar.request_message("Saved", Duration::from_secs(3));
+    let mut h = Harness::new(bar);
+    assert_eq!(h.semantics().value.as_deref(), Some("Ready"));
+    assert_eq!(h.host.next_deadline(&h.tree), Some(f64::NEG_INFINITY));
+    assert!(h.host.advance(&mut h.tree, 10.0));
+    assert_eq!(h.semantics().value.as_deref(), Some("Saved"));
+    assert_eq!(
+        h.host.take_announcements(),
+        [("Saved".to_owned(), AnnouncementPriority::Low)]
+    );
+    // The timeout counts from the host time of the first timer.
+    assert_eq!(h.host.next_deadline(&h.tree), Some(13.0));
+    assert!(h.messages().is_empty());
+    assert!(h.host.advance(&mut h.tree, 13.0));
+    assert_eq!(h.semantics().value.as_deref(), Some("Ready"));
+    assert_eq!(h.messages(), vec![ControlMessage::Dismissed]);
 }
 
 /// Arranges `control` in `bounds` as a host would.

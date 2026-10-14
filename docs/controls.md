@@ -2748,6 +2748,10 @@ right-to-left layout.
   actions. It measures the recipe height. Its deadline is the end of a timed message, so give `show_message` the
   host time as `now`. A queued announcement makes the deadline due at
   once, and the next timer sends it.
+- `request_message(text, timeout)` asks a hosted bar to show a message.
+  The deadline is due at once, and the next timer shows the message with
+  the host time as `now`. When a timed message expires on a timer, the bar
+  reports `Dismissed`.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -2762,7 +2766,9 @@ right-to-left layout.
 | Actions | - |
 
 **As a view.** `StatusBar::new(message, sections)` shows the message as the
-default text and the sections at the end. It has no binding.
+default text and the sections at the end. It has no binding. To show a
+timed message, call `request_message` in `.with_env`, and clear the state
+that asks for it in `.on_dismiss`.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
 

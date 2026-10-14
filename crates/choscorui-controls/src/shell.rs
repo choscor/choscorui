@@ -603,6 +603,9 @@ pub struct StatusBar {
     sections: Vec<StatusSection>,
     default_text: String,
     message: Option<(String, Option<Duration>)>,
+    /// A message for a hosted bar to show at its next timer, with its
+    /// timeout.
+    requested: Option<(String, Duration)>,
     announcement: Option<String>,
 }
 
@@ -659,8 +662,17 @@ impl StatusBar {
         self.announcement = Some(text.clone());
         self.message = Some((text, timeout.map(|timeout| now + timeout)));
     }
+    /// Asks a hosted bar to show `text` for `timeout` from its next
+    /// timer, because only the host knows the time. The bar announces the
+    /// message, and reports [`ControlMessage::Dismissed`] when the
+    /// message expires.
+    pub fn request_message(&mut self, text: impl Into<String>, timeout: Duration) {
+        self.requested = Some((text.into(), timeout));
+    }
+
     pub fn clear_message(&mut self) {
         self.message = None;
+        self.requested = None;
     }
     /// Expires the message; returns the next deadline to wake for.
     pub fn poll(&mut self, now: Duration) -> Option<Duration> {
@@ -1413,8 +1425,16 @@ impl CustomControl for StatusBar {
         if *event != ControlEvent::Timer {
             return EventReply::Continue;
         }
+        let now = Duration::from_secs_f64(cx.time().max(0.0));
+        if let Some((text, timeout)) = self.requested.take() {
+            self.show_message(text, Some(timeout), now);
+        }
         self.announce(cx);
-        self.poll(Duration::from_secs_f64(cx.time().max(0.0)));
+        let shown = self.message.is_some();
+        self.poll(now);
+        if shown && self.message.is_none() {
+            cx.emit(ControlMessage::Dismissed);
+        }
         cx.request_paint();
         cx.request_semantics();
         EventReply::Stop
@@ -1444,9 +1464,10 @@ impl CustomControl for StatusBar {
 
     /// The expiry of a timed message, in host time: pass the host time as
     /// `now` to [`StatusBar::show_message`].
-    /// A message that waits for its announcement is due at once.
+    /// A requested message, or a message that waits for its
+    /// announcement, is due at once.
     fn deadline(&self) -> Option<f64> {
-        if self.announcement.is_some() {
+        if self.announcement.is_some() || self.requested.is_some() {
             return Some(f64::NEG_INFINITY);
         }
         match &self.message {

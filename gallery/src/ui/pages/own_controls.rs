@@ -7,7 +7,7 @@ use std::path::Path;
 
 /// Each file that mounts a gallery control, how many mounts it has, and
 /// which controls they are.
-const OWN: [(&str, usize, &str); 6] = [
+const OWN: [(&str, usize, &str); 5] = [
     (
         "pages/containers/dock.rs",
         2,
@@ -33,7 +33,6 @@ const OWN: [(&str, usize, &str); 6] = [
         1,
         "StarRating is the application-defined control of the custom control page",
     ),
-    ("pages/shell.rs", 1, "TimedStatus clears its message"),
 ];
 
 /// The count of `Configured::custom` and `Configured::try_custom` calls in
