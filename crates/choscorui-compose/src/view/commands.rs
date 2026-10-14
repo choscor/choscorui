@@ -86,6 +86,17 @@ fn lower_rows(rows: &[MenuChoice], env: &Env, actions: &mut Vec<Rc<dyn Fn()>>) -
                     );
                 }
                 Row::Separator => return MenuEntry::Separator,
+                // The native menu shows a heading as a disabled item.
+                Row::Label(label) => {
+                    actions.push(Rc::new(|| {}));
+                    let state = MenuItemState {
+                        title: label.get().resolve(env),
+                        enabled: false,
+                        checked: false,
+                        shortcut: None,
+                    };
+                    return MenuEntry::command(MenuCommandId(actions.len() as u64), state);
+                }
             };
             actions.push(action.clone());
             let shortcut = choice.keys.map(|(key, modifiers)| MenuShortcut {

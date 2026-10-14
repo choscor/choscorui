@@ -8,8 +8,9 @@ use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandState, Shortcut};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, Path, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
+    StrokeStyle,
 };
 
 /// An area that opens a menu at the pointer on a secondary click or a
@@ -123,10 +124,11 @@ impl CustomControl for ContextMenu {
                 }
                 self.dismiss(cx)
             }
+            // A hover outside the panels clears the highlight too.
             ControlEvent::Pointer(PointerEvent::Move { position }) if self.popup.is_open() => {
-                if self.popup.pointer(*position, false).is_some() {
-                    cx.request_paint();
-                }
+                self.popup.pointer(*position, false);
+                cx.request_paint();
+                cx.request_semantics();
                 EventReply::Continue
             }
             ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.popup.is_open() => {
@@ -157,20 +159,39 @@ impl CustomControl for ContextMenu {
                     self.dismiss(cx);
                     return EventReply::Continue;
                 }
-                let response = self.popup.key(*key);
+                let response = self.popup.key(*key, cx.time());
                 self.respond(cx, response);
                 EventReply::Stop
             }
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => self.dismiss(cx),
+            // The pointer left the area and the panels: the highlight goes.
+            ControlEvent::Hover(false) => {
+                if self.popup.menu.leave() {
+                    cx.request_paint();
+                    cx.request_semantics();
+                }
+                EventReply::Continue
+            }
             _ => EventReply::Continue,
         }
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let state = cx.state.set(VisualState::OPEN, self.popup.is_open());
-        let area = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Placeholder).state(state));
-        let hint = &self.hint;
+        let mut area = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Placeholder).state(state));
+        // The border is dashed: the slot draws none, and a stroke with
+        // dashes one spacing unit long follows the edge.
+        let width = std::mem::take(&mut area.border_width);
+        let edge = Path::rounded_rect(cx.bounds.inset(width / 2.0), area.radius.top_start);
+        let stroke = StrokeStyle {
+            dash: vec![cx.tokens.spacing; 2],
+            ..StrokeStyle::new(width)
+        };
+        let (border, hint) = (area.border, &self.hint);
         cx.slot(cx.bounds, &area, |cx, inner| {
+            if width > 0.0 {
+                let _ = cx.list.stroke_path(edge, border.into(), stroke);
+            }
             cx.label(inner, hint, &area, TextAlign::Center);
         });
     }
@@ -434,7 +455,7 @@ impl Menubar {
     /// Sends `key` to menu `index`.
     fn forward(&mut self, cx: &mut ControlContext<'_>, index: usize, key: Key) -> EventReply {
         let popup = &mut self.menus[index].popup;
-        let response = popup.key(key);
+        let response = popup.key(key, cx.time());
         self.respond(cx, index, response);
         EventReply::Stop
     }
@@ -456,6 +477,7 @@ impl Menubar {
                 self.respond(cx, index, response);
             } else {
                 cx.request_paint();
+                cx.request_semantics();
             }
             return EventReply::Stop;
         }
@@ -482,6 +504,10 @@ impl Menubar {
                     && open != index
                 {
                     self.open_at(cx, index, false);
+                }
+                if self.open.is_some() {
+                    cx.request_paint();
+                    cx.request_semantics();
                 }
                 EventReply::Continue
             }

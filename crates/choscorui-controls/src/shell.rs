@@ -1155,7 +1155,7 @@ impl HostedToolbar {
             if cx.modifiers().is_chord() {
                 return EventReply::Continue;
             }
-            let response = self.menu.key(key);
+            let response = self.menu.key(key, cx.time());
             self.respond(cx, response);
             return EventReply::Stop;
         }

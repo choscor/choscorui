@@ -468,7 +468,9 @@ impl TypeAhead {
         count: usize,
         label: impl Fn(usize) -> String,
     ) -> Option<usize> {
-        if time - self.at > crate::TYPE_AHEAD_TIMEOUT.as_secs_f64() {
+        // A time that is not a number starts a new search.
+        let since = time - self.at;
+        if since.is_nan() || since > crate::TYPE_AHEAD_TIMEOUT.as_secs_f64() {
             self.typed.clear();
         }
         let before = self.typed.chars().count();

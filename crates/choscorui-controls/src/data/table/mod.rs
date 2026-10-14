@@ -533,7 +533,7 @@ impl DataTable {
                 None
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
-                let response = self.menu.key(*key);
+                let response = self.menu.key(*key, cx.time());
                 self.menu_response(cx, response);
                 Some(EventReply::Stop)
             }

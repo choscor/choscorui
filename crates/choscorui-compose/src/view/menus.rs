@@ -19,7 +19,7 @@ use choscorui_controls::{
     ShortcutModifiers, Variant,
 };
 use choscorui_core::{
-    EventPhase, EventReply, InputModality, KeyEvent, Measured, NodeId, Point, PointerButton,
+    EventPhase, EventReply, Icon, InputModality, KeyEvent, Measured, NodeId, Point, PointerButton,
     PointerEvent, SemanticNode, SemanticRole, SemanticState,
 };
 use std::cell::{Cell, RefCell};
@@ -36,6 +36,8 @@ pub(crate) enum Row {
     Check(Live<TextContent>, MenuCheck, Checked, Rc<dyn Fn()>),
     Submenu(Live<TextContent>, Vec<MenuChoice>),
     Separator,
+    /// A heading over a group of rows.
+    Label(Live<TextContent>),
 }
 
 /// One row of a menu that a view presents: an action, a checkbox or
@@ -48,6 +50,7 @@ pub struct MenuChoice {
     /// The key and modifiers of a command menu item.
     pub(crate) keys: Option<(char, ShortcutModifiers)>,
     destructive: bool,
+    icon: Option<Icon>,
     pub(crate) disabled: Live<bool>,
 }
 
@@ -58,6 +61,7 @@ impl MenuChoice {
             shortcut: None,
             keys: None,
             destructive: false,
+            icon: None,
             disabled: Live::Value(false),
         }
     }
@@ -106,6 +110,18 @@ impl MenuChoice {
     /// A line between groups of rows.
     pub fn separator() -> Self {
         Self::new(Row::Separator)
+    }
+
+    /// A heading over a group of rows, in muted text. The keys skip it.
+    pub fn label<M>(text: impl IntoLive<TextContent, M>) -> Self {
+        Self::new(Row::Label(text.into_live()))
+    }
+
+    /// Shows `icon` before the label of an action or a check row.
+    #[must_use]
+    pub fn icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
 
     /// Shows the shortcut text of an action, such as "⌘C". The text is
@@ -167,6 +183,7 @@ pub(super) fn build(
                     );
                 }
                 Row::Separator => return MenuItem::Separator,
+                Row::Label(label) => return MenuItem::label_row(label.get().resolve(env)),
             };
             actions.push(action.clone());
             let command = CommandId(actions.len() as u64);
@@ -180,6 +197,9 @@ pub(super) fn build(
             }
             if choice.destructive {
                 item = item.destructive();
+            }
+            if let Some(icon) = choice.icon {
+                item = item.with_icon(icon);
             }
             item
         })

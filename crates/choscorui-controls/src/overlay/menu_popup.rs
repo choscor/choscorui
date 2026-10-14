@@ -32,6 +32,9 @@ pub(crate) struct MenuPopup {
     /// How far the rows of each open level scroll, root first. A level
     /// scrolls only when the window limits its panel.
     scroll: Vec<f64>,
+    /// The last pointer position over a panel, for the path toward an
+    /// open submenu.
+    last: Option<Point>,
 }
 
 /// Where one open level is: the panel on screen, and the panel of all of
@@ -59,6 +62,7 @@ impl MenuPopup {
             direction: LayoutDirection::Ltr,
             motion_ms: 0,
             scroll: Vec::new(),
+            last: None,
         }
     }
 
@@ -110,7 +114,7 @@ impl MenuPopup {
         self.scroll.clear();
         self.anchor = anchor;
         if keyboard {
-            self.key(Key::Home);
+            self.key(Key::Home, f64::NAN);
         }
         self.reveal.set(true, time);
     }
@@ -173,10 +177,10 @@ impl MenuPopup {
         levels
     }
 
-    /// A key for the open menu. The highlighted row of each level
-    /// scrolls into view.
-    pub fn key(&mut self, key: Key) -> MenuResponse {
-        let response = self.menu.handle_key(key, &self.commands);
+    /// A key for the open menu at host `time`. The highlighted row of
+    /// each level scrolls into view.
+    pub fn key(&mut self, key: Key, time: f64) -> MenuResponse {
+        let response = self.menu.handle_key_at(key, &self.commands, time);
         self.reveal_highlight();
         response
     }
@@ -250,15 +254,28 @@ impl MenuPopup {
         self.panels().into_iter().reduce(|a, b| a.union(b))
     }
 
-    /// Hover or a release at `point`. `None` when no panel contains it.
+    /// Hover or a release at `point`. `None` when no panel contains it;
+    /// a hover there clears the highlight of the deepest level. While the
+    /// pointer moves toward an open submenu, the rows that it crosses do
+    /// not take the highlight.
     pub fn pointer(&mut self, point: Point, released: bool) -> Option<MenuResponse> {
         if !self.reveal.open {
             return None;
         }
         let levels = self.levels();
-        let level = levels
-            .iter()
-            .rposition(|level| level.panel.contains(point))?;
+        let Some(level) = levels.iter().rposition(|level| level.panel.contains(point)) else {
+            self.last = None;
+            if !released {
+                self.menu.leave();
+            }
+            return None;
+        };
+        let last = self.last.replace(point);
+        if let (false, Some(last), Some(submenu)) = (released, last, levels.get(level + 1))
+            && toward(last, point, submenu.panel)
+        {
+            return Some(MenuResponse::None);
+        }
         let response = self.menu.pointer(
             level,
             levels[level].rows.origin,
@@ -387,6 +404,29 @@ impl MenuPopup {
     }
 }
 
+/// Whether the pointer that moved from `from` to `to` heads into
+/// `panel`: `to` is inside the triangle from `from` to the near edge of
+/// the panel.
+fn toward(from: Point, to: Point, panel: Rect) -> bool {
+    let x = if panel.origin.x >= from.x {
+        panel.origin.x
+    } else {
+        panel.max_x()
+    };
+    let corners = [
+        from,
+        Point::new(x, panel.origin.y),
+        Point::new(x, panel.max_y()),
+    ];
+    let side = |a: Point, b: Point| (b.x - a.x) * (to.y - a.y) - (b.y - a.y) * (to.x - a.x);
+    let sides = [
+        side(corners[0], corners[1]),
+        side(corners[1], corners[2]),
+        side(corners[2], corners[0]),
+    ];
+    to != from && (sides.iter().all(|s| *s >= 0.0) || sides.iter().all(|s| *s <= 0.0))
+}
+
 /// The result of changing a command state.
 pub(crate) type CommandResult = Result<(), CommandError>;
 
@@ -398,7 +438,7 @@ fn register(items: &[MenuItem], commands: &mut CommandRegistry) {
                 let _ = commands.insert(*command, CommandState::default());
             }
             MenuItem::Submenu { items, .. } => register(items, commands),
-            MenuItem::Separator => {}
+            MenuItem::Separator | MenuItem::Label(_) => {}
         }
     }
 }
@@ -424,7 +464,7 @@ fn find(items: &[MenuItem], command: CommandId) -> Option<(&[MenuItem], usize)> 
 fn widest(items: &[MenuItem], cx: &MeasureContext<'_>) -> f64 {
     let query = |slot| StyleQuery::new(ControlKind::Menu, slot);
     let item = cx.style(query(Slot::Item));
-    let shortcut = cx.style(query(Slot::Shortcut));
+    let shortcut_style = cx.style(query(Slot::Shortcut));
     let indicator = cx.style(query(Slot::ItemIndicator));
     let indent = if items.iter().any(|item| item.check() != MenuCheck::None) {
         indicator.min_width + item.gap
@@ -438,10 +478,12 @@ fn widest(items: &[MenuItem], cx: &MeasureContext<'_>) -> f64 {
                 .label()
                 .map_or(0.0, |label| cx.text.width(label, &item.text));
             let end = match entry {
-                MenuItem::Action {
-                    shortcut: Some(text),
-                    ..
-                } => item.gap + cx.text.width(text, &shortcut.text),
+                MenuItem::Action { shortcut, icon, .. } => {
+                    let keys = shortcut.as_ref().map_or(0.0, |text| {
+                        item.gap + cx.text.width(text, &shortcut_style.text)
+                    });
+                    keys + icon.map_or(0.0, |_| item.icon_size + item.gap)
+                }
                 MenuItem::Submenu { items, .. } => {
                     // The submenu panels share the width.
                     return widest(items, cx).max(

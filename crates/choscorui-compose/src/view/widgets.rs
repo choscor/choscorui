@@ -17,8 +17,8 @@ use super::text::TextContent;
 use choscorui_controls as controls;
 use choscorui_controls::{
     ButtonVariant, CalendarMode, CharClass, ChartKind, ChartSeries, CommandId, CommandItem,
-    ControlKind, ControlMessage, ControlSize, ControlValue, InputType, ListEntry, MenuItem,
-    NavigationLink, SheetSide, SidebarItem, ToggleItem,
+    CommandState, ControlKind, ControlMessage, ControlSize, ControlValue, InputType, ListEntry,
+    MenuItem, NavigationLink, SheetSide, SidebarItem, ToggleItem,
 };
 use choscorui_core::{CivilDate, ColorRole, Icon, ItemModel, SelectionMode, SemanticRole};
 use std::rc::Rc;
@@ -812,6 +812,18 @@ impl Configured<controls::ContextMenu> {
         let (name, hint) = (label(name), label(hint));
         Configured::custom(ControlKind::Menu, move |env| {
             controls::ContextMenu::new(text(&name, env), text(&hint, env), items.items(env))
+        })
+    }
+
+    /// Sets whether `command` is enabled and checked. A live `state`
+    /// updates the menu when it changes.
+    #[must_use]
+    pub fn command<M>(self, command: CommandId, state: impl IntoLive<CommandState, M>) -> Self {
+        let state = state.into_live();
+        self.with(move |mut menu| {
+            // A command that no row has keeps no state.
+            let _ = menu.set_command(command, state.get());
+            menu
         })
     }
 }

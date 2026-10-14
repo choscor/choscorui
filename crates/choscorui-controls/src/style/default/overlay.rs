@@ -289,6 +289,7 @@ fn menu(cx: &Cx) -> ResolvedStyle {
             style.min_width = 300.0;
             style.min_height = 150.0;
             super::focus(&mut style, cx);
+            disabled(&mut style, cx);
             style
         }
         Slot::Panel => {

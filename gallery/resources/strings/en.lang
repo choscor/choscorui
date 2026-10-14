@@ -434,6 +434,7 @@ context-menu.create_shortcut = Create Shortcut…
 context-menu.delete = Delete
 context-menu.show_bookmarks = Show Bookmarks
 context-menu.show_full_urls = Show Full URLs
+context-menu.people = People
 context-menu.caption = Secondary click or Control-click the area
 context-menu.name = Page actions
 context-menu.area = Right click here

@@ -6,7 +6,7 @@ use choscorui_controls::{
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Localizer,
-    Point, Rect, SemanticAction, SemanticParts, Size, Tree,
+    Point, Rect, SemanticAction, SemanticParts, SemanticRole, Size, Tree,
 };
 use std::time::Duration;
 
@@ -403,6 +403,104 @@ fn dropdown_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
         menu.pointer(0, panel.origin, cut, true, &commands),
         MenuResponse::Activated(CommandId(1))
     );
+}
+
+#[test]
+fn a_menu_keeps_its_root_on_arrow_left_and_types_a_prefix() {
+    let commands = commands();
+    let mut menu = DropdownMenu::new(vec![
+        MenuItem::label_row("Edit"),
+        MenuItem::action("Copy", CommandId(1)),
+        MenuItem::action("Cut", CommandId(3)),
+        MenuItem::action("Paste", CommandId(4)).with_icon(choscorui_core::Icon::Check),
+    ]);
+    menu.handle_key(Key::ArrowDown, &commands);
+    assert_eq!(menu.highlighted(), Some(1), "the keys skip the heading");
+    assert_eq!(
+        menu.handle_key(Key::ArrowLeft, &commands),
+        MenuResponse::None,
+        "ArrowLeft at the root does nothing"
+    );
+    assert_eq!(menu.depth(), 1);
+    menu.handle_key_at(Key::Character('c'), &commands, 10.0);
+    assert_eq!(menu.highlighted(), Some(2), "the next item with c");
+    menu.handle_key_at(Key::Character('c'), &commands, 10.1);
+    assert_eq!(menu.highlighted(), Some(1), "a repeated letter cycles");
+    // "co" typed within the type-ahead time finds Copy.
+    menu.handle_key_at(Key::Character('c'), &commands, 20.0);
+    assert_eq!(menu.highlighted(), Some(2));
+    menu.handle_key_at(Key::Character('o'), &commands, 20.1);
+    assert_eq!(menu.highlighted(), Some(1), "the prefix co");
+    menu.handle_key_at(Key::Character('p'), &commands, 25.0);
+    assert_eq!(menu.highlighted(), Some(3), "a late key starts again");
+    // The heading is static text, not an item.
+    let mut parts = SemanticParts::new();
+    let panel = Rect::new(Point::new(0.0, 0.0), menu.level_size(0, 200.0));
+    menu.semantic_parts(0, &commands, panel, None, &mut parts);
+    let roles: Vec<_> = parts.parts().iter().map(|part| part.node.role).collect();
+    assert_eq!(roles[0], SemanticRole::StaticText);
+    assert_eq!(roles[1], SemanticRole::MenuItem);
+    // The heading paints muted, and Paste paints its icon.
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let mut list = DisplayList::new();
+    menu.paint(
+        &mut PaintContext::new(&mut list, panel, &tokens, &styles, &EstimatedText),
+        0,
+        &commands,
+    );
+    let muted = tokens.color(ColorRole::MutedForeground);
+    assert!(list.commands().iter().any(|command| matches!(
+        command,
+        DisplayCommand::DrawText { text, color, .. } if text == "Edit" && *color == muted
+    )));
+    assert!(
+        list.commands().iter().any(|command| matches!(
+            command,
+            DisplayCommand::FillPath { .. } | DisplayCommand::StrokePath { .. }
+        )),
+        "the icon"
+    );
+}
+
+#[test]
+fn hovering_a_separator_or_a_disabled_row_clears_the_highlight() {
+    let commands = commands();
+    let mut menu = DropdownMenu::new(vec![
+        MenuItem::action("Cut", CommandId(1)),
+        MenuItem::action("Copy", CommandId(2)),
+        MenuItem::Separator,
+        MenuItem::submenu(
+            "Export",
+            vec![
+                MenuItem::action("PDF", CommandId(4)),
+                MenuItem::action("PNG", CommandId(5)),
+            ],
+        ),
+    ]);
+    let panel = Rect::new(Point::new(0.0, 0.0), menu.level_size(0, 200.0));
+    let center = |menu: &DropdownMenu, index| menu.item_rect(0, panel, index).unwrap().center();
+    let (cut, copy, rule, export) = (
+        center(&menu, 0),
+        center(&menu, 1),
+        center(&menu, 2),
+        center(&menu, 3),
+    );
+    menu.pointer(0, panel.origin, cut, false, &commands);
+    assert_eq!(menu.highlighted(), Some(0));
+    menu.pointer(0, panel.origin, copy, false, &commands);
+    assert_eq!(menu.highlighted(), None, "a disabled row clears it");
+    menu.pointer(0, panel.origin, cut, false, &commands);
+    menu.pointer(0, panel.origin, rule, false, &commands);
+    assert_eq!(menu.highlighted(), None, "a separator clears it");
+    // Hovering the row of an open submenu again keeps its highlight.
+    menu.pointer(0, panel.origin, export, false, &commands);
+    assert_eq!(menu.depth(), 2);
+    menu.handle_key(Key::ArrowDown, &commands);
+    menu.handle_key(Key::ArrowDown, &commands);
+    assert_eq!(menu.highlighted(), Some(1));
+    menu.pointer(0, panel.origin, export, false, &commands);
+    assert_eq!(menu.depth(), 2);
+    assert_eq!(menu.highlighted(), Some(1), "the submenu stays as it was");
 }
 
 fn items(names: &[&str]) -> Vec<ComboItem> {

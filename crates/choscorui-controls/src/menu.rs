@@ -2,6 +2,7 @@
 //! `Menu` recipe.
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
+use crate::hosted::TypeAhead;
 use crate::overlay::menu_popup::{CommandResult, MenuPopup};
 use crate::style::{
     ControlKind, MenuItemVariant, PaintContext, Slot, StyleQuery, Styles, TextAlign, VisualState,
@@ -11,7 +12,7 @@ use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
     DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
     Measured, Point, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
-    SemanticState, Size, fold_for_search,
+    SemanticState, Size,
 };
 
 /// How an action shows its command's checked state.
@@ -36,12 +37,17 @@ pub enum MenuItem {
         shortcut: Option<String>,
         variant: MenuItemVariant,
         check: MenuCheck,
+        /// An icon before the label.
+        icon: Option<Icon>,
     },
     Submenu {
         label: String,
         items: Vec<MenuItem>,
     },
     Separator,
+    /// A heading over a group of items, in muted text. The keys and the
+    /// pointer skip it.
+    Label(String),
 }
 
 impl MenuItem {
@@ -52,7 +58,22 @@ impl MenuItem {
             shortcut: None,
             variant: MenuItemVariant::Default,
             check: MenuCheck::None,
+            icon: None,
         }
+    }
+
+    /// A heading over a group of items.
+    pub fn label_row(text: impl Into<String>) -> Self {
+        Self::Label(text.into())
+    }
+
+    /// Shows `icon` before the label of an action. Other items are
+    /// unchanged.
+    pub fn with_icon(mut self, glyph: Icon) -> Self {
+        if let Self::Action { icon, .. } = &mut self {
+            *icon = Some(glyph);
+        }
+        self
     }
 
     pub fn submenu(label: impl Into<String>, items: Vec<MenuItem>) -> Self {
@@ -88,7 +109,9 @@ impl MenuItem {
 
     pub(crate) fn label(&self) -> Option<&str> {
         match self {
-            Self::Action { label, .. } | Self::Submenu { label, .. } => Some(label),
+            Self::Action { label, .. } | Self::Submenu { label, .. } | Self::Label(label) => {
+                Some(label)
+            }
             Self::Separator => None,
         }
     }
@@ -114,6 +137,7 @@ pub enum MenuResponse {
 struct MenuMetrics {
     row: f64,
     separator: f64,
+    label: f64,
     inset: f64,
 }
 
@@ -121,11 +145,13 @@ impl MenuMetrics {
     fn resolve(styles: &Styles, tokens: &DesignTokens) -> Self {
         let style = |slot| styles.resolve(tokens, StyleQuery::new(ControlKind::Menu, slot));
         let (item, rule, panel) = (style(Slot::Item), style(Slot::Separator), style(Slot::Root));
+        let heading = style(Slot::GroupLabel);
         Self {
             row: item
                 .min_height
                 .max(item.text.line_height + item.padding.vertical()),
             separator: rule.min_height + rule.padding.vertical(),
+            label: heading.text.line_height + heading.padding.vertical(),
             inset: panel.padding.block_start,
         }
     }
@@ -143,6 +169,8 @@ pub struct DropdownMenu {
     metrics: MenuMetrics,
     /// Whether submenus open toward the left.
     rtl: bool,
+    /// The characters typed within the type-ahead time.
+    typed: TypeAhead,
 }
 
 /// Deprecated name of [`DropdownMenu`].
@@ -158,6 +186,7 @@ impl DropdownMenu {
             path: vec![None],
             metrics: MenuMetrics::resolve(&Styles::new(), &DesignTokens::light()),
             rtl: false,
+            typed: TypeAhead::default(),
         }
     }
 
@@ -225,7 +254,7 @@ impl DropdownMenu {
                 .map(|state| state.enabled)
                 .unwrap_or(false),
             MenuItem::Submenu { items, .. } => !items.is_empty(),
-            MenuItem::Separator => false,
+            MenuItem::Separator | MenuItem::Label(_) => false,
         }
     }
 
@@ -255,7 +284,20 @@ impl DropdownMenu {
         }
     }
 
+    /// Handles `key` as [`handle_key_at`](Self::handle_key_at) does, but
+    /// each character starts a new type-ahead search.
     pub fn handle_key(&mut self, key: Key, commands: &CommandRegistry) -> MenuResponse {
+        self.handle_key_at(key, commands, f64::NAN)
+    }
+
+    /// Handles `key` pressed at host `time`, in seconds. The characters
+    /// typed within the type-ahead time form a prefix.
+    pub fn handle_key_at(
+        &mut self,
+        key: Key,
+        commands: &CommandRegistry,
+        time: f64,
+    ) -> MenuResponse {
         let level = self.path.len() - 1;
         match key.in_reading_order(self.rtl) {
             Key::ArrowDown => self.step(commands, true),
@@ -269,29 +311,27 @@ impl DropdownMenu {
                 self.step(commands, false);
             }
             Key::ArrowRight => self.open_submenu(commands),
-            Key::ArrowLeft | Key::Escape => {
-                if self.path.len() > 1 {
-                    self.path.pop();
-                } else {
-                    return MenuResponse::Closed;
-                }
+            // ArrowLeft closes a submenu, and does nothing at the root.
+            Key::ArrowLeft | Key::Escape if self.path.len() > 1 => {
+                self.path.pop();
             }
+            Key::Escape => return MenuResponse::Closed,
             Key::Enter | Key::Space => return self.activate_highlighted(commands),
             Key::Character(character) => {
-                // Type-select: next enabled item starting with the letter.
+                // Type-ahead: the next enabled item that starts with the
+                // typed prefix.
                 let items = self.level_items(level).to_vec();
-                let needle = fold_for_search(&character.to_string());
-                let start = self.path[level].map_or(0, |index| index + 1);
-                for step in 0..items.len() {
-                    let index = (start + step) % items.len();
-                    if Self::enabled(&items[index], commands)
-                        && items[index]
-                            .label()
-                            .is_some_and(|label| fold_for_search(label).starts_with(&needle))
-                    {
-                        self.path[level] = Some(index);
-                        break;
+                let label = |index: usize| match &items[index] {
+                    item if Self::enabled(item, commands) => {
+                        item.label().unwrap_or_default().to_owned()
                     }
+                    _ => String::new(),
+                };
+                let mut text = [0; 4];
+                let typed = character.encode_utf8(&mut text);
+                let current = self.path[level];
+                if let Some(index) = self.typed.find(typed, time, current, items.len(), label) {
+                    self.path[level] = Some(index);
                 }
             }
             _ => {}
@@ -331,6 +371,7 @@ impl DropdownMenu {
     fn height(&self, item: &MenuItem) -> f64 {
         match item {
             MenuItem::Separator => self.metrics.separator,
+            MenuItem::Label(_) => self.metrics.label,
             _ => self.metrics.row,
         }
     }
@@ -388,23 +429,41 @@ impl DropdownMenu {
         if level >= self.path.len() {
             return MenuResponse::None;
         }
-        let Some(index) = self.item_at(level, origin, point) else {
+        let hit = self
+            .item_at(level, origin, point)
+            .map(|index| (index, self.level_items(level)[index].clone()))
+            .filter(|(_, item)| Self::enabled(item, commands));
+        // A separator, a disabled row, a heading, or the panel padding
+        // clears the highlight and closes the deeper levels.
+        let Some((index, item)) = hit else {
+            self.path.truncate(level + 1);
+            self.path[level] = None;
             return MenuResponse::None;
         };
-        let item = self.level_items(level)[index].clone();
-        if !Self::enabled(&item, commands) {
-            return MenuResponse::None;
+        let submenu = matches!(item, MenuItem::Submenu { .. });
+        // The row of an open submenu keeps the submenu as it is.
+        let open = self.path[level] == Some(index) && self.path.len() > level + 1;
+        if !open {
+            self.path.truncate(level + 1);
+            self.path[level] = Some(index);
+            if submenu {
+                self.path.push(None);
+            }
         }
-        self.path.truncate(level + 1);
-        self.path[level] = Some(index);
-        if matches!(item, MenuItem::Submenu { .. }) {
-            self.path.push(None);
+        if submenu {
             return MenuResponse::None;
         }
         if released {
             return self.activate_highlighted(commands);
         }
         MenuResponse::None
+    }
+
+    /// The pointer left the open panels: the deepest level loses its
+    /// highlight, and the rows that opened submenus keep theirs.
+    pub(crate) fn leave(&mut self) -> bool {
+        let last = self.path.last_mut().and_then(Option::take);
+        last.is_some()
     }
 
     fn checked(item: &MenuItem, commands: &CommandRegistry) -> Option<bool> {
@@ -433,6 +492,10 @@ impl DropdownMenu {
             else {
                 continue;
             };
+            if let MenuItem::Label(_) = item {
+                parts.push(parent, SemanticRole::StaticText, label, bounds);
+                continue;
+            }
             let enabled = Self::enabled(item, commands);
             let current = self.path.get(level) == Some(&Some(index));
             let part = parts.push(parent, SemanticRole::MenuItem, label, bounds);
@@ -538,11 +601,18 @@ impl DropdownMenu {
                     );
                     fill_shape(cx.list, line, &rule.radius, cx.rtl, &rule.background);
                 }
+                MenuItem::Label(label) => {
+                    let style = cx.style(query(Slot::GroupLabel));
+                    cx.slot(row, &style, |cx, inner| {
+                        cx.label(inner, label, &style, TextAlign::Start);
+                    });
+                }
                 MenuItem::Action {
                     label,
                     shortcut,
                     variant,
                     check,
+                    icon,
                     ..
                 } => {
                     let style = cx.style(query(Slot::Item).variant(*variant).state(state));
@@ -556,6 +626,11 @@ impl DropdownMenu {
                             if state.checked() {
                                 paint_mark(cx, mark, *check, &indicator);
                             }
+                        }
+                        if let Some(icon) = icon {
+                            let (glyph, rest) = split_start(text, style.icon_size, cx.rtl);
+                            cx.icon(glyph, *icon, &style);
+                            text = trim_start(rest, style.gap, cx.rtl);
                         }
                         let keys = shortcut.as_deref().unwrap_or_default();
                         cx.label_and_trailing(text, label, &style, keys, &shortcut_style);
@@ -651,8 +726,8 @@ impl DropdownMenu {
 
 /// A [`DropdownMenu`] shown in place in a [`crate::ControlHost`]: the root
 /// level fills the control's bounds, and open submenus float beside it.
-/// An activated action reports `Command`; Escape or ArrowLeft at the root
-/// reports `Dismissed`. Make it with [`DropdownMenu::hosted`].
+/// An activated action reports `Command`; Escape at the root reports
+/// `Dismissed`. Make it with [`DropdownMenu::hosted`].
 pub struct HostedDropdownMenu {
     name: String,
     popup: MenuPopup,
@@ -752,6 +827,14 @@ impl CustomControl for HostedDropdownMenu {
                 }
                 EventReply::Continue
             }
+            // The pointer left the panels: the highlight goes.
+            ControlEvent::Hover(false) => {
+                if self.popup.menu.leave() {
+                    cx.request_paint();
+                    cx.request_semantics();
+                }
+                EventReply::Continue
+            }
             ControlEvent::Pointer(PointerEvent::Up { position, .. }) => {
                 match self.popup.pointer(*position, true) {
                     Some(response) => {
@@ -765,7 +848,7 @@ impl CustomControl for HostedDropdownMenu {
             ControlEvent::Key(KeyEvent::Down { key, .. })
                 if *key != Key::Tab && !cx.modifiers().is_chord() =>
             {
-                let response = self.popup.key(*key);
+                let response = self.popup.key(*key, cx.time());
                 self.respond(cx, response);
                 EventReply::Stop
             }
@@ -825,7 +908,7 @@ impl CustomControl for HostedDropdownMenu {
     ) -> bool {
         match action {
             SemanticAction::Activate => {
-                let response = self.popup.key(Key::Enter);
+                let response = self.popup.key(Key::Enter, cx.time());
                 self.respond(cx, response);
                 true
             }

@@ -2170,25 +2170,34 @@ this behavior.
 
 - Hover highlights an enabled item. Hover on a submenu opens it at once.
   A release over an enabled action activates it.
+- Hover on a separator, a disabled item, a heading, or the panel padding
+  clears the highlight and closes the deeper levels. When the pointer
+  leaves the panels, the deepest level loses its highlight. Hover on the
+  row of an open submenu keeps the submenu as it is.
+- While the pointer moves toward an open submenu, the rows that it
+  crosses do not take the highlight. The path is the triangle from the
+  last pointer position to the near edge of the submenu.
 - ArrowDown and ArrowUp move between enabled items and wrap. Home and End
   go to the first and the last enabled item.
 - ArrowRight, Enter, or Space on a submenu opens it. Enter or Space on an
   action activates it.
-- ArrowLeft or Escape closes one submenu level. At the root, they return
-  `Closed`.
+- ArrowLeft or Escape closes one submenu level. At the root, Escape
+  returns `Closed`, and ArrowLeft does nothing.
 - `set_direction(Rtl)` swaps ArrowLeft and ArrowRight: the arrow toward
   the submenu side opens a submenu, and the other arrow closes one. A
   hosted menu takes the host direction.
 - A character highlights the next enabled item that starts with it.
-- The menu skips disabled or unknown commands, separators, and empty
-  submenus. These items never activate.
+  `handle_key_at(key, commands, time)` keeps the characters typed within
+  `TYPE_AHEAD_TIMEOUT` as a prefix, as a list box does. A repeated
+  character goes to the next item that starts with it.
+- The menu skips disabled or unknown commands, separators, headings, and
+  empty submenus. These items never activate.
 - `PopupMenu` is a deprecated alias of `DropdownMenu`.
 - **In a control host.** `hosted(name)` makes a `HostedDropdownMenu` with
   its own command states. The root level fills the node, and open
   submenus float beside it.
-- An activated action reports `Command`. Escape or ArrowLeft at the root
-  (ArrowRight in right-to-left layouts) reports `Dismissed`. The menu then closes its submenus and stays in
-  place.
+- An activated action reports `Command`. Escape at the root reports
+  `Dismissed`. The menu then closes its submenus and stays in place.
 - **In a view.** The `context_menu` and `dropdown_menu` view modifiers
   show a `HostedDropdownMenu` in an anchored layer. `Command` runs the
   chosen action and closes the layer, and `Dismissed` closes it.
@@ -2199,6 +2208,7 @@ this behavior.
   `MenuChoice::checkbox` and `MenuChoice::radio` make check rows. The
   command state of a check row follows its binding when the menu opens.
   Its `Command` sets the binding and closes the layer.
+  `MenuChoice::label` makes a heading, and `.icon` adds a leading icon.
 - **In the menu bar.** `CommandMenu` takes the same `MenuChoice` rows.
   The application lowers them to native menu items, so the system draws
   them and the recipe does not apply. `MenuChoice::keyboard_shortcut`
@@ -2206,7 +2216,9 @@ this behavior.
 - **Items.** `MenuItem::action` makes an action. `with_shortcut` adds the
   shortcut text, and `destructive` sets the destructive look.
   `with_check(MenuCheck::Checkbox)` or `with_check(MenuCheck::Radio)`
-  shows the checked state of the command.
+  shows the checked state of the command. `with_icon` shows an icon
+  before the label. `MenuItem::label_row(text)` makes a `Label` heading
+  over a group.
 - **Metrics.** `set_metrics` reads the row heights from the `Menu`
   recipe. `level_size` and `item_rect` use them.
 - **Look.** `paint` draws the `Root` panel, then each row in the context's
@@ -2220,11 +2232,13 @@ this behavior.
 | Submenu | `Trigger` | as `Item`, with a chevron at the end; `accent` fill while open |
 | Check or dot | `ItemIndicator` | 16 pt column before the label in a level with a checkable item |
 | Shortcut | `Shortcut` | xs `muted-foreground` text with widest tracking, at the end |
+| Icon | `Item` | the item icon size before the label, with the item gap |
+| Heading | `GroupLabel` | xs medium `muted-foreground` text, padding 8 by 6 pt |
 | Separator | `Separator` | 1 pt `border` line with 4 pt above and below, across the panel |
 
 | Field | `DropdownMenu::semantic_parts(level, commands, rows, parent, parts)`, one part per item |
 | --- | --- |
-| Role | `MenuItem` (AXMenuItem) |
+| Role | `MenuItem` (AXMenuItem); `StaticText` (AXStaticText) for a heading, with no state or actions |
 | Name / value | label / -; the shortcut text is the description |
 | State | disabled, checked for a checkable action, selected when highlighted, expanded for an open submenu |
 | Actions | `Activate` while enabled |
@@ -3371,7 +3385,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 [DropdownMenu](#dropdownmenu) keys, hover, and type-ahead apply.
 
 - Every action command starts enabled and unchecked. `set_command`
-  changes a state before you mount the control.
+  changes a state before you mount the control. In a view,
+  `ContextMenu::command(id, state)` sets a state, and a live state
+  follows its binding.
 - An activated action emits `Command(id)`, then `OpenChanged(false)`.
 - A checkbox action flips its check. A radio action checks itself and
   clears the other radio actions between the same separators.
@@ -3392,6 +3408,8 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   Shift-F10, the Menu key, or `ShowMenu` opens it at the center of the
   area, with the first item highlighted. A release over an action after
   the press activates the action.
+- The area has a dashed border, with dashes and gaps of one spacing
+  unit. A disabled area paints at the disabled opacity.
 - **Keyboard open.** `Shortcut::opens_context_menu` is true for
   Shift-F10 with no other modifier and for the Menu key
   (`Key::ContextMenu`). Every control that opens a context menu from the
@@ -3408,7 +3426,7 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
-| Context area | `Menu` `Placeholder` | 300 by 150 pt minimum, 1 pt `border`, radius md, sm `muted-foreground` text |
+| Context area | `Menu` `Placeholder` | 300 by 150 pt minimum, 1 pt dashed `border`, radius md, sm `muted-foreground` text; disabled opacity |
 | Menu panel | `Menu` `Root` | as [DropdownMenu](#dropdownmenu); at least 128 pt wide, 144 pt in a menu bar |
 | Bar | `Menubar` `Root` | 36 pt high, 1 pt `border`, radius md, 4 pt padding and gap, shadow xs |
 | Title | `Menubar` `Trigger` | sm medium text, padding 8 by 4 pt, radius sm; `muted` fill while hovered, open, or highlighted |

@@ -12,7 +12,7 @@ use choscorui::compose::view::{
     HorizontalAlignment, Input, Menubar, Popover, SpinBox, State, VStack, View, ViewExt,
 };
 use choscorui::controls::{
-    self, ButtonVariant, CommandId, CommandItem, MenuCheck, MenuItem, SheetSide,
+    self, ButtonVariant, CommandId, CommandItem, CommandState, MenuCheck, MenuItem, SheetSide,
 };
 use choscorui::core::{Icon, Space};
 
@@ -42,16 +42,27 @@ fn page_items(env: &Env) -> Vec<MenuItem> {
         MenuItem::action(text("context-menu.show_full_urls"), CommandId(8))
             .with_check(MenuCheck::Checkbox),
         MenuItem::Separator,
+        MenuItem::label_row(text("context-menu.people")),
         MenuItem::action(text("people.pedro"), CommandId(9)).with_check(MenuCheck::Radio),
         MenuItem::action(text("people.colm"), CommandId(10)).with_check(MenuCheck::Radio),
     ]
 }
 
+/// The state of a checked row.
+const CHECKED: CommandState = CommandState {
+    enabled: true,
+    checked: true,
+};
+
+/// A context menu area with a checked bookmark row and a chosen person,
+/// and a disabled area.
 pub fn context_menu(_: &PageCx) -> AnyView {
     column((
         section(
             t!("context-menu.caption"),
-            ContextMenu::new(t!("context-menu.name"), t!("context-menu.area"), page_items),
+            ContextMenu::new(t!("context-menu.name"), t!("context-menu.area"), page_items)
+                .command(CommandId(7), CHECKED)
+                .command(CommandId(9), CHECKED),
         ),
         section(
             t!("context-menu.disabled"),
@@ -580,5 +591,24 @@ mod tests {
             .map(|entry| entry.node.name.clone())
             .collect();
         assert_eq!(ran, ["Ran Search Emoji."]);
+    }
+
+    #[test]
+    fn the_context_menu_shows_its_initial_checks_and_a_group_heading() {
+        let mut page = Harness::new("context-menu");
+        assert!(page.act("Page actions", SemanticAction::Focus));
+        assert!(press(&mut page, Key::Enter));
+        let (snapshot, _) = page.host.semantics();
+        let part = |name: &str| {
+            snapshot
+                .iter()
+                .find(|entry| entry.part.is_some() && entry.node.name == name)
+                .map(|entry| entry.node.clone())
+                .unwrap()
+        };
+        assert_eq!(part("People").role, SemanticRole::StaticText);
+        assert_eq!(part("Show Bookmarks").state.checked, Some(true));
+        assert_eq!(part("Pedro Duarte").state.checked, Some(true));
+        assert_eq!(part("Show Full URLs").state.checked, Some(false));
     }
 }

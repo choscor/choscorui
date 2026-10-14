@@ -1192,6 +1192,38 @@ fn checkbox_and_radio_rows_set_their_bindings() {
     assert_eq!(host.take_errors(), Vec::new());
 }
 
+struct Grouped;
+
+impl View for Grouped {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let open = cx.state(false);
+        Button::new("Sort", move || open.set(true)).dropdown_menu(
+            open.binding(),
+            vec![
+                MenuChoice::label("Order"),
+                MenuChoice::action("By name", || {}).icon(choscorui_core::Icon::Check),
+            ],
+        )
+    }
+}
+
+#[test]
+fn a_menu_heading_is_static_text_that_the_keys_skip() {
+    let mut host = host(Grouped);
+    let sort = node(&mut host, "Sort");
+    host.focus(Some(sort));
+    open_menu(&mut host, "Sort", 1.0);
+    let menu = focused_menu(&mut host);
+    assert_eq!(highlighted(&mut host, menu), "By name");
+    let (snapshot, _) = host.semantics();
+    let heading = snapshot
+        .iter()
+        .find(|entry| entry.part.is_some() && entry.node.name == "Order")
+        .expect("the heading");
+    assert_eq!(heading.node.role, SemanticRole::StaticText);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
 // ---------------------------------------------------------------------------
 // Hover card
 

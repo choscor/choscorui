@@ -430,6 +430,7 @@ context-menu.create_shortcut = Tạo lối tắt…
 context-menu.delete = Xóa
 context-menu.show_bookmarks = Hiện dấu trang
 context-menu.show_full_urls = Hiện URL đầy đủ
+context-menu.people = Mọi người
 context-menu.caption = Nhấp chuột phụ hoặc Control-nhấp vào vùng này
 context-menu.name = Thao tác trang
 context-menu.area = Nhấp chuột phải vào đây

@@ -7,8 +7,8 @@ use choscorui_controls::{
     ShortcutModifiers,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, Key, LayoutDirection, Point, PointerButton, PointerEvent,
-    SemanticAction, SemanticRole,
+    ColorRole, DesignTokens, DisplayCommand, Key, LayoutDirection, Point, PointerButton,
+    PointerEvent, SemanticAction, SemanticRole,
 };
 use hosted::{Harness, rounded_fills, texts};
 
@@ -240,6 +240,62 @@ fn a_submenu_opens_beside_its_row() {
     assert_eq!(frame.max_x(), at.x, "right to left opens toward the left");
 }
 
+#[test]
+fn the_pointer_crosses_rows_toward_an_open_submenu() {
+    let mut h = Harness::new(area());
+    let at = h.bounds().center();
+    press(&mut h, at, PointerButton::Secondary);
+    let root = h.host.get(h.node).unwrap().overlay().unwrap();
+    let more = row(at, 2);
+    h.hover(more);
+    let both = h.host.get(h.node).unwrap().overlay().unwrap();
+    // Down and toward the submenu, over the separator: it stays open.
+    h.hover(Point::new(root.max_x() - 10.0, more.y + 20.0));
+    assert_eq!(h.selected_part(), "More Tools");
+    assert_eq!(h.host.get(h.node).unwrap().overlay().unwrap(), both);
+    // Straight down, away from the submenu: the row under the pointer
+    // takes the highlight, and the submenu closes.
+    h.hover(Point::new(root.max_x() - 10.0, more.y + 40.0));
+    assert_eq!(h.focused_part(), "Show Bookmarks");
+    assert_eq!(h.host.get(h.node).unwrap().overlay().unwrap(), root);
+}
+
+#[test]
+fn the_pointer_off_the_panels_clears_the_highlight() {
+    let mut h = Harness::new(area());
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.focused_part(), "Back");
+    let corner = h.bounds().origin;
+    h.hover(Point::new(corner.x + 4.0, corner.y + 4.0));
+    assert_eq!(h.focused_part(), "", "off the panel");
+    h.key(Key::ArrowDown);
+    assert_eq!(h.focused_part(), "Back");
+    // ArrowLeft at the root keeps the menu open.
+    h.key(Key::ArrowLeft);
+    assert!(h.host.get(h.node).unwrap().overlay().is_some());
+}
+
+#[test]
+fn a_context_menu_area_has_a_dashed_border_and_dims_when_disabled() {
+    let mut h = Harness::new(area());
+    let dashed = |list: &choscorui_core::DisplayList| {
+        list.commands().iter().any(|command| {
+            matches!(command, DisplayCommand::StrokePath { style, .. } if !style.dash.is_empty())
+        })
+    };
+    let dimmed = |list: &choscorui_core::DisplayList| {
+        list.commands()
+            .iter()
+            .any(|command| matches!(command, DisplayCommand::PushOpacity(_)))
+    };
+    let list = h.paint();
+    assert!(dashed(&list));
+    assert!(!dimmed(&list));
+    h.set_enabled(false);
+    assert!(dimmed(&h.paint()));
+}
+
 fn bar() -> Menubar {
     Menubar::new(
         "Main menu",
@@ -347,6 +403,21 @@ fn menubar_pointer_opens_switches_and_activates() {
 }
 
 /// A context menu area that fills the 800 x 600 window.
+#[test]
+fn a_hovered_menubar_title_fills_muted() {
+    let mut h = Harness::new(bar());
+    let muted = DesignTokens::light().color(ColorRole::Muted);
+    assert!(rounded_fills(&h.paint(), muted).is_empty());
+    let bounds = h.bounds();
+    h.hover(Point::new(bounds.origin.x + 10.0, bounds.center().y));
+    // The hover color eases in.
+    h.paint();
+    h.set_time(1.0);
+    let fills = rounded_fills(&h.paint(), muted);
+    assert_eq!(fills.len(), 1, "the File title");
+    assert!(fills[0].contains(Point::new(bounds.origin.x + 10.0, bounds.center().y)));
+}
+
 fn window_area() -> Harness {
     let mut h = Harness::new(area());
     h.place(hosted::rect(0.0, 0.0, 800.0, 600.0));

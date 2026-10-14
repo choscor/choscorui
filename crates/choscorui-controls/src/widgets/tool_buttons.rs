@@ -405,9 +405,7 @@ impl HostedToolButton {
                 self.close(cx);
                 return Some(EventReply::Continue);
             }
-            ControlEvent::Key(KeyEvent::Down { key, .. }) => {
-                self.popup.menu.handle_key(*key, &self.popup.commands)
-            }
+            ControlEvent::Key(KeyEvent::Down { key, .. }) => self.popup.key(*key, cx.time()),
             ControlEvent::Dismiss | ControlEvent::FocusChanged(false) => {
                 self.press = Press::default();
                 return Some(self.close(cx));

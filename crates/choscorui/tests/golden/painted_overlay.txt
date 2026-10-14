@@ -1024,7 +1024,13 @@ stroke 8.5,8.5 303x153 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 299x149 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
-= rest: hovered pressed focused disabled invalid checked indeterminate selected open highlighted
+# disabled
+opacity 0.5 {
+stroke 10.5,10.5 299x149 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
 ### menu default default item
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1118,7 +1124,13 @@ stroke 8.5,8.5 303x153 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 299x149 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
-= rest: hovered pressed focused disabled invalid checked indeterminate selected open highlighted
+# disabled
+opacity 0.5 {
+stroke 10.5,10.5 299x149 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
 ### menu destructive default item
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #e7000bff w1.3333333333333333 Round Round dash[]
@@ -1240,7 +1252,13 @@ stroke 8.5,8.5 303x153 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 299x149 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
-= rest: hovered pressed focused disabled invalid checked indeterminate selected open highlighted
+# disabled
+opacity 0.5 {
+stroke 10.5,10.5 299x149 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
 ### menubar default default item
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1350,7 +1368,13 @@ stroke 8.5,8.5 303x153 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 299x149 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
-= rest: hovered pressed focused disabled invalid checked indeterminate selected open highlighted
+# disabled
+opacity 0.5 {
+stroke 10.5,10.5 299x149 r7.5 w1 #e5e5e5ff
+stroke-path M23.333333333333332,81 L16,88.33333333333333 L12.666666666666666,85 #737373ff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,89.9 system-ui 14 w400 t0 #737373ff
+}
+= rest: hovered pressed focused invalid checked indeterminate selected open highlighted
 ### menubar destructive default item
 # rest
 stroke-path M31.333333333333332,22 L24,29.333333333333332 L20.666666666666668,26 #e7000bff w1.3333333333333333 Round Round dash[]

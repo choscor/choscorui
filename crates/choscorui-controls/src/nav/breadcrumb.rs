@@ -342,7 +342,7 @@ impl CustomControl for Breadcrumb {
                     self.dismiss_menu(cx);
                 }
                 ControlEvent::Key(KeyEvent::Down { key, .. }) if !cx.modifiers().is_chord() => {
-                    let response = self.menu.key(*key);
+                    let response = self.menu.key(*key, cx.time());
                     self.menu_response(cx, response);
                     return EventReply::Stop;
                 }

@@ -103,6 +103,15 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `ContextMenu::command`
+
+```rust
+pub fn command<M>(self, command: CommandId, state: impl IntoLive<CommandState, M>) -> Self
+```
+
+Sets whether `command` is enabled and checked. A live `state`
+updates the menu when it changes.
+
 #### `ContextMenu::new`
 
 ```rust
@@ -359,6 +368,14 @@ pub fn disabled<M>(self, disabled: impl IntoLive<bool, M>) -> Self
 Disables an action while `disabled` is true when the menu opens.
 The keys skip a disabled action, and it does not run.
 
+#### `MenuChoice::icon`
+
+```rust
+pub fn icon(self, icon: Icon) -> Self
+```
+
+Shows `icon` before the label of an action or a check row.
+
 #### `MenuChoice::keyboard_shortcut`
 
 ```rust
@@ -369,6 +386,14 @@ The key and modifiers that choose the item of a command menu, such
 as `'n'` with Command. The menu bar shows them, and the keys run
 the item from any window. A menu that a view presents ignores them;
 use [`MenuChoice::shortcut`](#menuchoiceshortcut) there.
+
+#### `MenuChoice::label`
+
+```rust
+pub fn label<M>(text: impl IntoLive<TextContent, M>) -> Self
+```
+
+A heading over a group of rows, in muted text. The keys skip it.
 
 #### `MenuChoice::radio`
 
