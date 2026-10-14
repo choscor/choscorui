@@ -11,6 +11,10 @@ pub struct Label {
     /// The node that `set_text` invalidates. A hosted label has none.
     node: Option<NodeId>,
     text: String,
+    /// Whether the label names a control, so that a click on it acts.
+    target: bool,
+    /// Whether a primary press on the label is down.
+    armed: bool,
 }
 
 impl Label {
@@ -18,6 +22,8 @@ impl Label {
         Self {
             node: Some(node),
             text: text.into(),
+            target: false,
+            armed: false,
         }
     }
 
@@ -27,7 +33,18 @@ impl Label {
         Self {
             node: None,
             text: text.into(),
+            target: false,
+            armed: false,
         }
+    }
+
+    /// The label names a control: in a control host, a primary click on
+    /// it emits `Activated`, and the view layer focuses or toggles the
+    /// control.
+    #[must_use]
+    pub fn with_target(mut self) -> Self {
+        self.target = true;
+        self
     }
 
     pub fn text(&self) -> &str {
@@ -146,10 +163,42 @@ impl crate::CustomControl for Label {
 
     fn event(
         &mut self,
-        _cx: &mut crate::ControlContext<'_>,
-        _event: &crate::ControlEvent,
+        cx: &mut crate::ControlContext<'_>,
+        event: &crate::ControlEvent,
     ) -> choscorui_core::EventReply {
-        choscorui_core::EventReply::Continue
+        use crate::{ControlEvent, ControlMessage};
+        use choscorui_core::{EventPhase, EventReply, PointerButton, PointerEvent};
+        if !self.target || cx.phase() != EventPhase::Target {
+            return EventReply::Continue;
+        }
+        match event {
+            ControlEvent::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) if cx.bounds().contains(*position) => {
+                self.armed = true;
+                cx.capture_pointer(true);
+                EventReply::Stop
+            }
+            ControlEvent::Pointer(PointerEvent::Up {
+                position,
+                button: PointerButton::Primary,
+            }) if self.armed => {
+                self.armed = false;
+                cx.capture_pointer(false);
+                if cx.bounds().contains(*position) {
+                    cx.emit(ControlMessage::Activated);
+                }
+                EventReply::Stop
+            }
+            _ => EventReply::Continue,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.armed = false;
+        }
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {

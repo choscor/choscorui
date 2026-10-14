@@ -177,7 +177,8 @@ changes as `ControlMessage` values:
 | --- | --- | --- |
 | `Button` | `Activated` | - |
 | `Checkbox` | `Changed(Bool)` | `Bool`, or `Mixed` for the mixed state |
-| `Label`, `Separator`, `Progress` | - | - |
+| `Label` | `Activated` on a click, with a target only | - |
+| `Separator`, `Progress` | - | - |
 | `Slider`, `SpinBox` | `Changed(Number)` | `Number`, rounded and clamped to the range |
 | `TextField` | `Changed(Text)` on an edit, `Activated` on Enter | `Text` |
 | `HostedRadioGroup`, `HostedTabs` | `Changed(Index(Some(i)))` | `Index(Some(i))` for an enabled option |
@@ -205,11 +206,11 @@ changes as `ControlMessage` values:
 | `ToolBox` | `Changed(Index)` | `Index` |
 | `HostedNumericDisplay` | - | a whole `Number` |
 | `KeySequenceEdit` | `Changed(Text)`, for example `⌘K, ⇧⌘S` | `Text` in that form |
-| `SizeGrip` | `Changed(Range(width, height))` | - |
+| `SizeGrip` | `Changed(Range(width, height))` | `Range(width, height)`, the size that a drag starts from |
 
 Other controls take a plain `Key` with no key-up event. The host delivers
-the key-down event and checks focus. `Label`, `Separator`, and
-`Progress` take no input.
+the key-down event and checks focus. `Separator` and `Progress` take no
+input. A `Label` takes only a click, and only with a target.
 
 **Keys in a control host.** These rules apply to the hosted controls:
 
@@ -702,11 +703,14 @@ behavior.
 
 ### Label and Separator
 
-- `Label` takes no input. `Label::set_text` invalidates `LAYOUT`, `PAINT`,
-  and `SEMANTICS`, and returns whether the text changed. It fails when the
-  node is not in the tree.
+- `Label::set_text` invalidates `LAYOUT`, `PAINT`, and `SEMANTICS`, and
+  returns whether the text changed. It fails when the node is not in the
+  tree.
 - `Label::hosted(text)` makes a label for a control host. It has no node, so
   `set_text` returns `MissingNode`.
+- `with_target()` makes a label that names a control. A primary press and
+  release on it emits `Activated`. A label without a target takes no
+  input.
 - `Separator` takes no input. It is decorative, so its node is a hidden
   `Group` that assistive technology skips. `paint` centers a 1 pt `border`
   line in either orientation, and snaps it to whole points, so that it
@@ -734,7 +738,11 @@ behavior.
 
 **As a view.** `Label::new(text)` mounts a `Label::hosted` label with
 literal or catalog text. The view builds a new label when the locale
-changes. `Divider` mounts a `Separator` across its stack: horizontal in
+changes. `Label::new(text).target(control)` puts the label before the
+control in a row, with the `Label` recipe gap. The control gets a
+`LabelledBy` relation to the label. A click on the label focuses the
+control, and toggles a checkbox or a switch. `Divider` mounts a
+`Separator` across its stack: horizontal in
 a vertical stack, and vertical in a horizontal stack.
 `Divider::oriented(orientation)` sets the orientation in any parent. A
 horizontal divider makes its stack take the width offered. A vertical

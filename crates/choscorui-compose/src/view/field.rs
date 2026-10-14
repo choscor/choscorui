@@ -154,6 +154,65 @@ impl<C: View> View for Field<C> {
     }
 }
 
+impl super::widgets_form::Label {
+    /// The label before `control` in a row, as the label "for" the
+    /// control. A click on the label focuses the control, and toggles a
+    /// checkbox or a switch. The control gets a `LabelledBy` relation to
+    /// the label. The gap is the `Label` recipe gap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// struct Terms;
+    ///
+    /// impl View for Terms {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let accepted = cx.state(false);
+    ///         Label::new("Accept the terms").target(Checkbox::new("Terms", accepted.binding()))
+    ///     }
+    /// }
+    /// ```
+    pub fn target<C: View>(self, control: C) -> impl View {
+        LabelFor {
+            label: self.with(controls::Label::with_target),
+            control,
+        }
+    }
+}
+
+/// A label and the control that it names, in a row.
+struct LabelFor<C> {
+    label: super::widgets_form::Label,
+    control: C,
+}
+
+impl<C: View> View for LabelFor<C> {
+    fn mount(self, cx: &mut Cx) {
+        let tokens = parent_tokens(cx);
+        let query = controls::StyleQuery::new(controls::ControlKind::Label, controls::Slot::Root);
+        let gap = cx.inner.styles.resolve(&tokens, query).gap;
+        let row = stack_node(
+            cx,
+            Axis::Horizontal,
+            gap.into(),
+            ItemAlign::Center,
+            MainAlign::Start,
+        );
+        let env = cx.env.clone();
+        let mut inside = cx.within(row, env);
+        let label = part(&mut inside, self.label).first().copied();
+        let control = part(&mut inside, self.control)
+            .into_iter()
+            .find_map(|node| first_control(&inside, node));
+        if let (Some(label), Some(control)) = (label, control) {
+            let relation = SemanticRelation::LabelledBy(label);
+            inside.inner.data(control).access.relations.push(relation);
+            inside.inner.data(label).internal = Some(label_press(control));
+        }
+    }
+}
+
 /// The error text of a field. It records its node, and relates the
 /// control to it while it shows.
 struct ErrorText {

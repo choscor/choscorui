@@ -159,7 +159,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`RadioGroup`](controls--type-aliases-1.md#radiogroup) type alias: Radio buttons, one for each option; `selected` edits the chosen option.
 - [`RangeSlider`](controls--type-aliases-1.md#rangeslider) type alias: Low and high values along one track; `values` edits both.
 - [`ScrollBar`](controls--type-aliases-1.md#scrollbar) type alias: A standalone scroll bar named `name` over `content` points, of which `viewport` show; `offset` edits the scroll position.
-- [`Select`](controls--type-aliases-1.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
+- [`Select`](controls--type-aliases-2.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
 - [`Sidebar`](controls--type-aliases-2.md#sidebar) type alias: Grouped navigation items; `selected` edits the chosen item.
 - [`SizeGrip`](controls--type-aliases-2.md#sizegrip) type alias: A grip in the bottom trailing corner that resizes its window.
 - [`Skeleton`](controls--type-aliases-2.md#skeleton) type alias: A pulsing placeholder block of `width` by `height` points.

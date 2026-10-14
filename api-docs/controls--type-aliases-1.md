@@ -1381,6 +1381,30 @@ pub fn new<M>(content: impl IntoLive<TextContent, M>) -> Self
 
 A label that shows `content`.
 
+#### `Label::target`
+
+```rust
+pub fn target<C: View>(self, control: C) -> impl View
+```
+
+The label before `control` in a row, as the label "for" the
+control. A click on the label focuses the control, and toggles a
+checkbox or a switch. The control gets a `LabelledBy` relation to
+the label. The gap is the `Label` recipe gap.
+
+##### Examples
+
+```rust
+struct Terms;
+
+impl View for Terms {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let accepted = cx.state(false);
+        Label::new("Accept the terms").target(Checkbox::new("Terms", accepted.binding()))
+    }
+}
+```
+
 ## `List`
 
 type alias in `choscorui::prelude::List`
@@ -1941,48 +1965,3 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, orientation: ScrollOrientatio
 ```
 
 A scroll bar named `name` for `content` in a `viewport`, with its position in `offset`.
-
-## `Select`
-
-type alias in `choscorui::prelude::Select`
-
-```rust
-pub type Select = Configured<Select>;
-```
-
-A trigger with a popup list; `selected` edits the chosen option.
-
-#### Examples
-
-```rust
-struct Fruit;
-
-impl View for Fruit {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let selected = cx.state(None);
-        let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
-        Select::new("Fruit", entries, selected.binding())
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `Select::native`
-
-```rust
-pub fn native<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select with the native-select look: a plain input box with a
-chevron. It behaves like [`Select::new`](controls--type-aliases-2.md#slidernew).
-
-#### `Select::new`
-
-```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select named `name` with `entries`; `selected` edits the chosen entry.

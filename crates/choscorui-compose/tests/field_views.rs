@@ -4,8 +4,8 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Field, FieldContent, FieldGroup, FieldSeparator, FieldSet, FieldTitle, Input, Switch, VStack,
-    View, ViewExt, ViewHost,
+    Field, FieldContent, FieldGroup, FieldSeparator, FieldSet, FieldTitle, Input, Label, Switch,
+    VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls::{EstimatedText, FieldOrientation, ShortcutModifiers};
 use choscorui_core::{
@@ -280,6 +280,31 @@ fn a_click_on_the_label_focuses_the_control_or_toggles_a_switch() {
     assert_eq!(consent.tree().focus(), Some(switch));
     assert_eq!(consent.semantic(switch).unwrap().state.checked, Some(true));
     assert_eq!(consent.find("Required"), None, "the binding took the value");
+}
+
+#[test]
+fn a_label_for_a_switch_names_it_and_toggles_it_on_a_click() {
+    struct Terms;
+    impl View for Terms {
+        fn body(&self, cx: &mut choscorui_compose::view::Cx) -> impl View {
+            let on = cx.state(false);
+            Label::new("Accept the terms").target(Switch::new("Terms", on.binding()))
+        }
+    }
+    let mut host = host(Terms, 600.0, "en");
+    let (switch, label) = (
+        node(&mut host, "Terms"),
+        node(&mut host, "Accept the terms"),
+    );
+    let relations = host.semantic(switch).unwrap().relations;
+    assert!(relations.contains(&SemanticRelation::LabelledBy(label)));
+    let position = bounds(&mut host, "Accept the terms").center();
+    let (button, modifiers) = (PointerButton::Primary, ShortcutModifiers::default());
+    host.pointer(PointerEvent::Down { position, button }, modifiers);
+    host.pointer(PointerEvent::Up { position, button }, modifiers);
+    host.layout();
+    assert_eq!(host.tree().focus(), Some(switch));
+    assert_eq!(host.semantic(switch).unwrap().state.checked, Some(true));
 }
 
 #[test]
