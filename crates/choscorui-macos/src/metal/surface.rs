@@ -471,13 +471,18 @@ pub(crate) fn request_frame(window: usize) -> bool {
 /// changed size, or moved to another display. The frame waits for the
 /// refresh, so a display list that the application sets in the meantime
 /// goes into the same frame.
+///
+/// A closed window that shows again has only its blank frame. The window
+/// server can report it as occluded, and the display link of an occluded
+/// window does not fire. Thus, such a window draws at once.
 pub(crate) fn window_changed(window: usize) {
     let link = SURFACES.with(|surfaces| {
         let mut surfaces = surfaces.borrow_mut();
         let surface = surfaces.get_mut(&window)?;
         surface.pending = true;
         surface.resized = true;
-        Some(surface.link.clone())
+        let blank = !surface.presented_once && surface.presented != (0, 0);
+        Some(surface.link.clone().filter(|_| !blank))
     });
     match link {
         Some(Some(link)) => SET_LINK_PAUSED.send(&link, (false,)),
