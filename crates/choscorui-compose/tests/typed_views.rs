@@ -386,7 +386,7 @@ fn a_column_browser_binds_its_path_both_ways() {
 }
 
 #[test]
-fn an_item_group_reports_an_activated_row() {
+fn an_item_group_reports_the_row_and_the_action() {
     let activated = Rc::new(Cell::new(None));
     let reported = activated.clone();
     let mut host = host(move |_| {
@@ -395,12 +395,12 @@ fn an_item_group_reports_an_activated_row() {
             "Inbox",
             vec![Item::new("Ana").with_action("Open", Default::default())],
         )
-        .on_item(move |index| reported.set(Some(index)))
+        .on_action(move |item, action| reported.set(Some((item, action))))
         .into_any()
     });
     let node = host.find("Inbox").unwrap();
     host.perform(node, SemanticAction::Activate, None);
-    assert_eq!(activated.get(), Some(0));
+    assert_eq!(activated.get(), Some((0, 0)));
 }
 
 #[test]

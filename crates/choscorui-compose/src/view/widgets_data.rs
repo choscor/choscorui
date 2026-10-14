@@ -248,8 +248,9 @@ impl Configured<controls::HostedColumnBrowser> {
 }
 
 /// Rows of items, each with a title and optional media, description,
-/// header, footer, and action. A link row or an action button reports
-/// its tab stop index through `.on_item`.
+/// header, footer, and action. A link row reports its row index through
+/// `.on_item`, and an action button its row and action index through
+/// `.on_action`.
 ///
 /// # Examples
 ///
@@ -267,6 +268,21 @@ impl Configured<controls::ItemGroup> {
         let name = label(name);
         Configured::custom(ControlKind::Item, move |env| {
             controls::ItemGroup::new(text(&name, env), items.items(env))
+        })
+    }
+
+    /// Runs `action` with the row index and the action index of an
+    /// action button that the user activates.
+    #[must_use]
+    pub fn on_action(self, action: impl Fn(usize, usize) + 'static) -> Self {
+        self.on_message(move |message| {
+            if let ControlMessage::ItemAction {
+                item,
+                action: index,
+            } = message
+            {
+                action(*item, *index);
+            }
         })
     }
 }

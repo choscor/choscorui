@@ -370,3 +370,36 @@ fn item_header_and_footer_lines_frame_the_row() {
         .unwrap();
     assert!(header.1.x > rtl.bounds().center().x, "the header mirrors");
 }
+
+#[test]
+fn item_messages_name_the_row_and_the_action_and_a_link_has_no_actions() {
+    let mut h = Harness::new(ItemGroup::new(
+        "Settings",
+        vec![
+            Item::new("Profile")
+                .with_action("Edit", ButtonVariant::Outline)
+                .with_action("Share", ButtonVariant::Outline),
+            Item::new("Billing")
+                .as_link()
+                .with_action("Ignored", ButtonVariant::Outline),
+            Item::new("Team").with_action("Invite", ButtonVariant::Default),
+        ],
+    ));
+    assert!(!texts(&h.paint()).contains(&"Ignored".to_string()));
+    h.focus();
+    assert!(tab(&mut h));
+    h.key(Key::Enter);
+    assert!(tab(&mut h));
+    h.key(Key::Enter);
+    assert!(tab(&mut h));
+    assert_eq!(h.focused_part(), "Invite");
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::ItemAction { item: 0, action: 1 },
+            ControlMessage::ItemActivated(1),
+            ControlMessage::ItemAction { item: 2, action: 0 },
+        ]
+    );
+}

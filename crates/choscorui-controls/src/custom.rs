@@ -82,6 +82,10 @@ pub enum ControlMessage {
     Activated,
     /// The item at this index ran its action, for example a menu item.
     ItemActivated(usize),
+    /// Action button `action` of row `item` ran, for example in an item
+    /// group. Both are indices in the app's lists, so they stay the same
+    /// when other rows gain or lose buttons.
+    ItemAction { item: usize, action: usize },
     /// The value changed through the user.
     Changed(ControlValue),
     /// A popup, dialog, or disclosure opened or closed.

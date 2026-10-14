@@ -4491,11 +4491,15 @@ behavior.
   from the main row.
 - `ItemMedia` is an icon, an image in a rounded square, or an avatar.
 - `as_link()` makes the whole row a link with a chevron at the end. A link
-  row shows the hover look.
+  row shows the hover look. A link row has no action buttons, also when
+  `with_action` comes after `as_link`.
 - `ItemVariant` selects `Default`, `Outline`, or `Muted`. The size is
   `Default`, `Sm`, or `Xs`.
 - Link rows and action buttons are tab stops, in order. Enter, Space, a
-  click, or `Activate` emits `ItemActivated(stop)`.
+  click, or `Activate` on a link row emits `ItemActivated(row)`. On an
+  action button it emits `ItemAction { item: row, action }`. The indices
+  are positions in the app's lists, so they do not change when other rows
+  gain or lose buttons.
 - `with_separators()` draws a line between rows instead of the group gap.
 - The media sits at the right in a right-to-left layout. The chevron
   points left.
@@ -4525,7 +4529,8 @@ behavior.
 
 **As a view.** `ItemGroup::new(name, items)` mounts the rows. An item is
 content of the group and has no view. `on_item` receives the index of an
-activated tab stop.
+activated link row. `on_action` receives the row index and the action
+index of an activated action button.
 
 [layout.rs](../crates/choscorui-controls/tests/layout.rs) pins this
 behavior.

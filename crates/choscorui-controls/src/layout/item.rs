@@ -115,9 +115,12 @@ impl Item {
         self
     }
 
-    /// Adds an action button at the end.
+    /// Adds an action button at the end. A link row ignores it.
     #[must_use]
     pub fn with_action(mut self, label: impl Into<String>, variant: ButtonVariant) -> Self {
+        if self.link {
+            return self;
+        }
         self.actions.push(PanelButton {
             label: label.into(),
             variant,
@@ -310,7 +313,8 @@ struct Stop {
 
 /// Item rows stacked with the group gap, or with separators between them.
 /// Link rows and action buttons are tab stops, in order. Enter, Space, or
-/// a click on a stop emits `ItemActivated(stop)`.
+/// a click on a link row emits `ItemActivated(row)`, and on an action
+/// button `ItemAction { item: row, action }`.
 pub struct ItemGroup {
     name: String,
     items: Vec<Item>,
@@ -401,9 +405,13 @@ impl ItemGroup {
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, stop: Stop) {
-        if let Some(index) = self.stops().iter().position(|other| *other == stop) {
-            cx.emit(ControlMessage::ItemActivated(index));
-        }
+        cx.emit(match stop.action {
+            None => ControlMessage::ItemActivated(stop.item),
+            Some(action) => ControlMessage::ItemAction {
+                item: stop.item,
+                action,
+            },
+        });
     }
 
     fn paint_row(

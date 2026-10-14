@@ -1240,8 +1240,9 @@ pub type ItemGroup = Configured<ItemGroup>;
 ```
 
 Rows of items, each with a title and optional media, description,
-header, footer, and action. A link row or an action button reports
-its tab stop index through `.on_item`.
+header, footer, and action. A link row reports its row index through
+`.on_item`, and an action button its row and action index through
+`.on_action`.
 
 #### Examples
 
@@ -1261,6 +1262,15 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<Item>) -> S
 ```
 
 An item group named `name` of `items`.
+
+#### `ItemGroup::on_action`
+
+```rust
+pub fn on_action(self, action: impl Fn(usize, usize) + 'static) -> Self
+```
+
+Runs `action` with the row index and the action index of an
+action button that the user activates.
 
 ## `Kbd`
 
