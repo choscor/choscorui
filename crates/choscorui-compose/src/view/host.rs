@@ -110,6 +110,9 @@ pub(crate) enum Layer {
 pub(crate) struct Decor {
     pub layers: Vec<Layer>,
     pub radius: Option<Corner>,
+    /// Logical radii of each corner for the clip. When set, the clip uses
+    /// them in place of `radius`.
+    pub corners: Option<choscorui_controls::Corners>,
     pub opacity: f64,
     pub offset: Point,
     pub clip: bool,
@@ -120,6 +123,7 @@ impl Default for Decor {
         Self {
             layers: Vec::new(),
             radius: None,
+            corners: None,
             opacity: 1.0,
             offset: Point::new(0.0, 0.0),
             clip: false,

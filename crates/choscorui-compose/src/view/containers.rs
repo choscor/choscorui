@@ -8,8 +8,7 @@
 use super::View;
 use super::configured::Configured;
 use super::dynamic::Dynamic;
-use super::env::Corner;
-use super::host::{Cx, Flex};
+use super::host::Cx;
 use super::layout::{Alignment, parent_tokens};
 use super::modifier::ViewExt;
 use super::state::{IntoLive, Live};
@@ -17,7 +16,10 @@ use super::text::TextContent;
 use super::widgets::{Items, Label, label, text, to_position};
 use choscorui_controls as controls;
 use choscorui_controls::{ControlKind, CustomControl, Slot, StyleQuery};
-use choscorui_core::{Dirty, LayoutKind, LayoutStyle, NodeId, SemanticRole, SharedLayout};
+use choscorui_core::{
+    ChildMeasure, Constraints, CustomLayout, Dirty, LayoutDirection, LayoutKind, LayoutStyle,
+    NodeId, Point, Rect, SemanticRole, SharedLayout, Size,
+};
 use std::rc::Rc;
 
 /// Mounts `control` with `child` as its child, which fills it. Returns
@@ -55,8 +57,9 @@ fn holder<T: CustomControl + 'static, V: View>(
 
 impl super::widgets::AspectRatio {
     /// A box named `name` with the width-to-height `ratio`, which holds
-    /// `child`. The box takes the width it is offered. The child fills the
-    /// box and is clipped to its corners.
+    /// `child`. The box is as large as fits in the offered width and
+    /// height, and it is centered in the space that it gets. The child
+    /// fills the box and is clipped to each corner radius.
     ///
     /// # Examples
     ///
@@ -87,7 +90,25 @@ struct Wrap<V> {
 impl<V: View> View for Wrap<V> {
     fn mount(self, cx: &mut Cx) {
         let tokens = parent_tokens(cx);
-        let Some(node) = holder(cx, self.control, self.child) else {
+        let ratio = if self.ratio.is_finite() && self.ratio > 0.0 {
+            self.ratio
+        } else {
+            1.0
+        };
+        // A layout node fits the box in the space that it gets, and the
+        // box node holds the control and the child. A stack can shrink
+        // the layout node to the height that it has.
+        let fit = AspectFit {
+            ratio,
+            unbounded: tokens.spacing * 112.0,
+        };
+        let outer = cx.node(LayoutStyle {
+            kind: LayoutKind::Custom(SharedLayout::new(fit)),
+            shrink: true,
+            ..LayoutStyle::default()
+        });
+        let env = cx.env.clone();
+        let Some(node) = holder(&mut cx.within(outer, env), self.control, self.child) else {
             return;
         };
         let style = cx.inner.styles.resolve(
@@ -95,20 +116,52 @@ impl<V: View> View for Wrap<V> {
             StyleQuery::new(ControlKind::AspectRatio, Slot::Root),
         );
         let data = cx.inner.data(node);
-        data.decor.radius = Some(Corner::Points(style.radius.top_start));
+        data.decor.corners = Some(style.radius);
         data.decor.clip = true;
-        if self.ratio.is_finite() && self.ratio > 0.0 {
-            data.aspect = Some(self.ratio);
-            cx.inner.aspects.insert(node);
-        }
-        // The box takes the width it is offered, and its height follows.
-        cx.inner.make_flexible(
-            node,
-            Flex {
-                wide: true,
-                tall: false,
-            },
+    }
+}
+
+/// Places an aspect-ratio box: as large as fits in the space, and
+/// centered in it.
+struct AspectFit {
+    ratio: f64,
+    /// The width without a bounded width or height.
+    unbounded: f64,
+}
+
+impl AspectFit {
+    /// The largest box of the ratio inside `max`.
+    fn fit(&self, max: Size) -> Size {
+        let width = match (max.width.is_finite(), max.height.is_finite()) {
+            (true, true) => max.width.min(max.height * self.ratio),
+            (true, false) => max.width,
+            (false, true) => max.height * self.ratio,
+            (false, false) => self.unbounded,
+        };
+        Size::new(width, width / self.ratio)
+    }
+}
+
+impl CustomLayout for AspectFit {
+    fn layout(
+        &self,
+        space: Constraints,
+        _direction: LayoutDirection,
+        children: &mut dyn ChildMeasure,
+    ) -> (Size, Vec<Rect>) {
+        let size = space.constrain(self.fit(space.max));
+        let inner = self.fit(size);
+        let origin = Point::new(
+            (size.width - inner.width) / 2.0,
+            (size.height - inner.height) / 2.0,
         );
+        let rects = (0..children.len())
+            .map(|index| {
+                children.measure(index, Constraints::tight(inner));
+                Rect::new(origin, inner)
+            })
+            .collect();
+        (size, rects)
     }
 }
 

@@ -17,8 +17,8 @@ use choscorui_controls::{
     Toast, Toasts,
 };
 use choscorui_core::{
-    Catalog, CivilDate, DesignTokens, Key, KeyEvent, Locale, NodeId, SemanticAction, SemanticEntry,
-    SemanticRole, Size,
+    Catalog, CivilDate, DesignTokens, DisplayCommand, Key, KeyEvent, Locale, NodeId, Path,
+    SemanticAction, SemanticEntry, SemanticRole, Size,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -192,6 +192,33 @@ fn an_aspect_ratio_box_holds_any_view() {
     let (outer, inner) = (host.tree().bounds(node), host.tree().bounds(child));
     assert_eq!(outer.unwrap().size, Size::new(320.0, 180.0));
     assert_eq!(inner.unwrap().size, Size::new(320.0, 180.0));
+}
+
+#[test]
+fn an_aspect_ratio_box_fits_a_short_frame_and_clips_each_corner() {
+    let mut host = host(|_| {
+        AspectRatio::wrap("Preview", 2.0, Text::new("Video"))
+            .frame(Frame::new().width(400.0).height(100.0))
+            .into_any()
+    });
+    let (node, child) = (host.find("Preview").unwrap(), host.find("Video").unwrap());
+    let bounds = host.tree().bounds(node).unwrap();
+    assert_eq!(bounds.size, Size::new(200.0, 100.0), "the height bounds it");
+    // The frame is centered in the 600 pt host, and the box in the frame.
+    assert_eq!(bounds.origin.x, 200.0, "the box is centered");
+    assert_eq!(host.tree().bounds(child).unwrap().size, bounds.size);
+    let style = controls::Styles::new().resolve(
+        &DesignTokens::light(),
+        controls::StyleQuery::new(ControlKind::AspectRatio, controls::Slot::Root),
+    );
+    let clip = Path::rounded_rect_corners(bounds, style.radius.physical(false));
+    let list = host.paint();
+    assert!(
+        list.commands()
+            .iter()
+            .any(|command| *command == DisplayCommand::PushClipPath(clip.clone())),
+        "the clip has the radius of each corner"
+    );
 }
 
 #[test]

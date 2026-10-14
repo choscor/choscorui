@@ -4,7 +4,9 @@
 
 use super::host::{Inner, Layer};
 use choscorui_controls::{FocusFrame, HostEnv, PaintContext};
-use choscorui_core::{Axis, DesignTokens, DisplayList, LayoutKind, NodeId, Path, Rect, Transform};
+use choscorui_core::{
+    Axis, DesignTokens, DisplayList, LayoutDirection, LayoutKind, NodeId, Path, Rect, Transform,
+};
 
 /// How far a shadow or ring can reach outside its node, for culling.
 const OVERHANG: f64 = 64.0;
@@ -140,7 +142,13 @@ impl Painter<'_, '_> {
             }
             if decor.clip {
                 clip = clip.intersection(bounds).unwrap_or_default();
-                if radius > 0.0 {
+                if let Some(corners) = decor.corners {
+                    let rtl = inner.direction == LayoutDirection::Rtl;
+                    let path = Path::rounded_rect_corners(bounds, corners.physical(rtl));
+                    if self.list.push_clip_path(path).is_ok() {
+                        pushed.push(Pop::Clip);
+                    }
+                } else if radius > 0.0 {
                     if self
                         .list
                         .push_clip_path(Path::rounded_rect(bounds, radius))

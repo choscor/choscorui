@@ -4497,12 +4497,14 @@ behavior.
 - Without a bounded width or height, the box is 448 pt wide. It takes no
   focus.
 - The `AspectRatio::wrap(name, ratio, child)` view holds any view. The
-  box takes the width that it gets, and the child fills the box and is
-  clipped to its corners.
+  box is as large as fits in the offered width and height, and it is
+  centered in the space that it gets. In a stack, the box shrinks to the
+  height that the stack has. The child fills the box and is clipped to
+  each corner radius.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Box | `Root` | `muted` fill, radius lg; the image is clipped to each corner radius |
+| Box | `Root` | `muted` fill, radius lg; the image or the child view is clipped to each corner radius |
 
 | Field | `AspectRatio::semantics` |
 | --- | --- |

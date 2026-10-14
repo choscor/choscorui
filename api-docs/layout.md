@@ -141,8 +141,9 @@ pub fn wrap<M, V: View>(name: impl IntoLive<TextContent, M>, ratio: f64, child: 
 ```
 
 A box named `name` with the width-to-height `ratio`, which holds
-`child`. The box takes the width it is offered. The child fills the
-box and is clipped to its corners.
+`child`. The box is as large as fits in the offered width and
+height, and it is centered in the space that it gets. The child
+fills the box and is clipped to each corner radius.
 
 ##### Examples
 
