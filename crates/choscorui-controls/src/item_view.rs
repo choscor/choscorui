@@ -701,7 +701,12 @@ impl ItemView {
 
     fn select(&mut self, key: ItemKey, command: SelectionCommand, response: &mut ItemViewResponse) {
         let before = self.selection.current();
-        response.selection_changed |= self.selection.apply(self.mode, command, key, &self.order);
+        let index_of = &self.index_of;
+        response.selection_changed |=
+            self.selection
+                .apply_indexed(self.mode, command, key, &self.order, |item| {
+                    index_of.get(&item).copied()
+                });
         response.current_changed |= before != Some(key);
         if let Some(index) = self.index_of(key) {
             response.scrolled |= self.scroll_to_index(index);

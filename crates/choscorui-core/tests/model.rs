@@ -133,6 +133,40 @@ fn extended_selection_ranges_survive_reorder_and_removal() {
 }
 
 #[test]
+fn an_indexed_range_looks_up_only_the_anchor_and_the_key() {
+    let order: Vec<ItemKey> = (0..1_000_000).map(ItemKey).collect();
+    let lookups = std::cell::Cell::new(0);
+    let position = |key: ItemKey| {
+        lookups.set(lookups.get() + 1);
+        usize::try_from(key.0).ok()
+    };
+    let mut selection = Selection::new();
+    let mode = SelectionMode::Extended;
+    selection.apply_indexed(
+        mode,
+        SelectionCommand::Replace,
+        order[999_990],
+        &order,
+        position,
+    );
+    assert!(selection.apply_indexed(
+        mode,
+        SelectionCommand::ExtendTo,
+        order[999_995],
+        &order,
+        position,
+    ));
+    assert_eq!(lookups.get(), 2, "one lookup each for the anchor and key");
+    assert_eq!(selection.len(), 6);
+    assert_eq!(selection.anchor(), Some(order[999_990]));
+    // A stale lookup past the order selects only the key.
+    selection.apply_indexed(mode, SelectionCommand::ExtendTo, order[3], &order, |_| {
+        Some(2_000_000)
+    });
+    assert_eq!(selection.keys().collect::<Vec<_>>(), [order[3]]);
+}
+
+#[test]
 fn single_and_multi_modes() {
     let order = [ItemKey(1), ItemKey(2), ItemKey(3)];
     let mut single = Selection::new();

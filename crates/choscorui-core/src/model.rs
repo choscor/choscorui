@@ -655,6 +655,9 @@ impl Selection {
 
     /// Applies one command using `order` (keys in the view's current visible
     /// order) to resolve ranges. Returns true when selection changed.
+    ///
+    /// A range finds the anchor with a scan of `order`. A view that keeps
+    /// an index from key to row uses [`Selection::apply_indexed`].
     pub fn apply(
         &mut self,
         mode: SelectionMode,
@@ -662,47 +665,62 @@ impl Selection {
         key: ItemKey,
         order: &[ItemKey],
     ) -> bool {
-        let before = self.selected.clone();
+        self.apply_indexed(mode, command, key, order, |item| {
+            order.iter().position(|other| *other == item)
+        })
+    }
+
+    /// Applies one command as [`Selection::apply`] does, with `position`
+    /// giving the row of a key in `order`. A range then costs two lookups
+    /// and the rows between them, not a scan of `order`.
+    pub fn apply_indexed(
+        &mut self,
+        mode: SelectionMode,
+        command: SelectionCommand,
+        key: ItemKey,
+        order: &[ItemKey],
+        position: impl Fn(ItemKey) -> Option<usize>,
+    ) -> bool {
         self.current = Some(key);
         match (mode, command) {
-            (SelectionMode::None, _) | (_, SelectionCommand::CurrentOnly) => {}
-            (SelectionMode::Single, _) => {
-                self.selected.clear();
-                self.selected.insert(key);
+            (SelectionMode::None, _) | (_, SelectionCommand::CurrentOnly) => false,
+            (SelectionMode::Single, _) | (SelectionMode::Extended, SelectionCommand::Replace) => {
                 self.anchor = Some(key);
+                self.replace(std::iter::once(key))
             }
             (SelectionMode::Multi, _) | (SelectionMode::Extended, SelectionCommand::Toggle) => {
                 if !self.selected.remove(&key) {
                     self.selected.insert(key);
                 }
                 self.anchor = Some(key);
-            }
-            (SelectionMode::Extended, SelectionCommand::Replace) => {
-                self.selected.clear();
-                self.selected.insert(key);
-                self.anchor = Some(key);
+                true
             }
             (SelectionMode::Extended, SelectionCommand::ExtendTo) => {
                 let anchor = self.anchor.unwrap_or(key);
-                let start = order.iter().position(|item| *item == anchor);
-                let end = order.iter().position(|item| *item == key);
-                self.selected.clear();
-                match (start, end) {
-                    (Some(start), Some(end)) => {
-                        let (low, high) = (start.min(end), start.max(end));
-                        self.selected.extend(order[low..=high].iter().copied());
+                let range = position(anchor)
+                    .zip(position(key))
+                    .and_then(|(start, end)| order.get(start.min(end)..=start.max(end)));
+                match range {
+                    Some(keys) => {
+                        self.anchor = Some(anchor);
+                        self.replace(keys.iter().copied())
                     }
-                    _ => {
-                        self.selected.insert(key);
+                    None => {
                         self.anchor = Some(key);
+                        self.replace(std::iter::once(key))
                     }
-                }
-                if self.anchor.is_none() {
-                    self.anchor = Some(key);
                 }
             }
         }
-        before != self.selected
+    }
+
+    /// Replaces the selected keys with `keys`. Returns true when the set
+    /// changed.
+    fn replace(&mut self, keys: impl Iterator<Item = ItemKey>) -> bool {
+        let next: BTreeSet<ItemKey> = keys.collect();
+        let changed = next != self.selected;
+        self.selected = next;
+        changed
     }
 
     pub fn select_all(&mut self, order: &[ItemKey]) -> bool {
