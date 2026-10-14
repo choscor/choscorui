@@ -1,7 +1,7 @@
 //! The target has no backend. The headless platform has no windows on
-//! screen and no event loop, so `Platform::new` returns
-//! `AppError::Unsupported`. Its windows and menus keep their state in
-//! memory and show nothing.
+//! screen and no event loop. Its capabilities say so, thus `App::start`
+//! returns `AppError::Unsupported`. Its windows and menus keep their
+//! state in memory and show nothing.
 
 use crate::AppError;
 use choscorui_compose::view::ViewHost;
@@ -9,7 +9,7 @@ use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel,
     MenuCommandId, MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services,
-    Size, Support, WindowGeometry, WindowOptions,
+    Size, WindowGeometry, WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -27,17 +27,10 @@ pub(crate) fn capabilities() -> BackendCapabilities {
 pub(crate) struct Platform;
 
 impl Platform {
-    /// Refuses to start: the headless platform cannot show windows.
+    /// The headless platform. `App::start` does not get here, because
+    /// the capabilities show that the platform cannot show windows.
     pub(crate) fn new() -> Result<Self, AppError> {
-        let platform = Self;
-        match platform.capabilities().multiple_windows {
-            Support::Supported => Ok(platform),
-            _ => Err(AppError::Unsupported),
-        }
-    }
-
-    fn capabilities(&self) -> BackendCapabilities {
-        capabilities()
+        Ok(Self)
     }
 
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {

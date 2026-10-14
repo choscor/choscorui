@@ -31,7 +31,7 @@ The facade also has `App`, the view-based entry point, on every target. `App` op
 **Backend selection.** The private `backend` module is the only place in the facade that reads the target OS. It selects one implementation of the crate-private `Platform`, `NativeWindow`, and `NativeMenu` types:
 
 - On macOS, `backend/macos.rs` wraps `choscorui-macos`.
-- On other targets, `backend/none.rs` keeps windows and menus in memory. Its `Platform::new` returns `AppError::Unsupported`, so `App::start` fails before a window opens, and `capabilities()` returns `BackendCapabilities::none("headless")`.
+- On other targets, `backend/none.rs` keeps windows and menus in memory. Its `capabilities()` returns `BackendCapabilities::none("headless")`. `App::start` examines `multiple_windows` and returns `AppError::Unsupported` before a window opens.
 
 The rest of the facade (`App`, `Scene`, `AppContext`) is the same code on every target.
 

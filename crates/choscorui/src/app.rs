@@ -3,11 +3,13 @@
 //! restore use. The same source compiles on every target; on a target
 //! without a backend, [`App::start`] returns [`AppError::Unsupported`].
 
-use crate::backend::Platform;
+use crate::backend::{Platform, capabilities};
 use crate::context::{AppContext, Commands, ErrorHandler, Hook, Root};
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{CommandMenu, Env, IntoLive, Live, Storage, View, ViewError};
-use choscorui_core::{DesignTokens, Locale, MenuError, SettingsSchema, WindowOptions};
+use choscorui_core::{
+    BackendCapabilities, DesignTokens, Locale, MenuError, SettingsSchema, Support, WindowOptions,
+};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -440,6 +442,16 @@ impl App {
     /// # Ok::<(), AppError>(())
     /// ```
     pub fn start(self) -> Result<AppContext, AppError> {
+        self.start_on(capabilities())
+    }
+
+    /// Starts the platform of a backend with `capabilities`. A backend
+    /// that cannot show windows, such as the `none` backend of a target
+    /// without a backend, gives [`AppError::Unsupported`].
+    fn start_on(self, capabilities: BackendCapabilities) -> Result<AppContext, AppError> {
+        if capabilities.multiple_windows != Support::Supported {
+            return Err(AppError::Unsupported);
+        }
         let platform = Platform::new()?;
         let path = self.settings_path.or_else(|| {
             self.id
@@ -489,5 +501,24 @@ impl App {
         let mut context = self.start()?;
         while context.pump() {}
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{App, AppError};
+    use crate::prelude::{Text, WindowOptions};
+    use choscorui_core::BackendCapabilities;
+
+    /// The `none` backend has these capabilities on each target without
+    /// a backend. The app refuses to start before it touches a platform.
+    #[test]
+    fn start_without_a_backend_is_unsupported() {
+        let result = App::new()
+            .window(WindowOptions::new("Hello", 320.0, 200.0), || {
+                Text::new("Hello")
+            })
+            .start_on(BackendCapabilities::none("headless"));
+        assert!(matches!(result, Err(AppError::Unsupported)));
     }
 }
