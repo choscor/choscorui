@@ -364,6 +364,8 @@ struct Node {
     visible: bool,
     /// Whether hit testing can find the node and its subtree.
     hit_testable: bool,
+    /// Changes when the children or the visibility of a child change.
+    revision: u64,
 }
 
 /// Retained ownership and geometry. Bounds are absolute logical coordinates;
@@ -371,6 +373,8 @@ struct Node {
 pub struct Tree {
     root: NodeId,
     next_id: u64,
+    /// The last value given to a [`Node::revision`].
+    revisions: u64,
     nodes: HashMap<NodeId, Node>,
     focus: Option<NodeId>,
     modality: InputModality,
@@ -399,11 +403,13 @@ impl Tree {
                 focusable: false,
                 visible: true,
                 hit_testable: true,
+                revision: 0,
             },
         )]);
         Self {
             root,
             next_id: 1,
+            revisions: 0,
             nodes,
             focus: None,
             modality: InputModality::Keyboard,
@@ -483,6 +489,8 @@ impl Tree {
             .children
             .insert(index, child);
         self.nodes.get_mut(&child).expect("child must exist").parent = Some(parent);
+        self.revise(old_parent);
+        self.revise(parent);
         let dirty = Dirty(Dirty::LAYOUT.0 | Dirty::PAINT.0 | Dirty::SEMANTICS.0);
         self.mark_ancestors(old_parent, dirty);
         self.mark_ancestors(parent, dirty);
@@ -510,8 +518,10 @@ impl Tree {
                 focusable: false,
                 visible: true,
                 hit_testable: true,
+                revision: 0,
             },
         );
+        self.revise(parent);
         self.mark_ancestors(parent, Dirty::LAYOUT);
         self.mark_ancestors(parent, Dirty::PAINT);
         self.mark_ancestors(parent, Dirty::SEMANTICS);
@@ -533,6 +543,7 @@ impl Tree {
             .unwrap()
             .children
             .retain(|child| *child != id);
+        self.revise(parent);
         let mut pending = vec![id];
         while let Some(current) = pending.pop() {
             if let Some(node) = self.nodes.remove(&current) {
@@ -689,6 +700,9 @@ impl Tree {
             return Ok(());
         }
         node.visible = visible;
+        if let Some(parent) = node.parent {
+            self.revise(parent);
+        }
         if !visible {
             if self
                 .focus
@@ -814,6 +828,27 @@ impl Tree {
         }
         self.pointer_capture = id;
         Ok(())
+    }
+
+    /// Gives `id` a new children revision.
+    fn revise(&mut self, id: NodeId) {
+        self.revisions += 1;
+        if let Some(node) = self.nodes.get_mut(&id) {
+            node.revision = self.revisions;
+        }
+    }
+
+    /// A value that changes when the children of `id` or the visibility of
+    /// one of them change. Layout uses it to keep the measurements of a
+    /// stack.
+    pub(crate) fn children_revision(&self, id: NodeId) -> Option<u64> {
+        self.nodes.get(&id).map(|node| node.revision)
+    }
+
+    /// The visibility flag of `id` alone. [`Tree::visible`] also looks at
+    /// the ancestors.
+    pub(crate) fn own_visible(&self, id: NodeId) -> Option<bool> {
+        self.nodes.get(&id).map(|node| node.visible)
     }
 
     fn mark_ancestors(&mut self, start: NodeId, dirty: Dirty) {

@@ -514,7 +514,87 @@ pub struct LayoutStats {
 
 #[derive(Default)]
 struct NodeCache {
+    /// Measurements by constraints and direction. An invalidation
+    /// empties them.
     entries: Vec<([u64; 4], u8, Measured)>,
+    /// The kept work of a stack, which an invalidation of a child keeps.
+    stack: Option<Box<StackMemo>>,
+}
+
+/// The inputs of the first measuring pass of a stack, other than its
+/// children.
+#[derive(Clone, Copy, PartialEq)]
+struct StackKey {
+    horizontal: bool,
+    cross_align: ItemAlign,
+    min_cross: u64,
+    max_cross: u64,
+    direction: LayoutDirection,
+    shown: bool,
+}
+
+/// The first measuring pass of a stack for one [`StackKey`].
+struct StackPass {
+    key: StackKey,
+    /// The natural size of each laid-out child, in child order. Empty
+    /// when the pass must run again for all children.
+    items: Vec<StackItem>,
+    /// Children to measure again.
+    remeasure: Vec<NodeId>,
+}
+
+/// What a stack keeps between layouts, so that a change to one child
+/// measures and arranges only that child.
+struct StackMemo {
+    /// The [`Tree::children_revision`] of the stack.
+    revision: u64,
+    /// The most recent passes. A parent can measure a stack in other
+    /// constraints than the stack gets when it is arranged.
+    passes: Vec<StackPass>,
+    /// The direction and the children with their rectangles from the last
+    /// arrangement. Empty before the first arrangement.
+    rects: Vec<(NodeId, Rect)>,
+    direction: LayoutDirection,
+    /// Children to arrange again.
+    rearrange: Vec<NodeId>,
+}
+
+/// More stale children than this make a stack measure or arrange all of
+/// its children again.
+const STALE_LIMIT: usize = 32;
+
+/// The number of passes that a stack keeps.
+const STACK_PASSES: usize = 2;
+
+impl StackMemo {
+    /// Records that `child` lost its measurement (`measure`) or only its
+    /// arrangement.
+    fn stale(&mut self, child: NodeId, measure: bool) {
+        if measure {
+            for pass in &mut self.passes {
+                if !pass.items.is_empty() && !add_stale(&mut pass.remeasure, child) {
+                    pass.items.clear();
+                }
+            }
+        }
+        if !self.rects.is_empty() && !add_stale(&mut self.rearrange, child) {
+            self.rects.clear();
+        }
+    }
+}
+
+/// Adds `child` to `stale`. Past [`STALE_LIMIT`] children, it empties
+/// `stale` and returns false: then the next pass visits every child.
+fn add_stale(stale: &mut Vec<NodeId>, child: NodeId) -> bool {
+    if stale.contains(&child) {
+        return true;
+    }
+    if stale.len() == STALE_LIMIT {
+        stale.clear();
+        return false;
+    }
+    stale.push(child);
+    true
 }
 
 /// Owns layout styles, caches, and scroll offsets for one retained tree.
@@ -596,20 +676,54 @@ impl LayoutEngine {
     }
 
     /// Content of `node` changed (text, font, metric). Clears cached
-    /// measurements for the node and every ancestor.
+    /// measurements for the node and every ancestor. A stack ancestor
+    /// keeps the measurements of its other children.
     pub fn invalidate(&mut self, tree: &Tree, node: NodeId) {
-        let mut current = Some(node);
-        while let Some(id) = current {
-            self.cache.remove(&id);
-            self.arranged.remove(&id);
-            current = tree.parent(id);
+        self.cache.remove(&node);
+        self.arranged.remove(&node);
+        let mut child = node;
+        while let Some(parent) = tree.parent(child) {
+            self.arranged.remove(&parent);
+            if let Some(cache) = self.cache.get_mut(&parent) {
+                cache.entries.clear();
+                if let Some(memo) = &mut cache.stack {
+                    memo.stale(child, true);
+                }
+            }
+            child = parent;
+        }
+    }
+
+    /// Tells the stack that holds `node`, and each stack above it, that
+    /// the arrangement on the path to `node` must run again.
+    fn unarrange_path(&mut self, tree: &Tree, node: NodeId) {
+        let mut child = node;
+        while let Some(parent) = tree.parent(child) {
+            self.arranged.remove(&parent);
+            if let Some(memo) = self.stack_memo(parent) {
+                memo.stale(child, false);
+            }
+            child = parent;
+        }
+    }
+
+    /// The kept work of the stack `node`, if any.
+    fn stack_memo(&mut self, node: NodeId) -> Option<&mut StackMemo> {
+        self.cache.get_mut(&node)?.stack.as_deref_mut()
+    }
+
+    /// Forgets every arrangement, for example after a failed pass.
+    fn unarrange_all(&mut self) {
+        self.arranged.clear();
+        for cache in self.cache.values_mut() {
+            cache.stack = None;
         }
     }
 
     /// A theme metric, scale, or locale change invalidates everything.
     pub fn invalidate_all(&mut self) {
         self.cache.clear();
-        self.arranged.clear();
+        self.unarrange_all();
     }
 
     pub fn scroll_offset(&self, node: NodeId) -> Point {
@@ -679,11 +793,12 @@ impl LayoutEngine {
         }
         self.stats = LayoutStats::default();
         for node in std::mem::take(&mut self.scrolled) {
-            let mut current = tree.parent(node);
-            while let Some(id) = current {
-                self.arranged.remove(&id);
-                current = tree.parent(id);
-            }
+            self.unarrange_path(tree, node);
+        }
+        // A root below a stack gets an arrangement that the stack did not
+        // give it.
+        if let Some(memo) = tree.parent(root).and_then(|parent| self.stack_memo(parent)) {
+            memo.stale(root, false);
         }
         let direction = self.inherited_direction(tree, root);
         let mut placements = Vec::new();
@@ -700,7 +815,7 @@ impl LayoutEngine {
             });
         if let Err(error) = result {
             // A failed pass leaves some subtrees unarranged.
-            self.arranged.clear();
+            self.unarrange_all();
             return Err(error);
         }
         Ok(placements)
@@ -715,7 +830,7 @@ impl LayoutEngine {
         self.placed.clear();
         for (node, rect) in placements {
             if tree.set_layout_bounds(node, rect).is_err() {
-                self.arranged.clear();
+                self.unarrange_all();
                 return Err(EngineError::MissingNode(node));
             }
             self.placed.push(node);
@@ -744,12 +859,17 @@ impl LayoutEngine {
         self.styles.get(&node).cloned().unwrap_or_default()
     }
 
+    /// The visible children of `node`. A child is visible when its own
+    /// flag is set and `node` is visible.
     fn laid_out_children(&self, tree: &Tree, node: NodeId) -> Vec<NodeId> {
+        if tree.visible(node) != Some(true) {
+            return Vec::new();
+        }
         tree.children(node)
             .unwrap_or(&[])
             .iter()
             .copied()
-            .filter(|child| tree.visible(*child) == Some(true))
+            .filter(|child| tree.own_visible(*child) == Some(true))
             .collect()
     }
 
@@ -896,7 +1016,6 @@ impl LayoutEngine {
         direction: LayoutDirection,
         leaves: &mut dyn LeafMeasure,
     ) -> Result<StackPlan, EngineError> {
-        let children = self.laid_out_children(tree, node);
         let horizontal = axis == crate::Axis::Horizontal;
         let main_of = |s: Size| if horizontal { s.width } else { s.height };
         let cross_of = |s: Size| if horizontal { s.height } else { s.width };
@@ -907,36 +1026,20 @@ impl LayoutEngine {
                 Size::new(cross, main)
             }
         };
-        let gaps = spacing * children.len().saturating_sub(1) as f64;
         let max_main = main_of(inner.max);
         let max_cross = cross_of(inner.max);
         let min_cross = cross_of(inner.min);
-        let mut items = Vec::with_capacity(children.len());
         // Pass 1: natural sizes with unbounded main axis.
-        for child in &children {
-            let style = self.style_of(*child);
-            let align = style.align_self.unwrap_or(cross_align);
-            let cross_min = if align == ItemAlign::Stretch && max_cross.is_finite() {
-                min_cross
-            } else {
-                0.0
-            };
-            let c = Constraints {
-                min: make(0.0, cross_min),
-                max: make(f64::INFINITY, max_cross),
-            };
-            let measured = self.measure_node(tree, *child, c, direction, leaves)?;
-            items.push(StackItem {
-                node: *child,
-                main: main_of(measured.size),
-                min_main: main_of(style.min),
-                max_main: main_of(style.max),
-                grow: style.grow,
-                shrink: style.shrink,
-                align,
-                measured,
-            });
-        }
+        let key = StackKey {
+            horizontal,
+            cross_align,
+            min_cross: min_cross.to_bits(),
+            max_cross: max_cross.to_bits(),
+            direction,
+            shown: tree.visible(node) == Some(true),
+        };
+        let mut items = self.stack_items(tree, node, key, leaves)?;
+        let gaps = spacing * items.len().saturating_sub(1) as f64;
         let natural: f64 = items.iter().map(|item| item.main).sum::<f64>() + gaps;
         let mut overflow = false;
         if max_main.is_finite() {
@@ -999,6 +1102,117 @@ impl LayoutEngine {
             content: make(used_main, cross),
             baseline,
             ascent,
+        })
+    }
+
+    /// Pass 1 of [`LayoutEngine::plan_stack`]: the natural size of each
+    /// laid-out child of `node`. The stack keeps the result, so that the
+    /// next call measures only the children that changed.
+    fn stack_items(
+        &mut self,
+        tree: &Tree,
+        node: NodeId,
+        key: StackKey,
+        leaves: &mut dyn LeafMeasure,
+    ) -> Result<Vec<StackItem>, EngineError> {
+        let revision = tree.children_revision(node).unwrap_or_default();
+        let kept = self
+            .cache
+            .get_mut(&node)
+            .and_then(|cache| cache.stack.take());
+        let mut memo = match kept {
+            Some(memo) if memo.revision == revision => memo,
+            _ => Box::new(StackMemo {
+                revision,
+                passes: Vec::new(),
+                rects: Vec::new(),
+                direction: key.direction,
+                rearrange: Vec::new(),
+            }),
+        };
+        let mut pass = match memo.passes.iter().position(|pass| pass.key == key) {
+            Some(index) => memo.passes.remove(index),
+            None => StackPass {
+                key,
+                items: Vec::new(),
+                remeasure: Vec::new(),
+            },
+        };
+        let mut reuse = !pass.items.is_empty();
+        for child in std::mem::take(&mut pass.remeasure) {
+            let found = pass.items.iter().position(|item| item.node == child);
+            let Some(index) = found.filter(|_| reuse) else {
+                reuse = false;
+                break;
+            };
+            pass.items[index] = self.stack_item(tree, child, key, leaves)?;
+        }
+        if !reuse {
+            let children = if key.shown {
+                self.laid_out_children(tree, node)
+            } else {
+                Vec::new()
+            };
+            pass.items = Vec::with_capacity(children.len());
+            for child in children {
+                let item = self.stack_item(tree, child, key, leaves)?;
+                pass.items.push(item);
+            }
+        }
+        let items = pass.items.clone();
+        if memo.passes.len() == STACK_PASSES {
+            memo.passes.remove(0);
+        }
+        memo.passes.push(pass);
+        self.cache.entry(node).or_default().stack = Some(memo);
+        Ok(items)
+    }
+
+    /// Measures one child of a stack along an unbounded main axis.
+    fn stack_item(
+        &mut self,
+        tree: &Tree,
+        child: NodeId,
+        key: StackKey,
+        leaves: &mut dyn LeafMeasure,
+    ) -> Result<StackItem, EngineError> {
+        let horizontal = key.horizontal;
+        let main_of = |s: Size| if horizontal { s.width } else { s.height };
+        let make = |main: f64, cross: f64| {
+            if horizontal {
+                Size::new(main, cross)
+            } else {
+                Size::new(cross, main)
+            }
+        };
+        let min_cross = f64::from_bits(key.min_cross);
+        let max_cross = f64::from_bits(key.max_cross);
+        let style = self.styles.get(&child);
+        let align = style.and_then(|style| style.align_self);
+        let align = align.unwrap_or(key.cross_align);
+        let min = style.map_or(Size::ZERO, |style| style.min);
+        let max = style.map_or(Size::new(f64::INFINITY, f64::INFINITY), |style| style.max);
+        let grow = style.map_or(0.0, |style| style.grow);
+        let shrink = style.is_some_and(|style| style.shrink);
+        let cross_min = if align == ItemAlign::Stretch && max_cross.is_finite() {
+            min_cross
+        } else {
+            0.0
+        };
+        let c = Constraints {
+            min: make(0.0, cross_min),
+            max: make(f64::INFINITY, max_cross),
+        };
+        let measured = self.measure_node(tree, child, c, key.direction, leaves)?;
+        Ok(StackItem {
+            node: child,
+            main: main_of(measured.size),
+            min_main: main_of(min),
+            max_main: main_of(max),
+            grow,
+            shrink,
+            align,
+            measured,
         })
     }
 
@@ -1186,6 +1400,7 @@ impl LayoutEngine {
                 } else {
                     content.size.width
                 };
+                let mut children = Vec::with_capacity(plan.items.len());
                 let used: f64 = plan.items.iter().map(|i| i.main).sum();
                 let gaps = spacing * plan.items.len().saturating_sub(1) as f64;
                 let free = (main_len - used - gaps).max(0.0);
@@ -1232,9 +1447,10 @@ impl LayoutEngine {
                         };
                         Rect::from_xywh(x, content.min_y() + cursor, cross_size, item.main)
                     };
-                    self.arrange_node(tree, item.node, child_rect, direction, leaves, out)?;
+                    children.push((item.node, child_rect));
                     cursor += item.main + spacing + extra_gap;
                 }
+                self.arrange_stack(tree, node, children, direction, leaves, out)?;
             }
             LayoutKind::Grid {
                 column_gap,
@@ -1361,6 +1577,37 @@ impl LayoutEngine {
         Ok(())
     }
 
+    /// Arranges each child of the stack `node` in its rectangle. A child
+    /// that keeps its rectangle and its arrangement is not visited, so a
+    /// change to one child of a long stack arranges only that child.
+    fn arrange_stack(
+        &mut self,
+        tree: &Tree,
+        node: NodeId,
+        children: Vec<(NodeId, Rect)>,
+        direction: LayoutDirection,
+        leaves: &mut dyn LeafMeasure,
+        out: &mut Vec<(NodeId, Rect)>,
+    ) -> Result<(), EngineError> {
+        let (mut old, mut stale) = (Vec::new(), Vec::new());
+        if let Some(memo) = self.stack_memo(node) {
+            stale = std::mem::take(&mut memo.rearrange);
+            if memo.direction == direction {
+                old = std::mem::take(&mut memo.rects);
+            }
+        }
+        for (index, &(child, rect)) in children.iter().enumerate() {
+            if old.get(index) != Some(&(child, rect)) || stale.contains(&child) {
+                self.arrange_node(tree, child, rect, direction, leaves, out)?;
+            }
+        }
+        if let Some(memo) = self.stack_memo(node) {
+            memo.rects = children;
+            memo.direction = direction;
+        }
+        Ok(())
+    }
+
     /// Runs a custom layout over `children` within `space`. A size that
     /// is not finite becomes zero, and the first failed child measure is
     /// the error.
@@ -1473,6 +1720,7 @@ fn scroll_child_constraints(axis: crate::Axis, inner: Constraints) -> Constraint
     }
 }
 
+#[derive(Clone, Copy)]
 struct StackItem {
     node: NodeId,
     main: f64,

@@ -765,3 +765,230 @@ fn shared_layouts_are_equal_only_to_themselves() {
     assert_eq!(layout, layout.clone());
     assert_ne!(layout, SharedLayout::new(Switching { breakpoint: 1.0 }));
 }
+
+/// xorshift64*: a deterministic random source without a dependency.
+struct Rng(u64);
+
+impl Rng {
+    fn below(&mut self, n: usize) -> usize {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        (self.0.wrapping_mul(0x2545_F491_4F6C_DD1D) % n.max(1) as u64) as usize
+    }
+}
+
+/// Every node of `tree`, in depth-first order.
+fn all_nodes(tree: &Tree) -> Vec<NodeId> {
+    let mut nodes = Vec::new();
+    let mut stack = vec![tree.root()];
+    while let Some(node) = stack.pop() {
+        nodes.push(node);
+        stack.extend_from_slice(tree.children(node).unwrap_or_default());
+    }
+    nodes
+}
+
+/// A random style for a stack child: a row, a column, or a leaf, with
+/// random alignment, growth, and padding.
+fn random_style(rng: &mut Rng) -> LayoutStyle {
+    let mut style = match rng.below(3) {
+        0 => LayoutStyle::row(rng.below(3) as f64 * 2.0),
+        1 => LayoutStyle::column(rng.below(3) as f64 * 2.0),
+        _ => LayoutStyle::leaf(),
+    };
+    style.align_self = [
+        None,
+        Some(ItemAlign::Start),
+        Some(ItemAlign::Center),
+        Some(ItemAlign::Stretch),
+        Some(ItemAlign::Baseline),
+    ][rng.below(5)];
+    style.grow = [0.0, 0.0, 1.0, 2.0][rng.below(4)];
+    style.shrink = rng.below(2) == 0;
+    style.padding = Insets::all(rng.below(3) as f64);
+    style
+}
+
+/// A column of stacks and text leaves, with a scrolling list.
+struct RandomTree {
+    tree: Tree,
+    engine: LayoutEngine,
+    text: FakeText,
+    stacks: Vec<NodeId>,
+    scroll: NodeId,
+    list: NodeId,
+}
+
+impl RandomTree {
+    fn new(rng: &mut Rng) -> Self {
+        let (mut tree, mut engine, mut text) = setup();
+        let root = tree.root();
+        engine
+            .set_style(&tree, root, LayoutStyle::column(2.0))
+            .unwrap();
+        let scroll_style = LayoutStyle {
+            kind: LayoutKind::Scroll {
+                axis: choscorui_core::Axis::Vertical,
+            },
+            ..LayoutStyle::leaf()
+        };
+        let scroll = add(&mut tree, &mut engine, root, scroll_style.with_grow(1.0));
+        let list = add(&mut tree, &mut engine, scroll, LayoutStyle::column(1.0));
+        let mut stacks = vec![root, list];
+        for _ in 0..60 {
+            let parent = stacks[rng.below(stacks.len())];
+            let style = random_style(rng);
+            let stack = matches!(style.kind, LayoutKind::Stack { .. });
+            let node = add(&mut tree, &mut engine, parent, style);
+            if stack {
+                stacks.push(node);
+            } else {
+                text.texts.insert(node, "x".repeat(1 + rng.below(30)));
+            }
+        }
+        Self {
+            tree,
+            engine,
+            text,
+            stacks,
+            scroll,
+            list,
+        }
+    }
+
+    /// Makes one random change and returns the new window size.
+    fn change(&mut self, rng: &mut Rng, size: Size) -> Size {
+        let Self {
+            tree,
+            engine,
+            text,
+            stacks,
+            scroll,
+            list,
+        } = self;
+        let root = tree.root();
+        let fixed = [root, *scroll, *list];
+        let nodes = all_nodes(tree);
+        let node = nodes[rng.below(nodes.len())];
+        match rng.below(7) {
+            0 | 1 if text.texts.contains_key(&node) => {
+                text.texts.insert(node, "y".repeat(1 + rng.below(40)));
+                engine.invalidate(tree, node);
+            }
+            2 if !fixed.contains(&node) => {
+                let mut style = random_style(rng);
+                style.kind = engine.style(node).unwrap().kind.clone();
+                engine.set_style(tree, node, style).unwrap();
+            }
+            3 => {
+                let parent = stacks[rng.below(stacks.len())];
+                if tree.contains(parent) {
+                    let leaf = add(tree, engine, parent, LayoutStyle::leaf());
+                    text.texts.insert(leaf, "z".repeat(1 + rng.below(20)));
+                }
+            }
+            4 if !fixed.contains(&node) => {
+                let parent = tree.parent(node).unwrap();
+                tree.detach(node).unwrap();
+                engine.invalidate(tree, parent);
+                engine.prune(tree);
+            }
+            5 if node != root => {
+                let visible = tree.visible(node) != Some(true);
+                tree.set_visible(node, visible).unwrap();
+                engine.invalidate(tree, node);
+            }
+            6 => {
+                let offset = Point::new(0.0, rng.below(400) as f64);
+                engine.set_scroll_offset(*scroll, offset);
+            }
+            _ => return Size::new(200.0 + rng.below(400) as f64, 300.0),
+        }
+        size
+    }
+}
+
+#[test]
+fn incremental_layout_matches_a_fresh_layout() {
+    for seed in 1..=40u64 {
+        let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+        let mut random = RandomTree::new(&mut rng);
+        let mut size = Size::new(400.0, 300.0);
+        for step in 0..120 {
+            size = random.change(&mut rng, size);
+            let RandomTree {
+                tree,
+                engine,
+                text,
+                scroll,
+                ..
+            } = &mut random;
+            run(tree, engine, text, size);
+            let incremental: Vec<_> = all_nodes(tree)
+                .into_iter()
+                .map(|node| (node, tree.bounds(node)))
+                .collect();
+            let mut fresh = LayoutEngine::new();
+            fresh.set_strict(false);
+            for (node, _) in &incremental {
+                if let Some(style) = engine.style(*node) {
+                    fresh.set_style(tree, *node, style.clone()).unwrap();
+                }
+            }
+            fresh.set_scroll_offset(*scroll, engine.scroll_offset(*scroll));
+            run(tree, &mut fresh, text, size);
+            for (node, bounds) in incremental {
+                assert_eq!(
+                    tree.bounds(node),
+                    bounds,
+                    "seed {seed}, step {step}: node {node:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_change_to_one_row_of_a_long_column_measures_and_places_only_that_row() {
+    let (mut tree, mut engine, mut text) = setup();
+    let root = tree.root();
+    engine
+        .set_style(&tree, root, LayoutStyle::column(0.0))
+        .unwrap();
+    let labels: Vec<NodeId> = (0..10_000)
+        .map(|index| {
+            let row = add(&mut tree, &mut engine, root, LayoutStyle::row(4.0));
+            let label = add(&mut tree, &mut engine, row, LayoutStyle::leaf());
+            add(
+                &mut tree,
+                &mut engine,
+                row,
+                LayoutStyle::leaf().with_grow(1.0),
+            );
+            text.texts.insert(label, format!("Row {index}"));
+            label
+        })
+        .collect();
+    let size = Size::new(400.0, 16.0 * 10_000.0);
+    run(&mut tree, &mut engine, &mut text, size);
+    for step in 0..3 {
+        let label = labels[step * 7];
+        let edited = format!("Row edit {step}");
+        text.texts.insert(label, edited.clone());
+        engine.invalidate(&tree, label);
+        text.calls = 0;
+        run(&mut tree, &mut engine, &mut text, size);
+        // The row and its two leaves, in the measuring and the arranging
+        // constraints: not one measure or cache hit for each other row.
+        let stats = engine.stats();
+        assert!(text.calls <= 8, "{} leaf measures", text.calls);
+        assert!(
+            stats.cache_hits + stats.leaf_measurements <= 16,
+            "{stats:?}"
+        );
+        assert!(engine.placed().len() <= 4, "{:?}", engine.placed());
+        let width = tree.bounds(label).unwrap().size.width;
+        assert_eq!(width, 7.0 * edited.len() as f64);
+    }
+}

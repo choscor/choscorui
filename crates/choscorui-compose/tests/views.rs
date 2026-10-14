@@ -4,8 +4,8 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    Binding, Branch, ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, Text, VStack, View,
-    ViewExt, ViewHost,
+    Binding, Branch, ControlView, Cx, Dynamic, Either, Env, ForEach, HStack, HorizontalAlignment,
+    ScrollView, Spacer, Text, VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls::{
     ControlContext, ControlEvent, ControlMessage, CustomControl, EstimatedText, MeasureContext,
@@ -206,6 +206,54 @@ fn a_state_change_dirties_the_same_nodes_at_any_size() {
     }
     assert_eq!(counts[0], counts[1]);
     assert!(counts[0] <= 2, "dirtied {} nodes", counts[0]);
+}
+
+/// The layout work of a change to one row of a scrolling column: the
+/// measures, the cache hits, and the placed nodes.
+fn row_change_work(rows: usize) -> (usize, usize) {
+    let runtime = Runtime::new();
+    let values: Vec<_> = (0..rows).map(|_| runtime.property(0u32)).collect();
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    let shown = values.clone();
+    host.mount(ScrollView::new(
+        VStack::new(ForEach::new(
+            (0..rows).collect::<Vec<_>>(),
+            |row| *row,
+            move |row: &usize| {
+                let value = shown[*row].clone();
+                HStack::new((
+                    Text::new(format!("Row {row}")),
+                    Spacer::new(),
+                    Text::new(move || format!("{} edits", value.get())),
+                ))
+                .padding(Space::S1)
+            },
+        ))
+        .alignment(HorizontalAlignment::Fill),
+    ));
+    host.layout();
+    values[5].set(12);
+    host.flush();
+    host.layout();
+    assert!(names(&mut host).contains(&"12 edits".to_owned()));
+    let stats = host.layout_engine().stats();
+    let measured = stats.cache_hits + stats.leaf_measurements;
+    (measured, host.layout_engine().placed().len())
+}
+
+#[test]
+fn a_row_change_lays_out_the_same_nodes_at_any_size() {
+    let small = row_change_work(100);
+    let large = row_change_work(10_000);
+    assert_eq!(small, large);
+    assert!(large.0 <= 16, "{} measures and cache hits", large.0);
+    assert!(large.1 <= 8, "{} placed nodes", large.1);
 }
 
 #[test]
