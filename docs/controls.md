@@ -3911,6 +3911,13 @@ behavior.
 ### Spinner and Skeleton
 
 - A spinner turns the loader icon once per second.
+- `with_size` sets the icon size: 12 pt for `Xs`, 14 pt for `Sm`, 16 pt
+  for `Default`, and 24 pt for `Lg`. The compose view has `.size`.
+- `with_color(role)` paints the icon in a color role in place of the
+  recipe foreground, as `currentColor` does. Give it the text color of the
+  content around the spinner. The compose view has `.color`.
+- The spinner reads the motion of the recipe at each paint. A change to
+  reduced motion stops the turn at the next paint.
 - A skeleton is a muted block that pulses between full and half opacity
   every 2 s. `Skeleton::new(label, width, height)` with a zero width fills
   the width it is given. `circle()` rounds it fully.
@@ -3921,7 +3928,7 @@ behavior.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Spinner | `Spinner` `Root` | 16 pt icon, 1000 ms turn |
+| Spinner | `Spinner` `Root` | 16 pt icon (12, 14, or 24 pt by size), `foreground`, 1000 ms turn |
 | Skeleton | `Skeleton` `Root` | `muted` fill, radius md, 2000 ms pulse |
 
 | Field | `Spinner::semantics`, `Skeleton::semantics` |

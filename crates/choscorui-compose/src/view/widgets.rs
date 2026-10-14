@@ -20,7 +20,7 @@ use choscorui_controls::{
     ControlKind, ControlMessage, ControlSize, ControlValue, InputType, ListEntry, MenuItem,
     NavigationLink, SheetSide, SidebarItem, ToggleItem,
 };
-use choscorui_core::{CivilDate, Icon, ItemModel, SelectionMode, SemanticRole};
+use choscorui_core::{CivilDate, ColorRole, Icon, ItemModel, SelectionMode, SemanticRole};
 use std::rc::Rc;
 
 /// The command id that view buttons report; views run closures instead.
@@ -1399,6 +1399,19 @@ impl Configured<controls::Spinner> {
         Configured::custom(ControlKind::Spinner, move |env| {
             controls::Spinner::new(text(&name, env))
         })
+    }
+
+    /// The icon size: `Xs`, `Sm`, `Default`, or `Lg`.
+    #[must_use]
+    pub fn size(self, size: ControlSize) -> Self {
+        self.with(move |spinner| spinner.with_size(size))
+    }
+
+    /// Paints the icon in `role`, for example the text color of the
+    /// content around it.
+    #[must_use]
+    pub fn color(self, role: ColorRole) -> Self {
+        self.with(move |spinner| spinner.with_color(role))
     }
 }
 

@@ -266,6 +266,15 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `Spinner::color`
+
+```rust
+pub fn color(self, role: ColorRole) -> Self
+```
+
+Paints the icon in `role`, for example the text color of the
+content around it.
+
 #### `Spinner::new`
 
 ```rust
@@ -273,6 +282,14 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>) -> Self
 ```
 
 A spinner named `name`.
+
+#### `Spinner::size`
+
+```rust
+pub fn size(self, size: ControlSize) -> Self
+```
+
+The icon size: `Xs`, `Sm`, `Default`, or `Lg`.
 
 ## `StackedContainer`
 

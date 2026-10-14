@@ -405,12 +405,42 @@ stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## spinner
-sizes default
+sizes default xs sm lg icon-xs icon-sm icon-lg
 slot root: root track range thumb indicator icon label content header title description footer action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
 ### spinner default default root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default xs root
+# rest
+stroke-path M20,25 L14.5,30.5 L12,28 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 22,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default sm root
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #0a0a0aff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default lg root
+# rest
+stroke-path M30,22 L19,33 L14,28 #0a0a0aff w2 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default icon-xs root
+# rest
+stroke-path M20,25 L14.5,30.5 L12,28 #0a0a0aff w1 Round Round dash[]
+text "Aa" at 22,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default icon-sm root
+# rest
+stroke-path M21.666666666666668,24.5 L15.25,30.916666666666668 L12.333333333333334,28 #0a0a0aff w1.1666666666666667 Round Round dash[]
+text "Aa" at 24,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### spinner default icon-lg root
+# rest
+stroke-path M30,22 L19,33 L14,28 #0a0a0aff w2 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## empty
 sizes default

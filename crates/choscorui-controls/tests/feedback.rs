@@ -3,7 +3,8 @@
 mod hosted;
 
 use choscorui_controls::{
-    Alert, AlertVariant, Avatar, ButtonVariant, ControlMessage, Empty, Skeleton, Spinner,
+    Alert, AlertVariant, Avatar, ButtonVariant, ControlMessage, ControlSize, Empty, Skeleton,
+    Spinner,
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, Icon, Key, KeyEvent, LayoutDirection,
@@ -107,6 +108,28 @@ fn spinner_spins_unless_motion_is_reduced() {
     assert_eq!(transforms(&h.paint()), 1);
     reduced(&mut h);
     assert!(!h.host.animating(&h.tree, 0.25), "a still spinner");
+}
+
+#[test]
+fn spinner_reads_motion_at_paint_and_takes_a_size_and_a_color() {
+    let spinner = Spinner::new("Saving")
+        .with_size(ControlSize::Lg)
+        .with_color(ColorRole::Primary);
+    let mut h = Harness::new(spinner);
+    assert_eq!(h.measure().width, 24.0);
+    assert!(h.host.animating(&h.tree, 0.0));
+    // Reduced motion reaches the spinner at the next paint, with no
+    // arrange.
+    let mut tokens = DesignTokens::light();
+    tokens.motion.reduced = true;
+    h.themes = ThemeResolver::new(tokens);
+    let painted = h.paint();
+    assert_eq!(transforms(&painted), 1);
+    assert!(!h.host.animating(&h.tree, 0.25));
+    assert!(paints(
+        &painted,
+        DesignTokens::light().color(ColorRole::Primary)
+    ));
 }
 
 #[test]

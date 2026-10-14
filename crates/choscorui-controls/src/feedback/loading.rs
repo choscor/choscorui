@@ -2,10 +2,11 @@
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
-use crate::style::{ControlKind, Corners, PaintContext, Slot, StyleQuery};
+use crate::style::{ControlKind, ControlSize, Corners, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    EventReply, Icon, Measured, Rect, SemanticNode, SemanticRole, Size, Transform,
+    ColorRole, EventReply, Icon, Measured, Rect, SemanticNode, SemanticRole, Size, Transform,
 };
+use std::cell::Cell;
 use std::f64::consts::TAU;
 
 /// The rotation, in radians, of a spinner `time` seconds into a turn of
@@ -34,22 +35,47 @@ fn pulse(time: f64, pulse_ms: u32) -> f64 {
 /// what is loading. With reduced motion, it does not spin.
 pub struct Spinner {
     label: String,
-    /// The turn time from the recipe, in milliseconds.
-    turn_ms: u32,
+    size: ControlSize,
+    /// The icon color in place of the recipe foreground.
+    color: Option<ColorRole>,
+    /// The turn time that the last paint read from the recipe, in
+    /// milliseconds.
+    turn_ms: Cell<u32>,
 }
 
 impl Spinner {
     pub fn new(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
-            turn_ms: 0,
+            size: ControlSize::Default,
+            color: None,
+            turn_ms: Cell::new(0),
         }
+    }
+
+    /// The spinner with the icon of `size`: `Xs`, `Sm`, `Default`, or `Lg`.
+    #[must_use]
+    pub fn with_size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Paints the icon in `role`, for example the text color of the
+    /// button or the row that holds the spinner, as `currentColor` does.
+    #[must_use]
+    pub fn with_color(mut self, role: ColorRole) -> Self {
+        self.color = Some(role);
+        self
+    }
+
+    fn query(&self) -> StyleQuery {
+        StyleQuery::new(ControlKind::Spinner, Slot::Root).size(self.size)
     }
 }
 
 impl CustomControl for Spinner {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        let style = cx.style(StyleQuery::new(ControlKind::Spinner, Slot::Root));
+        let style = cx.style(self.query());
         Measured {
             size: Size::new(style.icon_size, style.icon_size),
             baseline: None,
@@ -57,8 +83,7 @@ impl CustomControl for Spinner {
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
-        let style = cx.style(StyleQuery::new(ControlKind::Spinner, Slot::Root));
-        self.turn_ms = style.motion_ms;
+        self.turn_ms.set(cx.style(self.query()).motion_ms);
     }
 
     fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
@@ -66,7 +91,13 @@ impl CustomControl for Spinner {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let style = cx.style(StyleQuery::new(ControlKind::Spinner, Slot::Root));
+        let mut style = cx.style(self.query());
+        if let Some(role) = self.color {
+            style.foreground = cx.tokens.color(role);
+        }
+        // The motion comes from the paint, so a reduced-motion change
+        // stops the turn without a new arrange.
+        self.turn_ms.set(style.motion_ms);
         let center = cx.bounds.center();
         let angle = spin(cx.time, style.motion_ms);
         let rotation = Transform::translate(-center.x, -center.y)
@@ -80,7 +111,7 @@ impl CustomControl for Spinner {
     }
 
     fn animating(&self, _time: f64) -> bool {
-        self.turn_ms > 0
+        self.turn_ms.get() > 0
     }
 
     fn semantics(&self) -> SemanticNode {

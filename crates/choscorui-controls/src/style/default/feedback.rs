@@ -3,7 +3,7 @@
 
 use super::{Cx, focus, muted_text, text};
 use crate::style::{
-    AlertVariant, ControlKind, Corners, Edges, EmptyMediaVariant, ResolvedStyle, Slot,
+    AlertVariant, ControlKind, ControlSize, Corners, Edges, EmptyMediaVariant, ResolvedStyle, Slot,
 };
 use choscorui_core::{ColorRole, FontWeight, RadiusScale, ShadowScale, TextSize, Tracking};
 
@@ -152,8 +152,13 @@ fn skeleton(cx: &Cx) -> ResolvedStyle {
 
 fn spinner(cx: &Cx) -> ResolvedStyle {
     let mut style = cx.base();
-    style.icon_size = 16.0;
-    // One turn per second, still with reduced motion.
+    style.icon_size = match cx.q.size {
+        ControlSize::Xs | ControlSize::IconXs => 12.0,
+        ControlSize::Sm | ControlSize::IconSm => 14.0,
+        ControlSize::Lg | ControlSize::IconLg => 24.0,
+        _ => 16.0,
+    };
+    // One turn per second. Reduced motion gives zero: no turn.
     style.motion_ms = cx.motion(1000);
     style
 }
