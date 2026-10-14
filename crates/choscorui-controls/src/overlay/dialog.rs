@@ -9,12 +9,16 @@ use crate::style::{
     StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform, WheelUnit,
 };
 
 /// The share of a drawer's size that a drag must pass to dismiss it.
 const DRAG_DISMISS: f64 = 0.25;
+
+/// The speed toward the edge, in points per second, at which a release
+/// flicks a drawer closed after a shorter drag.
+const FLICK_SPEED: f64 = 600.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Form {
@@ -29,6 +33,18 @@ struct Drag {
     start: Point,
     /// How far the panel has moved toward its edge, in points.
     offset: f64,
+    /// The host time of the last move.
+    time: f64,
+    /// The speed toward the edge at the last move, in points per second.
+    speed: f64,
+}
+
+/// A drawer that springs back after a short drag: from `offset` points
+/// at host `time`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Spring {
+    offset: f64,
+    time: f64,
 }
 
 /// An outline button that opens a modal panel with a title, a
@@ -48,6 +64,13 @@ pub struct Dialog {
     header: Rect,
     close: Rect,
     handle: Option<Rect>,
+    /// The visible part of the title and the description. A taller text
+    /// scrolls in it.
+    body: Rect,
+    text_height: f64,
+    scroll: f64,
+    /// The description line height: one wheel line.
+    line: f64,
     motion_ms: u32,
     /// The focused part while open: a button index, or the button count
     /// for the close button.
@@ -57,6 +80,9 @@ pub struct Dialog {
     parts: Parts,
     trigger_press: Press,
     drag: Option<Drag>,
+    /// The drag offset where the close motion starts.
+    closing_from: f64,
+    spring: Option<Spring>,
     enabled: bool,
 }
 
@@ -79,11 +105,17 @@ impl Dialog {
             header: Rect::default(),
             close: Rect::default(),
             handle: None,
+            body: Rect::default(),
+            text_height: 0.0,
+            scroll: 0.0,
+            line: 0.0,
             motion_ms: 0,
             focus: 0,
             parts: Parts::default(),
             trigger_press: Press::default(),
             drag: None,
+            closing_from: 0.0,
+            spring: None,
             enabled: true,
         }
     }
@@ -194,18 +226,25 @@ impl Dialog {
 
     /// Opens or closes the dialog at `time` and ends a press or drag.
     /// Focus starts on the default button. Returns true when it changed.
+    /// A close during a drag starts its motion at the dragged offset.
     fn apply_open(&mut self, open: bool, time: f64) -> bool {
-        self.drag = None;
+        let dragged = self.drag.take().map_or(0.0, |drag| drag.offset);
+        self.spring = None;
         self.parts.clear();
         if self.reveal.open == open {
             return false;
         }
         self.reveal.set(open, time);
+        self.closing_from = if open { 0.0 } else { dragged };
+        self.scroll = 0.0;
         self.focus = self.default_part().unwrap_or(0);
         true
     }
 
     fn change_open(&mut self, cx: &mut ControlContext<'_>, open: bool) {
+        if self.drag.is_some() {
+            cx.capture_pointer(false);
+        }
         if !self.apply_open(open, cx.time()) {
             return;
         }
@@ -239,6 +278,30 @@ impl Dialog {
             Some(SheetSide::Left) => (-1.0, 0.0),
             Some(SheetSide::Right) => (1.0, 0.0),
         }
+    }
+
+    /// How far a drawer that springs back still is from its place at
+    /// `time`.
+    fn spring_offset(&self, tokens: &DesignTokens, time: f64) -> f64 {
+        let Some(spring) = self.spring else {
+            return 0.0;
+        };
+        let back = Reveal {
+            open: true,
+            changed_at: spring.time,
+        };
+        spring.offset * (1.0 - back.progress(tokens, self.motion_ms, time))
+    }
+
+    /// How far an edge panel is from its open place at `time`: the open
+    /// and close motion, a drag, and a spring back. A close after a drag
+    /// starts at the dragged offset.
+    fn edge_distance(&self, tokens: &DesignTokens, time: f64) -> f64 {
+        let progress = self.reveal.progress(tokens, self.motion_ms, time);
+        let extent = self.extent();
+        let from = self.closing_from.min(extent);
+        let drag = self.drag.map_or(0.0, |drag| drag.offset);
+        from + (1.0 - progress) * (extent - from) + drag + self.spring_offset(tokens, time)
     }
 
     /// The panel's size along its dismiss direction.
@@ -293,9 +356,23 @@ impl Dialog {
                 } else if !self.panel.contains(position) {
                     self.dismiss(cx);
                 } else if matches!(self.form, Form::Drawer(_)) {
+                    // A press during the spring back grabs the panel where
+                    // it is.
+                    let offset = self.spring.map_or(0.0, |spring| {
+                        let linear = if self.motion_ms == 0 {
+                            1.0
+                        } else {
+                            (cx.time() - spring.time) * 1000.0 / f64::from(self.motion_ms)
+                        };
+                        spring.offset * (1.0 - linear.clamp(0.0, 1.0))
+                    });
+                    let (ux, uy) = self.dismiss_direction();
+                    self.spring = None;
                     self.drag = Some(Drag {
-                        start: position,
-                        offset: 0.0,
+                        start: Point::new(position.x - ux * offset, position.y - uy * offset),
+                        offset,
+                        time: cx.time(),
+                        speed: 0.0,
                     });
                     cx.capture_pointer(true);
                 }
@@ -303,17 +380,47 @@ impl Dialog {
             }
             PointerEvent::Move { position } => {
                 let (ux, uy) = self.dismiss_direction();
+                let time = cx.time();
                 if let Some(drag) = &mut self.drag {
                     let (dx, dy) = (position.x - drag.start.x, position.y - drag.start.y);
-                    drag.offset = (dx * ux + dy * uy).max(0.0);
+                    let offset = (dx * ux + dy * uy).max(0.0);
+                    if time > drag.time {
+                        drag.speed = (offset - drag.offset) / (time - drag.time);
+                        drag.time = time;
+                    }
+                    drag.offset = offset;
+                    cx.request_paint();
+                }
+            }
+            PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            } if self.panel.contains(position) => {
+                let step = match unit {
+                    WheelUnit::Lines => delta.y * self.line,
+                    _ => delta.y,
+                };
+                let limit = (self.text_height - self.body.size.height).max(0.0);
+                let scroll = (self.scroll + step).clamp(0.0, limit);
+                if scroll != self.scroll {
+                    self.scroll = scroll;
                     cx.request_paint();
                 }
             }
             PointerEvent::Up { position, .. } => {
                 cx.capture_pointer(false);
-                if let Some(drag) = self.drag.take() {
-                    if drag.offset > self.extent() * DRAG_DISMISS {
+                if let Some(drag) = self.drag {
+                    let flick = drag.speed >= FLICK_SPEED && drag.offset > 0.0;
+                    if drag.offset > self.extent() * DRAG_DISMISS || flick {
                         self.dismiss(cx);
+                    } else {
+                        // A short drag springs back.
+                        self.drag = None;
+                        self.spring = (drag.offset > 0.0).then_some(Spring {
+                            offset: drag.offset,
+                            time: cx.time(),
+                        });
                     }
                     cx.request_paint();
                 } else if let Some(part) = pressed {
@@ -351,13 +458,21 @@ impl Dialog {
         let text = self.text.height(cx, self.query(Slot::Root), inner);
         let buttons = self.buttons.height(cx, false, footer.gap);
         let gap = if buttons > 0.0 { panel.gap } else { 0.0 };
-        let height = panel.padding.vertical() + text + gap + buttons;
+        // The panel stays inside the window, and a taller text scrolls.
+        let room = viewport.size.height - 2.0 * cx.tokens.spacing * 4.0;
+        let chrome = panel.padding.vertical() + gap + buttons;
+        let body = text.min((room - chrome).max(0.0));
+        let height = chrome + body;
         let x = viewport.center().x - width / 2.0;
         let y = viewport.center().y - height / 2.0;
         self.panel = Rect::from_xywh(x, y, width, height);
         let inner_x = x + panel.padding.inline_start;
         self.header = Rect::from_xywh(inner_x, y + panel.padding.block_start, inner, text);
-        let footer_rect = Rect::from_xywh(inner_x, self.header.max_y() + gap, inner, buttons);
+        self.set_body(
+            Rect::from_xywh(inner_x, self.header.origin.y, inner, body),
+            text,
+        );
+        let footer_rect = Rect::from_xywh(inner_x, self.body.max_y() + gap, inner, buttons);
         self.buttons.place_row(cx, footer_rect, footer.gap);
     }
 
@@ -425,6 +540,23 @@ impl Dialog {
             buttons,
         );
         self.buttons.place_column(cx, footer_rect, footer.gap);
+        // Under the 80% cap, or in a short window, a taller text scrolls
+        // above the footer.
+        let bottom = self.panel.max_y() - footer_height - header.padding.block_end;
+        let body = text.min((bottom - self.header.origin.y).max(0.0));
+        self.set_body(
+            Rect::from_xywh(inner_x, self.header.origin.y, inner, body),
+            text,
+        );
+    }
+
+    /// Records the visible text area and keeps the scroll inside it.
+    fn set_body(&mut self, body: Rect, text_height: f64) {
+        self.body = body;
+        self.text_height = text_height;
+        self.scroll = self
+            .scroll
+            .clamp(0.0, (text_height - body.size.height).max(0.0));
     }
 
     fn paint_panel(&self, cx: &mut PaintContext<'_>, panel: &ResolvedStyle, focus_visible: bool) {
@@ -445,8 +577,11 @@ impl Dialog {
             }
             _ => TextAlign::Start,
         };
-        self.text
-            .paint(cx, self.query(Slot::Root), self.header, align);
+        // The text clips to the body and moves by the scroll.
+        cx.list.push_clip(self.body);
+        let header = self.header.translate(0.0, -self.scroll);
+        self.text.paint(cx, self.query(Slot::Root), header, align);
+        let _ = cx.list.pop_clip();
         let focused = Some(self.focus);
         self.buttons.paint(cx, focused, &self.parts, focus_visible);
         if self.has_close() {
@@ -481,6 +616,7 @@ impl CustomControl for Dialog {
         self.viewport = cx.viewport;
         let panel = cx.style(self.query(Slot::Root));
         self.motion_ms = panel.motion_ms;
+        self.line = cx.style(self.query(Slot::Description)).text.line_height;
         match self.side() {
             None => self.arrange_dialog(cx, &panel),
             Some(side) => self.arrange_edge(cx, &panel, side),
@@ -551,20 +687,20 @@ impl CustomControl for Dialog {
         }
         let focus_visible = cx.state.focus_visible();
         let scrim = cx.style(self.query(Slot::Overlay));
-        let _ = cx.list.push_opacity(progress.clamp(0.0, 1.0));
-        cx.slot(self.viewport, &scrim, |_, _| {});
-        let _ = cx.list.pop_opacity();
         let panel = cx.style(self.query(Slot::Root).state(VisualState::OPEN));
         if self.side().is_none() {
+            paint_scrim(cx, self.viewport, &scrim, progress);
             Reveal::paint(cx, self.panel, progress, (0.0, 0.0), |cx| {
                 self.paint_panel(cx, &panel, focus_visible);
             });
             return;
         }
-        // An edge panel slides in from its edge and follows a drag.
+        // An edge panel slides in from its edge and follows a drag. The
+        // scrim fades with the share of the panel that shows.
         let (ux, uy) = self.dismiss_direction();
-        let drag = self.drag.map_or(0.0, |drag| drag.offset);
-        let distance = (1.0 - progress) * self.extent() + drag;
+        let distance = self.edge_distance(cx.tokens, cx.time);
+        let shown = 1.0 - distance / self.extent().max(1.0);
+        paint_scrim(cx, self.viewport, &scrim, shown);
         let _ = cx
             .list
             .push_transform(Transform::translate(ux * distance, uy * distance));
@@ -573,7 +709,10 @@ impl CustomControl for Dialog {
     }
 
     fn animating(&self, time: f64) -> bool {
-        self.reveal.animating(self.motion_ms, time)
+        let spring = self
+            .spring
+            .is_some_and(|spring| (time - spring.time) * 1000.0 < f64::from(self.motion_ms));
+        self.reveal.animating(self.motion_ms, time) || spring
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -595,7 +734,7 @@ impl CustomControl for Dialog {
         let mut node = hosted::node(SemanticRole::Dialog, &self.text.title, actions);
         node.description = self.text.description.clone();
         node.value = self.part_label(self.focus).map(str::to_string);
-        node.state.expanded = Some(true);
+        node.state.modal = true;
         node
     }
 
@@ -631,6 +770,7 @@ impl CustomControl for Dialog {
         if !enabled {
             self.reveal = Reveal::default();
             self.drag = None;
+            self.spring = None;
             self.parts.clear();
         }
     }
@@ -642,6 +782,13 @@ impl CustomControl for Dialog {
         self.apply_open(open, time);
         true
     }
+}
+
+/// Paints the scrim over `viewport` at `opacity`.
+fn paint_scrim(cx: &mut PaintContext<'_>, viewport: Rect, scrim: &ResolvedStyle, opacity: f64) {
+    let _ = cx.list.push_opacity(opacity.clamp(0.0, 1.0));
+    cx.slot(viewport, scrim, |_, _| {});
+    let _ = cx.list.pop_opacity();
 }
 
 fn trigger_query(state: VisualState) -> StyleQuery {

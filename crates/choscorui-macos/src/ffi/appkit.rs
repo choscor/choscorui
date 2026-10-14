@@ -311,6 +311,8 @@ messages! {
         (bool) -> ();
     pub(crate) SET_ACCESSIBILITY_EXPANDED: instance NSAccessibility,
         c"setAccessibilityExpanded:", (bool) -> ();
+    pub(crate) SET_ACCESSIBILITY_MODAL: instance NSAccessibility,
+        c"setAccessibilityModal:", (bool) -> ();
     pub(crate) SET_ACCESSIBILITY_SELECTED: instance NSAccessibility,
         c"setAccessibilitySelected:", (bool) -> ();
     pub(crate) SET_ACCESSIBILITY_LABEL: instance NSAccessibility, c"setAccessibilityLabel:",

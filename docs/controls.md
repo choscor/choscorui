@@ -3365,19 +3365,32 @@ is disabled. `set_value` returns false.
   drawer has no close button. The title and the description wrap in the
   panel width. The title lines stop before the close button.
 - **`Dialog::new`.** The panel is centered in the window. It is 448 pt
-  wide, or the window width less 32 pt. The footer buttons are a row at the
-  end. The panel fades and zooms in.
+  wide, or the window width less 32 pt. It is at most the window height
+  less 32 pt. The footer buttons are a row at the end. The panel fades and
+  zooms in.
+- **Body.** When the title and the description are taller than the room
+  in the panel, they clip to it, and the wheel scrolls them. The footer
+  stays in view.
 - **`Dialog::sheet(side, …)`.** The panel fills the window along `side`.
   A left or right sheet is 75% of the window width, at most 384 pt. The
   footer buttons stack at the bottom. The panel slides in from its edge.
   `side` is a window edge, so a right-to-left layout does not move the
   panel. Its border stays on the inner edge in both directions.
-- **`Dialog::drawer(side, …)`.** As a sheet, but a top or bottom drawer is
-  only as tall as its content, at most 80% of the window. A bottom drawer
-  has a handle. A drag toward the edge moves the panel. A release after
-  more than a quarter of its size dismisses it; a shorter drag snaps back.
-- A scrim at 10% black covers the window behind the panel and fades with
-  it.
+- A top or bottom sheet is only as tall as its content, at most 80% of
+  the window.
+- **`Dialog::drawer(side, …)`.** As a sheet. A bottom drawer has a handle.
+  A drag toward the edge moves the panel.
+- A release after more than a quarter of its size dismisses the drawer. A
+  release at 600 pt per second or more toward the edge also dismisses it.
+  The close motion starts at the dragged offset.
+- After a shorter and slower drag, the drawer springs back in the motion
+  time of the panel. A press during the spring back takes the panel where
+  it is.
+- Escape, Command+period, and `Dismiss` during a drag release the pointer.
+- A scrim at 10% black covers the window behind the panel.
+  It fades in and out in the motion time of the panel `Root` slot.
+- Behind a sheet or a drawer, the scrim opacity follows the share of the
+  panel that shows, so a drag also fades it.
 - **In a view.** The `dialog`, `alert_dialog`, `sheet`, and `drawer` view
   modifiers show view content in a panel of the same kind and recipe.
   Their `title` names the `Dialog` node of the panel and follows the
@@ -3407,7 +3420,7 @@ is disabled. `set_value` returns false.
 | Role | `Button` (AXButton) | `Dialog` (AXGroup) |
 | Name / value | trigger text / - | title / the focused part's label |
 | Description | - | the description |
-| State | expanded false, disabled | expanded |
+| State | expanded false, disabled | modal (`accessibilityModal`) |
 | Actions | `Activate` and `Focus` while enabled | `Activate` (the focused part), `Dismiss`, and `Focus` |
 
 `set_open` opens and closes the dialog, but not while it is disabled.
