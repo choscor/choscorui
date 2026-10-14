@@ -102,6 +102,22 @@ impl DatePicker {
         self
     }
 
+    /// Limits the days that can be chosen to `minimum` through
+    /// `maximum`. See [`Calendar::set_range`].
+    #[must_use]
+    pub fn with_range(mut self, minimum: Option<CivilDate>, maximum: Option<CivilDate>) -> Self {
+        self.calendar.set_range(minimum, maximum);
+        self
+    }
+
+    /// Disables each day for which `disabled` is true. See
+    /// [`Calendar::with_disabled_days`].
+    #[must_use]
+    pub fn with_disabled_days(mut self, disabled: impl Fn(CivilDate) -> bool + 'static) -> Self {
+        self.calendar = self.calendar.with_disabled_days(disabled);
+        self
+    }
+
     /// The picker with the invalid state from the start.
     #[must_use]
     pub fn with_invalid(mut self, invalid: bool) -> Self {
@@ -150,9 +166,41 @@ impl DatePicker {
         StyleQuery::new(ControlKind::DatePicker, slot).state(state)
     }
 
-    /// The trigger text: the chosen days, or the placeholder.
+    /// The chosen days as text, or `None` while nothing is chosen.
     fn text(&self) -> Option<String> {
         (!self.dates().is_empty()).then(|| self.calendar.value_text())
+    }
+
+    /// The trigger label: the placeholder, the chosen days, or the count
+    /// of several days that a multiple picker chose.
+    fn label(&self, strings: &Localizer) -> String {
+        let count = self.dates().len();
+        if self.mode == CalendarMode::Multiple && count > 1 {
+            let number = count.to_string();
+            let args = [("count", number.as_str())];
+            if let Ok(summary) = strings.plural("choscorui.date_picker.count", count as u64, &args)
+            {
+                return summary;
+            }
+        }
+        self.text().unwrap_or_else(|| self.placeholder.clone())
+    }
+
+    /// Clears the chosen days and reports it. Returns false when none
+    /// were chosen.
+    fn clear(&mut self, cx: &mut ControlContext<'_>) -> bool {
+        if self.dates().is_empty() {
+            return false;
+        }
+        self.calendar.set_dates(&[]);
+        cx.emit(ControlMessage::Changed(match self.mode {
+            CalendarMode::Single => ControlValue::Date(None),
+            _ => ControlValue::Dates(Vec::new()),
+        }));
+        cx.request_layout();
+        cx.request_paint();
+        cx.request_semantics();
+        true
     }
 
     /// Opens or closes the popover at `time`. Returns true when it
@@ -207,7 +255,10 @@ impl DatePicker {
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, date: CivilDate) {
         if self.mode == CalendarMode::Single {
-            if self.calendar.dates() != [date] {
+            // A second choice of the chosen day clears it.
+            if self.calendar.dates() == [date] {
+                self.clear(cx);
+            } else {
                 self.calendar.set_dates(&[date]);
                 cx.emit(ControlMessage::Changed(ControlValue::Date(Some(date))));
                 cx.request_semantics();
@@ -255,8 +306,10 @@ impl DatePicker {
             };
             if layout.previous.contains(position) {
                 self.calendar.show_month(-1);
+                cx.request_semantics();
             } else if layout.next.contains(position) {
                 self.calendar.show_month(1);
+                cx.request_semantics();
             } else if let Some(index) = layout.days.iter().position(|day| day.contains(position)) {
                 let cell = self.calendar.cells().get(index).copied();
                 if let Some(cell) = cell.filter(|cell| cell.enabled) {
@@ -277,10 +330,11 @@ impl DatePicker {
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
         if !self.reveal.open {
             return match key {
-                Key::Enter | Key::Space | Key::ArrowDown => {
+                Key::Enter | Key::Space | Key::ArrowDown | Key::ArrowUp => {
                     self.change_open(cx, true);
                     EventReply::Stop
                 }
+                Key::Backspace | Key::Delete if self.clear(cx) => EventReply::Stop,
                 _ => EventReply::Continue,
             };
         }
@@ -291,8 +345,20 @@ impl DatePicker {
             cx.request_semantics();
             return EventReply::Stop;
         }
-        if key == Key::Tab && self.calendar.has_dropdown_caption() {
+        if key == Key::Tab {
             return self.tab(cx);
+        }
+        if matches!(key, Key::Enter | Key::Space)
+            && matches!(self.focus, CalendarFocus::Previous | CalendarFocus::Next)
+        {
+            let mut focus = self.focus;
+            self.calendar.press_button(&mut focus);
+            self.focus = focus;
+            self.reveal_cursor = true;
+            cx.request_layout();
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Stop;
         }
         if let Some(part) = self.calendar.caption_part(self.focus) {
             if self.calendar.caption_key(part, key) == CaptionReply::Ignored {
@@ -307,15 +373,19 @@ impl DatePicker {
                 self.dismiss(cx);
                 EventReply::Stop
             }
-            Key::Tab => {
-                self.dismiss(cx);
-                EventReply::Continue
-            }
             Key::Enter | Key::Space => {
                 let date = self.calendar.selected();
-                self.activate(cx, date);
+                if self
+                    .calendar
+                    .cells()
+                    .iter()
+                    .any(|c| c.date == date && c.enabled)
+                {
+                    self.activate(cx, date);
+                }
                 EventReply::Stop
             }
+            _ if self.focus != CalendarFocus::Grid => EventReply::Continue,
             key => {
                 // Arrow keys, Page Up and Down, Home, and End move the
                 // cursor; Enter or Space chooses.
@@ -350,8 +420,9 @@ impl DatePicker {
         Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl())
     }
 
-    /// Tab and Shift+Tab move between the caption dropdowns and the grid.
-    /// Past the ends they close the popover, and focus moves on.
+    /// Tab and Shift+Tab move between the month buttons, the caption
+    /// dropdowns, and the grid. Past the ends they close the popover, and
+    /// focus moves on.
     fn tab(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
         let stops = self.calendar.stops();
         let current = stops
@@ -377,7 +448,12 @@ impl DatePicker {
 impl CustomControl for DatePicker {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let root = cx.style(Self::query(Slot::Root, VisualState::NONE));
-        let text = self.text().unwrap_or_else(|| self.placeholder.clone());
+        // A count summary is short, so several days measure as the
+        // placeholder does.
+        let text = match self.text() {
+            Some(text) if self.mode != CalendarMode::Multiple || self.dates().len() == 1 => text,
+            _ => self.placeholder.clone(),
+        };
         let content = Content {
             leading: Some(Icon::Calendar),
             label: &text,
@@ -388,9 +464,10 @@ impl CustomControl for DatePicker {
             constraints: choscorui_core::Constraints::UNBOUNDED,
             ..*cx
         };
+        // A narrower width truncates the label.
         let width = size.width.max(default_width(&unbounded, &root));
         Measured {
-            size: Size::new(width, size.height),
+            size: cx.constraints.constrain(Size::new(width, size.height)),
             baseline: None,
         }
     }
@@ -495,15 +572,15 @@ impl CustomControl for DatePicker {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let state = self.visual_state(cx.state);
         let root = cx.style(Self::query(Slot::Root, state));
-        let text = self.text();
+        let chosen = !self.dates().is_empty();
+        let label = self.label(cx.strings);
         let placeholder = cx.style(Self::query(Slot::Placeholder, state));
         let bounds = cx.bounds;
         cx.slot(bounds, &root, |cx, inner| {
-            let style = if text.is_some() { &root } else { &placeholder };
-            let label = text.as_deref().unwrap_or(&self.placeholder);
+            let style = if chosen { &root } else { &placeholder };
             let content = Content {
                 leading: Some(Icon::Calendar),
-                label,
+                label: &label,
                 trailing: None,
             };
             let mut style = style.clone();

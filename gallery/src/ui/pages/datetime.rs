@@ -72,7 +72,9 @@ impl View for CalendarPage {
             ),
             section(
                 t!("calendar.dropdown"),
-                Calendar::new(birthday.binding()).with_env(|calendar, env| {
+                Calendar::new(birthday.binding()).with_env(|mut calendar, env| {
+                    // The month buttons stop at the years of the dropdown.
+                    calendar.set_range(Some(date(1926, 1, 1)), Some(date(2026, 12, 31)));
                     calendar
                         .with_name(env.text("calendar.birthday", &[]))
                         .with_today(today())
@@ -234,6 +236,21 @@ mod tests {
     }
 
     #[test]
+    fn the_dropdown_calendar_stops_at_the_last_year_of_its_list() {
+        let mut page = Harness::new("calendar");
+        assert!(page.act("Birthday", SemanticAction::Focus));
+        // Tab passes the previous-month button; Enter pages to December.
+        press(&mut page, Key::Tab);
+        press(&mut page, Key::Enter);
+        press(&mut page, Key::Enter);
+        // The next-month button is now disabled, and Enter goes to the grid.
+        press(&mut page, Key::Enter);
+        let node = page.node("Birthday");
+        let description = page.host.semantic(node).unwrap().description.clone();
+        assert_eq!(description, "December 2026");
+    }
+
+    #[test]
     fn the_limited_editor_clamps_hours_outside_office_hours() {
         let mut page = Harness::new("date-time-edit");
         let message = "Outside the allowed range; Return or leaving the field clamps it";
@@ -269,7 +286,15 @@ mod tests {
     fn choosing_a_day_shows_it() {
         let mut page = Harness::new("calendar");
         assert!(page.act("Calendar", SemanticAction::Focus));
+        // Tab passes the month buttons to the grid.
+        press(&mut page, Key::Tab);
+        press(&mut page, Key::Tab);
         press(&mut page, Key::ArrowRight);
+        assert!(
+            page.host.find("Chosen: October 13, 2026").is_none(),
+            "an arrow moves the cursor only"
+        );
+        press(&mut page, Key::Enter);
         assert!(page.host.find("Chosen: October 13, 2026").is_some());
     }
 }

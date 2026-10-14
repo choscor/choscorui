@@ -1768,26 +1768,35 @@ behavior.
 
 **Calendar:**
 
-- ArrowLeft and ArrowRight move one day. ArrowUp and ArrowDown move one
-  week. PageUp and PageDown move one month.
+- The keys move a cursor and do not choose. ArrowLeft and ArrowRight move
+  one day. ArrowUp and ArrowDown move one week. PageUp and PageDown move
+  one month.
 - Home and End go to the start and the end of the week. The locale sets
   the first weekday.
-- A move to a date outside the range does nothing.
+- A move to a date outside the range does nothing. The cursor can stop on
+  a disabled day, but that day cannot be chosen.
 - Right-to-left layouts swap ArrowLeft and ArrowRight, so the arrow keys
   follow the mirrored columns. `set_direction(Rtl)` sets this, and a hosted
   calendar or date picker takes the host direction.
-- The host chooses the date, for example on Enter. `show_month` changes the
-  shown month and keeps the selection.
+- Enter, Space, or a click chooses a day. `select` moves the cursor, and
+  `activate` chooses.
+- `show_month` and the month buttons show another month and move the
+  cursor into it, inside the range. They keep the chosen days. A month
+  with no day in the range cannot show: `can_show_month` is false, and its
+  month button is disabled.
+- `with_disabled_days` disables each day for which a test is true, such as
+  weekends.
 - **Look.** `layout` places a caption row, a weekday row, and six weeks of
   32 pt cells. Columns follow reading order. `paint` uses the `Calendar`
   recipe.
 - The selected day fills `primary`, and today fills `muted`. Days outside
   the month are muted. `CalendarFocus` names the part that rings.
-- **Modes.** `with_mode` sets the `CalendarMode`. In `Single` mode the
-  selected day is the value. In `Multiple` and `Range` modes the selected
-  day is the keyboard cursor, and `activate` or Enter or Space chooses.
-- `Multiple` adds or removes the day. `Range` sets the start, then the end.
-  A day before the start, or a third activation, starts a new range.
+- **Modes.** `with_mode` sets the `CalendarMode`. In each mode the
+  selected day is the keyboard cursor, and `activate` or Enter or Space
+  chooses. A `Single` calendar starts with the cursor day chosen.
+- `Single` chooses the day. `Multiple` adds or removes the day. `Range`
+  sets the start, then the end. A day before the start, or after the end,
+  extends the range to it. A day inside a full range starts a new range.
 - Chosen days fill `primary`. A range's middle days fill `muted` with
   square corners, and a muted band joins its two ends. The ring follows the
   cursor.
@@ -1802,7 +1811,19 @@ behavior.
   with the same keys, type-ahead, scroll buttons, and hover scroll. A check
   mark shows the shown month or year.
 - Months and years with no day in the range are disabled. A choice shows
-  that month and keeps the selection. It emits no message.
+  that month, moves the cursor into it, and keeps the chosen days. It
+  emits no message.
+- **In a control host.** The tab stops are the enabled previous-month and
+  next-month buttons, the caption dropdowns, and the grid, in this order.
+  Tab and Shift+Tab move between them and leave the calendar at the ends.
+  Enter or Space on a month button shows its month. When that month
+  disables the button, focus goes to the grid.
+- On the grid, the arrow keys move the cursor and emit no message. Enter or
+  Space chooses the cursor day and emits `Changed` when the value changes.
+  A `Single` calendar then emits `Activated`. A click on an enabled day
+  chooses it.
+- A focused month button shows the focus ring. A disabled month button
+  is a disabled part.
 
 | Calendar part | Slot | Value |
 | --- | --- | --- |
@@ -1820,7 +1841,8 @@ behavior.
 | Caption dropdown | `Trigger` | 32 pt input box with no fill, radius md, 8 pt start and 4 pt end padding, sm medium text, 4 pt gap; the focus ring while focused |
 | Dropdown chevron | `Icon` | 14 pt `muted-foreground` chevron at the end of the trigger |
 | Dropdown list | `Select` `Content`, `Item` | the select list |
-| Month buttons | `Previous`, `Next` | 32 pt ghost icon buttons |
+| Month buttons | `Previous`, `Next` | 32 pt ghost icon buttons; disabled at the ends of the range |
+
 
 | Field | `DateTimeEdit::semantics` | `Calendar::semantics` | `Calendar::cell_semantics` |
 | --- | --- | --- | --- |
@@ -3268,9 +3290,16 @@ character that the code does not accept. `set_open` returns false.
 ### DatePicker
 
 - The trigger is an outline button with a calendar icon and the chosen
-  dates, or the placeholder. It is at least 240 pt wide.
-- A press on the trigger, Enter, Space, or ArrowDown opens the calendar 4
-  pt below the trigger. It fades, zooms, and slides in like a select list.
+  dates, or the placeholder. It is at least 240 pt wide, but a narrower
+  width constraint makes it narrower, and the label truncates.
+- A `Multiple` picker with more than one chosen day shows a count, from
+  the built-in `choscorui.date_picker.count` plural message, for example
+  "2 dates". The semantic value keeps the full list.
+- A press on the trigger, Enter, Space, ArrowDown, or ArrowUp opens the
+  calendar 4 pt below the trigger. It fades, zooms, and slides in like a
+  select list.
+- Backspace or Delete on the closed trigger clears the chosen days and
+  emits `Changed` with no date.
 - `place_popup` keeps the calendar in the window. Near the bottom edge it
   opens above the trigger. In a window that is too short, the popover gets
   the height of the window and the calendar scrolls in it. The wheel
@@ -3278,21 +3307,26 @@ character that the code does not accept. `set_open` returns false.
 - Each close without a choice emits `Dismissed`: Escape, Tab, a press
   outside, a press on the trigger, focus loss, and disabling.
 - **Keys while open.** The calendar keys move the cursor and do not choose.
-  Enter or Space chooses the cursor day. Escape closes and emits
-  `Dismissed`. Tab closes and moves focus.
+  Enter or Space chooses the cursor day, when it is enabled. Escape closes
+  and emits `Dismissed`.
+- Tab and Shift+Tab move between the enabled month buttons, the caption
+  dropdowns, and the grid, as in a hosted
+  [Calendar](#datetimeedit-and-calendar). Past the ends they close the
+  popover, and focus moves on.
 - The ring on the cursor day or a caption dropdown shows only while the
   last input is the keyboard. A popover that a press opens shows no ring
   until a key.
 - A press on a day chooses it, and the month buttons change the shown
   month.
-- A `Single` picker closes after a choice and emits `Changed(Date)`.
-  `Multiple` and `Range` pickers stay open and emit `Changed(Dates)`.
+- A `Single` picker closes after a choice and emits `Changed(Date)`. A
+  choice of the chosen day clears it. `Multiple` and `Range` pickers stay
+  open and emit `Changed(Dates)`.
 - `with_today` marks today. `set_dates` sets the value; a single picker
   keeps the first date.
+- `with_range` limits the days to a minimum and a maximum, and
+  `with_disabled_days` disables days, as on the calendar.
 - **Dropdown caption.** `with_dropdown_caption(first_year, last_year)` gives
   the calendar the dropdown caption of [Calendar](#datetimeedit-and-calendar).
-  Tab and Shift+Tab move between the month dropdown, the year dropdown, and
-  the grid. Past the ends they close the popover, and focus moves on.
 - Escape closes an open dropdown list first. The popover stays open.
 - **Invalid.** `set_invalid(true)` or `with_invalid(true)` gives the
   trigger the invalid look and sets the invalid semantic state.

@@ -6,7 +6,8 @@ use choscorui_controls::{
     Calendar, CalendarMode, ControlMessage, ControlValue, DatePicker, VisualState,
 };
 use choscorui_core::{
-    CivilDate, ColorRole, DesignTokens, Key, Locale, SemanticAction, SemanticRole,
+    CivilDate, ColorRole, Constraints, DesignTokens, Key, Locale, Point, SemanticAction,
+    SemanticRole, Size,
 };
 use hosted::{Harness, paints, rounded_fills, texts};
 
@@ -149,11 +150,20 @@ fn calendar_modes_choose_days_as_documented() {
     let mut range = Calendar::new(locale, date(12)).with_mode(CalendarMode::Range);
     range.activate(date(10));
     range.activate(date(5));
-    assert_eq!(range.dates(), [date(5)], "an earlier day starts again");
+    assert_eq!(range.dates(), [date(5), date(10)], "an earlier day ends it");
     range.activate(date(9));
-    assert_eq!(range.dates(), [date(5), date(9)]);
+    assert_eq!(range.dates(), [date(9)], "a day inside starts again");
     range.activate(date(20));
-    assert_eq!(range.dates(), [date(20)], "a third activation starts again");
+    assert_eq!(range.dates(), [date(9), date(20)]);
+    range.activate(date(3));
+    assert_eq!(
+        range.dates(),
+        [date(3), date(20)],
+        "an earlier day extends it"
+    );
+    range.activate(date(25));
+    assert_eq!(range.dates(), [date(3), date(25)], "a later day extends it");
+
     let node = range.semantics("Stay");
     assert_eq!(node.role, SemanticRole::Table);
 }
@@ -220,4 +230,104 @@ fn closing_without_a_choice_reports_dismissed_and_disabling_closes() {
         ]
     );
     assert!(h.host.get(h.node).unwrap().overlay().is_none());
+}
+
+#[test]
+fn month_buttons_respect_the_range_and_page_the_cursor() {
+    let mut calendar = Calendar::new(Locale::parse("en").unwrap(), date(15)).with_name("Due");
+    calendar.set_range(Some(CivilDate::new(2026, 9, 10).unwrap()), Some(date(20)));
+    assert!(!calendar.can_show_month(1), "November is past the range");
+    let mut h = Harness::new(calendar);
+    h.focus();
+    // The previous-month button is the first stop. The disabled
+    // next-month button is no stop.
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().description, "September 2026");
+    // The cursor moved into September. The previous-month button is now
+    // disabled, so focus moved to the grid, where Enter chooses.
+    h.key(Key::Enter);
+    let september = CivilDate::new(2026, 9, 15).unwrap();
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::Changed(ControlValue::Date(Some(september))),
+            ControlMessage::Activated,
+        ]
+    );
+    let bounds = h.bounds();
+    h.click(Point::new(bounds.origin.x + 28.0, bounds.origin.y + 28.0));
+    assert_eq!(h.semantics().description, "September 2026", "disabled");
+}
+
+#[test]
+fn a_multiple_picker_counts_its_days_and_a_key_clears_them() {
+    let mut h = Harness::new(picker(CalendarMode::Multiple));
+    let node = h.node;
+    let dates = ControlValue::Dates(vec![date(3), date(9)]);
+    assert!(h.host.set_value(&mut h.tree, node, &dates));
+    assert_eq!(texts(&h.paint()), ["2 dates"]);
+    assert_eq!(
+        h.semantics().value.as_deref(),
+        Some("October 3, 2026, October 9, 2026")
+    );
+    h.focus();
+    h.key(Key::Delete);
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Dates(Vec::new()))]
+    );
+    assert_eq!(texts(&h.paint()), ["Pick a date"]);
+}
+
+#[test]
+fn arrow_up_opens_and_choosing_the_chosen_day_again_clears_it() {
+    let mut h = Harness::new(picker(CalendarMode::Single));
+    let node = h.node;
+    let chosen = ControlValue::Date(Some(date(12)));
+    assert!(h.host.set_value(&mut h.tree, node, &chosen));
+    h.focus();
+    h.key(Key::ArrowUp);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    h.messages();
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::Changed(ControlValue::Date(None)),
+            ControlMessage::OpenChanged(false),
+        ]
+    );
+}
+
+#[test]
+fn a_picker_takes_a_range_and_disabled_days_and_truncates_to_its_width() {
+    let picker = picker(CalendarMode::Single)
+        .with_range(Some(date(5)), Some(date(25)))
+        .with_disabled_days(|day| day.day() == 13);
+    let mut h = Harness::new(picker);
+    h.focus();
+    h.key(Key::Enter);
+    h.messages();
+    h.key(Key::ArrowRight);
+    h.key(Key::Enter);
+    assert!(h.messages().is_empty(), "the 13th is disabled");
+    h.key(Key::ArrowRight);
+    h.key(Key::Enter);
+    assert_eq!(
+        h.messages(),
+        [
+            ControlMessage::Changed(ControlValue::Date(Some(date(14)))),
+            ControlMessage::OpenChanged(false),
+        ]
+    );
+    let narrow = h.measure_in(Constraints::loose(Size::new(120.0, 100.0)));
+    assert_eq!(narrow.width, 120.0);
+    h.place(hosted::rect(10.0, 10.0, narrow.width, narrow.height));
+    h.set_time(1.0);
+    assert!(
+        texts(&h.paint())
+            .iter()
+            .any(|text| text.ends_with('\u{2026}')),
+        "the label truncates"
+    );
 }

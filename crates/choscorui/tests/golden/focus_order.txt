@@ -67,6 +67,8 @@ resizable
 scroll-area
 dropdown-menu
 calendar
+calendar (inside)
+calendar (inside)
 date-time-edit
 button-group
 tool-button
@@ -90,8 +92,6 @@ scroll-bar
 key-sequence-edit
 text-editor
 canvas
-canvas (inside)
-canvas (inside)
 canvas (inside)
 canvas (inside)
 canvas (inside)
@@ -410,6 +410,8 @@ resizable
 scroll-area
 dropdown-menu
 calendar
+calendar (inside)
+calendar (inside)
 date-time-edit
 button-group
 tool-button
@@ -433,8 +435,6 @@ scroll-bar
 key-sequence-edit
 text-editor
 canvas
-canvas (inside)
-canvas (inside)
 canvas (inside)
 canvas (inside)
 canvas (inside)

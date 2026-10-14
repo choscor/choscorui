@@ -347,7 +347,7 @@ fn en() -> Locale {
 }
 
 #[test]
-fn a_hosted_calendar_moves_its_selection_and_leaves_choosing_to_the_application() {
+fn a_hosted_calendar_moves_a_cursor_and_chooses_on_enter() {
     let calendar = Calendar::new(en(), date(2024, 5, 15))
         .with_name("Due")
         .with_today(date(2024, 5, 1));
@@ -356,6 +356,9 @@ fn a_hosted_calendar_moves_its_selection_and_leaves_choosing_to_the_application(
     assert_eq!(h.semantics().name, "Due");
     assert_eq!(h.semantics().description, "May 2024");
     h.focus();
+    // Tab passes the month buttons to the grid.
+    h.key(Key::Tab);
+    h.key(Key::Tab);
     h.key(Key::ArrowRight);
     h.key(Key::Enter);
     assert!(h.perform(SemanticAction::Focus, None));
@@ -392,6 +395,9 @@ fn a_hosted_multiple_calendar_chooses_days() {
     let calendar = Calendar::new(en(), date(2024, 5, 15)).with_mode(CalendarMode::Multiple);
     let mut h = Harness::new(calendar);
     h.focus();
+    h.key(Key::Tab);
+    h.key(Key::Tab);
+
     h.key(Key::Space);
     h.key(Key::ArrowRight);
     assert_eq!(

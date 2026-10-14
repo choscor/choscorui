@@ -43,6 +43,14 @@ fn text_x(list: &DisplayList, text: &str) -> f64 {
         .unwrap_or_else(|| panic!("no text {text}"))
 }
 
+/// Focuses the calendar and tabs past the two month buttons to the
+/// month dropdown.
+fn focus_month(h: &mut Harness) {
+    h.focus();
+    h.key(Key::Tab);
+    h.key(Key::Tab);
+}
+
 fn shift_tab(h: &mut Harness) {
     h.modifiers(ShortcutModifiers {
         shift: true,
@@ -70,11 +78,11 @@ fn the_caption_shows_month_and_year_dropdowns_in_place_of_the_title() {
 }
 
 #[test]
-fn the_dropdowns_are_tab_stops_before_the_grid() {
+fn the_dropdowns_are_tab_stops_between_the_month_buttons_and_the_grid() {
     let mut h = Harness::new(calendar());
-    h.focus();
+    focus_month(&mut h);
     let node = h.semantics();
-    assert_eq!(h.focused_part(), "October", "Tab enters at the month");
+    assert_eq!(h.focused_part(), "October", "after the month buttons");
     assert_eq!(node.state.expanded, Some(false));
     assert!(node.actions.contains(&SemanticAction::ShowMenu));
     h.key(Key::Tab);
@@ -85,14 +93,15 @@ fn the_dropdowns_are_tab_stops_before_the_grid() {
     shift_tab(&mut h);
     assert_eq!(h.focused_part(), "2026");
     shift_tab(&mut h);
+    assert_eq!(h.focused_part(), "October");
     shift_tab(&mut h);
-    assert_eq!(h.focused_part(), "October", "focus left at the start");
+    assert_eq!(h.focused_part(), "Next month");
 }
 
 #[test]
 fn keys_open_a_dropdown_and_a_choice_shows_its_month() {
     let mut h = Harness::new(calendar());
-    h.focus();
+    focus_month(&mut h);
     for open in [Key::Enter, Key::Space, Key::ArrowDown] {
         h.key(open);
         assert_eq!(h.semantics().state.expanded, Some(true), "{open:?}");
@@ -178,6 +187,7 @@ fn months_and_years_outside_the_range_are_disabled() {
     calendar.set_range(Some(date(2026, 10, 5)), Some(date(2027, 2, 1)));
     let mut h = Harness::new(calendar);
     h.focus();
+    h.key(Key::Tab);
     h.key(Key::Enter);
     h.key(Key::Home);
     assert_eq!(h.focused_part(), "October", "earlier months are disabled");
@@ -198,7 +208,7 @@ fn the_year_list_takes_its_ends_in_either_order() {
         .with_dropdown_caption(2030, 2024);
     assert!(calendar.has_dropdown_caption());
     let mut h = Harness::new(calendar);
-    h.focus();
+    focus_month(&mut h);
     h.key(Key::Tab);
     h.key(Key::Enter);
     h.key(Key::Home);
@@ -210,7 +220,7 @@ fn the_year_list_takes_its_ends_in_either_order() {
 #[test]
 fn assistive_actions_open_and_close_the_focused_dropdown() {
     let mut h = Harness::new(calendar());
-    h.focus();
+    focus_month(&mut h);
     assert!(h.perform(SemanticAction::ShowMenu, None));
     assert_eq!(h.semantics().state.expanded, Some(true));
     assert!(h.semantics().actions.contains(&SemanticAction::Collapse));

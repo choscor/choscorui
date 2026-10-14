@@ -77,14 +77,19 @@ fn a_right_to_left_calendar_moves_days_with_the_mirrored_columns() {
     let calendar = Calendar::new(Locale::parse("en-US").unwrap(), date(15)).with_name("Due");
     let mut h = rtl(calendar);
     h.focus();
-    h.key(Key::ArrowLeft);
-    h.key(Key::ArrowRight);
-    h.key(Key::ArrowRight);
-    h.key(Key::ArrowDown);
-    assert_eq!(
-        h.messages(),
-        vec![chosen(16), chosen(15), chosen(14), chosen(21)]
-    );
+    h.key(Key::Tab);
+    h.key(Key::Tab);
+    for (keys, day) in [
+        (&[Key::ArrowLeft][..], 16),
+        (&[Key::ArrowRight, Key::ArrowRight], 14),
+        (&[Key::ArrowDown], 21),
+    ] {
+        for key in keys {
+            h.key(*key);
+        }
+        h.key(Key::Enter);
+        assert_eq!(h.messages(), vec![chosen(day), ControlMessage::Activated]);
+    }
 }
 
 const COPY: CommandId = CommandId(1);

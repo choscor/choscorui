@@ -538,6 +538,9 @@ fn a_calendar_of_several_days_edits_its_dates() {
     });
     let node = host.find("Meetings").unwrap();
     host.focus(Some(node));
+    // Tab passes the month buttons to the grid.
+    press(&mut host, Key::Tab);
+    press(&mut host, Key::Tab);
     press(&mut host, Key::ArrowRight);
     press(&mut host, Key::Enter);
     assert_eq!(take(&dates).get(), vec![day(8), day(9)]);

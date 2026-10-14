@@ -26,6 +26,7 @@ use choscorui_core::{
     Size, days_in_month, month_grid, month_name, weekday_short_name,
 };
 use std::ops::Range;
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DateTimeField {
@@ -483,20 +484,22 @@ impl DateTimeEdit {
     }
 }
 
-/// Month calendar: arrows move by day and week, Page Up/Down by month,
-/// Home/End to the start/end of the week (locale first weekday). Choosing
-/// a date (for example on Return) is left to the host. Dates outside the
-/// range are visible but not selectable.
+/// Month calendar: arrows move the cursor by day and week, Page Up/Down
+/// by month, Home/End to the start/end of the week (locale first
+/// weekday). Return, Space, or a click chooses the cursor day. Dates
+/// outside the range are visible but not selectable.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Calendar {
     locale: Locale,
+    /// The keyboard cursor.
     selected: CivilDate,
     shown: (i32, u8),
     minimum: Option<CivilDate>,
     maximum: Option<CivilDate>,
     mode: CalendarMode,
-    /// The chosen days of a `Multiple` calendar, in order, or the start
-    /// and end of a `Range` calendar.
+    /// The chosen day of a `Single` calendar, the chosen days of a
+    /// `Multiple` calendar in order, or the start and end of a `Range`
+    /// calendar.
     chosen: Vec<CivilDate>,
     /// The accessible name of a hosted calendar.
     name: String,
@@ -512,6 +515,25 @@ pub struct Calendar {
     pub(crate) parts: Parts<CalendarPart>,
     /// Whether the day grid runs right to left.
     rtl: bool,
+    /// The days that cannot be chosen inside the range.
+    disabled: Option<DisabledDays>,
+}
+
+/// The test of [`Calendar::with_disabled_days`]. Two calendars are equal
+/// only when they share the same test.
+#[derive(Clone)]
+struct DisabledDays(Rc<dyn Fn(CivilDate) -> bool>);
+
+impl std::fmt::Debug for DisabledDays {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DisabledDays")
+    }
+}
+
+impl PartialEq for DisabledDays {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 /// A month button, or a day cell by index, of a calendar.
@@ -594,7 +616,7 @@ impl Calendar {
             minimum: None,
             maximum: None,
             mode: CalendarMode::Single,
-            chosen: Vec::new(),
+            chosen: vec![selected],
             name: String::new(),
             today: None,
             layout: None,
@@ -602,6 +624,7 @@ impl Calendar {
             caption: None,
             focus: CalendarFocus::None,
             rtl: false,
+            disabled: None,
         }
     }
 
@@ -626,17 +649,40 @@ impl Calendar {
     }
 
     /// Shows `month` of `year`, as a choice in a caption dropdown does.
-    /// It keeps the selection.
+    /// It keeps the chosen days and moves the cursor into the shown
+    /// month, inside the range.
     pub fn show(&mut self, year: i32, month: u8) {
-        self.shown = (year, month.clamp(1, 12));
+        let cursor = CivilDate::clamped(year, month, self.selected.day());
+        self.shown = (cursor.year(), cursor.month());
+        self.selected = self.clamp(cursor);
     }
 
-    /// Chooses days as `mode` says. In `Multiple` and `Range` modes the
-    /// selected day is the keyboard cursor, and activation chooses.
+    /// `date`, moved inside the range.
+    fn clamp(&self, date: CivilDate) -> CivilDate {
+        let date = self.minimum.map_or(date, |minimum| date.max(minimum));
+        self.maximum.map_or(date, |maximum| date.min(maximum))
+    }
+
+    /// True when the month `delta` months from the shown month has a day
+    /// inside the range, so the month buttons can page to it.
+    pub fn can_show_month(&self, delta: i32) -> bool {
+        let month = |year: i32, month: u8| year * 12 + i32::from(month) - 1;
+        let target = month(self.shown.0, self.shown.1) + delta;
+        (month(1, 1)..=month(9999, 12)).contains(&target)
+            && (self.minimum).is_none_or(|day| month(day.year(), day.month()) <= target)
+            && (self.maximum).is_none_or(|day| month(day.year(), day.month()) >= target)
+    }
+
+    /// Chooses days as `mode` says. The selected day is the keyboard
+    /// cursor, and activation chooses. A `Single` calendar starts with
+    /// the cursor day chosen.
     #[must_use]
     pub fn with_mode(mut self, mode: CalendarMode) -> Self {
         self.mode = mode;
-        self.chosen.clear();
+        self.chosen = match mode {
+            CalendarMode::Single => vec![self.selected],
+            _ => Vec::new(),
+        };
         self
     }
 
@@ -644,55 +690,62 @@ impl Calendar {
         self.mode
     }
 
-    /// The chosen days: the selected day in `Single` mode, the set in
+    /// The chosen days: the chosen day in `Single` mode, the set in
     /// `Multiple` mode, and the start and end (when set) in `Range` mode.
     pub fn dates(&self) -> Vec<CivilDate> {
-        match self.mode {
-            CalendarMode::Single => vec![self.selected],
-            _ => self.chosen.clone(),
-        }
+        self.chosen.clone()
     }
 
     /// Activates `date` as a click or Enter would. In `Single` mode it
-    /// selects the day. In `Multiple` mode it adds or removes it. In
-    /// `Range` mode it sets the start, or the end after the start; an
-    /// earlier day or a third activation starts again. Returns true when
-    /// the chosen days changed.
+    /// chooses the day. In `Multiple` mode it adds or removes it. In
+    /// `Range` mode it sets the start, or the end after the start. A day
+    /// before the start or after the end extends the range to it; a day
+    /// inside a full range starts again. Returns true when the chosen
+    /// days changed.
     pub fn activate(&mut self, date: CivilDate) -> bool {
         if !self.allowed(date) {
             return false;
         }
-        match self.mode {
-            CalendarMode::Single => return self.select(date),
-            CalendarMode::Multiple => match self.chosen.iter().position(|day| *day == date) {
-                Some(index) => {
-                    self.chosen.remove(index);
-                }
-                None => {
-                    self.chosen.push(date);
-                    self.chosen.sort();
-                }
-            },
-            CalendarMode::Range => match self.chosen.as_slice() {
-                [start] if date >= *start => self.chosen.push(date),
-                _ => self.chosen = vec![date],
-            },
-        }
         self.selected = date;
         self.shown = (date.year(), date.month());
-        true
+        let chosen = match (self.mode, self.chosen.as_slice()) {
+            (CalendarMode::Single, _) => vec![date],
+            (CalendarMode::Multiple, days) => {
+                let mut days = days.to_vec();
+                match days.iter().position(|day| *day == date) {
+                    Some(index) => {
+                        days.remove(index);
+                    }
+                    None => {
+                        days.push(date);
+                        days.sort();
+                    }
+                }
+                days
+            }
+            (CalendarMode::Range, [start]) if date != *start => {
+                vec![date.min(*start), date.max(*start)]
+            }
+            (CalendarMode::Range, [start, end]) if date < *start => vec![date, *end],
+            (CalendarMode::Range, [start, end]) if date > *end => vec![*start, date],
+            (CalendarMode::Range, _) => vec![date],
+        };
+        let changed = chosen != self.chosen;
+        self.chosen = chosen;
+        changed
     }
 
-    /// Replaces the chosen days of a `Multiple` or `Range` calendar.
+    /// Replaces the chosen days. A `Single` calendar keeps the first and
+    /// moves the cursor to it; a `Range` calendar keeps the ends.
     pub fn set_dates(&mut self, dates: &[CivilDate]) {
+        let mut dates: Vec<CivilDate> =
+            dates.iter().copied().filter(|d| self.allowed(*d)).collect();
         if self.mode == CalendarMode::Single {
+            dates.truncate(1);
             if let Some(date) = dates.first() {
                 self.select(*date);
             }
-            return;
         }
-        let mut dates: Vec<CivilDate> =
-            dates.iter().copied().filter(|d| self.allowed(*d)).collect();
         dates.sort();
         dates.dedup();
         if self.mode == CalendarMode::Range && dates.len() > 2 {
@@ -703,8 +756,7 @@ impl Calendar {
 
     fn is_chosen(&self, date: CivilDate) -> bool {
         match self.mode {
-            CalendarMode::Single => date == self.selected,
-            CalendarMode::Multiple => self.chosen.contains(&date),
+            CalendarMode::Single | CalendarMode::Multiple => self.chosen.contains(&date),
             CalendarMode::Range => match self.chosen.as_slice() {
                 [start] => date == *start,
                 [start, end] => date >= *start && date <= *end,
@@ -735,14 +787,29 @@ impl Calendar {
     pub fn shown_month(&self) -> (i32, u8) {
         self.shown
     }
-    fn allowed(&self, date: CivilDate) -> bool {
+    /// True when `date` is inside the range, so the cursor can go to it.
+    fn in_range(&self, date: CivilDate) -> bool {
         self.minimum.is_none_or(|minimum| date >= minimum)
             && self.maximum.is_none_or(|maximum| date <= maximum)
     }
 
-    /// Selects `date` if allowed, showing its month.
+    /// True when `date` can be chosen: inside the range and not disabled.
+    fn allowed(&self, date: CivilDate) -> bool {
+        self.in_range(date) && !self.disabled.as_ref().is_some_and(|days| (days.0)(date))
+    }
+
+    /// Disables each day for which `disabled` is true, such as weekends.
+    /// The cursor can rest on a disabled day, but it cannot be chosen.
+    #[must_use]
+    pub fn with_disabled_days(mut self, disabled: impl Fn(CivilDate) -> bool + 'static) -> Self {
+        self.disabled = Some(DisabledDays(Rc::new(disabled)));
+        self
+    }
+
+    /// Moves the cursor to `date` inside the range, showing its month. It
+    /// does not choose the day; see [`Calendar::activate`].
     pub fn select(&mut self, date: CivilDate) -> bool {
-        if !self.allowed(date) || date == self.selected {
+        if !self.in_range(date) || date == self.selected {
             return false;
         }
         self.selected = date;
@@ -781,7 +848,8 @@ impl Calendar {
             .collect()
     }
 
-    /// Returns true when the selection changed.
+    /// Moves the cursor, or with Enter or Space chooses the cursor day.
+    /// Returns true when the cursor or the chosen days changed.
     pub fn handle_key(&mut self, key: Key) -> bool {
         let target = match key.in_reading_order(self.rtl) {
             Key::ArrowLeft => self.selected.add_days(-1),
@@ -790,9 +858,7 @@ impl Calendar {
             Key::ArrowDown => self.selected.add_days(7),
             Key::PageUp => self.selected.add_months(-1),
             Key::PageDown => self.selected.add_months(1),
-            Key::Enter | Key::Space if self.mode != CalendarMode::Single => {
-                return self.activate(self.selected);
-            }
+            Key::Enter | Key::Space => return self.activate(self.selected),
             Key::Home | Key::End => {
                 let first = i64::from(self.locale.data().first_weekday);
                 let weekday = i64::from(self.selected.weekday().0);
@@ -811,9 +877,16 @@ impl Calendar {
         }
     }
 
-    pub fn show_month(&mut self, delta: i32) {
+    /// Shows the month `delta` months away, as the month buttons do, and
+    /// moves the cursor into it. Returns false, and does nothing, when
+    /// that month has no day inside the range.
+    pub fn show_month(&mut self, delta: i32) -> bool {
+        if !self.can_show_month(delta) {
+            return false;
+        }
         let total = self.shown.0 * 12 + i32::from(self.shown.1) - 1 + delta;
-        self.shown = (total.div_euclid(12), (total.rem_euclid(12) + 1) as u8);
+        self.show(total.div_euclid(12), (total.rem_euclid(12) + 1) as u8);
+        true
     }
 
     /// The edge of one day cell in the `Calendar` recipe.
@@ -879,13 +952,14 @@ impl Calendar {
             (Icon::ChevronLeft, Icon::ChevronRight)
         };
         let host = cx.state;
-        for (rect, slot, icon, part, hit) in [
+        for (rect, slot, icon, part, hit, delta) in [
             (
                 layout.previous,
                 Slot::Previous,
                 back,
                 CalendarFocus::Previous,
                 CalendarPart::Previous,
+                -1,
             ),
             (
                 layout.next,
@@ -893,12 +967,17 @@ impl Calendar {
                 forward,
                 CalendarFocus::Next,
                 CalendarPart::Next,
+                1,
             ),
         ] {
             let state = self
                 .parts
                 .state(hit, host)
-                .set(VisualState::FOCUS_VISIBLE, focus == part);
+                .set(VisualState::FOCUS_VISIBLE, focus == part)
+                .set(
+                    VisualState::DISABLED,
+                    host.disabled() || !self.can_show_month(delta),
+                );
             let style = cx.style(query(slot).state(state));
             cx.slot(rect, &style, |cx, inner| cx.icon(inner, icon, &style));
         }
@@ -1313,17 +1392,37 @@ impl Calendar {
         }
     }
 
-    /// The tab stops inside the calendar, in order.
-    pub(crate) fn stops(&self) -> &'static [CalendarFocus] {
-        if self.caption.is_some() {
-            &[
-                CalendarFocus::Month,
-                CalendarFocus::Year,
-                CalendarFocus::Grid,
-            ]
-        } else {
-            &[CalendarFocus::Grid]
+    /// The tab stops inside the calendar, in order: the enabled month
+    /// buttons, the dropdowns, and the grid.
+    pub(crate) fn stops(&self) -> Vec<CalendarFocus> {
+        let mut stops = Vec::with_capacity(5);
+        if self.can_show_month(-1) {
+            stops.push(CalendarFocus::Previous);
         }
+        if self.can_show_month(1) {
+            stops.push(CalendarFocus::Next);
+        }
+        if self.caption.is_some() {
+            stops.extend([CalendarFocus::Month, CalendarFocus::Year]);
+        }
+        stops.push(CalendarFocus::Grid);
+        stops
+    }
+
+    /// Pages to the month that the month button `part` names. A button
+    /// that the page disables passes its focus to the grid. Returns
+    /// false when the button does not page.
+    pub(crate) fn press_button(&mut self, part: &mut CalendarFocus) -> bool {
+        let delta = match part {
+            CalendarFocus::Previous => -1,
+            CalendarFocus::Next => 1,
+            _ => return false,
+        };
+        let paged = self.show_month(delta);
+        if !self.can_show_month(delta) {
+            *part = CalendarFocus::Grid;
+        }
+        paged
     }
 
     /// The dropdown that `focus` names, when the caption has dropdowns.
@@ -1435,16 +1534,19 @@ impl Calendar {
         parent: Option<usize>,
         parts: &mut SemanticParts,
     ) {
-        for (id, rect, part) in [
+        for (id, rect, part, delta) in [
             (
                 "choscorui.month.previous",
                 layout.previous,
                 CalendarFocus::Previous,
+                -1,
             ),
-            ("choscorui.month.next", layout.next, CalendarFocus::Next),
+            ("choscorui.month.next", layout.next, CalendarFocus::Next, 1),
         ] {
             let name = strings.message(id, &[]);
-            crate::hosted::pressable(parts, parent, SemanticRole::Button, &name, rect, true);
+            let enabled = self.can_show_month(delta);
+            crate::hosted::pressable(parts, parent, SemanticRole::Button, &name, rect, enabled);
+
             if focus == part {
                 parts.set_focused(Some(parts.len() - 1));
             }
@@ -1489,10 +1591,10 @@ impl Calendar {
                 .is_some_and(|list| list.contains(point));
             let layout = layout.filter(|_| !covered)?;
             if layout.previous.contains(point) {
-                return Some(CalendarPart::Previous);
+                return self.can_show_month(-1).then_some(CalendarPart::Previous);
             }
             if layout.next.contains(point) {
-                return Some(CalendarPart::Next);
+                return self.can_show_month(1).then_some(CalendarPart::Next);
             }
             let index = layout.days.iter().position(|day| day.contains(point))?;
             let enabled = self.cells().get(index).is_some_and(|cell| cell.enabled);
@@ -1527,7 +1629,7 @@ impl Calendar {
     /// Reports the chosen days: `Date` in `Single` mode, else `Dates`.
     fn report(&self, cx: &mut ControlContext<'_>) {
         let value = match self.mode {
-            CalendarMode::Single => ControlValue::Date(Some(self.selected)),
+            CalendarMode::Single => ControlValue::Date(self.chosen.first().copied()),
             _ => ControlValue::Dates(self.dates()),
         };
         cx.emit(ControlMessage::Changed(value));
@@ -1587,8 +1689,8 @@ impl Calendar {
         }
     }
 
-    /// Tab and Shift+Tab move between the dropdowns and the grid, and
-    /// leave the calendar at the ends.
+    /// Tab and Shift+Tab move between the month buttons, the dropdowns,
+    /// and the grid, and leave the calendar at the ends.
     fn hosted_tab(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
         let stops = self.stops();
         let current = stops
@@ -1608,8 +1710,18 @@ impl Calendar {
     }
 
     fn hosted_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
-        if key == Key::Tab && self.caption.is_some() {
+        if key == Key::Tab {
             return self.hosted_tab(cx);
+        }
+        if matches!(self.focus, CalendarFocus::Previous | CalendarFocus::Next) {
+            let mut focus = self.focus;
+            if !matches!(key, Key::Enter | Key::Space) || !self.press_button(&mut focus) {
+                return EventReply::Continue;
+            }
+            self.focus = focus;
+            cx.request_paint();
+            cx.request_semantics();
+            return EventReply::Stop;
         }
         if let Some(part) = self.focus.caption_part() {
             let reply = self.caption_key(part, key);
@@ -1621,13 +1733,14 @@ impl Calendar {
             return EventReply::Stop;
         }
         match key {
-            // A single calendar leaves choosing to the application.
-            Key::Enter | Key::Space if self.mode == CalendarMode::Single => {
-                cx.emit(ControlMessage::Activated);
-            }
+            // A single calendar also reports the activation, so that the
+            // application can act on the chosen day.
             Key::Enter | Key::Space => {
                 if self.handle_key(key) {
                     self.report(cx);
+                }
+                if self.mode == CalendarMode::Single {
+                    cx.emit(ControlMessage::Activated);
                 }
             }
             Key::ArrowLeft
@@ -1639,11 +1752,7 @@ impl Calendar {
             | Key::Home
             | Key::End => {
                 if self.handle_key(key) {
-                    if self.mode == CalendarMode::Single {
-                        self.report(cx);
-                    } else {
-                        cx.request_semantics();
-                    }
+                    cx.request_semantics();
                 }
             }
             _ => return EventReply::Continue,
@@ -1731,7 +1840,11 @@ impl CustomControl for Calendar {
         // The grid rings for keyboard focus; a dropdown rings while focused.
         let focus = match self.focus {
             CalendarFocus::Month | CalendarFocus::Year if cx.state.focused() => self.focus,
-            CalendarFocus::Grid if cx.state.focus_visible() => CalendarFocus::Grid,
+            CalendarFocus::Grid | CalendarFocus::Previous | CalendarFocus::Next
+                if cx.state.focus_visible() =>
+            {
+                self.focus
+            }
             _ => CalendarFocus::None,
         };
         if let Some(layout) = &self.layout {
@@ -1799,8 +1912,10 @@ impl CustomControl for Calendar {
     /// Takes `Date` in `Single` mode and `Dates` in the other modes.
     fn set_value(&mut self, value: &ControlValue) -> bool {
         match (self.mode, value) {
-            (CalendarMode::Single, ControlValue::Date(Some(date))) if self.allowed(*date) => {
-                self.select(*date);
+            (CalendarMode::Single, ControlValue::Date(date))
+                if date.is_none_or(|date| self.allowed(date)) =>
+            {
+                self.set_dates(date.as_slice());
                 true
             }
             (CalendarMode::Multiple | CalendarMode::Range, ControlValue::Dates(dates)) => {

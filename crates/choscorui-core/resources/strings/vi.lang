@@ -54,6 +54,7 @@ choscorui.field.meridiem = Ô SA/CH
 choscorui.today = hôm nay
 choscorui.month.previous = Tháng trước
 choscorui.month.next = Tháng sau
+choscorui.date_picker.count[other] = {count} ngày
 
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói

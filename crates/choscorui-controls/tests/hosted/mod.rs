@@ -107,10 +107,14 @@ impl Harness {
     }
 
     pub fn measure(&mut self) -> Size {
+        self.measure_in(Constraints::UNBOUNDED)
+    }
+
+    pub fn measure_in(&mut self, constraints: Constraints) -> Size {
         let env =
             HostEnv::new(&self.themes, &self.styles, &EstimatedText).direction(self.direction);
         self.host
-            .measure(&self.tree, self.node, Constraints::UNBOUNDED, &env)
+            .measure(&self.tree, self.node, constraints, &env)
             .unwrap()
             .size
     }
