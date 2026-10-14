@@ -838,7 +838,7 @@ DrawText { baseline: Point { x: 36.00000000000001, y: 110.15 }, text: "Open", fo
 PopClip
 # message Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 64.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "Read", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "Read", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 64.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
@@ -893,7 +893,7 @@ DrawText { baseline: Point { x: 451.5, y: 24.9 }, text: "Today", font_family: "s
 PopClip
 # message-scroller Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } }
-semantics SemanticNode { role: ScrollArea, name: "Chat", description: "", value: Some("Ana: Hi"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Increment, Decrement, Focus], text: None }
+semantics SemanticNode { role: ScrollArea, name: "Chat", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Increment, Decrement, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 26.0 }, size: Size { width: 40.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
@@ -910,7 +910,7 @@ PopClip
 PopClip
 # questionnaire Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 212.0 } }
-semantics SemanticNode { role: Group, name: "Survey", description: "A", value: Some("Pick one"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
+semantics SemanticNode { role: Group, name: "Survey", description: "", value: Some("Pick one"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 212.0 } })
 DrawText { baseline: Point { x: 10.0, y: 27.6 }, text: "Pick one", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(600), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 54.0 }, size: Size { width: 480.0, height: 48.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
@@ -1056,35 +1056,35 @@ FillRect { rect: Rect { origin: Point { x: 281.5, y: 19.5 }, size: Size { width:
 PopClip
 # message default Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopClip
 # message secondary Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
 PopClip
 # message muted Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # message tinted Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 232, green: 232, blue: 232, alpha: 255 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # message outline Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 10.5 }, size: Size { width: 70.0, height: 37.75 } }, radius: 13.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
@@ -1092,13 +1092,13 @@ DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: 
 PopClip
 # message ghost Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 22.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 22.75 } })
 DrawText { baseline: Point { x: 10.0, y: 26.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # message destructive Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } }
-semantics SemanticNode { role: Group, name: "Ana", description: "", value: Some("Hello!"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Ana", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 38.75 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 71.0, height: 38.75 } }, radius: 14.0, color: Color { red: 231, green: 0, blue: 11, alpha: 26 } }
 DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hello!", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 231, green: 0, blue: 11, alpha: 255 } }

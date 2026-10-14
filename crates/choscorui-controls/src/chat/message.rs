@@ -8,7 +8,8 @@ use crate::style::{
     BubbleVariant, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Measured, PointerEvent, Rect, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Localizer, Measured, PointerEvent, Rect, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// One chat bubble: wrapped text in a box of the bubble recipe.
@@ -129,16 +130,33 @@ impl Message {
     }
 
     /// The bubble texts, for assistive apps.
-    pub(crate) fn text(&self) -> String {
-        self.bubbles
-            .iter()
-            .map(|bubble| bubble.text.as_str())
+    /// The message node: a Group named by the author, described by the
+    /// header and the footer.
+    pub(crate) fn node(&self) -> SemanticNode {
+        let mut node = hosted::node(SemanticRole::Group, &self.author, Vec::new());
+        node.description = [self.header.as_str(), self.footer.as_str()]
+            .into_iter()
+            .filter(|part| !part.is_empty())
             .collect::<Vec<_>>()
-            .join(" ")
+            .join(", ");
+        node
     }
 
-    pub(crate) fn author(&self) -> &str {
-        &self.author
+    /// Adds a StaticText part under `parent` for each bubble of `layout`,
+    /// with a StaticText part under it for its reactions.
+    pub(crate) fn push_parts(
+        &self,
+        layout: &MessageLayout,
+        parts: &mut SemanticParts,
+        parent: Option<usize>,
+    ) {
+        for (bubble, place) in self.bubbles.iter().zip(&layout.bubbles) {
+            parts.push(parent, SemanticRole::StaticText, &bubble.text, place.frame);
+            let under = Some(parts.len() - 1);
+            if let Some(pill) = place.reactions {
+                parts.push(under, SemanticRole::StaticText, &bubble.reactions, pill);
+            }
+        }
     }
 
     /// Lays the message out across `rect`; the height of `rect` is
@@ -370,14 +388,12 @@ impl CustomControl for Message {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let mut node = hosted::node(SemanticRole::Group, &self.author, Vec::new());
-        node.value = Some(self.text());
-        node.description = [self.header.as_str(), self.footer.as_str()]
-            .into_iter()
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
-        node
+        self.node()
+    }
+
+    /// A part for each bubble, with its reactions under it.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.push_parts(&self.layout, parts, None);
     }
 
     fn focusable(&self) -> bool {

@@ -88,11 +88,23 @@ fn message_stacks_header_bubbles_and_footer() {
     let node = h.semantics();
     assert_eq!(node.role, SemanticRole::Group);
     assert_eq!(node.name, "Ana Lee");
-    assert_eq!(
-        node.value.as_deref(),
-        Some("Hi! Are we still on for lunch? I found a new place.")
-    );
+    assert_eq!(node.value, None);
     assert_eq!(node.description, "Ana Lee · 12:01, Read");
+    // Each bubble is a part, with its reactions under it.
+    let parts = h.parts();
+    let parts: Vec<_> = parts
+        .parts()
+        .iter()
+        .map(|part| (part.parent, part.node.name.as_str()))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (None, "Hi! Are we still on for lunch?"),
+            (None, "I found a new place."),
+            (Some(1), "👍 2"),
+        ]
+    );
     assert!(!h.host.get(h.node).unwrap().focusable());
 }
 
@@ -245,7 +257,18 @@ fn message_scroller_sticks_to_the_bottom() {
     let painted = texts(&h.paint());
     assert!(painted.contains(&"Message 199".to_string()), "{painted:?}");
     assert!(painted.len() < 20, "only messages in view paint");
-    assert_eq!(h.semantics().value.as_deref(), Some("Ana: Message 199"));
+    let parts = h.parts();
+    let last = parts
+        .parts()
+        .iter()
+        .rev()
+        .find(|part| part.parent.is_some());
+    assert_eq!(
+        last.map(|part| part.node.name.as_str()),
+        Some("Message 199")
+    );
+    assert!(parts.len() < 40, "only messages in view are parts");
+    assert_eq!(parts.collection().map(|c| c.item_count), Some(200));
     conversation.push(Message::new("Bao", vec![Bubble::new("Newest")]));
     assert!(advance(&mut h, 0.1));
     assert!(texts(&h.paint()).contains(&"Newest".to_string()));
@@ -377,6 +400,14 @@ fn questionnaire_mirrors_and_clicks() {
         h.messages(),
         [ControlMessage::Changed(ControlValue::Indices(vec![0]))]
     );
+    // Each option is a radio button part; the picked one is checked.
+    let parts = h.parts();
+    let options: Vec<_> = parts.parts()[..2]
+        .iter()
+        .map(|part| (part.node.role, part.node.state.checked))
+        .collect();
+    let radio = SemanticRole::RadioButton;
+    assert_eq!(options, [(radio, Some(true)), (radio, Some(false))]);
     // Submit sits at the end, which is the left in a right-to-left layout.
     h.click(Point::new(bounds.origin.x + 10.0, bounds.max_y() - 10.0));
     assert_eq!(h.messages(), [ControlMessage::Activated]);

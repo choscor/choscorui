@@ -159,10 +159,15 @@ fn input_group_button_addons_take_focus_and_keep_the_validation_message() {
     );
     h.focus();
     h.key(Key::Tab);
-    let node = h.semantics();
+    let node = h.focused_node().expect("the focused addon");
     assert_eq!(
         (node.role, node.name.as_str()),
         (SemanticRole::Button, "Clear")
+    );
+    assert_eq!(
+        h.semantics().role,
+        SemanticRole::TextField,
+        "the field stays"
     );
     h.text("x");
     h.key(Key::Space);

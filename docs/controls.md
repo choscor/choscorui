@@ -3301,11 +3301,11 @@ and closes the list, but not while the select is disabled.
 | Name / value | name / value (bullets for a password) | name / value |
 | Description | validation message | validation message, then the text of the text addons |
 | State | invalid, disabled | invalid, disabled |
-| Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled |
+| Actions | `SetValue` and `Focus` while enabled | `SetValue` and `Focus` while enabled; `Activate` while a button addon has the focus |
 
-While a button addon has the focus, the `InputGroup` node is that button.
-It has the role `Button`, the addon label as the name, and the `Activate`
-and `Focus` actions. `Activate` emits `ItemActivated(index)`.
+Each button addon of an `InputGroup` is a `Button` part, named by its
+label. The focused addon is the focused part. `Activate` emits
+`ItemActivated(index)`.
 
 `set_value` takes `Text`, also while the input is disabled, and drops line
 breaks. `set_open` returns false.
@@ -4651,9 +4651,10 @@ behavior.
 | Field | `Message::semantics` |
 | --- | --- |
 | Role | `Group` (AXGroup) |
-| Name / value | author / bubble texts |
+| Name / value | author / none |
 | Description | header and footer |
 | Actions | none |
+| Parts | a `StaticText` part for each bubble, with a `StaticText` part for its reactions under it |
 
 **As a view.** `Message::new(author, bubbles)` mounts a message. A bubble is
 content of a message and has no view. `.with` adds the avatar, the header,
@@ -4761,9 +4762,10 @@ behavior.
 | Field | `MessageScroller::semantics` |
 | --- | --- |
 | Role | `ScrollArea` (AXScrollArea) |
-| Name / value | name / author and text of the last message |
+| Name / value | name / none |
 | State | disabled |
 | Actions | `Increment`, `Decrement`, and `Focus` while enabled |
+| Parts | a `Group` part for each message in view, with its index and the parts of a `Message` under it; the collection counts every message |
 
 **As a view.** `MessageScroller::new(name, messages)` keeps one
 `Conversation` between builds. The messages of the last build can start
@@ -4815,9 +4817,10 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / current question |
-| Description | the focused option, button, or typed text, then the error line while it shows |
+| Description | the error line while it shows |
 | State | invalid, disabled |
 | Actions | `Activate` and `Focus` while enabled; `SetValue` for a freeform question |
+| Parts | a `RadioButton` part for each option of a single choice, or a `Checkbox` part for a multiple choice, checked when picked; a `TextField` part for a freeform answer; a `Button` part for each button; the focused stop is the focused part |
 
 `set_value` takes `Index` to show a question, `Indices` for the picks of a
 choice question, or `Text` for a freeform answer. `set_open` returns false.

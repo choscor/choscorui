@@ -80,6 +80,16 @@ fn value(host: &mut ViewHost, node: NodeId) -> Option<String> {
     host.semantic(node).unwrap().value
 }
 
+/// The name of the focused part of `node`, or an empty string.
+fn focused_part(host: &mut ViewHost, node: NodeId) -> String {
+    let (snapshot, _) = host.semantics();
+    snapshot
+        .into_iter()
+        .find(|entry| entry.id == node && entry.part.is_some() && entry.focused)
+        .map(|entry| entry.node.name)
+        .unwrap_or_default()
+}
+
 #[test]
 fn a_label_follows_the_locale_on_the_same_node() {
     let runtime = Runtime::new();
@@ -463,7 +473,7 @@ fn a_questionnaire_binds_its_question_and_runs_submit() {
     host.focus(Some(node));
     // Tab moves from the answer to the buttons; Next shows question 2.
     for _ in 0..4 {
-        if host.semantic(node).unwrap().description == "Next" {
+        if focused_part(&mut host, node) == "Next" {
             break;
         }
         press(&mut host, Key::Tab);
@@ -477,7 +487,7 @@ fn a_questionnaire_binds_its_question_and_runs_submit() {
     take(&question).set(1);
     host.flush();
     for _ in 0..4 {
-        if host.semantic(node).unwrap().description == "Submit" {
+        if focused_part(&mut host, node) == "Submit" {
             break;
         }
         press(&mut host, Key::Tab);
@@ -660,7 +670,14 @@ fn a_message_scroller_keeps_its_place_when_a_message_comes() {
         shows(&mut host, "Message 0"),
         "a scrolled-up view stays put"
     );
-    assert_eq!(value(&mut host, chat).as_deref(), Some("Ana: Message 50"));
+    let (snapshot, _) = host.semantics();
+    let entry = snapshot
+        .iter()
+        .find(|entry| entry.id == chat && entry.part.is_none());
+    let messages = entry
+        .and_then(|entry| entry.collection)
+        .map(|c| c.item_count);
+    assert_eq!(messages, Some(51), "the new message counts");
     press(&mut host, Key::End);
     assert!(shows(&mut host, "Message 50"));
     take(&count).set(52);
@@ -711,7 +728,7 @@ fn a_questionnaire_keeps_its_answers_when_it_builds_again() {
     let run = |host: &mut ViewHost, button: &str| {
         host.focus(Some(node));
         for _ in 0..4 {
-            if host.semantic(node).unwrap().description == button {
+            if focused_part(host, node) == button {
                 break;
             }
             press(host, Key::Tab);

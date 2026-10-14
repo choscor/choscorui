@@ -12,8 +12,9 @@ use crate::style::{
     ButtonVariant, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
+    TextInputInfo,
 };
 
 /// The answer that a question takes.
@@ -875,33 +876,54 @@ impl CustomControl for Questionnaire {
         }
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
         node.value = self.question().map(|question| question.title.clone());
-        node.description = match self.focus {
-            Stop::Button(index) => self
-                .buttons()
-                .buttons
-                .get(index)
-                .map(|button| button.label.clone())
-                .unwrap_or_default(),
-            Stop::Answer => match (self.question(), self.editors.get(self.current)) {
-                (_, Some(Some(editor))) => editor.value().to_string(),
-                (Some(question), _) => question
-                    .options()
-                    .get(self.choice)
-                    .cloned()
-                    .unwrap_or_default(),
-                _ => String::new(),
-            },
-        };
         if self.invalid {
-            // The error line is part of the description.
-            if !node.description.is_empty() {
-                node.description.push_str(", ");
-            }
-            node.description.push_str(&self.labels.required);
+            // The error line is the description.
+            node.description.clone_from(&self.labels.required);
         }
         node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A RadioButton part for each option of a single choice, or a
+    /// Checkbox part for a multiple choice, checked when picked. A
+    /// freeform answer is a TextField part. Then a Button part for each
+    /// button. The focused stop is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let geometry = &self.geometry;
+        let answer = self.focus == Stop::Answer;
+        if let Some(Some(editor)) = self.editors.get(self.current) {
+            let title = self
+                .question()
+                .map_or("", |question| question.title.as_str());
+            let part = parts.push(None, SemanticRole::TextField, title, geometry.input);
+            part.node.value = Some(editor.value().to_string());
+            if answer {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        } else if let Some(question) = self.question() {
+            let role = if self.single() {
+                SemanticRole::RadioButton
+            } else {
+                SemanticRole::Checkbox
+            };
+            let picked = &self.picked[self.current];
+            for (index, (option, &rect)) in
+                question.options().iter().zip(&geometry.choices).enumerate()
+            {
+                let part = hosted::pressable(parts, None, role, option, rect, self.enabled);
+                part.node.state.checked = Some(picked.contains(&index));
+                if answer && index == self.choice {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
+        let focused = match self.focus {
+            Stop::Button(index) => Some(index),
+            Stop::Answer => None,
+        };
+        self.buttons()
+            .semantic_parts(focused, self.enabled, None, parts);
     }
 
     fn perform(

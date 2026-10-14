@@ -12,7 +12,7 @@ use crate::style::{
 use crate::text_field::{TextField, ValidationState};
 use choscorui_core::{
     EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, TextInputInfo,
+    Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size, TextInputInfo,
 };
 
 /// What an addon shows.
@@ -212,14 +212,6 @@ impl InputGroup {
             size.width,
             size.height,
         )
-    }
-
-    /// The label of button addon `index`.
-    fn label(&self, index: usize) -> &str {
-        match &self.addons[index].content {
-            AddonContent::Button { label, .. } => label,
-            _ => "",
-        }
     }
 
     /// Handles the keys and focus changes that move the focus among the
@@ -479,13 +471,11 @@ impl CustomControl for InputGroup {
     }
 
     fn semantics_in(&self, strings: &choscorui_core::Localizer) -> SemanticNode {
-        // A focused button addon is the node, so assistive technology
-        // reads it as a button.
-        if let Some(index) = self.focus {
-            let actions = vec![SemanticAction::Activate, SemanticAction::Focus];
-            return hosted::node(SemanticRole::Button, self.label(index), actions);
-        }
         let mut node = self.editor.hosted_semantics(strings);
+        // A focused button addon takes `Activate`.
+        if self.focus.is_some() {
+            node.actions.push(SemanticAction::Activate);
+        }
         // Addon text describes the value, for example a unit or a domain.
         // It follows the validation message, which stays.
         let addons = self.addons.iter().filter_map(|addon| match &addon.content {
@@ -498,6 +488,19 @@ impl CustomControl for InputGroup {
             .collect();
         node.description = parts.join(" ");
         node
+    }
+
+    /// A Button part for each button addon. The focused addon is the
+    /// focused part.
+    fn semantic_parts(&self, _strings: &choscorui_core::Localizer, parts: &mut SemanticParts) {
+        for (index, &rect) in self.buttons.iter().enumerate() {
+            if let AddonContent::Button { label, .. } = &self.addons[index].content {
+                hosted::pressable(parts, None, SemanticRole::Button, label, rect, true);
+                if self.focus == Some(index) {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
     }
 
     fn perform(

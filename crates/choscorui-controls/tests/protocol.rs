@@ -471,7 +471,12 @@ fn questionnaire_takes_the_question_the_picks_and_the_answer() {
         },
     ));
     assert!(take(&mut h, ControlValue::Indices(vec![1])));
-    assert_eq!(h.semantics().description, "Pro");
+    let parts = h.parts();
+    let pro = &parts.parts()[1];
+    assert_eq!(
+        (pro.node.name.as_str(), pro.node.state.checked),
+        ("Pro", Some(true))
+    );
     assert!(!take(&mut h, ControlValue::Indices(vec![0, 1])), "single");
     assert!(!take(&mut h, ControlValue::Indices(vec![3])));
     assert!(!take(&mut h, ControlValue::Text("Hi".into())), "a choice");
@@ -479,12 +484,13 @@ fn questionnaire_takes_the_question_the_picks_and_the_answer() {
     assert!(take(&mut h, ControlValue::Index(Some(1))));
     assert_eq!(value(&h).as_deref(), Some("Which features matter?"));
     assert!(take(&mut h, ControlValue::Indices(vec![1, 0])));
-    assert_eq!(h.semantics().description, "Speed");
+    assert_eq!(h.focused_part(), "Speed");
 
     assert!(take(&mut h, ControlValue::Index(Some(2))));
     assert_eq!(value(&h).as_deref(), Some("Anything else?"));
     assert!(take(&mut h, ControlValue::Text("Dark mode".into())));
-    assert_eq!(h.semantics().description, "Dark mode");
+    let answer = h.focused_node().and_then(|node| node.value);
+    assert_eq!(answer.as_deref(), Some("Dark mode"));
     assert!(!take(&mut h, ControlValue::Indices(vec![0])), "freeform");
     assert!(!take(&mut h, ControlValue::Index(Some(3))));
     assert_eq!(value(&h).as_deref(), Some("Anything else?"));

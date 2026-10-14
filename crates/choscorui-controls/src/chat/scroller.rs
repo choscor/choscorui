@@ -5,8 +5,8 @@ use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext}
 use crate::hosted;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size, WheelUnit,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, PointerEvent, Rect, SemanticAction,
+    SemanticCollection, SemanticNode, SemanticParts, SemanticRole, Size, WheelUnit,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -457,15 +457,33 @@ impl CustomControl for MessageScroller {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::ScrollArea, &self.name, actions);
-        node.value = self
-            .conversation
-            .0
-            .borrow()
-            .messages
-            .last()
-            .map(|message| format!("{}: {}", message.author(), message.text()));
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A Group part for each message in view, with its index among all
+    /// messages, and its bubbles under it. The collection counts every
+    /// message.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let thread = self.conversation.0.borrow();
+        parts.set_collection(SemanticCollection {
+            item_count: thread.messages.len(),
+            column_count: None,
+        });
+        for (index, layout) in &self.shown {
+            let Some(message) = thread.messages.get(*index) else {
+                continue;
+            };
+            let bounds = layout.bubbles.iter().fold(
+                layout.avatar.union(layout.header).union(layout.footer),
+                |all, bubble| all.union(bubble.frame),
+            );
+            let part = parts.push(None, SemanticRole::Group, "", bounds);
+            part.node = message.node();
+            part.item(*index);
+            let parent = Some(parts.len() - 1);
+            message.push_parts(layout, parts, parent);
+        }
     }
 
     fn perform(
