@@ -660,7 +660,10 @@ impl Scene {
             return;
         }
         self.accessible = (self.order.iter().copied())
-            .filter(|id| self.nodes[id].item.role.is_some() && self.effectively_visible(*id))
+            .filter(|id| {
+                let node = &self.nodes[id];
+                node.item.role.is_some() && self.effectively_visible(node)
+            })
             .collect();
         self.accessible_rank = (self.accessible.iter().enumerate())
             .map(|(index, id)| (*id, index))
@@ -679,14 +682,14 @@ impl Scene {
         &self.order
     }
 
-    fn effectively_visible(&self, mut id: SceneItemId) -> bool {
+    /// Whether `node` and each of its ancestors are visible.
+    fn effectively_visible<'a>(&'a self, mut node: &'a Node) -> bool {
         loop {
-            let node = &self.nodes[&id];
             if !node.item.visible {
                 return false;
             }
             match node.parent {
-                Some(parent) => id = parent,
+                Some(parent) => node = &self.nodes[&parent],
                 None => return true,
             }
         }
@@ -703,10 +706,9 @@ impl Scene {
     pub fn items_in_rect(&mut self, rect: Rect) -> Vec<SceneItemId> {
         self.ensure_order();
         let keep = |id: &SceneItemId| {
-            self.nodes[id]
-                .bounds
-                .is_some_and(|bounds| bounds.intersects(rect))
-                && self.effectively_visible(*id)
+            let node = &self.nodes[id];
+            node.bounds.is_some_and(|bounds| bounds.intersects(rect))
+                && self.effectively_visible(node)
         };
         let (cells, large) = cover(rect);
         if large {
@@ -829,8 +831,9 @@ impl Scene {
         // root outside `visible` is never visited, so the cost follows
         // the visible items, not the scene size.
         let ids = self.items_in_rect(visible);
-        for root in ids.iter().filter(|id| self.nodes[id].parent.is_none()) {
-            painted += self.paint_subtree(list, *root, visible)?;
+        let nodes = ids.iter().map(|id| &self.nodes[id]);
+        for root in nodes.filter(|node| node.parent.is_none()) {
+            painted += self.paint_subtree(list, root, visible)?;
         }
         Ok(painted)
     }
@@ -844,10 +847,9 @@ impl Scene {
     fn paint_subtree(
         &self,
         list: &mut DisplayList,
-        id: SceneItemId,
+        node: &Node,
         visible: Rect,
     ) -> Result<usize, DisplayListError> {
-        let node = &self.nodes[&id];
         // Groups and their descendants are culled together by bounds. A
         // hidden item has no bounds, so it and its descendants paint
         // nothing.
@@ -882,7 +884,7 @@ impl Scene {
                 list.push_clip_path(path.transformed(node.world))?;
             }
             for child in children {
-                painted += self.paint_subtree(list, child, visible)?;
+                painted += self.paint_subtree(list, &self.nodes[&child], visible)?;
             }
             if clip.is_some() {
                 list.pop_clip()?;

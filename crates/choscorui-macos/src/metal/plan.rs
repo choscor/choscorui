@@ -130,6 +130,9 @@ pub(super) struct Plan {
     /// True when a blur reads the frame, so the frame is a texture of its
     /// own and not the drawable.
     pub(super) reads_frame: bool,
+    /// The color that the frame clears to: transparent, or the color of
+    /// an opaque fill of the whole frame that draws first.
+    pub(super) clear: [f32; 4],
 }
 
 #[derive(Clone, Copy, Default)]
@@ -364,12 +367,6 @@ pub(super) fn build(
             .plan
             .instances
             .reserve(list.len().saturating_mul(INSTANCE_WORDS));
-        builder.plan.reads_frame = list.commands().iter().any(|command| {
-            matches!(
-                command,
-                DisplayCommand::BackdropBlur { .. } | DisplayCommand::BackdropBlurCorners { .. }
-            )
-        });
         for command in list.commands() {
             builder.command(command);
         }
@@ -431,6 +428,7 @@ impl<'a> Builder<'a> {
                 height,
                 groups: 0,
                 reads_frame: false,
+                clear: [0.0; 4],
                 ..spare
             },
             None => Plan {
@@ -445,6 +443,7 @@ impl<'a> Builder<'a> {
                 blurs: Vec::new(),
                 groups: 0,
                 reads_frame: false,
+                clear: [0.0; 4],
             },
         };
         Self {
@@ -840,12 +839,45 @@ impl<'a> Builder<'a> {
         let Some(bounds) = self.visible(quad) else {
             return;
         };
+        if self.clears_frame(rect, radii, paint) {
+            return;
+        }
         let mut instance = Instance::local(KIND_FILL, self.state.device);
         instance.bounds = rect_words(quad);
         instance.shape = rect_words(rect);
         instance.radii = radii.map(|v| v as f32);
         self.set_paint(&mut instance, paint, Transform::IDENTITY);
         self.add(instance, Source::None, bounds);
+    }
+
+    /// Takes a fill of `rect` as the clear color of the frame when it is
+    /// opaque, covers the whole frame, and nothing draws before it. A
+    /// fill of the window background then shades no pixel.
+    fn clears_frame(&mut self, rect: Rect, radii: [f64; 4], paint: &Paint) -> bool {
+        let device = self.state.device;
+        let Paint::Solid(color) = paint else {
+            return false;
+        };
+        let [x0, y0] = [rect.min_x(), rect.min_y()];
+        let [x1, y1] = [rect.max_x(), rect.max_y()];
+        let corner = |x: f64, y: f64| device.apply(Point::new(x, y));
+        let (low, high) = (corner(x0, y0), corner(x1, y1));
+        let covers = device.b == 0.0
+            && device.c == 0.0
+            && low.x.max(low.y) <= 0.0
+            && high.x >= self.viewport[2]
+            && high.y >= self.viewport[3];
+        let clear = covers
+            && color.alpha == 255
+            && radii.iter().all(|radius| *radius <= 0.0)
+            && self.plan.ops.is_empty()
+            && self.state.target == Target::Frame
+            && self.state.clips.is_empty()
+            && self.state.clip == self.viewport;
+        if clear {
+            self.plan.clear = color_words(*color);
+        }
+        clear
     }
 
     fn stroke(&mut self, path: &Path, paint: &Paint, style: &StrokeStyle) {

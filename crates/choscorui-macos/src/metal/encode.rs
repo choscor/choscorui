@@ -4,25 +4,35 @@
 
 use super::coverage::{ATLAS_SIZE, EDGE_WORDS, PixelBox};
 use super::plan::{ATLAS_LIMIT, BlurPass, Op, Plan, Source, Target};
-use super::surface::drawable_size;
+use super::surface::{IN_FLIGHT, drawable_size};
 use super::{COLOR_FORMAT, Gpu};
 use crate::ffi::Obj;
 use crate::ffi::metal::{
     BLIT_ENCODER, COPY_TEXTURE, DRAW_PRIMITIVES, END_BLIT_ENCODING, END_RENDER_ENCODING,
     LOAD_ACTION_CLEAR, LOAD_ACTION_DONT_CARE, LOAD_ACTION_LOAD, MTLBuffer, MTLClearColor,
     MTLCommandBuffer, MTLOrigin, MTLRenderCommandEncoder, MTLScissorRect, MTLSize, MTLTexture,
-    MTLViewport, PASS_ATTACHMENT_AT, PASS_COLOR_ATTACHMENTS, PIXEL_FORMAT_R16_FLOAT,
-    PIXEL_FORMAT_RGBA8, PRIMITIVE_TRIANGLE, PRIMITIVE_TRIANGLE_STRIP, RENDER_ENCODER,
-    RENDER_PASS_DESCRIPTOR, SET_ATTACHMENT_TEXTURE, SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER,
-    SET_FRAGMENT_SAMPLER, SET_FRAGMENT_TEXTURE, SET_LOAD_ACTION, SET_PIPELINE, SET_SCISSOR_RECT,
-    SET_STORE_ACTION, SET_VERTEX_BUFFER, SET_VIEWPORT, STORE_ACTION_STORE, new_buffer,
-    set_fragment_ints, set_vertex_floats,
+    MTLViewport, NEW_BUFFER_WITH_LENGTH, PASS_ATTACHMENT_AT, PASS_COLOR_ATTACHMENTS,
+    PIXEL_FORMAT_R16_FLOAT, PIXEL_FORMAT_RGBA8, PRIMITIVE_TRIANGLE, PRIMITIVE_TRIANGLE_STRIP,
+    RENDER_ENCODER, RENDER_PASS_DESCRIPTOR, RESOURCE_STORAGE_SHARED, SET_ATTACHMENT_TEXTURE,
+    SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER, SET_FRAGMENT_SAMPLER, SET_FRAGMENT_TEXTURE,
+    SET_LOAD_ACTION, SET_PIPELINE, SET_SCISSOR_RECT, SET_STORE_ACTION, SET_VERTEX_BUFFER,
+    SET_VIEWPORT, STORE_ACTION_STORE, new_buffer, set_fragment_ints, set_vertex_floats,
+    write_buffer,
 };
 use crate::ffi::retained::Retained;
-use std::collections::HashMap;
 
 /// The most blur texture pairs that a window keeps.
 const BLUR_LIMIT: usize = 8;
+
+/// The buffers of instances, stops, and clips that a window keeps. The
+/// frames take them in turn, so a frame writes the buffer of the frame
+/// this many frames before it. At most [`IN_FLIGHT`] frames of a window
+/// are on the GPU, frames complete in the order of their commits, and a
+/// capture waits for its frame, so the GPU no longer reads that buffer.
+const BUFFERS: usize = IN_FLIGHT + 1;
+
+/// The two textures of one blur size.
+type BlurPair = [Retained<MTLTexture>; 2];
 
 /// The textures that one window draws with, kept between frames.
 #[derive(Default)]
@@ -36,9 +46,14 @@ pub(super) struct Targets {
     groups: Vec<Retained<MTLTexture>>,
     /// The coverage atlas texture slots, at most [`ATLAS_LIMIT`].
     atlases: Vec<Retained<MTLTexture>>,
-    blurs: HashMap<(usize, usize), [Retained<MTLTexture>; 2]>,
+    /// The blur texture pairs by size. A list, as it holds at most
+    /// [`BLUR_LIMIT`] pairs.
+    blurs: Vec<((usize, usize), BlurPair)>,
     empty_color: Option<Retained<MTLTexture>>,
     empty_coverage: Option<Retained<MTLTexture>>,
+    buffers: [Option<Retained<MTLBuffer>>; BUFFERS],
+    /// The index in `buffers` of the last frame.
+    turn: usize,
 }
 
 impl Targets {
@@ -54,6 +69,25 @@ impl Targets {
             self.frame = None;
             self.groups.clear();
         }
+    }
+
+    /// The next buffer in turn, with the instances, stops, and clips of
+    /// `plan` one after the other. A frame does not make a new buffer
+    /// unless its words do not fit.
+    fn words(&mut self, gpu: &Gpu, plan: &Plan) -> Option<Retained<MTLBuffer>> {
+        let parts = [&plan.instances[..], &plan.stops, &plan.clips];
+        let words = parts.iter().map(|part| part.len()).sum::<usize>();
+        self.turn = (self.turn + 1) % BUFFERS;
+        let slot = &mut self.buffers[self.turn];
+        if let Some(buffer) = slot.as_ref()
+            && write_buffer(buffer, &parts).is_some()
+        {
+            return Some(buffer.clone());
+        }
+        let length = (words * 4 + 1).next_power_of_two();
+        let buffer = NEW_BUFFER_WITH_LENGTH.send(&gpu.device, (length, RESOURCE_STORAGE_SHARED))?;
+        write_buffer(&buffer, &parts)?;
+        Some(slot.insert(buffer).clone())
     }
 
     /// Releases the coverage atlas slots past the first after a frame
@@ -80,7 +114,7 @@ pub(super) fn clear(
     output: &Obj<MTLTexture>,
     size: (usize, usize),
 ) -> Option<()> {
-    let pass = begin_render(command_buffer, output, LOAD_ACTION_CLEAR, size)?;
+    let pass = begin_render(command_buffer, output, LOAD_ACTION_CLEAR, size, [0.0; 4])?;
     END_RENDER_ENCODING.send(&pass, ());
     Some(())
 }
@@ -109,9 +143,8 @@ struct Encoder<'a> {
     gpu: &'a Gpu,
     command_buffer: &'a Obj<MTLCommandBuffer>,
     plan: &'a Plan,
-    instances: Retained<MTLBuffer>,
-    stops: Retained<MTLBuffer>,
-    clips: Retained<MTLBuffer>,
+    /// The instances, stops, and clips of the plan.
+    words: Retained<MTLBuffer>,
     frame: Retained<MTLTexture>,
     groups: Vec<Retained<MTLTexture>>,
     atlases: Vec<Retained<MTLTexture>>,
@@ -136,7 +169,6 @@ pub(super) fn encode(
 ) -> Option<()> {
     targets.fit((plan.width, plan.height));
     let (width, height) = targets.size;
-    let device = &gpu.device;
     let frame = if plan.reads_frame {
         texture_in(&mut targets.frame, || {
             gpu.target_texture(COLOR_FORMAT, width, height)
@@ -170,9 +202,7 @@ pub(super) fn encode(
         gpu,
         command_buffer,
         plan,
-        instances: new_buffer(device, &plan.instances)?,
-        stops: new_buffer(device, &plan.stops)?,
-        clips: new_buffer(device, &plan.clips)?,
+        words: targets.words(gpu, plan)?,
         frame,
         groups: targets.groups.clone(),
         atlases,
@@ -218,7 +248,13 @@ pub(super) fn encode(
     }
     if plan.reads_frame {
         let frame_area = (plan.width, plan.height);
-        let pass = begin_render(command_buffer, output, LOAD_ACTION_DONT_CARE, frame_area)?;
+        let pass = begin_render(
+            command_buffer,
+            output,
+            LOAD_ACTION_DONT_CARE,
+            frame_area,
+            [0.0; 4],
+        )?;
         SET_PIPELINE.send(&pass, (&gpu.copy,));
         SET_FRAGMENT_TEXTURE.send(&pass, (Some(&*encoder.frame), 0));
         DRAW_PRIMITIVES.send(&pass, (PRIMITIVE_TRIANGLE, 0, 3, 1, 0));
@@ -246,12 +282,14 @@ fn atlas_slots(plan: &Plan) -> usize {
 
 /// A render pass into `texture` with `load` for its one attachment. Its
 /// viewport is the top-left `area` of the texture, in pixels, so a frame
-/// fills that part of a drawable that is larger than the frame.
+/// fills that part of a drawable that is larger than the frame. A clear
+/// clears to `color`, premultiplied.
 fn begin_render(
     command_buffer: &Obj<MTLCommandBuffer>,
     texture: &Obj<MTLTexture>,
     load: usize,
     area: (usize, usize),
+    color: [f32; 4],
 ) -> Option<Retained<MTLRenderCommandEncoder>> {
     let descriptor = RENDER_PASS_DESCRIPTOR.class_send(()).ok()??;
     let attachments = PASS_COLOR_ATTACHMENTS.send(&descriptor, ())?;
@@ -259,7 +297,16 @@ fn begin_render(
     SET_ATTACHMENT_TEXTURE.send(attachment, (Some(texture),));
     SET_LOAD_ACTION.send(attachment, (load,));
     SET_STORE_ACTION.send(attachment, (STORE_ACTION_STORE,));
-    SET_CLEAR_COLOR.send(attachment, (MTLClearColor::default(),));
+    let [red, green, blue, alpha] = color.map(f64::from);
+    SET_CLEAR_COLOR.send(
+        attachment,
+        (MTLClearColor {
+            red,
+            green,
+            blue,
+            alpha,
+        },),
+    );
     let encoder = RENDER_ENCODER.send(command_buffer, (&descriptor,))?;
     SET_VIEWPORT.send(
         &encoder,
@@ -283,6 +330,7 @@ impl Encoder<'_> {
             texture,
             LOAD_ACTION_CLEAR,
             (side, side),
+            [0.0; 4],
         )?;
         let edges = self.plan.edges.get(atlas as usize)?;
         if !edges.is_empty() {
@@ -332,14 +380,23 @@ impl Encoder<'_> {
         };
         let texture = self.target_texture(target).clone();
         let area = (self.plan.width, self.plan.height);
-        let encoder = begin_render(self.command_buffer, &texture, load, area)?;
+        let color = match target {
+            Target::Frame => self.plan.clear,
+            Target::Group(_) => [0.0; 4],
+        };
+        let encoder = begin_render(self.command_buffer, &texture, load, area, color)?;
         SET_PIPELINE.send(&encoder, (&self.gpu.ui,));
-        SET_VERTEX_BUFFER.send(&encoder, (Some(&*self.instances), 0, 0));
+        let words = Some(&*self.words);
+        SET_VERTEX_BUFFER.send(&encoder, (words, 0, 0));
         let viewport = [self.plan.width as f32, self.plan.height as f32];
         set_vertex_floats(&encoder, &viewport, 1);
-        SET_FRAGMENT_BUFFER.send(&encoder, (Some(&*self.instances), 0, 0));
-        SET_FRAGMENT_BUFFER.send(&encoder, (Some(&*self.stops), 0, 2));
-        SET_FRAGMENT_BUFFER.send(&encoder, (Some(&*self.clips), 0, 3));
+        // The stops and the clips follow the instances, at offsets of a
+        // multiple of 16 bytes.
+        let stops = self.plan.instances.len() * 4;
+        let clips = stops + self.plan.stops.len() * 4;
+        SET_FRAGMENT_BUFFER.send(&encoder, (words, 0, 0));
+        SET_FRAGMENT_BUFFER.send(&encoder, (words, stops, 2));
+        SET_FRAGMENT_BUFFER.send(&encoder, (words, clips, 3));
         SET_FRAGMENT_SAMPLER.send(&encoder, (Some(&*self.gpu.linear), 0));
         SET_FRAGMENT_SAMPLER.send(&encoder, (Some(&*self.gpu.nearest), 1));
         self.pass = Some(Pass {
@@ -418,15 +475,20 @@ impl Encoder<'_> {
             self.begin_pass(Target::Frame)?;
         }
         self.end_pass();
-        if !targets.blurs.contains_key(&size) {
-            if targets.blurs.len() >= BLUR_LIMIT {
-                targets.blurs.clear();
+        let blurs = &mut targets.blurs;
+        let slot = match blurs.iter().position(|(key, _)| *key == size) {
+            Some(slot) => slot,
+            None => {
+                if blurs.len() >= BLUR_LIMIT {
+                    blurs.clear();
+                }
+                let first = self.gpu.target_texture(COLOR_FORMAT, size.0, size.1)?;
+                let second = self.gpu.target_texture(COLOR_FORMAT, size.0, size.1)?;
+                blurs.push((size, [first, second]));
+                blurs.len() - 1
             }
-            let first = self.gpu.target_texture(COLOR_FORMAT, size.0, size.1)?;
-            let second = self.gpu.target_texture(COLOR_FORMAT, size.0, size.1)?;
-            targets.blurs.insert(size, [first, second]);
-        }
-        let [first, second] = targets.blurs.get(&size)?.clone();
+        };
+        let [first, second] = blurs[slot].1.clone();
         let blit = BLIT_ENCODER.send(self.command_buffer, ())?;
         COPY_TEXTURE.send(
             &blit,
@@ -447,7 +509,13 @@ impl Encoder<'_> {
         if let Some(radii) = radii {
             for direction in [[1, 0], [0, 1]] {
                 for radius in radii {
-                    let pass = begin_render(self.command_buffer, &to, LOAD_ACTION_DONT_CARE, size)?;
+                    let pass = begin_render(
+                        self.command_buffer,
+                        &to,
+                        LOAD_ACTION_DONT_CARE,
+                        size,
+                        [0.0; 4],
+                    )?;
                     SET_PIPELINE.send(&pass, (&self.gpu.blur,));
                     SET_FRAGMENT_TEXTURE.send(&pass, (Some(&*from), 0));
                     let radius = i32::try_from(radius).unwrap_or(i32::MAX);

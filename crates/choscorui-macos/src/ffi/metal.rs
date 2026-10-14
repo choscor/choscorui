@@ -498,6 +498,29 @@ pub(crate) fn read_region(
     Some(bytes)
 }
 
+/// Copies `parts` one after the other into the start of a shared buffer.
+/// Returns `None`, and copies nothing, unless the buffer is longer than
+/// the parts, so that an offset at the end of each part is inside it.
+/// Call it only while no GPU work reads the buffer.
+pub(crate) fn write_buffer(buffer: &Obj<MTLBuffer>, parts: &[&[u32]]) -> Option<()> {
+    let words: usize = parts.iter().map(|part| part.len()).sum();
+    let contents = BUFFER_CONTENTS.send(buffer, ()).cast::<u32>().cast_mut();
+    if BUFFER_LENGTH.send(buffer, ()) <= words * 4 || contents.is_null() {
+        return None;
+    }
+    let mut start = 0;
+    for part in parts {
+        let to = contents.wrapping_add(start);
+        // SAFETY: a shared buffer of more than `words` words starts at
+        // `contents`, and `part` goes from `to` to at most its end. No
+        // GPU work reads the buffer, and `part` is Rust memory apart
+        // from it.
+        unsafe { std::ptr::copy_nonoverlapping(part.as_ptr(), to, part.len()) };
+        start += part.len();
+    }
+    Some(())
+}
+
 /// A copy of the first `length` bytes of a shared buffer, or `None` when
 /// the buffer is shorter. Call it after the GPU work that writes the
 /// buffer completes.

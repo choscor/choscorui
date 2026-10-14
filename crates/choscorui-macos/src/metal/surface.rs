@@ -74,7 +74,7 @@ pub struct MetalUsage {
 }
 
 /// The most frames of one window that the GPU works on at a time.
-const IN_FLIGHT: usize = 2;
+pub(super) const IN_FLIGHT: usize = 2;
 
 /// The drawables of a layer.
 const DRAWABLES: usize = 3;
