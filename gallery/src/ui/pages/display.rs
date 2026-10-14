@@ -285,7 +285,7 @@ fn months(env: &Env) -> Vec<String> {
     .to_vec()
 }
 
-fn visitors(kind: ChartKind) -> impl View {
+fn visitors(kind: ChartKind) -> Configured<controls::Chart> {
     Chart::new(t!("chart.visitors_by_month"), kind, months, |env: &Env| {
         vec![
             ChartSeries::new(
@@ -327,7 +327,10 @@ pub fn chart(_: &PageCx) -> AnyView {
     column((
         section(t!("chart.bar"), visitors(ChartKind::Bar)),
         section(t!("chart.area"), visitors(ChartKind::Area)),
-        section(t!("chart.line"), visitors(ChartKind::Line)),
+        section(
+            t!("chart.line"),
+            visitors(ChartKind::Line).with(|chart| chart.with_value_axis()),
+        ),
         section(
             t!("chart.pie_donut"),
             // The two charts share the width.

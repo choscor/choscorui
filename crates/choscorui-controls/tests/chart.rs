@@ -217,3 +217,61 @@ fn negative_values_get_a_baseline_and_values_use_the_locale() {
     vi.key(Key::End);
     assert_eq!(vi.semantics().value.as_deref(), Some("Q2: Profit 3.000,50"));
 }
+
+/// The baseline of each value label of `list`, by its text.
+fn value_labels(list: &choscorui_core::DisplayList) -> Vec<(String, Point)> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { text, baseline, .. }
+                if text.chars().all(|c| c.is_ascii_digit()) =>
+            {
+                Some((text.clone(), *baseline))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_value_axis_labels_the_grid_on_the_start_side() {
+    let tokens = DesignTokens::light();
+    let bar_left = |list: &choscorui_core::DisplayList| {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::FillPath {
+                    path,
+                    paint: Paint::Solid(color),
+                    ..
+                } if *color == tokens.color(ColorRole::Chart1) => Some(path.bounds().origin.x),
+                _ => None,
+            })
+            .fold(f64::INFINITY, f64::min)
+    };
+    let plain = Harness::new(visitors(ChartKind::Bar)).paint();
+    assert!(value_labels(&plain).is_empty(), "off by default");
+    let mut h = Harness::new(visitors(ChartKind::Bar).with_value_axis());
+    let list = h.paint();
+    let labels = value_labels(&list);
+    let names: Vec<&str> = labels.iter().map(|(text, _)| text.as_str()).collect();
+    // 305 rounds up to 500, in four steps from zero.
+    assert_eq!(names, ["0", "125", "250", "375", "500"]);
+    assert!(labels.windows(2).all(|pair| pair[1].1.y < pair[0].1.y));
+    assert!(labels.iter().all(|(_, at)| at.x < bar_left(&list)));
+    assert!(labels[4].1.y > 0.0, "the top label is inside the chart");
+    let mut rtl = Harness::with_direction(
+        visitors(ChartKind::Bar).with_value_axis(),
+        LayoutDirection::Rtl,
+    );
+    let list = rtl.paint();
+    let labels = value_labels(&list);
+    assert_eq!(labels.len(), 5);
+    let width = rtl.measure().width;
+    assert!(
+        labels.iter().all(|(_, at)| at.x > width / 2.0),
+        "the right side"
+    );
+    let pie = Harness::new(browsers(ChartKind::Pie).with_value_axis()).paint();
+    assert!(value_labels(&pie).is_empty(), "only cartesian charts");
+}

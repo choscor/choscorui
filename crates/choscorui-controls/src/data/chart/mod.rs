@@ -69,6 +69,8 @@ pub struct Chart {
     categories: Vec<String>,
     series: Vec<ChartSeries>,
     legend: bool,
+    /// Whether a cartesian chart labels its grid lines with values.
+    value_axis: bool,
     donut: bool,
     /// The app's value format, or `None` for the number format of
     /// `locale`.
@@ -101,6 +103,7 @@ impl Chart {
             categories,
             series,
             legend: false,
+            value_axis: false,
             donut: false,
             format: None,
             locale: Localizer::builtin().locale().clone(),
@@ -115,6 +118,14 @@ impl Chart {
     #[must_use]
     pub fn with_legend(mut self) -> Self {
         self.legend = true;
+        self
+    }
+
+    /// Labels the grid lines of an area, bar, or line chart with their
+    /// values, on the start side of the marks. Other kinds ignore it.
+    #[must_use]
+    pub fn with_value_axis(mut self) -> Self {
+        self.value_axis = true;
         self
     }
 

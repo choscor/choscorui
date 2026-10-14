@@ -25,6 +25,8 @@ pub(super) struct Plot {
     area: Rect,
     /// The category labels under a cartesian chart.
     axis: Rect,
+    /// The value labels beside a cartesian chart, when it shows them.
+    values: Rect,
     legend: Rect,
     /// The values at the top and the bottom of the value axis. The
     /// bottom is below zero only when a value is.
@@ -176,16 +178,61 @@ impl Chart {
             .map(|(series, category)| self.value(series, category))
     }
 
+    /// The value of grid line `tick`, from the bottom of the value axis.
+    fn tick_value(top: f64, bottom: f64, tick: usize) -> f64 {
+        bottom + (top - bottom) * tick as f64 / TICKS as f64
+    }
+
     pub(super) fn layout(&self, cx: &MeasureContext<'_>, bounds: Rect) -> Plot {
         let axis = self.axis_height(cx);
         let legend = self.legend_height(cx, bounds.size.width);
-        let area = Rect::from_xywh(
-            bounds.origin.x,
-            bounds.origin.y,
-            bounds.size.width,
-            (bounds.size.height - axis - legend).max(0.0),
-        );
         let label = cx.style(Self::query(Slot::Label));
+        let top = if self.kind == ChartKind::Pie {
+            1.0
+        } else {
+            nice(self.values().fold(0.0, f64::max))
+        };
+        // A cartesian chart with a negative value shows values below a
+        // zero baseline.
+        let lowest = self.values().fold(0.0, f64::min);
+        let bottom = if self.cartesian() && lowest < 0.0 {
+            -nice(-lowest)
+        } else {
+            0.0
+        };
+        // The value labels take a column on the start side, one gap from
+        // the marks. The marks start half a line down, so that the top
+        // label is not cut.
+        let (column, inset) = if self.value_axis && self.cartesian() {
+            let widest = (0..=TICKS)
+                .map(|tick| {
+                    let text = self.formatted(Self::tick_value(top, bottom, tick));
+                    cx.text.width(&text, &label.text)
+                })
+                .fold(0.0, f64::max);
+            (
+                (widest.ceil() + label.gap).min(bounds.size.width),
+                label.text.line_height / 2.0,
+            )
+        } else {
+            (0.0, 0.0)
+        };
+        let marks_x = if self.rtl {
+            bounds.origin.x
+        } else {
+            bounds.origin.x + column
+        };
+        let area = Rect::from_xywh(
+            marks_x,
+            bounds.origin.y + inset,
+            bounds.size.width - column,
+            (bounds.size.height - axis - legend - inset).max(0.0),
+        );
+        let values_x = if self.rtl {
+            area.max_x()
+        } else {
+            bounds.origin.x
+        };
         let room = if self.kind == ChartKind::Radar {
             // Category labels sit around the radar.
             label.text.line_height + label.gap
@@ -200,25 +247,13 @@ impl Chart {
             ChartKind::Radial => radius * 0.3,
             _ => 0.0,
         };
-        let top = if self.kind == ChartKind::Pie {
-            1.0
-        } else {
-            nice(self.values().fold(0.0, f64::max))
-        };
-        // A cartesian chart with a negative value shows values below a
-        // zero baseline.
-        let lowest = self.values().fold(0.0, f64::min);
-        let bottom = if self.cartesian() && lowest < 0.0 {
-            -nice(-lowest)
-        } else {
-            0.0
-        };
         let tooltips = (0..self.categories.len())
             .map(|category| self.tooltip_size(cx, category))
             .collect();
         Plot {
             area,
             axis: Rect::from_xywh(bounds.origin.x, area.max_y(), bounds.size.width, axis),
+            values: Rect::from_xywh(values_x, area.origin.y, column, area.size.height),
             legend: Rect::from_xywh(
                 bounds.origin.x,
                 area.max_y() + axis,
@@ -434,6 +469,29 @@ impl Chart {
             // The zero baseline, in the label color.
             let baseline = cx.style(Self::query(Slot::Label)).foreground;
             cx.list.fill_rect(line(self.y(0.0)), baseline);
+        }
+        self.value_labels(cx);
+    }
+
+    /// The value of each grid line, centered on the line, toward the
+    /// marks.
+    fn value_labels(&self, cx: &mut PaintContext<'_>) {
+        let column = self.plot.values;
+        if column.size.width <= 0.0 {
+            return;
+        }
+        let label = cx.style(Self::query(Slot::Label));
+        let width = (column.size.width - label.gap).max(0.0);
+        let x = if self.rtl {
+            column.origin.x + label.gap
+        } else {
+            column.origin.x
+        };
+        for tick in 0..=TICKS {
+            let value = Self::tick_value(self.plot.top, self.plot.bottom, tick);
+            let y = self.y(value) - label.text.line_height / 2.0;
+            let rect = Rect::from_xywh(x, y, width, label.text.line_height);
+            cx.label(rect, &self.formatted(value), &label, TextAlign::End);
         }
     }
 

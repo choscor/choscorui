@@ -4182,6 +4182,10 @@ behavior.
   When a cartesian chart has a negative value, the axis goes down to a
   round value below the smallest value. A 1 pt `muted-foreground` line
   marks zero, and bars and areas grow from it, up or down.
+- `with_value_axis()` labels each grid line of an area, bar, or line
+  chart with its value, in the value format. The labels take a column on
+  the start side, one `Label` gap from the marks. The marks then start
+  half a line lower, so the top label fits. Other kinds ignore it.
 - **Tooltip.** Hover picks the category under the pointer. Arrow keys,
   Home, and End pick a category while the chart has focus. The tooltip
   shows the category and its values beside the pick.
