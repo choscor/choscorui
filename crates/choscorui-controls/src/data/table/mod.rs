@@ -700,13 +700,8 @@ impl DataTable {
     fn grid_key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> bool {
         let rows = self.page_keys().len();
         let columns = self.columns().len();
-        let (forward, back) = if self.rtl {
-            (Key::ArrowLeft, Key::ArrowRight)
-        } else {
-            (Key::ArrowRight, Key::ArrowLeft)
-        };
         let cell = self.cell;
-        self.cell = match key {
+        self.cell = match key.in_reading_order(self.rtl) {
             Key::ArrowDown => Cell {
                 row: match cell.row {
                     None if rows > 0 => Some(0),
@@ -719,11 +714,11 @@ impl DataTable {
                 row: cell.row.and_then(|row| row.checked_sub(1)),
                 ..cell
             },
-            key if key == forward => Cell {
+            Key::ArrowRight => Cell {
                 column: (cell.column + 1).min(columns - 1),
                 ..cell
             },
-            key if key == back => Cell {
+            Key::ArrowLeft => Cell {
                 column: cell.column.saturating_sub(1),
                 ..cell
             },
