@@ -199,6 +199,14 @@ impl OverlayScrollBar {
         self.bar.paint_track(cx, track, state);
     }
 
+    /// Moves the bar to the edge of `viewport` and keeps its look, for a
+    /// bar that serves several viewports, such as the columns of a
+    /// browser. The offset clamps to the new length.
+    pub(crate) fn set_viewport(&mut self, viewport: Rect) {
+        self.viewport = viewport;
+        self.set_content(self.bar.content);
+    }
+
     /// Moves the offset to `offset`, clamped. Returns false when the
     /// offset stays, for example at a limit.
     pub(crate) fn scroll_to(&mut self, offset: f64) -> bool {

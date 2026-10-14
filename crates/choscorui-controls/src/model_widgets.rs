@@ -5,15 +5,19 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
-use crate::hosted::{Parts, Routed};
+use crate::hosted::{Parts, Routed, TypeAhead};
 use crate::item_view::list_row_height;
-use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
+use crate::style::{
+    ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState, fill_area,
+};
 use crate::validation::{DateError, NumberError, ValidationError};
 use crate::{DateInput, InputFilter, NumberInput, ValidationState};
+use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
-    CivilDate, EditableModel, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection,
-    Locale, Localizer, Measured, ModelError, Point, PointerButton, PointerEvent, Rect, Role,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder, UndoStack, Value,
+    CivilDate, EditableModel, EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent,
+    LayoutDirection, Locale, Localizer, Measured, ModelError, Point, PointerButton, PointerEvent,
+    Rect, Role, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder,
+    UndoStack, Value, WheelUnit,
 };
 use std::collections::HashMap;
 
@@ -1045,12 +1049,41 @@ impl CustomControl for HeaderView {
     }
 }
 
+/// The model of a hosted browser: read-only, or lazy with `fetch_more`.
+enum BrowserModel {
+    Plain(Box<dyn ItemModel>),
+    Lazy(Box<dyn EditableModel>),
+}
+
+impl BrowserModel {
+    fn get(&self) -> &dyn ItemModel {
+        match self {
+            Self::Plain(model) => model.as_ref(),
+            Self::Lazy(model) => model.as_ref(),
+        }
+    }
+}
+
 impl ColumnBrowser {
     /// A browser over its own `model` that mounts in a
     /// [`crate::ControlHost`] as a single node named `name`.
     pub fn hosted(self, name: impl Into<String>, model: Box<dyn ItemModel>) -> HostedColumnBrowser {
-        HostedColumnBrowser {
-            name: name.into(),
+        self.mount(name.into(), BrowserModel::Plain(model))
+    }
+
+    /// A hosted browser over a lazy `model`: when a column opens whose
+    /// parent can fetch more children, the browser calls `fetch_more`.
+    pub fn hosted_lazy(
+        self,
+        name: impl Into<String>,
+        model: Box<dyn EditableModel>,
+    ) -> HostedColumnBrowser {
+        self.mount(name.into(), BrowserModel::Lazy(model))
+    }
+
+    fn mount(self, name: String, model: BrowserModel) -> HostedColumnBrowser {
+        let mut hosted = HostedColumnBrowser {
+            name,
             browser: self,
             model,
             column_width: 0.0,
@@ -1058,7 +1091,14 @@ impl ColumnBrowser {
             bounds: Rect::default(),
             rtl: false,
             tracked: Parts::default(),
-        }
+            offsets: Vec::new(),
+            scroll_x: 0.0,
+            bar: OverlayScrollBar::new(ScrollOrientation::Vertical),
+            dragging: None,
+            type_ahead: TypeAhead::default(),
+        };
+        hosted.fetch();
+        hosted
     }
 }
 
@@ -1069,13 +1109,22 @@ impl ColumnBrowser {
 pub struct HostedColumnBrowser {
     name: String,
     browser: ColumnBrowser,
-    model: Box<dyn ItemModel>,
+    model: BrowserModel,
     column_width: f64,
     row_height: f64,
     bounds: Rect,
     rtl: bool,
     /// Hover and press of the rows, by column and row.
     tracked: Parts<(usize, usize)>,
+    /// The vertical scroll offset of each column, in points.
+    offsets: Vec<f64>,
+    /// The horizontal scroll offset of the columns, in points.
+    scroll_x: f64,
+    /// The scroll bar look; each column places a copy at its edge.
+    bar: OverlayScrollBar,
+    /// The column whose scroll bar thumb follows a drag.
+    dragging: Option<(usize, OverlayScrollBar)>,
+    type_ahead: TypeAhead,
 }
 
 impl HostedColumnBrowser {
@@ -1084,7 +1133,7 @@ impl HostedColumnBrowser {
     }
 
     pub fn model(&self) -> &dyn ItemModel {
-        self.model.as_ref()
+        self.model.get()
     }
 
     /// The row of each path item among its siblings.
@@ -1092,13 +1141,32 @@ impl HostedColumnBrowser {
         self.browser
             .path()
             .iter()
-            .filter_map(|key| self.model.row(*key))
+            .filter_map(|key| self.model().row(*key))
             .collect()
     }
 
-    /// The rectangle of column `column`; columns follow reading order.
+    /// The parent that each column lists, root first.
+    fn parents(&self) -> Vec<Option<ItemKey>> {
+        self.browser.columns(self.model())
+    }
+
+    /// Calls `fetch_more` for each shown column of a lazy model that can
+    /// fetch more children.
+    fn fetch(&mut self) {
+        let parents = self.parents();
+        if let BrowserModel::Lazy(model) = &mut self.model {
+            for parent in parents {
+                if model.can_fetch_more(parent) {
+                    model.fetch_more(parent);
+                }
+            }
+        }
+    }
+
+    /// The rectangle of column `column`; columns follow reading order and
+    /// scroll by the horizontal offset.
     fn column_rect(&self, column: usize) -> Rect {
-        let offset = column as f64 * self.column_width;
+        let offset = column as f64 * self.column_width - self.scroll_x;
         let x = if self.rtl {
             self.bounds.max_x() - offset - self.column_width
         } else {
@@ -1112,52 +1180,221 @@ impl HostedColumnBrowser {
         )
     }
 
+    /// The column at `position`, among `count` columns.
+    fn column_at(&self, position: Point, count: usize) -> Option<usize> {
+        (0..count).find(|column| self.column_rect(*column).contains(position))
+    }
+
     /// Rows that fit in a column.
     fn page(&self) -> usize {
         ((self.bounds.size.height / self.row_height).floor() as usize).max(1)
     }
 
-    /// The first row a column shows: it scrolls to keep the path item in
-    /// view.
-    fn first_row(&self, column: usize) -> usize {
-        let selected = self
-            .browser
-            .path()
-            .get(column)
-            .and_then(|key| self.model.row(*key))
-            .unwrap_or(0);
-        (selected + 1).saturating_sub(self.page())
+    fn offset(&self, column: usize) -> f64 {
+        self.offsets.get(column).copied().unwrap_or(0.0)
     }
 
-    fn changed(&self, cx: &mut ControlContext<'_>) {
-        cx.emit(ControlMessage::Changed(ControlValue::Indices(
-            self.path_rows(),
-        )));
+    /// The scroll bar of `column`, placed at its edge with its offset.
+    fn column_bar(&self, column: usize, parent: Option<ItemKey>) -> OverlayScrollBar {
+        let mut bar = self.bar.clone();
+        bar.set_viewport(self.column_rect(column));
+        let content = self.model().row_count(parent) as f64 * self.row_height;
+        bar.set_scroll(content, self.offset(column));
+        bar
+    }
+
+    /// Keeps the path item of each column and the focused column in view,
+    /// and drops the offsets of closed columns.
+    fn reveal(&mut self) {
+        let parents = self.parents();
+        self.offsets.resize(parents.len(), 0.0);
+        for (column, parent) in parents.iter().enumerate() {
+            let mut bar = self.column_bar(column, *parent);
+            if let Some(row) = self
+                .browser
+                .path()
+                .get(column)
+                .and_then(|key| self.model().row(*key))
+            {
+                let top = row as f64 * self.row_height;
+                bar.reveal(top, top + self.row_height);
+            }
+            self.offsets[column] = bar.offset();
+        }
+        let width = self.bounds.size.width;
+        let total = parents.len() as f64 * self.column_width;
+        let start = self.browser.focused_column() as f64 * self.column_width;
+        if start < self.scroll_x {
+            self.scroll_x = start;
+        } else if start + self.column_width > self.scroll_x + width {
+            self.scroll_x = start + self.column_width - width;
+        }
+        self.scroll_x = self.scroll_x.clamp(0.0, (total - width).max(0.0));
+    }
+
+    /// Reports a path change, or repaints after a focus change.
+    fn moved(&mut self, cx: &mut ControlContext<'_>, before: &ColumnBrowser) {
+        if self.browser == *before {
+            return;
+        }
+        self.fetch();
+        self.reveal();
+        if self.browser.path() != before.path() {
+            cx.emit(ControlMessage::Changed(ControlValue::Indices(
+                self.path_rows(),
+            )));
+            cx.request_semantics();
+        }
         cx.request_paint();
-        cx.request_semantics();
     }
 
     /// The column at `position` and the row that it shows there.
     fn entry_at(&self, position: Point) -> Option<(usize, usize)> {
-        let count = self.browser.columns(self.model.as_ref()).len();
-        let column = (0..count).find(|column| self.column_rect(*column).contains(position))?;
-        let line = ((position.y - self.bounds.origin.y) / self.row_height).floor() as usize;
-        Some((column, self.first_row(column) + line))
+        if !self.bounds.contains(position) {
+            return None;
+        }
+        let parents = self.parents();
+        let column = self.column_at(position, parents.len())?;
+        let y = position.y - self.bounds.origin.y + self.offset(column);
+        let row = (y / self.row_height).floor() as usize;
+        (row < self.model().row_count(parents[column])).then_some((column, row))
     }
 
     fn press(&mut self, cx: &mut ControlContext<'_>, position: Point) -> EventReply {
         let Some((column, row)) = self.entry_at(position) else {
             return EventReply::Continue;
         };
-        let parent = self.browser.columns(self.model.as_ref())[column];
-        if let Some(key) = self.model.key(parent, row) {
+        let parent = self.parents()[column];
+        if let Some(key) = self.model().key(parent, row) {
             let before = self.browser.clone();
             self.browser.select(column, key);
-            if self.browser != before {
-                self.changed(cx);
+            self.moved(cx, &before);
+            if cx.click_count() >= 2 {
+                cx.emit(ControlMessage::ItemActivated(row));
             }
         }
         EventReply::Stop
+    }
+
+    /// Gives a pointer event to the scroll bar of the column under it, or
+    /// to the bar whose thumb follows a drag. Returns true when a bar
+    /// used it.
+    fn bar_pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> bool {
+        let (column, mut bar) = match self.dragging.take() {
+            Some(dragging) => dragging,
+            None => {
+                let parents = self.parents();
+                let Some(column) = self.column_at(event.position(), parents.len()) else {
+                    return false;
+                };
+                (column, self.column_bar(column, parents[column]))
+            }
+        };
+        let used = bar.hosted_pointer(cx, event).is_some();
+        if let Some(offset) = self.offsets.get_mut(column) {
+            *offset = bar.offset();
+        }
+        if bar.dragging() {
+            self.dragging = Some((column, bar));
+        }
+        used
+    }
+
+    /// Selects a row in the focused column: the first for Home, the last
+    /// for End, one page away for PageUp and PageDown, or the row that
+    /// `typed` text (at a time in seconds) starts.
+    fn move_in_column(&mut self, key: Key, typed: Option<(&str, f64)>) {
+        let column = self.browser.focused_column();
+        let Some(parent) = self.parents().get(column).copied() else {
+            return;
+        };
+        let model = self.model.get();
+        let count = model.row_count(parent);
+        if count == 0 {
+            return;
+        }
+        let current = self
+            .browser
+            .path()
+            .get(column)
+            .and_then(|key| model.row(*key));
+        let page = self.page();
+        let row = match (typed, key) {
+            (Some((text, time)), _) => {
+                let label = |row| {
+                    model
+                        .key(parent, row)
+                        .map(|key| model.data(key, 0, Role::Display).to_display_string())
+                        .unwrap_or_default()
+                };
+                self.type_ahead.find(text, time, current, count, label)
+            }
+            (None, Key::Home) => Some(0),
+            (None, Key::End) => Some(count - 1),
+            (None, Key::PageDown) => Some(current.map_or(0, |row| (row + page).min(count - 1))),
+            (None, Key::PageUp) => Some(current.map_or(0, |row| row.saturating_sub(page))),
+            _ => None,
+        };
+        if let Some(key) = row.and_then(|row| model.key(parent, row)) {
+            self.browser.select(column, key);
+        }
+    }
+
+    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
+        let before = self.browser.clone();
+        // Columns follow reading order, so the keys mirror too.
+        let key = key.in_reading_order(self.rtl);
+        match key {
+            Key::Enter => {
+                let column = self.browser.focused_column();
+                let Some(row) = self.path_rows().get(column).copied() else {
+                    return EventReply::Continue;
+                };
+                cx.emit(ControlMessage::ItemActivated(row));
+                return EventReply::Stop;
+            }
+            Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown => {
+                self.browser.handle_key(self.model.get(), key);
+            }
+            Key::Home | Key::End | Key::PageUp | Key::PageDown => self.move_in_column(key, None),
+            _ => return EventReply::Continue,
+        }
+        self.moved(cx, &before);
+        EventReply::Stop
+    }
+
+    /// Scrolls the column under `position` by a wheel event, and the
+    /// columns sideways by its horizontal part. At the limits the event
+    /// goes on to an outer scroll view.
+    fn wheel(
+        &mut self,
+        cx: &mut ControlContext<'_>,
+        position: Point,
+        delta: Point,
+        unit: WheelUnit,
+    ) -> EventReply {
+        let parents = self.parents();
+        let Some(column) = self.column_at(position, parents.len()) else {
+            return EventReply::Continue;
+        };
+        let line = self.row_height;
+        let mut bar = self.column_bar(column, parents[column]);
+        let mut reply = bar.wheel(cx, delta, unit, line);
+        self.offsets[column] = bar.offset();
+        let scale = if unit == WheelUnit::Lines { line } else { 1.0 };
+        let total = parents.len() as f64 * self.column_width;
+        let limit = (total - self.bounds.size.width).max(0.0);
+        let x = (self.scroll_x + delta.x * scale).clamp(0.0, limit);
+        if x != self.scroll_x {
+            self.scroll_x = x;
+            cx.request_paint();
+            reply = EventReply::Stop;
+        }
+        if reply == EventReply::Stop {
+            // Other rows move under the pointer.
+            self.tracked.hovered = None;
+        }
+        reply
     }
 }
 
@@ -1185,12 +1422,28 @@ impl CustomControl for HostedColumnBrowser {
         self.column_width = cx.tokens.spacing * 50.0;
         self.bounds = bounds;
         self.rtl = cx.rtl();
+        self.bar.arrange(cx, bounds);
+        self.reveal();
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
+        if cx.phase() == EventPhase::Target
+            && let ControlEvent::Pointer(pointer) = event
+            && self.bar_pointer(cx, pointer)
+        {
+            return EventReply::Stop;
+        }
         let mut tracked = self.tracked;
         tracked.track(cx, event, |point| self.entry_at(point));
         self.tracked = tracked;
+        if cx.phase() == EventPhase::Target
+            && let ControlEvent::Text(text) = event
+        {
+            let before = self.browser.clone();
+            self.move_in_column(Key::Other(0), Some((text, cx.time())));
+            self.moved(cx, &before);
+            return EventReply::Stop;
+        }
         let Some(routed) = crate::hosted::route(cx, event) else {
             return EventReply::Continue;
         };
@@ -1199,52 +1452,55 @@ impl CustomControl for HostedColumnBrowser {
                 position,
                 button: PointerButton::Primary,
             }) => self.press(cx, position),
-            Routed::Key(KeyEvent::Down { key, .. }) => {
-                // Columns follow reading order, so the keys mirror too.
-                let key = key.in_reading_order(self.rtl);
-                if !matches!(
-                    key,
-                    Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown
-                ) {
-                    return EventReply::Continue;
+            Routed::Pointer(PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            }) => self.wheel(cx, position, delta, unit),
+            Routed::Key(KeyEvent::Down { key, .. }) => self.key(cx, key),
+            Routed::Cancel => {
+                if let Some((_, mut bar)) = self.dragging.take() {
+                    bar.release();
+                    cx.capture_pointer(false);
                 }
-                let before = self.browser.clone();
-                self.browser.handle_key(self.model.as_ref(), key);
-                if self.browser.path() != before.path() {
-                    self.changed(cx);
-                } else if self.browser != before {
-                    cx.request_paint();
-                }
-                EventReply::Stop
+                EventReply::Continue
             }
             _ => EventReply::Continue,
         }
     }
 
-    /// Paints only the rows that fit in each column.
+    /// Paints only the rows in view in each column, a divider at the end
+    /// of each column, and the scroll bar of each column that overflows.
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let host = cx.state;
         let focused = host.focused();
         let page = self.page();
-        for (column, parent) in self.browser.columns(self.model.as_ref()).iter().enumerate() {
+        let model = self.model();
+        let divider = cx.style(StyleQuery::new(ControlKind::Separator, Slot::Root));
+        cx.list.push_clip(self.bounds);
+        for (column, parent) in self.parents().iter().enumerate() {
             let rect = self.column_rect(column);
-            let first = self.first_row(column);
-            let end = self.model.row_count(*parent).min(first + page + 1);
+            if rect.max_x() < self.bounds.origin.x || rect.origin.x > self.bounds.max_x() {
+                continue;
+            }
+            let offset = self.offset(column);
+            let first = (offset / self.row_height).floor() as usize;
+            let end = model.row_count(*parent).min(first + page + 2);
             let selected = self.browser.path().get(column).copied();
             let active = focused && column == self.browser.focused_column();
+            cx.list.push_clip(rect);
             for row in first..end {
-                let Some(key) = self.model.key(*parent, row) else {
+                let Some(key) = model.key(*parent, row) else {
                     continue;
                 };
                 let entry = Rect::from_xywh(
                     rect.origin.x,
-                    rect.origin.y + (row - first) as f64 * self.row_height,
+                    rect.origin.y + row as f64 * self.row_height - offset,
                     rect.size.width,
                     self.row_height,
                 );
-                let label = self.model.data(key, 0, Role::Display).to_display_string();
-                let has_children =
-                    self.model.has_children(key) || self.model.can_fetch_more(Some(key));
+                let label = model.data(key, 0, Role::Display).to_display_string();
+                let has_children = model.has_children(key) || model.can_fetch_more(Some(key));
                 ColumnBrowser::paint_row(
                     &mut cx.at(entry),
                     &label,
@@ -1254,6 +1510,24 @@ impl CustomControl for HostedColumnBrowser {
                     self.tracked.state((column, row), host),
                 );
             }
+            let _ = cx.list.pop_clip();
+            // The divider at the end edge of the column.
+            let width = divider.min_width;
+            let x = if self.rtl {
+                rect.origin.x
+            } else {
+                rect.max_x() - width
+            };
+            fill_area(
+                cx.list,
+                Rect::from_xywh(x, rect.origin.y, width, rect.size.height),
+                cx.rtl,
+                &divider.background,
+            );
+            match &self.dragging {
+                Some((dragged, bar)) if *dragged == column => bar.paint(cx),
+                _ => self.column_bar(column, *parent).paint(cx),
+            }
         }
         // Keyboard focus rings the focused column.
         let column = self.column_rect(self.browser.focused_column());
@@ -1262,6 +1536,7 @@ impl CustomControl for HostedColumnBrowser {
             .radius
             .top_start;
         cx.focus_ring(column, radius);
+        let _ = cx.list.pop_clip();
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -1271,7 +1546,11 @@ impl CustomControl for HostedColumnBrowser {
             .browser
             .path()
             .get(self.browser.focused_column())
-            .map(|key| self.model.data(*key, 0, Role::Display).to_display_string());
+            .map(|key| {
+                self.model()
+                    .data(*key, 0, Role::Display)
+                    .to_display_string()
+            });
         node
     }
 
@@ -1296,13 +1575,15 @@ impl CustomControl for HostedColumnBrowser {
         let mut browser = ColumnBrowser::new();
         let mut parent = None;
         for (column, row) in rows.iter().enumerate() {
-            let Some(key) = self.model.key(parent, *row) else {
+            let Some(key) = self.model().key(parent, *row) else {
                 return false;
             };
             browser.select(column, key);
             parent = Some(key);
         }
         self.browser = browser;
+        self.fetch();
+        self.reveal();
         true
     }
 }

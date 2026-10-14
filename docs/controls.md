@@ -1899,7 +1899,7 @@ pin this behavior.
   the search wraps.
 - A new search starts after the current item. A repeated character cycles
   through the items that start with it.
-- A space never goes into the prefix, because the Space key selects.
+- A space never starts a prefix, because the Space key selects.
 - **Rows change.** `sync` keeps the scroll offset when the rows change, for
   example after a filter. `set_layout` also keeps it. At the next arrange,
   the view scrolls the current item into view.
@@ -1975,9 +1975,10 @@ selection mode, and `on_item` receives `ItemActivated`.
 `TextItemDelegate::table` and the `Table` kind. Its selection binds in the
 same way.
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
-[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
-pin this behavior.
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs),
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
+and [data_views.rs](../crates/choscorui-controls/tests/data_views.rs) pin
+this behavior.
 
 ### HeaderView
 
@@ -2026,9 +2027,10 @@ release sorts only in the same cell. `Activate` sorts the focused column.
 gives the header the bound sort. `on_resize` receives the widths after each
 resize. The view keeps the widths when it builds the header again.
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
-[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
-pin this behavior.
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs),
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
+and [data_views.rs](../crates/choscorui-controls/tests/data_views.rs) pin
+this behavior.
 
 ### CellEdit and DataMapper
 
@@ -2086,21 +2088,38 @@ These types have no semantic node. Show the rows in an `ItemView`.
 
 **In a control host.** `ColumnBrowser::hosted` returns a
 `HostedColumnBrowser` that owns the model and mounts as one node. It paints
-one column for each level, and each column shows the rows that fit. A
-column scrolls to keep the path item visible. A press selects the row under
-the pointer. The row under the pointer shows the `ListView` hover fill.
-Columns follow reading order, so ArrowLeft and ArrowRight mirror in
-right-to-left layouts. Keyboard focus rings the focused column just inside
-its edges. The node has the `Tree` role, the name, and the focused path
-item as its value. Its only action is `Focus`.
+one column for each level, and each column paints only the rows in view.
+A 1 pt `Separator` divider marks the end of each column.
+
+- Each column scrolls with the wheel and has an
+  [`OverlayScrollBar`](#overlayscrollbar) when its rows overflow. A
+  column scrolls to keep its path item visible.
+- When the columns are wider than the browser, they scroll sideways to keep
+  the focused column visible. A horizontal wheel also scrolls them.
+- A press selects the row under the pointer, and a double click activates
+  it. The row under the pointer shows the `ListView` hover fill.
+- Home and End go to the first and the last row of the focused column, and
+  PageUp and PageDown move one page. Typed text selects the next row that
+  starts with it, as in [ItemView](#itemview). Enter activates the row.
+- Activation reports `ItemActivated(row)` with the row among its siblings.
+  `Changed` reports only a change of the path.
+- `ColumnBrowser::hosted_lazy` takes an `EditableModel`. When a column
+  opens whose parent can fetch more children, the browser calls
+  `fetch_more`.
+- Columns follow reading order, so ArrowLeft and ArrowRight mirror in
+  right-to-left layouts. Keyboard focus rings the focused column just
+  inside its edges.
+- The node has the `Tree` role, the name, and the focused path item as its
+  value. Its only action is `Focus`.
 
 **As a view.** `ColumnBrowser::new(name, model, path)` mounts a
 `HostedColumnBrowser`. `model` makes the tree model in the view's
 environment. `path` follows the `Indices` value in both directions.
 
-[item_view.rs](../crates/choscorui-controls/tests/item_view.rs) and
-[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs)
-pin this behavior.
+[item_view.rs](../crates/choscorui-controls/tests/item_view.rs),
+[builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),
+and [data_views.rs](../crates/choscorui-controls/tests/data_views.rs) pin
+this behavior.
 
 ### DropdownMenu
 

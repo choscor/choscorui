@@ -428,7 +428,7 @@ pub(crate) fn routed_reply(routed: Routed) -> EventReply {
 
 /// Type-ahead over rows: the characters typed within a second form a
 /// prefix, compared after `fold_for_search`. Repeating one character
-/// cycles through the rows that start with it. A space never reaches the
+/// cycles through the rows that start with it. A space never starts a
 /// search, because the Space key selects or activates.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TypeAhead {
@@ -452,8 +452,11 @@ impl TypeAhead {
             self.typed.clear();
         }
         let before = self.typed.chars().count();
-        self.typed
-            .extend(text.chars().filter(|c| !c.is_control() && *c != ' '));
+        for c in text.chars().filter(|c| !c.is_control()) {
+            if c != ' ' || !self.typed.is_empty() {
+                self.typed.push(c);
+            }
+        }
         if self.typed.chars().count() == before || count == 0 {
             return None;
         }
