@@ -1,7 +1,7 @@
 //! Choosing one of several: radio groups, tabs, combo boxes, and the font
 //! chooser.
 
-use crate::ui::page::{Build, PageCx, column};
+use crate::ui::page::{Build, PageCx, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     Alignment, AnyView, Canvas, Combobox, Cx, Dynamic, Env, FontChooser, Frame, HStack,
@@ -278,7 +278,17 @@ impl View for FontChooserPage {
         })
         .text_style(TextPreset::Small)
         .foreground(ColorRole::MutedForeground);
-        column((chooser, preview, note))
+        let families: Vec<String> = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
+        let locked = FontChooser::new(families, FALLBACK, cx.state(Some(4)).binding())
+            .with_env(|chooser, env| chooser.with_name(env.text("font-chooser.locked", &[])))
+            .frame(Frame::new().width(280.0).alignment(Alignment::FILL))
+            .disabled(true);
+        column((
+            chooser,
+            preview,
+            note,
+            section(t!("font-chooser.disabled"), locked),
+        ))
     }
 }
 

@@ -1,6 +1,7 @@
 //! The tool box page: an accordion of tool pages, one open at a time.
 
-use crate::ui::page::{PageCx, column, stateful};
+use crate::ui::page::{PageCx, column, section, stateful};
+use choscorui::compose::t;
 use choscorui::compose::view::{AnyView, Configured, Env, Frame, VStack, ViewExt};
 use choscorui::controls::{
     ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue, CustomControl,
@@ -89,32 +90,41 @@ impl CustomControl for ToolBoxPages {
     }
 }
 
+/// The tool box control with the tool pages in `env`.
+fn tool_box_pages(env: &Env) -> ToolBoxPages {
+    let (titles, texts) = tool_pages(env).into_iter().unzip();
+    ToolBoxPages {
+        toolbox: ToolBox::new(titles),
+        texts,
+        header: 0.0,
+    }
+}
+
 /// An accordion: Up and Down move between headers, Space opens one. The
 /// group reads the open page's title and text.
 pub fn tool_box(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(0usize);
-        let toolbox = Configured::custom(ControlKind::Accordion, |env| {
-            let (titles, texts) = tool_pages(env).into_iter().unzip();
-            ToolBoxPages {
-                toolbox: ToolBox::new(titles),
-                texts,
-                header: 0.0,
-            }
-        })
-        .on_message(move |message| {
-            if let ControlMessage::Changed(ControlValue::Index(Some(page))) = message {
-                open.set(*page);
-            }
-        });
+        let toolbox =
+            Configured::custom(ControlKind::Accordion, tool_box_pages).on_message(move |message| {
+                if let ControlMessage::Changed(ControlValue::Index(Some(page))) = message {
+                    open.set(*page);
+                }
+            });
         let pages = tool_pages(cx.env());
         let hints = pages.clone();
-        column(
+        column((
             VStack::new(toolbox.frame(Frame::size(320.0, 260.0)))
                 .accessibility_label(cx.env().text("tool-box.name", &[]))
                 .accessibility_value(move || pages[open.get()].0.clone())
                 .accessibility_hint(move || hints[open.get()].1.clone()),
-        )
+            section(
+                t!("tool-box.disabled"),
+                Configured::custom(ControlKind::Accordion, tool_box_pages)
+                    .frame(Frame::size(320.0, 200.0))
+                    .disabled(true),
+            ),
+        ))
     })
 }
 

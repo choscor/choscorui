@@ -1,7 +1,7 @@
 //! Range controls: sliders, spin boxes, progress, scroll bars, dials, and
 //! numeric displays.
 
-use crate::ui::page::{Build, PageCx, caption, column};
+use crate::ui::page::{Build, PageCx, caption, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Button, Canvas, Cx, DecimalSpinBox, Dial, Env, Frame, HStack, HorizontalAlignment,
@@ -317,9 +317,11 @@ impl View for DecimalSpinBoxPage {
                     .frame(Frame::new().width(220.0)),
             )
         };
+        let tax = row("decimal-spin-box.tax", (0.0, 100.0), 0.5, 1, 8.5);
         column((
             row("decimal-spin-box.price", (0.0, 10_000.0), 0.25, 2, 1_234.5),
             row("decimal-spin-box.ratio", (0.0, 1.0), 0.005, 3, 0.618),
+            section(t!("decimal-spin-box.disabled"), tax.disabled(true)),
         ))
     }
 }

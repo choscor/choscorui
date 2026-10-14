@@ -1,7 +1,7 @@
 //! The dock page: four dockable panels around an editor, with an
 //! arrangement that the page store keeps across restarts.
 
-use crate::ui::page::{PageCx, column, stateful};
+use crate::ui::page::{PageCx, column, section, stateful};
 use choscorui::compose::view::{
     AnyView, Button, Configured, Dynamic, Env, Frame, HStack, Text, ViewExt,
 };
@@ -277,6 +277,15 @@ pub fn dock(cx: &PageCx) -> AnyView {
                         .foreground(ColorRole::MutedForeground)
                 })
             }),
+            // A locked arrangement: it shows its panels and takes no input.
+            section(
+                t!("dock.disabled"),
+                Configured::custom(ControlKind::Dock, |env| {
+                    DockView::new(env, titled_dock(env))
+                })
+                .frame(Frame::new().max_width(760.0).height(220.0))
+                .disabled(true),
+            ),
         ))
     })
 }

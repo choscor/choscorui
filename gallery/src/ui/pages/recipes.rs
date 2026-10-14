@@ -92,6 +92,11 @@ impl View for ButtonRecipesPage {
                 activated("button-recipes.continue"),
             )
             .frame(width),
+            Button::new(t!("button-recipes.locked"), || {})
+                .recipe(ControlKind::Button, Rc::new(Square))
+                .accessibility_hint(text("button-recipes.locked_hint"))
+                .frame(width)
+                .disabled(true),
             status(last),
         ))
     }
@@ -117,6 +122,8 @@ struct StarRating {
     env: Env,
     /// Whether the stars run from the right, from the last arrange.
     rtl: bool,
+    /// Whether the control takes input; the host sets it.
+    enabled: bool,
 }
 
 impl StarRating {
@@ -127,6 +134,7 @@ impl StarRating {
             hover: None,
             env,
             rtl: false,
+            enabled: true,
         }
     }
 
@@ -217,9 +225,18 @@ impl CustomControl for StarRating {
         }
     }
 
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.hover = None;
+        }
+    }
+
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let (bounds, tokens) = (cx.bounds, cx.tokens);
         let width = bounds.size.width / 5.0;
+        // A disabled rating paints at half strength, like disabled buttons.
+        let strength = if cx.state.disabled() { 0.5 } else { 1.0 };
         let shown = self.hover.unwrap_or(self.value);
         for star in 1..=5u8 {
             let start = f64::from(star - 1) * width;
@@ -233,9 +250,11 @@ impl CustomControl for StarRating {
                 Size::new(width, bounds.size.height),
             );
             let color = if star <= shown {
-                tokens.color(ColorRole::Primary)
+                tokens.color(ColorRole::Primary).with_alpha(strength)
             } else {
-                tokens.color(ColorRole::Foreground).with_alpha(0.25)
+                tokens
+                    .color(ColorRole::Foreground)
+                    .with_alpha(0.25 * strength)
             };
             let _ = cx.list.draw_text(
                 Point::new(cell.origin.x + 4.0, cell.origin.y + cell.size.height * 0.8),
@@ -257,13 +276,20 @@ impl CustomControl for StarRating {
                 "custom-control.stars",
                 &[("value", &self.value.to_string())],
             )),
-            state: SemanticState::default(),
+            state: SemanticState {
+                disabled: !self.enabled,
+                ..SemanticState::default()
+            },
             relations: Vec::new(),
-            actions: vec![
-                SemanticAction::Increment,
-                SemanticAction::Decrement,
-                SemanticAction::Focus,
-            ],
+            actions: if self.enabled {
+                vec![
+                    SemanticAction::Increment,
+                    SemanticAction::Decrement,
+                    SemanticAction::Focus,
+                ]
+            } else {
+                Vec::new()
+            },
             text: None,
         }
     }
@@ -288,13 +314,14 @@ impl CustomControl for StarRating {
 
 /// A captioned star rating named by the catalog string `key`. The caption
 /// repeats the rating's name, so assistive technology skips it.
-fn rating(env: &Env, key: &'static str, value: u8) -> impl View {
+fn rating(env: &Env, key: &'static str, value: u8, enabled: bool) -> impl View {
     VStack::new((
         Text::new(t!(key))
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground)
             .accessibility_hidden(true),
-        ControlView::new(StarRating::new(env.text(key, &[]), value, env.clone())),
+        ControlView::new(StarRating::new(env.text(key, &[]), value, env.clone()))
+            .disabled(!enabled),
     ))
     .alignment(HorizontalAlignment::Leading)
     .spacing(Space::S1)
@@ -304,8 +331,9 @@ pub fn custom_control(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let env = cx.env();
         column((
-            rating(env, "custom-control.food", 4),
-            rating(env, "custom-control.service", 2),
+            rating(env, "custom-control.food", 4, true),
+            rating(env, "custom-control.service", 2, true),
+            rating(env, "custom-control.locked", 3, false),
         ))
     })
 }

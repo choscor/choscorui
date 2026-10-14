@@ -1,7 +1,7 @@
 //! Text entry: single-line fields, the multi-line editor, and structured
 //! inputs (numbers, masks, dates) with validation feedback.
 
-use crate::ui::page::{Build, PageCx, column};
+use crate::ui::page::{Build, PageCx, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Binding, Cx, Dynamic, Env, Frame, HorizontalAlignment, Input, Text, TextEditor,
@@ -155,10 +155,17 @@ impl View for TextEditorPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let sample = cx.env().text("text-editor.sample", &[]);
         let text = cx.state(sample);
-        column(
+        let notes = cx.state(cx.env().text("text-editor.locked_text", &[]));
+        column((
             TextEditor::new(t!("text-editor.document"), text.binding())
                 .frame(Frame::size(620.0, 320.0)),
-        )
+            section(
+                t!("text-editor.disabled"),
+                TextEditor::new(t!("text-editor.locked"), notes.binding())
+                    .frame(Frame::size(620.0, 120.0))
+                    .disabled(true),
+            ),
+        ))
     }
 }
 
@@ -176,6 +183,8 @@ type Make = Rc<dyn Fn(controls::Input) -> controls::Input>;
 /// One structured-input field.
 #[derive(Clone)]
 struct RuleField {
+    /// The page id, which prefixes the verdict strings.
+    page: &'static str,
     label: String,
     raw: String,
     placeholder: String,
@@ -183,11 +192,12 @@ struct RuleField {
     make: Make,
 }
 
-/// The line under a field: whether its value is valid, or why not.
-fn verdict(env: &Env, validation: &ValidationState) -> String {
+/// The line under a field of page `page`: whether its value is valid,
+/// or why not.
+fn verdict(env: &Env, page: &str, validation: &ValidationState) -> String {
     match validation {
-        ValidationState::Valid => env.text("number-input.valid", &[]),
-        ValidationState::Intermediate => env.text("number-input.incomplete", &[]),
+        ValidationState::Valid => env.text(&format!("{page}.valid"), &[]),
+        ValidationState::Intermediate => env.text(&format!("{page}.incomplete"), &[]),
         ValidationState::Invalid(error) => error.message(&env.localizer()),
     }
 }
@@ -213,6 +223,7 @@ impl View for RuleFields {
 /// The caption, the field, and the verdict line of a structured field.
 fn verdict_column(
     env: Env,
+    page: &'static str,
     label: String,
     input: impl View,
     checked: impl Fn() -> ValidationState + Clone + 'static,
@@ -221,7 +232,7 @@ fn verdict_column(
         let checked = checked.clone();
         move || matches!(checked(), ValidationState::Invalid(_))
     };
-    let message = Text::new(move || verdict(&env, &checked()))
+    let message = Text::new(move || verdict(&env, page, &checked()))
         .text_style(TextPreset::Small)
         .foreground(move || {
             if invalid() {
@@ -239,6 +250,7 @@ fn verdict_column(
 
 fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
     let RuleField {
+        page,
         label,
         raw,
         placeholder,
@@ -260,10 +272,10 @@ fn rule_field(cx: &mut Cx, field: RuleField) -> AnyView {
         .with(validated)
         .accessibility_hint({
             let (checked, env) = (checked.clone(), env.clone());
-            move || verdict(&env, &checked())
+            move || verdict(&env, page, &checked())
         })
         .frame(Frame::new().width(300.0));
-    verdict_column(env, label, input, checked)
+    verdict_column(env, page, label, input, checked)
 }
 
 /// A page of structured fields that `fields` makes for the environment's
@@ -288,6 +300,7 @@ fn number_fields(env: &Env) -> Vec<RuleField> {
     let field = |label: String, raw: String, placeholder: String, input: NumberInput| {
         let make = input.clone();
         RuleField {
+            page: "number-input",
             label,
             raw,
             placeholder,
@@ -324,6 +337,7 @@ fn date_fields(env: &Env) -> Vec<RuleField> {
     let field = |label: String, raw: String, input: DateInput| {
         let make = input.clone();
         RuleField {
+            page: "date-input",
             label,
             raw,
             placeholder: placeholder.clone(),
@@ -381,10 +395,16 @@ fn mask_field(cx: &mut Cx, env: &Env, key: &str, raw: &str, pattern: &str) -> Op
     let input = Input::masked(label.clone(), mask, value.binding())
         .accessibility_hint({
             let (checked, env) = (checked.clone(), env.clone());
-            move || verdict(&env, &checked())
+            move || verdict(&env, "input-mask", &checked())
         })
         .frame(Frame::new().width(300.0));
-    Some(verdict_column(env.clone(), label, input, checked))
+    Some(verdict_column(
+        env.clone(),
+        "input-mask",
+        label,
+        input,
+        checked,
+    ))
 }
 
 pub fn number_input(_: &PageCx) -> AnyView {

@@ -10,7 +10,7 @@ use std::path::Path;
 const OWN: [(&str, usize, &str); 7] = [
     (
         "pages/containers/dock.rs",
-        1,
+        2,
         "DockView draws the dock layout",
     ),
     (
@@ -20,7 +20,7 @@ const OWN: [(&str, usize, &str); 7] = [
     ),
     (
         "pages/containers/tool_box.rs",
-        1,
+        2,
         "ToolBoxPages draws the text of each tool box page",
     ),
     (

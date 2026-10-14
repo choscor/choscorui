@@ -174,6 +174,10 @@ impl View for ToolButtonPage {
             ))
             .spacing(Space::S2),
             readout(t!("tool-button.last", action = last)),
+            section(
+                t!("tool-button.disabled"),
+                tool("tool-button.paste", false, ToolButtonMenu::None, Vec::new()).disabled(true),
+            ),
         ))
     }
 }
@@ -397,6 +401,16 @@ impl View for KeySequencePage {
             readout(t!("key-sequence.last", change = last)),
             caption(t!("key-sequence.examples", examples = examples()))
                 .accessibility_label(examples()),
+            section(
+                t!("key-sequence.disabled"),
+                KeySequenceEdit::new(
+                    t!("key-sequence.locked"),
+                    2,
+                    cx.state("⇧⌘L".to_owned()).binding(),
+                )
+                .frame(Frame::new().width(320.0))
+                .disabled(true),
+            ),
         ))
     }
 }
