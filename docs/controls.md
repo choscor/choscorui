@@ -2804,13 +2804,19 @@ back with the content rectangle of each shown panel, in paint order.
 - In a control host, a `SizeGrip` drag reports the new size as
   `Changed(Range(width, height))`. The grip takes the direction of the
   host, and its hosted node is hidden.
+- A drag starts from the window content size. A `Range(width, height)`
+  value sets a different start size, for a grip that resizes a pane.
+- Escape during a drag reaches the grip from anywhere in the window. It
+  reports the start size again and ends the drag.
 - `FocusFrame` is not a hosted control. It paints outside its node, at
   the node that has the focus.
 - **As a view.** The `FocusFrame` view of `choscorui-compose` paints the
   ring after its content, outside the clip of the containers in the
   content. It paints only for focus in its content.
 - **As a view.** `SizeGrip::new(minimum, maximum, on_resize)` runs
-  `on_resize` with the size of each `Changed(Range)` message.
+  `on_resize` with the size of each `Changed(Range)` message. Give a pane
+  size with `.value`, and size the pane with a live `.frame`, such as
+  `.frame(move || Frame::size(width, height))`.
 - When frames are nested, the frame nearest to the focused node paints
   the ring. The layout mirrors the focused node in right-to-left layouts,
   and the ring follows it.

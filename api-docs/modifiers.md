@@ -675,10 +675,11 @@ let caption = Text::new("Caption").foreground(ColorRole::MutedForeground);
 #### `Styled::frame`
 
 ```rust
-pub fn frame(self, frame: Frame) -> Self
+pub fn frame<M>(self, frame: impl IntoLive<Frame, M>) -> Self
 ```
 
-Size constraints, with the content aligned in the frame.
+Size constraints, with the content aligned in the frame. A live
+frame, such as a closure, updates the layout when it changes.
 
 ##### Examples
 

@@ -163,7 +163,7 @@ Stacks place their children along one axis:
 | `LazyVStack`, `LazyHStack` | A column or a row that mounts only the items in view, with `.spacing` and `.alignment` |
 | `List` | The rows of an `ItemModel`, painted only while they show, with a selection binding |
 | `.padding(edges)` | Space around the view, from a `Space` token or `Edges` |
-| `.frame(Frame)` | A fixed, minimum, or maximum size, with the content aligned in it |
+| `.frame(Frame)` | A fixed, minimum, or maximum size, with the content aligned in it; a closure gives a live frame |
 | `.layout_priority(share)` | A share of the leftover space along the stack |
 
 A view is as large as its content. A `Spacer`, a `ScrollView`, a `Divider`, or a frame with an infinite maximum is flexible. A stack that holds a flexible view becomes flexible too, so it takes the space that its parent offers. A fixed width or height stops this along that axis. Layout mirrors in a right-to-left locale: leading is on the right.

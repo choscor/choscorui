@@ -873,6 +873,26 @@ fn a_hosted_size_grip_reports_the_new_size() {
 }
 
 #[test]
+fn a_size_grip_resizes_a_given_size_and_escape_cancels_the_drag() {
+    let grip = SizeGrip::new(Size::new(200.0, 100.0), Size::new(1000.0, 650.0), false);
+    let mut h = Harness::new(grip);
+    let pane = ControlValue::Range(400.0, 300.0);
+    assert!(h.host.set_value(&mut h.tree, h.node, &pane));
+    let start = h.bounds().center();
+    press(&mut h, start);
+    h.hover(Point::new(start.x + 50.0, start.y + 80.0));
+    assert_eq!(
+        h.messages(),
+        vec![changed(ControlValue::Range(450.0, 380.0))]
+    );
+    // Escape reaches the grip without focus, and puts the size back.
+    h.key(Key::Escape);
+    assert_eq!(h.messages(), vec![changed(pane)]);
+    h.hover(Point::new(start.x + 90.0, start.y));
+    assert!(h.messages().is_empty(), "the drag ended");
+}
+
+#[test]
 fn a_hosted_size_grip_grows_left_in_right_to_left_layouts() {
     let grip = SizeGrip::new(Size::new(200.0, 100.0), Size::new(1000.0, 800.0), false);
     let mut h = Harness::with_direction(grip, LayoutDirection::Rtl);

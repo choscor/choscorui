@@ -1925,7 +1925,21 @@ pub struct SizeGrip {
     /// drag reported.
     viewport: Size,
     reported: Option<Size>,
+    /// In a control host: the size that the application gave as the
+    /// value, which a drag starts from in place of the viewport.
+    size: Option<Size>,
 }
+
+/// Escape, which reaches a dragging grip from anywhere in its window.
+const ESCAPE: [crate::Shortcut; 1] = [crate::Shortcut {
+    key: Key::Escape,
+    modifiers: crate::ShortcutModifiers {
+        shift: false,
+        control: false,
+        option: false,
+        command: false,
+    },
+}];
 
 impl SizeGrip {
     pub fn new(minimum: Size, maximum: Size, rtl: bool) -> Self {
@@ -1936,6 +1950,7 @@ impl SizeGrip {
             start: None,
             viewport: Size::new(0.0, 0.0),
             reported: None,
+            size: None,
         }
     }
     pub fn rect(&self, window: Size, extent: f64) -> Rect {
@@ -1999,8 +2014,10 @@ impl SizeGrip {
 }
 
 /// A drag reports the new window content size as `Changed(Range(width,
-/// height))`. The grip takes the direction of the host and has no focus.
-/// Its node is hidden, because the grip has no semantic node.
+/// height))`; a `Range` value sets the size that a drag starts from, for
+/// a grip that resizes a pane. Escape during a drag reports the start size
+/// and ends the drag. The grip takes the direction of the host and has no
+/// focus. Its node is hidden, because the grip has no semantic node.
 impl CustomControl for SizeGrip {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let style = cx.style(StyleQuery::new(ControlKind::SizeGrip, Slot::Root));
@@ -2021,7 +2038,7 @@ impl CustomControl for SizeGrip {
                 position,
                 button: PointerButton::Primary,
             }) if cx.bounds().contains(*position) => {
-                self.press(*position, self.viewport);
+                self.press(*position, self.size.unwrap_or(self.viewport));
                 cx.capture_pointer(true);
                 EventReply::Stop
             }
@@ -2042,12 +2059,38 @@ impl CustomControl for SizeGrip {
                 self.end_drag(cx);
                 EventReply::Stop
             }
+            ControlEvent::Shortcut(_) => match self.start {
+                Some((_, size)) => {
+                    // Escape puts the size back where the drag started.
+                    if self.reported.is_some() {
+                        cx.emit(ControlMessage::Changed(ControlValue::Range(
+                            size.width,
+                            size.height,
+                        )));
+                    }
+                    self.end_drag(cx);
+                    EventReply::Stop
+                }
+                None => EventReply::Continue,
+            },
             ControlEvent::FocusChanged(false) | ControlEvent::Dismiss if self.start.is_some() => {
                 self.end_drag(cx);
                 EventReply::Continue
             }
             _ => EventReply::Continue,
         }
+    }
+
+    fn window_shortcuts(&self) -> &[crate::Shortcut] {
+        if self.start.is_some() { &ESCAPE } else { &[] }
+    }
+
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Range(width, height) = *value else {
+            return false;
+        };
+        self.size = Some(Size::new(width, height));
+        true
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {

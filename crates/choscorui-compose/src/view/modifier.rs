@@ -212,7 +212,7 @@ pub(crate) struct Trigger {
 /// One modifier. The list keeps them in the order they were applied.
 pub(crate) enum Modifier {
     Padding(Edges),
-    Frame(Frame),
+    Frame(Live<Frame>),
     Priority(f64),
     FixedSize,
     AspectRatio(f64),
@@ -369,7 +369,8 @@ modifiers! {
     /// let row = Text::new("Name").padding(Edges::horizontal(Space::S2));
     /// ```
     fn padding(edges: impl Into<Edges>) => Modifier::Padding(edges.into());
-    /// Size constraints, with the content aligned in the frame.
+    /// Size constraints, with the content aligned in the frame. A live
+    /// frame, such as a closure, updates the layout when it changes.
     ///
     /// # Examples
     ///
@@ -378,7 +379,7 @@ modifiers! {
     /// let title = Text::new("Title")
     ///     .frame(Frame::new().width(200.0).alignment(Alignment::LEADING));
     /// ```
-    fn frame(frame: Frame) => Modifier::Frame(frame);
+    fn frame<M>(frame: impl IntoLive<Frame, M>) => Modifier::Frame(frame.into_live());
     /// A share of the leftover space along the parent stack.
     ///
     /// # Examples
@@ -1523,70 +1524,80 @@ fn apply(
         Modifier::Frame(frame) => {
             let node = layout_node(cx.inner, target);
             let axis = parent_axis(cx.inner, node);
-            let (vertical, horizontal) = frame.alignment.items();
-            cx.inner.data(node).child_align = Some((vertical, horizontal));
-            cx.inner.children_changed(node);
-            update_style(cx.inner, node, |style| {
-                if let Some(width) = frame.width {
-                    style.width = Length::Points(width);
-                }
-                if let Some(height) = frame.height {
-                    style.height = Length::Points(height);
-                }
-                style.min = Size::new(
-                    style.min.width.max(frame.min.width),
-                    style.min.height.max(frame.min.height),
-                );
-                style.max = Size::new(
-                    style
-                        .max
-                        .width
-                        .min(frame.max_width.unwrap_or(f64::INFINITY)),
-                    style
-                        .max
-                        .height
-                        .min(frame.max_height.unwrap_or(f64::INFINITY)),
-                );
-                // A fixed size along an axis ends the flexibility of the
-                // content along it.
-                match axis {
-                    Some(Axis::Horizontal) => {
-                        if frame.width.is_some() {
-                            style.grow = 0.0;
+            // A live frame updates the layout when it changes.
+            cx.bind(frame, move |inner, frame| {
+                let (vertical, horizontal) = frame.alignment.items();
+                inner.data(node).child_align = Some((vertical, horizontal));
+                inner.children_changed(node);
+                update_style(inner, node, |style| {
+                    if let Some(width) = frame.width {
+                        style.width = Length::Points(width);
+                    }
+                    if let Some(height) = frame.height {
+                        style.height = Length::Points(height);
+                    }
+                    style.min = Size::new(
+                        style.min.width.max(frame.min.width),
+                        style.min.height.max(frame.min.height),
+                    );
+                    style.max = Size::new(
+                        style
+                            .max
+                            .width
+                            .min(frame.max_width.unwrap_or(f64::INFINITY)),
+                        style
+                            .max
+                            .height
+                            .min(frame.max_height.unwrap_or(f64::INFINITY)),
+                    );
+                    // A fixed size along an axis ends the flexibility of the
+                    // content along it.
+                    match axis {
+                        Some(Axis::Horizontal) => {
+                            if frame.width.is_some() {
+                                style.grow = 0.0;
+                            }
+                            if frame.height.is_some()
+                                && style.align_self == Some(ItemAlign::Stretch)
+                            {
+                                style.align_self = None;
+                            }
                         }
-                        if frame.height.is_some() && style.align_self == Some(ItemAlign::Stretch) {
-                            style.align_self = None;
+                        Some(Axis::Vertical) => {
+                            if frame.height.is_some() {
+                                style.grow = 0.0;
+                            }
+                            if frame.width.is_some() && style.align_self == Some(ItemAlign::Stretch)
+                            {
+                                style.align_self = None;
+                            }
+                        }
+                        None => {
+                            if frame.width.is_some()
+                                && style.justify_self == Some(ItemAlign::Stretch)
+                            {
+                                style.justify_self = None;
+                            }
+                            if frame.height.is_some()
+                                && style.align_self == Some(ItemAlign::Stretch)
+                            {
+                                style.align_self = None;
+                            }
                         }
                     }
-                    Some(Axis::Vertical) => {
-                        if frame.height.is_some() {
-                            style.grow = 0.0;
-                        }
-                        if frame.width.is_some() && style.align_self == Some(ItemAlign::Stretch) {
-                            style.align_self = None;
-                        }
-                    }
-                    None => {
-                        if frame.width.is_some() && style.justify_self == Some(ItemAlign::Stretch) {
-                            style.justify_self = None;
-                        }
-                        if frame.height.is_some() && style.align_self == Some(ItemAlign::Stretch) {
-                            style.align_self = None;
-                        }
-                    }
-                }
+                });
+                let data = inner.data(node);
+                data.flex.wide &= frame.width.is_none();
+                data.flex.tall &= frame.height.is_none();
+                // A frame with an infinite maximum takes the space that its
+                // parent offers along that axis.
+                let infinite = |max: Option<f64>| max.is_some_and(f64::is_infinite);
+                let flex = Flex {
+                    wide: frame.width.is_none() && infinite(frame.max_width),
+                    tall: frame.height.is_none() && infinite(frame.max_height),
+                };
+                inner.make_flexible(node, flex);
             });
-            let data = cx.inner.data(node);
-            data.flex.wide &= frame.width.is_none();
-            data.flex.tall &= frame.height.is_none();
-            // A frame with an infinite maximum takes the space that its
-            // parent offers along that axis.
-            let infinite = |max: Option<f64>| max.is_some_and(f64::is_infinite);
-            let flex = Flex {
-                wide: frame.width.is_none() && infinite(frame.max_width),
-                tall: frame.height.is_none() && infinite(frame.max_height),
-            };
-            cx.inner.make_flexible(node, flex);
         }
         Modifier::Priority(priority) => {
             let node = target.node;

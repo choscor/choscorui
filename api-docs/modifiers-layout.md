@@ -36,10 +36,11 @@ let status = Text::new("Connected").fixed_size();
 ### `frame`
 
 ```rust
-fn frame(self, frame: Frame) -> Styled<Self>
+fn frame<M>(self, frame: impl IntoLive<Frame, M>) -> Styled<Self>
 ```
 
-Size constraints, with the content aligned in the frame.
+Size constraints, with the content aligned in the frame. A live
+frame, such as a closure, updates the layout when it changes.
 
 #### Examples
 
