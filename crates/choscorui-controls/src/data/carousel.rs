@@ -8,8 +8,8 @@ use crate::style::{
     ControlKind, ControlSize, Orientation, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    MotionTokens, Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, MotionTokens, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
 };
 
 /// How long the carousel waits after the last wheel event before it snaps

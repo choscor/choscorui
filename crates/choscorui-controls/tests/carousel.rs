@@ -162,7 +162,12 @@ fn a_flick_moves_one_slide_and_home_and_end_go_to_the_ends() {
         },
     );
     h.set_time(0.05);
-    pointer(&mut h, PointerEvent::Move { position: at(-40.0) });
+    pointer(
+        &mut h,
+        PointerEvent::Move {
+            position: at(-40.0),
+        },
+    );
     pointer(
         &mut h,
         PointerEvent::Up {
