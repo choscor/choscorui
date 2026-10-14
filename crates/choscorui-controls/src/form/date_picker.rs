@@ -9,7 +9,8 @@ use crate::datetime_controls::{Calendar, CalendarFocus, CalendarLayout, Calendar
 use crate::hosted::{self, Reveal};
 use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{
-    Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState, content_rect,
+    Content, ControlKind, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, VisualState,
+    content_rect,
 };
 use choscorui_core::{
     CivilDate, EventPhase, EventReply, Icon, Key, KeyEvent, Locale, Measured, Point, PointerButton,
@@ -35,6 +36,11 @@ pub struct DatePicker {
     focus: CalendarFocus,
     frame: Rect,
     layout: Option<CalendarLayout>,
+    /// How far the calendar scrolls up in a popover that the window
+    /// limits, and whether the next arrange scrolls the cursor day into
+    /// view.
+    scroll: f64,
+    reveal_cursor: bool,
 }
 
 impl DatePicker {
@@ -53,6 +59,8 @@ impl DatePicker {
             focus: CalendarFocus::None,
             frame: Rect::default(),
             layout: None,
+            scroll: 0.0,
+            reveal_cursor: false,
         }
     }
 
@@ -156,6 +164,9 @@ impl DatePicker {
         self.calendar.close_caption();
         if open {
             self.calendar.parts.clear();
+            // The popover opens at its top, scrolled to the chosen day.
+            self.scroll = 0.0;
+            self.reveal_cursor = true;
         }
         self.focus = if open {
             CalendarFocus::Grid
@@ -171,6 +182,7 @@ impl DatePicker {
         let changed = self.apply_open(open, cx.time());
         if changed {
             cx.emit(ControlMessage::OpenChanged(open));
+            cx.request_layout();
             cx.request_paint();
             cx.request_semantics();
         }
@@ -307,6 +319,8 @@ impl DatePicker {
                 // Arrow keys, Page Up and Down, Home, and End move the
                 // cursor; Enter or Space chooses.
                 if self.calendar.handle_key(key) {
+                    self.reveal_cursor = true;
+                    cx.request_layout();
                     cx.request_paint();
                     cx.request_semantics();
                     EventReply::Stop
@@ -319,6 +333,22 @@ impl DatePicker {
 }
 
 impl DatePicker {
+    /// The calendar parts in a popover at `frame` with all of its `size`,
+    /// moved up by the scroll offset.
+    fn calendar_layout(
+        &self,
+        cx: &MeasureContext<'_>,
+        calendar: &ResolvedStyle,
+        size: Size,
+    ) -> CalendarLayout {
+        let full = Rect::new(
+            Point::new(self.frame.origin.x, self.frame.origin.y - self.scroll),
+            size,
+        );
+        let inner = content_rect(full, calendar, cx.rtl());
+        Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl())
+    }
+
     /// Tab and Shift+Tab move between the caption dropdowns and the grid.
     /// Past the ends they close the popover, and focus moves on.
     fn tab(&mut self, cx: &mut ControlContext<'_>) -> EventReply {
@@ -373,8 +403,8 @@ impl CustomControl for DatePicker {
             grid.width + calendar.padding.horizontal(),
             grid.height + calendar.padding.vertical(),
         );
-        // The calendar does not scroll, so it keeps its size where
-        // `place_popup` puts it.
+        // A window that is too short limits the popover, and the
+        // calendar scrolls in it.
         let placed = place_popup(
             gap_anchor(bounds, cx.tokens.spacing, None),
             size,
@@ -382,9 +412,24 @@ impl CustomControl for DatePicker {
             Placement::Below,
             cx.direction,
         );
-        self.frame = Rect::new(placed.rect.origin, size);
-        let inner = content_rect(self.frame, &calendar, cx.rtl());
-        let layout = Calendar::layout(inner.origin, cx.styles, cx.tokens, cx.rtl());
+        self.frame = placed.rect;
+        let room = (size.height - self.frame.size.height).max(0.0);
+        self.scroll = self.scroll.clamp(0.0, room);
+        let mut layout = self.calendar_layout(cx, &calendar, size);
+        if std::mem::take(&mut self.reveal_cursor) {
+            let index = (self.calendar.cells().iter())
+                .position(|cell| cell.date == self.calendar.selected());
+            if let Some(day) = index.and_then(|index| layout.days.get(index)) {
+                let frame = self.frame;
+                if day.origin.y < frame.origin.y {
+                    self.scroll -= frame.origin.y - day.origin.y;
+                } else if day.max_y() > frame.max_y() {
+                    self.scroll += day.max_y() - frame.max_y();
+                }
+                self.scroll = self.scroll.clamp(0.0, room);
+                layout = self.calendar_layout(cx, &calendar, size);
+            }
+        }
         self.calendar.arrange_caption(cx, &layout);
         self.layout = Some(layout);
     }
@@ -392,6 +437,18 @@ impl CustomControl for DatePicker {
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
+        }
+        if let ControlEvent::Pointer(PointerEvent::Wheel {
+            position, delta, ..
+        }) = event
+            && self.reveal.open
+            && self.frame.contains(*position)
+            && self.calendar.caption_frame().is_none()
+        {
+            self.scroll += delta.y;
+            cx.request_layout();
+            cx.request_paint();
+            return EventReply::Stop;
         }
         let layout = self.layout.as_ref().filter(|_| self.reveal.open);
         self.calendar.track_parts(cx, event, layout);
@@ -485,7 +542,9 @@ impl CustomControl for DatePicker {
         Reveal::paint(cx, frame, progress, slide, |cx| {
             cx.slot(frame, &content, |cx, _| {
                 cx.slot(frame, &calendar, |_, _| {});
+                cx.list.push_clip(frame);
                 self.calendar.paint(cx, layout, self.today, focus);
+                let _ = cx.list.pop_clip();
             });
         });
         self.calendar.paint_caption_list(cx);

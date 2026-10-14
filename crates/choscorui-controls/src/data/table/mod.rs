@@ -455,6 +455,10 @@ impl DataTable {
             return None;
         }
         match event {
+            ControlEvent::Pointer(pointer) if self.menu.wheel(pointer) => {
+                cx.request_paint();
+                Some(EventReply::Stop)
+            }
             ControlEvent::Pointer(pointer) => {
                 let released = matches!(pointer, PointerEvent::Up { .. });
                 let Some(response) = self.menu.pointer(pointer.position(), released) else {
@@ -476,7 +480,7 @@ impl DataTable {
                 None
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
-                let response = self.menu.menu.handle_key(*key, &self.menu.commands);
+                let response = self.menu.key(*key);
                 self.menu_response(cx, response);
                 Some(EventReply::Stop)
             }

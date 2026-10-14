@@ -964,6 +964,10 @@ impl HostedToolbar {
         event: PointerEvent,
         pressed: Option<usize>,
     ) -> EventReply {
+        if self.menu.wheel(&event) {
+            cx.request_paint();
+            return EventReply::Stop;
+        }
         if self.menu.is_open() {
             let released = matches!(event, PointerEvent::Up { .. });
             if let Some(response) = self.menu.pointer(event.position(), released) {
@@ -1025,7 +1029,7 @@ impl HostedToolbar {
                 self.dismiss_menu(cx);
                 return EventReply::Continue;
             }
-            let response = self.menu.menu.handle_key(key, &self.menu.commands);
+            let response = self.menu.key(key);
             self.respond(cx, response);
             return EventReply::Stop;
         }

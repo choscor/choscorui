@@ -8,7 +8,7 @@ use crate::menu::{DropdownMenu, MenuCheck, MenuItem, MenuResponse};
 use crate::popup::{Placement, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use crate::{CommandError, CommandId, CommandRegistry, CommandState};
-use choscorui_core::{Key, LayoutDirection, Point, Rect};
+use choscorui_core::{Key, LayoutDirection, Point, PointerEvent, Rect, WheelUnit};
 
 /// An open or closed dropdown menu that a hosted control owns.
 pub(crate) struct MenuPopup {
@@ -27,6 +27,17 @@ pub(crate) struct MenuPopup {
     width: f64,
     direction: LayoutDirection,
     motion_ms: u32,
+    /// How far the rows of each open level scroll, root first. A level
+    /// scrolls only when the window limits its panel.
+    scroll: Vec<f64>,
+}
+
+/// Where one open level is: the panel on screen, and the panel of all of
+/// its rows, moved up by the scroll offset.
+#[derive(Clone, Copy, Debug)]
+struct LevelPanel {
+    panel: Rect,
+    rows: Rect,
 }
 
 impl MenuPopup {
@@ -45,6 +56,7 @@ impl MenuPopup {
             width: 0.0,
             direction: LayoutDirection::Ltr,
             motion_ms: 0,
+            scroll: Vec::new(),
         }
     }
 
@@ -93,9 +105,10 @@ impl MenuPopup {
     pub fn open_beside(&mut self, anchor: Rect, side: Placement, time: f64, keyboard: bool) {
         self.side = side;
         self.menu.reset();
+        self.scroll.clear();
         self.anchor = anchor;
         if keyboard {
-            self.menu.handle_key(Key::Home, &self.commands);
+            self.key(Key::Home);
         }
         self.reveal.set(true, time);
     }
@@ -106,9 +119,14 @@ impl MenuPopup {
 
     /// The panel of each open level, root first. The root opens below
     /// its anchor, and a submenu beside its row with the rows aligned.
-    /// Each panel flips and moves to stay inside the bounds.
+    /// Each panel flips and moves to stay inside the bounds. A panel
+    /// taller than the bounds gets their height, and its rows scroll.
     pub fn panels(&self) -> Vec<Rect> {
-        let mut panels = Vec::new();
+        self.levels().into_iter().map(|level| level.panel).collect()
+    }
+
+    fn levels(&self) -> Vec<LevelPanel> {
+        let mut levels = Vec::new();
         let mut anchor = self.anchor;
         let mut preferred = self.side;
         let path = self.menu.path();
@@ -122,12 +140,24 @@ impl MenuPopup {
                 };
                 Rect::from_xywh(x, anchor.origin.y, size.width, size.height)
             } else {
-                place_popup(anchor, size, self.bounds, preferred, self.direction)
-                    .unshrunk(size, self.bounds)
+                place_popup(anchor, size, self.bounds, preferred, self.direction).rect
             };
-            panels.push(panel);
+            let room = (size.height - panel.size.height).max(0.0);
+            let offset = self
+                .scroll
+                .get(level)
+                .copied()
+                .unwrap_or(0.0)
+                .clamp(0.0, room);
+            let rows = Rect::from_xywh(
+                panel.origin.x,
+                panel.origin.y - offset,
+                panel.size.width,
+                size.height,
+            );
+            levels.push(LevelPanel { panel, rows });
             if let Some(Some(index)) = path.get(level)
-                && let Some(row) = self.menu.item_rect(level, panel, *index)
+                && let Some(row) = self.menu.item_rect(level, rows, *index)
             {
                 anchor = Rect::from_xywh(
                     panel.origin.x,
@@ -138,7 +168,76 @@ impl MenuPopup {
                 preferred = Placement::After;
             }
         }
-        panels
+        levels
+    }
+
+    /// A key for the open menu. The highlighted row of each level
+    /// scrolls into view.
+    pub fn key(&mut self, key: Key) -> MenuResponse {
+        let response = self.menu.handle_key(key, &self.commands);
+        self.reveal_highlight();
+        response
+    }
+
+    /// Scrolls each open level so that its highlighted row shows inside
+    /// the panel padding.
+    fn reveal_highlight(&mut self) {
+        let depth = self.menu.depth();
+        self.scroll.resize(depth, 0.0);
+        let inset = self.menu.inset();
+        for level in 0..depth {
+            let levels = self.levels();
+            let LevelPanel { panel, rows } = levels[level];
+            let offset = panel.origin.y - rows.origin.y;
+            let Some(Some(index)) = self.menu.path().get(level).copied() else {
+                self.scroll[level] = offset;
+                continue;
+            };
+            let Some(row) = self.menu.item_rect(level, rows, index) else {
+                continue;
+            };
+            let (top, bottom) = (panel.origin.y + inset, panel.max_y() - inset);
+            self.scroll[level] = if row.origin.y < top {
+                offset - (top - row.origin.y)
+            } else if row.max_y() > bottom {
+                offset + (row.max_y() - bottom)
+            } else {
+                offset
+            };
+        }
+    }
+
+    /// Scrolls the rows of the panel under a wheel event. Returns true
+    /// when the event is over an open panel, so the menu takes it.
+    pub fn wheel(&mut self, event: &PointerEvent) -> bool {
+        let PointerEvent::Wheel {
+            position,
+            delta,
+            unit,
+        } = *event
+        else {
+            return false;
+        };
+        if !self.reveal.open {
+            return false;
+        }
+        let levels = self.levels();
+        let Some(level) = levels
+            .iter()
+            .rposition(|level| level.panel.contains(position))
+        else {
+            return false;
+        };
+        let LevelPanel { panel, rows } = levels[level];
+        let step = match unit {
+            WheelUnit::Points => delta.y,
+            WheelUnit::Lines => delta.y * self.menu.row_height(),
+        };
+        let room = (rows.size.height - panel.size.height).max(0.0);
+        let offset = panel.origin.y - rows.origin.y;
+        self.scroll.resize(self.menu.depth(), 0.0);
+        self.scroll[level] = (offset + step).clamp(0.0, room);
+        true
     }
 
     /// The rectangle around every open panel.
@@ -154,12 +253,20 @@ impl MenuPopup {
         if !self.reveal.open {
             return None;
         }
-        let panels = self.panels();
-        let level = panels.iter().rposition(|panel| panel.contains(point))?;
-        Some(
-            self.menu
-                .pointer(level, panels[level].origin, point, released, &self.commands),
-        )
+        let levels = self.levels();
+        let level = levels
+            .iter()
+            .rposition(|level| level.panel.contains(point))?;
+        let response = self.menu.pointer(
+            level,
+            levels[level].rows.origin,
+            point,
+            released,
+            &self.commands,
+        );
+        // A submenu that opens starts at its first row.
+        self.scroll.truncate(level + 1);
+        Some(response)
     }
 
     /// Acts on a menu response: an activated command updates its check,
@@ -234,16 +341,21 @@ impl MenuPopup {
         if progress <= 0.0 {
             return;
         }
-        let panels = self.panels();
-        let Some(frame) = panels.iter().copied().reduce(|a, b| a.union(b)) else {
+        let levels = self.levels();
+        let Some(frame) = levels
+            .iter()
+            .map(|level| level.panel)
+            .reduce(|a, b| a.union(b))
+        else {
             return;
         };
         let slide = (0.0, -cx.tokens.spacing * 2.0);
         Reveal::paint(cx, frame, progress, slide, |cx| {
-            for (level, panel) in panels.iter().enumerate() {
+            for (level, LevelPanel { panel, rows }) in levels.iter().enumerate() {
                 let mut panel_cx = cx.at(*panel);
                 panel_cx.state = VisualState::OPEN;
-                self.menu.paint(&mut panel_cx, level, &self.commands);
+                self.menu
+                    .paint_scrolled(&mut panel_cx, level, &self.commands, *rows);
             }
         });
     }

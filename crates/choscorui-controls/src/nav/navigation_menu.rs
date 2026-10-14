@@ -67,6 +67,8 @@ pub struct NavigationMenu {
     rtl: bool,
     /// The area that the panel fits in.
     room: Rect,
+    /// How far the links scroll up in a panel that the window limits.
+    scroll: f64,
     /// Link heights and the panel padding, read from the recipe.
     link_heights: Vec<Vec<f64>>,
     padding: crate::style::Edges,
@@ -84,6 +86,7 @@ impl NavigationMenu {
             shown: 0,
             panel: Rect::default(),
             links: Vec::new(),
+            scroll: 0.0,
             reveal: Reveal::default(),
             motion_ms: 0,
             tracked: Parts::default(),
@@ -155,8 +158,8 @@ impl NavigationMenu {
             LayoutDirection::Ltr
         };
         let size = Size::new(width, height);
-        // The panel does not scroll, so it keeps its size where
-        // `place_popup` puts it.
+        // A window that is too short limits the panel, and the links
+        // scroll in it.
         self.panel = place_popup(
             gap_anchor(trigger, 6.0, None),
             size,
@@ -164,10 +167,13 @@ impl NavigationMenu {
             Placement::Below,
             direction,
         )
-        .unshrunk(size, self.room);
+        .rect;
+        self.scroll = self
+            .scroll
+            .clamp(0.0, (height - self.panel.size.height).max(0.0));
         let (x, y) = (self.panel.origin.x, self.panel.origin.y);
         let mut links = Vec::new();
-        let mut top = y + pad.block_start;
+        let mut top = y + pad.block_start - self.scroll;
         for (row, row_height) in row_heights.iter().enumerate() {
             for column in 0..columns {
                 if row * columns + column >= heights.len() {
@@ -200,6 +206,7 @@ impl NavigationMenu {
         let was_open = self.open.is_some();
         self.open = Some(item);
         self.shown = item;
+        self.scroll = 0.0;
         self.place_panel(item);
         if !was_open {
             self.reveal.set(true, time);
@@ -287,6 +294,7 @@ impl NavigationMenu {
 
     fn hit(&self, point: Point) -> Option<Focus> {
         if self.open.is_some()
+            && self.panel.contains(point)
             && let Some(link) = hosted::hit(&self.links, point)
         {
             return Some(Focus::Link(link));
@@ -296,8 +304,42 @@ impl NavigationMenu {
 
     fn set_focus(&mut self, cx: &mut ControlContext<'_>, focus: Focus) {
         self.focus = focus;
+        if let (Focus::Link(link), Some(item)) = (focus, self.open)
+            && let Some(rect) = self.links.get(link).copied()
+        {
+            // The focused link scrolls into view.
+            let panel = self.panel;
+            let shift = if rect.origin.y < panel.origin.y {
+                rect.origin.y - panel.origin.y - self.padding.block_start
+            } else if rect.max_y() > panel.max_y() {
+                rect.max_y() - panel.max_y() + self.padding.block_end
+            } else {
+                0.0
+            };
+            if shift != 0.0 {
+                self.scroll += shift;
+                self.place_panel(item);
+            }
+        }
         cx.request_paint();
         cx.request_semantics();
+    }
+
+    /// Scrolls the open panel under a wheel event. Returns true when the
+    /// panel takes the event.
+    fn wheel(&mut self, event: &ControlEvent) -> bool {
+        let ControlEvent::Pointer(PointerEvent::Wheel {
+            position, delta, ..
+        }) = event
+        else {
+            return false;
+        };
+        let Some(item) = self.open.filter(|_| self.panel.contains(*position)) else {
+            return false;
+        };
+        self.scroll += delta.y;
+        self.place_panel(item);
+        true
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
@@ -554,6 +596,10 @@ impl CustomControl for NavigationMenu {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        if self.wheel(event) {
+            cx.request_paint();
+            return EventReply::Stop;
+        }
         let pressed = self.tracked.pressed;
         let mut tracked = self.tracked;
         tracked.track(cx, event, |point| self.hit(point));
@@ -619,6 +665,7 @@ impl CustomControl for NavigationMenu {
         let spacing = cx.tokens.spacing;
         Reveal::paint(cx, panel, progress, slide, |cx| {
             cx.slot(panel, &content, |_, _| {});
+            cx.list.push_clip(panel);
             for (index, (entry, rect)) in self.items[item].1.iter().zip(&self.links).enumerate() {
                 let state = self.part_state(Focus::Link(index), host);
                 let style = cx.style(Self::query(Slot::Link, state));
@@ -649,6 +696,7 @@ impl CustomControl for NavigationMenu {
                     );
                 });
             }
+            let _ = cx.list.pop_clip();
         });
     }
 

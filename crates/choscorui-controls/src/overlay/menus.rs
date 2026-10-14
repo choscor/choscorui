@@ -103,6 +103,12 @@ impl CustomControl for ContextMenu {
             return EventReply::Continue;
         }
         let bounds = cx.bounds();
+        if let ControlEvent::Pointer(pointer) = event
+            && self.popup.wheel(pointer)
+        {
+            cx.request_paint();
+            return EventReply::Stop;
+        }
         match event {
             ControlEvent::Pointer(PointerEvent::Down { position, button }) => {
                 if self.popup.pointer(*position, false).is_some() {
@@ -150,7 +156,7 @@ impl CustomControl for ContextMenu {
                     self.dismiss(cx);
                     return EventReply::Continue;
                 }
-                let response = self.popup.menu.handle_key(*key, &self.popup.commands);
+                let response = self.popup.key(*key);
                 self.respond(cx, response);
                 EventReply::Stop
             }
@@ -422,13 +428,19 @@ impl Menubar {
     /// Sends `key` to menu `index`.
     fn forward(&mut self, cx: &mut ControlContext<'_>, index: usize, key: Key) -> EventReply {
         let popup = &mut self.menus[index].popup;
-        let response = popup.menu.handle_key(key, &popup.commands);
+        let response = popup.key(key);
         self.respond(cx, index, response);
         EventReply::Stop
     }
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &PointerEvent) -> EventReply {
         let position = event.position();
+        if let Some(index) = self.open
+            && self.menus[index].popup.wheel(event)
+        {
+            cx.request_paint();
+            return EventReply::Stop;
+        }
         if let Some(index) = self.open
             && let Some(response) = self.menus[index]
                 .popup

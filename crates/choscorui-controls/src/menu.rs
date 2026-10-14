@@ -187,6 +187,11 @@ impl DropdownMenu {
         self.metrics.inset
     }
 
+    /// The height of an item row.
+    pub(crate) fn row_height(&self) -> f64 {
+        self.metrics.row
+    }
+
     /// Closes every submenu and clears the highlight.
     pub(crate) fn reset(&mut self) {
         self.path = vec![None];
@@ -470,9 +475,43 @@ impl DropdownMenu {
     /// Paints level `level` as a panel in the context's bounds.
     pub fn paint(&self, cx: &mut PaintContext<'_>, level: usize, commands: &CommandRegistry) {
         let panel = cx.bounds;
+        self.paint_scrolled(cx, level, commands, panel);
+    }
+
+    /// Paints level `level` as a panel in the context's bounds, with its
+    /// rows laid out in `rows`: the panel of every row, which is taller
+    /// than the bounds and moved up when the panel scrolls. Rows show
+    /// only inside the panel padding.
+    pub(crate) fn paint_scrolled(
+        &self,
+        cx: &mut PaintContext<'_>,
+        level: usize,
+        commands: &CommandRegistry,
+        rows: Rect,
+    ) {
+        let panel = cx.bounds;
         let query = |slot| StyleQuery::new(ControlKind::Menu, slot);
         let root = cx.style(query(Slot::Root));
         cx.slot(panel, &root, |_, _| {});
+        let inset = self.metrics.inset;
+        cx.list.push_clip(Rect::from_xywh(
+            panel.origin.x,
+            panel.origin.y + inset,
+            panel.size.width,
+            (panel.size.height - 2.0 * inset).max(0.0),
+        ));
+        self.paint_rows(cx, level, commands, rows);
+        let _ = cx.list.pop_clip();
+    }
+
+    fn paint_rows(
+        &self,
+        cx: &mut PaintContext<'_>,
+        level: usize,
+        commands: &CommandRegistry,
+        panel: Rect,
+    ) {
+        let query = |slot| StyleQuery::new(ControlKind::Menu, slot);
         let items = self.level_items(level);
         let indent = items.iter().any(|item| item.check() != MenuCheck::None);
         for (index, item) in items.iter().enumerate() {
@@ -682,6 +721,12 @@ impl CustomControl for HostedDropdownMenu {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
+        if let ControlEvent::Pointer(pointer) = event
+            && self.popup.wheel(pointer)
+        {
+            cx.request_paint();
+            return EventReply::Stop;
+        }
         match event {
             ControlEvent::Pointer(PointerEvent::Down { position, .. }) => {
                 match self.popup.pointer(*position, false) {
@@ -710,7 +755,7 @@ impl CustomControl for HostedDropdownMenu {
                 }
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) if *key != Key::Tab => {
-                let response = self.popup.menu.handle_key(*key, &self.popup.commands);
+                let response = self.popup.key(*key);
                 self.respond(cx, response);
                 EventReply::Stop
             }
@@ -770,7 +815,7 @@ impl CustomControl for HostedDropdownMenu {
     ) -> bool {
         match action {
             SemanticAction::Activate => {
-                let response = self.popup.menu.handle_key(Key::Enter, &self.popup.commands);
+                let response = self.popup.key(Key::Enter);
                 self.respond(cx, response);
                 true
             }

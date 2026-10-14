@@ -3103,7 +3103,9 @@ character that the code does not accept. `set_open` returns false.
 - A press on the trigger, Enter, Space, or ArrowDown opens the calendar 4
   pt below the trigger. It fades, zooms, and slides in like a select list.
 - `place_popup` keeps the calendar in the window. Near the bottom edge it
-  opens above the trigger. The calendar keeps its size.
+  opens above the trigger. In a window that is too short, the popover gets
+  the height of the window and the calendar scrolls in it. The wheel
+  scrolls it, and the cursor day scrolls into view when it moves.
 - Each close without a choice emits `Dismissed`: Escape, Tab, a press
   outside, a press on the trigger, focus loss, and disabling.
 - **Keys while open.** The calendar keys move the cursor and do not choose.
@@ -3170,7 +3172,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   right-to-left layouts, the menus open toward the left.
 - `place_popup` keeps every panel in the window. A menu near the bottom
   edge opens above its anchor. A submenu near the end edge opens on the
-  start side. A panel keeps its size and moves into the window.
+  start side. A panel taller than the window gets the height of the
+  window, and its rows scroll. The wheel scrolls them, and the
+  highlighted row scrolls into view when a key moves it.
 - **`ContextMenu`.** A secondary press or a Control-press in the area
   opens the menu with its top-start corner at the pointer. Enter, Space,
   Shift-F10, the Menu key, or `ShowMenu` opens it at the center of the
@@ -3457,7 +3461,9 @@ last page. `set_open` returns false.
   emits `Dismissed`.
 - A press outside the panel, focus loss, `Collapse`, and disabling also
   close the panel and emit `Dismissed`. `place_popup` keeps the panel in
-  the window.
+  the window. A panel taller than the window gets the height of the
+  window, and its links scroll. The wheel scrolls them, and the focused
+  link scrolls into view.
 - A panel with more than three links shows them in two 240 pt columns.
 
 | Part | Slot | Value |
