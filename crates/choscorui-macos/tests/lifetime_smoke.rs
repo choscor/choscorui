@@ -13,7 +13,7 @@ use choscorui_core::{
 };
 #[cfg(target_os = "macos")]
 use choscorui_macos::{
-    Application, MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, Window,
+    Application, MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, Painter, Window,
     WindowEvent, WindowOptions,
 };
 #[cfg(target_os = "macos")]
@@ -92,6 +92,7 @@ fn themed(size: Size, tokens: &DesignTokens, light: bool) -> DisplayList {
 
 #[cfg(target_os = "macos")]
 fn window_churn(app: &Application, count: usize) {
+    let before = app.metal_usage();
     let mut open = Vec::new();
     for i in 0..count {
         let mut window = app
@@ -128,9 +129,28 @@ fn window_churn(app: &Application, count: usize) {
         )
         .unwrap();
     drop(menu);
-    for mut window in open {
+    for window in &mut open {
         window.close();
+        // A closed window keeps its surface until the drop, with no
+        // textures and with a blank frame of one pixel in place of its
+        // content.
+        let usage = window.metal_usage();
+        if window.painter() == Painter::Metal {
+            assert_eq!(usage.surfaces, 1);
+            assert_eq!(usage.textures, 0, "a closed window keeps no texture");
+            assert!(
+                usage.presented_pixels <= 1,
+                "a closed window keeps its last frame: {usage:?}"
+            );
+        }
     }
+    drop(open);
+    let dropped = app.metal_usage();
+    assert_eq!(dropped.surfaces, before.surfaces, "every surface released");
+    assert_eq!(
+        dropped.orphaned_frames, 0,
+        "no frame of a dropped window waits for a handler"
+    );
     pump(app, Duration::from_millis(300));
 }
 

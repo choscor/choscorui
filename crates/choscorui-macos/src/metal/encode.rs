@@ -50,6 +50,26 @@ impl Targets {
     fn trim(&mut self) {
         self.atlases.truncate(1);
     }
+
+    /// The number of textures that the window keeps.
+    pub(super) fn count(&self) -> usize {
+        usize::from(self.frame.is_some())
+            + self.groups.len()
+            + self.atlases.len()
+            + self.blurs.len() * 2
+            + usize::from(self.empty_color.is_some())
+            + usize::from(self.empty_coverage.is_some())
+    }
+}
+
+/// Records a pass that clears `output` to transparent.
+pub(super) fn clear(
+    command_buffer: &Obj<MTLCommandBuffer>,
+    output: &Obj<MTLTexture>,
+) -> Option<()> {
+    let pass = begin_render(command_buffer, output, LOAD_ACTION_CLEAR)?;
+    END_RENDER_ENCODING.send(&pass, ());
+    Some(())
 }
 
 /// A texture of `targets`, created on first use.

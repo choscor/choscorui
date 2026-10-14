@@ -6,9 +6,10 @@
 //! GPU and it is visible; otherwise the display link draws it at the next
 //! refresh. The link pauses when nothing is pending.
 
-use super::encode::{Targets, encode};
+use super::encode::{Targets, clear, encode};
 use super::plan;
 use super::{COLOR_FORMAT, Gpu, gpu};
+use crate::address_map::AddressMap;
 use crate::ffi::Obj;
 use crate::ffi::Pool;
 use crate::ffi::appkit::{
@@ -40,7 +41,6 @@ use crate::ffi::retained::{Retained, alloc_init};
 use crate::{PaintHandle, PaintTiming, Poster};
 use choscorui_core::{Image, ImageError};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
@@ -53,6 +53,23 @@ pub enum Painter {
     Metal,
     /// Core Graphics draws the window on the CPU.
     CoreGraphics,
+}
+
+/// The Metal resources of the windows, for leak checks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MetalUsage {
+    /// The windows that paint with Metal, closed windows included. For
+    /// one window, 1 when it paints with Metal.
+    pub surfaces: usize,
+    /// The textures that the windows keep between frames.
+    pub textures: usize,
+    /// The sum of the pixels of the frame that each window presented
+    /// last. A closed window presented a frame of one pixel.
+    pub presented_pixels: usize,
+    /// The frames that wait for a Metal handler but have no window. It is
+    /// 0 for one window that is alive.
+    pub orphaned_frames: usize,
 }
 
 /// The most frames of one window that the GPU works on at a time.
@@ -93,11 +110,13 @@ struct Surface {
     transaction: bool,
     size: (usize, usize),
     scale: f64,
+    /// The pixel size of the frame that the window presented last.
+    presented: (usize, usize),
 }
 
 thread_local! {
     /// The surfaces of the windows that paint with Metal, by window.
-    static SURFACES: RefCell<HashMap<usize, Surface>> = RefCell::new(HashMap::new());
+    static SURFACES: RefCell<AddressMap<Surface>> = RefCell::new(AddressMap::default());
 }
 
 /// A frame on its way to the display.
@@ -114,11 +133,11 @@ struct Submitted {
 }
 
 /// The frames waiting for their presented handler, by drawable.
-static PRESENTATIONS: LazyLock<Mutex<HashMap<usize, Presentation>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PRESENTATIONS: LazyLock<Mutex<AddressMap<Presentation>>> =
+    LazyLock::new(|| Mutex::new(AddressMap::default()));
 /// The frames waiting for their completed handler, by command buffer.
-static COMMANDS: LazyLock<Mutex<HashMap<usize, Submitted>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static COMMANDS: LazyLock<Mutex<AddressMap<Submitted>>> =
+    LazyLock::new(|| Mutex::new(AddressMap::default()));
 
 static PRESENTED: LazyLock<GlobalBlock<DrawableArgs>> = LazyLock::new(presented_block::<Presented>);
 static COMPLETED: LazyLock<GlobalBlock<CommandBufferArgs>> =
@@ -265,6 +284,7 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
         transaction: true,
         size: (0, 0),
         scale: 0.0,
+        presented: (0, 0),
     };
     SURFACES.with(|surfaces| surfaces.borrow_mut().insert(window.addr(), surface));
     true
@@ -279,27 +299,132 @@ pub(crate) fn painter(window: usize) -> Painter {
     }
 }
 
-/// Stops the display link of a window that closes for good.
+/// Prepares the surface of a closed window. The window presents a
+/// transparent frame of one pixel, because the window server can keep
+/// the last frame of a closed window: on the virtual GPU of a CI Mac, it
+/// keeps that frame after the window is released. The window also
+/// releases its textures and stops waiting for the presented handlers of
+/// its frames. The display link of a hidden window pauses when it fires.
+/// When the window shows again, it draws a full frame.
+pub(crate) fn retire(window: usize) {
+    SURFACES.with(|surfaces| {
+        let mut surfaces = surfaces.borrow_mut();
+        let Some(surface) = surfaces.get_mut(&window) else {
+            return;
+        };
+        let _pool = Pool::new();
+        if let Some(gpu) = gpu() {
+            present_blank(gpu, surface);
+        }
+        forget_presentations(&surface.shared);
+        surface.targets = Targets::default();
+        // `show` asks for a new frame.
+        surface.pending = false;
+    });
+}
+
+/// Releases the surface of a window that closes for good: its layer, its
+/// textures, its display link, and the frames that wait for a presented
+/// handler, which can fail to run. A handler that runs later finds no
+/// frame. The completed handler of each frame runs when the GPU finishes
+/// the frame, and it removes the frame.
 pub(crate) fn detach(window: usize) {
-    let surface = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window));
-    if let Some(Surface {
-        link: Some(link), ..
-    }) = &surface
-    {
+    remove(window);
+}
+
+/// Removes the surface of `window`, stops its display link, and stops
+/// waiting for the presented handlers of its frames.
+fn remove(window: usize) -> Option<Surface> {
+    let surface = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window))?;
+    if let Some(link) = &surface.link {
         INVALIDATE_LINK.send(link, ());
     }
+    forget_presentations(&surface.shared);
+    Some(surface)
+}
+
+/// The Metal resources of `window`, or of all windows for `None`.
+pub(crate) fn usage(window: Option<usize>) -> MetalUsage {
+    SURFACES.with(|surfaces| {
+        let surfaces = surfaces.borrow();
+        let orphaned = |shared: &Shared| {
+            window.is_none_or(|window| window == shared.window)
+                && !surfaces.contains_key(&shared.window)
+        };
+        let selected = || {
+            surfaces
+                .iter()
+                .filter(|(key, _)| window.is_none_or(|window| window == **key))
+                .map(|(_, surface)| surface)
+        };
+        let presentations = PRESENTATIONS
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|presentation| orphaned(&presentation.shared))
+            .count();
+        let commands = COMMANDS
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|submitted| orphaned(&submitted.shared))
+            .count();
+        MetalUsage {
+            surfaces: selected().count(),
+            textures: selected().map(|surface| surface.targets.count()).sum(),
+            presented_pixels: selected()
+                .map(|surface| surface.presented.0 * surface.presented.1)
+                .sum(),
+            orphaned_frames: presentations + commands,
+        }
+    })
+}
+
+/// Presents a transparent frame of one pixel in place of the last frame
+/// of a window that presented one.
+fn present_blank(gpu: &Gpu, surface: &mut Surface) {
+    // As in `render`, `nextDrawable` must not block.
+    if surface.presented == (0, 0)
+        || surface.shared.unpresented.load(Ordering::Acquire) >= DRAWABLES
+    {
+        return;
+    }
+    SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (false,));
+    surface.transaction = false;
+    SET_DRAWABLE_SIZE.send(
+        &surface.layer,
+        (NSSize {
+            width: 1.0,
+            height: 1.0,
+        },),
+    );
+    surface.size = (1, 1);
+    let Some(drawable) = NEXT_DRAWABLE.send(&surface.layer, ()) else {
+        return;
+    };
+    let Some(texture) = DRAWABLE_TEXTURE.send(&drawable, ()) else {
+        return;
+    };
+    let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) else {
+        return;
+    };
+    if clear(&command_buffer, texture).is_none() {
+        return;
+    }
+    PRESENT_DRAWABLE.send(&command_buffer, (drawable.as_drawable(),));
+    COMMIT.send(&command_buffer, ());
+    // The frame must reach the window server before the window closes.
+    WAIT_UNTIL_SCHEDULED.send(&command_buffer, ());
+    surface.presented = (1, 1);
 }
 
 /// Moves `window` to Core Graphics for the rest of its life and repaints
 /// it in full.
 fn fall_back(window: usize) {
-    let Some(surface) = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window)) else {
+    let _pool = Pool::new();
+    let Some(surface) = remove(window) else {
         return;
     };
-    let _pool = Pool::new();
-    if let Some(link) = &surface.link {
-        INVALIDATE_LINK.send(link, ());
-    }
     // Without its own layer, the view is layer-backed again and AppKit
     // calls `drawRect:`.
     SET_VIEW_LAYER.send(&surface.view, (None,));
@@ -537,6 +662,7 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         COMMIT.send(&command_buffer, ());
     }
     surface.presented_once = true;
+    surface.presented = size;
     surface.committed = Some(Instant::now());
     Frame::Presented
 }

@@ -30,7 +30,7 @@ use crate::ffi::retained::{Retained, alloc_init};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Once, OnceLock};
 
-pub use surface::Painter;
+pub use surface::{MetalUsage, Painter};
 
 /// The compiled shaders. `scripts/macos/build-shaders.sh` writes them.
 const LIBRARY: &[u8] = include_bytes!("../shaders/ui.metallib");

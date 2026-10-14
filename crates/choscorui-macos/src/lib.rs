@@ -14,10 +14,11 @@ pub use choscorui_core::{
     MenuShortcutModifiers, MenuSpec, WindowOptions,
 };
 pub use ime::{ImeEvent, TextInputState};
+mod address_map;
 mod backdrop;
 mod dialog;
 mod metal;
-pub use metal::Painter;
+pub use metal::{MetalUsage, Painter};
 mod menu_native;
 mod paint;
 pub use dialog::{
@@ -814,6 +815,12 @@ impl Application {
             None => false,
         }
     }
+    /// The Metal resources that the windows hold. Leak checks compare it
+    /// before and after window churn. With Core Graphics, all counts are 0.
+    pub fn metal_usage(&self) -> MetalUsage {
+        metal::surface::usage(None)
+    }
+
     pub fn posted_panic_count(&self) -> usize {
         self.posted.state.lock().unwrap().panics
     }
@@ -1021,11 +1028,19 @@ impl Window {
         BACKING_SCALE_FACTOR.send(&self.window, ())
     }
 
+    /// The Metal resources of this window. With Core Graphics, all
+    /// counts are 0.
+    pub fn metal_usage(&self) -> MetalUsage {
+        metal::surface::usage(Some(self.window.addr()))
+    }
+
     pub fn close(&mut self) {
         if !self.closed {
             let _pool = Pool::new();
             // setReleasedWhenClosed:NO keeps ownership after close.
             CLOSE.send(&self.window, ());
+            // After the close, the blank frame does not show.
+            metal::surface::retire(self.window.addr());
             self.closed = true;
         }
     }
@@ -1036,8 +1051,8 @@ impl Drop for Window {
         // them, so a caller without its own pool does not keep the window
         // alive. It drops after the window and delegate fields.
         self.drop_pool = Pool::new().ok();
-        metal::surface::detach(self.window.addr());
         self.close();
+        metal::surface::detach(self.window.addr());
         for (_, element) in self.accessibility.get_mut().elements.drain() {
             accessibility_bridge::unbind(&element);
         }

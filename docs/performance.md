@@ -205,6 +205,7 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke
 After the rounds, the test makes these checks:
 
 - **Windows.** Only the main window is alive. A drop of the main window releases every native window (`Application::window_count`).
+- **Metal surfaces.** A closed Metal window keeps no texture and shows a frame of one pixel (`Window::metal_usage`). After the drop of the churn windows, no surface of them remains, and no frame waits for a handler without a window (`Application::metal_usage`).
 - **Footprint floor.** The lowest footprint of the last rounds is less than 16 MiB above the lowest footprint of the first rounds.
 - **Panics.** No posted task or timer panicked.
 
