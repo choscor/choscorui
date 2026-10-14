@@ -10,8 +10,9 @@
 //! The hosted controls come from the catalog that the controls contract
 //! tests use, so a control added there is pinned here too. The
 //! `painted_slots` module pins the default recipe of every control kind,
-//! and the `views` module pins views mounted through the compose
-//! `ViewHost`.
+//! the `semantic_states` module pins the child parts of hosted controls
+//! in states that the catalog samples do not reach, and the `views`
+//! module pins views mounted through the compose `ViewHost`.
 
 use choscorui::controls::{
     Alert, AlertVariant, Avatar, Badge, BadgeVariant, Bubble, BubbleVariant, Button, ButtonVariant,
@@ -37,6 +38,8 @@ mod catalog;
 mod painted_slots;
 #[path = "compatibility/painted_text.rs"]
 mod painted_text;
+#[path = "compatibility/semantic_states.rs"]
+mod semantic_states;
 #[path = "compatibility/views.rs"]
 mod views;
 
@@ -263,6 +266,8 @@ fn control_semantics() {
             }
         }
     }
+    semantic_states::record(&mut out);
+    views::group_box_semantics(&mut out);
     views::tooltip_semantics(&mut out);
     golden("control_semantics", &out);
 }

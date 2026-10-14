@@ -3825,6 +3825,11 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 | State | expanded with a collapsed range, disabled |
 | Actions | `Activate` and `Focus` while enabled, with two or more items |
 
+The `selected` state marks the current page. This is a design choice.
+`SemanticState` has no separate current state, because the AppKit
+accessibility protocol has no public attribute for a current item. The
+same rule applies to [`Pagination`](#pagination).
+
 `set_open` opens and closes the ellipsis menu. It returns false when no
 item is hidden. `set_value` returns false.
 
@@ -3862,6 +3867,9 @@ item is hidden. `set_value` returns false.
 | Parts | a `Button` part for each arrow, disabled at an end; a `Link` part for each page, the current page selected; a `StaticText` part for each ellipsis; the focused stop is the focused part |
 | State | disabled |
 | Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled, with pages |
+
+The `selected` state marks the current page, as in
+[`Breadcrumb`](#breadcrumb). A separate current state does not exist.
 
 `set_value` takes `Index` of a page. It rejects `None` and a page past the
 last page. `set_open` returns false.
@@ -4991,7 +4999,9 @@ items, tabs, buttons, and table cells, are child nodes in the
 
 The `control_semantics` golden in
 [compatibility.rs](../crates/choscorui/tests/compatibility.rs) records
-the parts of each control, closed and open.
+the parts of each control, closed and open. It also records parts in
+states that the catalog samples do not show. Examples are a checked
+menu item, an open submenu, a sorted column, and today in a calendar.
 
 ### Notifications
 

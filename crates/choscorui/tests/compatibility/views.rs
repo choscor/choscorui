@@ -1,10 +1,12 @@
 //! Views through the compose `ViewHost`, mounted without a window and
 //! measured with `EstimatedText`: the order of layout and paint
-//! modifiers, a stack and a form in both directions, and the semantics
-//! of a tooltip on a button.
+//! modifiers, a stack and a form in both directions, the semantics of a
+//! group box and its members, and the semantics of a tooltip on a button.
 
 use choscorui::compose::Runtime;
-use choscorui::compose::view::{Button, Env, Form, FormRow, HStack, Text, View, ViewExt, ViewHost};
+use choscorui::compose::view::{
+    Button, Env, Form, FormRow, GroupBox, HStack, Text, View, ViewExt, ViewHost,
+};
 use choscorui::controls::{EstimatedText, ShortcutModifiers, TOOLTIP_DELAY};
 use choscorui::core::{
     Catalog, ColorRole, DesignTokens, Locale, NodeId, PointerEvent, SemanticEntry,
@@ -103,6 +105,35 @@ pub fn record() -> String {
         layout(&mut out, &mut mount(form(), tag));
     }
     out
+}
+
+/// The semantics of a group box: the `Group` node with its title, and
+/// each member as a child of it.
+pub fn group_box_semantics(out: &mut String) {
+    let members = (
+        Button::new("Standard", || {}),
+        Button::new("Express", || {}),
+    );
+    let mut host = mount(GroupBox::new("Delivery", members), "en");
+    let (entries, _) = host.semantics();
+    let group = host.find("Delivery").unwrap();
+    for entry in &entries {
+        let within = entry.id == group || host.tree().is_within(entry.id, group);
+        if !within {
+            continue;
+        }
+        let parent = entry
+            .parent
+            .map_or_else(|| "-".to_owned(), |node| label(&entries, node));
+        writeln!(
+            out,
+            "group box: {} in {parent} state {:?}",
+            label(&entries, entry.id),
+            entry.node.state
+        )
+        .unwrap();
+    }
+    assert_eq!(host.take_errors(), Vec::new());
 }
 
 /// The semantics of a button with a tooltip: the button's description,
