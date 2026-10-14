@@ -5,7 +5,6 @@
 //! `display_ms` samples end when the frame reached the display
 //! (`Window::last_display`); the bench reports them without a budget.
 
-use crate::alloc;
 use crate::stats::Results;
 use crate::sys::{self, mib};
 use crate::workspace::Workspace;
@@ -17,6 +16,7 @@ use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayList, Point, Rect, Size, TextLayoutCache, TextStyle,
     ThemeInvalidation, ThemeResolver, Tree,
 };
+use choscorui_macos::allocation_count;
 use choscorui_macos::{
     Application, CoreTextShaper, PaintTiming, Window, WindowEvent, WindowOptions,
 };
@@ -238,14 +238,14 @@ pub fn scroll(
         for _ in 0..steps {
             let paints = window.paint_count();
             let displays = window.display_count();
-            let allocated = alloc::count();
+            let allocated = allocation_count();
             let started = Instant::now();
             if !workspace.wheel(at, 0.0, step * direction, false) {
                 continue;
             }
             window.set_display_list(workspace.paint());
             build.push(ms(started.elapsed()));
-            allocations.push((alloc::count() - allocated) as f64);
+            allocations.push((allocation_count() - allocated) as f64);
             peak_nodes = peak_nodes.max(
                 workspace
                     .tree

@@ -4,7 +4,7 @@ This record describes each hand-written FFI boundary in `choscorui-macos`. For e
 
 ## General rules
 
-The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, and the Objective-C runtime by hand. It uses no build script and no binding generator. The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSWindow.h` and `objc/message.h`. Apple's [NSApplication reference](https://developer.apple.com/documentation/appkit/nsapplication) and [NSWindow reference](https://developer.apple.com/documentation/appkit/nswindow) define the platform behavior.
+The crate binds AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, UserNotifications, the process usage calls of libSystem, and the Objective-C runtime by hand. It uses no build script and no binding generator. The ABI shapes and numeric constants come from the macOS SDK headers, for example `NSWindow.h` and `objc/message.h`. Apple's [NSApplication reference](https://developer.apple.com/documentation/appkit/nsapplication) and [NSWindow reference](https://developer.apple.com/documentation/appkit/nswindow) define the platform behavior.
 
 ### The `ffi` module
 
@@ -187,6 +187,13 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 
 - **Calls.** `preferences.rs` reads `accessibilityDisplayShouldReduceMotion` and `accessibilityDisplayShouldIncreaseContrast` from `NSWorkspace`. It reads `NSApp.effectiveAppearance.name` and copies it into a Rust `String` in a local pool.
 - **Threads.** The calls occur on the main thread. The calls keep no object after they return.
+
+### Process usage and the counting allocator
+
+- **Calls.** `process_usage` calls `getrusage` and `proc_pid_rusage` with the `RUSAGE_INFO_V2` flavor. It passes `rusage` and `rusage_info_v2` structs that `ffi_struct!` declares, so the SDK header check checks their layouts.
+- **Allocator.** `CountingAllocator` in `ffi/alloc.rs` implements `GlobalAlloc`. Each method adds to an atomic count and forwards its arguments to `System` without change.
+- **Threads.** Any thread can call these functions. The count is an atomic value, and the calls keep no state.
+- **Tests.** The doc tests read the usage and the count. `lifetime_smoke` reads the footprint, and the bench reads the count in each scroll frame.
 
 ### Accessibility
 

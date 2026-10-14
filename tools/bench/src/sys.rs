@@ -1,79 +1,13 @@
-//! Process resource usage (hand-written libSystem declarations) and the
-//! machine manifest recorded with every result.
+//! Process resource usage, which `choscorui-macos` reads from the
+//! kernel, and the machine manifest recorded with every result.
 
+use choscorui_macos::{ProcessUsage, process_usage};
 use std::process::Command;
-use std::time::Duration;
 
-#[repr(C)]
-#[derive(Default)]
-struct Timeval {
-    seconds: i64,
-    microseconds: i32,
-}
-
-#[repr(C)]
-#[derive(Default)]
-struct Rusage {
-    user: Timeval,
-    system: Timeval,
-    /// Bytes on macOS.
-    max_rss: i64,
-    rest: [i64; 13],
-}
-
-unsafe extern "C" {
-    fn getrusage(who: i32, usage: *mut Rusage) -> i32;
-    fn getpid() -> i32;
-    fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut *mut std::ffi::c_void) -> i32;
-}
-
-const RUSAGE_SELF: i32 = 0;
-const RUSAGE_INFO_V2: i32 = 2;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Usage {
-    /// User plus system CPU time.
-    pub cpu: Duration,
-    pub peak_rss: u64,
-    pub resident: u64,
-    /// Physical footprint, the figure Activity Monitor reports as memory.
-    pub footprint: u64,
-    pub idle_wakeups: u64,
-    pub interrupt_wakeups: u64,
-}
-
-pub fn usage() -> Usage {
-    let mut usage = Rusage::default();
-    // SAFETY: `Rusage` matches `struct rusage` on 64-bit Darwin.
-    let ok = unsafe { getrusage(RUSAGE_SELF, &mut usage) } == 0;
-    let to_duration = |t: &Timeval| {
-        Duration::from_secs(t.seconds as u64) + Duration::from_micros(t.microseconds as u64)
-    };
-    // rusage_info_v2: uuid (2 words), user, system, pkg_idle_wkups,
-    // interrupt_wkups, pageins, wired, resident, phys_footprint, ... The
-    // buffer is larger than the struct.
-    let mut info = [0u64; 40];
-    // SAFETY: The flavor's struct fits in `info`; the API takes the buffer
-    // address typed as `rusage_info_t *`.
-    let info_ok = unsafe {
-        proc_pid_rusage(
-            getpid(),
-            RUSAGE_INFO_V2,
-            info.as_mut_ptr() as *mut *mut std::ffi::c_void,
-        )
-    } == 0;
-    Usage {
-        cpu: if ok {
-            to_duration(&usage.user) + to_duration(&usage.system)
-        } else {
-            Duration::ZERO
-        },
-        peak_rss: if ok { usage.max_rss as u64 } else { 0 },
-        resident: if info_ok { info[8] } else { 0 },
-        footprint: if info_ok { info[9] } else { 0 },
-        idle_wakeups: if info_ok { info[4] } else { 0 },
-        interrupt_wakeups: if info_ok { info[5] } else { 0 },
-    }
+/// The resource usage of this process, or zeros when the kernel does not
+/// report it.
+pub fn usage() -> ProcessUsage {
+    process_usage().unwrap_or_default()
 }
 
 pub fn mib(bytes: u64) -> f64 {

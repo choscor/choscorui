@@ -54,6 +54,7 @@ fn all_c_items() -> Vec<CItem> {
         super::foundation::c_items(),
         super::graphics::c_items(),
         super::image_io::c_items(),
+        super::process::c_items(),
         super::runloop::c_items(),
         super::runtime::c_items(),
         super::text::c_items(),
@@ -348,6 +349,7 @@ fn sdk_headers_compile() {
         super::cf::SDK_CONSTS,
         super::graphics::SDK_CONSTS,
         super::keys::SDK_CONSTS,
+        super::process::SDK_CONSTS,
         super::text::SDK_CONSTS,
         super::user_notifications::SDK_CONSTS,
         super::metal::SDK_CONSTS,
@@ -356,6 +358,7 @@ fn sdk_headers_compile() {
     let structs = [
         super::geometry::STRUCTS,
         super::msg::STRUCTS,
+        super::process::STRUCTS,
         super::runloop::STRUCTS,
         super::runtime::STRUCTS,
         super::text::STRUCTS,

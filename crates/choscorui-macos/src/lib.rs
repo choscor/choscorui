@@ -49,6 +49,9 @@ pub use imaging::{decode_image, encode_png};
 mod announce;
 mod feedback;
 pub use feedback::SystemFeedback;
+mod process;
+pub use ffi::alloc::{CountingAllocator, allocation_count};
+pub use process::{ProcessUsage, ProcessUsageError, process_usage};
 // All `unsafe` of the crate is in `ffi`: each block is one raw FFI
 // operation with its `SAFETY` comment, and the checks in `ffi::checks`
 // compare every binding with the runtime and the SDK headers.

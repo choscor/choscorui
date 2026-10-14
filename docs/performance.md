@@ -11,8 +11,8 @@ The harness measures these values:
 - **Frame cost.** Each `present_ms` sample starts at the input and ends when the painter finished the frame (`Window::last_paint`). With Metal, this is the `GPUEndTime` of the command buffer, which the completed handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application.
 - **Display latency.** Each `display_ms` sample starts at the input and ends when the frame is on the display (`Window::last_display`), from the `presentedTime` of the drawable. The report includes it, but it has no budget. `missed_display` counts frames that did not reach the display in one second.
 - **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the end of the first frame. The driver also records the time from spawn to report.
-- **Allocations.** A counting global allocator gives the number of Rust heap allocations in each scroll frame.
-- **Resources.** CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
+- **Allocations.** The bench uses `choscorui_macos::CountingAllocator` as its global allocator. It counts each Rust heap allocation and reallocation, and `allocation_count` reads the count. `scroll.allocations_per_frame` is the change of the count in each scroll frame. The kernel does not count allocations, and `malloc_zone_statistics` gives only the blocks in use. Thus, the count comes from the allocator.
+- **Resources.** `choscorui_macos::process_usage` reads the process usage. CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
 
 ### Scenarios
 

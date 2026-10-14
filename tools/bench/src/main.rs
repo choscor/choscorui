@@ -26,40 +26,9 @@ mod views;
 mod workspace;
 
 /// Counts Rust heap allocations so frames can report allocation churn.
-mod alloc {
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-
-    pub struct Counting;
-
-    // SAFETY: Forwards to the system allocator unchanged.
-    unsafe impl GlobalAlloc for Counting {
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            // SAFETY: Same contract as the caller's.
-            unsafe { System.alloc(layout) }
-        }
-        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            // SAFETY: Same contract as the caller's.
-            unsafe { System.dealloc(ptr, layout) }
-        }
-        unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            // SAFETY: Same contract as the caller's.
-            unsafe { System.realloc(ptr, layout, new_size) }
-        }
-    }
-
-    #[global_allocator]
-    static GLOBAL: Counting = Counting;
-
-    #[allow(dead_code)]
-    pub fn count() -> u64 {
-        ALLOCATIONS.load(Ordering::Relaxed)
-    }
-}
+#[cfg(target_os = "macos")]
+#[global_allocator]
+static ALLOCATOR: choscorui_macos::CountingAllocator = choscorui_macos::CountingAllocator;
 
 #[cfg(target_os = "macos")]
 const SCENARIOS: [&str; 10] = [

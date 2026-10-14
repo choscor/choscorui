@@ -5,6 +5,7 @@
 //! and the checks in `checks` compare every descriptor with the runtime.
 //! Each `unsafe` block holds one raw operation with its `SAFETY` comment.
 
+pub(crate) mod alloc;
 pub(crate) mod appkit;
 pub(crate) mod block;
 pub(crate) mod callback;
@@ -23,6 +24,7 @@ pub(crate) mod image_io;
 pub(crate) mod keys;
 pub(crate) mod metal;
 pub(crate) mod msg;
+pub(crate) mod process;
 pub(crate) mod quartz;
 pub(crate) mod retained;
 pub(crate) mod runloop;

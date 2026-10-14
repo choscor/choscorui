@@ -45,9 +45,12 @@ const PRELUDE: &str = r#"#import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
 #include <Block.h>
+#include <libproc.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <pthread.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <cstddef>
 #include <cstdint>
 #include <tuple>
