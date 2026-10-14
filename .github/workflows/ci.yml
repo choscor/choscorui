@@ -19,13 +19,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build
         run: cargo test -p choscorui-macos --test lifetime_smoke --locked --no-run
-      - name: churn base
-        run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
-      - name: churn early-shrink
-        run: DIAG_ONLY=churn DIAG_FIX=early,shrink cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
-      - name: churn early-shrink-sleep
-        run: DIAG_ONLY=churn DIAG_FIX=early,shrink,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
-      - name: churn early-unhost-flush-sleep
-        run: DIAG_ONLY=churn DIAG_FIX=early,unhost,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
-      - name: churn early-all-sleep
-        run: DIAG_ONLY=churn DIAG_FIX=early,forget,contents,device,unhost,flush,sleep cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-pool
+        run: DIAG_ONLY=churn DIAG_FIX=early,pool cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn early-shrink-pool
+        run: DIAG_ONLY=churn DIAG_FIX=early,shrink,pool cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn all-early-shrink
+        run: DIAG_ONLY=churn DIAG_ONLY= DIAG_FIX=early,shrink cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'
+      - name: churn all-early-shrink-pool
+        run: DIAG_ONLY=churn DIAG_ONLY= DIAG_FIX=early,shrink,pool cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (grown)|Owned physical|panicked|Shared with|B .*(IOSurface|CoreAnimation)$'

@@ -97,6 +97,10 @@ struct Surface {
 }
 
 thread_local! {
+    static LAYER_POOL: RefCell<Vec<Retained<CAMetalLayer>>> = const { RefCell::new(Vec::new()) };
+}
+
+thread_local! {
     /// The surfaces of the windows that paint with Metal, by window.
     static SURFACES: RefCell<HashMap<usize, Surface>> = RefCell::new(HashMap::new());
 }
@@ -215,8 +219,15 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
     let Some(view) = CONTENT_VIEW.send(window, ()) else {
         return false;
     };
-    let Ok(layer) = alloc_init::<CAMetalLayer>() else {
-        return false;
+    let pooled = LAYER_POOL.with(|pool| pool.borrow_mut().pop());
+    let layer = match pooled {
+        Some(layer) => layer,
+        None => {
+            let Ok(layer) = alloc_init::<CAMetalLayer>() else {
+                return false;
+            };
+            layer
+        }
     };
     SET_LAYER_DEVICE.send(&layer, (Some(&*gpu.device),));
     SET_LAYER_PIXEL_FORMAT.send(&layer, (COLOR_FORMAT,));
@@ -352,6 +363,15 @@ pub(crate) fn detach(window: usize) {
         }
         if has("sleep") {
             std::thread::sleep(Duration::from_millis(50));
+        }
+        if has("pool") {
+            SET_VIEW_LAYER.send(&s.view, (None,));
+            LAYER_POOL.with(|pool| {
+                let mut pool = pool.borrow_mut();
+                if pool.len() < 4 {
+                    pool.push(s.layer.clone());
+                }
+            });
         }
     }
 }
