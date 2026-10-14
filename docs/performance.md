@@ -92,7 +92,7 @@ The release executable grows in 16 KiB pages. The size budget is the measured si
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.765 MiB | ≤ 2.781 |
+| `size.choscorui-gallery_mib` | 2.781 MiB | ≤ 2.797 |
 
 These correctness counters have a budget of 0:
 
