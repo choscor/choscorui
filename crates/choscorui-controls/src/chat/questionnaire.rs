@@ -259,6 +259,7 @@ impl Questionnaire {
         Buttons {
             buttons,
             rects: self.geometry.buttons.clone(),
+            ..Buttons::default()
         }
     }
 
@@ -456,6 +457,7 @@ impl Questionnaire {
             let back = Buttons {
                 buttons: buttons.buttons[..1].to_vec(),
                 rects: Vec::new(),
+                ..Buttons::default()
             };
             let back_width = Buttons::width(cx, &back.buttons[0]);
             let back_x = if cx.rtl() {
@@ -466,6 +468,7 @@ impl Questionnaire {
             let rest = Buttons {
                 buttons: buttons.buttons[1..].to_vec(),
                 rects: Vec::new(),
+                ..Buttons::default()
             };
             let mut rest = rest;
             rest.place_row(cx, row, action.gap);

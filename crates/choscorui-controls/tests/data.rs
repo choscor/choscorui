@@ -254,3 +254,31 @@ fn avatars_cover_their_circle_center_in_bounds_and_keep_their_group_size() {
         "the group sets each avatar size"
     );
 }
+
+/// The bounds of each part of `h`, in part order.
+fn part_bounds(h: &Harness) -> Vec<choscorui_core::Rect> {
+    h.parts().parts().iter().map(|part| part.bounds).collect()
+}
+
+#[test]
+fn a_narrow_card_wraps_its_footer_and_a_small_card_has_small_buttons() {
+    use choscorui_core::{Constraints, Size};
+    let mut h = Harness::new(login());
+    let wide = h.measure().height;
+    let narrow = h.measure_in(Constraints::loose(Size::new(200.0, 1000.0)));
+    assert!(narrow.height > wide, "{narrow:?} vs {wide}");
+    h.place(hosted::rect(10.0, 10.0, narrow.width, narrow.height));
+    let bounds = h.bounds();
+    let parts = part_bounds(&h);
+    let (first, google) = (parts[1], parts[2]);
+    assert!(google.origin.y > first.max_y(), "a second row: {parts:?}");
+    for part in &parts {
+        assert!(part.origin.x >= bounds.origin.x && part.max_x() <= bounds.max_x());
+    }
+
+    let mut small = Harness::new(login().with_size(ControlSize::Sm));
+    small.measure();
+    let regular = part_bounds(&Harness::new(login()))[1];
+    let little = part_bounds(&small)[1];
+    assert!(little.size.height < regular.size.height, "{little:?}");
+}

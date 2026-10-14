@@ -111,7 +111,8 @@ impl Empty {
             media_height,
             wrapped_height(&self.title, &title.text, width, cx.text),
             wrapped_height(&self.description, &description.text, width, cx.text),
-            Buttons::button_height(cx) * f64::from(u8::from(!self.buttons.buttons.is_empty())),
+            self.buttons
+                .wrapped_height(cx, width, cx.tokens.spacing * 2.0),
         ]
     }
 
@@ -179,18 +180,9 @@ impl CustomControl for Empty {
         }
         self.parts[2] = Rect::from_xywh(x, y, width, heights[2]);
         y += heights[2] + content.gap;
-        // Center the button row: place it at the end of a row as wide as
-        // the buttons.
-        let gap = cx.tokens.spacing * 2.0;
-        let buttons: f64 = self
-            .buttons
-            .buttons
-            .iter()
-            .map(|button| Buttons::width(cx, button))
-            .sum::<f64>()
-            + gap * self.buttons.buttons.len().saturating_sub(1) as f64;
-        let row = Rect::from_xywh(bounds.center().x - buttons / 2.0, y, buttons, heights[3]);
-        self.buttons.place_row(cx, row, gap);
+        // The buttons wrap inside the text width, each row centered.
+        let row = Rect::from_xywh(x, y, width, heights[3]);
+        self.buttons.rects = self.buttons.wrap(cx, row, cx.tokens.spacing * 2.0, true);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {

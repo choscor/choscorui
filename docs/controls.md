@@ -3926,7 +3926,10 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 
 - The header shows the title and the description. An optional header
   action sits at the header end. Content text wraps to the card width.
-  Footer buttons sit in a row at the end.
+  Footer buttons sit in a row at the end. When the row is wider than the
+  card, the buttons wrap to more rows. A button wider than the card gets
+  the card width.
+- The `Sm` card has `Sm` buttons.
 - Without constraints, the card is 384 pt wide. Its measure honors the
   constraints that it gets.
 - The header action and the footer buttons are tab stops inside the card.
@@ -4259,7 +4262,8 @@ behavior.
 ### Empty
 
 - The media, the title, the description, and the buttons sit centered in
-  a column. The text wraps at 384 pt.
+  a column. The text wraps at 384 pt. The buttons wrap to more rows at
+  the same width, and each row is centered.
 - `with_icon(icon)` shows the icon in a muted box. `with_avatar(avatar)`
   shows an avatar.
 - The buttons are tab stops. Enter, Space, a click, or `Activate` emits

@@ -103,27 +103,85 @@ pub(crate) struct PanelButton {
 pub(crate) struct Buttons {
     pub buttons: Vec<PanelButton>,
     pub rects: Vec<Rect>,
+    /// The button size: `Default`, or `Sm` in a small card.
+    pub size: ControlSize,
 }
 
 impl Buttons {
-    fn query(variant: ButtonVariant, state: VisualState) -> StyleQuery {
+    fn query(&self, variant: ButtonVariant, state: VisualState) -> StyleQuery {
         StyleQuery::new(ControlKind::Button, Slot::Root)
             .variant(variant)
-            .size(ControlSize::Default)
+            .size(self.size)
             .state(state)
     }
 
-    /// The width of one button.
+    /// The width of one button of the default size.
     pub fn width(cx: &MeasureContext<'_>, button: &PanelButton) -> f64 {
-        let style = cx.style(Self::query(button.variant, VisualState::NONE));
+        Self::default().button_width(cx, button)
+    }
+
+    /// The height of one button of the default size.
+    pub fn button_height(cx: &MeasureContext<'_>) -> f64 {
+        Self::default().one_height(cx)
+    }
+
+    /// The width of one button of this size.
+    pub fn button_width(&self, cx: &MeasureContext<'_>, button: &PanelButton) -> f64 {
+        let style = cx.style(self.query(button.variant, VisualState::NONE));
         (cx.text.width(&button.label, &style.text) + style.padding.horizontal())
             .max(style.min_width)
     }
 
-    /// The height of one button.
-    pub fn button_height(cx: &MeasureContext<'_>) -> f64 {
-        cx.style(Self::query(ButtonVariant::Default, VisualState::NONE))
+    /// The height of one button of this size.
+    pub fn one_height(&self, cx: &MeasureContext<'_>) -> f64 {
+        cx.style(self.query(ButtonVariant::Default, VisualState::NONE))
             .min_height
+    }
+
+    /// The buttons in rows no wider than `rect`, `gap` apart. A button
+    /// goes to a new row when the row has no room for it, and a button
+    /// wider than `rect` gets the full width. Each row sits at the end of
+    /// `rect`, or at its center with `centered`, in reading order.
+    pub fn wrap(&self, cx: &MeasureContext<'_>, rect: Rect, gap: f64, centered: bool) -> Vec<Rect> {
+        let height = self.one_height(cx);
+        let room = rect.size.width.max(0.0);
+        let widths: Vec<f64> = self
+            .buttons
+            .iter()
+            .map(|button| self.button_width(cx, button).min(room))
+            .collect();
+        let rtl = cx.rtl();
+        let mut rects = Vec::with_capacity(widths.len());
+        let (mut start, mut y) = (0, rect.origin.y);
+        while start < widths.len() {
+            let (mut end, mut used) = (start + 1, widths[start]);
+            while end < widths.len() && used + gap + widths[end] <= room {
+                used += gap + widths[end];
+                end += 1;
+            }
+            let free = room - used;
+            let mut offset = if centered { free / 2.0 } else { free };
+            for width in &widths[start..end] {
+                let x = if rtl {
+                    rect.max_x() - offset - width
+                } else {
+                    rect.origin.x + offset
+                };
+                rects.push(Rect::from_xywh(x, y, *width, height));
+                offset += width + gap;
+            }
+            y += height + gap;
+            start = end;
+        }
+        rects
+    }
+
+    /// The height of the rows that [`Buttons::wrap`] makes in `width`.
+    pub fn wrapped_height(&self, cx: &MeasureContext<'_>, width: f64, gap: f64) -> f64 {
+        let rect = Rect::from_xywh(0.0, 0.0, width, 0.0);
+        self.wrap(cx, rect, gap, false)
+            .last()
+            .map_or(0.0, |last| last.max_y())
     }
 
     /// The height of the buttons in a row, or stacked with `gap`.
@@ -132,7 +190,7 @@ impl Buttons {
         if count == 0 {
             return 0.0;
         }
-        let one = Self::button_height(cx);
+        let one = self.one_height(cx);
         if stacked {
             one * count as f64 + gap * (count - 1) as f64
         } else {
@@ -143,11 +201,11 @@ impl Buttons {
     /// Places the buttons in a row at the end of `rect`, `gap` apart, in
     /// reading order.
     pub fn place_row(&mut self, cx: &MeasureContext<'_>, rect: Rect, gap: f64) {
-        let height = Self::button_height(cx);
+        let height = self.one_height(cx);
         let widths: Vec<f64> = self
             .buttons
             .iter()
-            .map(|button| Self::width(cx, button))
+            .map(|button| self.button_width(cx, button))
             .collect();
         let total = widths.iter().sum::<f64>() + gap * widths.len().saturating_sub(1) as f64;
         let rtl = cx.rtl();
@@ -173,7 +231,7 @@ impl Buttons {
 
     /// Stacks the buttons across the width of `rect`, `gap` apart.
     pub fn place_column(&mut self, cx: &MeasureContext<'_>, rect: Rect, gap: f64) {
-        let height = Self::button_height(cx);
+        let height = self.one_height(cx);
         self.rects = (0..self.buttons.len())
             .map(|index| {
                 let y = rect.origin.y + index as f64 * (height + gap);
@@ -221,7 +279,7 @@ impl Buttons {
                 VisualState::FOCUS_VISIBLE,
                 focus_visible && focused == Some(index),
             );
-            let style = cx.style(Self::query(button.variant, state));
+            let style = cx.style(self.query(button.variant, state));
             cx.slot(*rect, &style, |cx, inner| {
                 cx.label(inner, &button.label, &style, TextAlign::Center);
             });

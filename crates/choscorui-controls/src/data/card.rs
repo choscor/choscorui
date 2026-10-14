@@ -79,11 +79,16 @@ impl Card {
         self
     }
 
-    /// Sets the size: `Default` or `Sm`, which has less spacing and a
-    /// smaller title.
+    /// Sets the size: `Default` or `Sm`, which has less spacing, a
+    /// smaller title, and small buttons.
     #[must_use]
     pub fn with_size(mut self, size: ControlSize) -> Self {
         self.size = size;
+        self.buttons.size = if size == ControlSize::Sm {
+            ControlSize::Sm
+        } else {
+            ControlSize::Default
+        };
         self
     }
 
@@ -91,16 +96,12 @@ impl Card {
         StyleQuery::new(ControlKind::Card, slot).size(self.size)
     }
 
-    fn footer_count(&self) -> usize {
-        self.buttons.buttons.len() - usize::from(self.action)
-    }
-
     /// The header text width inside a card of `width`.
     fn header_width(&self, cx: &MeasureContext<'_>, width: f64) -> f64 {
         let header = cx.style(self.query(Slot::Header));
         let mut inner = width - header.padding.horizontal();
         if self.action {
-            inner -= Buttons::width(cx, &self.buttons.buttons[0]) + header.gap;
+            inner -= self.buttons.button_width(cx, &self.buttons.buttons[0]) + header.gap;
         }
         inner.max(1.0)
     }
@@ -108,10 +109,11 @@ impl Card {
     /// The section heights: header, content, and footer, zero when empty.
     fn sections(&self, cx: &MeasureContext<'_>, width: f64) -> [f64; 3] {
         let content = cx.style(self.query(Slot::Content));
+        let footer = cx.style(self.query(Slot::Footer));
         let text = self
             .text
             .height(cx, self.query(Slot::Root), self.header_width(cx, width));
-        let button = Buttons::button_height(cx);
+        let button = self.buttons.one_height(cx);
         let header = if self.action { text.max(button) } else { text };
         let body = wrapped_height(
             &self.content,
@@ -119,8 +121,18 @@ impl Card {
             (width - content.padding.horizontal()).max(1.0),
             cx.text,
         );
-        let footer = if self.footer_count() > 0 { button } else { 0.0 };
+        let inner = (width - footer.padding.horizontal()).max(0.0);
+        let footer = self.footer().wrapped_height(cx, inner, footer.gap);
         [header, body, footer]
+    }
+
+    /// The footer buttons, without their places.
+    fn footer(&self) -> Buttons {
+        Buttons {
+            buttons: self.buttons.buttons[usize::from(self.action)..].to_vec(),
+            rects: Vec::new(),
+            size: self.buttons.size,
+        }
     }
 
     fn focused_label(&self) -> Option<&str> {
@@ -190,20 +202,16 @@ impl CustomControl for Card {
         let footer_row = inset(footer.padding.horizontal(), y, footer_height);
         let mut rects = Vec::new();
         if self.action {
-            let action = PanelButton::clone(&self.buttons.buttons[0]);
             let mut row = Buttons {
-                buttons: vec![action],
+                buttons: vec![PanelButton::clone(&self.buttons.buttons[0])],
                 rects: Vec::new(),
+                size: self.buttons.size,
             };
             row.place_row(cx, header_row, header.gap);
             rects.extend(row.rects);
         }
-        let mut row = Buttons {
-            buttons: self.buttons.buttons[usize::from(self.action)..].to_vec(),
-            rects: Vec::new(),
-        };
-        row.place_row(cx, footer_row, footer.gap);
-        rects.extend(row.rects);
+        // Footer buttons wrap to more rows when the card is too narrow.
+        rects.extend(self.footer().wrap(cx, footer_row, footer.gap, false));
         self.buttons.rects = rects;
     }
 

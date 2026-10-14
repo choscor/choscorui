@@ -262,3 +262,30 @@ fn panel_buttons_show_hover_press_while_inside_and_disabled() {
     assert_eq!(opacity_layers(&disabled), [0.5], "one group opacity");
     assert_eq!(hosted::rounded_fills(&disabled, primary), [button]);
 }
+
+#[test]
+fn empty_buttons_wrap_inside_the_content_width() {
+    let mut h = Harness::new(
+        Empty::new("No projects yet", "")
+            .with_action("Create a project from a template", ButtonVariant::Default)
+            .with_action(
+                "Import a project from another place",
+                ButtonVariant::Outline,
+            )
+            .with_action("Read the guide", ButtonVariant::Link),
+    );
+    h.measure();
+    let bounds = h.bounds();
+    let center = bounds.center().x;
+    let parts: Vec<_> = h.parts().parts().iter().map(|part| part.bounds).collect();
+    assert_eq!(parts.len(), 3);
+    assert!(parts[1].origin.y > parts[0].max_y(), "rows: {parts:?}");
+    for part in &parts {
+        assert!(part.max_x() - part.origin.x <= 384.0);
+        assert!(part.origin.x >= center - 192.0 && part.max_x() <= center + 192.0);
+    }
+    assert!(
+        (parts[0].center().x - center).abs() < 0.5,
+        "each row is centered"
+    );
+}

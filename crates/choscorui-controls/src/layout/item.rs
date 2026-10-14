@@ -270,6 +270,7 @@ impl Item {
         let mut row = Buttons {
             buttons: self.actions.clone(),
             rects: Vec::new(),
+            ..Buttons::default()
         };
         row.place_row(cx, end_rect, action.gap);
         RowLayout {
@@ -487,6 +488,7 @@ impl ItemGroup {
             let buttons = Buttons {
                 buttons: item.actions.clone(),
                 rects: row.buttons.clone(),
+                ..Buttons::default()
             };
             let focused_action = focused
                 .filter(|stop| stop.item == index)
