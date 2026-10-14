@@ -13,7 +13,7 @@ use crate::style::{
 use crate::{ControlContext, ControlEvent, ControlMessage, ControlValue};
 use choscorui_core::{
     EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 /// The side of the square close button in a tab.
@@ -782,16 +782,44 @@ impl crate::CustomControl for DockLayout {
         self.semantics_in(Localizer::builtin())
     }
 
+    /// A `Group` with the actions of the focused part.
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        let group = || crate::hosted::node(SemanticRole::Group, "", Vec::new());
-        match self.host_focus(self.hosted.bounds) {
-            DockFocus::Tab(panel) => self.panel_semantics(panel, strings).unwrap_or_else(group),
-            DockFocus::Splitter(area) => {
-                let mut node = self.splitter_semantics(area, strings);
-                node.actions.push(SemanticAction::Focus);
-                node
+        let mut actions = match self.host_focus(self.hosted.bounds) {
+            DockFocus::Tab(panel) => self
+                .panel_semantics(panel, strings)
+                .map(|node| node.actions)
+                .unwrap_or_default(),
+            DockFocus::Splitter(area) => self.splitter_semantics(area, strings).actions,
+            DockFocus::None => Vec::new(),
+        };
+        actions.retain(|action| *action != SemanticAction::Focus);
+        actions.push(SemanticAction::Focus);
+        crate::hosted::node(SemanticRole::Group, "", actions)
+    }
+
+    /// A `Tab` part for each tab and floating title bar, selected while its
+    /// panel is active, and a `Slider` part for each splitter with its
+    /// range. The focused tab or splitter is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let arrangement = self.arrange(self.hosted.bounds);
+        let focus = self.host_focus(self.hosted.bounds);
+        for (panel, rect) in self.tab_rects(&arrangement, self.hosted.rtl) {
+            let Some(mut node) = self.panel_semantics(panel, strings) else {
+                continue;
+            };
+            node.role = SemanticRole::Tab;
+            node.actions[0] = SemanticAction::Activate;
+            parts.push(None, SemanticRole::Tab, "", rect).node = node;
+            if focus == DockFocus::Tab(panel) {
+                parts.set_focused(Some(parts.len() - 1));
             }
-            DockFocus::None => group(),
+        }
+        for (area, rect) in arrangement.splitters {
+            let node = self.splitter_semantics(area, strings);
+            parts.push(None, SemanticRole::Slider, "", rect).node = node;
+            if focus == DockFocus::Splitter(area) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
         }
     }
 

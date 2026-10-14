@@ -87,14 +87,17 @@ fn a_floating_panel_is_painted_hit_tested_focused_and_exposed() {
     assert!(texts(&h.paint()).contains(&"Notes".to_owned()));
     // A press on its title bar focuses it, above the center.
     h.click(Point::new(340.0, 112.0));
-    assert_eq!(h.semantics().role, SemanticRole::TabPanel);
-    assert_eq!(h.semantics().name, "Notes");
-    assert_eq!(h.semantics().description, "Floating");
+    assert_eq!(
+        h.focused_node().map(|node| node.role),
+        Some(SemanticRole::Tab)
+    );
+    assert_eq!(h.focused_part(), "Notes");
+    assert_eq!(h.focused_node().unwrap().description, "Floating");
     // A press on its content stops there.
     h.click(Point::new(16.0, 12.0));
-    assert_eq!(h.semantics().name, "Files");
+    assert_eq!(h.focused_part(), "Files");
     h.click(Point::new(400.0, 200.0));
-    assert_eq!(h.semantics().name, "Notes");
+    assert_eq!(h.focused_part(), "Notes");
     // Its close button closes it.
     h.messages();
     h.click(Point::new(500.0 - 4.0 - 8.0, 112.0));
@@ -205,7 +208,7 @@ fn closable_tabs_close_from_their_button_and_command_w() {
     let close = Point::new(search.max_x() - 4.0 - 8.0, search.center().y);
     h.click(close);
     assert_eq!(h.messages(), vec![ControlMessage::Dismissed]);
-    assert_eq!(h.semantics().name, "Console");
+    assert_eq!(h.focused_part(), "Console");
 
     let mut h = hosted();
     h.click(bottom.tab_rect(0, false).center());
@@ -247,7 +250,7 @@ fn splitter_extents_stop_at_what_the_dock_shows() {
         h.messages(),
         vec![ControlMessage::Changed(ControlValue::Number(716.0))]
     );
-    assert_eq!(h.semantics().value.as_deref(), Some("716"));
+    assert_eq!(h.focused_node().unwrap().value.as_deref(), Some("716"));
     h.key(Key::ArrowRight);
     assert!(h.messages().is_empty(), "no growth past the limit");
 
@@ -319,10 +322,10 @@ fn hidden_panels_keep_their_area_and_group_in_the_saved_text() {
 fn tab_stops_follow_reading_order() {
     let mut h = hosted();
     h.focus();
-    let mut names = vec![h.semantics().name];
+    let mut names = vec![h.focused_part()];
     for _ in 0..4 {
         h.key(Key::Tab);
-        names.push(h.semantics().name);
+        names.push(h.focused_part());
     }
     // Files and its splitter, the bottom splitter and group, then the
     // floating panel.

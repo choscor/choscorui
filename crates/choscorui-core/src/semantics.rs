@@ -80,7 +80,7 @@ impl SemanticRelation {
     }
 }
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub struct SemanticState {
     pub disabled: bool,
     pub checked: Option<bool>,
@@ -96,14 +96,14 @@ pub struct SemanticState {
     pub modal: bool,
 }
 
-/// The whole-number value of a range node and its bounds.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// The numeric value of a range node, its bounds, and its step.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SemanticRange {
-    pub value: i64,
-    pub minimum: i64,
-    pub maximum: i64,
+    pub value: f64,
+    pub minimum: f64,
+    pub maximum: f64,
     /// The change of one increment or decrement.
-    pub step: i64,
+    pub step: f64,
 }
 
 /// Lists `range` only when the node has one, and `modal` only when it is

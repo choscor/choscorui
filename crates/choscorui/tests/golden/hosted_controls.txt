@@ -203,7 +203,7 @@ StrokePath { path: Path { elements: [MoveTo(Point { x: 226.0, y: 26.0 }), LineTo
 PopClip
 # range-slider Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 160.0, height: 16.0 } }
-semantics SemanticNode { role: Slider, name: "Price", description: "20", value: Some("20 – 80"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Increment, Decrement, Focus], text: None }
+semantics SemanticNode { role: Slider, name: "Price", description: "", value: Some("20 – 80"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Increment, Decrement, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 160.0, height: 16.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 15.0 }, size: Size { width: 160.0, height: 6.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 FillRoundedRect { rect: Rect { origin: Point { x: 46.8, y: 15.0 }, size: Size { width: 86.39999999999999, height: 6.0 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }

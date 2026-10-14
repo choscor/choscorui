@@ -23,8 +23,8 @@ use crate::{
 use choscorui_core::{
     Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Icon, Key,
     KeyEvent, Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticParts, SemanticRole, SemanticState, Size, TextStyle,
-    Tree, TreeError,
+    SemanticAction, SemanticNode, SemanticParts, SemanticRange, SemanticRole, SemanticState, Size,
+    TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -584,6 +584,7 @@ impl ColorPicker {
                 {
                     self.focus = ColorChannel::ALL[next];
                     cx.request_paint();
+                    cx.request_semantics();
                 }
                 return EventReply::Stop;
             }
@@ -709,7 +710,37 @@ impl CustomControl for ColorPicker {
     }
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        ColorPicker::semantics(self, &self.name, strings)
+        let mut node = ColorPicker::semantics(self, &self.name, strings);
+        node.actions
+            .extend([SemanticAction::Increment, SemanticAction::Decrement]);
+        node
+    }
+
+    /// A `Slider` part for each channel, in percent with its range. The
+    /// focused channel is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let ids = [
+            "choscorui.color.hue",
+            "choscorui.color.saturation",
+            "choscorui.color.brightness",
+            "choscorui.color.opacity",
+        ];
+        for ((channel, strip), id) in ColorChannel::ALL.into_iter().zip(self.strips).zip(ids) {
+            let percent = (self.channel(channel) * 100.0).round();
+            let name = strings.message(id, &[]);
+            let part = parts.push(None, SemanticRole::Slider, &name, strip);
+            part.node.value = Some(format!("{percent}%"));
+            part.node.state.range = Some(SemanticRange {
+                value: percent,
+                minimum: 0.0,
+                maximum: 100.0,
+                step: CHANNEL_STEP * 100.0,
+            });
+            part.node.actions = vec![SemanticAction::Increment, SemanticAction::Decrement];
+            if channel == self.focus {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(
@@ -730,6 +761,16 @@ impl CustomControl for ColorPicker {
             }
             (SemanticAction::Focus, _) => {
                 cx.request_focus();
+                true
+            }
+            (SemanticAction::Increment | SemanticAction::Decrement, _) => {
+                let sign = if action == SemanticAction::Increment {
+                    1.0
+                } else {
+                    -1.0
+                };
+                let target = self.channel(self.focus) + sign * CHANNEL_STEP;
+                self.change(cx, self.focus, target);
                 true
             }
             _ => false,

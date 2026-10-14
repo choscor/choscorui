@@ -605,8 +605,11 @@ fn a_panel_group_with_handle_nodes_leaves_the_handles_to_them() {
     let first = control.handle_semantics(0);
     assert_eq!(first.role, SemanticRole::Slider);
     assert_eq!(first.value.as_deref(), Some("100"));
-    assert_eq!(first.description, "50–150");
-    assert_eq!(control.handle_semantics(1).description, "50–242");
+    let bounds = |node: &choscorui_core::SemanticNode| {
+        node.state.range.map(|range| (range.minimum, range.maximum))
+    };
+    assert_eq!(bounds(&first), Some((50.0, 150.0)));
+    assert_eq!(bounds(&control.handle_semantics(1)), Some((50.0, 242.0)));
     assert_eq!(control.handle_semantics(2).value, None);
 }
 

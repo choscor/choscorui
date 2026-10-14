@@ -4,7 +4,8 @@ use crate::style::{
 };
 use choscorui_core::{
     DesignTokens, Key, KeyEvent, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRelation, SemanticRole, SemanticState, Size, Tree, TreeError,
+    SemanticNode, SemanticRange, SemanticRelation, SemanticRole, SemanticState, Size, Tree,
+    TreeError,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -255,7 +256,15 @@ impl Resizable {
             name: self.label.clone(),
             description: String::new(),
             value: Some(format_number(self.position)),
-            state: SemanticState::default(),
+            state: SemanticState {
+                range: Some(SemanticRange {
+                    value: self.position,
+                    minimum: self.minimum_first,
+                    maximum: self.maximum(),
+                    step: self.step,
+                }),
+                ..SemanticState::default()
+            },
             relations: vec![
                 SemanticRelation::Controls(self.first),
                 SemanticRelation::Controls(self.second),
@@ -1191,8 +1200,8 @@ impl HostedResizable {
     }
 
     /// The semantics of handle `index`: a `Slider` with the group label,
-    /// the size of the pane before the handle as the value, and the range
-    /// of that size as the description, for example `50–150`.
+    /// and the size of the pane before the handle as the value, with the
+    /// range of that size.
     pub fn handle_semantics(&self, index: usize) -> SemanticNode {
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
@@ -1204,14 +1213,23 @@ impl HostedResizable {
             ],
         );
         if index < self.handle_count() {
-            let sizes = self.layout();
-            node.value = Some(format_number(sizes[index]));
-            let (minimum, maximum) = self.range(&sizes, index);
-            if maximum.is_finite() {
-                node.description = format!("{}–{}", format_number(minimum), format_number(maximum));
-            }
+            self.handle_value(&mut node, index);
         }
         node
+    }
+
+    /// Sets the size of the pane before handle `index` as the value of
+    /// `node`, with its range.
+    fn handle_value(&self, node: &mut SemanticNode, index: usize) {
+        let sizes = self.layout();
+        node.value = Some(format_number(sizes[index]));
+        let (minimum, maximum) = self.range(&sizes, index);
+        node.state.range = maximum.is_finite().then_some(SemanticRange {
+            value: sizes[index],
+            minimum,
+            maximum,
+            step: self.step,
+        });
     }
 
     /// Performs `Increment`, `Decrement`, or `Focus` on handle `index`.
@@ -1336,7 +1354,7 @@ impl crate::CustomControl for HostedResizable {
                 SemanticAction::Focus,
             ],
         );
-        node.value = Some(format_number(self.layout()[self.active]));
+        self.handle_value(&mut node, self.active);
         node
     }
 

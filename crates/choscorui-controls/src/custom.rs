@@ -1577,8 +1577,10 @@ impl ControlHost {
 
     /// Routes an assistive-technology action to part `part` of `node`.
     /// [`SemanticAction::Activate`] presses and releases the primary
-    /// button at the center of the part, as a click does. Returns false
-    /// when the part is gone or does not list the action.
+    /// button at the center of the part, as a click does. Another action
+    /// goes to the control when the part has the focus, such as
+    /// `Increment` on the focused thumb. Returns false when the part is
+    /// gone or does not list the action.
     pub fn perform_part(
         &mut self,
         tree: &mut Tree,
@@ -1587,11 +1589,16 @@ impl ControlHost {
         action: SemanticAction,
     ) -> bool {
         let parts = self.parts(node);
-        let Some(part) = parts.get(part).filter(|part| {
-            action == SemanticAction::Activate && part.node.actions.contains(&action)
-        }) else {
+        let focused = parts.focused().map(|position| parts.parts()[position].key);
+        let Some(part) = parts
+            .get(part)
+            .filter(|part| part.node.actions.contains(&action))
+        else {
             return false;
         };
+        if action != SemanticAction::Activate {
+            return focused == Some(part.key) && self.perform(tree, node, action, None);
+        }
         let position = part.bounds.center();
         let button = PointerButton::Primary;
         self.dispatch_pointer(tree, PointerEvent::Down { position, button });

@@ -138,6 +138,12 @@ its text with `Condition::message`.
 | `choscorui.alert.destructive` | | Error (the description of a destructive alert) |
 | `choscorui.toolbar.more` | | More items (the name of the overflow chevron of a toolbar) |
 | `choscorui.carousel.slide` | `index`, `count` | {index} of {count} (the position of a carousel slide) |
+| `choscorui.range.low` | | Minimum (the name of the low thumb of a range slider) |
+| `choscorui.range.high` | | Maximum (the name of the high thumb of a range slider) |
+| `choscorui.color.hue` | | Hue (the name of a color picker channel) |
+| `choscorui.color.saturation` | | Saturation (the name of a color picker channel) |
+| `choscorui.color.brightness` | | Brightness (the name of a color picker channel) |
+| `choscorui.color.opacity` | | Opacity (the name of a color picker channel) |
 | `choscorui.month.previous` | | Previous month |
 | `choscorui.month.next` | | Next month |
 | `choscorui.zoom` | `percent` | Zoom {percent}% |

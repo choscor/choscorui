@@ -9,8 +9,8 @@ use crate::style::{
     ControlKind, Orientation, PaintContext, Slot, StyleQuery, VisualState, fill_shape,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRange, SemanticRole, Size,
 };
 
 /// A range slider: a track with a low and a high thumb. Each thumb is a
@@ -33,8 +33,10 @@ pub struct RangeSlider {
     meeting: bool,
     /// The thumb under the pointer.
     hovered: Option<usize>,
-    /// The thumb length along the track, from the last arrange.
+    /// The thumb length along the track, and the bounds, from the last
+    /// arrange.
     thumb: f64,
+    bounds: Rect,
     enabled: bool,
     rtl: bool,
 }
@@ -63,6 +65,7 @@ impl RangeSlider {
             meeting: false,
             hovered: None,
             thumb: 0.0,
+            bounds: Rect::default(),
             enabled: true,
             rtl: false,
         };
@@ -175,7 +178,8 @@ impl CustomControl for RangeSlider {
 
     /// Records the direction and the thumb length, so that the pointer
     /// maps onto the travel that paint draws.
-    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.bounds = bounds;
         self.rtl = cx.rtl();
         let thumb = cx.style(Self::query(Slot::Thumb, VisualState::NONE));
         self.thumb = if self.vertical() {
@@ -354,9 +358,38 @@ impl CustomControl for RangeSlider {
         };
         let mut node = hosted::node(SemanticRole::Slider, &self.name, actions);
         node.value = Some(format!("{} – {}", self.values[0], self.values[1]));
-        node.description = self.values[self.active].to_string();
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Slider` part for each thumb, named low and high, with its range.
+    /// The active thumb is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        for (index, id) in ["choscorui.range.low", "choscorui.range.high"]
+            .into_iter()
+            .enumerate()
+        {
+            let value = self.values[index];
+            let center = self.point(self.bounds, value);
+            let size = Size::new(self.thumb, self.thumb);
+            let rect = Rect::new(
+                Point::new(center.x - size.width / 2.0, center.y - size.height / 2.0),
+                size,
+            );
+            let name = strings.message(id, &[]);
+            let part = parts.push(None, SemanticRole::Slider, &name, rect);
+            part.node.value = Some(value.to_string());
+            part.node.state.range = Some(SemanticRange {
+                value,
+                minimum: self.minimum,
+                maximum: self.maximum,
+                step: self.step,
+            });
+            part.node.actions = vec![SemanticAction::Increment, SemanticAction::Decrement];
+            if index == self.active {
+                parts.set_focused(Some(index));
+            }
+        }
     }
 
     fn perform(

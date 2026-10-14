@@ -13,8 +13,8 @@ use choscorui::controls::{
 };
 use choscorui::core::{
     AnnouncementPriority, ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured,
-    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, Size, Space, TextPreset,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRange,
+    SemanticRole, SemanticState, Size, Space, TextPreset,
 };
 use std::rc::Rc;
 
@@ -278,6 +278,12 @@ impl CustomControl for StarRating {
             )),
             state: SemanticState {
                 disabled: !self.enabled,
+                range: Some(SemanticRange {
+                    value: self.value.into(),
+                    minimum: 0.0,
+                    maximum: 5.0,
+                    step: 1.0,
+                }),
                 ..SemanticState::default()
             },
             relations: Vec::new(),

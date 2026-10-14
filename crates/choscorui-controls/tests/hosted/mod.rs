@@ -222,11 +222,17 @@ impl Harness {
 
     /// The name of the part that has the focus, or an empty string.
     pub fn focused_part(&self) -> String {
+        self.focused_node()
+            .map(|node| node.name)
+            .unwrap_or_default()
+    }
+
+    /// The node of the part that has the focus.
+    pub fn focused_node(&self) -> Option<SemanticNode> {
         let parts = self.parts();
         parts
             .focused()
-            .map(|position| parts.parts()[position].node.name.clone())
-            .unwrap_or_default()
+            .map(|position| parts.parts()[position].node.clone())
     }
 
     /// The name of the first selected part, or an empty string.

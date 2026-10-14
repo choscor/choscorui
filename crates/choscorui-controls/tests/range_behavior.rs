@@ -266,10 +266,10 @@ fn a_progress_fill_moves_over_the_recipe_motion_and_reports_its_range() {
     assert_eq!(
         h.semantics().state.range,
         Some(SemanticRange {
-            value: 200,
-            minimum: 0,
-            maximum: 200,
-            step: 1,
+            value: 200.0,
+            minimum: 0.0,
+            maximum: 200.0,
+            step: 1.0,
         })
     );
 }

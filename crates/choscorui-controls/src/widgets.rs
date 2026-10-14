@@ -20,7 +20,8 @@ use crate::{
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayList, EventPhase, EventReply, FillRule, Icon, Key, KeyEvent,
     LayoutDirection, Locale, Localizer, Measured, Paint, Path, Point, PointerButton, PointerEvent,
-    RadiusScale, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
+    RadiusScale, Rect, SemanticAction, SemanticNode, SemanticRange, SemanticRole, SemanticState,
+    Size, Tree,
 };
 use std::f64::consts::PI;
 
@@ -649,6 +650,12 @@ impl DecimalSpinBox {
             value: Some(self.text().to_owned()),
             state: SemanticState {
                 invalid: matches!(validation, ValidationState::Invalid(_)),
+                range: Some(SemanticRange {
+                    value: self.value,
+                    minimum: self.minimum,
+                    maximum: self.maximum,
+                    step: self.step,
+                }),
                 ..SemanticState::default()
             },
             relations: Vec::new(),
@@ -990,7 +997,10 @@ impl Dial {
             name: name.to_owned(),
             description: strings.message("choscorui.dial", &[]),
             value: Some(self.range.value().to_string()),
-            state: SemanticState::default(),
+            state: SemanticState {
+                range: Some(self.range.into()),
+                ..SemanticState::default()
+            },
             relations: Vec::new(),
             actions: vec![
                 SemanticAction::Increment,

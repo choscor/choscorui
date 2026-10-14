@@ -159,15 +159,19 @@ fn each_handle_is_a_slider_node_in_a_group() {
     assert_eq!(host.tree().bounds(second).unwrap().min_x(), 204.0);
     // Each handle has its own name.
     let rows = [
-        (first, "Panels 1", "100", "50–150"),
-        (second, "Panels 2", "100", "50–242"),
+        (first, "Panels 1", "100", 150.0),
+        (second, "Panels 2", "100", 242.0),
     ];
-    for (node, name, value, range) in rows {
+    for (node, name, value, maximum) in rows {
         let semantic = host.semantic(node).unwrap();
         assert_eq!(semantic.role, SemanticRole::Slider);
         assert_eq!(semantic.name, name);
         assert_eq!(semantic.value.as_deref(), Some(value));
-        assert_eq!(semantic.description, range);
+        let range = semantic
+            .state
+            .range
+            .map(|range| (range.minimum, range.maximum));
+        assert_eq!(range, Some((50.0, maximum)));
         assert_eq!(
             semantic.actions,
             vec![
@@ -248,8 +252,10 @@ fn a_handle_action_moves_it_and_refreshes_its_neighbor() {
     // The move of the first handle widened the pane before the second.
     let semantic = host.semantic(second).unwrap();
     assert_eq!(semantic.value.as_deref(), Some("120"));
-    assert_eq!(semantic.description, "50–252");
-    assert_eq!(host.semantic(first).unwrap().description, "50–160");
+    let maximum =
+        |semantic: &choscorui_core::SemanticNode| semantic.state.range.map(|range| range.maximum);
+    assert_eq!(maximum(&semantic), Some(252.0));
+    assert_eq!(maximum(&host.semantic(first).unwrap()), Some(160.0));
     // A change of the binding also refreshes the handles.
     sizes.set(vec![60.0, 200.0]);
     host.flush();

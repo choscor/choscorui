@@ -192,7 +192,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 
 - **Announcements.** `Window::announce` builds an autoreleased `NSDictionary` in a local pool. It posts `NSAccessibilityAnnouncementRequestedNotification` through `NSAccessibilityPostNotificationWithUserInfo`.
 - **Collections.** Element updates set `accessibilityRowCount`, `accessibilityColumnCount`, and `accessibilityIndex` with `NSInteger` values, saturated from `usize`.
-- **Ranges.** For a node with a `SemanticRange`, element updates set `accessibilityValue`, `accessibilityMinValue`, and `accessibilityMaxValue` to autoreleased `NSNumber` values. The values saturate from `i64` to `NSInteger`.
+- **Ranges.** For a node with a `SemanticRange`, element updates set `accessibilityValue`, `accessibilityMinValue`, and `accessibilityMaxValue` to autoreleased `NSNumber` values from `numberWithDouble:`.
 - **Tests.** `window_smoke` reads the row count, the index, and the text area role back from the native elements.
 
 The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes the full accessibility bridge.

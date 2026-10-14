@@ -106,7 +106,10 @@ fn slider_supports_drag_keyboard_and_accessibility_actions() {
         "the bounds are numbers, not text"
     );
     let range = semantics.state.range.unwrap();
-    assert_eq!((range.minimum, range.maximum, range.step), (0, 100, 5));
+    assert_eq!(
+        (range.minimum, range.maximum, range.step),
+        (0.0, 100.0, 5.0)
+    );
     assert_eq!(
         semantics.actions,
         vec![

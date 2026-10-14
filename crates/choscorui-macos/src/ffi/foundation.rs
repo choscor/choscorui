@@ -43,6 +43,8 @@ messages! {
         (bool) -> Autoreleased<NSNumber>;
     pub(crate) NUMBER_WITH_INTEGER: class NSNumber, c"numberWithInteger:",
         (isize) -> Autoreleased<NSNumber>;
+    pub(crate) NUMBER_WITH_DOUBLE: class NSNumber, c"numberWithDouble:",
+        (f64) -> Autoreleased<NSNumber>;
     DICTIONARY_WITH_OBJECTS: class NSDictionary, c"dictionaryWithObjects:forKeys:count:",
         (*const &Obj<NSObject>, *const &Obj<NSObject>, usize) -> Autoreleased<NSDictionary>;
     ARRAY_WITH_OBJECTS: class NSArray, c"arrayWithObjects:count:",

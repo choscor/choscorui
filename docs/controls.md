@@ -1339,7 +1339,7 @@ this behavior.
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | name / low and high joined with an en dash |
-| Description | value of the active thumb |
+| Parts | a `Slider` part for each thumb, named by `choscorui.range.low` and `choscorui.range.high`, with its value and its range; the active thumb is the focused part |
 | State | disabled |
 | Actions | `Increment`, `Decrement`, and `Focus` while enabled; they move the active thumb |
 
@@ -1438,7 +1438,7 @@ this behavior.
 | --- | --- |
 | Role | `SpinButton` (AXIncrementor) |
 | Name / value | name / the text |
-| State | invalid; the error message is the description |
+| State | invalid; the error message is the description; `range` gives the value, the bounds, and the step |
 | Actions | `Increment`, `Decrement`, `SetValue`, `Focus` |
 
 **As a view.** `DecimalSpinBox::new(name, bounds, step, fraction_digits,
@@ -1481,7 +1481,7 @@ The dial paints no value text. Show the value in a view next to it.
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | name / the integer value; the description is "Dial" |
-| State | disabled, from the host |
+| State | disabled, from the host; `range` gives the value, the bounds, and the step |
 | Actions | `Increment`, `Decrement`, `SetValue`, `Focus` |
 
 `Dial` has no handler for these actions. In a control host, `Increment`
@@ -1689,7 +1689,7 @@ scroll view use the same bar.
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | label / position in points |
-| State | - |
+| State | `range` gives the value, the bounds, and the step |
 | Actions | `Increment`, `Decrement`, `Focus` |
 
 The node has a `Controls` relation to each pane.
@@ -1750,8 +1750,8 @@ mirrors ArrowLeft, ArrowRight, and the drag. The hosted node has no
 - **Handle node semantics.** Each handle node is a `Slider`. With one
   handle, the name is the group label. With more handles, the name is the
   label and the handle number from 1, for example `Workspace 2`. The value
-  is the size of the pane before the handle. The
-  description gives the range of that size, for example `50–150`.
+  is the size of the pane before the handle. `range` gives that size,
+  its bounds, and the key step.
 - **Pane geometry.** `rects_in` gives the pane and handle rectangles in
   other bounds, before the control arranges. `minimum_extent` gives the
   pane minimums and the handles together. The `Resizable` view uses them
@@ -2548,7 +2548,12 @@ index through `.on_item`, and Escape runs `.on_dismiss`.
 | Role | `Group` (AXGroup) |
 | Name / value | name / hex value |
 | State | the description gives red, green, blue, and opacity |
-| Actions | `SetValue`, `Focus` |
+| Actions | `SetValue`, `Focus`; in a control host also `Increment` and `Decrement` on the focused channel |
+
+A hosted `ColorPicker` publishes a `Slider` part for each channel. The
+names are `choscorui.color.hue`, `choscorui.color.saturation`,
+`choscorui.color.brightness`, and `choscorui.color.opacity`. The value is
+in percent, with its range. The focused channel is the focused part.
 
 `FontDialog` has no semantic node. Its family combobox publishes the
 `FontChooser` semantics. The control host has no `FontDialog` control.
@@ -2736,7 +2741,7 @@ default text and the sections at the end. It has no binding.
 | --- | --- | --- |
 | Role | `TabPanel` (AXGroup) | `Slider` (AXSlider) |
 | Name / value | panel title / - | area name and "panel size" / extent in points that the dock shows |
-| State | selected when active; the description is "Floating" for a floating panel | - |
+| State | selected when active; the description is "Floating" for a floating panel | `range` gives the value, the bounds, and the step; the maximum is infinite before a host arranges the dock |
 | Actions | `Focus`, and `Dismiss` when closable | `Increment`, `Decrement` |
 
 **In a control host.** The dock's node covers its whole area. It paints
@@ -2763,7 +2768,10 @@ panel is on top.
   collapses the area to its 80 pt minimum, and the next double click
   restores the extent.
 - The tabs, the close buttons, and the splitters show hover and press.
-- The node's semantics are those of the focused panel or splitter.
+- The node is a `Group` with the actions of the focused tab or
+  splitter. It publishes a `Tab` part for each tab and floating title
+  bar, and a `Slider` part for each splitter. The focused tab or splitter
+  is the focused part.
 
 **As a view.** `Dock::new(layout)` mounts the `DockLayout` that `layout`
 makes from the environment. `on_item` receives the id of an activated panel.
@@ -4804,8 +4812,8 @@ and gives it to the platform accessibility API.
 - `snapshot` walks the retained tree in order. Each entry has its semantic
   parent, layout bounds, focus, collection size, and item index.
 - `supports(id, action)` is true only when the node lists the action.
-- A `SemanticRange` in the state gives the whole-number value, the
-  minimum, the maximum, and the step of a range node. A range node does
+- A `SemanticRange` in the state gives the value, the minimum, the
+  maximum, and the step of a range node, as `f64` numbers. A range node does
   not put its bounds in the description.
 
 ### Parts
@@ -4828,7 +4836,11 @@ items, tabs, buttons, and table cells, are child nodes in the
   `SemanticTree::set_parts`. A disabled control publishes disabled parts
   with no actions.
 - `ControlHost::perform_part` and `ViewHost::perform_part` run an assistive
-  action on a part. `Activate` clicks the center of the part.
+  action on a part. `Activate` clicks the center of the part. Another
+  action, such as `Increment`, goes to the control when the part has the
+  focus.
+- A part with a range, such as a slider thumb or a splitter, publishes
+  its value, minimum, maximum, and step in `SemanticState::range`.
 
 The `control_semantics` golden in
 [compatibility.rs](../crates/choscorui/tests/compatibility.rs) records

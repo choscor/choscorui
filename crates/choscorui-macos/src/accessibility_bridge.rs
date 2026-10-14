@@ -32,7 +32,7 @@ use crate::ffi::appkit::{
 };
 use crate::ffi::encode::Bool;
 use crate::ffi::foundation::{
-    DESCRIPTION, NSObject, NSString, NUMBER_WITH_BOOL, NUMBER_WITH_INTEGER, ns_array, ns_string,
+    DESCRIPTION, NSObject, NSString, NUMBER_WITH_BOOL, NUMBER_WITH_DOUBLE, ns_array, ns_string,
     string,
 };
 use crate::ffi::retained::Retained;
@@ -486,9 +486,8 @@ fn apply_attributes(
 }
 
 /// An `NSNumber` of `value`, saturated to the native integer.
-fn number(value: i64) -> Result<Retained<NSObject>, Error> {
-    let value = isize::try_from(value).unwrap_or(if value < 0 { isize::MIN } else { isize::MAX });
-    Ok(NUMBER_WITH_INTEGER
+fn number(value: f64) -> Result<Retained<NSObject>, Error> {
+    Ok(NUMBER_WITH_DOUBLE
         .class_send((value,))?
         .ok_or(Error::AppKitUnavailable)?
         .into_super())

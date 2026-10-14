@@ -12,8 +12,8 @@ use choscorui::controls::{
     PanelId, PanelLocation, Slot, StyleQuery, TextAlign,
 };
 use choscorui::core::{
-    ColorRole, EventReply, Measured, Point, Rect, SemanticAction, SemanticNode, Size, Space,
-    TextPreset,
+    ColorRole, EventReply, Localizer, Measured, Point, Rect, SemanticAction, SemanticNode,
+    SemanticParts, Size, Space, TextPreset,
 };
 
 const FILES: PanelId = PanelId(1);
@@ -194,6 +194,14 @@ impl CustomControl for DockView {
         CustomControl::semantics(&self.dock)
     }
 
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.dock.semantics_in(strings)
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.dock.semantic_parts(strings, parts);
+    }
+
     fn perform(
         &mut self,
         cx: &mut ControlContext<'_>,
@@ -353,13 +361,23 @@ mod tests {
         assert_eq!(console_area(&store.dock.get()), Some(DockArea::Bottom));
     }
 
-    /// The dock's node: it publishes the focused tab's panel.
+    /// The dock's node: it publishes its tabs as parts.
     fn dock_node(page: &mut Harness) -> Option<NodeId> {
         let (snapshot, _) = page.host.semantics();
         snapshot
             .into_iter()
-            .find(|entry| entry.node.role == SemanticRole::TabPanel)
+            .find(|entry| entry.node.role == SemanticRole::Tab && entry.part.is_some())
             .map(|entry| entry.id)
+    }
+
+    /// The name of the focused part of the dock.
+    fn focused_part(page: &mut Harness) -> String {
+        let (snapshot, _) = page.host.semantics();
+        snapshot
+            .into_iter()
+            .find(|entry| entry.focused && entry.part.is_some())
+            .map(|entry| entry.node.name)
+            .unwrap_or_default()
     }
 
     fn names_starting_with(page: &mut Harness, prefix: &str) -> usize {
@@ -378,21 +396,17 @@ mod tests {
     #[test]
     fn changes_inside_the_dock_are_saved_and_reset_restores_the_default() {
         let (mut page, store) = dock_page("");
-        let dock = dock_node(&mut page).expect("the dock publishes a tab panel");
+        let dock = dock_node(&mut page).expect("the dock publishes its tabs");
         page.host.focus(Some(dock));
         // Tab moves between the dock's groups and splitters.
         for _ in 0..8 {
-            if page
-                .host
-                .semantic(dock)
-                .is_some_and(|node| node.name == "Outline")
-            {
+            if focused_part(&mut page) == "Outline" {
                 break;
             }
             assert!(press(&mut page, Key::Tab));
         }
         assert!(press(&mut page, Key::ArrowLeft));
-        assert_eq!(page.host.semantic(dock).unwrap().name, "Files");
+        assert_eq!(focused_part(&mut page), "Files");
         let (arranged, _) = restored(&store.dock.get(), default_dock());
         assert!(arranged.is_active(super::FILES));
 

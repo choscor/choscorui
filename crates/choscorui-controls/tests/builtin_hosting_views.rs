@@ -1440,12 +1440,15 @@ fn a_hosted_dock_selects_tabs_resizes_areas_and_closes_panels() {
     let console = bottom.tab_rect(0, false).center();
     let search = bottom.tab_rect(1, false).center();
     h.click(console);
-    assert_eq!(h.semantics().role, SemanticRole::TabPanel);
-    assert_eq!(h.semantics().name, "Console");
+    assert_eq!(
+        h.focused_node().map(|node| node.role),
+        Some(SemanticRole::Tab)
+    );
+    assert_eq!(h.focused_part(), "Console");
     assert!(!h.perform(SemanticAction::Dismiss, None), "not closable");
     h.focus();
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "Search");
+    assert_eq!(h.focused_part(), "Search");
     assert!(h.perform(SemanticAction::Dismiss, None));
     assert_eq!(
         h.messages(),
@@ -1455,10 +1458,13 @@ fn a_hosted_dock_selects_tabs_resizes_areas_and_closes_panels() {
             ControlMessage::Dismissed,
         ]
     );
-    assert_eq!(h.semantics().name, "Console");
+    assert_eq!(h.focused_part(), "Console");
 
     h.click(left_splitter.center());
-    assert_eq!(h.semantics().role, SemanticRole::Slider);
+    assert_eq!(
+        h.focused_node().map(|node| node.role),
+        Some(SemanticRole::Slider)
+    );
     h.key(Key::ArrowRight);
     assert!(h.perform(SemanticAction::Decrement, None));
     assert_eq!(

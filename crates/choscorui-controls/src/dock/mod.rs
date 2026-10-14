@@ -9,7 +9,8 @@
 mod host;
 
 use choscorui_core::{
-    Key, Localizer, Point, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    Key, Localizer, Point, Rect, SemanticAction, SemanticNode, SemanticRange, SemanticRole,
+    SemanticState, Size,
 };
 use host::HostState;
 use std::collections::BTreeMap;
@@ -615,8 +616,9 @@ impl DockLayout {
         )
     }
 
-    /// Splitter semantics: an adjustable value in points, named in the
-    /// language of `strings`.
+    /// Splitter semantics: an adjustable value in points with its range,
+    /// named in the language of `strings`. Before a host arranges the
+    /// dock, the maximum is infinite.
     pub fn splitter_semantics(&self, area: DockArea, strings: &Localizer) -> SemanticNode {
         let id = match area {
             DockArea::Left => "choscorui.dock.left",
@@ -629,7 +631,15 @@ impl DockLayout {
             name: strings.message(id, &[]),
             description: String::new(),
             value: Some(format!("{}", self.shown_extent(area).round())),
-            state: SemanticState::default(),
+            state: SemanticState {
+                range: Some(SemanticRange {
+                    value: self.shown_extent(area),
+                    minimum: MIN_EXTENT,
+                    maximum: self.limit(area).max(self.shown_extent(area)),
+                    step: KEY_STEP,
+                }),
+                ..SemanticState::default()
+            },
             relations: Vec::new(),
             actions: vec![SemanticAction::Increment, SemanticAction::Decrement],
             text: None,

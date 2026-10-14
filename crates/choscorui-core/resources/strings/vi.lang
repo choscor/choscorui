@@ -59,6 +59,12 @@ choscorui.date_picker.count[other] = {count} ngày
 choscorui.alert.destructive = Lỗi
 choscorui.toolbar.more = Thêm mục
 choscorui.carousel.slide = {index} trên {count}
+choscorui.range.low = Tối thiểu
+choscorui.range.high = Tối đa
+choscorui.color.hue = Sắc độ
+choscorui.color.saturation = Độ bão hòa
+choscorui.color.brightness = Độ sáng
+choscorui.color.opacity = Độ mờ đục
 
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói

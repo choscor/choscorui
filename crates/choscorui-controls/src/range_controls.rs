@@ -935,15 +935,26 @@ impl Progress {
             state: SemanticState {
                 range: self.value.map(|(value, maximum)| SemanticRange {
                     value: value.into(),
-                    minimum: 0,
+                    minimum: 0.0,
                     maximum: maximum.into(),
-                    step: 1,
+                    step: 1.0,
                 }),
                 ..SemanticState::default()
             },
             relations: Vec::new(),
             actions: Vec::new(),
             text: None,
+        }
+    }
+}
+
+impl From<IntegerRange> for SemanticRange {
+    fn from(range: IntegerRange) -> Self {
+        Self {
+            value: range.value().into(),
+            minimum: range.minimum().into(),
+            maximum: range.maximum().into(),
+            step: range.step().into(),
         }
     }
 }
@@ -964,12 +975,7 @@ fn range_semantics(
         value: Some(range.value().to_string()),
         state: SemanticState {
             disabled: !enabled,
-            range: Some(SemanticRange {
-                value: range.value().into(),
-                minimum: range.minimum().into(),
-                maximum: range.maximum().into(),
-                step: range.step().into(),
-            }),
+            range: Some(range.into()),
             ..SemanticState::default()
         },
         relations: Vec::new(),

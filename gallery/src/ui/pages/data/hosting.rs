@@ -7,8 +7,8 @@ use choscorui::controls::{
 };
 use choscorui::core::{
     EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Localizer, Measured, ModelChange,
-    Point, PointerButton, PointerEvent, Rect, Role, SemanticAction, SemanticNode, SortFilterProxy,
-    Value,
+    Point, PointerButton, PointerEvent, Rect, Role, SemanticAction, SemanticNode, SemanticParts,
+    SortFilterProxy, Value,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -243,6 +243,10 @@ impl<C: CustomControl> CustomControl for Handle<C> {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         self.control.borrow().semantics_in(strings)
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.control.borrow().semantic_parts(strings, parts);
     }
 
     fn perform(
