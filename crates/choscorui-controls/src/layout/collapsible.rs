@@ -7,7 +7,8 @@ use crate::style::{
     TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventReply, Icon, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Icon, Localizer, Measured, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// A collapsible section. The header shows the title and a toggle
@@ -252,11 +253,23 @@ impl CustomControl for Collapsible {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::Group, &self.title, actions);
-        node.description = self.toggle_label.clone();
         node.value = Some(self.summary.clone());
         node.state.expanded = Some(self.reveal.open);
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// The toggle `Button` part, which has the focus, and a `StaticText`
+    /// part for the summary and each shown item.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let role = SemanticRole::Button;
+        let toggle = hosted::pressable(parts, None, role, &self.toggle_label, self.toggle, true);
+        toggle.node.state.expanded = Some(self.reveal.open);
+        parts.set_focused(Some(0));
+        let texts = std::iter::once(&self.summary).chain(&self.items);
+        for (text, rect) in texts.zip(&self.boxes) {
+            parts.push(None, SemanticRole::StaticText, text, *rect);
+        }
     }
 
     fn perform(

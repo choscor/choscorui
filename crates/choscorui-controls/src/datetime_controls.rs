@@ -1522,7 +1522,7 @@ impl Calendar {
 
     /// Adds the parts of the calendar in `layout` under `parent`: the
     /// month buttons, the caption dropdowns, and a `Row` part for each
-    /// week with a `Cell` part for each day. The `today` cell says so in
+    /// week, named by its first and last day, with a `Cell` part for each day. The `today` cell says so in
     /// its description. The `focus` part has the focus; in the grid, the
     /// selected day has it.
     pub(crate) fn semantic_parts(
@@ -1560,12 +1560,19 @@ impl Calendar {
             let Some(bounds) = rects.iter().copied().reduce(Rect::union) else {
                 continue;
             };
-            let row = parts.push(parent, SemanticRole::Row, "", bounds);
-            row.item(week);
+            let nodes: Vec<_> = days.iter().map(|cell| self.cell_semantics(cell)).collect();
+            // A week is named by its first and last day.
+            let name = match (nodes.first(), nodes.last()) {
+                (Some(first), Some(last)) => format!("{} – {}", first.name, last.name),
+                _ => String::new(),
+            };
+            parts
+                .push(parent, SemanticRole::Row, &name, bounds)
+                .item(week);
             let row = Some(parts.len() - 1);
-            for (cell, rect) in days.iter().zip(rects) {
+            for ((cell, rect), node) in days.iter().zip(rects).zip(nodes) {
                 let part = parts.push(row, SemanticRole::Cell, "", *rect);
-                part.node = self.cell_semantics(cell);
+                part.node = node;
                 if Some(cell.date) == today {
                     part.node.description.clone_from(&today_text);
                 }

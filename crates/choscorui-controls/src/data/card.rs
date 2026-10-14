@@ -8,7 +8,8 @@ use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign,
 };
 use choscorui_core::{
-    EventReply, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Localizer, Measured, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// A card: a title and a description in the header, an optional header
@@ -242,9 +243,13 @@ impl CustomControl for Card {
                 .join("\n"),
         )
         .filter(|value| !value.is_empty());
-        node.description = self.focused_label().unwrap_or_default().to_string();
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.buttons
+            .semantic_parts(Some(self.stops.focus), self.enabled, None, parts);
     }
 
     fn perform(

@@ -12,8 +12,9 @@ use crate::style::{
     TextAlign, Variant, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Image, ImageSampling, Key, KeyEvent, Measured, Path, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Image, ImageSampling, Key, KeyEvent, Localizer, Measured, Path,
+    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// What an item shows at its start.
@@ -404,14 +405,6 @@ impl ItemGroup {
         }
     }
 
-    fn label(&self, stop: Stop) -> String {
-        let item = &self.items[stop.item];
-        match stop.action {
-            Some(action) => item.actions[action].label.clone(),
-            None => item.title.clone(),
-        }
-    }
-
     fn paint_row(
         &self,
         cx: &mut PaintContext<'_>,
@@ -629,12 +622,47 @@ impl CustomControl for ItemGroup {
                 .collect::<Vec<_>>()
                 .join(", "),
         );
-        node.description = stops
-            .get(self.focus)
-            .map(|stop| self.label(*stop))
-            .unwrap_or_default();
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `ListItem` part for each row, or a `Link` part for a link row,
+    /// with a `Button` part for each action. The focused stop is the
+    /// focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let focused = self.stops().get(self.focus).copied();
+        for (index, (item, row)) in self.items.iter().zip(&self.rows).enumerate() {
+            let role = if item.link {
+                SemanticRole::Link
+            } else {
+                SemanticRole::ListItem
+            };
+            let part = hosted::pressable(parts, None, role, &item.title, row.rect, item.link);
+            part.node.state.disabled = false;
+            part.node.description = item.description.clone();
+            part.item(index);
+            let parent = parts.len() - 1;
+            if focused
+                == Some(Stop {
+                    item: index,
+                    action: None,
+                })
+            {
+                parts.set_focused(Some(parent));
+            }
+            for (action, (button, rect)) in item.actions.iter().zip(&row.buttons).enumerate() {
+                let role = SemanticRole::Button;
+                hosted::pressable(parts, Some(parent), role, &button.label, *rect, true);
+                if focused
+                    == Some(Stop {
+                        item: index,
+                        action: Some(action),
+                    })
+                {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
     }
 
     fn perform(

@@ -51,14 +51,10 @@ fn card_paints_its_sections_and_tabs_through_its_buttons() {
         Some("Enter your email below.\nUse the address that your team invited.")
     );
     h.focus();
-    assert_eq!(
-        h.semantics().description,
-        "Sign up",
-        "the action comes first"
-    );
+    assert_eq!(h.focused_part(), "Sign up", "the action comes first");
     assert!(tab(&mut h));
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Login with Google");
+    assert_eq!(h.focused_part(), "Login with Google");
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(2)]);
     assert!(!tab(&mut h), "Tab leaves after the last button");

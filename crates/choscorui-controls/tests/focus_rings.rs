@@ -57,7 +57,7 @@ fn the_toast_close_button_shows_the_ring_on_keyboard_focus() {
     h.focus();
     let undo = rings(&mut h);
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Close");
+    assert_eq!(h.focused_part(), "Close");
     let close = rings(&mut h);
     assert_eq!((undo.len(), close.len()), (1, 1), "one ring on each button");
     assert_ne!(undo, close, "the ring moves to the close button");

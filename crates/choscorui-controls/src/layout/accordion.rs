@@ -7,8 +7,8 @@ use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted::{self, Reveal};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size, Transform,
 };
 
 /// One frame of a height animation, in seconds.
@@ -427,14 +427,29 @@ impl CustomControl for Accordion {
             .map(|index| self.items[index].0.as_str())
             .collect();
         node.value = (!open.is_empty()).then(|| open.join(", "));
-        node.description = self
-            .items
-            .get(self.focus)
-            .map(|(title, _)| title.clone())
-            .unwrap_or_default();
-        node.state.expanded = self.reveals.get(self.focus).map(|reveal| reveal.open);
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Button` part for each header, expanded while its item is open,
+    /// and a `StaticText` part for each open content. The focused header
+    /// is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        for (index, ((title, content), (header, body))) in
+            self.items.iter().zip(&self.rows).enumerate()
+        {
+            let open = self.reveals[index].open;
+            let enabled = !self.disabled[index];
+            let role = SemanticRole::Button;
+            let part = hosted::pressable(parts, None, role, title, *header, enabled);
+            part.node.state.expanded = Some(open);
+            if index == self.focus {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+            if open {
+                parts.push(None, SemanticRole::StaticText, content, *body);
+            }
+        }
     }
 
     fn perform(

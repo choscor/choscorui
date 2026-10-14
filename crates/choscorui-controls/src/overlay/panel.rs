@@ -9,7 +9,8 @@ use crate::style::{
     ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect,
+    EventPhase, EventReply, Key, KeyEvent, Point, PointerButton, PointerEvent, Rect, SemanticParts,
+    SemanticRole,
 };
 
 /// The title and description of an overlay panel.
@@ -179,6 +180,24 @@ impl Buttons {
                 Rect::from_xywh(rect.origin.x, y, rect.size.width, height)
             })
             .collect();
+    }
+
+    /// Adds a `Button` part for each button under `parent`. The button at
+    /// `focused` has the focus.
+    pub fn semantic_parts(
+        &self,
+        focused: Option<usize>,
+        enabled: bool,
+        parent: Option<usize>,
+        parts: &mut SemanticParts,
+    ) {
+        for (index, (button, rect)) in self.buttons.iter().zip(&self.rects).enumerate() {
+            let role = SemanticRole::Button;
+            crate::hosted::pressable(parts, parent, role, &button.label, *rect, enabled);
+            if focused == Some(index) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     /// The button under `point`.

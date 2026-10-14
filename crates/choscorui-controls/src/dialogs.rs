@@ -23,7 +23,8 @@ use crate::{
 use choscorui_core::{
     Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Icon, Key,
     KeyEvent, Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
+    SemanticAction, SemanticNode, SemanticParts, SemanticRole, SemanticState, Size, TextStyle,
+    Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1568,6 +1569,24 @@ impl CustomControl for HostedAlertDialog {
             node.actions.clear();
         }
         node
+    }
+
+    /// While open, each button is a `Button` part, and the focused one has
+    /// the focus.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        if !self.reveal.open {
+            return;
+        }
+        for (index, rect) in &self.buttons {
+            let Some(button) = self.alert.buttons.get(*index) else {
+                continue;
+            };
+            let role = SemanticRole::Button;
+            crate::hosted::pressable(parts, None, role, &button.title, *rect, true);
+            if self.focus == *index {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

@@ -120,9 +120,9 @@ fn keys_reach_the_action_and_close_buttons() {
     let id = toasts.push(Toast::new("Message deleted").with_action("Undo"));
     advance(&mut h, 0.0);
     h.focus();
-    assert_eq!(h.semantics().description, "Undo");
+    assert_eq!(h.focused_part(), "Undo");
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Close");
+    assert_eq!(h.focused_part(), "Close");
     assert!(!tab(&mut h), "Tab leaves after the last button");
     h.modifiers(ShortcutModifiers {
         shift: true,

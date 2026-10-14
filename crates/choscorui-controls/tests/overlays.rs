@@ -208,14 +208,14 @@ fn a_dialog_traps_focus_and_activates_its_buttons() {
     assert_eq!(node.role, SemanticRole::Dialog);
     assert_eq!(node.name, "Edit profile");
     assert_eq!(
-        node.value.as_deref(),
-        Some("Save changes"),
+        h.focused_part(),
+        "Save changes",
         "focus starts on the default button"
     );
     assert!(tab(&mut h), "Tab stays in the dialog");
-    assert_eq!(h.semantics().value.as_deref(), Some("Close"));
+    assert_eq!(h.focused_part(), "Close");
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().value.as_deref(), Some("Cancel"), "it wraps");
+    assert_eq!(h.focused_part(), "Cancel", "it wraps");
     h.modifiers(ShortcutModifiers {
         shift: true,
         ..ShortcutModifiers::default()
@@ -249,7 +249,7 @@ fn return_runs_the_default_button_and_command_period_cancels() {
     // Focus moves to Cancel, but Return still runs the default button.
     assert!(tab(&mut h));
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().value.as_deref(), Some("Cancel"));
+    assert_eq!(h.focused_part(), "Cancel");
     h.key(Key::Enter);
     assert_eq!(
         h.messages(),
@@ -373,7 +373,7 @@ fn a_drawer_dismisses_after_a_long_enough_drag() {
     // A drawer has no close button: Submit is the only part.
     h.focus();
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().value.as_deref(), Some("Submit"));
+    assert_eq!(h.focused_part(), "Submit");
     // Drag the handle area down a little: it snaps back.
     let top = Point::new(400.0, 600.0 - 150.0);
     let drag = |h: &mut Harness, distance: f64| {

@@ -9,7 +9,8 @@ use crate::style::{
     AlertVariant, ButtonVariant, ControlKind, PaintContext, Slot, StyleQuery, TextAlign,
 };
 use choscorui_core::{
-    EventReply, Icon, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Icon, Localizer, Measured, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// An alert. The icon sits at the start, and the title and the
@@ -234,6 +235,11 @@ impl CustomControl for Alert {
     }
 
     fn semantics(&self) -> SemanticNode {
+        self.semantics_in(Localizer::builtin())
+    }
+
+    /// A destructive alert says so in its description.
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         let actions = if self.enabled && !self.buttons.buttons.is_empty() {
             vec![SemanticAction::Activate, SemanticAction::Focus]
         } else {
@@ -241,14 +247,16 @@ impl CustomControl for Alert {
         };
         let mut node = hosted::node(SemanticRole::Group, &self.title, actions);
         node.value = (!self.description.is_empty()).then(|| self.description.clone());
-        node.description = self
-            .buttons
-            .buttons
-            .get(self.stops.focus)
-            .map(|button| button.label.clone())
-            .unwrap_or_default();
+        if self.variant == AlertVariant::Destructive {
+            node.description = strings.message("choscorui.alert.destructive", &[]);
+        }
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.buttons
+            .semantic_parts(Some(self.stops.focus), self.enabled, None, parts);
     }
 
     fn perform(

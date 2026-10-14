@@ -124,24 +124,26 @@ fn accordion_keeps_one_item_open() {
     let mut h = Harness::new(Accordion::new("FAQ", faq()).with_open(0));
     assert_eq!(h.semantics().value.as_deref(), Some("Is it accessible?"));
     h.focus();
-    assert_eq!(h.semantics().description, "Is it accessible?");
+    assert_eq!(h.focused_part(), "Is it accessible?");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Is it styled?");
+    assert_eq!(h.focused_part(), "Is it styled?");
     h.key(Key::Space);
     assert_eq!(
         h.messages(),
         [ControlMessage::Changed(ControlValue::Indices(vec![1]))]
     );
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "Is it animated?");
-    assert_eq!(h.semantics().state.expanded, Some(false));
+    assert_eq!(h.focused_part(), "Is it animated?");
+    let parts = h.parts();
+    let focused = &parts.parts()[parts.focused().unwrap_or_default()];
+    assert_eq!(focused.node.state.expanded, Some(false));
     assert!(h.perform(SemanticAction::Expand, None));
     assert_eq!(
         h.messages(),
         [ControlMessage::Changed(ControlValue::Indices(vec![2]))]
     );
     h.key(Key::Home);
-    assert_eq!(h.semantics().description, "Is it accessible?");
+    assert_eq!(h.focused_part(), "Is it accessible?");
 }
 
 #[test]
@@ -214,7 +216,7 @@ fn a_disabled_accordion_item_is_skipped_and_only_primary_releases_toggle() {
     let mut h = Harness::new(Accordion::new("FAQ", faq()).with_disabled(1));
     h.focus();
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Is it animated?");
+    assert_eq!(h.focused_part(), "Is it animated?");
     let bounds = h.bounds();
     let header = bounds.size.height / 3.0;
     h.click(Point::new(
@@ -289,9 +291,9 @@ fn item_group_tabs_through_links_and_actions() {
     let node = h.semantics();
     assert_eq!(node.role, SemanticRole::List);
     h.focus();
-    assert_eq!(h.semantics().description, "Action");
+    assert_eq!(h.focused_part(), "Action");
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Your profile has been verified.");
+    assert_eq!(h.focused_part(), "Your profile has been verified.");
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(1)]);
     assert!(!tab(&mut h));

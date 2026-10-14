@@ -8,8 +8,9 @@ use crate::style::{
     ControlKind, ControlSize, Orientation, PaintContext, Slot, StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, MotionTokens, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, MotionTokens, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    Size, WheelUnit,
 };
 
 /// How long the carousel waits after the last wheel event before it snaps
@@ -369,6 +370,28 @@ impl Carousel {
         }
     }
 
+    /// The rectangle of slide `index` at the scroll `position`, with
+    /// `extent` along the orientation.
+    fn slide_rect(&self, index: usize, position: f64, extent: f64) -> Rect {
+        let viewport = self.viewport;
+        let offset = (index as f64 - position) * self.step;
+        if self.horizontal() {
+            let x = if self.rtl {
+                viewport.max_x() - offset - extent
+            } else {
+                viewport.origin.x + offset
+            };
+            Rect::from_xywh(x, viewport.origin.y, extent, viewport.size.height)
+        } else {
+            Rect::from_xywh(
+                viewport.origin.x,
+                viewport.origin.y + offset,
+                viewport.size.width,
+                extent,
+            )
+        }
+    }
+
     fn paint_slides(&self, cx: &mut PaintContext<'_>) {
         let item = cx.style(Self::query(Slot::Item));
         let surface = cx.style(StyleQuery::new(ControlKind::Card, Slot::Root));
@@ -382,22 +405,7 @@ impl Carousel {
         let end = (position + self.per_view as f64).ceil() as usize;
         let shown = first..end.min(self.items.len());
         for index in shown {
-            let offset = (index as f64 - position) * self.step;
-            let rect = if self.horizontal() {
-                let x = if self.rtl {
-                    viewport.max_x() - offset - extent
-                } else {
-                    viewport.origin.x + offset
-                };
-                Rect::from_xywh(x, viewport.origin.y, extent, viewport.size.height)
-            } else {
-                Rect::from_xywh(
-                    viewport.origin.x,
-                    viewport.origin.y + offset,
-                    viewport.size.width,
-                    extent,
-                )
-            };
+            let rect = self.slide_rect(index, position, extent);
             let label = &self.items[index];
             cx.slot(rect, &surface, |cx, inner| {
                 cx.label(inner, label, &title, TextAlign::Center);
@@ -614,9 +622,39 @@ impl CustomControl for Carousel {
         }
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
         node.value = self.items.get(self.current).cloned();
-        node.description = self.label(self.focus).to_string();
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Group` part for each slide in view, with its position ("2 of 5")
+    /// as the description, and a `Button` part for each button. The
+    /// focused button is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let count = self.items.len().to_string();
+        let end = (self.current + self.per_view).min(self.items.len());
+        for index in self.current..end {
+            let rect = self.slide_rect(index, self.current as f64, self.step);
+            let part = parts.push(None, SemanticRole::Group, &self.items[index], rect);
+            let position = (index + 1).to_string();
+            let args = [("index", position.as_str()), ("count", count.as_str())];
+            part.node.description = strings.message("choscorui.carousel.slide", &args);
+            part.item(index);
+        }
+        for button in [Button::Previous, Button::Next] {
+            let rect = self.buttons[button as usize];
+            let enabled = self.can(button);
+            hosted::pressable(
+                parts,
+                None,
+                SemanticRole::Button,
+                self.label(button),
+                rect,
+                enabled,
+            );
+            if button == self.focus {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

@@ -15,8 +15,8 @@ use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
     AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
-    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticNode, SemanticRole,
-    SemanticState, Size,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticNode, SemanticParts,
+    SemanticRole, SemanticState, Size,
 };
 use std::time::Duration;
 
@@ -1347,6 +1347,36 @@ impl CustomControl for HostedToolbar {
             node.state.expanded = Some(self.menu.is_open());
         }
         node
+    }
+
+    /// A `Button` part for each placed command, and a `PopUpButton` part
+    /// for the chevron with the open overflow menu under it. The item with
+    /// the roving focus is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let toolbar = &self.toolbar;
+        for (index, rect) in &self.layout.items {
+            let ToolbarItemKind::Command { command, label } = &toolbar.items[*index].kind else {
+                continue;
+            };
+            let state = self.commands.state(*command).unwrap_or_default();
+            let role = SemanticRole::Button;
+            let part = hosted::pressable(parts, None, role, label, *rect, state.enabled);
+            part.node.state.checked = state.checked.then_some(true);
+            if toolbar.focused == Some(*index) && !toolbar.chevron {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
+        let Some(rect) = self.layout.overflow_button else {
+            return;
+        };
+        let name = strings.message("choscorui.toolbar.more", &[]);
+        let chevron = hosted::pressable(parts, None, SemanticRole::PopUpButton, &name, rect, true);
+        chevron.node.state.expanded = Some(self.menu.is_open());
+        let position = parts.len() - 1;
+        if toolbar.chevron {
+            parts.set_focused(Some(position));
+        }
+        self.menu.semantic_parts(Some(position), parts);
     }
 
     fn set_enabled(&mut self, enabled: bool) {

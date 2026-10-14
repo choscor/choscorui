@@ -9,8 +9,9 @@ use crate::style::{
     StyleQuery, TextAlign, VisualState,
 };
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform, WheelUnit,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    Size, Transform, WheelUnit,
 };
 
 /// The share of a drawer's size that a drag must pass to dismiss it.
@@ -207,13 +208,6 @@ impl Dialog {
             return Some(index);
         }
         (self.has_close() && self.close.contains(point)).then_some(self.buttons.buttons.len())
-    }
-
-    fn part_label(&self, part: usize) -> Option<&str> {
-        match self.buttons.buttons.get(part) {
-            Some(button) => Some(&button.label),
-            None => self.close_label.as_deref().filter(|_| self.has_close()),
-        }
     }
 
     /// The default button: the last button with the `Default` look.
@@ -733,9 +727,24 @@ impl CustomControl for Dialog {
         }
         let mut node = hosted::node(SemanticRole::Dialog, &self.text.title, actions);
         node.description = self.text.description.clone();
-        node.value = self.part_label(self.focus).map(str::to_string);
         node.state.modal = true;
         node
+    }
+
+    /// While open, the buttons and the close button are parts, and the
+    /// focused one has the focus.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        if !self.reveal.open {
+            return;
+        }
+        self.buttons
+            .semantic_parts(Some(self.focus), true, None, parts);
+        if let Some(label) = self.close_label.as_deref().filter(|_| self.has_close()) {
+            hosted::pressable(parts, None, SemanticRole::Button, label, self.close, true);
+            if self.focus == self.buttons.buttons.len() {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

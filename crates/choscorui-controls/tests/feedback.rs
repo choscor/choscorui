@@ -71,7 +71,12 @@ fn alert_shows_its_text_and_tabs_through_its_actions() {
     assert_eq!(node.role, SemanticRole::Group);
     assert_eq!(node.value.as_deref(), Some("Check your card details."));
     h.focus();
-    assert_eq!(h.semantics().description, "Retry");
+    assert_eq!(h.focused_part(), "Retry");
+    assert_eq!(
+        h.semantics().description,
+        "Error",
+        "the variant is destructive"
+    );
     assert!(tab(&mut h));
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(1)]);

@@ -34,10 +34,13 @@ fn arrow_keys_and_buttons_move_one_slide() {
     assert_eq!(h.measure().height, 320.0);
     assert_eq!(texts(&h.paint()), ["1"]);
     h.focus();
+    assert_eq!(h.focused_part(), "Next slide", "Previous is disabled");
+    let parts = h.parts();
+    let slide = &parts.parts()[0];
     assert_eq!(
-        h.semantics().description,
-        "Next slide",
-        "Previous is disabled"
+        (slide.node.name.as_str(), slide.node.description.as_str()),
+        ("1", "1 of 5"),
+        "the slide in view says where it is"
     );
     h.key(Key::ArrowLeft);
     assert!(h.messages().is_empty(), "the first slide stops");
@@ -63,7 +66,7 @@ fn arrow_keys_and_buttons_move_one_slide() {
         moved
     };
     assert!(tab_back(&mut h));
-    assert_eq!(h.semantics().description, "Previous slide");
+    assert_eq!(h.focused_part(), "Previous slide");
     assert!(!tab_back(&mut h), "Shift+Tab leaves the carousel");
     let bounds = h.bounds();
     h.click(Point::new(bounds.origin.x + 16.0, bounds.center().y));

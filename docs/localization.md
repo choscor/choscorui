@@ -135,6 +135,9 @@ its text with `Condition::message`.
 | `choscorui.font.fallback` | `font` | Not installed; using {font} |
 | `choscorui.color.channels` | `red`, `green`, `blue`, `opacity` | Red {red}, Green {green}, Blue {blue}, Opacity {opacity}% |
 | `choscorui.today` | | today (the description of the today cell of a calendar) |
+| `choscorui.alert.destructive` | | Error (the description of a destructive alert) |
+| `choscorui.toolbar.more` | | More items (the name of the overflow chevron of a toolbar) |
+| `choscorui.carousel.slide` | `index`, `count` | {index} of {count} (the position of a carousel slide) |
 | `choscorui.month.previous` | | Previous month |
 | `choscorui.month.next` | | Next month |
 | `choscorui.zoom` | `percent` | Zoom {percent}% |

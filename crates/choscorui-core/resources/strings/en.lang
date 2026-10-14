@@ -57,6 +57,9 @@ choscorui.month.previous = Previous month
 choscorui.month.next = Next month
 choscorui.date_picker.count[one] = {count} date
 choscorui.date_picker.count[other] = {count} dates
+choscorui.alert.destructive = Error
+choscorui.toolbar.more = More items
+choscorui.carousel.slide = {index} of {count}
 
 # Conditions of the backend capabilities.
 choscorui.condition.app_bundle = Needs an app bundle with a bundle identifier

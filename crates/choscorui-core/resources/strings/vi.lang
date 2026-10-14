@@ -55,6 +55,9 @@ choscorui.today = hôm nay
 choscorui.month.previous = Tháng trước
 choscorui.month.next = Tháng sau
 choscorui.date_picker.count[other] = {count} ngày
+choscorui.alert.destructive = Lỗi
+choscorui.toolbar.more = Thêm mục
+choscorui.carousel.slide = {index} trên {count}
 
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói

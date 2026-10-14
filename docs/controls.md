@@ -1882,8 +1882,9 @@ Shift+Tab at the grid. Tab and Shift+Tab leave the calendar at the ends.
 A hosted `Calendar` publishes the month buttons as `Button` parts with
 the `choscorui.month.previous` and `choscorui.month.next` names. It also
 publishes the caption dropdowns, and a `Row` part for each week with a
-`Cell` part for each day. The today cell has the `choscorui.today` description. The focused
-part has the focus. In the grid, the cursor day has it.
+`Cell` part for each day. The name of a week is its first and last day.
+The today cell has the `choscorui.today` description. The focused part
+has the focus. In the grid, the cursor day has it.
 
 - On a focused dropdown, Enter, Space, ArrowDown, or ArrowUp opens its list.
   A press on a trigger focuses it and opens or closes its list.
@@ -2423,6 +2424,7 @@ behavior.
 | --- | --- |
 | Role | `Dialog` (AXGroup) |
 | Name / value | title / -; the message and the detail are the description |
+| Parts | a `Button` part for each button of the hosted alert; the focused button is the focused part |
 | State | modal while the hosted alert is open |
 | Actions | `Dismiss` |
 
@@ -2608,10 +2610,14 @@ through the `Text` value in both directions. Accept runs `on_activate`.
 | --- | --- |
 | Role | `Toolbar` (AXToolbar) |
 | Name / value | name / - |
-| State | - |
+| State | expanded while the overflow menu is open |
 | Actions | - |
 
-The items publish their own semantics.
+A `HostedToolbar` publishes a `Button` part for each placed command. A
+checked command is checked. The overflow chevron is a `PopUpButton` part
+with the `choscorui.toolbar.more` name. The open overflow menu is a `Menu`
+part under it. The item with the roving focus is the focused part. An
+embedded control publishes its own semantics.
 
 **As a view.** `Toolbar::new(name, area, items)` mounts a `HostedToolbar` on
 the `area` edge. A command runs `on_command`. `HostedToolbar::move_to` in
@@ -3566,8 +3572,9 @@ is disabled. `set_value` returns false.
 | Field | `Dialog::semantics` closed | `Dialog::semantics` open |
 | --- | --- | --- |
 | Role | `Button` (AXButton) | `Dialog` (AXGroup) |
-| Name / value | trigger text / - | title / the focused part's label |
+| Name / value | trigger text / - | title / - |
 | Description | - | the description |
+| Parts | - | a `Button` part for each button and the close button; the focused button is the focused part |
 | State | expanded false, disabled | modal (`accessibilityModal`) |
 | Actions | `Activate` and `Focus` while enabled | `Activate` (the focused part), `Dismiss`, and `Focus` |
 
@@ -3878,7 +3885,7 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | title / description and content text |
-| Description | the label of the focused button |
+| Parts | a `Button` part for each button; the focused button is the focused part |
 | State | disabled |
 | Actions | `Activate` and `Focus` with buttons while enabled |
 
@@ -3977,7 +3984,7 @@ and the size with `.with(|group| group.with_count(count))` and
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / label of the first visible slide |
-| Description | the label of the focused button |
+| Parts | a `Group` part for each slide in view, with "2 of 5" (`choscorui.carousel.slide`) as the description; a `Button` part for each button, disabled at an end; the focused button is the focused part |
 | State | disabled |
 | Actions | `Focus`; `Activate`, `Increment`, and `Decrement` when a move is possible |
 
@@ -4119,7 +4126,8 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | title / description |
-| Description | the label of the focused action |
+| Description | "Error" (`choscorui.alert.destructive`) for `Destructive` |
+| Parts | a `Button` part for each action; the focused action is the focused part |
 | State | disabled |
 | Actions | `Activate` and `Focus` with actions while enabled |
 
@@ -4180,7 +4188,7 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | title / description |
-| Description | the label of the focused button |
+| Parts | a `Button` part for each button; the focused button is the focused part |
 | State | disabled |
 | Actions | `Activate` and `Focus` with buttons while enabled |
 
@@ -4234,7 +4242,7 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / the title and the description of the newest toast |
-| Description | the label of the focused button |
+| Parts | a `Group` part for each toast in view, with its action and close `Button` parts; the focused button is the focused part |
 | Actions | `Activate` and `Focus` while toasts show |
 
 [toast.rs](../crates/choscorui-controls/tests/toast.rs) pins this behavior.
@@ -4285,7 +4293,7 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | title / summary |
-| Description | the toggle label |
+| Parts | the toggle `Button` part, expanded and focused; a `StaticText` part for the summary and each shown item |
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
@@ -4323,8 +4331,8 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / titles of the open items |
-| Description | the title of the focused item |
-| State | expanded (focused item), disabled |
+| Parts | a `Button` part for each header, expanded while open, disabled for a disabled item; a `StaticText` part for each open content; the focused header is the focused part |
+| State | disabled |
 | Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while the control and the focused item are enabled |
 
 `set_value` takes `Indices` of the open items and shows them without an
@@ -4371,7 +4379,7 @@ behavior.
 | --- | --- |
 | Role | `List` (AXList) |
 | Name / value | name / the header, title, and footer of each row |
-| Description | the label of the focused stop |
+| Parts | a `ListItem` part for each row, or a `Link` part for a link row, with a `Button` part for each action; the focused stop is the focused part |
 | State | disabled |
 | Actions | `Activate` and `Focus` with stops while enabled |
 

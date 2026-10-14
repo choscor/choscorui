@@ -10,8 +10,9 @@ use crate::style::{
     ToastVariant, VisualState,
 };
 use choscorui_core::{
-    AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    Size, Transform,
 };
 
 /// The most toasts that show at once while the stack is collapsed.
@@ -781,16 +782,33 @@ impl CustomControl for Toaster {
                 .collect::<Vec<_>>()
                 .join("\n")
         });
-        node.description = match stops.get(self.focus) {
-            Some((index, Button::Action)) => self.entries[*index]
-                .toast
-                .action
-                .clone()
-                .unwrap_or_default(),
-            Some((_, Button::Close)) => self.close_label.clone(),
-            None => String::new(),
-        };
         node
+    }
+
+    /// A `Group` part for each toast in view, with its action and close
+    /// buttons. The focused stop is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let mut group = None;
+        for (stop, (index, button)) in self.stops().into_iter().enumerate() {
+            let entry = &self.entries[index];
+            if group.map(|(shown, _)| shown) != Some(index) {
+                let part = parts.push(None, SemanticRole::Group, &entry.toast.title, entry.rect);
+                part.node.description = entry.toast.description.clone();
+                group = Some((index, parts.len() - 1));
+            }
+            let (label, rect) = match button {
+                Button::Action => (
+                    entry.toast.action.as_deref().unwrap_or_default(),
+                    entry.action,
+                ),
+                Button::Close => (self.close_label.as_str(), entry.close),
+            };
+            let parent = group.map(|(_, position)| position);
+            hosted::pressable(parts, parent, SemanticRole::Button, label, rect, true);
+            if stop == self.focus {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

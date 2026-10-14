@@ -10,7 +10,8 @@ use crate::style::{
     ButtonVariant, ControlKind, EmptyMediaVariant, PaintContext, Slot, StyleQuery, TextAlign,
 };
 use choscorui_core::{
-    EventReply, Icon, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventReply, Icon, Localizer, Measured, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, Size,
 };
 
 /// What the empty state shows above its title.
@@ -239,14 +240,13 @@ impl CustomControl for Empty {
         };
         let mut node = hosted::node(SemanticRole::Group, &self.title, actions);
         node.value = (!self.description.is_empty()).then(|| self.description.clone());
-        node.description = self
-            .buttons
-            .buttons
-            .get(self.stops.focus)
-            .map(|button| button.label.clone())
-            .unwrap_or_default();
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.buttons
+            .semantic_parts(Some(self.stops.focus), self.enabled, None, parts);
     }
 
     fn perform(
