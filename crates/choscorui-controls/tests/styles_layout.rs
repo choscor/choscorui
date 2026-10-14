@@ -481,8 +481,19 @@ fn text_editor_matches_its_reference_table() {
             (bg(&caret), caret.min_width),
             (c(ColorRole::Foreground), 1.0)
         );
-        let selection = get(&tokens, query(Slot::Range, VisualState::NONE));
+        let selection = get(&tokens, query(Slot::Range, VisualState::FOCUSED));
         assert_eq!(bg(&selection), c(ColorRole::Primary).with_alpha(0.25));
+        // Without focus, the selection shows in the inactive color.
+        let inactive = get(&tokens, query(Slot::Range, VisualState::NONE));
+        assert_eq!(bg(&inactive), c(ColorRole::Foreground).with_alpha(0.1));
+        let textarea = |state| {
+            get(
+                &tokens,
+                StyleQuery::new(ControlKind::Textarea, Slot::Range).state(state),
+            )
+        };
+        assert_eq!(bg(&textarea(VisualState::FOCUSED)), bg(&selection));
+        assert_eq!(bg(&textarea(VisualState::NONE)), bg(&inactive));
         let code = get(&tokens, query(Slot::Text, VisualState::NONE));
         assert_eq!(code.text, tokens.mono(TextSize::Sm, FontWeight::NORMAL));
     }

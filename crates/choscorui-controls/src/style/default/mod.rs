@@ -169,6 +169,20 @@ pub(super) fn disabled(style: &mut ResolvedStyle, cx: &Cx) {
     }
 }
 
+/// The selection of a multi-line text: `primary` at 25% while focused,
+/// and an unemphasized `foreground` at 10% while another control has
+/// focus, as macOS text views show it.
+pub(super) fn text_selection(cx: &Cx) -> ResolvedStyle {
+    let mut style = cx.base();
+    let (role, alpha) = if cx.s().focused() {
+        (ColorRole::Primary, 0.25)
+    } else {
+        (ColorRole::Foreground, 0.1)
+    };
+    style.background = cx.a(role, alpha).into();
+    style
+}
+
 /// Focus, invalid, and disabled of a text or select field.
 pub(super) fn field_states(style: &mut ResolvedStyle, cx: &Cx) {
     focus(style, cx);

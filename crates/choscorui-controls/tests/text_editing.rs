@@ -7,8 +7,11 @@ use choscorui_controls::{
     ComboItem, Combobox, ControlMessage, ControlValue, DecimalSpinBox, EditCommand, Input,
     InputOtp, IntegerRange, ShortcutModifiers, SpinBox, TextEditor, Textarea,
 };
-use choscorui_core::{CompositionEvent, DisplayCommand, DisplayList, ItemKey, Key, Locale, Point};
-use hosted::{FakeClipboard, Harness};
+use choscorui_core::{
+    ColorRole, CompositionEvent, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, Locale,
+    Point,
+};
+use hosted::{FakeClipboard, Harness, paints};
 
 const COMMAND: ShortcutModifiers = ShortcutModifiers {
     shift: false,
@@ -343,4 +346,32 @@ fn a_control_without_composition_gets_the_commit_as_text() {
     assert!(h.host.dispatch_composition(&mut h.tree, commit));
     assert_eq!(value(&h), "12");
     assert!(h.host.text_input(&h.tree).is_none());
+}
+
+/// Selects all the text of `h`, then moves focus away. The selection
+/// shows in `primary` at 25% while focused, and in the inactive color
+/// after that.
+fn assert_inactive_selection(mut h: Harness) {
+    let tokens = DesignTokens::light();
+    let active = tokens.color(ColorRole::Primary).with_alpha(0.25);
+    let inactive = tokens.color(ColorRole::Foreground).with_alpha(0.1);
+    h.place(hosted::rect(10.0, 10.0, 240.0, 120.0));
+    h.focus();
+    assert!(h.host.dispatch_edit(&mut h.tree, EditCommand::SelectAll));
+    // Colors ease between states, so each check waits for the end.
+    h.paint();
+    h.set_time(1.0);
+    assert!(paints(&h.paint(), active));
+    h.host.move_focus(&mut h.tree, None);
+    h.paint();
+    h.set_time(2.0);
+    let list = h.paint();
+    assert!(!paints(&list, active));
+    assert!(paints(&list, inactive), "the selection stays visible");
+}
+
+#[test]
+fn an_unfocused_text_editor_and_textarea_keep_an_inactive_selection() {
+    assert_inactive_selection(Harness::new(TextEditor::new("Doc", "Some notes")));
+    assert_inactive_selection(Harness::new(Textarea::new("Notes", "Some notes")));
 }

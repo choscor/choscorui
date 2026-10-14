@@ -4980,7 +4980,8 @@ text "Aa" at 34,32.9 system-ui 14 w500 t0 #e7000bff
 = rest: hovered pressed focused focus-visible checked indeterminate selected open highlighted
 ## textarea
 sizes default
-slot root: root track range thumb indicator label content header title description footer action trigger value item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot root: root track thumb indicator label content header title description footer action trigger value item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot range: range
 slot icon: icon
 slot placeholder: placeholder
 ### textarea default default root
@@ -5009,6 +5010,20 @@ stroke 10.5,10.5 119x63 r7.5 w1 #e7000bff
 stroke-path M33.33333333333333,38 L26,45.33333333333333 L22.666666666666668,42 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 36,46.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused checked indeterminate selected open highlighted
+### textarea default default range
+# rest
+fill-rect 10,10 120x36 #0a0a0a1a
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focused
+fill-rect 10,10 120x36 #17171740
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+# focus-visible
+fill-rect 10,10 120x36 #17171740
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed disabled invalid checked indeterminate selected open highlighted
 ### textarea default default icon
 # rest
 stroke-path M33.33333333333333,38 L26,45.33333333333333 L22.666666666666668,42 #737373ff w1.3333333333333333 Round Round dash[]

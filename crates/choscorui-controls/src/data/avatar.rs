@@ -91,12 +91,14 @@ impl Avatar {
         if let Some(icon) = self.badge {
             let style = cx.style(Self::query(self.size, Slot::Badge));
             let side = style.min_width;
+            // The ring stays inside the avatar, where the host clip keeps it.
+            let room = style.ring.map_or(0.0, |ring| ring.width.max(0.0));
             let x = if cx.rtl {
-                rect.origin.x
+                rect.origin.x + room
             } else {
-                rect.max_x() - side
+                rect.max_x() - side - room
             };
-            let badge = Rect::from_xywh(x, rect.max_y() - side, side, side);
+            let badge = Rect::from_xywh(x, rect.max_y() - side - room, side, side);
             cx.slot(badge, &style, |cx, inner| {
                 if let Some(icon) = icon.filter(|_| style.icon_size > 0.0) {
                     cx.icon(inner, icon, &style);
@@ -176,6 +178,12 @@ impl AvatarGroup {
     fn circles(&self) -> usize {
         self.avatars.len() + usize::from(self.count.is_some())
     }
+
+    /// The room around the circles for the ring that each one has, so
+    /// that the host clip keeps the whole ring.
+    fn ring_room(root: &ResolvedStyle) -> f64 {
+        root.ring.map_or(0.0, |ring| ring.width.max(0.0))
+    }
 }
 
 impl CustomControl for AvatarGroup {
@@ -183,8 +191,9 @@ impl CustomControl for AvatarGroup {
         let root = cx.style(Avatar::query(self.size, Slot::Root));
         let count = self.circles();
         let width = root.min_width * count as f64 + root.gap * count.saturating_sub(1) as f64;
+        let room = 2.0 * Self::ring_room(&root);
         Measured {
-            size: Size::new(width.max(0.0), root.min_height),
+            size: Size::new(width.max(0.0) + room, root.min_height + room),
             baseline: None,
         }
     }
@@ -196,7 +205,7 @@ impl CustomControl for AvatarGroup {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let root = cx.style(Avatar::query(self.size, Slot::Root));
         let side = root.min_width;
-        let bounds = cx.bounds;
+        let bounds = cx.bounds.inset(Self::ring_room(&root));
         let step = side + root.gap;
         let circle = |index: usize, rtl: bool| {
             let offset = index as f64 * step;

@@ -496,25 +496,25 @@ FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { 
 DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
 # avatar-group Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 56.0, height: 32.0 } }
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } }
 semantics SemanticNode { role: Group, name: "Team", description: "", value: Some("Ana Lee, Bao Tran"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 56.0, height: 32.0 } })
-StrokeRoundedRect { rect: Rect { origin: Point { x: 9.0, y: 9.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 33.0, y: 9.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 34.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 42.3, y: 30.9 }, text: "BT", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } })
+StrokeRoundedRect { rect: Rect { origin: Point { x: 11.0, y: 11.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
+FillRoundedRect { rect: Rect { origin: Point { x: 12.0, y: 12.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 20.299999999999997, y: 32.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 35.0, y: 11.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
+FillRoundedRect { rect: Rect { origin: Point { x: 36.0, y: 12.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 44.3, y: 32.9 }, text: "BT", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
 # avatar-group Rtl
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 56.0, height: 32.0 } }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 56.0, height: 32.0 } })
-StrokeRoundedRect { rect: Rect { origin: Point { x: 33.0, y: 9.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 34.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 42.3, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 9.0, y: 9.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
-DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "BT", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } })
+StrokeRoundedRect { rect: Rect { origin: Point { x: 35.0, y: 11.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
+FillRoundedRect { rect: Rect { origin: Point { x: 36.0, y: 12.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 44.3, y: 32.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 11.0, y: 11.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
+FillRoundedRect { rect: Rect { origin: Point { x: 12.0, y: 12.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
+DrawText { baseline: Point { x: 20.299999999999997, y: 32.9 }, text: "BT", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
 # carousel Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 416.0, height: 320.0 } }

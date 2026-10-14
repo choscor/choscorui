@@ -2,7 +2,7 @@
 
 use super::{
     Cx, choice_invalid, disabled, field_box, field_invalid, field_states, focus, group_label,
-    list_item, muted_text, rule, surface, text,
+    list_item, muted_text, rule, surface, text, text_selection,
 };
 use crate::style::{
     AddonAlign, ButtonVariant, ControlKind, ControlSize, Corners, Cursor, Edges, FieldOrientation,
@@ -251,6 +251,9 @@ fn input(cx: &Cx) -> ResolvedStyle {
 }
 
 fn textarea(cx: &Cx) -> ResolvedStyle {
+    if cx.q.slot == Slot::Range {
+        return text_selection(cx);
+    }
     let mut style = input(cx);
     if cx.q.slot != Slot::Placeholder {
         style.padding = Edges::axes(cx.sp(2.5), cx.sp(2.0));

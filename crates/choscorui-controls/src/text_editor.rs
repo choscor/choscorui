@@ -982,10 +982,9 @@ impl CustomControl for TextEditor {
                 }
             };
             cx.list.push_clip(inner);
-            if state.focused() {
-                for rect in self.selection_rects(layout) {
-                    fill_area(cx.list, place(rect), cx.rtl, &selection);
-                }
+            // Without focus, the selection stays in the inactive color.
+            for rect in self.selection_rects(layout) {
+                fill_area(cx.list, place(rect), cx.rtl, &selection);
             }
             let source = layout.text();
             for line in layout.lines() {

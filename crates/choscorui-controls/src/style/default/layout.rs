@@ -1,7 +1,7 @@
 //! Layout: separators, resizable panels, scroll areas, collapsibles,
 //! accordions, item rows, typography, and the repainted editors.
 
-use super::{Cx, disabled, focus, muted_text, text};
+use super::{Cx, disabled, focus, muted_text, text, text_selection};
 use crate::style::{
     ControlKind, ControlSize, Corners, Cursor, Edges, ItemVariant, ResolvedStyle, Sides, Slot,
 };
@@ -306,12 +306,7 @@ fn editor(cx: &Cx) -> ResolvedStyle {
             style.min_width = 1.0;
             style
         }
-        Slot::Range => {
-            // The selection.
-            let mut style = cx.base();
-            style.background = cx.a(ColorRole::Primary, 0.25).into();
-            style
-        }
+        Slot::Range => text_selection(cx),
         Slot::Text => {
             let mut style = cx.base();
             style.text = cx.t.mono(TextSize::Sm, FontWeight::NORMAL);

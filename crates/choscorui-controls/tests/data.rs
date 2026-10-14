@@ -158,8 +158,8 @@ fn avatar_shows_the_image_or_the_fallback_and_a_badge() {
     let badges = rounded_fills(&list, tokens.color(ColorRole::Primary));
     assert_eq!(
         badges,
-        [hosted::rect(32.0, 32.0, 10.0, 10.0)],
-        "the badge sits at the bottom end"
+        [hosted::rect(30.0, 30.0, 10.0, 10.0)],
+        "the badge sits at the bottom end, its 2 pt ring inside the avatar"
     );
     let rtl = Harness::with_direction(
         Avatar::new("Ana Lee", "AL").with_badge(None),
@@ -167,7 +167,7 @@ fn avatar_shows_the_image_or_the_fallback_and_a_badge() {
     );
     assert_eq!(
         rounded_fills(&rtl.paint(), tokens.color(ColorRole::Primary)),
-        [hosted::rect(10.0, 32.0, 10.0, 10.0)]
+        [hosted::rect(12.0, 30.0, 10.0, 10.0)]
     );
 
     let image = Image::from_rgba8(1, 1, vec![255, 0, 0, 255]).unwrap();
@@ -190,12 +190,29 @@ fn avatar_groups_overlap_and_end_with_a_count() {
         ]
     };
     let mut h = Harness::new(AvatarGroup::new("Team", people()).with_count("+3"));
-    assert_eq!(h.measure().width, 4.0 * 32.0 - 3.0 * 8.0);
+    // A 2 pt ring goes around each circle, inside the bounds.
+    let size = h.measure();
+    assert_eq!(size.width, 4.0 * 32.0 - 3.0 * 8.0 + 4.0);
+    assert_eq!(size.height, 32.0 + 4.0);
+    let bounds = h.bounds();
+    let rings: Vec<_> = h
+        .paint()
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::StrokeRoundedRect { rect, width, .. } => Some(rect.inset(-width / 2.0)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rings.len(), 4, "a ring around each circle");
+    for outer in rings {
+        assert!(bounds.contains_rect(outer), "{outer:?} stays in {bounds:?}");
+    }
     assert_eq!(texts(&h.paint()), ["AL", "BT", "CV", "+3"]);
     assert_eq!(
         h.semantics().value.as_deref(),
         Some("Ana Lee, Bao Tran, Chi Vo, +3")
     );
     let mut small = Harness::new(AvatarGroup::new("Team", people()).with_size(ControlSize::Sm));
-    assert_eq!(small.measure().width, 3.0 * 24.0 - 2.0 * 8.0);
+    assert_eq!(small.measure().width, 3.0 * 24.0 - 2.0 * 8.0 + 4.0);
 }

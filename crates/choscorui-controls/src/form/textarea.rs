@@ -7,7 +7,7 @@ use crate::custom::{
 };
 use crate::style::{
     ControlKind, EstimatedText, PaintContext, Slot, StyleQuery, TextAlign, TextMeasure,
-    VisualState, content_rect,
+    VisualState, content_rect, fill_area,
 };
 use crate::text_editor::{
     TextEditor, TextEditorChange, TextEditorInput, layout_point, lines_height, reveal_caret,
@@ -15,8 +15,8 @@ use crate::text_editor::{
 };
 use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
-    ColorRole, DesignTokens, EventPhase, EventReply, FontWeight, Measured, Point, Rect,
-    SemanticAction, SemanticNode, Size, TextInputInfo, TextLayout, TextSize, Tree, TypeSpec,
+    DesignTokens, EventPhase, EventReply, FontWeight, Measured, Point, Rect, SemanticAction,
+    SemanticNode, Size, TextInputInfo, TextLayout, TextSize, Tree, TypeSpec,
 };
 use std::cell::{Cell, RefCell};
 
@@ -248,12 +248,11 @@ impl CustomControl for Textarea {
                     rect
                 }
             };
-            if focused {
-                let color = cx.tokens.color(ColorRole::Primary).with_alpha(0.25);
-                for rect in self.editor.selection_rects(&layout) {
-                    let rect = mirror(rect.translate(inner.origin.x, inner.origin.y));
-                    cx.list.fill_rect(rect, color);
-                }
+            // Without focus, the selection stays in the inactive color.
+            let selection = cx.style(Self::query(Slot::Range, state)).background;
+            for rect in self.editor.selection_rects(&layout) {
+                let rect = mirror(rect.translate(inner.origin.x, inner.origin.y));
+                fill_area(cx.list, rect, false, &selection);
             }
             let text = layout.text().to_string();
             for line in layout.lines() {

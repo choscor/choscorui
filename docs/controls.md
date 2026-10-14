@@ -1106,9 +1106,11 @@ behavior.
 - **Read-only.** Typing, marked text, Enter, Tab, Backspace, Delete, `Cut`,
   `Undo`, `Redo`, and semantic `SetValue` do nothing. Navigation works.
 - Undo and redo skip marked text. Typed `\r\n` becomes `\n`.
-- **Look.** `paint` uses the `TextEditor` recipe: the textarea box, a
-  `primary` selection at 25%, and a 1 pt caret while focused. The layout
-  starts at `content_origin`, inside the padding.
+- **Look.** `paint` uses the `TextEditor` recipe: the textarea box, the
+  selection, and a 1 pt caret while focused. The selection is `primary`
+  at 25% while focused. Without focus, it stays visible in `foreground`
+  at 10%, as in macOS text views. The layout starts at `content_origin`,
+  inside the padding.
 - **In a control host.** The editor lays out its text with the host text
   measurement and paints each line. Right-to-left layouts mirror the
   lines. Tab moves the focus, unless `set_tab_inserts(true)` is set.
@@ -1129,7 +1131,7 @@ behavior.
 | States | `Root` | focus, invalid, and disabled as `TextField` |
 | Placeholder | `Placeholder` | sm `muted-foreground` text |
 | Caret | `Indicator` | 1 pt `foreground` line |
-| Selection | `Range` | `primary` at 25% |
+| Selection | `Range` | `primary` at 25% while focused; `foreground` at 10% without focus |
 | Code text | `Text` | sm mono text |
 
 | Field | `TextEditor::semantics` |
@@ -3256,6 +3258,7 @@ sets the text that shows while the field is empty.
 | --- | --- |
 | Box | `input` border, extra-small shadow, `md` radius, 64 pt minimum height |
 | Padding | 10 pt sides, 8 pt top and bottom |
+| Selection | `Range`: `primary` at 25% while focused; `foreground` at 10% without focus |
 
 | Field | `Textarea::semantics` |
 | --- | --- |
@@ -3983,10 +3986,12 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
   text that is too wide gets a smaller type size to fit, and is clipped.
   It does not truncate.
 - `with_badge(icon)` adds a badge at the bottom end. The `Sm` size shows
-  no badge icon.
+  no badge icon. The badge ring stays inside the avatar bounds.
 - An avatar group overlaps its avatars in reading order. Each avatar has a
   2 pt ring in the background color. `with_count` ends the group with a
   circle that shows the count of people not shown.
+- The group is 2 pt larger than its circles on each side, so that the
+  rings stay inside its bounds.
 - Avatars take no focus.
 
 | Part | Slot | Value |
