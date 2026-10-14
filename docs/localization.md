@@ -131,7 +131,7 @@ its text with `Condition::message`.
 | `choscorui.dial` | | Dial |
 | `choscorui.modal` | | Modal (the description of a modal dialog) |
 | `choscorui.stack.page` | `page`, `count` | Page {page} of {count} (the value of a stack without page titles) |
-| `choscorui.key.command`, `.shift`, `.option`, `.control`, `.delete`, `.forward_delete`, `.return`, `.escape`, `.tab`, `.caps_lock`, `.space`, `.left`, `.right`, `.up`, `.down`, `.page_up`, `.page_down`, `.eject` | | Command, Shift, and the other key names (the names of the key symbols of a Kbd) |
+| `choscorui.key.command`, `.shift`, `.option`, `.control`, `.delete`, `.forward_delete`, `.return`, `.escape`, `.tab`, `.caps_lock`, `.space`, `.left`, `.right`, `.up`, `.down`, `.page_up`, `.page_down`, `.eject`, `.menu` | | Command, Shift, and the other key names (the names of the key symbols of a Kbd, and the Space and Menu keys of a KeySequenceEdit) |
 | `choscorui.status` | | Status (the name of a StatusBar) |
 | `choscorui.font` | | Font (the name of a FontChooser) |
 | `choscorui.font.fallback` | `font` | Not installed; using {font} |
@@ -151,12 +151,17 @@ its text with `Condition::message`.
 | `choscorui.zoom` | `percent` | Zoom {percent}% |
 | `choscorui.overflow` | | Value too large to display |
 | `choscorui.shortcut.recording` | | Recording shortcut; press Escape to cancel |
+| `choscorui.shortcut.prompt` | | Type a shortcut (the prompt of a KeySequenceEdit that records) |
 | `choscorui.column.ascending` | | ascending |
 | `choscorui.column.descending` | | descending |
 | `choscorui.column.width` | `width` | {width} points wide |
 | `choscorui.dock.left`, `.right`, `.top`, `.bottom` | | Left panel size, and so on |
 | `choscorui.dock.floating` | | Floating |
-| `choscorui.field.day`, `.month`, `.year`, `.hour`, `.minute`, `.second` | | Day field, and so on |
+| `choscorui.field.day`, `.month`, `.year`, `.hour`, `.minute`, `.second`, `.meridiem` | | Day field, and so on, and AM/PM field |
+| `choscorui.cancel` | | Cancel (the cancel button of a dialog) |
+| `choscorui.combobox.no_results` | | No results (the empty list of a combobox) |
+| `choscorui.list.no_results` | | No results (an item view with no matching row) |
+| `choscorui.date_picker.count` | `count` (plural) | {count} dates (the trigger of a date picker with more than one date) |
 | `choscorui.condition.app_bundle` | | Needs an app bundle with a bundle identifier |
 
 ## Plural forms

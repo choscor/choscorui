@@ -46,6 +46,7 @@ choscorui.key.down = Down Arrow
 choscorui.key.page_up = Page Up
 choscorui.key.page_down = Page Down
 choscorui.key.eject = Eject
+choscorui.key.menu = Menu
 choscorui.status = Status
 choscorui.font = Font
 choscorui.font.fallback = Not installed; using {font}

@@ -415,3 +415,43 @@ fn application_messages_override_builtin_ones() {
     );
     assert_eq!(localizer.message("no.such.message", &[]), "no.such.message");
 }
+
+/// The ids of a documentation table row: the first id in full, and the
+/// ids that start with `.` after the prefix of the first id.
+fn documented_ids(row: &str) -> Vec<String> {
+    let spans: Vec<&str> = row.split('`').skip(1).step_by(2).collect();
+    let Some(first) = spans.first() else {
+        return Vec::new();
+    };
+    let prefix = first.rsplit_once('.').map_or("", |(prefix, _)| prefix);
+    spans
+        .iter()
+        .map(|span| match span.strip_prefix('.') {
+            Some(last) => format!("{prefix}.{last}"),
+            None => (*span).to_owned(),
+        })
+        .collect()
+}
+
+#[test]
+fn each_builtin_message_id_is_documented() {
+    let english = include_str!("../resources/strings/en.lang");
+    let guide = include_str!("../../../docs/localization.md");
+    let documented: Vec<String> = guide
+        .lines()
+        .filter(|line| line.starts_with("| `choscorui."))
+        .flat_map(|line| documented_ids(line.split(" | ").next().unwrap_or_default()))
+        .collect();
+    let missing: Vec<&str> = english
+        .lines()
+        .filter_map(|line| line.split_once(" = ").map(|(id, _)| id.trim()))
+        .filter(|id| id.starts_with("choscorui."))
+        // A plural message has one line for each category.
+        .map(|id| id.split_once('[').map_or(id, |(id, _)| id))
+        .filter(|id| !documented.iter().any(|documented| documented == id))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "add these ids to the tables in docs/localization.md: {missing:?}"
+    );
+}

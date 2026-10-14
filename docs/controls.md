@@ -876,8 +876,12 @@ divides by 10. Each change saturates at the `i64` bounds and emits
 - `finish` with nothing recorded cancels.
 - A `Key::Other` key does nothing. This includes a press of a modifier key
   only.
-- A function key shows as `F1` to `F24`, and the Menu key shows as `Menu`.
-  `set_value` reads these names.
+- A function key shows as `F1` to `F24`. The field and its semantic value
+  show the Space and Menu keys with the names of the window language, from
+  `choscorui.key.space` and `choscorui.key.menu`.
+- `text` and the `Changed` report use the canonical names, such as `Space`
+  and `Menu`. `set_value` reads the canonical names and the names of each
+  language in the built-in catalog.
 - **Look.** `paint` draws the `Input` box with one `Kbd` key cap per
   chord. While it records, the chords so far show. A recording with no
   chord shows the `choscorui.shortcut.prompt` message ("Type a shortcut").

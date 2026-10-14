@@ -45,6 +45,7 @@ choscorui.key.down = Mũi tên xuống
 choscorui.key.page_up = Lên trang
 choscorui.key.page_down = Xuống trang
 choscorui.key.eject = Đẩy đĩa
+choscorui.key.menu = Phím menu
 choscorui.status = Trạng thái
 choscorui.font = Phông chữ
 choscorui.font.fallback = Chưa cài đặt; đang dùng {font}

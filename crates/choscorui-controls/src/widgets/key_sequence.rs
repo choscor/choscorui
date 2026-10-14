@@ -7,8 +7,9 @@ use crate::form::input::default_width;
 use crate::style::{Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    Catalog, EventPhase, EventReply, Icon, Key, KeyEvent, Locale, Localizer, Measured,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
+    Size,
 };
 
 /// The pause after a chord, in seconds, that commits a shorter sequence
@@ -155,6 +156,16 @@ impl KeySequenceEdit {
             .collect::<Vec<_>>()
             .join(", ")
     }
+
+    /// The text of the sequence in the language of `strings`: the key
+    /// names, such as Space, are localized.
+    fn localized_text(&self, strings: &Localizer) -> String {
+        self.committed
+            .iter()
+            .map(|shortcut| compose_text(*shortcut, Some(strings)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
     /// The semantics, with the recording hint in the language of
     /// `strings`.
     pub fn semantics(&self, name: &str, strings: &Localizer) -> SemanticNode {
@@ -166,7 +177,7 @@ impl KeySequenceEdit {
             } else {
                 String::new()
             },
-            value: Some(self.text()),
+            value: Some(self.localized_text(strings)),
             state: SemanticState {
                 read_only: true,
                 ..SemanticState::default()
@@ -207,7 +218,7 @@ impl KeySequenceEdit {
             let height = cap.min_height.min(inner.size.height);
             let y = inner.origin.y + (inner.size.height - height) / 2.0;
             for chord in chords {
-                let text = shortcut_text(*chord);
+                let text = compose_text(*chord, Some(cx.strings));
                 let width = Content::label(&text).size(&cap, cx.text).width;
                 let left = if cx.rtl { x - width } else { x };
                 let rect = Rect::from_xywh(left, y, width, height);
@@ -393,7 +404,8 @@ impl CustomControl for KeySequenceEdit {
     }
 
     /// Takes a sequence in the text that `text` gives, for example
-    /// `⌘K, ⇧⌘S`. An empty text clears the sequence.
+    /// `⌘K, ⇧⌘S`. A key name can also be in the language of a built-in
+    /// catalog, such as `⌘Phím cách`. An empty text clears the sequence.
     fn set_value(&mut self, value: &ControlValue) -> bool {
         let ControlValue::Text(text) = value else {
             return false;
@@ -411,7 +423,7 @@ impl CustomControl for KeySequenceEdit {
 /// The modifier glyphs in canonical order.
 const MODIFIER_GLYPHS: [char; 4] = ['⌃', '⌥', '⇧', '⌘'];
 
-/// The text of each named key.
+/// The canonical text of each named key.
 const KEY_NAMES: [(Key, &str); 15] = [
     (Key::Enter, "↩"),
     (Key::Tab, "⇥"),
@@ -430,8 +442,23 @@ const KEY_NAMES: [(Key, &str); 15] = [
     (Key::ContextMenu, "Menu"),
 ];
 
-/// macOS modifier glyphs in canonical order, then the key.
+/// The message ids of the key names that are words, not symbols. The
+/// field shows these names in the window language.
+const KEY_MESSAGES: [(Key, &str); 2] = [
+    (Key::Space, "choscorui.key.space"),
+    (Key::ContextMenu, "choscorui.key.menu"),
+];
+
+/// macOS modifier glyphs in canonical order, then the key. The key names
+/// are the canonical English names, such as `Space`, which `set_value`
+/// reads in each language.
 pub fn shortcut_text(shortcut: Shortcut) -> String {
+    compose_text(shortcut, None)
+}
+
+/// The modifier glyphs, then the key name: the localized name from
+/// `strings` when it is given, otherwise the canonical name.
+fn compose_text(shortcut: Shortcut, strings: Option<&Localizer>) -> String {
     let modifiers = shortcut.modifiers;
     let held = [
         modifiers.control,
@@ -446,13 +473,30 @@ pub fn shortcut_text(shortcut: Shortcut) -> String {
         .map(|(glyph, _)| *glyph)
         .collect();
     let named = KEY_NAMES.iter().find(|(key, _)| *key == shortcut.key);
-    match (shortcut.key, named) {
-        (Key::Character(character), _) => text.extend(character.to_uppercase()),
-        (Key::F(number), _) => text.push_str(&format!("F{number}")),
-        (_, Some((_, name))) => text.push_str(name),
-        (other, None) => text.push_str(&format!("{other:?}")),
+    let message = KEY_MESSAGES.iter().find(|(key, _)| *key == shortcut.key);
+    match (shortcut.key, named, message.zip(strings)) {
+        (Key::Character(character), _, _) => text.extend(character.to_uppercase()),
+        (Key::F(number), _, _) => text.push_str(&format!("F{number}")),
+        (_, _, Some(((_, id), strings))) => text.push_str(&strings.message(id, &[])),
+        (_, Some((_, name)), None) => text.push_str(name),
+        (other, None, None) => text.push_str(&format!("{other:?}")),
     }
     text
+}
+
+/// The key of a localized key name in a language of the built-in
+/// catalog.
+fn localized_key(name: &str) -> Option<Key> {
+    let catalog = Catalog::builtin();
+    catalog
+        .locales()
+        .filter_map(|tag| Locale::parse(tag).ok())
+        .find_map(|locale| {
+            KEY_MESSAGES.iter().find_map(|(key, id)| {
+                let text = catalog.text(&locale, id, &[]).ok()?;
+                (text == name).then_some(*key)
+            })
+        })
 }
 
 /// The chords of a sequence text such as `⌘K, ⇧⌘S`, or `None` for a
@@ -474,10 +518,14 @@ fn parse_shortcut(text: &str) -> Option<Shortcut> {
         shift: held('⇧'),
         command: held('⌘'),
     };
-    let named = KEY_NAMES.iter().find(|(_, name)| *name == key_text);
+    let named = KEY_NAMES
+        .iter()
+        .find(|(_, name)| *name == key_text)
+        .map(|(key, _)| *key)
+        .or_else(|| localized_key(key_text));
     let mut characters = key_text.chars();
     let key = match (named, characters.next(), characters.next()) {
-        (Some((key, _)), _, _) => *key,
+        (Some(key), _, _) => key,
         (None, Some('F'), Some(_)) => Key::F(key_text[1..].parse().ok().filter(|n| *n > 0)?),
         (None, Some(character), None) => Key::Character(character.to_lowercase().next()?),
         _ => return None,

@@ -402,6 +402,29 @@ fn key_sequence_edit_names_function_and_menu_keys() {
     assert_eq!(copy.sequence(), edit.sequence(), "F0 is not a key");
 }
 
+#[test]
+fn key_sequence_edit_shows_localized_key_names_and_reads_them_back() {
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    let mut edit = KeySequenceEdit::new(2);
+    edit.start();
+    edit.press(Key::Space, command);
+    edit.press(Key::ContextMenu, ShortcutModifiers::default());
+    // The value that the control reports keeps the canonical names.
+    assert_eq!(edit.text(), "⌘Space, Menu");
+    let vietnamese = Localizer::new(Locale::parse("vi").unwrap(), Catalog::new());
+    let node = edit.semantics("Phím tắt", &vietnamese);
+    assert_eq!(node.value.as_deref(), Some("⌘Phím cách, Phím menu"));
+
+    for text in ["⌘Phím cách, Phím menu", "⌘Space, Menu"] {
+        let mut copy = KeySequenceEdit::new(2);
+        assert!(copy.set_value(&ControlValue::Text(text.into())), "{text}");
+        assert_eq!(copy.sequence(), edit.sequence(), "{text}");
+    }
+}
+
 fn datetime(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> CivilDateTime {
     CivilDateTime {
         date: CivilDate::new(year, month, day).unwrap(),
