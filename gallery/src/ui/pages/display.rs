@@ -64,8 +64,15 @@ pub fn badge(_: &PageCx) -> AnyView {
         ("badge.ghost", BadgeVariant::Ghost),
         ("badge.link", BadgeVariant::Link),
     ];
+    // The ghost and link looks are for links, so they demo as links.
     let badge = |key: &'static str, variant: BadgeVariant| {
-        Badge::new(t!(key)).with(move |badge| badge.with_variant(variant))
+        Badge::new(t!(key)).with(move |badge| {
+            let badge = badge.with_variant(variant);
+            match variant {
+                BadgeVariant::Ghost | BadgeVariant::Link => badge.as_link(),
+                _ => badge,
+            }
+        })
     };
     let iconic = |key: &'static str, variant: BadgeVariant, icon: Icon| {
         badge(key, variant).with(move |badge| badge.with_icon(icon))
@@ -83,7 +90,7 @@ pub fn badge(_: &PageCx) -> AnyView {
             row((
                 iconic("badge.verified", BadgeVariant::Secondary, Icon::Check),
                 iconic("badge.failed", BadgeVariant::Destructive, Icon::OctagonX),
-                iconic("badge.syncing", BadgeVariant::Outline, Icon::LoaderCircle),
+                iconic("badge.syncing", BadgeVariant::Outline, Icon::Upload),
             )),
         ),
         section(
@@ -401,6 +408,14 @@ mod tests {
         assert_eq!(role(&mut page, "Visitors by month"), SemanticRole::Image);
         assert!(page.act("Visitors by month", SemanticAction::Focus));
         assert!(press(&mut page, Key::ArrowRight));
+    }
+
+    #[test]
+    fn badge_page_shows_ghost_and_link_badges_as_links() {
+        let mut page = Harness::new("badge");
+        assert_eq!(role(&mut page, "Ghost"), SemanticRole::Link);
+        assert_eq!(role(&mut page, "Link"), SemanticRole::Link);
+        assert_eq!(role(&mut page, "Outline"), SemanticRole::StaticText);
     }
 
     #[test]
