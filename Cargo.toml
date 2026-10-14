@@ -20,7 +20,7 @@ strip = "symbols"
 opt-level = "z"
 
 [profile.release.package.choscorui-controls]
-opt-level = "s"
+opt-level = "z"
 
 # This override drops the inherited `strip`, so it sets it again.
 [profile.release.package.choscorui-gallery]
