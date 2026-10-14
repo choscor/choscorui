@@ -2,6 +2,8 @@
 # Reference machine and baselines: docs/performance.md. Each limit sits above
 # the measured p95 by a stated margin, or at a user-visible goal (a 60 Hz
 # frame is 16.7 ms; a 30 Hz frame is 33 ms), whichever is tighter.
+# Frames that move content stay inside one 120 Hz frame (8.3 ms), measured
+# to the time the frame is on the display.
 # Correctness counters must stay at zero.
 
 # Startup: process entry to first presented frame.
@@ -17,13 +19,13 @@ idle.wakeups_per_sec <= 20
 idle.footprint_mib.after <= 200
 
 # Resize between 400x300 and 1600x1000 points.
-resize.present_ms.p95 <= 33
+resize.present_ms.p95 <= 8.3
 resize.missed_configure <= 0
 resize.missed_present <= 0
 
 # 100,000-row list and 20,000-item canvas, wheel scrolling.
-scroll.present_ms.p95 <= 25
-scroll.frame_interval_ms.p95 <= 25
+scroll.present_ms.p95 <= 8.3
+scroll.frame_interval_ms.p95 <= 8.3
 scroll.peak_realized_rows <= 40
 scroll.allocations_per_frame.p95 <= 10000
 scroll.missed_present <= 0
@@ -35,12 +37,12 @@ document.caret_mismatches <= 0
 document.missed_present <= 0
 
 # Structurally distinct light/dark theme switch, 240 controls.
-theme.present_ms.p95 <= 16.7
+theme.present_ms.p95 <= 8.3
 theme.missed_present <= 0
 
 # One state change in a 10,000-row view tree. The changed-node count must
-# not grow with the tree; the frame stays inside a 60 Hz frame.
-views.present_ms.p95 <= 16.7
+# not grow with the tree; the frame stays inside a 120 Hz frame.
+views.present_ms.p95 <= 8.3
 views.dirty_nodes <= 4
 views.dirty_growth <= 0
 views.missed_present <= 0
@@ -53,5 +55,6 @@ windows.missed_present <= 0
 windows.idle_cpu_percent_after_close <= 3
 
 # Release executable size, as the release profile builds it: the
-# measured size plus one 16 KiB page. The cap is 3.25 MiB.
-size.choscorui-gallery_mib <= 2.797
+# measured size plus one 16 KiB page. The cap is 3.25 MiB. The Metal
+# painter adds GPU painting for 120 Hz frames.
+size.choscorui-gallery_mib <= 2.940

@@ -8,7 +8,7 @@ This document describes the benchmark harness, the release budgets, the profilin
 
 The harness measures these values:
 
-- **Presented frames.** Each latency sample ends when the `drawRect:` replay of the window completes (`Window::last_paint`). The harness does not use a "done" flag from the application.
+- **Presented frames.** Each latency sample ends when the frame is on the display (`Window::last_paint`). With Metal, this is the `presentedTime` of the drawable, which the presented handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application.
 - **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the first presented frame. The driver also records the time from spawn to report.
 - **Allocations.** A counting global allocator gives the number of Rust heap allocations in each scroll frame.
 - **Resources.** CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
@@ -66,33 +66,33 @@ Each result file repeats the manifest: model, CPU, memory, architecture, power s
 
 ## Budgets
 
-[`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms.
+[`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 120 Hz frame is 8.3 ms, a 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms. Frames that move content (resize, scroll, theme, and views) have a budget of one 120 Hz frame.
 
-The baselines are from the reference machine, measured on 2026-10-08. The `views` and `startup.gallery` baselines are from 2026-10-12, and the `size` baseline is from 2026-10-14.
+The baselines are from the reference machine, measured on 2026-10-14 with the Metal painter. The display refreshes at 120 Hz. The frames that move content do not meet their 8.3 ms budgets yet.
 
-The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable below 2.8 MiB. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
+The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
-| `startup.gallery.first_frame_ms.p95` | 134 ms | ≤ 250 |
-| `startup.stress.first_frame_ms.p95` | 223–245 ms | ≤ 400 |
+| `startup.gallery.first_frame_ms.p95` | 158–190 ms | ≤ 250 |
+| `startup.stress.first_frame_ms.p95` | 194–270 ms | ≤ 400 |
 | `idle.paints` | 0 | ≤ 0 |
-| `idle.cpu_percent` | 0.10 % | ≤ 1 |
-| `idle.wakeups_per_sec` | 4.3 | ≤ 20 |
-| `idle.footprint_mib.after` | 122 MiB | ≤ 200 |
-| `resize.present_ms.p95` | 19 ms | ≤ 33 |
-| `scroll.present_ms.p95` | 14.8 ms | ≤ 25 |
-| `scroll.frame_interval_ms.p95` | 15.5 ms | ≤ 25 |
+| `idle.cpu_percent` | 0.05–0.08 % | ≤ 1 |
+| `idle.wakeups_per_sec` | 4.4–4.6 | ≤ 20 |
+| `idle.footprint_mib.after` | 97 MiB | ≤ 200 |
+| `resize.present_ms.p95` | 37.7 ms | ≤ 8.3 |
+| `scroll.present_ms.p95` | 28.8 ms | ≤ 8.3 |
+| `scroll.frame_interval_ms.p95` | 30.0 ms | ≤ 8.3 |
 | `scroll.peak_realized_rows` | 32 | ≤ 40 |
-| `scroll.allocations_per_frame.p95` | 6,933 | ≤ 10000 |
-| `document.present_ms.p95` | 20.7 ms | ≤ 33 |
-| `document.shape_ms.p95` | 6.8 ms | ≤ 12 |
-| `theme.present_ms.p95` | 2.7–2.9 ms | ≤ 16.7 |
-| `views.present_ms.p95` | 6.3–8.0 ms, 10,000 rows | ≤ 16.7 |
+| `scroll.allocations_per_frame.p95` | 7,157 | ≤ 10000 |
+| `document.present_ms.p95` | 28.8 ms | ≤ 33 |
+| `document.shape_ms.p95` | 6.9–7.7 ms | ≤ 12 |
+| `theme.present_ms.p95` | 18.8 ms | ≤ 8.3 |
+| `views.present_ms.p95` | 28.8 ms, 10,000 rows | ≤ 8.3 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
-| `windows.first_frame_ms.p95` | 18 ms | ≤ 33 |
-| `windows.idle_cpu_percent_after_close` | 0.6 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.781 MiB | ≤ 2.797 |
+| `windows.first_frame_ms.p95` | 12–17 ms | ≤ 33 |
+| `windows.idle_cpu_percent_after_close` | 0.14 % | ≤ 3 |
+| `size.choscorui-gallery_mib` | 2.924 MiB | ≤ 2.940 |
 
 These correctness counters have a budget of 0:
 
@@ -102,6 +102,10 @@ These correctness counters have a budget of 0:
 - `document.caret_mismatches`
 - `views.dirty_growth`, `views.missed_present`, and `views.errors`
 - `windows.leaked_native_windows`
+
+The present times end when the frame is on the display. On the reference machine, this time is approximately 24 ms (three refreshes), also for a frame with little content. Thus the 8.3 ms budgets fail until presentation is faster.
+
+When AppKit reports that a window is occluded, the window does not draw. Thus `resize.missed_present` can count frames when another window covers the benchmark window.
 
 ### How `--check` enforces the budgets
 
@@ -129,7 +133,7 @@ These design facts keep the paint, layout, and input paths independent of the mo
 | Canvas paint | `Scene::paint` paints only the items in the visible rectangle, in paint order. The scene keeps its sorted roots, so a frame does not sort them again. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Canvas transforms | An item with an identity transform does not push a transform. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Damage | `damage` compares two display lists as sorted multisets of draw regions, with two allocations for each call. Identical lists produce no damage. | [`display.rs`](../crates/choscorui-core/src/display.rs) |
-| Presentation | `Window::set_display_list` invalidates only the damaged region. `drawRect:` replays an `Arc<DisplayList>` and does not copy the list. | [`surface.rs`](../crates/choscorui-macos/src/surface.rs) |
+| Presentation | With Metal, `Window::set_display_list` draws the full list at once when a drawable and a frame slot are free. Otherwise the display link draws it at the next refresh. Rounded rectangles, circles, shadows, and glyphs are instances of one shader. Only other paths go through coverage atlases. With Core Graphics, it invalidates only the damaged region, and `drawRect:` replays an `Arc<DisplayList>` without a copy. | [`metal/surface.rs`](../crates/choscorui-macos/src/metal/surface.rs), [`metal/plan.rs`](../crates/choscorui-macos/src/metal/plan.rs) |
 | Long documents | `TextLayoutCache::layout_paragraphs` reshapes only the edited paragraph and uses the cached layout of every other paragraph. | [`text_layout.rs`](../crates/choscorui-core/src/text_layout.rs) |
 | View updates | A state change runs only the reactions that read the state. `ViewHost::take_dirty_count` counts the changed nodes. | [`host.rs`](../crates/choscorui-compose/src/view/host.rs) |
 | View layout | `LayoutEngine::plan` arranges a node again only when it was invalidated or its bounds change. A clean subtree keeps its bounds. Semantics update only for the placed nodes. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
@@ -143,7 +147,7 @@ These design facts keep the paint, layout, and input paths independent of the mo
 
 Native calls that close or release windows drain their own autorelease pool. Without a pool, AppKit autoreleases kept closed windows alive. The `windows.leaked_native_windows` budget and the lifetime smoke test guard this behavior.
 
-Core Graphics paints on the CPU, so there is no GPU device to lose and no software fallback.
+When Metal is not available, windows paint with Core Graphics on the CPU. When the GPU fails a frame, the window paints with Core Graphics for the rest of its life. [platform-macos.md](platform-macos.md) lists the conditions.
 
 ## Reliability checks
 
