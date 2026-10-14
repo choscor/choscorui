@@ -2657,7 +2657,9 @@ hue of a gray.
   Right-to-left layouts swap them.
 - A vertical toolbar uses ArrowDown and ArrowUp. Focus wraps, and Home and
   End go to the ends.
-- When Tab enters the toolbar, the host sends Home.
+- A host of the `Toolbar` model sends Home when Tab enters the toolbar.
+  A `HostedToolbar` returns focus to the last focused item instead, as
+  the hosted rules below tell.
 - Enter or Space on a focused enabled command returns the command. On an
   embedded control, it returns nothing.
 - **Layout.** Items that do not fit go to an overflow chevron.
@@ -2681,6 +2683,11 @@ hue of a gray.
   lengths from the recipe. A command reports `Command`.
 - Focus that enters the toolbar returns to the last focused item. The
   first time, it goes to the first item that is not an embedded control.
+  When the last focused item is an embedded control, that control gets
+  the keyboard focus again.
+- Focus that comes to the toolbar from its last focused embedded
+  control, such as Shift+Tab out of it, stays on the toolbar. Thus focus
+  can leave the toolbar.
 - The overflow chevron is the last roving stop. Enter, Space, and
   ArrowDown on it open the menu with its first row highlighted.
 - An embedded control that gets the roving focus gets the keyboard focus

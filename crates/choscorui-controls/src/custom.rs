@@ -200,6 +200,9 @@ pub struct ControlContext<'a> {
     announcements: &'a mut Vec<(String, AnnouncementPriority)>,
     feedback: &'a dyn Feedback,
     strings: &'a Localizer,
+    /// The node that had the focus, while a `FocusChanged(true)` event
+    /// is delivered.
+    focus_from: Option<NodeId>,
 }
 
 impl ControlContext<'_> {
@@ -257,6 +260,11 @@ impl ControlContext<'_> {
     /// clipboard or the write fails.
     pub fn write_clipboard(&mut self, text: &str) -> bool {
         self.services.set_clipboard_text(text).is_ok()
+    }
+    /// The node that had the focus before this control got it, during a
+    /// `FocusChanged(true)` event.
+    pub(crate) fn focus_from(&self) -> Option<NodeId> {
+        self.focus_from
     }
     /// The tree, for built-in controls that wrap a tree-based model.
     pub(crate) fn tree_mut(&mut self) -> &mut Tree {
@@ -495,6 +503,9 @@ pub struct ControlHost {
     /// The ring that the focused node left for its focus frame at its
     /// last paint.
     framed_ring: Cell<Option<crate::style::FramedRing>>,
+    /// The node that had the focus, while the host delivers
+    /// `FocusChanged(true)`.
+    focus_from: Option<NodeId>,
 }
 
 /// The messages of a host: the built-in ones of the root locale until the
@@ -844,6 +855,7 @@ impl ControlHost {
                     announcements: &mut self.announcements,
                     feedback: &*self.feedback.0,
                     strings: &self.strings.0,
+                    focus_from: self.focus_from,
                 };
                 control.event(&mut context, event)
             }
@@ -1284,12 +1296,14 @@ impl ControlHost {
             let _ = tree.invalidate(previous, Dirty::PAINT);
         }
         if let Some(next) = next {
+            self.focus_from = previous;
             self.deliver(
                 tree,
                 next,
                 EventPhase::Target,
                 &ControlEvent::FocusChanged(true),
             );
+            self.focus_from = None;
             let _ = tree.invalidate(next, Dirty::PAINT);
         }
     }
@@ -1679,6 +1693,7 @@ impl ControlHost {
             announcements: &mut self.announcements,
             feedback: &*self.feedback.0,
             strings: &self.strings.0,
+            focus_from: None,
         };
         let done = control.perform(&mut context, action, value);
         self.sync_modal(tree);

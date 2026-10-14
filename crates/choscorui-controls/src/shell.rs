@@ -1218,32 +1218,33 @@ impl HostedToolbar {
     }
 
     /// Focus that enters the toolbar returns to the last focused item, or
-    /// goes to the first stop that is not an embedded control.
-    fn enter(&mut self) {
-        let control = |index: usize| {
-            matches!(
-                self.toolbar.items[index].kind,
-                ToolbarItemKind::Control { .. }
-            )
+    /// goes to the first stop that is not an embedded control. When the
+    /// last focused item is an embedded control, the control gets the
+    /// keyboard focus again. Focus that comes from that control, such as
+    /// Shift+Tab out of it, stays on the toolbar, so that it can leave.
+    fn enter(&mut self, cx: &mut ControlContext<'_>) {
+        let control = |index: usize| match self.toolbar.items[index].kind {
+            ToolbarItemKind::Control { node, .. } => Some(node),
+            _ => None,
         };
         let stops = self.stops();
+        let from = cx.focus_from();
         let last = if self.toolbar.chevron {
             Some(None)
         } else {
             self.toolbar
                 .focused
-                .filter(|index| !control(*index))
+                .filter(|index| from.is_none() || control(*index) != from)
                 .map(Some)
         };
         let entry = last.filter(|stop| stops.contains(stop)).or_else(|| {
             stops
                 .iter()
                 .copied()
-                .find(|stop| stop.is_none_or(|index| !control(index)))
+                .find(|stop| stop.is_none_or(|index| control(index).is_none()))
         });
         if let Some(stop) = entry {
-            self.toolbar.focused = stop;
-            self.toolbar.chevron = stop.is_none();
+            self.focus_stop(cx, stop);
         }
     }
 }
@@ -1307,7 +1308,7 @@ impl CustomControl for HostedToolbar {
             ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::FocusChanged(true) => {
-                self.enter();
+                self.enter(cx);
                 cx.request_paint();
                 EventReply::Continue
             }

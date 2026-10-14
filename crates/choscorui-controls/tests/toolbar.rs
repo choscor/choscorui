@@ -141,6 +141,24 @@ fn focus_returns_to_the_last_focused_item() {
 }
 
 #[test]
+fn focus_returns_to_a_last_focused_embedded_control() {
+    let (mut h, search) = with_search();
+    h.focus();
+    h.key(Key::End);
+    assert_eq!(h.tree.focus(), Some(search));
+    h.host.move_focus(&mut h.tree, None);
+    h.focus();
+    assert_eq!(h.tree.focus(), Some(search), "the control gets focus again");
+    // Focus that comes from the control, such as Shift+Tab out of it,
+    // stays on the toolbar, so that it can leave.
+    let node = h.node;
+    h.host.move_focus(&mut h.tree, Some(node));
+    assert_eq!(h.tree.focus(), Some(node));
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), vec![ControlMessage::Command(COPY)]);
+}
+
+#[test]
 fn the_bar_takes_its_geometry_from_the_recipe_and_shows_icons() {
     let items = vec![ToolbarItem::command("copy", "Copy", COPY).with_icon(Icon::Copy)];
     let mut h = Harness::new(Toolbar::new("Edit", items).hosted());
