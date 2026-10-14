@@ -4,9 +4,57 @@ use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext}
 use crate::hosted;
 use crate::style::{
     Content, ControlKind, KbdVariant, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign,
-    TextMeasure,
+    TextMeasure, content_rect,
 };
-use choscorui_core::{EventReply, Measured, Rect, SemanticNode, SemanticRole, Size};
+use choscorui_core::{EventReply, Localizer, Measured, Rect, SemanticNode, SemanticRole, Size};
+
+/// The key symbols that assistive technology reads by name, with the id
+/// of the name in the built-in messages.
+const KEY_NAMES: [(char, &str); 20] = [
+    ('⌘', "choscorui.key.command"),
+    ('⇧', "choscorui.key.shift"),
+    ('⌥', "choscorui.key.option"),
+    ('⌃', "choscorui.key.control"),
+    ('⌫', "choscorui.key.delete"),
+    ('⌦', "choscorui.key.forward_delete"),
+    ('⏎', "choscorui.key.return"),
+    ('↩', "choscorui.key.return"),
+    ('↵', "choscorui.key.return"),
+    ('⎋', "choscorui.key.escape"),
+    ('⇥', "choscorui.key.tab"),
+    ('⇪', "choscorui.key.caps_lock"),
+    ('␣', "choscorui.key.space"),
+    ('←', "choscorui.key.left"),
+    ('→', "choscorui.key.right"),
+    ('↑', "choscorui.key.up"),
+    ('↓', "choscorui.key.down"),
+    ('⇞', "choscorui.key.page_up"),
+    ('⇟', "choscorui.key.page_down"),
+    ('⏏', "choscorui.key.eject"),
+];
+
+/// `key` as assistive technology reads it: each key symbol by its name,
+/// and the other text as it is, such as "Command K" for "⌘K".
+fn spoken(key: &str, strings: &Localizer) -> String {
+    let mut words: Vec<String> = Vec::new();
+    let mut plain = String::new();
+    for ch in key.chars() {
+        match KEY_NAMES.iter().find(|(symbol, _)| *symbol == ch) {
+            Some((_, id)) => {
+                if !plain.trim().is_empty() {
+                    words.push(plain.trim().to_owned());
+                }
+                plain.clear();
+                words.push(strings.message(id, &[]));
+            }
+            None => plain.push(ch),
+        }
+    }
+    if !plain.trim().is_empty() {
+        words.push(plain.trim().to_owned());
+    }
+    words.join(" ")
+}
 
 /// One or more key caps, such as `⌘` `K`. Caps sit in reading order with
 /// the group gap between them. The control does not take focus.
@@ -61,9 +109,15 @@ impl CustomControl for Kbd {
         let width = sizes.iter().map(|size| size.width).sum::<f64>()
             + gap * sizes.len().saturating_sub(1) as f64;
         let height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+        // The baseline of the text in the tallest cap, which is centered.
+        let baseline = sizes.iter().find(|size| size.height == height).map(|size| {
+            let inner = content_rect(Rect::from_xywh(0.0, 0.0, size.width, height), &cap, false);
+            let spec = &cap.text;
+            inner.origin.y + (inner.size.height - spec.line_height) / 2.0 + spec.baseline()
+        });
         Measured {
             size: Size::new(width, height),
-            baseline: None,
+            baseline,
         }
     }
 
@@ -92,7 +146,13 @@ impl CustomControl for Kbd {
     }
 
     fn semantics(&self) -> SemanticNode {
-        hosted::node(SemanticRole::StaticText, self.keys.join(" "), Vec::new())
+        self.semantics_in(Localizer::builtin())
+    }
+
+    /// The name reads each key, with a key symbol by its name.
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        let keys: Vec<String> = self.keys.iter().map(|key| spoken(key, strings)).collect();
+        hosted::node(SemanticRole::StaticText, keys.join(" "), Vec::new())
     }
 
     fn focusable(&self) -> bool {

@@ -7,7 +7,8 @@ use choscorui_controls::{
     ToggleItem, ToggleVariant,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, Icon, Key, LayoutDirection, Point, SemanticAction, SemanticRole, Size,
+    ColorRole, DesignTokens, DisplayCommand, Icon, Key, LayoutDirection, Point, SemanticAction,
+    SemanticRole, Size,
 };
 use hosted::{Harness, fills, rounded_fills, texts};
 
@@ -186,7 +187,22 @@ fn kbd_paints_one_cap_per_key_and_takes_no_focus() {
     let muted = DesignTokens::light().color(ColorRole::Muted);
     assert_eq!(rounded_fills(&h.paint(), muted).len(), 2);
     assert_eq!(h.host.focus_next(&mut h.tree, false), None);
-    assert_eq!(h.semantics().name, "⌘ K");
+    // Assistive technology reads a key symbol by its name.
+    assert_eq!(h.semantics().name, "Command K");
+    let one = Harness::new(Kbd::new("⌘⇧P"));
+    assert_eq!(one.semantics().name, "Command Shift P");
+    // The baseline is the baseline of the painted text.
+    let baseline = h.baseline().expect("a baseline");
+    let top = h.bounds().origin.y;
+    let drawn = h
+        .paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawText { baseline, .. } => Some(baseline.y - top),
+            _ => None,
+        });
+    assert_eq!(drawn, Some(baseline));
 }
 
 #[test]

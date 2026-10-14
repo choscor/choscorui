@@ -13,7 +13,7 @@ use choscorui::controls::{
     self, AddonAlign, CalendarMode, ControlSize, FieldOrientation, InputGroupAddon, KbdVariant,
     ListEntry, Orientation, SwitchSize, ToggleItem, ToggleVariant, ValidationState,
 };
-use choscorui::core::{CivilDate, Icon, Space};
+use choscorui::core::{CivilDate, ColorRole, Icon, RadiusScale, Space};
 
 /// The catalog string `key` in `env`.
 fn text(env: &Env, key: &str) -> String {
@@ -699,10 +699,14 @@ pub fn kbd(_: &PageCx) -> AnyView {
         ),
         section(
             t!("kbd.inverted"),
+            // Inverted caps sit on a dark surface, where they show.
             row((
                 Kbd::new("Enter").with(inverted),
                 keys(&["⌥", "⌫"]).with(inverted),
-            )),
+            ))
+            .padding(Space::S2)
+            .background(ColorRole::Primary)
+            .corner_radius(RadiusScale::Md),
         ),
         section(t!("kbd.disabled"), keys(&["⌘", "S"]).disabled(true)),
     ))

@@ -119,6 +119,17 @@ impl Harness {
             .size
     }
 
+    /// The unbounded baseline that the control reports.
+    pub fn baseline(&mut self) -> Option<f64> {
+        let env =
+            HostEnv::new(&self.themes, &self.styles, &EstimatedText).direction(self.direction);
+        let unbounded = Constraints::UNBOUNDED;
+        self.host
+            .measure(&self.tree, self.node, unbounded, &env)
+            .unwrap()
+            .baseline
+    }
+
     /// Sets the control's bounds and arranges it.
     pub fn place(&mut self, bounds: Rect) {
         self.tree.set_bounds(self.node, bounds).unwrap();

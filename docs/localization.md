@@ -130,6 +130,8 @@ its text with `Condition::message`.
 | `choscorui.toggle` | | toggle (the description of a Toggle) |
 | `choscorui.dial` | | Dial |
 | `choscorui.modal` | | Modal (the description of a modal dialog) |
+| `choscorui.stack.page` | `page`, `count` | Page {page} of {count} (the value of a stack without page titles) |
+| `choscorui.key.command`, `.shift`, `.option`, `.control`, `.delete`, `.forward_delete`, `.return`, `.escape`, `.tab`, `.caps_lock`, `.space`, `.left`, `.right`, `.up`, `.down`, `.page_up`, `.page_down`, `.eject` | | Command, Shift, and the other key names (the names of the key symbols of a Kbd) |
 | `choscorui.status` | | Status (the name of a StatusBar) |
 | `choscorui.font` | | Font (the name of a FontChooser) |
 | `choscorui.font.fallback` | `font` | Not installed; using {font} |

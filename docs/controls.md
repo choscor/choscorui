@@ -3129,6 +3129,13 @@ group. `set_open` returns false for both.
 - `Kbd::new` shows one key cap. `Kbd::group` shows one cap for each key,
   4 pt apart.
 - A `Kbd` takes no focus and gets no input.
+- The measure reports the baseline of the text in the caps, so a row
+  with baseline alignment lines the caps up with text.
+- The name reads a key symbol by its name in the window language, such
+  as "Command" for "⌘" and "Left Arrow" for "←". Other text stays as it
+  is, so "⌘K" reads "Command K".
+- `Inverted` caps are for a dark surface, such as a primary button or a
+  tooltip. On the page background they do not show.
 
 | Variant | Fill | Text |
 | --- | --- | --- |
@@ -3141,7 +3148,7 @@ extra-small medium text.
 | Field | `Kbd::semantics` |
 | --- | --- |
 | Role | `StaticText` (AXStaticText) |
-| Name / value | keys joined with spaces / - |
+| Name / value | the keys, with key symbols by name, joined with spaces / - |
 | Actions | none |
 
 [form.rs](../crates/choscorui-controls/tests/form.rs) pins this behavior.

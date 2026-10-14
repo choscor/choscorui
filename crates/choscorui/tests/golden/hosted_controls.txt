@@ -41,7 +41,7 @@ DrawText { baseline: Point { x: 20.499999999999993, y: 32.9 }, text: "Right", fo
 PopClip
 # kbd Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }
-semantics SemanticNode { role: StaticText, name: "⌘K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: StaticText, name: "Command K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }, radius: 6.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 14.0, y: 24.2 }, text: "⌘K", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
@@ -1021,14 +1021,14 @@ DrawText { baseline: Point { x: 26.0, y: 58.9 }, text: "You can add components."
 PopClip
 # kbd default Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }
-semantics SemanticNode { role: StaticText, name: "⌘K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: StaticText, name: "Command K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }, radius: 6.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 14.0, y: 24.2 }, text: "⌘K", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
 # kbd inverted Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }
-semantics SemanticNode { role: StaticText, name: "⌘K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: StaticText, name: "Command K", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 21.200000000000003, height: 20.0 } }, radius: 6.0, color: Color { red: 255, green: 255, blue: 255, alpha: 51 } }
 DrawText { baseline: Point { x: 14.0, y: 24.2 }, text: "⌘K", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }

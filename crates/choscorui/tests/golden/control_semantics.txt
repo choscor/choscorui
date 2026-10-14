@@ -12,8 +12,8 @@ toggle Ltr: role Button name "Bold" value None state SemanticState { disabled: f
 toggle Rtl: role Button name "Bold" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 toggle-group Ltr: role RadioGroup name "Alignment" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
 toggle-group Rtl: role RadioGroup name "Alignment" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
-kbd Ltr: role StaticText name "⌘K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
-kbd Rtl: role StaticText name "⌘K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
+kbd Ltr: role StaticText name "Command K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
+kbd Rtl: role StaticText name "Command K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 select Ltr: role ComboBox name "Status" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, SetValue, Focus]
   open:
   part 0 in None: List "Status" value None desc "" [] []
