@@ -590,7 +590,7 @@ impl View for Mail {
         );
         let labels = ["Archive", "", "Pin"].map(String::from).to_vec();
         VStack::new((
-            ButtonGroup::new(group, labels, checked.binding())
+            ButtonGroup::new("Mail", group, labels, checked.binding())
                 .on_item(move |index| runs.update(|runs| *runs += index + 1)),
             Text::new(move || format!("runs {} checked {:?}", runs.get(), checked.get())),
         ))

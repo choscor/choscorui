@@ -186,10 +186,11 @@ pub fn tool_button(_: &PageCx) -> AnyView {
     ToolButtonPage.into_any()
 }
 
-/// A joined group of `members` named by the catalog strings `labels`; a
-/// separator has an empty key. `checked` edits the checked toggles, and
+/// A joined group named by the catalog string `name`, of `members`
+/// named by the catalog strings `labels`; a separator has an empty key. `checked` edits the checked toggles, and
 /// the members join along `orientation`.
 fn group(
+    name: &'static str,
     members: Vec<ButtonGroupMember>,
     labels: &'static [&'static str],
     exclusive: bool,
@@ -207,7 +208,7 @@ fn group(
     };
     let group =
         controls::ButtonGroup::from_members(members, exclusive).with_orientation(orientation);
-    ButtonGroup::new(group, names, checked.binding())
+    ButtonGroup::new(t!(name), group, names, checked.binding())
 }
 
 /// `count` toggle members, each 92 × 36 pt, and the frame that holds them
@@ -225,8 +226,8 @@ fn toggles(count: u64, orientation: Orientation) -> (Vec<ButtonGroupMember>, Fra
 
 /// A group under its caption; assistive technology reads the caption as
 /// `name`.
-fn titled(title: &'static str, name: String, content: impl View) -> impl View {
-    VStack::new((caption(t!(title)).accessibility_label(name), content))
+fn titled(title: &'static str, content: impl View) -> impl View {
+    VStack::new((caption(t!(title)), content))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S2)
 }
@@ -242,13 +243,6 @@ impl View for ButtonGroupPage {
         let style = cx.state(vec![0]);
         let vertical = cx.state(vec![1]);
         let size = cx.state(14_u32);
-        let text = |key: &str| cx.env().text(key, &[]);
-        let (alignment_name, style_name, vertical_name, size_name) = (
-            text("button-group.alignment"),
-            text("button-group.style"),
-            text("button-group.vertical_name"),
-            text("button-group.size"),
-        );
         let (across, down) = (Orientation::Horizontal, Orientation::Vertical);
         let (four, four_frame) = toggles(4, across);
         let (three, three_frame) = toggles(3, across);
@@ -263,8 +257,8 @@ impl View for ButtonGroupPage {
         column((
             titled(
                 "button-group.exclusive",
-                alignment_name,
                 group(
+                    "button-group.alignment",
                     four,
                     &[
                         "button-group.left",
@@ -281,8 +275,8 @@ impl View for ButtonGroupPage {
             ),
             titled(
                 "button-group.non_exclusive",
-                style_name,
                 group(
+                    "button-group.style",
                     three,
                     &[
                         "tool-button.bold",
@@ -297,8 +291,8 @@ impl View for ButtonGroupPage {
             ),
             titled(
                 "button-group.vertical",
-                vertical_name,
                 group(
+                    "button-group.vertical_name",
                     stack,
                     &[
                         "button-group.top",
@@ -313,8 +307,8 @@ impl View for ButtonGroupPage {
             ),
             titled(
                 "button-group.parts",
-                size_name,
                 group(
+                    "button-group.size",
                     parts,
                     &[
                         "button-group.size",
@@ -567,8 +561,8 @@ mod tests {
         assert!(page.act("Left", SemanticAction::Focus));
         for name in ["Center", "Right", "Left"] {
             press(&mut page, Key::ArrowRight);
-            let node = page.node(name);
-            assert_eq!(page.host.semantic(node).unwrap().state.checked, Some(true));
+            let part = page.part(name).unwrap();
+            assert_eq!(part.state.checked, Some(true));
         }
     }
 
@@ -578,10 +572,10 @@ mod tests {
         assert!(page.host.find("Text size: 14 pt").is_some());
         assert!(page.act("Smaller", SemanticAction::Activate));
         assert!(page.host.find("Text size: 13 pt").is_some());
-        let smaller = page.node("Smaller");
+        let group = page.node("Text size");
         assert_eq!(
-            page.host.semantic(smaller).unwrap().description,
-            "Text size"
+            page.host.semantic(group).unwrap().role,
+            choscorui::core::SemanticRole::Group
         );
         assert!(page.act("Smaller", SemanticAction::Focus));
         // The arrow key passes the separator to the other button.

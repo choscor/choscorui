@@ -227,7 +227,8 @@ pub type ButtonGroup = Configured<HostedButtonGroup>;
 ```
 
 Joined members of a `controls::ButtonGroup`: toggles, buttons,
-separators, and text parts. `labels` names each member, and `checked`
+separators, and text parts. `name` names the group, `labels` names
+each member, and `checked`
 edits the indices of the checked toggle members. A button member
 reports its index through `.on_item`.
 
@@ -244,7 +245,8 @@ impl View for Styles {
             ButtonGroupMember::Toggle(CommandId(2)),
         ];
         let group = controls::ButtonGroup::from_members(members, false);
-        ButtonGroup::new(group, vec!["Bold".to_owned(), "Italic".to_owned()], checked.binding())
+        let labels = vec!["Bold".to_owned(), "Italic".to_owned()];
+        ButtonGroup::new("Style", group, labels, checked.binding())
     }
 }
 ```
@@ -256,10 +258,11 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 #### `ButtonGroup::new`
 
 ```rust
-pub fn new(group: ButtonGroup, labels: impl Items<String>, checked: Binding<Vec<usize>>) -> Self
+pub fn new<M>(name: impl IntoLive<TextContent, M>, group: ButtonGroup, labels: impl Items<String>, checked: Binding<Vec<usize>>) -> Self
 ```
 
-A view of `group`, with `labels` for its members and `checked` for its toggles.
+A view of `group` named `name`, with `labels` for its members and
+`checked` for its toggles.
 
 ## `Calendar`
 

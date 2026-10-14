@@ -11,8 +11,8 @@ use crate::style::{
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, PointerEvent, Rect, SemanticAction,
-    SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 /// One member of a [`ButtonGroup`].
@@ -256,11 +256,11 @@ impl ButtonGroup {
         None
     }
 
-    /// The group for a control host, with a label for each member. A
-    /// separator ignores its label. It keeps the members' enabled and
-    /// checked state itself, in place of an application
+    /// The group named `name` for a control host, with a label for each
+    /// member. A separator ignores its label. It keeps the members'
+    /// enabled and checked state itself, in place of an application
     /// `CommandRegistry`.
-    pub fn hosted(self, labels: Vec<String>) -> HostedButtonGroup {
+    pub fn hosted(self, name: impl Into<String>, labels: Vec<String>) -> HostedButtonGroup {
         let mut commands = CommandRegistry::new();
         for command in self.members.iter().filter_map(|member| member.command()) {
             let _ = commands.insert(command, CommandState::default());
@@ -272,6 +272,7 @@ impl ButtonGroup {
             .unwrap_or(0);
         HostedButtonGroup {
             group: self,
+            name: name.into(),
             labels,
             commands,
             focus,
@@ -289,6 +290,7 @@ impl ButtonGroup {
 /// members, and `ItemActivated(index)` when a button member runs.
 pub struct HostedButtonGroup {
     group: ButtonGroup,
+    name: String,
     labels: Vec<String>,
     commands: CommandRegistry,
     /// The focused member: always a toggle or button member when the
@@ -603,40 +605,46 @@ impl CustomControl for HostedButtonGroup {
         cx.bounds = bounds;
     }
 
-    /// The node of the focused member: a checkable tool button for a
-    /// toggle member, or a button. The description holds the labels of
-    /// the text parts.
+    /// A Group named by the group name, with the actions of the focused
+    /// member.
     fn semantics(&self) -> SemanticNode {
-        let Some(command) = self.command(self.focus) else {
-            return hosted::node(SemanticRole::Group, "", Vec::new());
-        };
-        let state = self.commands.state(command).unwrap_or_default();
-        let actions = if state.enabled {
+        let actions = if self.enabled(self.focus) {
             vec![SemanticAction::Activate, SemanticAction::Focus]
         } else {
             Vec::new()
         };
-        // A toggle is a button with a checked state. In an exclusive group
-        // it is a radio button.
-        let toggle = matches!(self.group.members[self.focus], ButtonGroupMember::Toggle(_));
-        let role = if toggle && self.group.exclusive {
-            SemanticRole::RadioButton
-        } else {
-            SemanticRole::Button
-        };
-        let mut node = hosted::node(role, self.label(self.focus), actions);
-        node.state.checked = toggle.then_some(state.checked);
-        node.state.disabled = !state.enabled;
-        node.description = self
-            .group
-            .members
-            .iter()
-            .enumerate()
-            .filter(|(_, member)| **member == ButtonGroupMember::Text)
-            .map(|(index, _)| self.label(index))
-            .collect::<Vec<_>>()
-            .join(", ");
-        node
+        hosted::node(SemanticRole::Group, &self.name, actions)
+    }
+
+    /// A part for each member but a separator: a StaticText for a text
+    /// part, a button for a button member, and a checkable button for a
+    /// toggle, or a radio button in an exclusive group. The focused
+    /// member is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        for (index, (member, &rect)) in self.group.members.iter().zip(&self.rects).enumerate() {
+            let label = self.label(index);
+            let role = match member {
+                ButtonGroupMember::Separator => continue,
+                ButtonGroupMember::Text => {
+                    parts.push(None, SemanticRole::StaticText, label, rect);
+                    continue;
+                }
+                ButtonGroupMember::Toggle(_) if self.group.exclusive => SemanticRole::RadioButton,
+                _ => SemanticRole::Button,
+            };
+            let enabled = self.enabled(index);
+            let part = hosted::pressable(parts, None, role, label, rect, enabled);
+            if let ButtonGroupMember::Toggle(command) = member {
+                let checked = self
+                    .commands
+                    .state(*command)
+                    .is_ok_and(|state| state.checked);
+                part.node.state.checked = Some(checked);
+            }
+            if index == self.focus {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

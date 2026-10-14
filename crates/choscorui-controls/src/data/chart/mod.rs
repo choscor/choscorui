@@ -8,7 +8,7 @@ use crate::hosted;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
     ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Locale, Localizer, Measured,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 use plot::Plot;
 
@@ -271,18 +271,18 @@ impl Chart {
         EventReply::Stop
     }
 
-    /// The semantic summary of `category`: its label and its values.
+    /// The semantic value of `category`: its values, after the series
+    /// names when the chart has series.
     fn summary(&self, category: usize) -> String {
-        let label = self.categories.get(category).cloned().unwrap_or_default();
         if self.per_category() {
-            return format!("{label}: {}", self.formatted(self.value(0, category)));
+            return self.formatted(self.value(0, category));
         }
         let values: Vec<String> = self
             .rows(category)
             .into_iter()
             .map(|(_, series, value)| format!("{series} {value}"))
             .collect();
-        format!("{label}: {}", values.join(", "))
+        values.join(", ")
     }
 }
 
@@ -345,7 +345,6 @@ impl CustomControl for Chart {
 
     fn semantics(&self) -> SemanticNode {
         let mut node = hosted::node(SemanticRole::Image, &self.name, vec![SemanticAction::Focus]);
-        node.value = self.active.map(|category| self.summary(category));
         node.description = self
             .legend_entries()
             .into_iter()
@@ -353,6 +352,18 @@ impl CustomControl for Chart {
             .collect::<Vec<_>>()
             .join(", ");
         node
+    }
+
+    /// A data point part for each category, named by the category with
+    /// its values as the value. The picked category is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        for (category, label) in self.categories.iter().enumerate() {
+            let rect = self.point_rect(category);
+            let part = parts.push(None, SemanticRole::StaticText, label, rect);
+            part.node.value = Some(self.summary(category));
+            part.item(category);
+        }
+        parts.set_focused(self.active);
     }
 
     fn perform(

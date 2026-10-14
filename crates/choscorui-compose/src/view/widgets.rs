@@ -388,7 +388,8 @@ impl Configured<controls::ToggleGroup> {
 }
 
 /// Joined members of a [`controls::ButtonGroup`]: toggles, buttons,
-/// separators, and text parts. `labels` names each member, and `checked`
+/// separators, and text parts. `name` names the group, `labels` names
+/// each member, and `checked`
 /// edits the indices of the checked toggle members. A button member
 /// reports its index through `.on_item`.
 ///
@@ -408,21 +409,25 @@ impl Configured<controls::ToggleGroup> {
 ///             ButtonGroupMember::Toggle(CommandId(2)),
 ///         ];
 ///         let group = controls::ButtonGroup::from_members(members, false);
-///         ButtonGroup::new(group, vec!["Bold".to_owned(), "Italic".to_owned()], checked.binding())
+///         let labels = vec!["Bold".to_owned(), "Italic".to_owned()];
+///         ButtonGroup::new("Style", group, labels, checked.binding())
 ///     }
 /// }
 /// ```
 pub type ButtonGroup = Configured<controls::HostedButtonGroup>;
 
 impl Configured<controls::HostedButtonGroup> {
-    /// A view of `group`, with `labels` for its members and `checked` for its toggles.
-    pub fn new(
+    /// A view of `group` named `name`, with `labels` for its members and
+    /// `checked` for its toggles.
+    pub fn new<M>(
+        name: impl IntoLive<TextContent, M>,
         group: controls::ButtonGroup,
         labels: impl Items<String>,
         checked: Binding<Vec<usize>>,
     ) -> Self {
+        let name = label(name);
         Configured::custom(ControlKind::ButtonGroup, move |env| {
-            group.clone().hosted(labels.items(env))
+            group.clone().hosted(text(&name, env), labels.items(env))
         })
         .bind(checked, ControlValue::Indices, as_indices)
     }

@@ -593,21 +593,22 @@ pins this behavior.
 `ButtonGroup` has no node of its own. Its members publish their own
 semantics.
 
-| Field | `HostedButtonGroup::semantics` |
-| --- | --- |
-| Role | the focused member: `RadioButton` (AXRadioButton) for a toggle in an exclusive group, else `Button` (AXButton) |
-| Name / value | the member label / - |
-| Description | the labels of the text parts |
-| State | disabled; checked for a toggle member, as on a `Toggle` |
-| Actions | `Activate`, `Focus`, while the member is enabled |
+| Field | `HostedButtonGroup::semantics` | Member parts |
+| --- | --- | --- |
+| Role | `Group` (AXGroup) | `RadioButton` (AXRadioButton) for a toggle in an exclusive group, `StaticText` for a text part, else `Button` (AXButton) |
+| Name / value | the group name / - | the member label / - |
+| State | - | disabled; checked for a toggle member, as on a `Toggle`; the focused member is the focused part |
+| Actions | `Activate`, `Focus`, while the focused member is enabled | `Activate` while enabled |
+
+A separator has no part.
 
 **In a control host.** `ToolButton::hosted` keeps the command state
 itself, because the host has no `CommandRegistry`. In right-to-left
 layouts, the split arrow is at the left. `ButtonGroup::hosted` gives one
-node for the whole group, with a label for each member. It paints the
+node for the whole group, with a group name and a label for each member. It paints the
 `Root` slot, then each member. While focus is visible, the focused member
 paints last, so no neighbour covers its ring. That node publishes the
-focused member.
+members as parts.
 Arrow keys, Home, and End move the focus among the enabled toggle and
 button members. They skip disabled members, separators, and text parts.
 In an exclusive group, a toggle member that gets the focus also gets the
@@ -625,8 +626,8 @@ check, and focus enters the group at the checked member.
   action, or focus.
 - `ButtonGroup::with_size` sets the size of the toggle, button, and text
   members: `Sm`, `Default`, or `Lg`.
-- The compose `ButtonGroup` view takes a `ButtonGroup`, the labels, and a
-  binding for the checked toggle members. Button members report through
+- The compose `ButtonGroup` view takes a group name, a `ButtonGroup`, the
+  labels, and a binding for the checked toggle members. Button members report through
   `.on_item`.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) and
@@ -4072,8 +4073,11 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 | Field | `Avatar::semantics` | `AvatarGroup::semantics` |
 | --- | --- | --- |
 | Role | `Image` (AXImage) | `Group` (AXGroup) |
-| Name / value | person's name / none | name / the names and the count |
+| Name / value | person's name / none | name / none |
 | Actions | none | none |
+
+`AvatarGroup` publishes an `Image` part for each member, named by the
+person, and a `StaticText` part for the count.
 
 [data.rs](../crates/choscorui-controls/tests/data.rs) pins this behavior.
 
@@ -4267,9 +4271,13 @@ behavior.
 | Field | `Chart::semantics` |
 | --- | --- |
 | Role | `Image` (AXImage) |
-| Name / value | name / the picked category and its values |
+| Name / value | name / none |
 | Description | the legend entries |
 | Actions | `Focus` |
+
+Each category is a `StaticText` data point part with its item index. Its
+name is the category, and its value holds the values, after the series
+names. The picked category is the focused part.
 
 [chart.rs](../crates/choscorui-controls/tests/chart.rs) pins this behavior.
 

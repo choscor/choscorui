@@ -40,6 +40,12 @@ fn browsers(kind: ChartKind) -> Chart {
     )
 }
 
+/// The focused data point as "category: values".
+fn active(h: &Harness) -> Option<String> {
+    let node = h.focused_node()?;
+    Some(format!("{}: {}", node.name, node.value.unwrap_or_default()))
+}
+
 #[test]
 fn a_bar_chart_paints_series_colors_axis_labels_and_a_legend() {
     let tokens = DesignTokens::light();
@@ -66,7 +72,7 @@ fn arrow_keys_pick_categories_and_show_the_tooltip() {
     assert_eq!(h.host.get(h.node).unwrap().overlay(), None);
     h.key(Key::ArrowRight);
     assert_eq!(
-        h.semantics().value.as_deref(),
+        active(&h).as_deref(),
         Some("January: Desktop 186, Mobile 80")
     );
     let tooltip = h.host.get(h.node).unwrap().overlay().expect("shown");
@@ -74,7 +80,7 @@ fn arrow_keys_pick_categories_and_show_the_tooltip() {
     assert!(texts(&list).contains(&"186".to_string()), "{tooltip:?}");
     h.key(Key::End);
     assert_eq!(
-        h.semantics().value.as_deref(),
+        active(&h).as_deref(),
         Some("March: Desktop 237, Mobile 120")
     );
     h.key(Key::Escape);
@@ -84,7 +90,7 @@ fn arrow_keys_pick_categories_and_show_the_tooltip() {
     rtl.focus();
     rtl.key(Key::ArrowLeft);
     rtl.key(Key::ArrowLeft);
-    assert!(rtl.semantics().value.unwrap().starts_with("February"));
+    assert!(active(&rtl).unwrap().starts_with("February"));
 }
 
 #[test]
@@ -92,13 +98,10 @@ fn hover_picks_the_category_under_the_pointer() {
     let mut h = Harness::new(visitors(ChartKind::Bar));
     let bounds = h.bounds();
     h.hover(Point::new(bounds.origin.x + 20.0, bounds.origin.y + 100.0));
-    assert!(h.semantics().value.unwrap().starts_with("January"));
+    assert!(active(&h).unwrap().starts_with("January"));
     let mut rtl = Harness::with_direction(visitors(ChartKind::Bar), LayoutDirection::Rtl);
     rtl.hover(Point::new(bounds.origin.x + 20.0, bounds.origin.y + 100.0));
-    assert!(
-        rtl.semantics().value.unwrap().starts_with("March"),
-        "mirrored"
-    );
+    assert!(active(&rtl).unwrap().starts_with("March"), "mirrored");
 }
 
 #[test]
@@ -111,28 +114,25 @@ fn polar_charts_hit_slices_spokes_and_rings() {
     let center = Point::new(pie.bounds().center().x, pie.bounds().origin.y + 100.0);
     // Just right of the top, inside the ring: the first slice.
     pie.hover(Point::new(center.x + 10.0, center.y - 80.0));
-    assert_eq!(
-        pie.semantics().value.as_deref(),
-        Some("Chrome: 275 visitors")
-    );
+    assert_eq!(active(&pie).as_deref(), Some("Chrome: 275 visitors"));
     pie.hover(center);
-    assert_eq!(pie.semantics().value, None, "the donut hole");
+    assert_eq!(active(&pie), None, "the donut hole");
     // Just left of the top: the last slice.
     pie.hover(Point::new(center.x - 10.0, center.y - 80.0));
-    assert!(pie.semantics().value.unwrap().starts_with("Edge"));
+    assert!(active(&pie).unwrap().starts_with("Edge"));
 
     let mut radar = Harness::new(browsers(ChartKind::Radar));
     radar.hover(Point::new(center.x + 2.0, center.y - 50.0));
-    assert!(radar.semantics().value.unwrap().starts_with("Chrome"));
+    assert!(active(&radar).unwrap().starts_with("Chrome"));
     radar.hover(Point::new(center.x + 50.0, center.y));
-    assert!(radar.semantics().value.unwrap().starts_with("Safari"));
+    assert!(active(&radar).unwrap().starts_with("Safari"));
 
     let mut radial = Harness::new(browsers(ChartKind::Radial));
     // The innermost ring starts at 30% of the 100 pt radius.
     radial.hover(Point::new(center.x, center.y - 35.0));
-    assert!(radial.semantics().value.unwrap().starts_with("Chrome"));
+    assert!(active(&radial).unwrap().starts_with("Chrome"));
     radial.hover(Point::new(center.x, center.y - 95.0));
-    assert!(radial.semantics().value.unwrap().starts_with("Edge"));
+    assert!(active(&radial).unwrap().starts_with("Edge"));
 }
 
 #[test]
@@ -148,13 +148,13 @@ fn the_tooltip_hides_when_the_pointer_leaves_and_blur_clears_the_highlight() {
         None,
         "the tooltip hides, though the chart has focus"
     );
-    assert!(h.semantics().value.is_some(), "the highlight stays");
+    assert!(active(&h).is_some(), "the highlight stays");
     h.key(Key::ArrowRight);
     h.key(Key::Escape);
-    assert_eq!(h.semantics().value, None, "Escape clears the highlight");
+    assert_eq!(active(&h), None, "Escape clears the highlight");
     h.key(Key::ArrowRight);
     h.host.move_focus(&mut h.tree, None);
-    assert_eq!(h.semantics().value, None, "blur clears the highlight");
+    assert_eq!(active(&h), None, "blur clears the highlight");
 }
 
 #[test]
@@ -211,11 +211,11 @@ fn negative_values_get_a_baseline_and_values_use_the_locale() {
     assert!(bars[1].max_y() <= zero.max_y() + 1.0, "above: {bars:?}");
     h.focus();
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().value.as_deref(), Some("Q1: Profit -1,250"));
+    assert_eq!(active(&h).as_deref(), Some("Q1: Profit -1,250"));
     let mut vi = Harness::new(chart("vi"));
     vi.focus();
     vi.key(Key::End);
-    assert_eq!(vi.semantics().value.as_deref(), Some("Q2: Profit 3.000,50"));
+    assert_eq!(active(&vi).as_deref(), Some("Q2: Profit 3.000,50"));
 }
 
 /// The baseline of each value label of `list`, by its text.

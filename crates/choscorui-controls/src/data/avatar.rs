@@ -9,7 +9,8 @@ use crate::style::{
     TextOverflow, draw_text,
 };
 use choscorui_core::{
-    EventReply, Icon, Image, ImageSampling, Measured, Path, Rect, SemanticNode, SemanticRole, Size,
+    EventReply, Icon, Image, ImageSampling, Localizer, Measured, Path, Rect, SemanticNode,
+    SemanticParts, SemanticRole, Size,
 };
 
 /// A round avatar. It shows the image when there is one, and the
@@ -157,6 +158,8 @@ pub struct AvatarGroup {
     avatars: Vec<Avatar>,
     count: Option<String>,
     size: ControlSize,
+    /// The circle of each avatar, then of the count, in reading order.
+    circles: Vec<Rect>,
 }
 
 impl AvatarGroup {
@@ -167,6 +170,7 @@ impl AvatarGroup {
             avatars,
             count: None,
             size: ControlSize::Default,
+            circles: Vec::new(),
         }
         .with_size(ControlSize::Default)
     }
@@ -213,6 +217,24 @@ impl CustomControl for AvatarGroup {
         }
     }
 
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        let root = cx.style(Avatar::query(self.size, Slot::Root));
+        let side = root.min_width;
+        let bounds = bounds.inset(Self::ring_room(&root));
+        let rtl = cx.rtl();
+        self.circles = (0..self.circles())
+            .map(|index| {
+                let offset = index as f64 * (side + root.gap);
+                let x = if rtl {
+                    bounds.max_x() - side - offset
+                } else {
+                    bounds.origin.x + offset
+                };
+                Rect::from_xywh(x, bounds.origin.y, side, side)
+            })
+            .collect();
+    }
+
     fn event(&mut self, _cx: &mut ControlContext<'_>, _event: &ControlEvent) -> EventReply {
         EventReply::Continue
     }
@@ -220,28 +242,14 @@ impl CustomControl for AvatarGroup {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let root = cx.style(Avatar::query(self.size, Slot::Root));
         let side = root.min_width;
-        let bounds = cx.bounds.inset(Self::ring_room(&root));
-        let step = side + root.gap;
-        let circle = |index: usize, rtl: bool| {
-            let offset = index as f64 * step;
-            let x = if rtl {
-                bounds.max_x() - side - offset
-            } else {
-                bounds.origin.x + offset
-            };
-            Rect::from_xywh(x, bounds.origin.y, side, side)
-        };
         let ring = root.ring.filter(|ring| ring.width > 0.0);
-        let rtl = cx.rtl;
-        for (index, avatar) in self.avatars.iter().enumerate() {
-            let rect = circle(index, rtl);
+        for (avatar, &rect) in self.avatars.iter().zip(&self.circles) {
             if let Some(ring) = ring {
                 let _ = cx.list.draw_ring(rect, side / 2.0, ring.width, ring.color);
             }
             avatar.paint_at(cx, rect);
         }
-        if let Some(count) = &self.count {
-            let rect = circle(self.avatars.len(), rtl);
+        if let (Some(count), Some(&rect)) = (&self.count, self.circles.get(self.avatars.len())) {
             let mut style = cx.style(Avatar::query(self.size, Slot::Group));
             style.ring = ring;
             cx.slot(rect, &style, |cx, inner| {
@@ -251,13 +259,23 @@ impl CustomControl for AvatarGroup {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let mut node = hosted::node(SemanticRole::Group, &self.name, Vec::new());
-        let mut names: Vec<&str> = self.avatars.iter().map(|a| a.name.as_str()).collect();
-        if let Some(count) = &self.count {
-            names.push(count);
+        hosted::node(SemanticRole::Group, &self.name, Vec::new())
+    }
+
+    /// An Image part for each member, then a StaticText part for the
+    /// count.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let names = self
+            .avatars
+            .iter()
+            .map(|avatar| (SemanticRole::Image, &avatar.name));
+        let count = self
+            .count
+            .iter()
+            .map(|count| (SemanticRole::StaticText, count));
+        for ((role, name), &rect) in names.chain(count).zip(&self.circles) {
+            parts.push(None, role, name, rect);
         }
-        node.value = Some(names.join(", "));
-        node
     }
 
     fn focusable(&self) -> bool {

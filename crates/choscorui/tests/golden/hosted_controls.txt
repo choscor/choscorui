@@ -497,7 +497,7 @@ DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_
 PopClip
 # avatar-group Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } }
-semantics SemanticNode { role: Group, name: "Team", description: "", value: Some("Ana Lee, Bao Tran"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Team", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 60.0, height: 36.0 } })
 StrokeRoundedRect { rect: Rect { origin: Point { x: 11.0, y: 11.0 }, size: Size { width: 34.0, height: 34.0 } }, radius: 17.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 }, width: 2.0 }
 FillRoundedRect { rect: Rect { origin: Point { x: 12.0, y: 12.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }

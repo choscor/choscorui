@@ -67,7 +67,8 @@ pub mod tests {
     use choscorui::compose::view::{Env, ViewExt, ViewHost};
     use choscorui::controls::EstimatedText;
     use choscorui::core::{
-        BaseColor, ColorScheme, DesignTokens, Locale, NodeId, SemanticAction, SemanticRole, Size,
+        BaseColor, ColorScheme, DesignTokens, Locale, NodeId, SemanticAction, SemanticNode,
+        SemanticRole, Size,
     };
     use std::rc::Rc;
 
@@ -135,13 +136,18 @@ pub mod tests {
                 .map(|entry| entry.node.name)
         }
 
-        /// The semantic value of the part named `name`.
-        pub fn part_value(&mut self, name: &str) -> Option<String> {
+        /// The node of the part named `name`.
+        pub fn part(&mut self, name: &str) -> Option<SemanticNode> {
             let (snapshot, _) = self.host.semantics();
             snapshot
                 .into_iter()
                 .find(|entry| entry.part.is_some() && entry.node.name == name)
-                .and_then(|entry| entry.node.value)
+                .map(|entry| entry.node)
+        }
+
+        /// The semantic value of the part named `name`.
+        pub fn part_value(&mut self, name: &str) -> Option<String> {
+            self.part(name).and_then(|node| node.value)
         }
     }
 

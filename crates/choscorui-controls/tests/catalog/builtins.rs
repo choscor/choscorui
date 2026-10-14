@@ -200,7 +200,7 @@ pub fn builtins() -> Vec<(&'static str, TreeFactory)> {
         }),
         ("button-group", |_| {
             let group = ButtonGroup::new(vec![CommandId(1), CommandId(2)], true);
-            Box::new(group.hosted(strings(&["Left", "Right"])))
+            Box::new(group.hosted("Alignment", strings(&["Left", "Right"])))
         }),
         ("tool-button", tool_button),
         ("command-link", |_| {

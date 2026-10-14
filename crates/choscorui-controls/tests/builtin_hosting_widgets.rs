@@ -427,6 +427,11 @@ fn alignment(exclusive: bool) -> ButtonGroup {
     ButtonGroup::new(vec![CommandId(1), CommandId(2), CommandId(3)], exclusive)
 }
 
+/// The node of the focused member.
+fn member_node(h: &Harness) -> choscorui_core::SemanticNode {
+    h.focused_node().expect("a focused member")
+}
+
 fn labels() -> Vec<String> {
     ["Left", "Center", "Right"].map(String::from).to_vec()
 }
@@ -443,11 +448,11 @@ fn member(h: &Harness, index: usize) -> Point {
 
 #[test]
 fn a_hosted_exclusive_button_group_moves_its_check() {
-    let mut h = Harness::new(alignment(true).hosted(labels()));
+    let mut h = Harness::new(alignment(true).hosted("Alignment", labels()));
     let center = member(&h, 1);
     h.click(center);
-    assert_eq!(h.semantics().name, "Center");
-    assert_eq!(h.semantics().state.checked, Some(true));
+    assert_eq!(member_node(&h).name, "Center");
+    assert_eq!(member_node(&h).state.checked, Some(true));
     h.focus();
     h.key(Key::ArrowRight);
     assert!(h.perform(SemanticAction::Activate, None));
@@ -460,7 +465,7 @@ fn a_hosted_exclusive_button_group_moves_its_check() {
     );
     assert!(set_value(&mut h, ControlValue::Indices(vec![0])));
     assert!(!set_value(&mut h, ControlValue::Indices(vec![0, 1])));
-    assert_eq!(h.semantics().state.checked, Some(false));
+    assert_eq!(member_node(&h).state.checked, Some(false));
     assert!(h.messages().is_empty());
     h.set_enabled(false);
     h.click(center);
@@ -469,15 +474,18 @@ fn a_hosted_exclusive_button_group_moves_its_check() {
 
 #[test]
 fn a_hosted_button_group_mirrors_and_toggles_members() {
-    let mut h = Harness::with_direction(alignment(false).hosted(labels()), LayoutDirection::Rtl);
+    let mut h = Harness::with_direction(
+        alignment(false).hosted("Alignment", labels()),
+        LayoutDirection::Rtl,
+    );
     // The first member sits at the right of a right-to-left row.
     let right = member(&h, 2);
     h.click(right);
-    assert_eq!(h.semantics().name, "Left");
+    assert_eq!(member_node(&h).name, "Left");
     h.focus();
     h.key(Key::ArrowLeft);
     h.key(Key::Space);
-    assert_eq!(h.semantics().name, "Center");
+    assert_eq!(member_node(&h).name, "Center");
     assert_eq!(
         h.messages(),
         vec![
@@ -489,18 +497,22 @@ fn a_hosted_button_group_mirrors_and_toggles_members() {
 
 #[test]
 fn a_hosted_button_group_skips_a_disabled_member() {
-    let mut h = Harness::new(alignment(true).hosted(labels()).with_enabled(1, false));
+    let mut h = Harness::new(
+        alignment(true)
+            .hosted("Alignment", labels())
+            .with_enabled(1, false),
+    );
     assert!(set_value(&mut h, ControlValue::Indices(vec![0])));
     // A press on the disabled member focuses the group at its checked
     // member and does not reach the disabled one.
     h.click(member(&h, 1));
-    assert_eq!(h.semantics().name, "Left");
-    assert!(!h.semantics().state.disabled);
+    assert_eq!(member_node(&h).name, "Left");
+    assert!(!member_node(&h).state.disabled);
     assert!(h.messages().is_empty());
     h.focus();
     h.key(Key::ArrowLeft);
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "Left");
+    assert_eq!(member_node(&h).name, "Left");
     assert_eq!(
         h.messages(),
         vec![
@@ -521,32 +533,40 @@ fn a_hosted_exclusive_button_group_starts_at_the_check_and_reaches_buttons() {
         ],
         true,
     );
-    let mut h = Harness::new(group.hosted(labels()));
+    let mut h = Harness::new(group.hosted("Alignment", labels()));
     assert!(set_value(&mut h, ControlValue::Indices(vec![1])));
     h.focus();
-    let node = h.semantics();
+    let node = member_node(&h);
     assert_eq!(
         (node.name.as_str(), node.role),
         ("Center", SemanticRole::RadioButton)
     );
     h.key(Key::ArrowRight);
     assert_eq!(
-        h.semantics().name,
+        member_node(&h).name,
         "Right",
         "arrow keys reach a button member"
     );
     assert!(h.messages().is_empty(), "a button member takes no check");
     h.key(Key::Home);
-    assert_eq!(h.semantics().name, "Left");
+    assert_eq!(member_node(&h).name, "Left");
     h.key(Key::End);
-    assert_eq!(h.semantics().name, "Right");
+    assert_eq!(member_node(&h).name, "Right");
     assert_eq!(h.messages(), vec![changed(ControlValue::Indices(vec![0]))]);
 }
 
 #[test]
 fn a_button_group_size_sets_the_member_height() {
-    let small = Harness::new(alignment(false).with_size(ControlSize::Sm).hosted(labels()));
-    let large = Harness::new(alignment(false).with_size(ControlSize::Lg).hosted(labels()));
+    let small = Harness::new(
+        alignment(false)
+            .with_size(ControlSize::Sm)
+            .hosted("Alignment", labels()),
+    );
+    let large = Harness::new(
+        alignment(false)
+            .with_size(ControlSize::Lg)
+            .hosted("Alignment", labels()),
+    );
     assert_eq!(small.bounds().size.height, 32.0);
     assert_eq!(large.bounds().size.height, 40.0);
 }
@@ -570,24 +590,25 @@ fn zoom() -> ButtonGroup {
 #[test]
 fn a_hosted_button_group_runs_buttons_and_skips_parts() {
     let labels = ["Zoom", "Out", "", "In", "Fit"].map(String::from).to_vec();
-    let mut h = Harness::new(zoom().hosted(labels));
+    let mut h = Harness::new(zoom().hosted("Zoom", labels));
     h.focus();
-    let semantics = h.semantics();
+    let semantics = member_node(&h);
     assert_eq!(semantics.name, "Out", "focus starts at the first button");
     assert_eq!(semantics.role, SemanticRole::Button);
     assert_eq!(semantics.state.checked, None);
-    assert_eq!(semantics.description, "Zoom");
+    assert_eq!(h.semantics().name, "Zoom", "the group name");
+    assert_eq!(h.parts().parts()[0].node.name, "Zoom", "the text part");
     // Arrow keys and Tab skip the separator and the text part.
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "In");
+    assert_eq!(member_node(&h).name, "In");
     h.key(Key::Enter);
     h.key(Key::Tab);
-    assert_eq!(h.semantics().name, "Fit");
-    assert_eq!(h.semantics().role, SemanticRole::Button);
-    assert_eq!(h.semantics().state.checked, Some(false));
+    assert_eq!(member_node(&h).name, "Fit");
+    assert_eq!(member_node(&h).role, SemanticRole::Button);
+    assert_eq!(member_node(&h).state.checked, Some(false));
     h.key(Key::Space);
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "Out", "arrow keys wrap");
+    assert_eq!(member_node(&h).name, "Out", "arrow keys wrap");
     assert!(h.perform(SemanticAction::Activate, None));
     assert_eq!(
         h.messages(),
@@ -627,7 +648,7 @@ fn baselines(h: &Harness) -> Vec<(String, Point)> {
 #[test]
 fn a_hosted_button_group_keeps_parts_at_their_natural_width() {
     let labels = ["Zoom", "Out", "", "In", "Fit"].map(String::from).to_vec();
-    let mut h = Harness::new(zoom().hosted(labels).with_enabled(1, false));
+    let mut h = Harness::new(zoom().hosted("Zoom", labels).with_enabled(1, false));
     let before = baselines(&h);
     let natural = h.bounds();
     h.place(hosted::rect(10.0, 10.0, natural.size.width + 90.0, 36.0));
@@ -641,8 +662,8 @@ fn a_hosted_button_group_keeps_parts_at_their_natural_width() {
     // The disabled button takes no click and no focus.
     h.click(after[1].1);
     assert!(h.messages().is_empty());
-    assert_eq!(h.semantics().name, "In");
-    assert!(!h.semantics().state.disabled);
+    assert_eq!(member_node(&h).name, "In");
+    assert!(!member_node(&h).state.disabled);
 }
 
 #[test]

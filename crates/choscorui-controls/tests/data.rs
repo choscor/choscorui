@@ -209,10 +209,14 @@ fn avatar_groups_overlap_and_end_with_a_count() {
         assert!(bounds.contains_rect(outer), "{outer:?} stays in {bounds:?}");
     }
     assert_eq!(texts(&h.paint()), ["AL", "BT", "CV", "+3"]);
-    assert_eq!(
-        h.semantics().value.as_deref(),
-        Some("Ana Lee, Bao Tran, Chi Vo, +3")
-    );
+    let parts = h.parts();
+    let names: Vec<_> = parts
+        .parts()
+        .iter()
+        .map(|part| part.node.name.as_str())
+        .collect();
+    assert_eq!(names, ["Ana Lee", "Bao Tran", "Chi Vo", "+3"]);
+    assert_eq!(h.semantics().value, None, "the members are parts");
     let mut small = Harness::new(AvatarGroup::new("Team", people()).with_size(ControlSize::Sm));
     assert_eq!(small.measure().width, 3.0 * 24.0 - 2.0 * 8.0 + 4.0);
 }

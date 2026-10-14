@@ -410,6 +410,24 @@ impl Chart {
         )
     }
 
+    /// The area of the data point of `category`: its band of a cartesian
+    /// chart, or a square around its anchor on a polar chart.
+    pub(super) fn point_rect(&self, category: usize) -> Rect {
+        let area = self.plot.area;
+        if self.cartesian() {
+            let band = self.band();
+            return Rect::from_xywh(
+                self.x(category) - band / 2.0,
+                area.origin.y,
+                band,
+                area.size.height,
+            );
+        }
+        let side = self.plot.radius / 4.0;
+        let anchor = self.anchor(category);
+        Rect::from_xywh(anchor.x - side / 2.0, anchor.y - side / 2.0, side, side)
+    }
+
     /// The point the tooltip of `category` sits beside.
     fn anchor(&self, category: usize) -> Point {
         let plot = &self.plot;
