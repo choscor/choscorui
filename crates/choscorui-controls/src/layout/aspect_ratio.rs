@@ -1,4 +1,5 @@
-//! A box with a fixed ratio of width to height, filled with an image.
+//! A box with a fixed ratio of width to height, filled with an image or
+//! a child view.
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
@@ -7,9 +8,11 @@ use choscorui_core::{
     EventReply, Image, ImageSampling, Measured, Path, Rect, SemanticNode, SemanticRole, Size,
 };
 
-/// A box whose height follows its width at a fixed ratio. An image
-/// covers the box and is cropped at the center; without one, the box
-/// shows its muted placeholder. It takes no focus.
+/// A box with a fixed ratio of width to height, as large as fits in the
+/// offered width and height. An image covers the box and is cropped at
+/// the center; without one, the box shows its muted placeholder. It takes
+/// no focus. Only a box with an image is an `Image` for assistive
+/// technology; the placeholder is a `Group`.
 pub struct AspectRatio {
     name: String,
     ratio: f64,
@@ -58,12 +61,14 @@ fn cover(image: &Image, rect: Rect) -> Rect {
 
 impl CustomControl for AspectRatio {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        let max = cx.constraints.max.width;
-        // An unbounded box is as wide as a small container.
-        let width = if max.is_finite() {
-            max
-        } else {
-            cx.tokens.spacing * 112.0
+        let max = cx.constraints.max;
+        // The box fits in both bounds; an unbounded box is as wide as a
+        // small container.
+        let width = match (max.width.is_finite(), max.height.is_finite()) {
+            (true, true) => max.width.min(max.height * self.ratio),
+            (true, false) => max.width,
+            (false, true) => max.height * self.ratio,
+            (false, false) => cx.tokens.spacing * 112.0,
         };
         Measured {
             size: Size::new(width, width / self.ratio),
@@ -80,7 +85,7 @@ impl CustomControl for AspectRatio {
         let bounds = cx.bounds;
         cx.slot(bounds, &style, |_, _| {});
         if let Some(image) = &self.image {
-            let clip = Path::rounded_rect(bounds, style.radius.top_start);
+            let clip = Path::rounded_rect_corners(bounds, style.radius.physical(cx.rtl));
             if cx.list.push_clip_path(clip).is_ok() {
                 let _ =
                     cx.list
@@ -91,7 +96,12 @@ impl CustomControl for AspectRatio {
     }
 
     fn semantics(&self) -> SemanticNode {
-        hosted::node(SemanticRole::Image, &self.name, Vec::new())
+        let role = if self.image.is_some() {
+            SemanticRole::Image
+        } else {
+            SemanticRole::Group
+        };
+        hosted::node(role, &self.name, Vec::new())
     }
 
     fn focusable(&self) -> bool {

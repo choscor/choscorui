@@ -119,7 +119,7 @@ to a control. [`Field`](#field-and-fieldtext) and the compose
 | Feedback | [`Skeleton`](#spinner-and-skeleton) | Pulsing placeholder block. |
 | Feedback | [`Empty`](#empty) | Centered empty state with media and actions. |
 | Feedback | [`Toaster`](#toast-and-toaster) | Stack of toasts at a window corner. |
-| Layout | [`AspectRatio`](#aspectratio) | Box with a fixed ratio, filled with an image. |
+| Layout | [`AspectRatio`](#aspectratio) | Box with a fixed ratio, filled with an image or a view. |
 | Layout | [`Collapsible`](#collapsible) | Section that shows or hides its items. |
 | Layout | [`Accordion`](#accordion) | Stacked sections that open under their headers. |
 | Layout | [`ItemGroup`](#item-and-itemgroup) | Rows of media, text, and actions. |
@@ -4336,19 +4336,24 @@ behavior.
 
 ### AspectRatio
 
-- The height follows the width at a fixed ratio, such as 16 by 9. A ratio
-  that is not positive counts as 1.
+- The box keeps a fixed ratio of width to height, such as 16 by 9. It is
+  as large as fits in the offered width and height. A ratio that is not
+  positive counts as 1.
 - `with_image(image)` covers the box with the image. The image keeps its
   own ratio and is cropped at the center.
-- Without a bounded width, the box is 448 pt wide. It takes no focus.
+- Without a bounded width or height, the box is 448 pt wide. It takes no
+  focus.
+- The `AspectRatio::wrap(name, ratio, child)` view holds any view. The
+  box takes the width that it gets, and the child fills the box and is
+  clipped to its corners.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Box | `Root` | `muted` fill, radius lg; the image is clipped to the radius |
+| Box | `Root` | `muted` fill, radius lg; the image is clipped to each corner radius |
 
 | Field | `AspectRatio::semantics` |
 | --- | --- |
-| Role | `Image` (AXImage) |
+| Role | `Image` (AXImage) with an image; `Group` without one |
 | Name | the name from `new` |
 | Actions | none |
 

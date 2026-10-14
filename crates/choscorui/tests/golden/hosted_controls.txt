@@ -760,7 +760,7 @@ PopOpacity
 PopTransform
 # aspect-ratio Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 252.0 } }
-semantics SemanticNode { role: Image, name: "Photo", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: Group, name: "Photo", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 252.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 448.0, height: 252.0 } }, radius: 10.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 PopClip

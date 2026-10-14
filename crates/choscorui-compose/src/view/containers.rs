@@ -2,21 +2,115 @@
 //! node lowers onto the controls' group layout: its first child is the
 //! hosted card, which paints the frame and the title, and the members
 //! follow. The stack node holds the hosted stack control, and the view of
-//! its current page fills it.
+//! its current page fills it. A wrapping aspect-ratio box holds its child
+//! the same way.
 
 use super::View;
 use super::configured::Configured;
 use super::dynamic::Dynamic;
-use super::host::Cx;
+use super::env::Corner;
+use super::host::{Cx, Flex};
 use super::layout::{Alignment, parent_tokens};
 use super::modifier::ViewExt;
 use super::state::{IntoLive, Live};
 use super::text::TextContent;
 use super::widgets::{Items, Label, label, text, to_position};
 use choscorui_controls as controls;
-use choscorui_controls::ControlKind;
-use choscorui_core::{Dirty, LayoutKind, LayoutStyle, SemanticRole, SharedLayout};
+use choscorui_controls::{ControlKind, CustomControl, Slot, StyleQuery};
+use choscorui_core::{Dirty, LayoutKind, LayoutStyle, NodeId, SemanticRole, SharedLayout};
 use std::rc::Rc;
+
+/// Mounts `control` with `child` as its child, which fills it. Returns
+/// the node, or `None` when the control did not mount.
+fn holder<T: CustomControl + 'static, V: View>(
+    cx: &mut Cx,
+    control: Configured<T>,
+    child: V,
+) -> Option<NodeId> {
+    let fragment = cx.inner.fragments.child(cx.fragment);
+    {
+        let mut part = Cx {
+            inner: &mut *cx.inner,
+            parent: cx.parent,
+            fragment,
+            scope: cx.scope,
+            env: cx.env.clone(),
+        };
+        part.mount(control);
+    }
+    let node = cx.inner.fragments.nodes(fragment).first().copied()?;
+    cx.inner.set_style(
+        node,
+        LayoutStyle {
+            kind: LayoutKind::Overlay,
+            ..LayoutStyle::default()
+        },
+    );
+    cx.inner.data(node).child_align = Some(Alignment::FILL.items());
+    let env = cx.env.clone();
+    cx.within(node, env).mount(child);
+    cx.inner.children_changed(node);
+    Some(node)
+}
+
+impl super::widgets::AspectRatio {
+    /// A box named `name` with the width-to-height `ratio`, which holds
+    /// `child`. The box takes the width it is offered. The child fills the
+    /// box and is clipped to its corners.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let preview = AspectRatio::wrap("Preview", 16.0 / 9.0, Text::new("Video"));
+    /// ```
+    pub fn wrap<M, V: View>(
+        name: impl IntoLive<TextContent, M>,
+        ratio: f64,
+        child: V,
+    ) -> impl View {
+        Wrap {
+            control: Self::new(name, ratio),
+            ratio,
+            child,
+        }
+    }
+}
+
+/// An aspect-ratio box that holds a child view.
+struct Wrap<V> {
+    control: super::widgets::AspectRatio,
+    ratio: f64,
+    child: V,
+}
+
+impl<V: View> View for Wrap<V> {
+    fn mount(self, cx: &mut Cx) {
+        let tokens = parent_tokens(cx);
+        let Some(node) = holder(cx, self.control, self.child) else {
+            return;
+        };
+        let style = cx.inner.styles.resolve(
+            &tokens,
+            StyleQuery::new(ControlKind::AspectRatio, Slot::Root),
+        );
+        let data = cx.inner.data(node);
+        data.decor.radius = Some(Corner::Points(style.radius.top_start));
+        data.decor.clip = true;
+        if self.ratio.is_finite() && self.ratio > 0.0 {
+            data.aspect = Some(self.ratio);
+            cx.inner.aspects.insert(node);
+        }
+        // The box takes the width it is offered, and its height follows.
+        cx.inner.make_flexible(
+            node,
+            Flex {
+                wide: true,
+                tall: false,
+            },
+        );
+    }
+}
 
 /// A titled frame around related controls. The group is named by
 /// `title`, and `members` are its children in the tree. Each top-level
@@ -143,32 +237,8 @@ where
                 .map(|stack| stack.with_titles(titles))
         })
         .value(self.current.clone().map(to_position));
-        let fragment = cx.inner.fragments.child(cx.fragment);
-        {
-            let mut part = Cx {
-                inner: &mut *cx.inner,
-                parent: cx.parent,
-                fragment,
-                scope: cx.scope,
-                env: cx.env.clone(),
-            };
-            part.mount(control);
-        }
-        let Some(node) = cx.inner.fragments.nodes(fragment).first().copied() else {
-            return;
-        };
         // The current page fills the stack node.
-        cx.inner.set_style(
-            node,
-            LayoutStyle {
-                kind: LayoutKind::Overlay,
-                ..LayoutStyle::default()
-            },
-        );
-        cx.inner.data(node).child_align = Some(Alignment::FILL.items());
         let (current, page) = (self.current, self.page);
-        let env = cx.env.clone();
-        cx.within(node, env)
-            .mount(Dynamic::new(move || page(current.get())));
+        holder(cx, control, Dynamic::new(move || page(current.get())));
     }
 }

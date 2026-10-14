@@ -5,9 +5,10 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    AlertDialog, AnyView, AvatarGroup, Calendar, Checkbox, Command, CommandLink, Configured, Cx,
-    DropdownMenu, Env, FontChooser, GroupBox, Kbd, NumericDisplay, ScrollBar, StackedContainer,
-    State, Switch, Text, Toaster, ToolBox, ToolButton, View, ViewExt, ViewHost,
+    AlertDialog, AnyView, AspectRatio, AvatarGroup, Calendar, Checkbox, Command, CommandLink,
+    Configured, Cx, DropdownMenu, Env, FontChooser, Frame, GroupBox, Kbd, NumericDisplay,
+    ScrollBar, StackedContainer, State, Switch, Text, Toaster, ToolBox, ToolButton, View, ViewExt,
+    ViewHost,
 };
 use choscorui_controls as controls;
 use choscorui_controls::{
@@ -173,6 +174,24 @@ fn a_group_box_holds_its_members_and_disables_them() {
     // The group is wider than the switch, to hold its title.
     let (group, member) = (host.tree().bounds(group), host.tree().bounds(member));
     assert!(group.unwrap().size.width > member.unwrap().size.width + 100.0);
+}
+
+#[test]
+fn an_aspect_ratio_box_holds_any_view() {
+    let mut host = host(|_| {
+        AspectRatio::wrap("Preview", 16.0 / 9.0, Text::new("Video"))
+            .frame(Frame::new().width(320.0))
+            .into_any()
+    });
+    let (node, child) = (host.find("Preview").unwrap(), host.find("Video").unwrap());
+    assert_eq!(host.semantic(node).unwrap().role, SemanticRole::Group);
+    assert!(
+        host.tree().is_within(child, node),
+        "the box holds its child"
+    );
+    let (outer, inner) = (host.tree().bounds(node), host.tree().bounds(child));
+    assert_eq!(outer.unwrap().size, Size::new(320.0, 180.0));
+    assert_eq!(inner.unwrap().size, Size::new(320.0, 180.0));
 }
 
 #[test]

@@ -7,8 +7,8 @@ use choscorui_controls::{
     ItemGroup, ItemMedia, ItemVariant,
 };
 use choscorui_core::{
-    ColorRole, DesignTokens, DisplayCommand, DisplayList, Icon, Image, Key, KeyEvent,
-    LayoutDirection, Point, PointerButton, PointerEvent, SemanticAction, SemanticRole,
+    ColorRole, Constraints, DesignTokens, DisplayCommand, DisplayList, Icon, Image, Key, KeyEvent,
+    LayoutDirection, Point, PointerButton, PointerEvent, SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, paints, texts};
 
@@ -64,6 +64,13 @@ fn aspect_ratio_follows_its_width_and_covers_with_the_image() {
     assert!(!h.host.get(h.node).unwrap().focusable());
     let mut square = Harness::new(AspectRatio::new("Square", -1.0));
     assert_eq!(square.measure().height, 448.0);
+    // The box fits in both bounds, and the placeholder is not an image.
+    let mut wide = Harness::new(AspectRatio::new("Wide", 16.0 / 9.0));
+    let fit = wide.measure_in(Constraints::loose(Size::new(400.0, 90.0)));
+    assert_eq!((fit.width, fit.height), (160.0, 90.0));
+    let fit = wide.measure_in(Constraints::loose(Size::new(f64::INFINITY, 90.0)));
+    assert_eq!(fit.width, 160.0);
+    assert_eq!(wide.semantics().role, SemanticRole::Group);
 }
 
 #[test]

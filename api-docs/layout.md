@@ -134,6 +134,22 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, ratio: f64) -> Self
 
 A box named `name` with the width-to-height `ratio`.
 
+#### `AspectRatio::wrap`
+
+```rust
+pub fn wrap<M, V: View>(name: impl IntoLive<TextContent, M>, ratio: f64, child: V) -> impl View
+```
+
+A box named `name` with the width-to-height `ratio`, which holds
+`child`. The box takes the width it is offered. The child fills the
+box and is clipped to its corners.
+
+##### Examples
+
+```rust
+let preview = AspectRatio::wrap("Preview", 16.0 / 9.0, Text::new("Video"));
+```
+
 ## `Divider`
 
 struct in `choscorui::prelude::Divider`
