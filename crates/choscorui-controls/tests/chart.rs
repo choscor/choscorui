@@ -251,7 +251,7 @@ fn the_value_axis_labels_the_grid_on_the_start_side() {
     };
     let plain = Harness::new(visitors(ChartKind::Bar)).paint();
     assert!(value_labels(&plain).is_empty(), "off by default");
-    let mut h = Harness::new(visitors(ChartKind::Bar).with_value_axis());
+    let h = Harness::new(visitors(ChartKind::Bar).with_value_axis());
     let list = h.paint();
     let labels = value_labels(&list);
     let names: Vec<&str> = labels.iter().map(|(text, _)| text.as_str()).collect();
