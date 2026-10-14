@@ -539,6 +539,17 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, hex: Binding<String>) -> Self
 
 A color picker named `name` that edits `hex`.
 
+#### `ColorPicker::on_channels`
+
+```rust
+pub fn on_channels(self, action: impl Fn([f64; 4]) + 'static) -> Self
+```
+
+Runs `action` with the hue, saturation, value, and alpha after
+each change by the user, each as a fraction of its range. It also
+runs when the hex text stays the same, for example for a new hue
+of a gray.
+
 ## `ColumnBrowser`
 
 type alias in `choscorui::prelude::ColumnBrowser`

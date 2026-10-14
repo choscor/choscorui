@@ -564,8 +564,19 @@ impl ColorPicker {
         cx.request_paint();
         if self.channel(channel) != before {
             cx.request_semantics();
-            cx.emit(ControlMessage::Changed(ControlValue::Text(self.hex())));
+            self.report(cx);
         }
+    }
+
+    /// Reports the color: first its hex text, then its channels. The
+    /// channels show a change that the hex text does not, such as a new
+    /// hue of a gray.
+    fn report(&self, cx: &mut ControlContext<'_>) {
+        cx.emit(ControlMessage::Changed(ControlValue::Text(self.hex())));
+        let channels = ColorChannel::ALL.map(|channel| self.channel(channel));
+        cx.emit(ControlMessage::Changed(ControlValue::Channels(
+            channels.to_vec(),
+        )));
     }
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> EventReply {
@@ -756,7 +767,7 @@ impl CustomControl for ColorPicker {
                 }
                 cx.request_paint();
                 cx.request_semantics();
-                cx.emit(ControlMessage::Changed(ControlValue::Text(self.hex())));
+                self.report(cx);
                 true
             }
             (SemanticAction::Focus, _) => {

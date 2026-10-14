@@ -927,13 +927,19 @@ fn a_hosted_color_picker_edits_channels_and_takes_hex_values() {
     h.key(Key::Enter);
     assert!(h.perform(SemanticAction::SetValue, Some("#00FF00")));
     assert!(!h.perform(SemanticAction::SetValue, Some("green")));
+    // Each change reports the hex text, then the channels.
+    let channels =
+        |values: [f64; 4]| ControlMessage::Changed(ControlValue::Channels(values.into()));
     assert_eq!(
         h.messages(),
         vec![
             ControlMessage::Changed(ControlValue::Text("#FFFFFF".into())),
+            channels([0.0, 0.0, 1.0, 1.0]),
             ControlMessage::Changed(ControlValue::Text("#FF0000".into())),
+            channels([0.0, 1.0, 1.0, 1.0]),
             ControlMessage::Activated,
             ControlMessage::Changed(ControlValue::Text("#00FF00".into())),
+            channels([120.0 / 360.0, 1.0, 1.0, 1.0]),
         ]
     );
 
@@ -957,9 +963,10 @@ fn a_hosted_color_picker_edits_channels_and_takes_hex_values() {
     h.click(Point::new(end.x, end.y - padding.vertical() / 2.0 - 1.0));
     assert_eq!(
         h.messages(),
-        vec![ControlMessage::Changed(ControlValue::Text(
-            "#0000FF00".into()
-        ))]
+        vec![
+            ControlMessage::Changed(ControlValue::Text("#0000FF00".into())),
+            channels([240.0 / 360.0, 1.0, 1.0, 0.0]),
+        ]
     );
 
     h.set_enabled(false);
@@ -1001,7 +1008,8 @@ fn a_hosted_color_picker_mirrors_its_arrow_keys() {
     rtl.key(Key::ArrowRight);
     assert!(rtl.messages().is_empty());
     rtl.key(Key::ArrowLeft);
-    assert_eq!(rtl.messages().len(), 1);
+    // The hex text, then the channels.
+    assert_eq!(rtl.messages().len(), 2);
 }
 
 fn edit_toolbar() -> Toolbar {

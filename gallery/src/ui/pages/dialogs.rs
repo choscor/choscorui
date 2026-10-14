@@ -246,7 +246,7 @@ fn swatch(color: Color, chosen: Binding<String>) -> impl View {
 
 /// The hosted picker with its channel readouts, a hex field, and the
 /// recent colors chosen with Use Color or Return in the picker. The
-/// readouts show the channels of the current color.
+/// readouts show the channels that the picker reports.
 struct ColorPickerPage;
 
 impl View for ColorPickerPage {
@@ -273,6 +273,14 @@ impl View for ColorPickerPage {
             },
         );
         let picker = view::ColorPicker::new(t!("color-picker.current"), chosen)
+            // The readouts come from the channels, which show a change
+            // that the hex text does not, such as a new hue of a gray.
+            .on_channels(move |[hue, saturation, value, alpha]| {
+                model.update(|picker| {
+                    picker.set_hsv(hue * 360.0, saturation, value);
+                    picker.set_alpha(alpha);
+                })
+            })
             .on_activate(move || {
                 model.update(|picker| {
                     picker.accept();
@@ -532,6 +540,22 @@ mod tests {
         page.host.layout();
         assert!(page.host.semantic(hex).unwrap().state.invalid);
         assert_eq!(page.value("Current color").as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn a_new_hue_of_a_gray_shows_in_the_readout() {
+        let mut page = Harness::new("color-picker");
+        let hex = page.node("Hex color");
+        page.host
+            .perform(hex, SemanticAction::SetValue, Some("#808080"));
+        page.host.layout();
+        assert!(page.host.find("Hue 180°").is_some());
+        assert!(page.host.find("Saturation 0%").is_some());
+        // The hue strip has focus; a step changes the hue, not the hex.
+        assert!(page.act("Current color", SemanticAction::Increment));
+        assert_eq!(page.value("Current color").as_deref(), Some("#808080"));
+        assert!(page.host.find("Hue 180°").is_none(), "the hue moved");
+        assert!(page.host.find("Saturation 0%").is_some());
     }
 
     #[test]

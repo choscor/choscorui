@@ -189,7 +189,7 @@ changes as `ControlMessage` values:
 | `DateTimeEdit` | `Changed(Date)` for a date, `Changed(Text)` for a time or a date and time | the same kind |
 | `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
-| `ColorPicker` | `Changed(Text)` with the hex value, `Activated` on Enter | `Text` with a hex value |
+| `ColorPicker` | `Changed(Text)` with the hex value, then `Changed(Channels)` with the hue, saturation, value, and alpha; `Activated` on Enter | `Text` with a hex value |
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu, `ItemActivated(index)` for an overflowed embedded control | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
 | `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
@@ -2636,6 +2636,9 @@ size, bold, and italic controls.
 
 **As a view.** `ColorPicker::new(name, hex)` edits a `Binding<String>`
 through the `Text` value in both directions. Accept runs `on_activate`.
+`on_channels` runs with the four channels after each change by the
+user. It also runs when the hex text stays the same, for example for a new
+hue of a gray.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
 

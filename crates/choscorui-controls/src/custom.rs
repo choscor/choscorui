@@ -68,6 +68,10 @@ pub enum ControlValue {
     Number(f64),
     Range(f64, f64),
     Text(String),
+    /// The channels of a multi-channel value, each as a fraction of its
+    /// range, such as the hue, saturation, value, and alpha of a
+    /// `ColorPicker`.
+    Channels(Vec<f64>),
     Index(Option<usize>),
     Indices(Vec<usize>),
     Date(Option<CivilDate>),

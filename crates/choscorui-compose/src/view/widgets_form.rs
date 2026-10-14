@@ -351,6 +351,21 @@ impl Configured<controls::ColorPicker> {
         })
         .bind(hex, ControlValue::Text, as_text)
     }
+
+    /// Runs `action` with the hue, saturation, value, and alpha after
+    /// each change by the user, each as a fraction of its range. It also
+    /// runs when the hex text stays the same, for example for a new hue
+    /// of a gray.
+    #[must_use]
+    pub fn on_channels(self, action: impl Fn([f64; 4]) + 'static) -> Self {
+        self.on_message(move |message| {
+            if let ControlMessage::Changed(ControlValue::Channels(channels)) = message
+                && let [hue, saturation, value, alpha] = channels[..]
+            {
+                action([hue, saturation, value, alpha]);
+            }
+        })
+    }
 }
 
 /// A rotary control that edits `value`. Like a slider, it covers
