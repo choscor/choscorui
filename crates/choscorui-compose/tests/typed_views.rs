@@ -613,3 +613,53 @@ fn bind_connects_a_custom_configured_control_both_ways() {
     host.flush();
     assert_eq!(host.semantic(node).unwrap().state.checked, Some(false));
 }
+
+/// Whether the painted frame of `host` shows `text`.
+fn shows(host: &mut ViewHost, text: &str) -> bool {
+    host.layout();
+    host.paint().commands().iter().any(|command| {
+        matches!(command, choscorui_core::DisplayCommand::DrawText { text: shown, .. } if shown == text)
+    })
+}
+
+#[test]
+fn a_message_scroller_keeps_its_place_when_a_message_comes() {
+    let count = slot();
+    let shared = count.clone();
+    let mut host = host(move |cx| {
+        let count = cx.state(50_usize);
+        shared.set(Some(count));
+        MessageScroller::new("Chat", move |_: &Env| {
+            (0..count.get())
+                .map(|index| {
+                    let bubble = Bubble::new(format!("Message {index}"));
+                    choscorui_controls::Message::new("Ana", vec![bubble])
+                })
+                .collect()
+        })
+        .frame(Frame::new().width(300.0).height(160.0))
+        .into_any()
+    });
+    host.advance(0.0);
+    let chat = host.find("Chat").unwrap();
+    host.focus(Some(chat));
+    press(&mut host, Key::Home);
+    assert!(shows(&mut host, "Message 0"));
+    take(&count).set(51);
+    host.flush();
+    host.advance(0.1);
+    assert!(
+        shows(&mut host, "Message 0"),
+        "a scrolled-up view stays put"
+    );
+    assert_eq!(value(&mut host, chat).as_deref(), Some("Ana: Message 50"));
+    press(&mut host, Key::End);
+    assert!(shows(&mut host, "Message 50"));
+    take(&count).set(52);
+    host.flush();
+    host.advance(0.2);
+    assert!(
+        shows(&mut host, "Message 51"),
+        "the view sticks to the bottom"
+    );
+}

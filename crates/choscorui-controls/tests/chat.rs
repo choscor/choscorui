@@ -473,3 +473,92 @@ fn a_message_holds_its_avatar_and_its_reactions() {
         );
     }
 }
+
+/// The baseline y of the first line of each message.
+fn text_tops(list: &DisplayList) -> Vec<(String, f64)> {
+    list.commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::DrawText { baseline, text, .. } if text.starts_with("Message") => {
+                Some((text.clone(), baseline.y))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn message_scroller_keeps_its_place_hovers_bubbles_and_jumps_with_command_arrows() {
+    let tokens = DesignTokens::light();
+    let conversation = Conversation::new();
+    let mut h = Harness::new(MessageScroller::new("Chat", conversation.clone()));
+    let long = "word ".repeat(60);
+    for index in 0..200 {
+        conversation.push(Message::new(
+            "Ana",
+            vec![Bubble::new(format!("Message {index} {long}"))],
+        ));
+    }
+    assert!(advance(&mut h, 0.0));
+    let bounds = h.bounds();
+    let last = rounded_fills(&h.paint(), tokens.color(ColorRole::Primary));
+    let last = last.last().expect("a bubble");
+    assert!(
+        (bounds.max_y() - last.max_y() - 16.0).abs() < 0.5,
+        "half the gap below the last message: {last:?} in {bounds:?}"
+    );
+
+    // Messages that come into view above get their heights, and the
+    // messages that were in view move by exactly the page.
+    h.focus();
+    for _ in 0..4 {
+        h.key(Key::PageUp);
+        h.place(bounds);
+    }
+    let before = text_tops(&h.paint());
+    h.key(Key::PageUp);
+    h.place(bounds);
+    let after = text_tops(&h.paint());
+    let moved: Vec<f64> = before
+        .iter()
+        .filter_map(|(text, y)| {
+            after
+                .iter()
+                .find(|(other, _)| other == text)
+                .map(|(_, other)| other - y)
+        })
+        .collect();
+    assert!(!moved.is_empty(), "a message stays in view");
+    for shift in moved {
+        assert!((shift - 384.0 * 0.9).abs() < 0.01, "moved {shift}");
+    }
+
+    let command = ShortcutModifiers {
+        command: true,
+        ..ShortcutModifiers::default()
+    };
+    h.chord(command, Key::ArrowUp);
+    h.place(bounds);
+    let list = h.paint();
+    let first = rounded_fills(&list, tokens.color(ColorRole::Primary))[0];
+    assert!(
+        (first.origin.y - bounds.origin.y - 16.0).abs() < 0.5,
+        "half the gap above the first message"
+    );
+    assert!(texts(&list)[0].starts_with("Message 0 "));
+    let plain = h.paint();
+    h.hover(first.center());
+    h.set_time(5.0);
+    assert_ne!(
+        h.paint(),
+        plain,
+        "the bubble under the pointer shows the hover look"
+    );
+    h.chord(command, Key::ArrowDown);
+    h.place(bounds);
+    assert!(
+        texts(&h.paint())
+            .iter()
+            .any(|text| text.starts_with("Message 199 "))
+    );
+}

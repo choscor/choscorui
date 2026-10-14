@@ -4653,16 +4653,23 @@ behavior.
 ### MessageScroller and Conversation
 
 - The app pushes messages through a `Conversation` handle. Clones of the
-  handle share one queue. The scroller shows new messages at the next
-  `advance`.
+  handle share one conversation: the queue, the shown messages, and the
+  scroll position. The scroller shows new messages at the next `advance`.
+  A new scroller with the same handle keeps the messages, the offset, and
+  whether it sticks to the bottom.
 - Only the messages in view are measured and painted. A message keeps an
   estimated height until it comes into view. Heights are in a Fenwick
   tree, so a scroll does not scale with the conversation.
 - The scroller sticks to the bottom. While it shows the last message, new
   messages and size changes keep the last message in view. After a scroll
-  up, the view stays put.
+  up, the view stays put. While messages that come into view get their
+  heights, the first measured message in view keeps its place.
+- Half the message gap is above the first message and below the last
+  one.
+- The bubble under the pointer shows the hover look.
 - The wheel, ArrowUp, ArrowDown, Page Up, Page Down, Space, Home, and End
-  scroll it. Shift+Space scrolls one page up. `Increment` and `Decrement`
+  scroll it. Shift+Space scrolls one page up. Command+ArrowUp and
+  Command+ArrowDown go to the top and the bottom. `Increment` and `Decrement`
   scroll one page. At the top or the bottom, the scroller does not use
   the wheel, so an outer scroll view scrolls.
 - An [`OverlayScrollBar`](#overlayscrollbar) at the trailing edge shows
@@ -4680,9 +4687,12 @@ behavior.
 | State | disabled |
 | Actions | `Increment`, `Decrement`, and `Focus` while enabled |
 
-**As a view.** `MessageScroller::new(name, messages)` puts the messages in a
-new `Conversation` at each build. The scroller shows them at the next
-`advance`.
+**As a view.** `MessageScroller::new(name, messages)` keeps one
+`Conversation` between builds. The messages of the last build can start
+the new messages in the same locale. Then only the new messages go to it,
+and the scroller keeps its offset and whether it sticks to the bottom. Other
+messages start a new conversation. The scroller shows new messages at the
+next `advance`.
 
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.

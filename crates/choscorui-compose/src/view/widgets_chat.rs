@@ -10,6 +10,7 @@ use super::text::TextContent;
 use super::widgets::{Items, as_position, label, text, to_position};
 use choscorui_controls as controls;
 use choscorui_controls::{Bubble, ControlKind, Question, QuestionnaireLabels};
+use std::cell::RefCell;
 
 /// A chat message: the author's bubbles, with an optional avatar,
 /// header, and footer that `.with` adds. A bubble is content of a
@@ -55,13 +56,46 @@ impl Configured<controls::MessageScroller> {
         messages: impl Items<controls::Message>,
     ) -> Self {
         let name = label(name);
+        let kept = Kept::default();
         Configured::custom(ControlKind::MessageScroller, move |env| {
-            let conversation = controls::Conversation::new();
-            for message in messages.items(env) {
-                conversation.push(message);
-            }
+            let conversation = kept.conversation(env.locale().tag(), messages.items(env));
             controls::MessageScroller::new(text(&name, env), conversation)
         })
+    }
+}
+
+/// The conversation that a message scroller view keeps between builds,
+/// with the locale and the last message that it shows.
+#[derive(Default)]
+struct Kept(RefCell<Option<(String, controls::Conversation, Option<controls::Message>)>>);
+
+impl Kept {
+    /// The conversation of `messages`. When the messages of the last build
+    /// start them, in the same locale, only the new messages go to the
+    /// kept conversation, so the scroller keeps its offset and whether it
+    /// sticks to the bottom. Other messages start a new conversation.
+    fn conversation(
+        &self,
+        locale: String,
+        messages: Vec<controls::Message>,
+    ) -> controls::Conversation {
+        let mut kept = self.0.borrow_mut();
+        let sent = match &*kept {
+            Some((tag, conversation, last)) if *tag == locale => {
+                let count = conversation.len();
+                let same = count <= messages.len()
+                    && last.as_ref() == count.checked_sub(1).and_then(|at| messages.get(at));
+                same.then(|| (conversation.clone(), count))
+            }
+            _ => None,
+        };
+        let (conversation, count) = sent.unwrap_or_default();
+        let last = messages.last().cloned();
+        for message in messages.into_iter().skip(count) {
+            conversation.push(message);
+        }
+        *kept = Some((locale, conversation.clone(), last));
+        conversation
     }
 }
 

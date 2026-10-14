@@ -1,12 +1,12 @@
 //! A virtualized scroll area of chat messages that sticks to the bottom.
 
-use super::message::Message;
+use super::message::{Message, MessageLayout};
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    Constraints, EventPhase, EventReply, Key, KeyEvent, LayoutDirection, Measured, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, WheelUnit,
+    EventPhase, EventReply, Key, KeyEvent, Measured, PointerEvent, Rect, SemanticAction,
+    SemanticNode, SemanticRole, Size, WheelUnit,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -18,10 +18,13 @@ const ESTIMATE: f64 = 64.0;
 const LINE: f64 = 40.0;
 
 /// The handle that the app adds messages through. Clones share one
-/// queue. A [`MessageScroller`] made with the handle shows the messages
-/// at the next [`ControlHost::advance`](crate::ControlHost::advance).
+/// conversation: the queue, the shown messages, and the scroll position.
+/// A [`MessageScroller`] made with the handle shows queued messages at
+/// the next [`ControlHost::advance`](crate::ControlHost::advance). A new
+/// scroller with the same handle, such as after a view builds again,
+/// keeps the messages, the offset, and whether it sticks to the bottom.
 #[derive(Clone, Debug, Default)]
-pub struct Conversation(Rc<RefCell<Vec<Message>>>);
+pub struct Conversation(Rc<RefCell<Thread>>);
 
 impl Conversation {
     pub fn new() -> Self {
@@ -30,15 +33,135 @@ impl Conversation {
 
     /// Queues `message` at the end of the conversation.
     pub fn push(&self, message: Message) {
-        self.0.borrow_mut().push(message);
+        self.0.borrow_mut().pending.push(message);
+    }
+
+    /// The count of messages, shown and queued.
+    pub fn len(&self) -> usize {
+        let thread = self.0.borrow();
+        thread.messages.len() + thread.pending.len()
+    }
+
+    /// True when the conversation has no messages.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     fn pending(&self) -> bool {
-        !self.0.borrow().is_empty()
+        !self.0.borrow().pending.is_empty()
+    }
+}
+
+/// The messages of a conversation and where its scrollers show them.
+#[derive(Debug)]
+struct Thread {
+    pending: Vec<Message>,
+    messages: Vec<Message>,
+    heights: Heights,
+    generation: u64,
+    width: f64,
+    /// The space between messages. Half of it is above the first message
+    /// and below the last one.
+    gap: f64,
+    offset: f64,
+    stuck: bool,
+}
+
+impl Default for Thread {
+    fn default() -> Self {
+        Self {
+            pending: Vec::new(),
+            messages: Vec::new(),
+            heights: Heights::default(),
+            generation: 1,
+            width: 0.0,
+            gap: 0.0,
+            offset: 0.0,
+            stuck: true,
+        }
+    }
+}
+
+impl Thread {
+    fn bottom(&self, view: f64) -> f64 {
+        (self.heights.total() - view).max(0.0)
     }
 
-    fn take(&self) -> Vec<Message> {
-        std::mem::take(&mut self.0.borrow_mut())
+    /// The messages in a view `view` tall, as a range of indices.
+    fn visible(&self, view: f64) -> std::ops::Range<usize> {
+        if self.messages.is_empty() {
+            return 0..0;
+        }
+        let first = self.heights.at(self.offset);
+        let last = self.heights.at(self.offset + view).max(first);
+        first..last + 1
+    }
+
+    /// The top of message `index` in content coordinates.
+    fn top(&self, index: usize) -> f64 {
+        self.heights.before(index) + self.gap / 2.0
+    }
+
+    /// Measures the messages in view and keeps the offset in range. Each
+    /// pass measures only messages in view, so it does not scale with
+    /// the conversation. A view that does not stick to the bottom keeps
+    /// its first measured message in place while the messages that come
+    /// into view above it get their heights.
+    fn settle(&mut self, cx: &MeasureContext<'_>, view: f64) {
+        let anchor = (!self.stuck).then(|| {
+            let visible = self.visible(view);
+            let first = visible
+                .clone()
+                .find(|index| self.heights.measured[*index] == self.generation)
+                .unwrap_or(visible.start);
+            (first, self.offset - self.heights.before(first))
+        });
+        let place = |thread: &mut Self| {
+            if let Some((first, within)) = anchor {
+                thread.offset = thread.heights.before(first) + within;
+            }
+            let bottom = thread.bottom(view);
+            thread.offset = if thread.stuck {
+                bottom
+            } else {
+                thread.offset.clamp(0.0, bottom)
+            };
+        };
+        for _ in 0..4 {
+            place(self);
+            let mut changed = false;
+            for index in self.visible(view) {
+                if self.heights.measured[index] == self.generation {
+                    continue;
+                }
+                let rect = Rect::from_xywh(0.0, 0.0, self.width, 0.0);
+                let layout = self.messages[index].layout(cx, rect);
+                self.heights.set(index, layout.height + self.gap);
+                self.heights.measured[index] = self.generation;
+                changed = true;
+            }
+            if !changed {
+                break;
+            }
+        }
+        place(self);
+    }
+
+    /// Moves to `offset`, clamped. Returns false when the offset stays.
+    fn scroll_to(&mut self, offset: f64, view: f64) -> bool {
+        let bottom = self.bottom(view);
+        let offset = offset.clamp(0.0, bottom);
+        self.stuck = offset >= bottom - 0.5;
+        let moved = offset != self.offset;
+        self.offset = offset;
+        moved
+    }
+
+    fn receive(&mut self) {
+        for message in std::mem::take(&mut self.pending) {
+            self.messages.push(message);
+            self.heights.push(ESTIMATE);
+        }
     }
 }
 
@@ -122,19 +245,16 @@ impl Heights {
 /// and painted. It sticks to the bottom: while it shows the last message,
 /// new messages and size changes keep the last message in view. The
 /// wheel and the arrow, Page Up, Page Down, Home, and End keys scroll it.
+/// Command+ArrowUp and Command+ArrowDown go to the top and the bottom.
 pub struct MessageScroller {
     name: String,
     conversation: Conversation,
-    messages: Vec<Message>,
-    heights: Heights,
-    generation: u64,
-    width: f64,
-    gap: f64,
     viewport: Rect,
-    offset: f64,
-    stuck: bool,
-    rtl: bool,
     enabled: bool,
+    /// The messages in view and where they are, from the last arrange.
+    shown: Vec<(usize, MessageLayout)>,
+    /// The message and the bubble under the pointer.
+    hovered: Option<(usize, usize)>,
     /// The overlay scroll bar at the trailing edge.
     bar: crate::OverlayScrollBar,
 }
@@ -144,88 +264,30 @@ impl MessageScroller {
         Self {
             name: name.into(),
             conversation,
-            messages: Vec::new(),
-            heights: Heights::default(),
-            generation: 1,
-            width: 0.0,
-            gap: 0.0,
             viewport: Rect::default(),
-            offset: 0.0,
-            stuck: true,
-            rtl: false,
             enabled: true,
+            shown: Vec::new(),
+            hovered: None,
             bar: crate::OverlayScrollBar::new(crate::ScrollOrientation::Vertical),
-        }
-    }
-
-    fn bottom(&self) -> f64 {
-        (self.heights.total() - self.viewport.size.height).max(0.0)
-    }
-
-    /// The messages in view, as a range of indices.
-    fn visible(&self) -> std::ops::Range<usize> {
-        if self.messages.is_empty() {
-            return 0..0;
-        }
-        let first = self.heights.at(self.offset);
-        let last = self
-            .heights
-            .at(self.offset + self.viewport.size.height)
-            .max(first);
-        first..last + 1
-    }
-
-    /// Measures the messages in view and keeps the offset in range. Each
-    /// pass measures only messages in view, so it does not scale with
-    /// the conversation.
-    fn settle(&mut self, cx: &MeasureContext<'_>) {
-        for _ in 0..4 {
-            if self.stuck {
-                self.offset = self.bottom();
-            }
-            self.offset = self.offset.clamp(0.0, self.bottom());
-            let mut changed = false;
-            for index in self.visible() {
-                if self.heights.measured[index] == self.generation {
-                    continue;
-                }
-                let layout =
-                    self.messages[index].layout(cx, Rect::from_xywh(0.0, 0.0, self.width, 0.0));
-                self.heights.set(index, layout.height + self.gap);
-                self.heights.measured[index] = self.generation;
-                changed = true;
-            }
-            if !changed {
-                break;
-            }
-        }
-        if self.stuck {
-            self.offset = self.bottom();
         }
     }
 
     /// Moves to `offset`, clamped. Returns false when the offset stays.
     fn scroll_to(&mut self, cx: &mut ControlContext<'_>, offset: f64) -> bool {
-        let bottom = self.bottom();
-        let offset = offset.clamp(0.0, bottom);
-        self.stuck = offset >= bottom - 0.5;
-        let moved = offset != self.offset;
+        let view = self.viewport.size.height;
+        let moved = self.conversation.0.borrow_mut().scroll_to(offset, view);
         if moved {
-            self.offset = offset;
+            self.hovered = None;
             cx.request_layout();
             cx.request_paint();
         }
         moved
     }
 
-    fn receive(&mut self, cx: &mut ControlContext<'_>) {
-        for message in self.conversation.take() {
-            self.messages.push(message);
-            self.heights.push(ESTIMATE);
-        }
-        cx.request_layout();
-        cx.request_paint();
-        cx.request_semantics();
+    /// The content height and the offset, for the scroll bar.
+    fn scroll(&self) -> (f64, f64) {
+        let thread = self.conversation.0.borrow();
+        (thread.heights.total(), thread.offset)
     }
 }
 
@@ -255,22 +317,35 @@ impl CustomControl for MessageScroller {
             ControlKind::MessageScroller,
             Slot::Viewport,
         ));
-        self.rtl = cx.rtl();
-        if bounds.size.width != self.width || viewport.gap != self.gap {
+        self.viewport = bounds;
+        let mut thread = self.conversation.0.borrow_mut();
+        if bounds.size.width != thread.width || viewport.gap != thread.gap {
             // Every height is now stale; messages are measured again when
             // they come into view.
-            self.generation += 1;
-            self.width = bounds.size.width;
-            self.gap = viewport.gap;
+            thread.generation += 1;
+            thread.width = bounds.size.width;
+            thread.gap = viewport.gap;
         }
-        self.viewport = bounds;
-        self.settle(cx);
+        let view = bounds.size.height;
+        thread.settle(cx, view);
+        self.shown = thread
+            .visible(view)
+            .map(|index| {
+                let top = bounds.origin.y + thread.top(index) - thread.offset;
+                let rect = Rect::from_xywh(bounds.origin.x, top, bounds.size.width, 0.0);
+                (index, thread.messages[index].layout(cx, rect))
+            })
+            .collect();
+        drop(thread);
         self.bar.arrange(cx, bounds);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
         if let ControlEvent::Timer = event {
-            self.receive(cx);
+            self.conversation.0.borrow_mut().receive();
+            cx.request_layout();
+            cx.request_paint();
+            cx.request_semantics();
             return EventReply::Stop;
         }
         if cx.phase() != EventPhase::Target {
@@ -278,7 +353,8 @@ impl CustomControl for MessageScroller {
         }
         // The scroll bar takes the pointer before the messages under it.
         if let ControlEvent::Pointer(pointer) = event {
-            self.bar.set_scroll(self.heights.total(), self.offset);
+            let (total, offset) = self.scroll();
+            self.bar.set_scroll(total, offset);
             if let Some(scrolled) = self.bar.hosted_pointer(cx, pointer) {
                 if scrolled {
                     self.scroll_to(cx, self.bar.offset());
@@ -286,9 +362,20 @@ impl CustomControl for MessageScroller {
                 return EventReply::Stop;
             }
         }
+        let offset = self.scroll().1;
         match event {
+            ControlEvent::Pointer(PointerEvent::Move { position }) => {
+                let hovered = self.shown.iter().find_map(|(index, layout)| {
+                    Message::bubble_at(layout, *position).map(|bubble| (*index, bubble))
+                });
+                if hovered != self.hovered {
+                    self.hovered = hovered;
+                    cx.request_paint();
+                }
+                EventReply::Continue
+            }
             ControlEvent::Hover(false) | ControlEvent::Dismiss => {
-                if self.bar.release() {
+                if self.bar.release() | self.hovered.take().is_some() {
                     cx.request_paint();
                 }
                 EventReply::Continue
@@ -299,7 +386,7 @@ impl CustomControl for MessageScroller {
                     WheelUnit::Lines => LINE,
                 };
                 // At a limit the wheel goes on to an outer scroll view.
-                if delta.y != 0.0 && self.scroll_to(cx, self.offset + delta.y * scale) {
+                if delta.y != 0.0 && self.scroll_to(cx, offset + delta.y * scale) {
                     EventReply::Stop
                 } else {
                     EventReply::Continue
@@ -307,17 +394,20 @@ impl CustomControl for MessageScroller {
             }
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
                 let page = self.viewport.size.height * 0.9;
-                let offset = match key {
-                    Key::ArrowUp => self.offset - LINE,
-                    Key::ArrowDown => self.offset + LINE,
-                    Key::Space if cx.modifiers().shift => self.offset - page,
-                    Key::PageUp => self.offset - page,
-                    Key::PageDown | Key::Space => self.offset + page,
+                let modifiers = cx.modifiers();
+                let target = match key {
+                    Key::ArrowUp if modifiers.command => 0.0,
+                    Key::ArrowDown if modifiers.command => f64::INFINITY,
+                    Key::ArrowUp => offset - LINE,
+                    Key::ArrowDown => offset + LINE,
+                    Key::Space if modifiers.shift => offset - page,
+                    Key::PageUp => offset - page,
+                    Key::PageDown | Key::Space => offset + page,
                     Key::Home => 0.0,
                     Key::End => f64::INFINITY,
                     _ => return EventReply::Continue,
                 };
-                self.scroll_to(cx, offset);
+                self.scroll_to(cx, target);
                 EventReply::Stop
             }
             ControlEvent::FocusChanged(_) => {
@@ -330,34 +420,20 @@ impl CustomControl for MessageScroller {
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let viewport = self.viewport;
-        let measure = MeasureContext {
-            constraints: Constraints {
-                min: Size::new(0.0, 0.0),
-                max: viewport.size,
-            },
-            viewport,
-            direction: if self.rtl {
-                LayoutDirection::Rtl
-            } else {
-                LayoutDirection::Ltr
-            },
-            tokens: cx.tokens,
-            styles: cx.styles,
-            text: cx.text,
-        };
-        let mut layouts = Vec::new();
-        for index in self.visible() {
-            let top = viewport.origin.y + self.heights.before(index) - self.offset;
-            let rect = Rect::from_xywh(viewport.origin.x, top, viewport.size.width, 0.0);
-            layouts.push((index, self.messages[index].layout(&measure, rect)));
-        }
+        let thread = self.conversation.0.borrow();
         cx.list.push_clip(viewport);
-        for (index, layout) in &layouts {
-            self.messages[*index].paint_layout(cx, layout, None);
+        for (index, layout) in &self.shown {
+            let hovered = self
+                .hovered
+                .filter(|(message, _)| message == index)
+                .map(|(_, bubble)| bubble);
+            if let Some(message) = thread.messages.get(*index) {
+                message.paint_layout(cx, layout, hovered);
+            }
         }
         let _ = cx.list.pop_clip();
         let mut bar = self.bar.clone();
-        bar.set_scroll(self.heights.total(), self.offset);
+        bar.set_scroll(thread.heights.total(), thread.offset);
         bar.paint(cx);
         if cx.state.focus_visible() {
             let style =
@@ -382,6 +458,9 @@ impl CustomControl for MessageScroller {
         };
         let mut node = hosted::node(SemanticRole::ScrollArea, &self.name, actions);
         node.value = self
+            .conversation
+            .0
+            .borrow()
             .messages
             .last()
             .map(|message| format!("{}: {}", message.author(), message.text()));
@@ -396,12 +475,13 @@ impl CustomControl for MessageScroller {
         _value: Option<&str>,
     ) -> bool {
         let page = self.viewport.size.height * 0.9;
+        let offset = self.scroll().1;
         match action {
             SemanticAction::Increment => {
-                self.scroll_to(cx, self.offset + page);
+                self.scroll_to(cx, offset + page);
             }
             SemanticAction::Decrement => {
-                self.scroll_to(cx, self.offset - page);
+                self.scroll_to(cx, offset - page);
             }
             SemanticAction::Focus => cx.request_focus(),
             _ => return false,
