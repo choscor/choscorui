@@ -1,98 +1,29 @@
-# Continuous integration for the supported platform: macOS 15 on Apple
-# silicon and on Intel.
+# Diagnostic workflow (do not merge).
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
-  check:
-    name: build and test (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        # macos-15: Apple silicon (arm64). macos-15-intel: x86_64.
-        os: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Toolchains
-        run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy
-          rustup toolchain install 1.88 --profile minimal
-          # The pinned nightly writes the rustdoc JSON of api-docs/.
-          rustup toolchain install "$(grep -v '^#' tools/api-docs/nightly.txt | head -n 1)" --profile minimal --target aarch64-apple-darwin
-          # The portable app layer must build for targets without a backend.
-          rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-gnu
-      - name: Docs
-        run: scripts/check-docs.sh
-      - name: API docs are current
-        run: cargo run -p choscorui-api-docs --locked -- --check
-      - name: Format
-        run: cargo fmt --all --check
-      - name: Lint
-        run: cargo clippy --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked -- -D warnings
-      - name: Minimum supported Rust version
-        run: cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-linux --all-targets --locked
-      - name: Tests
-        run: cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
-      - name: Portable app layer
-        run: |
-          cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
-          cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
-
-  native:
-    name: native macOS app (${{ matrix.os }})
-    needs: check
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    # A message to a released object crashes with a zombie report, and freed
-    # memory is scribbled, so a memory error is loud.
+  diag:
+    runs-on: macos-15
     env:
       NSZombieEnabled: "YES"
       MallocScribble: "1"
+      NSDeallocateZombies: "YES"
+      CHOSCORUI_RUN_MACOS_SMOKE: "1"
     steps:
       - uses: actions/checkout@v7
-      - name: Smoke tests
-        env:
-          CHOSCORUI_RUN_MACOS_SMOKE: "1"
-        run: |
-          cargo test -p choscorui-macos --test window_smoke --locked
-          cargo test -p choscorui-macos --test menu_smoke --locked
-          # The footprint check needs freed memory back, so zombies are freed.
-          NSDeallocateZombies=YES cargo test -p choscorui-macos --test lifetime_smoke --locked
-          cargo test -p choscorui --test app_smoke --locked
-          cargo test -p choscorui --test metal_parity_smoke --locked
-          CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
-      - name: Gallery first frame
-        run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
-      - name: Gallery autopilot
-        run: CHOSCORUI_GALLERY_SETTINGS="$RUNNER_TEMP/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
-
-  package:
-    name: package and install check
-    needs: native
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v7
-      - name: Targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - name: Universal archive (ad-hoc signed)
-        run: CHOSCORUI_UNIVERSAL=1 scripts/macos/package.sh
-      - name: Install, run core scenarios, uninstall
-        run: scripts/macos/install-check.sh dist/choscorui-*-macos-universal.zip
-      - uses: actions/upload-artifact@v7
-        with:
-          name: choscorui-macos-universal
-          path: |
-            dist/*.zip
-            dist/*.sha256
+      - name: Build
+        run: cargo test -p choscorui-macos --test lifetime_smoke --locked --no-run
+      - name: All
+        run: cargo test -p choscorui-macos --test lifetime_smoke --locked
+      - name: Churn
+        run: DIAG_ONLY=churn cargo test -p choscorui-macos --test lifetime_smoke --locked
+      - name: Storm
+        run: DIAG_ONLY=storm cargo test -p choscorui-macos --test lifetime_smoke --locked
+      - name: Other
+        run: DIAG_ONLY=other cargo test -p choscorui-macos --test lifetime_smoke --locked

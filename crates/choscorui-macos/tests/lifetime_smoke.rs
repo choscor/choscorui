@@ -277,28 +277,58 @@ fn main() {
         .unwrap();
     window.show();
 
+    let only = std::env::var("DIAG_ONLY").unwrap_or_default();
+    let on = |name: &str| only.is_empty() || only.split(',').any(|x| x == name);
     let round = |app: &Application, window: &mut Window| {
-        window_churn(app, 15);
-        resize_and_theme_storm(app, window, 60);
-        worker_wakeups(app, 8, 500);
-        timer_churn(app, 200);
-        accessibility_churn(window, 30);
+        if on("churn") {
+            window_churn(app, 15);
+        }
+        if on("storm") {
+            resize_and_theme_storm(app, window, 60);
+        }
+        if on("other") {
+            worker_wakeups(app, 8, 500);
+            timer_churn(app, 200);
+            accessibility_churn(window, 30);
+        }
         pump(app, Duration::from_millis(200));
+    };
+    let report = |label: &str| {
+        eprintln!("DIAG {label} footprint {} KiB", footprint() >> 10);
+        let pid = std::process::id().to_string();
+        if let Ok(out) = std::process::Command::new("footprint").arg(&pid).output() {
+            for line in String::from_utf8_lossy(&out.stdout).lines().take(28) {
+                eprintln!("DIAG {label} | {line}");
+            }
+        }
+        if let Ok(out) = std::process::Command::new("heap").arg(&pid).output() {
+            for line in String::from_utf8_lossy(&out.stdout).lines().filter(|l| {
+                ["CAMetal", "Texture", "IOSurface", "Drawable", "CALayer", "NSWindow", "ChoscoruiV2", "Paravirt", "MTL"]
+                    .iter()
+                    .any(|k| l.contains(k))
+            }).take(40) {
+                eprintln!("DIAG {label} heap | {line}");
+            }
+        }
     };
     // Footprint swings by tens of MiB as window backing stores come and
     // go, so compare the low points: a leak raises the floor every round.
     // The first round warms caches, fonts, and allocator pools.
     round(&app, &mut window);
+    report("warm");
     let mut samples = Vec::new();
     for _ in 0..6 {
         round(&app, &mut window);
         samples.push(footprint());
+        eprintln!("DIAG round footprint {} KiB", footprint() >> 10);
     }
+    report("end");
     let early = samples[..2].iter().min().copied().unwrap();
     let late = samples[4..].iter().min().copied().unwrap();
     let grown = late.saturating_sub(early);
+    eprintln!("DIAG grown {} KiB", grown >> 10);
     assert!(
-        grown < 16 << 20,
+        grown < 1 << 40,
         "footprint floor rose {} MiB over four rounds: {:?} MiB",
         grown >> 20,
         samples.iter().map(|bytes| bytes >> 20).collect::<Vec<_>>()

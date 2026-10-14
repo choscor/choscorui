@@ -282,6 +282,20 @@ pub(crate) fn painter(window: usize) -> Painter {
 /// Stops the display link of a window that closes for good.
 pub(crate) fn detach(window: usize) {
     let surface = SURFACES.with(|surfaces| surfaces.borrow_mut().remove(&window));
+    if let Some(s) = &surface {
+        eprintln!(
+            "DIAG detach in_flight={} unpresented={} presentations={} commands={} shared_rc={} paint={:?}",
+            s.shared.in_flight.load(Ordering::Acquire),
+            s.shared.unpresented.load(Ordering::Acquire),
+            PRESENTATIONS.lock().unwrap().len(),
+            COMMANDS.lock().unwrap().len(),
+            Arc::strong_count(&s.shared),
+            {
+                let p = s.paint.lock().unwrap();
+                (p.count, p.displays)
+            }
+        );
+    }
     if let Some(Surface {
         link: Some(link), ..
     }) = &surface
