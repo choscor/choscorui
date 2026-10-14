@@ -477,6 +477,50 @@ mod tests {
             .collect()
     }
 
+    /// The opacity that each star of the rating named `name` paints
+    /// with: the product of the open opacity layers.
+    fn star_opacity(page: &mut Harness, name: &str) -> Vec<f64> {
+        let node = page.node(name);
+        let (snapshot, _) = page.host.semantics();
+        let area = snapshot
+            .into_iter()
+            .find(|entry| entry.id == node)
+            .map(|entry| entry.bounds)
+            .expect("the rating");
+        let mut layers = vec![1.0];
+        let mut found = Vec::new();
+        for command in page.host.paint().commands() {
+            match command {
+                DisplayCommand::PushOpacity(opacity) => {
+                    layers.push(layers.last().copied().unwrap_or(1.0) * opacity);
+                }
+                DisplayCommand::PopOpacity => {
+                    layers.pop();
+                }
+                DisplayCommand::DrawText { baseline, text, .. }
+                    if text == "★" && area.contains(Point::new(baseline.x, baseline.y - 1.0)) =>
+                {
+                    found.push(layers.last().copied().unwrap_or(1.0));
+                }
+                _ => {}
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn a_disabled_star_rating_dims() {
+        let mut page = Harness::new("custom-control");
+        let enabled = star_opacity(&mut page, "Food");
+        let disabled = star_opacity(&mut page, "Ambience (closed for rating)");
+        assert_eq!(enabled, [1.0; 5]);
+        assert_eq!(disabled.len(), 5);
+        assert!(
+            disabled.iter().all(|opacity| *opacity < 1.0),
+            "{disabled:?}"
+        );
+    }
+
     #[test]
     fn star_rating_shows_a_click_at_once_ignores_other_digits_and_mirrors() {
         let mut page = Harness::new("custom-control");

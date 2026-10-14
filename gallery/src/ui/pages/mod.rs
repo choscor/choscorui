@@ -67,8 +67,9 @@ pub mod tests {
     use choscorui::compose::view::{Env, ViewExt, ViewHost};
     use choscorui::controls::EstimatedText;
     use choscorui::core::{
-        BaseColor, ColorScheme, DesignTokens, Locale, NodeId, SemanticAction, SemanticNode,
-        SemanticRole, Size,
+        BaseColor, Color, ColorScheme, DesignTokens, DisplayCommand, DisplayList, Icon, Locale,
+        NodeId, Path, PathElement, Point, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+        Transform,
     };
     use std::rc::Rc;
 
@@ -158,6 +159,66 @@ pub mod tests {
         pub fn part_value(&mut self, name: &str) -> Option<String> {
             self.part(name).and_then(|node| node.value)
         }
+    }
+
+    /// True when `list` draws `icon` inside `area`, at any place and
+    /// size: a run of paths that are the paths of the icon after one move
+    /// and one scale.
+    pub fn draws_icon(list: &DisplayList, area: Rect, icon: Icon) -> bool {
+        fn path(command: &DisplayCommand) -> Option<&Path> {
+            match command {
+                DisplayCommand::FillPath { path, .. } | DisplayCommand::StrokePath { path, .. } => {
+                    Some(path)
+                }
+                _ => None,
+            }
+        }
+        fn near(a: Point, b: Point) -> bool {
+            (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3
+        }
+        fn same(a: &Path, b: &Path) -> bool {
+            a.elements().len() == b.elements().len()
+                && a.elements()
+                    .iter()
+                    .zip(b.elements())
+                    .all(|pair| match pair {
+                        (PathElement::MoveTo(a), PathElement::MoveTo(b))
+                        | (PathElement::LineTo(a), PathElement::LineTo(b)) => near(*a, *b),
+                        (PathElement::QuadTo(a, c), PathElement::QuadTo(b, d)) => {
+                            near(*a, *b) && near(*c, *d)
+                        }
+                        (PathElement::CubicTo(a, c, e), PathElement::CubicTo(b, d, f)) => {
+                            near(*a, *b) && near(*c, *d) && near(*e, *f)
+                        }
+                        (PathElement::Close, PathElement::Close) => true,
+                        _ => false,
+                    })
+        }
+        let mut probe = DisplayList::new();
+        let unit = Rect::new(Point::new(0.0, 0.0), Size::new(24.0, 24.0));
+        if icon.draw(&mut probe, unit, Color::BLACK).is_err() {
+            return false;
+        }
+        let shapes: Vec<&Path> = probe.commands().iter().filter_map(path).collect();
+        let drawn: Vec<&Path> = (list.commands().iter().filter_map(path))
+            .filter(|path| area.contains(path.bounds().center()))
+            .collect();
+        !shapes.is_empty()
+            && drawn.windows(shapes.len()).any(|run| {
+                let (from, to) = (shapes[0].bounds(), run[0].bounds());
+                let scale = if from.size.width >= from.size.height {
+                    to.size.width / from.size.width
+                } else {
+                    to.size.height / from.size.height
+                };
+                let place = Transform::scale(scale, scale).then(Transform::translate(
+                    to.origin.x - from.origin.x * scale,
+                    to.origin.y - from.origin.y * scale,
+                ));
+                run.iter()
+                    .zip(&shapes)
+                    .all(|(drawn, shape)| same(&shape.transformed(place), drawn))
+            })
     }
 
     #[test]

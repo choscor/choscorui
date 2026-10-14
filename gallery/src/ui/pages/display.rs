@@ -361,9 +361,9 @@ pub fn page(id: &str) -> Option<Build> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ui::pages::tests::Harness;
+    use crate::ui::pages::tests::{Harness, draws_icon};
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, SemanticAction, SemanticRole};
+    use choscorui::core::{Icon, Key, KeyEvent, SemanticAction, SemanticRole};
 
     fn press(page: &mut Harness, key: Key) -> bool {
         let handled = page.host.key(
@@ -419,6 +419,21 @@ mod tests {
         assert_eq!(role(&mut page, "Ghost"), SemanticRole::Link);
         assert_eq!(role(&mut page, "Link"), SemanticRole::Link);
         assert_eq!(role(&mut page, "Outline"), SemanticRole::StaticText);
+    }
+
+    #[test]
+    fn the_syncing_badge_shows_an_upload_icon_not_a_loader() {
+        let mut page = Harness::new("badge");
+        let node = page.node("Syncing");
+        let (snapshot, _) = page.host.semantics();
+        let area = snapshot
+            .into_iter()
+            .find(|entry| entry.id == node)
+            .map(|entry| entry.bounds)
+            .expect("the badge");
+        let list = page.host.paint();
+        assert!(draws_icon(&list, area, Icon::Upload));
+        assert!(!draws_icon(&list, area, Icon::LoaderCircle));
     }
 
     #[test]

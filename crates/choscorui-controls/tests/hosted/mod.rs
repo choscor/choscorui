@@ -406,7 +406,7 @@ pub fn draws_icon(list: &DisplayList, icon: choscorui_core::Icon) -> bool {
     }
     drawn.windows(shapes.len()).any(|run| {
         let (from, to) = (shapes[0].bounds(), run[0].bounds());
-        let scale = if from.size.width > 0.0 {
+        let scale = if from.size.width >= from.size.height {
             to.size.width / from.size.width
         } else {
             to.size.height / from.size.height
