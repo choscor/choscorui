@@ -13,7 +13,7 @@ use choscorui_core::{
 /// A badge: a short label with an optional leading icon. A plain badge
 /// is static text and takes no focus. A badge made with
 /// [`Badge::as_link`] is a link: it takes focus, shows the hover look,
-/// and emits `ItemActivated(0)` on a click, Enter, or Space.
+/// and emits `ItemActivated(0)` on a click or Enter.
 pub struct Badge {
     label: String,
     icon: Option<Icon>,
