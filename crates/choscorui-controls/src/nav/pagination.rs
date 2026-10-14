@@ -129,11 +129,18 @@ impl Pagination {
         }
     }
 
-    /// Places the parts in reading order inside the bounds.
+    /// Places the parts in reading order inside the bounds. Without
+    /// pages, no part shows. When the slots change, no part is hovered.
     fn place(&mut self) {
-        let mut sequence = vec![Part::Previous];
-        sequence.extend(self.slots());
-        sequence.push(Part::Next);
+        let mut sequence = Vec::new();
+        if self.pages > 0 {
+            sequence.push(Part::Previous);
+            sequence.extend(self.slots());
+            sequence.push(Part::Next);
+        }
+        if !sequence.iter().eq(self.parts.iter().map(|(part, _)| part)) {
+            self.tracked.hovered = None;
+        }
         let bounds = self.bounds;
         let gap = self.metrics.gap;
         let mut x = if self.rtl {
@@ -224,7 +231,11 @@ impl CustomControl for Pagination {
         self.arrange_metrics(cx);
         let slots = self.pages.min(MAX_SLOTS) as f64;
         let m = self.metrics;
-        let width = m.previous + m.next + slots * m.page + (slots + 1.0) * m.gap;
+        let width = if self.pages == 0 {
+            0.0
+        } else {
+            m.previous + m.next + slots * m.page + (slots + 1.0) * m.gap
+        };
         let height = cx
             .style(Self::query(Slot::Link, VisualState::NONE))
             .min_height;
@@ -366,7 +377,7 @@ impl CustomControl for Pagination {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let actions = if self.enabled {
+        let actions = if self.enabled && self.pages > 0 {
             vec![
                 SemanticAction::Activate,
                 SemanticAction::Increment,
@@ -377,7 +388,7 @@ impl CustomControl for Pagination {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
-        node.value = Some((self.current + 1).to_string());
+        node.value = (self.pages > 0).then(|| (self.current + 1).to_string());
         if let Some(stop) = self.stops().get(self.focus) {
             node.description = self.label(self.parts[*stop].0);
         }
@@ -399,7 +410,7 @@ impl CustomControl for Pagination {
                 }
                 None => false,
             },
-            SemanticAction::Increment => {
+            SemanticAction::Increment if self.current + 1 < self.pages => {
                 self.go(cx, self.current + 1, Part::Next);
                 true
             }
@@ -417,6 +428,11 @@ impl CustomControl for Pagination {
 
     fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    /// Without pages, the control is empty and takes no focus.
+    fn focusable(&self) -> bool {
+        self.pages > 0
     }
 
     /// Takes `Index`, the shown page. Rejects no page and a page past the
@@ -457,8 +473,10 @@ impl Pagination {
                 + style.gap
                 + cx.text.width(label, &style.text)
         };
+        // A page slot grows to fit the widest page number.
+        let number = cx.text.width(&self.pages.to_string(), &link.text) + link.padding.horizontal();
         self.metrics = Metrics {
-            page: link.min_width.max(link.min_height),
+            page: link.min_width.max(link.min_height).max(number),
             previous: button(&previous, &self.previous),
             next: button(&next, &self.next),
             gap: root.gap,

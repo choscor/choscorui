@@ -137,6 +137,30 @@ fn pagination_previous_and_next_follow_the_direction() {
     );
 }
 
+#[test]
+fn pagination_bounds_fail_alike_and_zero_pages_is_empty() {
+    let mut first = Harness::new(pages(0));
+    assert!(!first.perform(SemanticAction::Decrement, None));
+    let mut last = Harness::new(pages(9));
+    assert!(!last.perform(SemanticAction::Increment, None));
+    assert!(last.messages().is_empty());
+    assert_eq!(last.semantics().value.as_deref(), Some("10"));
+
+    let empty = Harness::new(Pagination::new("Pages", "Previous", "Next", 0, 0));
+    assert!(texts(&empty.paint()).is_empty());
+    let node = empty.semantics();
+    assert!(node.actions.is_empty());
+    assert_eq!(node.value, None);
+    assert!(!empty.host.get(empty.node).unwrap().focusable());
+}
+
+#[test]
+fn pagination_slots_grow_to_fit_long_page_numbers() {
+    let mut short = Harness::new(pages(0));
+    let mut long = Harness::new(Pagination::new("Pages", "Previous", "Next", 10_000_000, 0));
+    assert!(long.measure().width > short.measure().width);
+}
+
 fn site() -> NavigationMenu {
     let links = |titles: &[&str]| {
         titles

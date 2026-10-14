@@ -3597,23 +3597,29 @@ item is hidden. `set_value` returns false.
   on the first page, and Next on the last.
 - Enter, Space, or a click on a page shows it and emits
   `Changed(Index(page))`. Focus stays on the part that shows the page.
-- `Increment` and `Decrement` show the next and the previous page.
+- `Increment` and `Decrement` show the next and the previous page. On the
+  last page `Increment` returns false, and on the first page `Decrement`
+  returns false.
 - The chevrons of Previous and Next point along the reading order.
+- A page slot grows to fit the widest page number.
+- When the slots change, no slot stays hovered.
+- With zero pages the control is empty. It paints nothing, takes no focus,
+  and has no value and no actions.
 
 | Part | Slot | Value |
 | --- | --- | --- |
 | Row | `Root` | 4 pt gap |
-| Page | `Link` | 36 pt icon button; ghost, outline for the current page |
+| Page | `Link` | 36 pt icon button, wider for a long number; ghost, outline for the current page |
 | Previous, Next | `Previous`, `Next` | ghost default button with 8 pt padding on the icon side |
 | Ellipsis | `Ellipsis` | 36 by 36 pt with a 16 pt icon |
 
 | Field | `Pagination::semantics` |
 | --- | --- |
 | Role | `Group` (AXGroup) |
-| Name / value | name / current page number |
+| Name / value | name / current page number, none without pages |
 | Description | the label of the focused part |
 | State | disabled |
-| Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled |
+| Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled, with pages |
 
 `set_value` takes `Index` of a page. It rejects `None` and a page past the
 last page. `set_open` returns false.
