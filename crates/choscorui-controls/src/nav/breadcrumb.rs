@@ -159,9 +159,10 @@ impl Breadcrumb {
         self.items[self.hidden.clone()].join("\n")
     }
 
-    /// Opens the menu below the ellipsis at `time`. Returns false when no
-    /// item is collapsed or the trail is not arranged yet.
-    fn open_menu(&mut self, time: f64) -> bool {
+    /// Opens the menu below the ellipsis at `time`. A `keyboard` open
+    /// highlights the first row. Returns false when no item is collapsed
+    /// or the trail is not arranged yet.
+    fn open_menu(&mut self, time: f64, keyboard: bool) -> bool {
         let Some(rect) = self
             .parts
             .iter()
@@ -170,14 +171,19 @@ impl Breadcrumb {
         else {
             return false;
         };
-        self.menu.open(gap_anchor(rect, 4.0, None), time, true);
+        self.menu.open(gap_anchor(rect, 4.0, None), time, keyboard);
         true
     }
 
     fn activate(&mut self, cx: &mut ControlContext<'_>, part: usize) {
         match self.parts.get(part).map(|(part, _)| *part) {
             Some(Part::Link(index)) => cx.emit(ControlMessage::ItemActivated(index)),
-            Some(Part::Ellipsis) if self.open_menu(cx.time()) => {
+            Some(Part::Ellipsis)
+                if self.open_menu(
+                    cx.time(),
+                    cx.input_modality() == choscorui_core::InputModality::Keyboard,
+                ) =>
+            {
                 cx.emit(ControlMessage::OpenChanged(true));
             }
             _ => return,
@@ -533,6 +539,6 @@ impl CustomControl for Breadcrumb {
             self.menu.close(time);
             return true;
         }
-        self.enabled && (self.menu.is_open() || self.open_menu(time))
+        self.enabled && (self.menu.is_open() || self.open_menu(time, false))
     }
 }

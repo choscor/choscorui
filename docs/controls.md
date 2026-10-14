@@ -2163,7 +2163,8 @@ this behavior.
   chosen action and closes the layer, and `Dismissed` closes it.
   `opened_from_keyboard(true)` highlights the first row when the arrange
   places the menu. A context menu that the keyboard or `ShowMenu` opens
-  uses it.
+  uses it. A `dropdown_menu` that opens while the input modality is the
+  keyboard uses it too.
   `MenuChoice::checkbox` and `MenuChoice::radio` make check rows. The
   command state of a check row follows its binding when the menu opens.
   Its `Command` sets the binding and closes the layer.
@@ -3583,7 +3584,8 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 - `with_collapsed(range)` hides those items behind an ellipsis. The first
   and the last item always show. Activating the ellipsis opens a menu of
   the hidden items. A choice emits `ItemActivated(index)`. ArrowDown on
-  the ellipsis also opens the menu.
+  the ellipsis also opens the menu. A key open highlights the first row,
+  and a press highlights no row.
 - A press on the trail outside the open menu, or a second press on the
   ellipsis, only closes the menu, and
   emits `OpenChanged(false)` and `Dismissed`. Escape, Tab, and focus loss

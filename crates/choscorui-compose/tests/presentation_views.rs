@@ -589,8 +589,9 @@ fn dropdown_menu_follows_its_binding() {
         panel.min_y() >= button.max_y(),
         "the menu sits below the view"
     );
-    // The keys skip the disabled action.
-    press(&mut host, Key::ArrowDown);
+    // A keyboard open highlights the first row, and the keys skip the
+    // disabled action.
+    assert_eq!(highlighted(&mut host, menu), "Rename");
     press(&mut host, Key::ArrowDown);
     let highlighted = highlighted(&mut host, menu);
     assert_eq!(highlighted, "Move to");
@@ -1130,13 +1131,37 @@ fn dots(list: &DisplayList) -> Vec<f64> {
 }
 
 #[test]
+fn a_dropdown_menu_opened_by_a_press_highlights_nothing() {
+    let mut host = host(Options);
+    host.advance(1.0);
+    let center = bounds(&mut host, "Options").center();
+    for event in [
+        PointerEvent::Down {
+            position: center,
+            button: PointerButton::Primary,
+        },
+        PointerEvent::Up {
+            position: center,
+            button: PointerButton::Primary,
+        },
+    ] {
+        pointer(&mut host, event);
+    }
+    host.advance(2.0);
+    host.layout();
+    assert!(shown(&mut host, "open true"));
+    let menu = focused_menu(&mut host);
+    assert_eq!(highlighted(&mut host, menu), "");
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
 fn checkbox_and_radio_rows_set_their_bindings() {
     let mut host = host(ViewMenu);
     let view = node(&mut host, "View");
     host.focus(Some(view));
     open_menu(&mut host, "View", 1.0);
     assert!(dots(&host.paint()).is_empty(), "no radio row is chosen");
-    press(&mut host, Key::ArrowDown);
     press(&mut host, Key::Enter);
     assert!(shown(&mut host, "bookmarks true"));
     assert!(
@@ -1146,7 +1171,6 @@ fn checkbox_and_radio_rows_set_their_bindings() {
     assert_eq!(host.tree().focus(), Some(view));
     // The checkbox flips back.
     open_menu(&mut host, "View", 3.0);
-    press(&mut host, Key::ArrowDown);
     press(&mut host, Key::Enter);
     assert!(shown(&mut host, "bookmarks false"));
     // A radio row sets the selection, and its dot shows.

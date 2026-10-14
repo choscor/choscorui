@@ -19,8 +19,8 @@ use choscorui_controls::{
     ShortcutModifiers, Variant,
 };
 use choscorui_core::{
-    EventPhase, EventReply, KeyEvent, Measured, NodeId, Point, PointerButton, PointerEvent,
-    SemanticNode, SemanticRole, SemanticState,
+    EventPhase, EventReply, InputModality, KeyEvent, Measured, NodeId, Point, PointerButton,
+    PointerEvent, SemanticNode, SemanticRole, SemanticState,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -262,7 +262,15 @@ pub(super) fn dropdown_menu(presented: Binding<bool>, items: impl Items<MenuChoi
     let items: Rc<dyn Items<MenuChoice>> = Rc::new(items);
     Modifier::Present(Rc::new(move |cx: &mut Cx, anchor| {
         let name = name_of(cx.inner, anchor);
-        let content = menu_content(name, items.clone(), presented, Rc::default());
+        // A menu that opens after a key highlights its first row.
+        let keyboard: Rc<Cell<bool>> = Rc::default();
+        let opened = keyboard.clone();
+        cx.react(move |inner| {
+            if presented.get() {
+                opened.set(inner.tree.input_modality() == InputModality::Keyboard);
+            }
+        });
+        let content = menu_content(name, items.clone(), presented, keyboard);
         mount_presentation(
             cx,
             Anchor::Node(anchor),

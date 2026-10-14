@@ -315,6 +315,21 @@ fn the_ellipsis_toggles_its_menu_and_arrow_down_opens_it() {
 }
 
 #[test]
+fn a_pressed_ellipsis_opens_its_menu_with_no_row_highlighted() {
+    let mut h = Harness::new(trail());
+    open_ellipsis(&mut h);
+    h.key(Key::Enter);
+    assert_eq!(h.messages(), [], "a press highlights no row to choose");
+    // A keyboard open highlights the first row.
+    let mut h = Harness::new(trail());
+    h.focus();
+    assert!(tab(&mut h));
+    h.key(Key::Enter);
+    h.key(Key::Enter);
+    assert!(h.messages().contains(&ControlMessage::ItemActivated(1)));
+}
+
+#[test]
 fn a_breadcrumb_of_one_item_has_no_actions() {
     let h = Harness::new(Breadcrumb::new("Breadcrumb", vec!["Home".to_string()]));
     assert!(h.semantics().actions.is_empty());
