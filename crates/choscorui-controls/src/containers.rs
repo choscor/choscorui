@@ -1604,15 +1604,13 @@ impl StackedContainer {
             role: SemanticRole::Group,
             name: self.label.clone(),
             description: String::new(),
-            value: Some(
-                (self
-                    .pages
-                    .iter()
-                    .position(|page| page.panel == self.current)
-                    .expect("current page is retained")
-                    + 1)
-                .to_string(),
-            ),
+            // The current page is one of `pages`; the value is the
+            // one-based page number.
+            value: self
+                .pages
+                .iter()
+                .position(|page| page.panel == self.current)
+                .map(|index| (index + 1).to_string()),
             state: SemanticState::default(),
             relations: self
                 .pages
