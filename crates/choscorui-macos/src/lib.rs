@@ -1029,6 +1029,9 @@ impl Window {
             }
             // setReleasedWhenClosed:NO keeps ownership after close.
             CLOSE.send(&self.window, ());
+            if std::env::var("DIAG_FIX").unwrap_or_default().contains("after") {
+                metal::surface::detach(self.window.addr());
+            }
             self.closed = true;
         }
     }
