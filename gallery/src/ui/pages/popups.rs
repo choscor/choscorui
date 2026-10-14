@@ -3,19 +3,10 @@
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, Configured, DropdownMenu, Env, HStack, State, Text, View, ViewExt,
+    AnyView, Button, DropdownMenu, Env, HStack, State, Text, View, ViewExt,
 };
-use choscorui::controls::{
-    self, ButtonVariant, CommandId, CommandState, ControlContext, ControlEvent, ControlKind,
-    CustomControl, MeasureContext, MenuCheck, MenuItem, PaintContext, TooltipController,
-};
-use choscorui::core::{
-    ColorRole, EventReply, KeyEvent, LayoutDirection, Measured, NodeId, PointerEvent, Rect,
-    SemanticAction, SemanticNode, Space, TextPreset,
-};
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::time::Duration;
+use choscorui::controls::{ButtonVariant, CommandId, CommandState, MenuCheck, MenuItem, Placement};
+use choscorui::core::{ColorRole, Space, TextPreset};
 
 const CUT: CommandId = CommandId(1);
 const COPY: CommandId = CommandId(2);
@@ -140,162 +131,20 @@ pub fn dropdown_menu(_: &PageCx) -> AnyView {
     })
 }
 
-const TIPS: [(&str, &str); 3] = [
-    ("tooltip.bold", "tooltip.bold_tip"),
-    ("tooltip.italic", "tooltip.italic_tip"),
-    ("tooltip.underline", "tooltip.underline_tip"),
-];
-
-/// A button with a hover tooltip. The buttons of a page share one
-/// controller, so moving between them skips the delay within the grace
-/// period.
-struct TipButton {
-    button: controls::Button,
-    tip: String,
-    tips: Rc<RefCell<TooltipController>>,
-    /// The node, from the first event.
-    node: Option<NodeId>,
-    /// The host time of the next tooltip check.
-    due: Option<f64>,
-    /// The window area that the bubble fits in.
-    viewport: Rect,
-}
-
-impl TipButton {
-    fn new(label: String, tip: String, tips: Rc<RefCell<TooltipController>>) -> Self {
-        Self {
-            button: controls::Button::new(label, CommandId(0)).with_variant(ButtonVariant::Outline),
-            tip,
-            tips,
-            node: None,
-            due: None,
-            viewport: Rect::default(),
-        }
-    }
-
-    /// Whether the shared tooltip is this button's.
-    fn showing(&self) -> bool {
-        let tips = self.tips.borrow();
-        tips.visible()
-            .is_some_and(|tip| Some(tip.target) == self.node)
-    }
-}
-
-/// Host seconds as the controller's time.
-fn instant(seconds: f64) -> Duration {
-    Duration::from_secs_f64(seconds.max(0.0))
-}
-
-impl CustomControl for TipButton {
-    fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        CustomControl::measure(&mut self.button, cx)
-    }
-
-    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
-        self.viewport = cx.viewport;
-        CustomControl::arrange(&mut self.button, cx, bounds);
-    }
-
-    fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        self.node = Some(cx.node());
-        let now = instant(cx.time());
-        let before = self.showing();
-        {
-            let mut tips = self.tips.borrow_mut();
-            match event {
-                ControlEvent::Hover(true) => {
-                    tips.hover(cx.node(), &self.tip, cx.bounds(), now);
-                    self.due = tips.poll(now).map(|due| due.as_secs_f64());
-                }
-                ControlEvent::Hover(false) => {
-                    tips.leave(now);
-                    self.due = None;
-                }
-                ControlEvent::Pointer(PointerEvent::Down { .. } | PointerEvent::Wheel { .. })
-                | ControlEvent::Key(KeyEvent::Down { .. }) => {
-                    tips.interrupt(now);
-                    self.due = None;
-                }
-                ControlEvent::Timer => {
-                    self.due = tips.poll(now).map(|due| due.as_secs_f64());
-                }
-                _ => {}
-            }
-        }
-        if before != self.showing() {
-            cx.request_paint();
-        }
-        CustomControl::event(&mut self.button, cx, event)
-    }
-
-    fn paint(&self, cx: &mut PaintContext<'_>) {
-        CustomControl::paint(&self.button, cx);
-    }
-
-    fn overlay(&self) -> Option<Rect> {
-        let tips = self.tips.borrow();
-        let tip = tips.visible().filter(|tip| Some(tip.target) == self.node)?;
-        Some(tip.anchor)
-    }
-
-    fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
-        let tips = self.tips.borrow();
-        let Some(tip) = tips.visible().filter(|tip| Some(tip.target) == self.node) else {
-            return;
-        };
-        let direction = if cx.rtl {
-            LayoutDirection::Rtl
-        } else {
-            LayoutDirection::Ltr
-        };
-        let placed = tip.place(self.viewport, cx.styles, cx.tokens, cx.text, direction);
-        tip.paint(&mut cx.at(placed.rect), placed.placement);
-    }
-
-    fn semantics(&self) -> SemanticNode {
-        let mut node = CustomControl::semantics(&self.button);
-        node.description = self.tip.clone();
-        node
-    }
-
-    fn perform(
-        &mut self,
-        cx: &mut ControlContext<'_>,
-        action: SemanticAction,
-        value: Option<&str>,
-    ) -> bool {
-        CustomControl::perform(&mut self.button, cx, action, value)
-    }
-
-    fn focusable(&self) -> bool {
-        CustomControl::focusable(&self.button)
-    }
-
-    fn set_enabled(&mut self, enabled: bool) {
-        CustomControl::set_enabled(&mut self.button, enabled);
-    }
-
-    fn deadline(&self) -> Option<f64> {
-        self.due
-    }
-}
-
-/// Buttons with hover tooltips: a delay before the first, a grace period
-/// between neighbours, and hiding on press.
+/// Buttons with tooltips: a delay before the first, a grace period
+/// between neighbours, hiding on press, and at once on keyboard focus.
+/// The last tooltip shows below its button.
 pub fn tooltip(_: &PageCx) -> AnyView {
-    let tips = Rc::new(RefCell::new(TooltipController::new()));
-    let buttons: Vec<_> = TIPS
-        .iter()
-        .map(|&(label, tip)| {
-            let tips = tips.clone();
-            Configured::custom(ControlKind::Button, move |env| {
-                TipButton::new(text(env, label), text(env, tip), tips.clone())
-            })
-        })
-        .collect();
+    let button = |label| Button::new(label, || {}).variant(ButtonVariant::Outline);
     column((
         caption(t!("tooltip.caption")),
-        HStack::new(buttons).spacing(Space::S3),
+        HStack::new((
+            button(t!("tooltip.bold")).tooltip(t!("tooltip.bold_tip")),
+            button(t!("tooltip.italic")).tooltip(t!("tooltip.italic_tip")),
+            button(t!("tooltip.underline"))
+                .tooltip_on(t!("tooltip.underline_tip"), Placement::Below),
+        ))
+        .spacing(Space::S3),
     ))
 }
 
@@ -312,7 +161,7 @@ pub fn page(id: &str) -> Option<Build> {
 mod tests {
     use crate::ui::pages::tests::Harness;
     use choscorui::controls::ShortcutModifiers;
-    use choscorui::core::{Key, KeyEvent, PointerEvent, SemanticAction};
+    use choscorui::core::{Key, KeyEvent, Point, PointerEvent, SemanticAction, SemanticRole};
 
     fn press(page: &mut Harness, key: Key) -> bool {
         let event = KeyEvent::Down { key, repeat: false };
@@ -341,6 +190,14 @@ mod tests {
         assert!(page.host.find("Edit").is_none());
     }
 
+    /// Whether a tooltip with `text` shows.
+    fn showing(page: &mut Harness, text: &str) -> bool {
+        page.host
+            .find(text)
+            .and_then(|node| page.host.semantic(node))
+            .is_some_and(|node| node.role == SemanticRole::Tooltip)
+    }
+
     #[test]
     fn tooltip_appears_only_after_the_hover_delay() {
         let mut page = Harness::new("tooltip");
@@ -352,13 +209,32 @@ mod tests {
             PointerEvent::Move { position: center },
             ShortcutModifiers::default(),
         );
-        let showing = |page: &Harness| {
-            let control = page.host.controls().get(bold).unwrap();
-            control.overlay().is_some()
-        };
         page.host.advance(0.05);
-        assert!(!showing(&page));
+        assert!(!showing(&mut page, "Make the selection bold (⌘B)"));
         page.host.advance(3.0);
-        assert!(showing(&page));
+        assert!(showing(&mut page, "Make the selection bold (⌘B)"));
+    }
+
+    #[test]
+    fn tooltip_shows_at_once_on_keyboard_focus_and_stays_after_a_hover() {
+        let mut page = Harness::new("tooltip");
+        let (bold, italic) = (page.node("Bold"), page.node("Italic"));
+        page.host.advance(1.0);
+        press(&mut page, Key::Tab);
+        assert_eq!(page.host.tree().focus(), Some(bold));
+        page.host.advance(1.0);
+        assert!(showing(&mut page, "Make the selection bold (⌘B)"));
+        // The pointer passes over Italic and leaves: the focus tooltip
+        // shows again.
+        let center = page.host.tree().bounds(italic).unwrap().center();
+        let modifiers = ShortcutModifiers::default();
+        page.host
+            .pointer(PointerEvent::Move { position: center }, modifiers);
+        page.host.advance(1.1);
+        let away = Point::new(center.x, center.y + 200.0);
+        page.host
+            .pointer(PointerEvent::Move { position: away }, modifiers);
+        page.host.advance(1.2);
+        assert!(showing(&mut page, "Make the selection bold (⌘B)"));
     }
 }

@@ -713,6 +713,16 @@ fn overlay(&self) -> Option<Rect>
 The rectangle of an open popup in window coordinates. The host
 routes pointer events inside it to this control first.
 
+#### `CustomControl::overlay_takes_input`
+
+```rust
+fn overlay_takes_input(&self) -> bool
+```
+
+True when the open overlay takes pointer input. A tooltip bubble
+returns false, so that the pointer reaches the control under it.
+The default is true.
+
 #### `CustomControl::paint`
 
 ```rust

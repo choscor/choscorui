@@ -238,10 +238,8 @@ fn tooltip_shows_on_keyboard_focus_and_hides_on_escape() {
     let wrapper = tip_of(&mut host, "Save");
     host.advance(20.0);
     assert_eq!(host.focus_next(false), Some(node(&mut host, "Save")));
-    assert!(!tip_shows(&host, wrapper));
-    host.advance(20.6);
     host.layout();
-    assert!(tip_shows(&host, wrapper));
+    assert!(tip_shows(&host, wrapper), "keyboard focus shows it at once");
     assert!(press(&mut host, Key::Escape), "Escape closes the tooltip");
     assert!(!tip_shows(&host, wrapper));
     // A pointer press also hides it, and it does not show again until
@@ -262,6 +260,28 @@ fn tooltip_shows_on_keyboard_focus_and_hides_on_escape() {
     );
     assert!(!tip_shows(&host, wrapper));
     host.advance(40.0);
+    assert!(!tip_shows(&host, wrapper));
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn the_tooltip_bubble_lets_the_pointer_through() {
+    let mut host = host(toolbar());
+    let wrapper = tip_of(&mut host, "Save");
+    let center = bounds(&mut host, "Save").center();
+    host.advance(10.0);
+    pointer(&mut host, PointerEvent::Move { position: center });
+    host.advance(10.6);
+    host.layout();
+    let bubble = host.controls().get(wrapper).unwrap().overlay().unwrap();
+    // The pointer on the bubble is off the view: the tooltip hides.
+    pointer(
+        &mut host,
+        PointerEvent::Move {
+            position: bubble.center(),
+        },
+    );
+    assert!(!host.controls().is_hovered(wrapper));
     assert!(!tip_shows(&host, wrapper));
     assert_eq!(host.take_errors(), Vec::new());
 }

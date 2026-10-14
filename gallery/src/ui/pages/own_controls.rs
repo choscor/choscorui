@@ -7,7 +7,7 @@ use std::path::Path;
 
 /// Each file that mounts a gallery control, how many mounts it has, and
 /// which controls they are.
-const OWN: [(&str, usize, &str); 7] = [
+const OWN: [(&str, usize, &str); 6] = [
     (
         "pages/containers/dock.rs",
         2,
@@ -32,11 +32,6 @@ const OWN: [(&str, usize, &str); 7] = [
         "pages/data/products.rs",
         3,
         "Handle shares a header view and forwards keys of the text and checkbox cell editors",
-    ),
-    (
-        "pages/popups.rs",
-        1,
-        "TipButton shows a tooltip from a timer",
     ),
     ("pages/shell.rs", 1, "TimedStatus clears its message"),
 ];

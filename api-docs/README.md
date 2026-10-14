@@ -245,6 +245,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`toast`](modifiers-presentation.md#toast) modifier: Posts the toast that `toast` makes when `presented` becomes true, and sets `presented` back to false.
 - [`toaster`](modifiers-presentation.md#toaster) modifier: Shows the toasts that descendants post through `Env::toasts`, at `position` in the window.
 - [`tooltip`](modifiers-presentation.md#tooltip) modifier: Shows `text` in a tooltip after the pointer rests on the view, or after keyboard focus moves into it.
+- [`tooltip_on`](modifiers-presentation.md#tooltip_on) modifier: Shows `text` in a tooltip as `tooltip` does, on `side` of the view.
 
 ### Styling modifiers
 

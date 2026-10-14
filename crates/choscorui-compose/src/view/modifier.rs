@@ -806,7 +806,21 @@ modifiers! {
     /// # use choscorui_compose::view::*;
     /// let save = Button::new("Save", || {}).tooltip("Save the document");
     /// ```
-    fn tooltip<M>(text: impl IntoLive<TextContent, M>) => tooltip::tooltip(text.into_live());
+    fn tooltip<M>(text: impl IntoLive<TextContent, M>) =>
+        tooltip::tooltip(text.into_live(), choscorui_controls::Placement::Above);
+    /// Shows `text` in a tooltip as [`tooltip`](Self::tooltip) does, on
+    /// `side` of the view. The bubble flips to the other side when it
+    /// does not fit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::Placement;
+    /// let back = Button::new("Back", || {}).tooltip_on("Go back", Placement::Below);
+    /// ```
+    fn tooltip_on<M>(text: impl IntoLive<TextContent, M>, side: choscorui_controls::Placement) =>
+        tooltip::tooltip(text.into_live(), side);
     /// Shows `content` in a hover card next to the view after the
     /// pointer rests on the view, or after keyboard focus moves into it.
     /// The card closes when the pointer leaves the view and the card, when

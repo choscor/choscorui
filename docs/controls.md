@@ -2243,20 +2243,26 @@ its command through `.on_command`. The `dropdown_menu` modifier of
   counts as a leave.
 - `interrupt` (a press, a key, or a scroll) hides the tooltip until the
   pointer goes to another target.
+- `focus` shows the tooltip of a target with keyboard focus at once.
+  When the pointer leaves another target, the tooltip of the focused
+  target shows again. `blur` hides it, but not a tooltip of the pointer.
 - `target` gives the target of the current hover, also after `interrupt`.
   `pending` gives the target that waits for its delay, and the time at
   which its tooltip shows.
 - **In a view.** The `tooltip` view modifier uses one controller for each
   view host, so the grace time applies between views. Keyboard focus in
-  the view starts the delay as a hover does. Escape hides the tooltip and
-  stops there, wherever the focus is.
+  the view shows the tooltip at once. Escape hides the tooltip and
+  stops there, wherever the focus is. The bubble is not a hit-test
+  target: the pointer on it is off the view. `tooltip_on(text, side)`
+  puts the bubble on `side` of the view.
   The bubble fades in, zooms from 95%, and slides 8 pt from its anchor,
   in the motion time of the `Tooltip` recipe. It goes out the same way.
   Reduced motion shows and hides it at once. While the bubble shows, a
   child of the wrapper publishes `semantics`, with the `DescribedBy`
   relation to the view.
 - **Look.** `VisibleTooltip::place` centers the bubble above the anchor,
-  and flips it below when it does not fit. `paint` uses the `Tooltip`
+  and flips it below when it does not fit. `place_on` puts it on a given
+  side. After or before the anchor, the bubble is centered vertically. `paint` uses the `Tooltip`
   recipe. The bubble has a `foreground` fill and xs `background` text. It
   has radius md and 12 by 6 pt padding, and is at most 320 pt wide. Longer
   text wraps, and `VisibleTooltip::size` adds one line height for each
@@ -2265,7 +2271,7 @@ its command through `.on_command`. The `dropdown_menu` modifier of
 | Part | Slot | Value |
 | --- | --- | --- |
 | Bubble | `Root` | `foreground` fill, xs `background` text, radius md, padding 12 by 6 pt, at most 320 pt wide, 100 ms motion |
-| Arrow | `Indicator` | 10 pt `foreground` square, radius 2 pt |
+| Arrow | `Indicator` | 10 pt `foreground` triangle, half as tall, toward the anchor |
 
 | Field | `TooltipController::semantics`, while visible |
 | --- | --- |
@@ -4511,7 +4517,9 @@ behavior.
 - The host sends `Hover(true)` and `Hover(false)` to each control on the
   path under the pointer when the path changes.
 - An open overlay gets pointer events inside its rectangle first. A press
-  outside the overlay sends `Dismiss` to its control.
+  outside the overlay sends `Dismiss` to its control. When
+  `overlay_takes_input` returns false, as for a tooltip bubble, the
+  pointer goes to the control under the overlay.
 - A control that closes a popup for `Dismiss` replies `Stop`. Then the
   host consumes the press, so the control under the pointer does not get
   it, and focus stays.

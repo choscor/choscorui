@@ -301,6 +301,13 @@ pub trait CustomControl {
         None
     }
 
+    /// True when the open overlay takes pointer input. A tooltip bubble
+    /// returns false, so that the pointer reaches the control under it.
+    /// The default is true.
+    fn overlay_takes_input(&self) -> bool {
+        true
+    }
+
     /// Paints the open popup above every control, without a clip. The
     /// host also calls it while the control animates, so a popup can
     /// animate its close.
@@ -820,6 +827,7 @@ impl ControlHost {
         self.layered(tree).into_iter().rev().find(|node| {
             self.controls
                 .get(node)
+                .filter(|control| control.overlay_takes_input())
                 .and_then(|control| control.overlay())
                 .is_some_and(|rect| rect.contains(point))
         })

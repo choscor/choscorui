@@ -387,7 +387,7 @@ impl View for Delete {
 
 ### Tooltips
 
-`.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It also shows after keyboard focus moves into the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one. While the tooltip shows, a `Tooltip` accessibility node holds the text, with a `DescribedBy` relation to the view. The tooltip fades, zooms, and slides in and out, and shows and hides at once with reduced motion.
+`.tooltip(text)` shows `text` in a tooltip next to the view. The tooltip shows after the pointer rests on the view for the delay of the controls. It shows at once when keyboard focus moves into the view. `.tooltip_on(text, side)` puts it on another side of the view. It hides when the pointer leaves, on a press, a key, or a scroll, and when focus moves away. Escape hides it and goes no further. The text also becomes the accessibility description of the view, unless `.accessibility_hint` gives one. While the tooltip shows, a `Tooltip` accessibility node holds the text, with a `DescribedBy` relation to the view. The tooltip fades, zooms, and slides in and out, and shows and hides at once with reduced motion.
 
 ### Hover cards
 

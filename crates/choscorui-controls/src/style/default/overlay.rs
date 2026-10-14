@@ -198,7 +198,6 @@ fn tooltip(cx: &Cx) -> ResolvedStyle {
         Slot::Indicator => {
             style.min_width = cx.sp(2.5);
             style.min_height = cx.sp(2.5);
-            style.radius = Corners::all(2.0);
         }
         _ => {
             style.radius = Corners::all(cx.r(RadiusScale::Md));

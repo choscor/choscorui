@@ -269,6 +269,7 @@ presentation choscorui::prelude::ViewExt::sheet
 presentation choscorui::prelude::ViewExt::toast
 presentation choscorui::prelude::ViewExt::toaster
 presentation choscorui::prelude::ViewExt::tooltip
+presentation choscorui::prelude::ViewExt::tooltip_on
 presentation choscorui::prelude::ViewExt::file_importer
 presentation choscorui::prelude::ViewExt::file_exporter
 controls choscorui::prelude::ViewExt::accessibility_hidden

@@ -237,6 +237,96 @@ fn tooltips_wait_warm_up_and_hide_on_interrupt() {
     assert!(tips.visible().is_none(), "grace expired: full delay again");
 }
 
+#[test]
+fn a_focus_tooltip_shows_at_once_and_a_hover_does_not_hide_it() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 100.0, 100.0));
+    let a = tree
+        .attach(tree.root(), rect(0.0, 0.0, 10.0, 10.0))
+        .unwrap();
+    let b = tree
+        .attach(tree.root(), rect(20.0, 0.0, 10.0, 10.0))
+        .unwrap();
+    let ms = Duration::from_millis;
+    let mut tips = TooltipController::new();
+    tips.focus(a, "Lưu", rect(0.0, 0.0, 10.0, 10.0), ms(0));
+    assert_eq!(tips.visible().unwrap().target, a, "no delay for focus");
+    // The pointer passes over b and leaves: a's tooltip shows again.
+    tips.hover(b, "Mở", rect(20.0, 0.0, 10.0, 10.0), ms(100));
+    assert_eq!(tips.visible().unwrap().target, b);
+    tips.leave(ms(200));
+    assert_eq!(tips.visible().unwrap().target, a);
+    // The pointer leaves a while it has focus: the tooltip stays.
+    tips.hover(a, "Lưu", rect(0.0, 0.0, 10.0, 10.0), ms(300));
+    tips.leave(ms(400));
+    assert_eq!(tips.visible().unwrap().target, a);
+    // A blur of another target leaves it, and a blur of a hides it.
+    tips.blur(b, ms(500));
+    assert!(tips.visible().is_some());
+    tips.blur(a, ms(600));
+    assert!(tips.visible().is_none());
+    // A hover tooltip stays when focus leaves another target.
+    tips.hover(b, "Mở", rect(20.0, 0.0, 10.0, 10.0), ms(5_000));
+    tips.focus(a, "Lưu", rect(0.0, 0.0, 10.0, 10.0), ms(5_100));
+    tips.hover(b, "Mở", rect(20.0, 0.0, 10.0, 10.0), ms(5_100));
+    tips.blur(a, ms(5_200));
+    assert_eq!(tips.target(), Some(b));
+}
+
+#[test]
+fn a_tooltip_takes_a_side_and_points_its_arrow_at_the_anchor() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 400.0, 300.0));
+    let anchor = rect(100.0, 100.0, 80.0, 30.0);
+    let target = tree.attach(tree.root(), anchor).unwrap();
+    let mut tips = TooltipController::new();
+    tips.focus(target, "Copy", anchor, Duration::ZERO);
+    let tip = tips.visible().unwrap();
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let bounds = rect(0.0, 0.0, 400.0, 300.0);
+    for (side, ltr) in [
+        (Placement::Below, Placement::Below),
+        (Placement::After, Placement::After),
+        (Placement::Before, Placement::Before),
+    ] {
+        let placed = tip.place_on(
+            side,
+            bounds,
+            &styles,
+            &tokens,
+            &EstimatedText,
+            LayoutDirection::Ltr,
+        );
+        assert_eq!(placed.placement, ltr);
+        let middle = placed.rect.center();
+        match side {
+            Placement::Below => assert_eq!(placed.rect.origin.y, anchor.max_y() + 5.0),
+            Placement::After => {
+                assert_eq!(placed.rect.origin.x, anchor.max_x() + 5.0);
+                assert!((middle.y - anchor.center().y).abs() < 1e-9, "centered");
+            }
+            _ => assert_eq!(placed.rect.max_x(), anchor.origin.x - 5.0),
+        }
+        let mut list = DisplayList::new();
+        tip.paint(
+            &mut PaintContext::new(&mut list, placed.rect, &tokens, &styles, &EstimatedText),
+            placed.placement,
+        );
+        // The arrow tip lies in the gap toward the anchor.
+        let tip_point = list
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                DisplayCommand::FillPath { path, .. } => Some(path.bounds()),
+                _ => None,
+            })
+            .expect("the arrow");
+        match side {
+            Placement::Below => assert_eq!(tip_point.origin.y, anchor.max_y()),
+            Placement::After => assert_eq!(tip_point.origin.x, anchor.max_x()),
+            _ => assert_eq!(tip_point.max_x(), anchor.origin.x),
+        }
+    }
+}
+
 fn commands() -> CommandRegistry {
     let mut commands = CommandRegistry::new();
     for id in 1..=5 {

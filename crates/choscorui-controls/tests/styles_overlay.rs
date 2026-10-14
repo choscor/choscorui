@@ -382,7 +382,7 @@ fn tooltip_matches_its_reference_table() {
         let arrow = get(&tokens, query(Slot::Indicator));
         assert_eq!(
             (bg(&arrow), arrow.min_width, arrow.min_height, arrow.radius),
-            (c(ColorRole::Foreground), 10.0, 10.0, Corners::all(2.0))
+            (c(ColorRole::Foreground), 10.0, 10.0, Corners::all(0.0))
         );
     }
 }

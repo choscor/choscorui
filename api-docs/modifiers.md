@@ -1069,6 +1069,22 @@ view for assistive technology.
 let save = Button::new("Save", || {}).tooltip("Save the document");
 ```
 
+#### `Styled::tooltip_on`
+
+```rust
+pub fn tooltip_on<M>(self, text: impl IntoLive<TextContent, M>, side: Placement) -> Self
+```
+
+Shows `text` in a tooltip as [`tooltip`](#styledtooltip) does, on
+`side` of the view. The bubble flips to the other side when it
+does not fit.
+
+##### Examples
+
+```rust
+let back = Button::new("Back", || {}).tooltip_on("Go back", Placement::Below);
+```
+
 #### `Styled::tracking`
 
 ```rust

@@ -940,7 +940,7 @@ text "Aa" at 44,32.2 system-ui 12 w400 t0 #ffffffff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### tooltip default default indicator
 # rest
-fill 10,10 10x10 r2 #0a0a0aff
+fill-rect 10,10 10x10 #0a0a0aff
 stroke-path M23.333333333333332,11 L16,18.333333333333332 L12.666666666666666,15 #ffffffff w1.3333333333333333 Round Round dash[]
 PushClip(Rect { origin: Point { x: 20.0, y: 5.0 }, size: Size { width: 0.0, height: 20.0 } })
 text "…" at 20,19.9 system-ui 14 w400 t0 #ffffffff

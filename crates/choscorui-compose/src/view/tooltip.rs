@@ -115,6 +115,8 @@ struct TooltipTrigger {
     bubble: Option<PopupPlacement>,
     /// The duration of the show and hide motion, from the last arrange.
     motion_ms: u32,
+    /// The side of the view that the bubble prefers.
+    side: Placement,
 }
 
 impl TooltipTrigger {
@@ -143,7 +145,14 @@ impl CustomControl for TooltipTrigger {
                     text: text.clone(),
                     anchor: bounds,
                 };
-                Some(tip.place(cx.viewport, cx.styles, cx.tokens, cx.text, cx.direction))
+                Some(tip.place_on(
+                    self.side,
+                    cx.viewport,
+                    cx.styles,
+                    cx.tokens,
+                    cx.text,
+                    cx.direction,
+                ))
             }
             _ => None,
         };
@@ -161,8 +170,14 @@ impl CustomControl for TooltipTrigger {
                 controller.hover(node, &text, cx.bounds(), now);
                 EventReply::Continue
             }
-            ControlEvent::Hover(false) | ControlEvent::Dismiss => {
+            ControlEvent::Hover(false) => {
                 release(controller, node, now);
+                EventReply::Continue
+            }
+            // An outside press or Escape hides the tooltip, also one of
+            // keyboard focus.
+            ControlEvent::Dismiss => {
+                controller.interrupt(now);
                 EventReply::Continue
             }
             ControlEvent::Timer => {
@@ -217,10 +232,14 @@ impl CustomControl for TooltipTrigger {
         }
         // The bubble slides in from its anchor.
         let distance = cx.tokens.spacing * 2.0;
-        let slide = if bubble.placement == Placement::Below {
-            (0.0, -distance)
-        } else {
-            (0.0, distance)
+        let toward = |near: bool| if near { -distance } else { distance };
+        let slide = match bubble.placement {
+            Placement::Below | Placement::Above => {
+                (0.0, toward(bubble.placement == Placement::Below))
+            }
+            Placement::After | Placement::Before => {
+                (toward(tip.anchor.center().x < bubble.rect.origin.x), 0.0)
+            }
         };
         Reveal::paint(cx, bubble.rect, progress, slide, |cx| {
             tip.paint(&mut cx.at(bubble.rect), bubble.placement);
@@ -257,10 +276,15 @@ impl CustomControl for TooltipTrigger {
     fn focusable(&self) -> bool {
         false
     }
+
+    fn overlay_takes_input(&self) -> bool {
+        false
+    }
 }
 
-/// The modifier that adds `text` as the tooltip of a view.
-pub(super) fn tooltip(text: Live<TextContent>) -> Modifier {
+/// The modifier that adds `text` as the tooltip of a view, on `side` of
+/// it.
+pub(super) fn tooltip(text: Live<TextContent>, side: Placement) -> Modifier {
     let shared: Rc<RefCell<String>> = Rc::default();
     let node: Rc<Cell<Option<NodeId>>> = Rc::default();
     let (control_text, control_node) = (shared.clone(), node.clone());
@@ -272,6 +296,7 @@ pub(super) fn tooltip(text: Live<TextContent>) -> Modifier {
                 node: control_node,
                 bubble: None,
                 motion_ms: 0,
+                side,
             })
         }),
         mount: Box::new(move |cx: &mut Cx, wrapper, view| {
@@ -332,7 +357,7 @@ pub(super) fn follow_focus(inner: &mut Inner, old: Option<NodeId>, new: Option<N
     let shared = inner.tooltips.clone();
     let mut tooltips = shared.borrow_mut();
     if let Some(left) = before {
-        release(&mut tooltips.controller, left, now);
+        tooltips.controller.blur(left, now);
         inner.touch(left, Dirty::PAINT);
     }
     if let (Some(entered), Some(focus)) = (after, new)
@@ -345,7 +370,7 @@ pub(super) fn follow_focus(inner: &mut Inner, old: Option<NodeId>, new: Option<N
             .map(|text| text.borrow().clone())
             .unwrap_or_default();
         let anchor = inner.tree.bounds(entered).unwrap_or_default();
-        tooltips.controller.hover(entered, &text, anchor, now);
+        tooltips.controller.focus(entered, &text, anchor, now);
         inner.touch(entered, Dirty::PAINT);
     }
     tooltips.sync(inner.time);

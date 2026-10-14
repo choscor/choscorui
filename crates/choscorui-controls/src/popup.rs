@@ -338,14 +338,40 @@ impl VisibleTooltip {
         text: &dyn TextMeasure,
         direction: LayoutDirection,
     ) -> PopupPlacement {
+        self.place_on(Placement::Above, viewport, styles, tokens, text, direction)
+    }
+
+    /// Places the bubble as [`place`](Self::place) does, on `side` of the
+    /// anchor. A bubble `After` or `Before` the anchor is centered on it
+    /// vertically, and flips to the other side when it does not fit.
+    pub fn place_on(
+        &self,
+        side: Placement,
+        viewport: Rect,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+        direction: LayoutDirection,
+    ) -> PopupPlacement {
         let size = self.size(styles, tokens, text);
         let arrow = styles.resolve(
             tokens,
             StyleQuery::new(ControlKind::Tooltip, Slot::Indicator),
         );
-        let anchor = gap_anchor(self.anchor, arrow.min_height / 2.0, Some(size.width));
+        let gap = arrow.min_height / 2.0;
+        let anchor = if matches!(side, Placement::Above | Placement::Below) {
+            gap_anchor(self.anchor, gap, Some(size.width))
+        } else {
+            let center = self.anchor.center().y;
+            Rect::from_xywh(
+                self.anchor.origin.x - gap,
+                center - size.height / 2.0,
+                self.anchor.size.width + 2.0 * gap,
+                size.height,
+            )
+        };
         let bounds = popup_bounds(viewport, tokens);
-        place_popup(anchor, size, bounds, Placement::Above, direction)
+        place_popup(anchor, size, bounds, side, direction)
     }
 
     /// Paints the bubble in the context's bounds, from
@@ -361,18 +387,31 @@ impl VisibleTooltip {
         // anchor's center and clamped inside the bubble's corners.
         let half = arrow.min_width / 2.0;
         let corner = bubble.radius.top_start;
-        let x = (self.anchor.origin.x + self.anchor.size.width / 2.0)
+        let center = self.anchor.center();
+        let x = center
+            .x
             .clamp(rect.origin.x + corner + half, rect.max_x() - corner - half);
+        let y = center
+            .y
+            .clamp(rect.origin.y + corner + half, rect.max_y() - corner - half);
         let reach = arrow.min_height / 2.0;
-        let (base, tip) = if placement == Placement::Below {
-            (rect.origin.y, rect.origin.y - reach)
-        } else {
-            (rect.max_y(), rect.max_y() + reach)
+        // The base and the tip of the arrow, as points across the edge.
+        let point = |along: f64, across: f64| match placement {
+            Placement::Above | Placement::Below => Point::new(x + along, across),
+            Placement::After | Placement::Before => Point::new(across, y + along),
+        };
+        let (base, tip) = match placement {
+            Placement::Below => (rect.origin.y, rect.origin.y - reach),
+            Placement::Above => (rect.max_y(), rect.max_y() + reach),
+            // `After` in a right-to-left layout is on the left, as
+            // `place_popup` puts it.
+            _ if self.anchor.center().x < rect.origin.x => (rect.origin.x, rect.origin.x - reach),
+            _ => (rect.max_x(), rect.max_x() + reach),
         };
         let mut path = Path::new();
-        path.move_to(Point::new(x - half, base))
-            .line_to(Point::new(x, tip))
-            .line_to(Point::new(x + half, base))
+        path.move_to(point(-half, base))
+            .line_to(point(0.0, tip))
+            .line_to(point(half, base))
             .close();
         let _ = cx.list.fill_path(
             path,
@@ -390,6 +429,9 @@ impl VisibleTooltip {
 #[derive(Default)]
 pub struct TooltipController {
     hover: Option<(NodeId, String, Rect, Duration)>,
+    /// The target with keyboard focus, whose tooltip shows again when
+    /// the pointer leaves another target.
+    focused: Option<(NodeId, String, Rect)>,
     visible: Option<VisibleTooltip>,
     last_hidden: Option<Duration>,
 }
@@ -419,27 +461,66 @@ impl TooltipController {
             || self
                 .last_hidden
                 .is_some_and(|hidden| now.saturating_sub(hidden) <= TOOLTIP_GRACE);
-        self.visible = None;
-        let start = if warm {
-            now.saturating_sub(TOOLTIP_DELAY)
+        if warm {
+            self.show(target, text.to_owned(), anchor, now);
         } else {
-            now
-        };
-        self.hover = Some((target, text.to_owned(), anchor, start));
-        self.poll(now);
+            self.visible = None;
+            self.hover = Some((target, text.to_owned(), anchor, now));
+        }
     }
 
-    /// Pointer left every tooltip target.
+    /// Keyboard focus moved into `target`: its tooltip shows at once.
+    pub fn focus(&mut self, target: NodeId, text: &str, anchor: Rect, now: Duration) {
+        self.focused = (!text.is_empty()).then(|| (target, text.to_owned(), anchor));
+        self.show_focused(now);
+    }
+
+    /// Keyboard focus left `target`: its tooltip hides, unless the
+    /// pointer rests on it.
+    pub fn blur(&mut self, target: NodeId, now: Duration) {
+        if self
+            .focused
+            .as_ref()
+            .is_some_and(|(node, ..)| *node == target)
+        {
+            self.focused = None;
+            if self.target() == Some(target) {
+                self.leave(now);
+            }
+        }
+    }
+
+    /// Shows the tooltip of the focused target without a delay.
+    fn show_focused(&mut self, now: Duration) {
+        if let Some((target, text, anchor)) = self.focused.clone() {
+            self.show(target, text, anchor, now);
+        }
+    }
+
+    /// Shows the tooltip of `target` without a delay.
+    fn show(&mut self, target: NodeId, text: String, anchor: Rect, now: Duration) {
+        self.visible = Some(VisibleTooltip {
+            target,
+            text: text.clone(),
+            anchor,
+        });
+        self.hover = Some((target, text, anchor, now.saturating_sub(TOOLTIP_DELAY)));
+    }
+
+    /// Pointer left every tooltip target. The tooltip of the focused
+    /// target shows again.
     pub fn leave(&mut self, now: Duration) {
         if self.visible.take().is_some() {
             self.last_hidden = Some(now);
         }
         self.hover = None;
+        self.show_focused(now);
     }
 
     /// Press, key, or scroll: hide and do not reshow until the pointer
-    /// moves to another target.
+    /// moves to another target or focus moves.
     pub fn interrupt(&mut self, now: Duration) {
+        self.focused = None;
         if self.visible.take().is_some() {
             self.last_hidden = Some(now);
         }

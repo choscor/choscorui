@@ -313,3 +313,19 @@ view for assistive technology.
 ```rust
 let save = Button::new("Save", || {}).tooltip("Save the document");
 ```
+
+### `tooltip_on`
+
+```rust
+fn tooltip_on<M>(self, text: impl IntoLive<TextContent, M>, side: Placement) -> Styled<Self>
+```
+
+Shows `text` in a tooltip as [`tooltip`](#tooltip) does, on
+`side` of the view. The bubble flips to the other side when it
+does not fit.
+
+#### Examples
+
+```rust
+let back = Button::new("Back", || {}).tooltip_on("Go back", Placement::Below);
+```
