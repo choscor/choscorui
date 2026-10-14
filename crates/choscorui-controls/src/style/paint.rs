@@ -850,31 +850,49 @@ impl<'a> Content<'a> {
         style: &ResolvedStyle,
         align: TextAlign,
     ) {
+        self.draw_turning(cx, rect, style, align, None);
+    }
+
+    /// Draws the content as [`Content::draw`] does. With `turn_ms`, the
+    /// leading icon turns as a spinner with that many milliseconds a turn,
+    /// as in a loading button.
+    pub(crate) fn draw_turning(
+        &self,
+        cx: &mut PaintContext<'_>,
+        rect: Rect,
+        style: &ResolvedStyle,
+        align: TextAlign,
+        turn_ms: Option<u32>,
+    ) {
         let width = self.width(style, cx.text);
         let excess = (width - rect.size.width).max(0.0);
         let mut x = align_x(rect, width - excess, align, cx.rtl);
-        let mut parts: Vec<(Option<Icon>, &str)> = Vec::with_capacity(3);
+        // Each part: its icon, its text, and whether it is the leading icon.
+        let mut parts: Vec<(Option<Icon>, &str, bool)> = Vec::with_capacity(3);
         if let Some(icon) = self.leading {
-            parts.push((Some(icon), ""));
+            parts.push((Some(icon), "", true));
         }
         if !self.label.is_empty() {
-            parts.push((None, self.label));
+            parts.push((None, self.label, false));
         }
         if let Some(icon) = self.trailing {
-            parts.push((Some(icon), ""));
+            parts.push((Some(icon), "", false));
         }
         if cx.rtl {
             parts.reverse();
         }
-        for (icon, text) in parts {
+        for (icon, text, leading) in parts {
             let part = match icon {
                 Some(_) => style.icon_size,
                 None => (cx.text.width(text, &style.text) - excess).max(0.0),
             };
             let slot = Rect::from_xywh(x, rect.origin.y, part, rect.size.height);
-            match icon {
-                Some(icon) => cx.icon(slot, icon, style),
-                None => {
+            match (icon, turn_ms.filter(|_| leading)) {
+                (Some(_), Some(turn_ms)) => {
+                    crate::feedback::loading::paint_loader(cx, slot, style, turn_ms);
+                }
+                (Some(icon), None) => cx.icon(slot, icon, style),
+                (None, _) => {
                     let line = TextLine::new(text, style, false);
                     draw_text(cx.list, slot, &line, cx.text);
                 }

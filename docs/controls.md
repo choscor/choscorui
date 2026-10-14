@@ -341,6 +341,11 @@ output of each kind, variant, size, slot, and key state.
   the box, the icons, and the label. A recipe reads only the style query and
   the tokens, so a recipe swap does not change behavior.
 - `set_expanded` keeps the open look while a popup is open.
+- **Loading.** `with_loading(true)` (compose: `.loading(live)`) replaces
+  the leading icon with the loader icon. The loader turns at the
+  `Spinner` recipe motion, and it stays still with reduced motion. While
+  it loads, the button has the disabled look and semantics, and it
+  ignores activation.
 - A button is not a field, so it has no invalid state. Put the error of a
   form on the field.
 - `CommandLink` paints an arrow, a title, and a description in an outline

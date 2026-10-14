@@ -13,6 +13,7 @@ use choscorui_core::{
 use choscorui_core::{
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState,
 };
+use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ButtonInput {
@@ -69,6 +70,10 @@ pub struct Button {
     leading: Option<Icon>,
     trailing: Option<Icon>,
     expanded: bool,
+    /// Whether the button shows a turning loader and ignores activation.
+    loading: bool,
+    /// The spinner turn time from the recipe, in milliseconds.
+    turn_ms: Cell<u32>,
 }
 
 impl Button {
@@ -86,7 +91,27 @@ impl Button {
             leading: None,
             trailing: None,
             expanded: false,
+            loading: false,
+            turn_ms: Cell::new(0),
         }
+    }
+
+    /// The loading state: the leading icon becomes a turning loader, the
+    /// button looks disabled, and it ignores activation until the
+    /// loading ends. With reduced motion, the loader does not turn.
+    #[must_use]
+    pub fn with_loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
+
+    /// Whether the button takes activation: enabled and not loading.
+    fn active(&self) -> bool {
+        self.enabled && !self.loading
     }
 
     #[must_use]
@@ -236,7 +261,7 @@ impl Button {
         input: ButtonInput,
     ) -> Result<Option<CommandId>, TreeError> {
         let bounds = tree.bounds(id).ok_or(TreeError::MissingNode)?;
-        if !self.enabled {
+        if !self.active() {
             return Ok(None);
         }
         let previous_visual = self.visual_state(tree, id);
@@ -303,16 +328,16 @@ impl Button {
     /// True while a hosted button shows the pressed look: a press whose
     /// pointer is still inside, or Space held down.
     pub(crate) fn is_pressed(&self) -> bool {
-        self.enabled && ((self.pointer_armed && self.pointer_inside) || self.space_armed)
+        self.active() && ((self.pointer_armed && self.pointer_inside) || self.space_armed)
     }
 
     /// The flags the button recipe reads.
     pub fn visual_state(&self, tree: &Tree, id: NodeId) -> VisualState {
-        let pressed = self.enabled
+        let pressed = self.active()
             && ((self.pointer_armed && self.pointer_inside && tree.pointer_capture() == Some(id))
                 || (self.space_armed && tree.focus() == Some(id)));
         VisualState::NONE
-            .set(VisualState::DISABLED, !self.enabled)
+            .set(VisualState::DISABLED, !self.active())
             .set(VisualState::HOVERED, self.hovered)
             .set(VisualState::PRESSED, pressed)
             .set(VisualState::FOCUSED, tree.focus() == Some(id))
@@ -325,9 +350,9 @@ impl Button {
         ButtonSemantics {
             role: "button",
             name: self.label.clone(),
-            enabled: self.enabled,
+            enabled: self.active(),
             focused: tree.focus() == Some(id),
-            actions: if self.enabled { ACTIVATE } else { &[] },
+            actions: if self.active() { ACTIVATE } else { &[] },
         }
     }
 
@@ -341,7 +366,11 @@ impl Button {
 
     fn content(&self) -> Content<'_> {
         Content {
-            leading: self.leading,
+            leading: if self.loading {
+                Some(Icon::LoaderCircle)
+            } else {
+                self.leading
+            },
             label: if self.size.is_icon() { "" } else { &self.label },
             trailing: self.trailing,
         }
@@ -366,8 +395,17 @@ impl Button {
         let style = cx.style(self.query(state));
         let bounds = cx.bounds;
         let content = self.content();
+        // The motion comes from the paint, so a reduced-motion change
+        // stops the turn without a new arrange.
+        let turn_ms = self.loading.then(|| {
+            let motion = cx
+                .style(StyleQuery::new(ControlKind::Spinner, Slot::Root))
+                .motion_ms;
+            self.turn_ms.set(motion);
+            motion
+        });
         cx.slot(bounds, &style, |cx, rect| {
-            content.draw(cx, rect, &style, TextAlign::Center);
+            content.draw_turning(cx, rect, &style, TextAlign::Center, turn_ms);
         });
     }
 }
@@ -403,15 +441,30 @@ impl crate::CustomControl for Button {
         let state = cx
             .state
             .set(VisualState::PRESSED, self.is_pressed())
-            .set(VisualState::OPEN, self.expanded);
+            .set(VisualState::OPEN, self.expanded)
+            .set(
+                VisualState::DISABLED,
+                cx.state.contains(VisualState::DISABLED) || self.loading,
+            );
         self.paint_state(cx, state);
+    }
+
+    fn arrange(&mut self, cx: &crate::MeasureContext<'_>, _bounds: choscorui_core::Rect) {
+        if self.loading {
+            let style = cx.style(StyleQuery::new(ControlKind::Spinner, Slot::Root));
+            self.turn_ms.set(style.motion_ms);
+        }
+    }
+
+    fn animating(&self, _time: f64) -> bool {
+        self.loading && self.turn_ms.get() > 0
     }
 
     fn semantics(&self) -> SemanticNode {
         ButtonSemantics {
             role: "button",
             name: self.label.clone(),
-            enabled: self.enabled,
+            enabled: self.active(),
             focused: false,
             actions: &[],
         }
@@ -424,7 +477,7 @@ impl crate::CustomControl for Button {
         action: CoreSemanticAction,
         _value: Option<&str>,
     ) -> bool {
-        if action != CoreSemanticAction::Activate || !self.enabled {
+        if action != CoreSemanticAction::Activate || !self.active() {
             return false;
         }
         cx.emit(crate::ControlMessage::Activated);

@@ -2,7 +2,7 @@
 //! state.
 
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
-use crate::feedback::loading::spin;
+use crate::feedback::loading::paint_loader;
 use crate::hosted;
 use crate::style::fill_area;
 use crate::style::{
@@ -11,7 +11,7 @@ use crate::style::{
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, Image, ImageSampling, Key, KeyEvent, Measured, Path,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
 };
 
 /// What an attachment shows in its media box.
@@ -283,14 +283,7 @@ impl Attachment {
             let center = rect.center();
             let side = spinner.icon_size;
             let mark = Rect::from_xywh(center.x - side / 2.0, center.y - side / 2.0, side, side);
-            let rotation = Transform::translate(-center.x, -center.y)
-                .then(Transform::rotate(spin(cx.time, spinner.motion_ms)))
-                .then(Transform::translate(center.x, center.y));
-            let turned = cx.list.push_transform(rotation).is_ok();
-            cx.icon(mark, Icon::LoaderCircle, &spinner);
-            if turned {
-                let _ = cx.list.pop_transform();
-            }
+            paint_loader(cx, mark, &spinner, spinner.motion_ms);
         }
     }
 }

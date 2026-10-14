@@ -151,6 +151,7 @@ pub struct Button {
     size: Option<Live<ControlSize>>,
     leading: Option<Icon>,
     trailing: Option<Icon>,
+    loading: Option<Live<bool>>,
 }
 
 impl Button {
@@ -163,7 +164,17 @@ impl Button {
             size: None,
             leading: None,
             trailing: None,
+            loading: None,
         }
+    }
+
+    /// Shows a turning loader in place of the leading icon while
+    /// `loading` is true. The button then looks disabled and ignores
+    /// activation.
+    #[must_use]
+    pub fn loading<M>(mut self, loading: impl IntoLive<bool, M>) -> Self {
+        self.loading = Some(loading.into_live());
+        self
     }
 
     /// The look of the button, instead of the environment's.
@@ -204,13 +215,15 @@ impl View for Button {
             size,
             leading,
             trailing,
+            loading,
         } = self;
         ControlView::build(move |env: &Env| {
             let variant = pick(&variant, env.button_variant()).unwrap_or_default();
             let size = pick(&size, env.control_size()).unwrap_or_default();
             let mut button = controls::Button::new(text(&label, env), NO_COMMAND)
                 .with_variant(variant)
-                .with_size(size);
+                .with_size(size)
+                .with_loading(pick(&loading, None).unwrap_or(false));
             if let Some(icon) = leading {
                 button = button.with_icon(icon);
             }

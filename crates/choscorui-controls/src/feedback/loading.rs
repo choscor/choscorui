@@ -2,7 +2,9 @@
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
-use crate::style::{ControlKind, ControlSize, Corners, PaintContext, Slot, StyleQuery};
+use crate::style::{
+    ControlKind, ControlSize, Corners, PaintContext, ResolvedStyle, Slot, StyleQuery,
+};
 use choscorui_core::{
     ColorRole, EventReply, Icon, Measured, Rect, SemanticNode, SemanticRole, Size, Transform,
 };
@@ -18,6 +20,26 @@ pub(crate) fn spin(time: f64, turn_ms: u32) -> f64 {
     }
     let turn = f64::from(turn_ms) / 1000.0;
     (time / turn).fract() * TAU
+}
+
+/// Paints the loader icon in `rect` with the colors of `style`, turned
+/// for the spinner motion of `turn_ms` milliseconds a turn at the context
+/// time. Spinners, attachments, and loading buttons share it.
+pub(crate) fn paint_loader(
+    cx: &mut PaintContext<'_>,
+    rect: Rect,
+    style: &ResolvedStyle,
+    turn_ms: u32,
+) {
+    let center = rect.center();
+    let rotation = Transform::translate(-center.x, -center.y)
+        .then(Transform::rotate(spin(cx.time, turn_ms)))
+        .then(Transform::translate(center.x, center.y));
+    let pushed = cx.list.push_transform(rotation).is_ok();
+    cx.icon(rect, Icon::LoaderCircle, style);
+    if pushed {
+        let _ = cx.list.pop_transform();
+    }
 }
 
 /// The opacity of a skeleton `time` seconds into a pulse of `pulse_ms`
@@ -98,16 +120,7 @@ impl CustomControl for Spinner {
         // The motion comes from the paint, so a reduced-motion change
         // stops the turn without a new arrange.
         self.turn_ms.set(style.motion_ms);
-        let center = cx.bounds.center();
-        let angle = spin(cx.time, style.motion_ms);
-        let rotation = Transform::translate(-center.x, -center.y)
-            .then(Transform::rotate(angle))
-            .then(Transform::translate(center.x, center.y));
-        let pushed = cx.list.push_transform(rotation).is_ok();
-        cx.icon(cx.bounds, Icon::LoaderCircle, &style);
-        if pushed {
-            let _ = cx.list.pop_transform();
-        }
+        paint_loader(cx, cx.bounds, &style, style.motion_ms);
     }
 
     fn animating(&self, _time: f64) -> bool {

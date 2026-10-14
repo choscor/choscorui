@@ -215,3 +215,16 @@ fn enabled_change_invalidates_paint_and_semantics() {
     assert!(dirty.contains(Dirty::SEMANTICS));
     assert!(!dirty.contains(Dirty::LAYOUT));
 }
+
+#[test]
+fn a_loading_button_looks_disabled_and_ignores_activation() {
+    let (mut tree, id, button) = setup();
+    let mut button = button.with_loading(true);
+    assert!(button.is_loading());
+    let activate = ButtonInput::Semantic(SemanticAction::Activate);
+    assert_eq!(button.handle(&mut tree, id, activate).unwrap(), None);
+    assert!(button.visual_state(&tree, id).disabled());
+    let semantics = button.semantics(&tree, id);
+    assert!(!semantics.enabled);
+    assert!(semantics.actions.is_empty());
+}

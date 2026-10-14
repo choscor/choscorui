@@ -34,6 +34,16 @@ pub fn icon(self, icon: Icon) -> Self
 
 An icon before the label, or the only content of an icon size.
 
+#### `Button::loading`
+
+```rust
+pub fn loading<M>(self, loading: impl IntoLive<bool, M>) -> Self
+```
+
+Shows a turning loader in place of the leading icon while
+`loading` is true. The button then looks disabled and ignores
+activation.
+
 #### `Button::new`
 
 ```rust
