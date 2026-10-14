@@ -13,7 +13,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - Layout: [layout.md](layout.md)
 - Controls: [controls--enums.md](controls--enums.md), [controls--structs.md](controls--structs.md), [controls--traits.md](controls--traits.md), [controls--type-aliases-1.md](controls--type-aliases-1.md), [controls--type-aliases-2.md](controls--type-aliases-2.md)
 - Presentation: [presentation.md](presentation.md)
-- Modifiers: [modifiers.md](modifiers.md)
+- Modifiers: [modifiers.md](modifiers.md), [modifiers-layout.md](modifiers-layout.md), [modifiers-controls.md](modifiers-controls.md), [modifiers-presentation.md](modifiers-presentation.md), [modifiers-styling.md](modifiers-styling.md), [modifiers-text.md](modifiers-text.md)
 - Styling: [styling.md](styling.md)
 - Text: [text.md](text.md)
 - Custom: [custom.md](custom.md)
@@ -207,69 +207,70 @@ Every example assumes `use choscorui::prelude::*;`.
 
 ### Layout modifiers
 
-- [`aspect_ratio`](modifiers.md#aspect_ratio) modifier: Keeps width ÷ height at `ratio`, with the width the view gets.
-- [`fixed_size`](modifiers.md#fixed_size) modifier: Keeps the view at its measured size when the parent overflows.
-- [`frame`](modifiers.md#frame-1) modifier: Size constraints, with the content aligned in the frame.
-- [`hidden`](modifiers.md#hidden) modifier: Hides the view but keeps its space.
-- [`layout_direction`](modifiers.md#layout_direction) modifier: The layout direction of the view, instead of the locale's.
-- [`layout_priority`](modifiers.md#layout_priority) modifier: A share of the leftover space along the parent stack.
-- [`offset`](modifiers.md#offset) modifier: Moves the painted view without changing its layout.
-- [`padding`](modifiers.md#padding) modifier: Space around the view, on all or on logical edges.
+- [`aspect_ratio`](modifiers-layout.md#aspect_ratio) modifier: Keeps width ÷ height at `ratio`, with the width the view gets.
+- [`fixed_size`](modifiers-layout.md#fixed_size) modifier: Keeps the view at its measured size when the parent overflows.
+- [`frame`](modifiers-layout.md#frame) modifier: Size constraints, with the content aligned in the frame.
+- [`hidden`](modifiers-layout.md#hidden) modifier: Hides the view but keeps its space.
+- [`layout_direction`](modifiers-layout.md#layout_direction) modifier: The layout direction of the view, instead of the locale's.
+- [`layout_priority`](modifiers-layout.md#layout_priority) modifier: A share of the leftover space along the parent stack.
+- [`offset`](modifiers-layout.md#offset) modifier: Moves the painted view without changing its layout.
+- [`padding`](modifiers-layout.md#padding) modifier: Space around the view, on all or on logical edges.
 
 ### Controls modifiers
 
-- [`accessibility_hidden`](modifiers.md#accessibility_hidden) modifier: Hides the view and its descendants from assistive technology.
-- [`accessibility_hint`](modifiers.md#accessibility_hint) modifier: What happens when the view is used, for assistive technology.
-- [`accessibility_label`](modifiers.md#accessibility_label) modifier: The name that assistive technology reads.
-- [`accessibility_value`](modifiers.md#accessibility_value) modifier: The value that assistive technology reads.
-- [`disabled`](modifiers.md#disabled) modifier: Disables every control in the view.
-- [`focusable`](modifiers.md#focusable) modifier: Whether keyboard focus can stop on the view.
-- [`focused`](modifiers.md#focused) modifier: Keeps `focused` true while the view has keyboard focus; setting it moves focus to the view.
-- [`keyboard_shortcut`](modifiers.md#keyboard_shortcut) modifier: Runs `action` for `key` with `modifiers` while focus is in the view, or anywhere when no closer view declares the same keys.
-- [`on_message`](modifiers.md#on_message) modifier: Calls `handler` with each message of the view's control.
-- [`on_submit`](modifiers.md#on_submit) modifier: Runs `action` when the control commits its input, for example Return in a text input.
+- [`accessibility_hidden`](modifiers-controls.md#accessibility_hidden) modifier: Hides the view and its descendants from assistive technology.
+- [`accessibility_hint`](modifiers-controls.md#accessibility_hint) modifier: What happens when the view is used, for assistive technology.
+- [`accessibility_label`](modifiers-controls.md#accessibility_label) modifier: The name that assistive technology reads.
+- [`accessibility_role`](modifiers-controls.md#accessibility_role) modifier: The role that assistive technology reports for the view, for example `TabPanel` for the content of the selected tab.
+- [`accessibility_value`](modifiers-controls.md#accessibility_value) modifier: The value that assistive technology reads.
+- [`disabled`](modifiers-controls.md#disabled) modifier: Disables every control in the view.
+- [`focusable`](modifiers-controls.md#focusable) modifier: Whether keyboard focus can stop on the view.
+- [`focused`](modifiers-controls.md#focused) modifier: Keeps `focused` true while the view has keyboard focus; setting it moves focus to the view.
+- [`keyboard_shortcut`](modifiers-controls.md#keyboard_shortcut) modifier: Runs `action` for `key` with `modifiers` while focus is in the view, or anywhere when no closer view declares the same keys.
+- [`on_message`](modifiers-controls.md#on_message) modifier: Calls `handler` with each message of the view's control.
+- [`on_submit`](modifiers-controls.md#on_submit) modifier: Runs `action` when the control commits its input, for example Return in a text input.
 
 ### Presentation modifiers
 
-- [`alert_dialog`](modifiers.md#alert_dialog) modifier: Shows `content` in an alert dialog, which asks the user to confirm or cancel.
-- [`context_menu`](modifiers.md#context_menu) modifier: Opens a menu of `items` at the pointer on a secondary click or a Control-click on the view, or for the `ShowMenu` action.
-- [`dialog`](modifiers.md#dialog) modifier: Shows `content` in a dialog while `presented` is true.
-- [`drawer`](modifiers.md#drawer) modifier: Shows `content` in a drawer along the `side` edge.
-- [`dropdown_menu`](modifiers.md#dropdown_menu) modifier: Shows a menu of `items` below the view while `presented` is true.
-- [`file_exporter`](modifiers.md#file_exporter) modifier: Shows the backend's save dialog, which starts with the file name `name`, while `presented` is true.
-- [`file_importer`](modifiers.md#file_importer) modifier: Shows the backend's open dialog for one file with an extension in `types` (all files when empty) while `presented` is true.
-- [`hover_card`](modifiers.md#hover_card) modifier: Shows `content` in a hover card next to the view after the pointer rests on the view, or after keyboard focus moves into it.
-- [`popover`](modifiers.md#popover) modifier: Shows `content` in a popover next to the view.
-- [`sheet`](modifiers.md#sheet) modifier: Shows `content` in a sheet along the `side` edge.
-- [`toast`](modifiers.md#toast) modifier: Posts the toast that `toast` makes when `presented` becomes true, and sets `presented` back to false.
-- [`toaster`](modifiers.md#toaster) modifier: Shows the toasts that descendants post through `Env::toasts`, at `position` in the window.
-- [`tooltip`](modifiers.md#tooltip) modifier: Shows `text` in a tooltip after the pointer rests on the view, or after keyboard focus moves into it.
+- [`alert_dialog`](modifiers-presentation.md#alert_dialog) modifier: Shows `content` in an alert dialog, which asks the user to confirm or cancel.
+- [`context_menu`](modifiers-presentation.md#context_menu) modifier: Opens a menu of `items` at the pointer on a secondary click or a Control-click on the view, or for the `ShowMenu` action.
+- [`dialog`](modifiers-presentation.md#dialog) modifier: Shows `content` in a dialog while `presented` is true.
+- [`drawer`](modifiers-presentation.md#drawer) modifier: Shows `content` in a drawer along the `side` edge.
+- [`dropdown_menu`](modifiers-presentation.md#dropdown_menu) modifier: Shows a menu of `items` below the view while `presented` is true.
+- [`file_exporter`](modifiers-presentation.md#file_exporter) modifier: Shows the backend's save dialog, which starts with the file name `name`, while `presented` is true.
+- [`file_importer`](modifiers-presentation.md#file_importer) modifier: Shows the backend's open dialog for one file with an extension in `types` (all files when empty) while `presented` is true.
+- [`hover_card`](modifiers-presentation.md#hover_card) modifier: Shows `content` in a hover card next to the view after the pointer rests on the view, or after keyboard focus moves into it.
+- [`popover`](modifiers-presentation.md#popover) modifier: Shows `content` in a popover next to the view.
+- [`sheet`](modifiers-presentation.md#sheet) modifier: Shows `content` in a sheet along the `side` edge.
+- [`toast`](modifiers-presentation.md#toast) modifier: Posts the toast that `toast` makes when `presented` becomes true, and sets `presented` back to false.
+- [`toaster`](modifiers-presentation.md#toaster) modifier: Shows the toasts that descendants post through `Env::toasts`, at `position` in the window.
+- [`tooltip`](modifiers-presentation.md#tooltip) modifier: Shows `text` in a tooltip after the pointer rests on the view, or after keyboard focus moves into it.
 
 ### Styling modifiers
 
-- [`background`](modifiers.md#background) modifier: Paints `fill` behind the view.
-- [`border`](modifiers.md#border) modifier: Strokes the view's edge inside its bounds.
-- [`button_variant`](modifiers.md#button_variant) modifier: The variant of buttons in the view that have none of their own.
-- [`clip_shape`](modifiers.md#clip_shape) modifier: Clips the content to the view's bounds and corner radius.
-- [`color_scheme`](modifiers.md#color_scheme) modifier: The color scheme of the view and its descendants.
-- [`control_size`](modifiers.md#control_size) modifier: The size of controls in the view that have none of their own.
-- [`corner_radius`](modifiers.md#corner_radius) modifier: Rounds the corners of the view's background, border, and clip.
-- [`environment`](modifiers.md#environment) modifier: Changes the environment of the view's descendants.
-- [`foreground`](modifiers.md#foreground) modifier: The color of text in the view.
-- [`opacity`](modifiers.md#opacity) modifier: Fades the view and its content.
-- [`recipe`](modifiers.md#recipe) modifier: Paints controls of `kind` in the view with `recipe`.
-- [`ring`](modifiers.md#ring) modifier: Strokes an outline just outside the view.
-- [`shadow`](modifiers.md#shadow) modifier: Paints a shadow under the view.
-- [`theme`](modifiers.md#theme) modifier: The base color and scheme of the view and its descendants.
-- [`tint`](modifiers.md#tint) modifier: The accent color of controls in the view: the primary role.
-- [`token`](modifiers.md#token) modifier: Replaces one color token in the view and its descendants.
+- [`background`](modifiers-styling.md#background) modifier: Paints `fill` behind the view.
+- [`border`](modifiers-styling.md#border) modifier: Strokes the view's edge inside its bounds.
+- [`button_variant`](modifiers-styling.md#button_variant) modifier: The variant of buttons in the view that have none of their own.
+- [`clip_shape`](modifiers-styling.md#clip_shape) modifier: Clips the content to the view's bounds and corner radius.
+- [`color_scheme`](modifiers-styling.md#color_scheme) modifier: The color scheme of the view and its descendants.
+- [`control_size`](modifiers-styling.md#control_size) modifier: The size of controls in the view that have none of their own.
+- [`corner_radius`](modifiers-styling.md#corner_radius) modifier: Rounds the corners of the view's background, border, and clip.
+- [`environment`](modifiers-styling.md#environment) modifier: Changes the environment of the view's descendants.
+- [`foreground`](modifiers-styling.md#foreground) modifier: The color of text in the view.
+- [`opacity`](modifiers-styling.md#opacity) modifier: Fades the view and its content.
+- [`recipe`](modifiers-styling.md#recipe) modifier: Paints controls of `kind` in the view with `recipe`.
+- [`ring`](modifiers-styling.md#ring) modifier: Strokes an outline just outside the view.
+- [`shadow`](modifiers-styling.md#shadow) modifier: Paints a shadow under the view.
+- [`theme`](modifiers-styling.md#theme) modifier: The base color and scheme of the view and its descendants.
+- [`tint`](modifiers-styling.md#tint) modifier: The accent color of controls in the view: the primary role.
+- [`token`](modifiers-styling.md#token) modifier: Replaces one color token in the view and its descendants.
 
 ### Text modifiers
 
-- [`font_weight`](modifiers.md#font_weight) modifier: The font weight of text in the view.
-- [`locale`](modifiers.md#locale) modifier: The locale of the view's text, and its layout direction.
-- [`text_style`](modifiers.md#text_style) modifier: The text preset of text in the view.
-- [`tracking`](modifiers.md#tracking) modifier: The letter spacing of text in the view.
+- [`font_weight`](modifiers-text.md#font_weight) modifier: The font weight of text in the view.
+- [`locale`](modifiers-text.md#locale) modifier: The locale of the view's text, and its layout direction.
+- [`text_style`](modifiers-text.md#text_style) modifier: The text preset of text in the view.
+- [`tracking`](modifiers-text.md#tracking) modifier: The letter spacing of text in the view.
 
 ## Styling
 

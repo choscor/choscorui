@@ -491,22 +491,14 @@ fn a_vertical_hosted_tab_list_stacks_its_tabs_and_moves_with_arrow_keys() {
     h.key(Key::ArrowDown);
     h.key(Key::ArrowUp);
     h.key(Key::ArrowUp);
+    // The arrows across a vertical list do nothing.
     h.key(Key::ArrowLeft);
     h.key(Key::ArrowRight);
     h.key(Key::End);
     h.key(Key::Home);
     assert_eq!(
         h.messages(),
-        vec![
-            index(2),
-            index(0),
-            index(2),
-            index(1),
-            index(0),
-            index(1),
-            index(2),
-            index(0)
-        ]
+        vec![index(2), index(0), index(2), index(1), index(2), index(0)]
     );
     assert_eq!(h.semantics().role, SemanticRole::TabList);
     assert_eq!(h.semantics().value.as_deref(), Some("Account"));

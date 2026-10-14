@@ -144,9 +144,9 @@ impl RadioGroup {
             }
             RadioInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(id) => match key {
                 Key::Space | Key::Enter => Some(index),
-                _ => {
-                    navigation_target(&self.options, index, key, self.rtl, |option| option.enabled)
-                }
+                _ => navigation_target(&self.options, index, key, self.rtl, None, |option| {
+                    option.enabled
+                }),
             },
             _ => None,
         };
@@ -394,7 +394,14 @@ impl Tabs {
             }
             TabInput::Key(KeyEvent::Down { key, .. }) if tree.focus() == Some(id) => match key {
                 Key::Space | Key::Enter => Some(index),
-                _ => navigation_target(&self.tabs, index, key, self.rtl, |tab| tab.enabled),
+                _ => navigation_target(
+                    &self.tabs,
+                    index,
+                    key,
+                    self.rtl,
+                    Some(self.orientation),
+                    |tab| tab.enabled,
+                ),
             },
             _ => None,
         };
@@ -627,7 +634,7 @@ fn selectable_semantics(
         role,
         name: label.to_owned(),
         description: String::new(),
-        value: Some(selected.to_string()),
+        value: None,
         state: SemanticState {
             disabled: !enabled,
             checked: (role == SemanticRole::RadioButton).then_some(selected),
@@ -670,15 +677,26 @@ fn validate_attached(tree: &Tree, ids: impl Iterator<Item = NodeId>) -> Result<(
 }
 
 /// The enabled item that `key` moves to from `current`. In a
-/// right-to-left layout ArrowLeft moves forward.
+/// right-to-left layout ArrowLeft moves forward. With an `axis`, only the
+/// arrow keys along it move; without one, all four arrows move.
 fn navigation_target<T>(
     items: &[T],
     current: usize,
     key: Key,
     rtl: bool,
+    axis: Option<Orientation>,
     enabled: impl Fn(&T) -> bool,
 ) -> Option<usize> {
-    match key.in_reading_order(rtl) {
+    let key = key.in_reading_order(rtl);
+    let across = match axis {
+        Some(Orientation::Horizontal) => matches!(key, Key::ArrowUp | Key::ArrowDown),
+        Some(Orientation::Vertical) => matches!(key, Key::ArrowLeft | Key::ArrowRight),
+        None => false,
+    };
+    if across {
+        return None;
+    }
+    match key {
         Key::Home => (0..items.len()).find(|index| enabled(&items[*index])),
         Key::End => (0..items.len()).rev().find(|index| enabled(&items[*index])),
         Key::ArrowRight | Key::ArrowDown => (1..=items.len())

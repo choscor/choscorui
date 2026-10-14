@@ -465,6 +465,7 @@ Each control publishes its role, name, value, state, and actions. You do not bui
 
 - `.accessibility_label`, `.accessibility_value`, and `.accessibility_hint` replace what assistive technology reads.
 - `.accessibility_hidden(true)` hides decoration.
+- `.accessibility_role(role)` replaces the role, for example `TabPanel` for the content of the selected tab.
 - `.focusable(false)` takes a view out of the keyboard order, and `.focused(binding)` moves focus.
 - `.tooltip(text)` gives the description, and `.context_menu(items)` adds the `ShowMenu` action.
 

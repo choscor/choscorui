@@ -37,6 +37,9 @@ struct Choices {
     pressed: Option<usize>,
     /// The part rectangles from the last arrange, in item order.
     rects: Vec<Rect>,
+    /// The axis of the arrow keys that move the selection, or `None`
+    /// for all four arrows.
+    axis: Option<Orientation>,
     /// Whether the last arrange was right to left.
     rtl: bool,
 }
@@ -68,6 +71,7 @@ impl Choices {
             hovered: None,
             pressed: None,
             rects: Vec::new(),
+            axis: None,
             rtl: false,
         })
     }
@@ -163,10 +167,14 @@ impl Choices {
                 ..
             }) => EventReply::Stop,
             ControlEvent::Key(KeyEvent::Down { key, .. }) => {
-                let target =
-                    navigation_target(&self.items, self.selected, *key, self.rtl, |item| {
-                        item.enabled
-                    });
+                let target = navigation_target(
+                    &self.items,
+                    self.selected,
+                    *key,
+                    self.rtl,
+                    self.axis,
+                    |item| item.enabled,
+                );
                 match target {
                     Some(target) => {
                         self.select(cx, target);
@@ -217,7 +225,9 @@ impl Choices {
             _ => return false,
         };
         if let Some(target) =
-            navigation_target(&self.items, self.selected, key, false, |item| item.enabled)
+            navigation_target(&self.items, self.selected, key, false, None, |item| {
+                item.enabled
+            })
         {
             self.select(cx, target);
         }
@@ -439,8 +449,10 @@ impl Tabs {
         tabs: impl IntoIterator<Item = S>,
         selected: usize,
     ) -> Result<HostedTabs, SelectionError> {
+        let mut choices = Choices::new(label, tabs, selected)?;
+        choices.axis = Some(Orientation::Horizontal);
         Ok(HostedTabs {
-            choices: Choices::new(label, tabs, selected)?,
+            choices,
             variant: TabsVariant::Default,
             orientation: Orientation::Horizontal,
         })
@@ -454,9 +466,12 @@ impl HostedTabs {
         self
     }
 
+    /// Lays the tabs out along `orientation`. Only the arrow keys along
+    /// it move the selection.
     #[must_use]
     pub fn with_orientation(mut self, orientation: Orientation) -> Self {
         self.orientation = orientation;
+        self.choices.axis = Some(orientation);
         self
     }
 

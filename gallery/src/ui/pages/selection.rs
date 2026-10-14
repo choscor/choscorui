@@ -8,7 +8,7 @@ use choscorui::compose::view::{
     HorizontalAlignment, IntoLive, RadioGroup, Tabs, Text, TextContent, VStack, View, ViewExt,
 };
 use choscorui::controls::{CompletionMode, ControlMessage, ControlValue, Orientation, TabsVariant};
-use choscorui::core::{ColorRole, Point, RadiusScale, Space, TextPreset};
+use choscorui::core::{ColorRole, Point, RadiusScale, SemanticRole, Space, TextPreset};
 
 /// A small muted caption. It repeats the name of the control below it, so
 /// assistive technology skips it and reads the control.
@@ -98,6 +98,7 @@ fn tab_set(cx: &mut Cx, variant: TabsVariant, orientation: Orientation) -> AnyVi
         .with(move |tabs| tabs.with_variant(variant).with_orientation(orientation))
         .disabled_tab(2);
     let panel = Text::new(move || t!(TAB_CONTENT[selected.get()].1))
+        .accessibility_role(SemanticRole::TabPanel)
         .padding(Space::S3)
         .frame(
             Frame::new()
@@ -347,6 +348,10 @@ mod tests {
         page.act("Settings", SemanticAction::Increment);
         assert_eq!(page.value("Settings").as_deref(), Some("General"));
         assert!(page.host.find("Hidden settings.").is_none());
+        // The shown panel is a tab panel.
+        let panel = page.node("Name, icon, and startup behavior.");
+        let role = page.host.semantic(panel).unwrap().role;
+        assert_eq!(role, choscorui::core::SemanticRole::TabPanel);
     }
 
     #[test]

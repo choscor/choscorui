@@ -456,7 +456,9 @@ the `Mixed` value, where `None` is the mixed state. A press sets
   focuses it.
 - ArrowRight and ArrowDown go to the next enabled option. ArrowLeft and
   ArrowUp go to the previous enabled option. Both wrap and skip disabled
-  options.
+  options. Tabs take only the arrows along their orientation: ArrowLeft
+  and ArrowRight in a horizontal list, ArrowUp and ArrowDown in a
+  vertical list.
 - Home and End select the first and the last enabled option.
 - Space or Enter on key-down selects the focused option. The control
   also accepts repeats.
@@ -489,8 +491,8 @@ the `Mixed` value, where `None` is the mixed state. A press sets
 - **Tabs look.** `with_variant` takes a `TabsVariant`: `Default` or
   `Line`. `with_orientation` takes an `Orientation`. Paint the list with
   `paint_list`, then each tab with `paint_tab`.
-- **Vertical tabs.** The arrow keys, Home, and End work as in a horizontal
-  list. `HostedTabs` stacks the tabs in one column from the top, and each
+- **Vertical tabs.** ArrowUp, ArrowDown, Home, and End move the selection.
+  `HostedTabs` stacks the tabs in one column from the top, and each
   tab fills the list width. The list height fits the tabs. A vertical tab
   starts its label at the start edge. The line indicator is at the inline
   end, so right-to-left layouts mirror it.
@@ -512,13 +514,17 @@ the `Mixed` value, where `None` is the mixed state. A press sets
 | Field | Group node | Option or tab node | Tab panel node |
 | --- | --- | --- | --- |
 | Role | `RadioGroup` or `TabList` (AXGroup) | `RadioButton` or `Tab` (AXRadioButton) | `TabPanel` (AXGroup) |
-| Name / value | label / selected label | label / `true` or `false` | tab label / - |
+| Name / value | label / selected label | label / - | tab label / - |
 | State | - | disabled; checked (radio) or selected (tab) | hidden when not selected |
 | Actions | - | `Activate`, `Focus` while enabled | - |
 
 The group node has a `Controls` relation to each option or tab. A tab has
 a `Controls` relation to its panel. A panel has a `LabelledBy` relation to
 its tab.
+
+**As a view.** `Tabs::new(name, labels, selected)` mounts a `HostedTabs`.
+Show the content of the selected tab next to it, and give that view
+`.accessibility_role(SemanticRole::TabPanel)`.
 
 [selection_controls.rs](../crates/choscorui-controls/tests/selection_controls.rs)
 pins this behavior.

@@ -133,9 +133,12 @@ fn tabs_select_panels_and_expose_bidirectional_relationships() {
     assert_eq!(tabs.selected_panel(), third_panel);
     assert_eq!(tree.focus(), Some(third_tab));
 
+    // ArrowDown does nothing in a horizontal list.
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowDown), None);
     let tab = tabs.tab_semantics(third_tab).unwrap();
     assert_eq!(tab.role, SemanticRole::Tab);
     assert_eq!(tab.state.selected, Some(true));
+    assert_eq!(tab.value, None, "the selected state carries the selection");
     assert!(
         tab.relations
             .contains(&SemanticRelation::Controls(third_panel))
@@ -165,7 +168,7 @@ fn press(tabs: &mut Tabs, tree: &mut Tree, key: Key) -> Option<choscorui_core::N
 }
 
 #[test]
-fn vertical_tabs_navigate_with_every_arrow_key_and_home_and_end() {
+fn vertical_tabs_navigate_with_the_vertical_arrows_and_home_and_end() {
     let mut tree = Tree::new(Rect::new(Point::new(0.0, 0.0), Size::new(400.0, 300.0)));
     let tabs_and_panels: Vec<_> = (0..4)
         .map(|row| {
@@ -200,9 +203,9 @@ fn vertical_tabs_navigate_with_every_arrow_key_and_home_and_end() {
     assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(d));
     assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(c));
     assert_eq!(press(&mut tabs, &mut tree, Key::ArrowUp), Some(a));
-    // The horizontal arrows move the same way in a vertical list.
-    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowRight), Some(c));
-    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowLeft), Some(a));
+    // The arrows across a vertical list do nothing.
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowRight), None);
+    assert_eq!(press(&mut tabs, &mut tree, Key::ArrowLeft), None);
     assert_eq!(press(&mut tabs, &mut tree, Key::End), Some(d));
     assert_eq!(press(&mut tabs, &mut tree, Key::Home), Some(a));
     assert_eq!(press(&mut tabs, &mut tree, Key::Home), None);

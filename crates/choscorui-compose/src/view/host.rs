@@ -144,6 +144,8 @@ pub(crate) struct Access {
     pub invalid: bool,
     /// Relations from the field around a control to its label and text.
     pub relations: Vec<choscorui_core::SemanticRelation>,
+    /// The role that replaces the role of the view.
+    pub role: Option<SemanticRole>,
 }
 
 impl Access {
@@ -156,6 +158,7 @@ impl Access {
             || self.field.is_some()
             || self.invalid
             || !self.relations.is_empty()
+            || self.role.is_some()
     }
 }
 
@@ -1712,6 +1715,9 @@ impl ViewHost {
         };
         if let Some(label) = &data.access.label {
             semantic.name.clone_from(label);
+        }
+        if let Some(role) = data.access.role {
+            semantic.role = role;
         }
         let access = &data.access;
         if let Some(hint) = access

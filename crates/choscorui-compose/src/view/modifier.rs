@@ -25,8 +25,8 @@ use choscorui_controls::{
 use choscorui_core::{
     Axis, BaseColor, ColorRole, ColorScheme, Contrast, DesignTokens, Dirty, FileDialogKind,
     FileDialogRequest, FontWeight, Insets, ItemAlign, Key, LayoutDirection, LayoutKind,
-    LayoutStyle, Length, Locale, NodeId, Point, RecipeSet, ServiceError, Size, TextPreset,
-    Tracking,
+    LayoutStyle, Length, Locale, NodeId, Point, RecipeSet, SemanticRole, ServiceError, Size,
+    TextPreset, Tracking,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -241,6 +241,7 @@ pub(crate) enum Modifier {
     Environment(Rc<dyn Fn(&mut Env)>),
     Access(AccessField, Live<String>),
     AccessHidden(Live<bool>),
+    AccessRole(SemanticRole),
     Shortcut(Key, ShortcutModifiers, Rc<dyn Fn()>),
     OnMessage(Handler),
     Focused(Binding<bool>),
@@ -705,6 +706,17 @@ modifiers! {
     /// let divider = Text::new("|").accessibility_hidden(true);
     /// ```
     fn accessibility_hidden<M>(hidden: impl IntoLive<bool, M>) => Modifier::AccessHidden(hidden.into_live());
+    /// The role that assistive technology reports for the view, for
+    /// example `TabPanel` for the content of the selected tab.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::SemanticRole;
+    /// let panel = Text::new("General settings").accessibility_role(SemanticRole::TabPanel);
+    /// ```
+    fn accessibility_role(role: SemanticRole) => Modifier::AccessRole(role);
     /// Runs `action` for `key` with `modifiers` while focus is in the
     /// view, or anywhere when no closer view declares the same keys.
     ///
@@ -1668,6 +1680,10 @@ fn apply(
                 }
                 inner.touch(node, Dirty::SEMANTICS);
             });
+        }
+        Modifier::AccessRole(role) => {
+            cx.inner.data(inner_node).access.role = Some(role);
+            cx.inner.touch(inner_node, Dirty::SEMANTICS);
         }
         Modifier::AccessHidden(hidden) => {
             let node = inner_node;
