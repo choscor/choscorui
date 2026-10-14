@@ -4,12 +4,13 @@
 use crate::ui::page::{Build, PageCx, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, CommandLink, ControlView, Cx, Env, Frame, HorizontalAlignment,
+    Alignment, AnyView, Button, CommandLink, Configured, Cx, Env, Frame, HorizontalAlignment,
     State, Text, VStack, View, ViewExt,
 };
 use choscorui::controls::{
     ButtonVariant, ControlContext, ControlEvent, ControlKind, ControlMessage, ControlValue,
     CustomControl, Edges, MeasureContext, PaintContext, Recipe, ResolvedStyle, StyleQuery,
+    TextAlign,
 };
 use choscorui::core::{
     AnnouncementPriority, ColorRole, DesignTokens, EventPhase, EventReply, Key, KeyEvent, Measured,
@@ -127,10 +128,11 @@ struct StarRating {
 }
 
 impl StarRating {
-    fn new(name: String, value: u8, env: Env) -> Self {
+    /// A rating of 0 named `name`. The app binds its value.
+    fn new(name: String, env: Env) -> Self {
         Self {
             name,
-            value: value.min(5),
+            value: 0,
             hover: None,
             env,
             rtl: false,
@@ -148,8 +150,13 @@ impl StarRating {
         ((inset / width).floor() as i64 + 1).clamp(1, 5) as u8
     }
 
+    /// Sets the rating from a click or a key. The stars show it at once,
+    /// so a hover look does not cover it until the pointer moves again.
     fn set(&mut self, context: &mut ControlContext<'_>, value: u8) -> bool {
         let value = value.min(5);
+        if self.hover.take().is_some() {
+            context.request_paint();
+        }
         if value == self.value {
             return false;
         }
@@ -206,7 +213,8 @@ impl CustomControl for StarRating {
                     Key::ArrowLeft | Key::ArrowDown => self.value.saturating_sub(1),
                     Key::Home => 0,
                     Key::End => 5,
-                    Key::Character(c) if c.is_ascii_digit() => c.to_digit(10).unwrap_or(0) as u8,
+                    // Only the digits of a rating, 0 to 5, set it.
+                    Key::Character(digit @ '0'..='5') => digit as u8 - b'0',
                     _ => return EventReply::Continue,
                 };
                 self.set(context, value);
@@ -235,9 +243,11 @@ impl CustomControl for StarRating {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let (bounds, tokens) = (cx.bounds, cx.tokens);
         let width = bounds.size.width / 5.0;
-        // A disabled rating paints at half strength, like disabled buttons.
-        let strength = if cx.state.disabled() { 0.5 } else { 1.0 };
+        // The host fades a disabled control as one group.
         let shown = self.hover.unwrap_or(self.value);
+        let mut style = ResolvedStyle::new(tokens);
+        style.text.size = bounds.size.height * 0.8;
+        style.text.line_height = bounds.size.height;
         for star in 1..=5u8 {
             let start = f64::from(star - 1) * width;
             let x = if cx.rtl {
@@ -249,20 +259,13 @@ impl CustomControl for StarRating {
                 Point::new(x, bounds.origin.y),
                 Size::new(width, bounds.size.height),
             );
-            let color = if star <= shown {
-                tokens.color(ColorRole::Primary).with_alpha(strength)
+            style.foreground = if star <= shown {
+                tokens.color(ColorRole::Primary)
             } else {
-                tokens
-                    .color(ColorRole::Foreground)
-                    .with_alpha(0.25 * strength)
+                tokens.color(ColorRole::Foreground).with_alpha(0.25)
             };
-            let _ = cx.list.draw_text(
-                Point::new(cell.origin.x + 4.0, cell.origin.y + cell.size.height * 0.8),
-                "★",
-                cx.tokens.font_sans.name(),
-                cell.size.height * 0.8,
-                color,
-            );
+            // Centered in its cell, so the stars mirror in right-to-left.
+            cx.label(cell, "★", &style, TextAlign::Center);
         }
         cx.focus_ring(bounds, 4.0);
     }
@@ -300,6 +303,17 @@ impl CustomControl for StarRating {
         }
     }
 
+    /// Takes the rating that the app binds, as a `Number` from 0 to 5.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        match value {
+            ControlValue::Number(rating) if (0.0..=5.0).contains(rating) => {
+                self.value = *rating as u8;
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn perform(
         &mut self,
         context: &mut ControlContext<'_>,
@@ -318,16 +332,31 @@ impl CustomControl for StarRating {
     }
 }
 
-/// A captioned star rating named by the catalog string `key`. The caption
-/// repeats the rating's name, so assistive technology skips it.
-fn rating(env: &Env, key: &'static str, value: u8, enabled: bool) -> impl View {
+/// A captioned star rating named by the catalog string `key`, bound to
+/// `value`, with the value in a line under it. The caption repeats the
+/// rating's name, so assistive technology skips it.
+fn rating(key: &'static str, value: State<u8>, enabled: bool) -> impl View {
+    let stars = Configured::custom(ControlKind::Slider, move |env| {
+        // The binding gives the rating, so a change does not build again.
+        StarRating::new(env.text(key, &[]), env.clone())
+    })
+    .bind(
+        value.binding(),
+        |rating| ControlValue::Number(f64::from(rating)),
+        |changed: &ControlValue| match changed {
+            ControlValue::Number(rating) => Some(*rating as u8),
+            _ => None,
+        },
+    )
+    .disabled(!enabled);
     VStack::new((
         Text::new(t!(key))
             .text_style(TextPreset::Small)
             .foreground(ColorRole::MutedForeground)
             .accessibility_hidden(true),
-        ControlView::new(StarRating::new(env.text(key, &[]), value, env.clone()))
-            .disabled(!enabled),
+        stars,
+        Text::new(t!("custom-control.stars", value = move || value.get()))
+            .text_style(TextPreset::Small),
     ))
     .alignment(HorizontalAlignment::Leading)
     .spacing(Space::S1)
@@ -335,11 +364,10 @@ fn rating(env: &Env, key: &'static str, value: u8, enabled: bool) -> impl View {
 
 pub fn custom_control(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let env = cx.env();
         column((
-            rating(env, "custom-control.food", 4, true),
-            rating(env, "custom-control.service", 2, true),
-            rating(env, "custom-control.locked", 3, false),
+            rating("custom-control.food", cx.state(4), true),
+            rating("custom-control.service", cx.state(2), true),
+            rating("custom-control.locked", cx.state(3), false),
         ))
     })
 }
@@ -356,7 +384,11 @@ pub fn page(id: &str) -> Option<Build> {
 #[cfg(test)]
 mod tests {
     use crate::ui::pages::tests::Harness;
-    use choscorui::core::{AnnouncementPriority, Key, KeyEvent, SemanticAction};
+    use choscorui::controls::ShortcutModifiers;
+    use choscorui::core::{
+        AnnouncementPriority, ColorRole, DesignTokens, DisplayCommand, Key, KeyEvent, Point,
+        PointerButton, PointerEvent, SemanticAction,
+    };
 
     #[test]
     fn every_recipe_runs_the_same_behavior() {
@@ -396,5 +428,92 @@ mod tests {
             Default::default(),
         );
         assert_eq!(page.value("Food").as_deref(), Some("5 of 5 stars"));
+    }
+
+    /// The stars of the rating named `name`: their x and whether they
+    /// show as filled.
+    fn stars(page: &mut Harness, name: &str) -> Vec<(f64, bool)> {
+        let node = page.node(name);
+        let (snapshot, _) = page.host.semantics();
+        let area = snapshot
+            .into_iter()
+            .find(|entry| entry.id == node)
+            .map(|entry| entry.bounds)
+            .expect("the rating");
+        let filled = DesignTokens::light().color(ColorRole::Primary);
+        page.host
+            .paint()
+            .commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::DrawText {
+                    baseline,
+                    text,
+                    color,
+                    ..
+                } if text == "★" && area.contains(Point::new(baseline.x, baseline.y - 1.0)) => {
+                    Some((baseline.x, *color == filled))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn star_rating_shows_a_click_at_once_ignores_other_digits_and_mirrors() {
+        let mut page = Harness::new("custom-control");
+        let xs: Vec<f64> = stars(&mut page, "Food").iter().map(|star| star.0).collect();
+        // A click on the current rating, the fourth star, clears it. The
+        // stars show that at once, though the pointer stays over them.
+        let at = Point::new(xs[3] + 4.0, {
+            let node = page.node("Food");
+            let (snapshot, _) = page.host.semantics();
+            let entry = snapshot.into_iter().find(|entry| entry.id == node).unwrap();
+            entry.bounds.center().y
+        });
+        let none = ShortcutModifiers::default();
+        let button = PointerButton::Primary;
+        page.host.pointer(PointerEvent::Move { position: at }, none);
+        page.host.pointer(
+            PointerEvent::Down {
+                position: at,
+                button,
+            },
+            none,
+        );
+        page.host.pointer(
+            PointerEvent::Up {
+                position: at,
+                button,
+            },
+            none,
+        );
+        page.host.layout();
+        assert_eq!(page.value("Food").as_deref(), Some("0 of 5 stars"));
+        assert!(stars(&mut page, "Food").iter().all(|star| !star.1));
+        assert!(
+            page.host.find("0 of 5 stars").is_some(),
+            "the bound value shows"
+        );
+        for (key, shown) in [('7', "0 of 5 stars"), ('3', "3 of 5 stars")] {
+            page.host.key(
+                KeyEvent::Down {
+                    key: Key::Character(key),
+                    repeat: false,
+                },
+                none,
+            );
+            page.host.layout();
+            assert_eq!(page.value("Food").as_deref(), Some(shown), "{key}");
+        }
+
+        let mut rtl = Harness::with("custom-control", DesignTokens::light(), "ar", true);
+        let shown = stars(&mut rtl, "custom-control.food");
+        let lit = shown.iter().filter(|star| star.1).map(|star| star.0);
+        let unlit = shown.iter().filter(|star| !star.1).map(|star| star.0);
+        assert!(
+            lit.fold(f64::INFINITY, f64::min) > unlit.fold(f64::NEG_INFINITY, f64::max),
+            "the rating fills from the right: {shown:?}"
+        );
     }
 }

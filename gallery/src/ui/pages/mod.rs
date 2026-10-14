@@ -83,7 +83,7 @@ pub mod tests {
             Self::with(id, DesignTokens::light(), "en", true)
         }
 
-        fn with(id: &str, tokens: DesignTokens, tag: &str, enabled: bool) -> Self {
+        pub fn with(id: &str, tokens: DesignTokens, tag: &str, enabled: bool) -> Self {
             let runtime = Runtime::new();
             let cx = PageCx {
                 store: PageStore::new(&runtime, &PageState::default()),
