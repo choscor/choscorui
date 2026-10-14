@@ -8,9 +8,10 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::{
     ButtonVariant, CommandId, CommandRegistry, CommandState, DialogKeyRoute, DialogKeys,
-    ShortcutModifiers, parse_mnemonic,
+    MnemonicTable, ShortcutModifiers,
 };
 use choscorui::core::{ColorRole, Key, KeyEvent, Space, TextPreset};
+use std::rc::Rc;
 
 /// The translation of `key`, for strings that state keeps.
 fn text(env: &Env, key: &str) -> String {
@@ -48,7 +49,6 @@ fn status(text: State<String>) -> impl View {
 struct MnemonicsPage;
 
 /// One mnemonic button: its display label, letter, and focus.
-#[derive(Clone)]
 struct Mnemonic {
     label: String,
     letter: Option<char>,
@@ -60,29 +60,24 @@ fn activated(env: &Env, label: &str) -> String {
     env.text("mnemonics.activated", &[("label", label)])
 }
 
-/// Presses Control-Option-`letter` among `buttons`: the status says what
-/// it activated or focused.
-fn press(env: &Env, buttons: &[Mnemonic], letter: char, last: State<String>) {
-    let matches: Vec<&Mnemonic> = buttons
-        .iter()
-        .filter(|button| button.letter == Some(letter))
-        .collect();
-    let (hit, activate) = match matches.as_slice() {
-        [] => return,
-        [only] => (*only, true),
-        many => {
-            let next = many
-                .iter()
-                .position(|button| button.focused.get())
-                .map_or(0, |index| (index + 1) % many.len());
-            (many[next], false)
-        }
+/// Presses Control-Option-`letter`: the table finds the button, and the
+/// status says what it activated or focused.
+fn press(
+    env: &Env,
+    (table, buttons): &(MnemonicTable<usize>, Vec<Mnemonic>),
+    letter: char,
+    last: State<String>,
+) {
+    let focus = buttons.iter().position(|button| button.focused.get());
+    let Some(hit) = table.resolve(letter, focus, |_| true) else {
+        return;
     };
-    hit.focused.set(true);
-    last.set(if activate {
-        activated(env, &hit.label)
+    let button = &buttons[hit.node];
+    button.focused.set(true);
+    last.set(if hit.activate {
+        activated(env, &button.label)
     } else {
-        env.text("mnemonics.focused", &[("label", &hit.label)])
+        env.text("mnemonics.focused", &[("label", &button.label)])
     });
 }
 
@@ -90,13 +85,15 @@ impl View for MnemonicsPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let env = cx.env().clone();
         let last = cx.state(text(&env, "mnemonics.prompt"));
+        let mut table = MnemonicTable::new();
         let buttons: Vec<Mnemonic> = MNEMONIC_LABELS
             .iter()
-            .map(|key| {
-                let (label, letter) = parse_mnemonic(&text(&env, key));
+            .enumerate()
+            .map(|(index, key)| {
+                let parsed = table.register(&text(&env, key), index);
                 Mnemonic {
-                    label,
-                    letter,
+                    label: parsed.text,
+                    letter: parsed.key,
                     focused: cx.state(false),
                 }
             })
@@ -104,11 +101,13 @@ impl View for MnemonicsPage {
         let row = HStack::new(
             buttons
                 .iter()
-                .map(|button| {
+                .zip(MNEMONIC_LABELS)
+                .map(|(button, key)| {
                     let (env, label) = (env.clone(), button.label.clone());
-                    Button::new(button.label.clone(), move || {
+                    Button::new(text(&env, key), move || {
                         last.set(activated(&env, &label));
                     })
+                    .mnemonic()
                     .variant(ButtonVariant::Outline)
                     .focused(button.focused.binding())
                     .accessibility_hint(
@@ -125,10 +124,11 @@ impl View for MnemonicsPage {
         letters.sort_unstable();
         letters.dedup();
         let page = column((row, status(last)));
+        let mnemonics = Rc::new((table, buttons));
         letters.into_iter().fold(page.into_any(), |page, letter| {
-            let (env, buttons) = (env.clone(), buttons.clone());
+            let (env, mnemonics) = (env.clone(), mnemonics.clone());
             page.keyboard_shortcut(Key::Character(letter), MNEMONIC_CHORD, move || {
-                press(&env, &buttons, letter, last);
+                press(&env, &mnemonics, letter, last);
             })
             .into_any()
         })
@@ -330,6 +330,9 @@ mod tests {
         let save = page.node("Save");
         let description = page.host.semantic(save).unwrap().description;
         assert_eq!(description, "Control-Option-S");
+        // The prompt names only the letters that a label has.
+        let prompt = "Press Control-Option and a letter (S, A, or P).";
+        assert!(page.host.find(prompt).is_some());
         assert!(page.host.find("Fish & Chips").is_some());
         assert!(press(&mut page, Key::Character('a'), MNEMONIC_CHORD));
         assert!(page.host.find("Activated “Save As…”").is_some());

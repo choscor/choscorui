@@ -347,6 +347,10 @@ output of each kind, variant, size, slot, and key state.
   `Spinner` recipe motion, and it stays still with reduced motion. While
   it loads, the button has the disabled look and semantics, and it
   ignores activation.
+- **Mnemonic.** `with_mnemonic()` (compose: `.mnemonic()`) reads the
+  label as a label with an `&` marker, as `parse_mnemonic` does. The
+  button shows the label without the marker and underlines the mnemonic.
+  The name has no marker. A `MnemonicTable` resolves the key.
 - A button is not a field, so it has no invalid state. Put the error of a
   form on the field.
 - `CommandLink` paints an arrow, a title, and a description in an outline
@@ -678,13 +682,19 @@ behavior.
 
 ### MnemonicTable and parse_mnemonic
 
-- **`parse_mnemonic`** removes the `&` markers from a label and returns the
-  display text and the mnemonic. `&Save` gives `Save` and `s`.
+- **`parse_mnemonic`** removes the `&` markers from a label and returns a
+  `MnemonicLabel`. It has the display text, the mnemonic, and the byte
+  range of the character to underline. `&Save` gives `Save`, `s`, and `0..1`.
 - The first `&` before a letter or a digit gives the mnemonic, in
-  lowercase. `&&` gives a literal `&`. A trailing `&` stays in the text.
+  lowercase. `&&` gives a literal `&`.
+- A single `&` before a character that is not a letter or a digit stays in
+  the text, so `Salt & Pepper` does not change. A trailing `&` also stays.
+- `TextLine::mark` underlines one character of a line, for example the
+  mnemonic. The mark shows only when the line is not truncated.
 - **`MnemonicTable::register`** parses a label, records the mnemonic for a
-  node, and returns the display text. It replaces the earlier entry of that
-  node.
+  key, and returns the `MnemonicLabel`. It replaces the earlier entry of
+  that key. The key is a `NodeId` by default. A view without node ids can
+  use another key, such as an index.
 - `remove` deletes the entry of a node. `conflicts` returns the nodes that
   share a character, in registration order.
 - **`resolve`** ignores case. It skips each node for which `available`
@@ -699,8 +709,10 @@ behavior.
 The table and the parser publish no semantic node.
 
 The `mnemonics_parse_escape_and_cycle_on_conflict` test in
-[navigation.rs](../crates/choscorui-controls/tests/navigation.rs) pins this
-behavior.
+[navigation.rs](../crates/choscorui-controls/tests/navigation.rs) and the
+`a_mnemonic_button_hides_the_marker_and_underlines_the_mnemonic` test in
+[builtin_hosting_widgets.rs](../crates/choscorui-controls/tests/builtin_hosting_widgets.rs)
+pin this behavior.
 
 ### Label and Separator
 

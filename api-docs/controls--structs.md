@@ -44,6 +44,17 @@ Shows a turning loader in place of the leading icon while
 `loading` is true. The button then looks disabled and ignores
 activation.
 
+#### `Button::mnemonic`
+
+```rust
+pub fn mnemonic(self) -> Self
+```
+
+Reads the label as a label with an `&` mnemonic marker, such as
+`&Save`. The button shows `Save` and underlines the `S`. Register
+the label in a `MnemonicTable` to
+resolve the key.
+
 #### `Button::new`
 
 ```rust

@@ -165,21 +165,35 @@ fn wheel_scrolls_only_over_the_area_and_cancel_releases_capture() {
 
 #[test]
 fn mnemonics_parse_escape_and_cycle_on_conflict() {
-    assert_eq!(parse_mnemonic("&Save"), ("Save".into(), Some('s')));
-    assert_eq!(parse_mnemonic("Save &As"), ("Save As".into(), Some('a')));
+    let parse = |label| {
+        let parsed = parse_mnemonic(label);
+        let underlined = parsed.underline.map(|range| parsed.text[range].to_string());
+        (parsed.text, parsed.key, underlined)
+    };
+    let some = |text: &str| Some(text.to_string());
+    assert_eq!(parse("&Save"), ("Save".into(), Some('s'), some("S")));
+    assert_eq!(parse("Save &As"), ("Save As".into(), Some('a'), some("A")));
     assert_eq!(
-        parse_mnemonic("Fish && &Chips"),
-        ("Fish & Chips".into(), Some('c'))
+        parse("Fish && &Chips"),
+        ("Fish & Chips".into(), Some('c'), some("C"))
     );
-    assert_eq!(parse_mnemonic("Trailing&"), ("Trailing&".into(), None));
-    assert_eq!(parse_mnemonic("&Đóng"), ("Đóng".into(), Some('đ')));
+    assert_eq!(parse("Trailing&"), ("Trailing&".into(), None, None));
+    assert_eq!(parse("&Đóng"), ("Đóng".into(), Some('đ'), some("Đ")));
+    // A single `&` before a character that is not a letter or a digit
+    // stays in the text.
+    assert_eq!(
+        parse("Salt & &Pepper"),
+        ("Salt & Pepper".into(), Some('p'), some("P"))
+    );
+    assert_eq!(parse("R&&D &-"), ("R&D &-".into(), None, None));
+    assert_eq!(parse_mnemonic("Lưu &thành").underline, Some(5..6));
 
     let mut tree = Tree::new(rect(0.0, 0.0, 10.0, 10.0));
     let a = tree.attach(tree.root(), rect(0.0, 0.0, 1.0, 1.0)).unwrap();
     let b = tree.attach(tree.root(), rect(0.0, 0.0, 1.0, 1.0)).unwrap();
     let c = tree.attach(tree.root(), rect(0.0, 0.0, 1.0, 1.0)).unwrap();
     let mut table = MnemonicTable::new();
-    assert_eq!(table.register("&Name", a), "Name");
+    assert_eq!(table.register("&Name", a).text, "Name");
     table.register("&Notes", b);
     table.register("&Open", c);
     let all = |_| true;

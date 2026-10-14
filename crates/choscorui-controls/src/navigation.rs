@@ -8,6 +8,7 @@ use choscorui_core::{
     Dirty, Key, KeyEvent, LayoutError, NodeId, Point, PointerButton, PointerEvent, Rect,
     ScrollViewport, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, Tree,
 };
+use std::ops::Range;
 
 /// Keyboard and assistive-technology scroll requests.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -615,35 +616,56 @@ impl crate::CustomControl for ScrollArea {
     }
 }
 
-/// Splits `&Save` into the display label `Save` and mnemonic `s`. `&&`
-/// is a literal ampersand; a trailing `&` is kept literally.
-pub fn parse_mnemonic(label: &str) -> (String, Option<char>) {
-    let mut display = String::with_capacity(label.len());
-    let mut mnemonic = None;
-    let mut chars = label.chars().peekable();
+/// A label with its `&` markers removed.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MnemonicLabel {
+    /// The display text.
+    pub text: String,
+    /// The mnemonic, in lowercase.
+    pub key: Option<char>,
+    /// The byte range in `text` of the character to underline.
+    pub underline: Option<Range<usize>>,
+}
+
+/// Splits `&Save` into the display label `Save` and mnemonic `s`, and
+/// marks the `S` to underline. `&&` is a literal ampersand. A single `&`
+/// before a character that is not a letter or a digit, or at the end,
+/// stays in the text.
+pub fn parse_mnemonic(label: &str) -> MnemonicLabel {
+    let mut parsed = MnemonicLabel {
+        text: String::with_capacity(label.len()),
+        ..MnemonicLabel::default()
+    };
+    let mut chars = label.chars();
     while let Some(ch) = chars.next() {
         if ch != '&' {
-            display.push(ch);
+            parsed.text.push(ch);
             continue;
         }
         match chars.next() {
-            Some('&') => display.push('&'),
-            Some(next) => {
-                if mnemonic.is_none() && next.is_alphanumeric() {
-                    mnemonic = next.to_lowercase().next();
+            Some('&') => parsed.text.push('&'),
+            Some(next) if next.is_alphanumeric() => {
+                if parsed.key.is_none() {
+                    parsed.key = next.to_lowercase().next();
+                    let start = parsed.text.len();
+                    parsed.underline = Some(start..start + next.len_utf8());
                 }
-                display.push(next);
+                parsed.text.push(next);
             }
-            None => display.push('&'),
+            Some(next) => {
+                parsed.text.push('&');
+                parsed.text.push(next);
+            }
+            None => parsed.text.push('&'),
         }
     }
-    (display, mnemonic)
+    parsed
 }
 
 /// Result of pressing a mnemonic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MnemonicHit {
-    pub node: NodeId,
+pub struct MnemonicHit<K = NodeId> {
+    pub node: K,
     /// A unique mnemonic activates; a shared one only moves focus so the
     /// user can press it again to reach the next control.
     pub activate: bool,
@@ -652,33 +674,42 @@ pub struct MnemonicHit {
 /// Mnemonics within one window or dialog. On macOS, AppKit has no
 /// mnemonic convention; applications opt in and choose the chord (the
 /// gallery uses Control+Option+letter) so it never shadows Option text
-/// input or Command shortcuts.
-#[derive(Default)]
-pub struct MnemonicTable {
-    entries: Vec<(char, NodeId)>,
+/// input or Command shortcuts. A key `K` other than [`NodeId`], such as
+/// an index, serves a view that has no node ids.
+pub struct MnemonicTable<K = NodeId> {
+    entries: Vec<(char, K)>,
 }
 
-impl MnemonicTable {
+impl<K> Default for MnemonicTable<K> {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl<K: Copy + Eq> MnemonicTable<K> {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registers a label's mnemonic for `node` and returns the display text.
-    pub fn register(&mut self, label: &str, node: NodeId) -> String {
-        let (display, mnemonic) = parse_mnemonic(label);
+    /// Registers a label's mnemonic for `node` and returns the parsed
+    /// label.
+    pub fn register(&mut self, label: &str, node: K) -> MnemonicLabel {
+        let parsed = parse_mnemonic(label);
         self.entries.retain(|(_, existing)| *existing != node);
-        if let Some(ch) = mnemonic {
+        if let Some(ch) = parsed.key {
             self.entries.push((ch, node));
         }
-        display
+        parsed
     }
 
-    pub fn remove(&mut self, node: NodeId) {
+    pub fn remove(&mut self, node: K) {
         self.entries.retain(|(_, existing)| *existing != node);
     }
 
     /// Nodes sharing `ch`, in registration order.
-    pub fn conflicts(&self, ch: char) -> Vec<NodeId> {
+    pub fn conflicts(&self, ch: char) -> Vec<K> {
         let ch = ch.to_lowercase().next().unwrap_or(ch);
         self.entries
             .iter()
@@ -692,10 +723,10 @@ impl MnemonicTable {
     pub fn resolve(
         &self,
         ch: char,
-        focus: Option<NodeId>,
-        available: impl Fn(NodeId) -> bool,
-    ) -> Option<MnemonicHit> {
-        let candidates: Vec<NodeId> = self
+        focus: Option<K>,
+        available: impl Fn(K) -> bool,
+    ) -> Option<MnemonicHit<K>> {
+        let candidates: Vec<K> = self
             .conflicts(ch)
             .into_iter()
             .filter(|node| available(*node))

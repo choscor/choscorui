@@ -152,6 +152,7 @@ pub struct Button {
     leading: Option<Icon>,
     trailing: Option<Icon>,
     loading: Option<Live<bool>>,
+    mnemonic: bool,
 }
 
 impl Button {
@@ -165,7 +166,18 @@ impl Button {
             leading: None,
             trailing: None,
             loading: None,
+            mnemonic: false,
         }
+    }
+
+    /// Reads the label as a label with an `&` mnemonic marker, such as
+    /// `&Save`. The button shows `Save` and underlines the `S`. Register
+    /// the label in a [`MnemonicTable`](controls::MnemonicTable) to
+    /// resolve the key.
+    #[must_use]
+    pub fn mnemonic(mut self) -> Self {
+        self.mnemonic = true;
+        self
     }
 
     /// Shows a turning loader in place of the leading icon while
@@ -216,6 +228,7 @@ impl View for Button {
             leading,
             trailing,
             loading,
+            mnemonic,
         } = self;
         ControlView::build(move |env: &Env| {
             let variant = pick(&variant, env.button_variant()).unwrap_or_default();
@@ -224,6 +237,9 @@ impl View for Button {
                 .with_variant(variant)
                 .with_size(size)
                 .with_loading(pick(&loading, None).unwrap_or(false));
+            if mnemonic {
+                button = button.with_mnemonic();
+            }
             if let Some(icon) = leading {
                 button = button.with_icon(icon);
             }

@@ -320,6 +320,7 @@ impl CustomControl for TextLeaf {
                 align,
                 rtl: cx.rtl,
                 underline: false,
+                mark: None,
                 overflow: TextOverflow::Ellipsis,
             };
             draw_text(cx.list, rect, &line, cx.text);

@@ -72,6 +72,8 @@ pub struct Button {
     expanded: bool,
     /// Whether the button shows a turning loader and ignores activation.
     loading: bool,
+    /// The byte offset in the label of the mnemonic to underline.
+    mnemonic: Option<usize>,
     /// The spinner turn time from the recipe, in milliseconds.
     turn_ms: Cell<u32>,
 }
@@ -92,8 +94,20 @@ impl Button {
             trailing: None,
             expanded: false,
             loading: false,
+            mnemonic: None,
             turn_ms: Cell::new(0),
         }
+    }
+
+    /// Reads the label as a label with an `&` mnemonic marker, as
+    /// [`parse_mnemonic`](crate::parse_mnemonic) does. The button shows
+    /// the label without the marker and underlines the mnemonic.
+    #[must_use]
+    pub fn with_mnemonic(mut self) -> Self {
+        let parsed = crate::parse_mnemonic(&self.label);
+        self.label = parsed.text;
+        self.mnemonic = parsed.underline.map(|range| range.start);
+        self
     }
 
     /// The loading state: the leading icon becomes a turning loader, the
@@ -405,7 +419,7 @@ impl Button {
             motion
         });
         cx.slot(bounds, &style, |cx, rect| {
-            content.draw_turning(cx, rect, &style, TextAlign::Center, turn_ms);
+            content.draw_turning(cx, rect, &style, TextAlign::Center, turn_ms, self.mnemonic);
         });
     }
 }

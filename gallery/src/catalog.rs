@@ -490,6 +490,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("MenuResponse", "result of DropdownMenu input"),
     ("MIN_ZOOM", "zoom bound constant of CanvasView"),
     ("MnemonicHit", "result of MnemonicTable::resolve"),
+    ("MnemonicLabel", "result of parse_mnemonic"),
     ("PanelLocation", "where DockLayout placed a panel"),
     ("PopupId", "identifier issued by PopupStack"),
     ("PopupPlacement", "result of place_popup"),

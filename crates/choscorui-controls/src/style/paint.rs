@@ -397,6 +397,8 @@ pub struct TextLine<'a> {
     pub align: TextAlign,
     pub rtl: bool,
     pub underline: bool,
+    /// The byte offset of one character to underline, such as a mnemonic.
+    pub mark: Option<usize>,
     pub overflow: TextOverflow,
 }
 
@@ -410,8 +412,17 @@ impl<'a> TextLine<'a> {
             align: TextAlign::Start,
             rtl,
             underline: style.underline,
+            mark: None,
             overflow: TextOverflow::Ellipsis,
         }
+    }
+
+    /// Underlines the character at byte offset `mark`, if the line shows
+    /// it whole.
+    #[must_use]
+    pub fn mark(mut self, mark: Option<usize>) -> Self {
+        self.mark = mark;
+        self
     }
 
     #[must_use]
@@ -506,6 +517,17 @@ pub fn draw_text(
     if line.underline {
         let y = baseline + (spec.size * 0.12).max(1.0);
         list.fill_rect(Rect::from_xywh(x, y, width, 1.0), line.color);
+    }
+    // The mark shows only on a whole line. Its offset follows the
+    // logical order of the text.
+    let mark = line.mark.filter(|_| matches!(text, Cow::Borrowed(_)));
+    if let Some(start) = mark.filter(|start| text.is_char_boundary(*start))
+        && let Some(ch) = text[start..].chars().next()
+    {
+        let offset = measure.width(&text[..start], spec);
+        let mark_width = measure.width(&text[start..start + ch.len_utf8()], spec);
+        let y = baseline + (spec.size * 0.12).max(1.0);
+        list.fill_rect(Rect::from_xywh(x + offset, y, mark_width, 1.0), line.color);
     }
     if clip {
         let _ = list.pop_clip();
@@ -929,12 +951,13 @@ impl<'a> Content<'a> {
         style: &ResolvedStyle,
         align: TextAlign,
     ) {
-        self.draw_turning(cx, rect, style, align, None);
+        self.draw_turning(cx, rect, style, align, None, None);
     }
 
     /// Draws the content as [`Content::draw`] does. With `turn_ms`, the
     /// leading icon turns as a spinner with that many milliseconds a turn,
-    /// as in a loading button.
+    /// as in a loading button. With `mark`, the label underlines the
+    /// character at that byte offset.
     pub(crate) fn draw_turning(
         &self,
         cx: &mut PaintContext<'_>,
@@ -942,6 +965,7 @@ impl<'a> Content<'a> {
         style: &ResolvedStyle,
         align: TextAlign,
         turn_ms: Option<u32>,
+        mark: Option<usize>,
     ) {
         let width = self.width(style, cx.text);
         let excess = (width - rect.size.width).max(0.0);
@@ -972,7 +996,7 @@ impl<'a> Content<'a> {
                 }
                 (Some(icon), None) => cx.icon(slot, icon, style),
                 (None, _) => {
-                    let line = TextLine::new(text, style, false);
+                    let line = TextLine::new(text, style, false).mark(mark);
                     draw_text(cx.list, slot, &line, cx.text);
                 }
             }

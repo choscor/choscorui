@@ -5,14 +5,15 @@
 mod hosted;
 
 use choscorui_controls::{
-    ButtonGroup, ButtonGroupMember, ButtonVariant, ComboItem, Combobox, CommandId, CommandLink,
-    ControlMessage, ControlSize, ControlValue, DecimalSpinBox, Dial, FontChooser, IntegerRange,
-    KeySequenceEdit, MenuItem, NumberBase, NumericDisplay, ScrollBar, ScrollOrientation,
-    ShortcutModifiers, SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
+    Button, ButtonGroup, ButtonGroupMember, ButtonVariant, ComboItem, Combobox, CommandId,
+    CommandLink, ControlMessage, ControlSize, ControlValue, DecimalSpinBox, Dial, FontChooser,
+    IntegerRange, KeySequenceEdit, MenuItem, NumberBase, NumericDisplay, ScrollBar,
+    ScrollOrientation, ShortcutModifiers, SizeGrip, TextEditor, ToolBox, ToolButton,
+    ToolButtonMenu,
 };
 use choscorui_core::{
-    Feedback, ItemKey, Key, KeyEvent, LayoutDirection, Locale, Point, PointerButton, PointerEvent,
-    SemanticAction, SemanticRole, Size,
+    DisplayCommand, Feedback, ItemKey, Key, KeyEvent, LayoutDirection, Locale, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, fills, texts};
 use std::cell::Cell;
@@ -990,4 +991,37 @@ fn near_the_bottom_edge_the_combobox_list_opens_above() {
     assert!(h.host.set_open(&mut h.tree, h.node, true));
     let popup = h.host.get(h.node).unwrap().overlay().unwrap();
     assert_eq!(popup.max_y(), 546.0, "4 pt above the trigger");
+}
+
+/// The start of the painted text and the 1 pt underlines of a paint.
+fn underlines(h: &Harness) -> (f64, Vec<Rect>) {
+    let list = h.paint();
+    let mut start = 0.0;
+    let mut marks = Vec::new();
+    for command in list.commands() {
+        match command {
+            DisplayCommand::DrawText { baseline, .. } => start = baseline.x,
+            DisplayCommand::FillRect { rect, .. } if rect.size.height == 1.0 => marks.push(*rect),
+            _ => {}
+        }
+    }
+    (start, marks)
+}
+
+#[test]
+fn a_mnemonic_button_hides_the_marker_and_underlines_the_mnemonic() {
+    let mnemonic = |label| Harness::new(Button::new(label, CommandId(1)).with_mnemonic());
+    let h = mnemonic("Save &As");
+    assert_eq!(texts(&h.paint()), ["Save As"]);
+    assert_eq!(h.semantics().name, "Save As");
+    let (start, marks) = underlines(&h);
+    assert_eq!(marks.len(), 1, "one underline below the A");
+    assert!(marks[0].origin.x > start + 10.0, "after `Save `");
+    assert!(marks[0].size.width > 0.0 && marks[0].max_x() < h.bounds().max_x());
+    let (start, marks) = underlines(&mnemonic("&Save"));
+    assert_eq!(marks.first().map(|mark| mark.origin.x), Some(start));
+    // A single `&` before a character that is not a letter stays.
+    let h = mnemonic("R&&D &-");
+    assert_eq!(texts(&h.paint()), ["R&D &-"]);
+    assert!(underlines(&h).1.is_empty());
 }
