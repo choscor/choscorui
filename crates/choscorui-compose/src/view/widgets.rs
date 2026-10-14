@@ -1124,6 +1124,12 @@ impl Configured<controls::NavigationMenu> {
             controls::NavigationMenu::new(text(&name, env), items.items(env))
         })
     }
+
+    /// Marks `item` as the current page.
+    #[must_use]
+    pub fn current(self, item: usize) -> Self {
+        self.with(move |menu| menu.with_current(item))
+    }
 }
 
 /// Grouped navigation items; `selected` edits the chosen item.

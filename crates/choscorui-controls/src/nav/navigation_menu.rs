@@ -18,8 +18,11 @@ pub const NAVIGATION_OPEN_DELAY: f64 = 0.2;
 /// How long a panel stays after the pointer leaves the menu, in seconds.
 pub const NAVIGATION_CLOSE_DELAY: f64 = 0.3;
 
-/// The width of one link column in a panel, in points.
-const COLUMN_WIDTH: f64 = 240.0;
+/// The width of one link column in a panel, in spacing units.
+const COLUMN_UNITS: f64 = 60.0;
+
+/// The gap between a trigger and its panel, in spacing units.
+const OFFSET_UNITS: f64 = 1.5;
 
 /// A link in a navigation menu panel.
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +76,15 @@ pub struct NavigationMenu {
     link_heights: Vec<Vec<f64>>,
     padding: crate::style::Edges,
     gap: f64,
+    /// The link column width and the panel offset, from the spacing.
+    column: f64,
+    offset: f64,
+    /// The trigger that the pointer rested on when a click or a key
+    /// closed its panel. Hover does not open it again until the pointer
+    /// leaves it.
+    quiet: Option<usize>,
+    /// The item of the current page.
+    current: Option<usize>,
 }
 
 impl NavigationMenu {
@@ -98,7 +110,18 @@ impl NavigationMenu {
             link_heights: Vec::new(),
             padding: crate::style::Edges::ZERO,
             gap: 0.0,
+            column: 0.0,
+            offset: 0.0,
+            quiet: None,
+            current: None,
         }
+    }
+
+    /// Marks `item` as the current page: its trigger shows selected.
+    #[must_use]
+    pub fn with_current(mut self, item: usize) -> Self {
+        self.current = (item < self.items.len()).then_some(item);
+        self
     }
 
     /// The trigger whose panel is open.
@@ -147,8 +170,9 @@ impl NavigationMenu {
             })
             .collect();
         let pad = self.padding;
+        let column_width = self.column;
         let width =
-            columns as f64 * COLUMN_WIDTH + (columns - 1) as f64 * self.gap + pad.horizontal();
+            columns as f64 * column_width + (columns - 1) as f64 * self.gap + pad.horizontal();
         let height = row_heights.iter().sum::<f64>()
             + rows.saturating_sub(1) as f64 * self.gap
             + pad.vertical();
@@ -161,7 +185,7 @@ impl NavigationMenu {
         // A window that is too short limits the panel, and the links
         // scroll in it.
         self.panel = place_popup(
-            gap_anchor(trigger, 6.0, None),
+            gap_anchor(trigger, self.offset, None),
             size,
             self.room,
             Placement::Below,
@@ -179,13 +203,13 @@ impl NavigationMenu {
                 if row * columns + column >= heights.len() {
                     break;
                 }
-                let offset = column as f64 * (COLUMN_WIDTH + self.gap);
+                let offset = column as f64 * (column_width + self.gap);
                 let left = if self.rtl {
-                    self.panel.max_x() - pad.inline_start - offset - COLUMN_WIDTH
+                    self.panel.max_x() - pad.inline_start - offset - column_width
                 } else {
                     x + pad.inline_start + offset
                 };
-                links.push(Rect::from_xywh(left, top, COLUMN_WIDTH, *row_height));
+                links.push(Rect::from_xywh(left, top, column_width, *row_height));
             }
             top += row_height + self.gap;
         }
@@ -204,6 +228,10 @@ impl NavigationMenu {
             return true;
         }
         let was_open = self.open.is_some();
+        // A link of another panel loses the focus to the trigger.
+        if let Focus::Link(_) = self.focus {
+            self.focus = Focus::Trigger(item);
+        }
         self.open = Some(item);
         self.shown = item;
         self.scroll = 0.0;
@@ -250,8 +278,14 @@ impl NavigationMenu {
         cx.request_semantics();
     }
 
-    /// Closes the open panel. Returns true when a panel was open.
+    /// Closes the open panel. Returns true when a panel was open. Hover
+    /// does not open the panel again while the pointer stays on its
+    /// trigger.
     fn close(&mut self, cx: &mut ControlContext<'_>) -> bool {
+        self.quiet = match self.tracked.hovered {
+            Some(Focus::Trigger(item)) => Some(item),
+            _ => None,
+        };
         let closed = self.hide(cx.time());
         if closed {
             cx.emit(ControlMessage::OpenChanged(false));
@@ -354,22 +388,33 @@ impl NavigationMenu {
                 self.open_at(cx, item);
                 self.set_focus(cx, Focus::Link(0));
             }
+            // The links sit in a grid in reading order: ArrowDown and
+            // ArrowUp move by a row, and ArrowLeft and ArrowRight in the
+            // row.
             (Key::ArrowDown, Focus::Link(link)) => {
-                self.set_focus(cx, Focus::Link((link + 1).min(links.saturating_sub(1))));
+                let below = link + Self::columns(links);
+                self.set_focus(cx, Focus::Link(if below < links { below } else { link }));
             }
-            (Key::ArrowUp, Focus::Link(0)) => {
-                if let Some(item) = self.open {
-                    self.set_focus(cx, Focus::Trigger(item));
-                }
+            (Key::ArrowUp, Focus::Link(link)) => {
+                let focus = match link.checked_sub(Self::columns(links)) {
+                    Some(above) => Focus::Link(above),
+                    None => Focus::Trigger(self.open.unwrap_or(0)),
+                };
+                self.set_focus(cx, focus);
             }
-            (Key::ArrowUp, Focus::Link(link)) => self.set_focus(cx, Focus::Link(link - 1)),
-            // The links sit in reading order, so the arrows follow it.
             (Key::ArrowLeft | Key::ArrowRight, Focus::Link(link)) => {
+                let columns = Self::columns(links);
+                let column = link % columns;
                 let next = match key.in_reading_order(self.rtl) {
-                    Key::ArrowRight => (link + 1).min(links.saturating_sub(1)),
-                    _ => link.saturating_sub(1),
+                    Key::ArrowRight if column + 1 < columns && link + 1 < links => link + 1,
+                    Key::ArrowLeft if column > 0 => link - 1,
+                    _ => link,
                 };
                 self.set_focus(cx, Focus::Link(next));
+            }
+            (Key::Home, Focus::Link(_)) => self.set_focus(cx, Focus::Link(0)),
+            (Key::End, Focus::Link(_)) => {
+                self.set_focus(cx, Focus::Link(links.saturating_sub(1)));
             }
             (Key::ArrowLeft | Key::ArrowRight | Key::Home | Key::End, Focus::Trigger(item)) => {
                 let Some(next) = hosted::rove(key, item, count, true, self.rtl) else {
@@ -443,9 +488,13 @@ impl NavigationMenu {
                 EventReply::Stop
             }
             PointerEvent::Move { .. } => {
+                if self.quiet.is_some() && hit != self.quiet.map(Focus::Trigger) {
+                    self.quiet = None;
+                }
                 if let Some(Focus::Trigger(item)) = hit
                     && self.has_links(item)
                     && self.open != Some(item)
+                    && self.quiet != Some(item)
                 {
                     if self.open.is_some() {
                         self.open_at(cx, item);
@@ -475,13 +524,9 @@ impl NavigationMenu {
     fn paint_trigger(&self, cx: &mut PaintContext<'_>, item: usize, rect: Rect) {
         let state = self
             .part_state(Focus::Trigger(item), cx.state)
-            .set(VisualState::OPEN, self.open == Some(item));
-        let slot = if self.has_links(item) {
-            Slot::Trigger
-        } else {
-            Slot::Link
-        };
-        let style = cx.style(Self::query(slot, state));
+            .set(VisualState::OPEN, self.open == Some(item))
+            .set(VisualState::SELECTED, self.current == Some(item));
+        let style = cx.style(Self::query(Slot::Trigger, state));
         let icon = cx.style(Self::query(Slot::Icon, state));
         let label = &self.items[item].0;
         let chevron = self.has_links(item).then_some(if self.open == Some(item) {
@@ -545,6 +590,8 @@ impl CustomControl for NavigationMenu {
         self.padding = content.padding;
         self.gap = cx.tokens.spacing;
         let spacing = cx.tokens.spacing;
+        self.column = spacing * COLUMN_UNITS;
+        self.offset = spacing * OFFSET_UNITS;
         let mut x = if self.rtl {
             bounds.max_x()
         } else {
@@ -571,7 +618,7 @@ impl CustomControl for NavigationMenu {
             })
             .collect();
         // A link is its title, 4 pt, and its description, wrapped.
-        let inner = COLUMN_WIDTH - link.padding.horizontal();
+        let inner = self.column - link.padding.horizontal();
         self.link_heights = self
             .items
             .iter()
@@ -612,6 +659,7 @@ impl CustomControl for NavigationMenu {
                     self.close_at = None;
                 } else {
                     self.pending = None;
+                    self.quiet = None;
                     if self.open.is_some() {
                         self.close_at = Some(cx.time() + NAVIGATION_CLOSE_DELAY);
                     }

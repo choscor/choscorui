@@ -3,6 +3,51 @@
 
 > Generated from the source doc comments. Do not edit by hand. Regenerate with `cargo run -p choscorui-api-docs --locked`. The [index](README.md) lists every item. Every example assumes `use choscorui::prelude::*;`.
 
+## `Select`
+
+type alias in `choscorui::prelude::Select`
+
+```rust
+pub type Select = Configured<Select>;
+```
+
+A trigger with a popup list; `selected` edits the chosen option.
+
+#### Examples
+
+```rust
+struct Fruit;
+
+impl View for Fruit {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selected = cx.state(None);
+        let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
+        Select::new("Fruit", entries, selected.binding())
+    }
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `Select::native`
+
+```rust
+pub fn native<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
+```
+
+A select with the native-select look: a plain input box with a
+chevron. It behaves like [`Select::new`](#slidernew).
+
+#### `Select::new`
+
+```rust
+pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
+```
+
+A select named `name` with `entries`; `selected` edits the chosen entry.
+
 ## `Sidebar`
 
 type alias in `choscorui::prelude::Sidebar`

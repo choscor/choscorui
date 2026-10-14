@@ -1619,6 +1619,14 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `NavigationMenu::current`
+
+```rust
+pub fn current(self, item: usize) -> Self
+```
+
+Marks `item` as the current page.
+
 #### `NavigationMenu::new`
 
 ```rust
@@ -1952,48 +1960,3 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, orientation: ScrollOrientatio
 ```
 
 A scroll bar named `name` for `content` in a `viewport`, with its position in `offset`.
-
-## `Select`
-
-type alias in `choscorui::prelude::Select`
-
-```rust
-pub type Select = Configured<Select>;
-```
-
-A trigger with a popup list; `selected` edits the chosen option.
-
-#### Examples
-
-```rust
-struct Fruit;
-
-impl View for Fruit {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let selected = cx.state(None);
-        let entries = vec![ListEntry::option("Apple"), ListEntry::option("Pear")];
-        Select::new("Fruit", entries, selected.binding())
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `Select::native`
-
-```rust
-pub fn native<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select with the native-select look: a plain input box with a
-chevron. It behaves like [`Select::new`](controls--type-aliases-2.md#slidernew).
-
-#### `Select::new`
-
-```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, entries: impl Items<ListEntry>, selected: Binding<Option<usize>>) -> Self
-```
-
-A select named `name` with `entries`; `selected` edits the chosen entry.

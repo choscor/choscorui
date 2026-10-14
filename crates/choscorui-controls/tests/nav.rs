@@ -6,8 +6,11 @@ use choscorui_controls::{
     Breadcrumb, ControlMessage, ControlValue, NAVIGATION_OPEN_DELAY, NavigationLink,
     NavigationMenu, Pagination, ShortcutModifiers,
 };
-use choscorui_core::{Key, KeyEvent, LayoutDirection, Point, SemanticAction, SemanticRole};
-use hosted::{Harness, texts};
+use choscorui_core::{
+    ColorRole, DesignTokens, DisplayCommand, FontWeight, Key, KeyEvent, LayoutDirection, Point,
+    SemanticAction, SemanticRole,
+};
+use hosted::{Harness, rounded_fills, texts};
 
 fn trail() -> Breadcrumb {
     Breadcrumb::new(
@@ -254,6 +257,78 @@ fn navigation_menu_opens_on_hover_after_a_delay() {
             ControlMessage::OpenChanged(false)
         ]
     );
+}
+
+#[test]
+fn navigation_links_move_as_a_grid() {
+    let mut h = Harness::new(site());
+    h.focus();
+    h.key(Key::ArrowRight);
+    h.key(Key::ArrowDown);
+    let value = |h: &Harness| h.semantics().value.unwrap_or_default();
+    assert_eq!(value(&h), "Alert Dialog");
+    for (key, title) in [
+        (Key::ArrowRight, "Hover Card"),
+        (Key::ArrowRight, "Hover Card"),
+        (Key::ArrowDown, "Scroll-area"),
+        (Key::ArrowDown, "Scroll-area"),
+        (Key::ArrowLeft, "Progress"),
+        (Key::ArrowUp, "Alert Dialog"),
+        (Key::End, "Scroll-area"),
+        (Key::Home, "Alert Dialog"),
+        (Key::ArrowUp, "Components"),
+    ] {
+        h.key(key);
+        assert_eq!(value(&h), title, "{key:?}");
+    }
+}
+
+#[test]
+fn a_hover_switch_moves_link_focus_to_the_trigger() {
+    let mut h = Harness::new(site());
+    h.focus();
+    h.key(Key::ArrowRight);
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().value.as_deref(), Some("Alert Dialog"));
+    let bounds = h.bounds();
+    h.hover(Point::new(bounds.origin.x + 10.0, bounds.center().y));
+    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+}
+
+#[test]
+fn hover_does_not_reopen_a_panel_closed_by_a_click_until_the_pointer_leaves() {
+    let mut h = Harness::new(site());
+    let bounds = h.bounds();
+    let start = Point::new(bounds.origin.x + 10.0, bounds.center().y);
+    h.hover(start);
+    h.host.advance(&mut h.tree, NAVIGATION_OPEN_DELAY);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    h.click(start);
+    assert_eq!(h.semantics().state.expanded, Some(false));
+    h.hover(Point::new(start.x + 2.0, start.y));
+    assert_eq!(h.host.next_deadline(&h.tree), None, "no hover open");
+    // Off the trigger and back: hover opens it again.
+    h.hover(Point::new(790.0, 590.0));
+    h.hover(start);
+    assert!(h.host.next_deadline(&h.tree).is_some());
+}
+
+#[test]
+fn a_top_level_link_paints_as_a_trigger_and_the_current_item_shows() {
+    let mut h = Harness::new(site().with_current(2));
+    h.measure();
+    let list = h.paint();
+    let docs = list.commands().iter().find_map(|command| match command {
+        DisplayCommand::DrawText {
+            text, font_weight, ..
+        } if text == "Docs" => Some(*font_weight),
+        _ => None,
+    });
+    assert_eq!(docs, Some(FontWeight::MEDIUM), "the trigger text");
+    let selected = DesignTokens::light()
+        .color(ColorRole::Muted)
+        .with_alpha(0.5);
+    assert_eq!(rounded_fills(&list, selected).len(), 1, "the current item");
 }
 
 #[test]

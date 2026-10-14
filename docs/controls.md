@@ -3713,19 +3713,26 @@ last page. `set_open` returns false.
 
 ### NavigationMenu and NavigationLink
 
-- A trigger with links opens a panel below the row, aligned with its
-  start. A trigger without links is a link itself.
+- A trigger with links opens a panel 6 pt (1.5 spacing units) below the
+  row, aligned with its start. A trigger without links is a link itself,
+  with the trigger look.
+- `with_current(item)` marks the item of the current page. Its trigger
+  shows the 50% `muted` fill.
 - **Pointer.** A click on a trigger opens or closes its panel. Rest on a
   trigger for `NAVIGATION_OPEN_DELAY` (0.2 s) to open its panel. While a
-  panel is open, hover on another trigger switches at once. The panel
-  closes `NAVIGATION_CLOSE_DELAY` (0.3 s) after the pointer leaves the menu
-  and the panel.
+  panel is open, hover on another trigger switches at once, and a focused
+  link gives the focus back to the new trigger. The panel closes
+  `NAVIGATION_CLOSE_DELAY` (0.3 s) after the pointer leaves the menu and
+  the panel.
+- After a click or a key closes a panel, hover does not open it again
+  until the pointer leaves its trigger.
 - **Keys.** ArrowLeft and ArrowRight move between the triggers in reading
   order and close the panel. ArrowDown opens the panel and focuses its
-  first link. ArrowDown and ArrowUp move between the links; ArrowUp from
-  the first link goes back to the trigger. On a link, ArrowRight moves to
-  the next link and ArrowLeft to the previous link. Right-to-left layouts
-  swap the two keys.
+  first link. The links are a grid in reading order. ArrowDown and
+  ArrowUp move by a row; ArrowUp from the first row goes back to the
+  trigger. ArrowRight and ArrowLeft move in the row and stop at its
+  ends. Home and End go to the first and the last link. Right-to-left
+  layouts swap ArrowLeft and ArrowRight.
 - Tab stops are each trigger, then the links of its open panel. Tab past
   the panel closes it.
 - Enter or Space on a link, or on a trigger without links, emits
@@ -3737,7 +3744,8 @@ last page. `set_open` returns false.
   the window. A panel taller than the window gets the height of the
   window, and its links scroll. The wheel scrolls them, and the focused
   link scrolls into view.
-- A panel with more than three links shows them in two 240 pt columns.
+- A panel with more than three links shows them in two 240 pt (60
+  spacing units) columns.
 
 | Part | Slot | Value |
 | --- | --- | --- |
