@@ -1045,7 +1045,6 @@ alert-dialog.tip_text = Ghi chú này không chặn: phần còn lại của tra
 alert-dialog.ok = OK
 alert-dialog.close_document = Đóng tài liệu…
 alert-dialog.show_tip = Hiện mẹo
-alert-dialog.help = Trợ giúp
 input-dialog.rename = Đổi tên
 input-dialog.new_name = Tên mới
 input-dialog.go_to_line = Đi tới dòng

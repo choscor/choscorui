@@ -108,6 +108,22 @@ mod tests {
         assert!(notes.is_empty(), "{notes:#?}");
     }
 
+    /// A later line with the same id replaces an earlier one, so a
+    /// duplicate hides a translation.
+    #[test]
+    fn each_catalog_names_each_id_once() {
+        for tag in LANGUAGES {
+            let path = resources().join(format!("strings/{tag}.lang"));
+            let text = std::fs::read_to_string(&path).expect("the catalog is readable");
+            let mut seen = std::collections::BTreeSet::new();
+            for line in text.lines().filter(|line| !line.starts_with('#')) {
+                if let Some((id, _)) = line.split_once(" = ") {
+                    assert!(seen.insert(id), "{tag}: {id} appears twice");
+                }
+            }
+        }
+    }
+
     #[test]
     fn every_page_and_category_has_an_english_title() {
         let (catalog, _, _) = load(&resources());

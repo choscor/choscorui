@@ -1052,7 +1052,6 @@ alert-dialog.tip_text = This note is modeless: the rest of the page keeps workin
 alert-dialog.ok = OK
 alert-dialog.close_document = Close document…
 alert-dialog.show_tip = Show tip
-alert-dialog.help = Help
 input-dialog.rename = Rename
 input-dialog.new_name = New name
 input-dialog.go_to_line = Go to line
