@@ -13,8 +13,8 @@ use choscorui::controls::{
     ToolbarItem,
 };
 use choscorui::core::{
-    ColorRole, EventReply, LayoutDirection, Localizer, Measured, RadiusScale, Rect, SemanticAction,
-    SemanticNode, Space, TextPreset, Tree,
+    ColorRole, EventReply, Localizer, Measured, RadiusScale, Rect, SemanticNode, Space, TextPreset,
+    Tree,
 };
 use std::time::Duration;
 
@@ -313,15 +313,6 @@ impl CustomControl for TimedStatus {
         self.bar.semantics_in(strings)
     }
 
-    fn perform(
-        &mut self,
-        cx: &mut ControlContext<'_>,
-        action: SemanticAction,
-        value: Option<&str>,
-    ) -> bool {
-        self.bar.perform(cx, action, value)
-    }
-
     fn focusable(&self) -> bool {
         false
     }
@@ -371,18 +362,12 @@ pub fn status_bar(_: &PageCx) -> AnyView {
 const WINDOW: (f64, f64) = (640.0, 380.0);
 const TOP_TOOLBAR: f64 = 36.0;
 const SIDE_TOOLBAR: f64 = 44.0;
-const STATUS_BAR: f64 = 22.0;
+const STATUS_BAR: f64 = 24.0;
 
 /// An empty toolbar named and captioned by catalog key `label` on
-/// `area`. A side toolbar sits on the start edge, so it moves to the
-/// right in right-to-left layouts.
+/// `area`.
 fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
-    let bar = Toolbar::new(t!(label), area, Vec::new()).with_env(move |mut toolbar, env| {
-        if area == ToolbarArea::Left && env.direction() == LayoutDirection::Rtl {
-            toolbar.move_to(ToolbarArea::Right);
-        }
-        toolbar
-    });
+    let bar = Toolbar::new(t!(label), area, Vec::new());
     ZStack::new((
         bar.frame(fill()),
         Text::new(t!(label))
@@ -393,16 +378,38 @@ fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
 }
 
 /// The window preview: toolbars on the chosen edges, an optional status
-/// bar, and the content area that remains.
+/// bar, and the content area that remains. `compose_main_window` gives
+/// the sizes; the side toolbar is on the start edge.
 fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View + use<> {
     let (width, height) = WINDOW;
-    let content_width = width - if side { SIDE_TOOLBAR } else { 0.0 };
-    let content_height =
-        height - if top { TOP_TOOLBAR } else { 0.0 } - if status { STATUS_BAR } else { 0.0 };
+    let start = ToolbarArea::start(env.direction());
+    let bars: Vec<(ToolbarArea, f64)> = [
+        (top, ToolbarArea::Top, TOP_TOOLBAR),
+        (side, start, SIDE_TOOLBAR),
+    ]
+    .into_iter()
+    .filter_map(|(shown, area, thickness)| shown.then_some((area, thickness)))
+    .collect();
+    let frames = controls::compose_main_window(
+        Rect::from_xywh(0.0, 0.0, width, height),
+        &bars,
+        status.then_some(STATUS_BAR),
+    );
+    let thickness = |area: ToolbarArea| {
+        let index = bars.iter().position(|(bar, _)| *bar == area)?;
+        let frame = frames.toolbars[index];
+        Some(if area == ToolbarArea::Top {
+            frame.size.height
+        } else {
+            frame.size.width
+        })
+    };
+    let (top_height, side_width) = (thickness(ToolbarArea::Top), thickness(start));
+    let status_height = frames.status_bar.map(|bar| bar.size.height);
     let content = Text::new(t!(
         "main-window.content",
-        width = format!("{content_width:.0}"),
-        height = format!("{content_height:.0}")
+        width = format!("{:.0}", frames.content.size.width),
+        height = format!("{:.0}", frames.content.size.height)
     ))
     .foreground(ColorRole::MutedForeground)
     .frame(
@@ -416,10 +423,8 @@ fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View +
     .corner_radius(RadiusScale::Lg)
     .padding(6.0);
     let middle = HStack::new((
-        side.then(|| {
-            preview_toolbar("main-window.tools", ToolbarArea::Left)
-                .frame(fill().width(SIDE_TOOLBAR))
-        }),
+        side_width
+            .map(|width| preview_toolbar("main-window.tools", start).frame(fill().width(width))),
         content,
     ))
     .spacing(0.0)
@@ -429,14 +434,13 @@ fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View +
             .max_height(f64::INFINITY),
     );
     let window = VStack::new((
-        top.then(|| {
-            preview_toolbar("main-window.toolbar", ToolbarArea::Top)
-                .frame(fill().height(TOP_TOOLBAR))
+        top_height.map(|height| {
+            preview_toolbar("main-window.toolbar", ToolbarArea::Top).frame(fill().height(height))
         }),
         middle,
-        status.then(|| {
+        status_height.map(|height| {
             choscorui::compose::view::StatusBar::new(t!("main-window.status_bar"), Vec::new())
-                .frame(fill().height(STATUS_BAR))
+                .frame(fill().height(height))
         }),
     ))
     .spacing(0.0);
@@ -484,6 +488,8 @@ pub fn page(id: &str) -> Option<Build> {
 #[cfg(test)]
 mod tests {
     use crate::ui::pages::tests::Harness;
+    use choscorui::controls::ToolbarArea;
+    use choscorui::core::LayoutDirection;
     use choscorui::core::{Key, KeyEvent, SemanticAction, SemanticRole};
 
     fn press(page: &mut Harness, key: Key) {
@@ -563,7 +569,7 @@ mod tests {
     fn main_window_toggles_its_toolbars_and_status_bar() {
         let mut page = Harness::new("main-window");
         assert!(page.host.find("Window preview").is_some());
-        assert!(page.host.find("Content 596 × 322").is_some());
+        assert!(page.host.find("Content 596 × 320").is_some());
         let top = page.node("Top toolbar");
         assert_eq!(page.host.semantic(top).unwrap().state.checked, Some(true));
         page.act("Top toolbar", SemanticAction::Activate);
@@ -571,6 +577,15 @@ mod tests {
         assert!(page.host.find("Toolbar").is_none());
         page.act("Status bar", SemanticAction::Activate);
         assert!(page.host.find("Content 596 × 380").is_some());
+        assert!(page.host.find("Tools").is_some());
+    }
+
+    #[test]
+    fn the_side_toolbar_sits_on_the_start_edge() {
+        assert_eq!(ToolbarArea::start(LayoutDirection::Rtl), ToolbarArea::Right);
+        let mut page = Harness::new("main-window");
+        page.act("Status bar", SemanticAction::Activate);
+        assert!(page.host.find("Content 596 × 344").is_some());
         assert!(page.host.find("Tools").is_some());
     }
 }

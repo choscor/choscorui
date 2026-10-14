@@ -189,7 +189,7 @@ changes as `ControlMessage` values:
 | `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
 | `ColorPicker` | `Changed(Text)` with the hex value, `Activated` on Enter | `Text` with a hex value |
-| `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu | - |
+| `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu, `ItemActivated(index)` for an overflowed embedded control | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
 | `HostedCanvas` | `Changed(Indices)` of item ids, `ItemActivated(id)` on Enter | `Indices` of live items |
 | `HostedResizable` | `Changed(Number)` with the size of the pane before the active handle; `active` names that handle | `Number` |
@@ -2459,20 +2459,32 @@ through the `Text` value in both directions. Accept runs `on_activate`.
   toolbar.
 - `save` and `restore` keep the area, the order, and the item visibility.
 - `compose_main_window` places the toolbars, the status bar, and the
-  content area.
+  content area. `ToolbarArea::start(direction)` and
+  `ToolbarArea::end(direction)` give the side edge where lines start or
+  end, so a side toolbar follows the layout direction.
 - **Look.** `paint` uses the `Toolbar` recipe: the bar has a border on
   the edge that faces the content. Commands are ghost buttons, and
   separators are 1 pt `border` lines. A checked command has the `muted`
-  fill.
+  fill. A command with an icon (`ToolbarItem::with_icon`) shows the icon
+  in place of its label.
 - The overflow chevron is a ghost button. The host paints the embedded
   controls. While focus is visible, the `Item` ring goes around the rect
   of a focused embedded control.
 - **In a control host.** `hosted` makes a `HostedToolbar` with its own
-  command states. A command reports `Command`. Focus that enters the
-  toolbar goes to the first item.
-- A click on the chevron opens the overflowed commands in a menu and
+  command states. It takes its thickness, its spacing, and the item
+  lengths from the recipe. A command reports `Command`.
+- Focus that enters the toolbar returns to the last focused item. The
+  first time, it goes to the first item that is not an embedded control.
+- The overflow chevron is the last roving stop. Enter, Space, and
+  ArrowDown on it open the menu with its first row highlighted.
+- An embedded control that gets the roving focus gets the keyboard focus
+  of the window.
+- An empty toolbar, or one with no enabled item, is not a Tab stop.
+- A click on the chevron opens the overflowed items in a menu and
   reports `OpenChanged`. The menu opens away from the window edge of the
-  bar: below a top bar, above a bottom bar, and beside a side bar.
+  bar: below a top bar, above a bottom bar, and beside a side bar. An
+  overflowed embedded control is a menu row that reports
+  `ItemActivated(index)` with its item index.
 - The enabled commands show hover and press. While the menu is open, the
   bar shows no hover.
 - A press on the bar outside the open menu only closes the menu. Each
@@ -2499,7 +2511,8 @@ the `area` edge. A command runs `on_command`. `HostedToolbar::move_to` in
 `.with_env` moves the bar to another edge, for example the right edge in a
 right-to-left layout.
 
-[shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
+[shell.rs](../crates/choscorui-controls/tests/shell.rs) and
+[toolbar.rs](../crates/choscorui-controls/tests/toolbar.rs) pin this behavior.
 
 ### StatusBar
 
@@ -2514,14 +2527,14 @@ right-to-left layout.
   them.
 - **Look.** `paint` uses the `StatusBar` recipe: a top border, xs muted
   text, and a 1 pt rule before each section.
-- **In a control host.** `StatusBar` takes no keyboard focus. Its
-  deadline is the end of a timed message, so give `show_message` the
+- **In a control host.** `StatusBar` takes no keyboard focus and has no
+  actions. It measures the recipe height. Its deadline is the end of a timed message, so give `show_message` the
   host time as `now`. A queued announcement makes the deadline due at
   once, and the next timer sends it.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Bar | `Root` | 24 pt high, `background` fill, 1 pt `border` above, 12 pt sides and gap, xs `muted-foreground` text |
+| Bar | `Root` | 24 pt high, `background` fill, 1 pt `border` above, 12 pt sides, 12 pt gap after each section rule, xs `muted-foreground` text |
 | Section rule | `Separator` | as the `Toolbar` separator |
 
 | Field | `StatusBar::semantics` |
@@ -2529,7 +2542,7 @@ right-to-left layout.
 | Role | `StatusBar` (AXGroup) |
 | Name / value | "Status" / the message and the sections, joined |
 | State | - |
-| Actions | `Focus` |
+| Actions | - |
 
 **As a view.** `StatusBar::new(message, sections)` shows the message as the
 default text and the sections at the end. It has no binding.

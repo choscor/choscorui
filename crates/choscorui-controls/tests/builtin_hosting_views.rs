@@ -1100,11 +1100,11 @@ fn a_hosted_status_bar_expires_its_message_on_the_host_timer() {
     assert_eq!(h.semantics().value.as_deref(), Some("Ready, Ln 1"));
     assert_eq!(h.host.next_deadline(&h.tree), None);
 
-    assert!(h.perform(SemanticAction::Focus, None));
-    assert_eq!(h.tree.focus(), Some(h.node));
+    assert!(
+        !h.perform(SemanticAction::Focus, None),
+        "the bar takes no focus"
+    );
     assert!(h.messages().is_empty());
-    h.set_enabled(false);
-    assert!(!h.perform(SemanticAction::Focus, None));
 }
 
 /// Arranges `control` in `bounds` as a host would.

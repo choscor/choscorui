@@ -15,8 +15,8 @@ use crate::style::{ControlKind, PaintContext, Sides, Slot, StyleQuery, TextAlign
 use crate::{CommandId, CommandRegistry, CommandState, MenuItem};
 use choscorui_core::{
     AnnouncementPriority, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
-    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
-    SemanticRole, SemanticState, Size,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticNode, SemanticRole,
+    SemanticState, Size,
 };
 use std::time::Duration;
 
@@ -29,6 +29,22 @@ pub enum ToolbarArea {
 }
 
 impl ToolbarArea {
+    /// The side edge where lines start in `direction`: the left edge, or
+    /// the right edge in a right-to-left layout.
+    pub fn start(direction: LayoutDirection) -> Self {
+        match direction {
+            LayoutDirection::Ltr => Self::Left,
+            LayoutDirection::Rtl => Self::Right,
+        }
+    }
+    /// The side edge where lines end in `direction`: the right edge, or
+    /// the left edge in a right-to-left layout.
+    pub fn end(direction: LayoutDirection) -> Self {
+        match direction {
+            LayoutDirection::Ltr => Self::Right,
+            LayoutDirection::Rtl => Self::Left,
+        }
+    }
     fn horizontal(self) -> bool {
         matches!(self, Self::Top | Self::Bottom)
     }
@@ -65,18 +81,34 @@ pub struct ToolbarItem {
     pub key: String,
     pub kind: ToolbarItemKind,
     pub visible: bool,
+    /// The icon of a command button. A command with an icon shows the
+    /// icon, and its label stays the name of the item.
+    pub icon: Option<Icon>,
 }
 
 impl ToolbarItem {
     pub fn command(key: impl Into<String>, label: impl Into<String>, command: CommandId) -> Self {
-        Self {
-            key: key.into(),
-            kind: ToolbarItemKind::Command {
+        Self::of(
+            key,
+            ToolbarItemKind::Command {
                 command,
                 label: label.into(),
             },
+        )
+    }
+    fn of(key: impl Into<String>, kind: ToolbarItemKind) -> Self {
+        Self {
+            key: key.into(),
+            kind,
             visible: true,
+            icon: None,
         }
+    }
+    /// The item with `icon` in place of its label.
+    #[must_use]
+    pub fn with_icon(mut self, icon: Icon) -> Self {
+        self.icon = Some(icon);
+        self
     }
     pub fn control(
         key: impl Into<String>,
@@ -84,29 +116,20 @@ impl ToolbarItem {
         node: NodeId,
         length: f64,
     ) -> Self {
-        Self {
-            key: key.into(),
-            kind: ToolbarItemKind::Control {
+        Self::of(
+            key,
+            ToolbarItemKind::Control {
                 node,
                 label: label.into(),
                 length,
             },
-            visible: true,
-        }
+        )
     }
     pub fn separator(key: impl Into<String>) -> Self {
-        Self {
-            key: key.into(),
-            kind: ToolbarItemKind::Separator,
-            visible: true,
-        }
+        Self::of(key, ToolbarItemKind::Separator)
     }
     pub fn flexible_space(key: impl Into<String>) -> Self {
-        Self {
-            key: key.into(),
-            kind: ToolbarItemKind::FlexibleSpace,
-            visible: true,
-        }
+        Self::of(key, ToolbarItemKind::FlexibleSpace)
     }
     fn focusable(&self, commands: &CommandRegistry) -> bool {
         match &self.kind {
@@ -136,14 +159,24 @@ pub struct Toolbar {
     pub name: String,
     items: Vec<ToolbarItem>,
     area: ToolbarArea,
-    /// Thickness across the toolbar.
+    /// Thickness across the toolbar. A hosted toolbar takes it, the
+    /// button length, and the spacing from the `Toolbar` recipe.
     pub thickness: f64,
     pub button_length: f64,
     pub spacing: f64,
+    /// The length of a separator item along the bar.
+    separator: f64,
     focused: Option<usize>,
-    /// The hovered and pressed command items of a hosted toolbar.
+    /// Whether the overflow chevron has the roving focus of a hosted
+    /// toolbar.
+    chevron: bool,
+    /// The hovered and pressed command items of a hosted toolbar, and
+    /// the chevron as [`CHEVRON`].
     parts: Parts,
 }
+
+/// The part number of the overflow chevron in [`Toolbar`] parts.
+const CHEVRON: usize = usize::MAX;
 
 impl Toolbar {
     pub fn new(name: impl Into<String>, items: Vec<ToolbarItem>) -> Self {
@@ -151,10 +184,12 @@ impl Toolbar {
             name: name.into(),
             items,
             area: ToolbarArea::Top,
-            thickness: 38.0,
+            thickness: 40.0,
             button_length: 32.0,
             spacing: 4.0,
+            separator: 9.0,
             focused: None,
+            chevron: false,
             parts: Parts::default(),
         }
     }
@@ -198,7 +233,7 @@ impl Toolbar {
         match &item.kind {
             ToolbarItemKind::Command { .. } => self.button_length,
             ToolbarItemKind::Control { length, .. } => *length,
-            ToolbarItemKind::Separator => 9.0,
+            ToolbarItemKind::Separator => self.separator,
             ToolbarItemKind::FlexibleSpace => 0.0,
         }
     }
@@ -391,6 +426,7 @@ impl Toolbar {
             _ => return None,
         };
         self.focused = Some(order[position]);
+        self.chevron = false;
         None
     }
 
@@ -436,8 +472,12 @@ impl Toolbar {
                             focus_visible && self.focused == Some(*index),
                         );
                     let style = cx.style(query(Slot::Item).state(state));
-                    cx.slot(*rect, &style, |cx, inner| {
-                        cx.label(inner, label, &style, TextAlign::Center);
+                    let icon = self.items[*index].icon;
+                    cx.slot(*rect, &style, |cx, inner| match icon {
+                        Some(icon) => cx.icon(inner, icon, &style),
+                        None => {
+                            cx.label(inner, label, &style, TextAlign::Center);
+                        }
                     });
                 }
                 ToolbarItemKind::Separator => {
@@ -476,7 +516,11 @@ impl Toolbar {
             }
         }
         if let Some(rect) = layout.overflow_button {
-            let style = cx.style(query(Slot::Action));
+            let state = self
+                .parts
+                .state(CHEVRON, host)
+                .set(VisualState::FOCUS_VISIBLE, focus_visible && self.chevron);
+            let style = cx.style(query(Slot::Action).state(state));
             let icon = match (horizontal, cx.rtl) {
                 (false, _) => Icon::ChevronDown,
                 (true, false) => Icon::ChevronsRight,
@@ -557,6 +601,8 @@ pub struct StatusSection {
 /// permanent sections on the trailing side.
 #[derive(Clone, Debug, Default)]
 pub struct StatusBar {
+    /// The height for `compose_main_window`. A hosted bar measures the
+    /// `StatusBar` recipe height.
     pub height: f64,
     sections: Vec<StatusSection>,
     default_text: String,
@@ -573,7 +619,7 @@ pub struct StatusBarLayout {
 impl StatusBar {
     pub fn new() -> Self {
         Self {
-            height: 22.0,
+            height: 24.0,
             ..Self::default()
         }
     }
@@ -713,12 +759,14 @@ impl StatusBar {
                 (section.size.height - rule.padding.vertical()).max(0.0),
             );
             fill_area(cx.list, line, cx.rtl, &rule.background);
-            cx.label(
-                inset(*section),
-                &self.sections[*index].text,
-                &style,
-                TextAlign::Start,
+            // A section's text starts one gap after its rule.
+            let text = Rect::from_xywh(
+                section.origin.x + if cx.rtl { 0.0 } else { style.gap },
+                section.origin.y,
+                (section.size.width - style.gap).max(0.0),
+                section.size.height,
             );
+            cx.label(text, &self.sections[*index].text, &style, TextAlign::Start);
         }
     }
 
@@ -734,7 +782,7 @@ impl StatusBar {
             value: Some(parts.join(", ")),
             state: SemanticState::default(),
             relations: Vec::new(),
-            actions: vec![SemanticAction::Focus],
+            actions: Vec::new(),
             text: None,
         }
     }
@@ -902,10 +950,20 @@ impl HostedToolbar {
             .map(|(index, _)| *index)
     }
 
-    /// The enabled command item at `point`. The bar has no hover or press
-    /// while the overflow menu is open.
+    /// The enabled command item or the chevron at `point`. The bar has no
+    /// hover or press while the overflow menu is open.
     fn command_at(&self, point: Point) -> Option<usize> {
-        let index = self.item_at(point).filter(|_| !self.menu.is_open())?;
+        if self.menu.is_open() {
+            return None;
+        }
+        if self
+            .layout
+            .overflow_button
+            .is_some_and(|button| button.contains(point))
+        {
+            return Some(CHEVRON);
+        }
+        let index = self.item_at(point)?;
         match self.toolbar.items[index].kind {
             ToolbarItemKind::Command { command, .. } => self
                 .commands
@@ -916,6 +974,46 @@ impl HostedToolbar {
         }
     }
 
+    /// The roving stops in order: the placed items that take focus, then
+    /// the chevron as `None`.
+    fn stops(&self) -> Vec<Option<usize>> {
+        let mut stops: Vec<Option<usize>> = self
+            .layout
+            .items
+            .iter()
+            .map(|(index, _)| *index)
+            .filter(|index| self.toolbar.items[*index].focusable(&self.commands))
+            .map(Some)
+            .collect();
+        if self.layout.overflow_button.is_some() {
+            stops.push(None);
+        }
+        stops
+    }
+
+    /// Gives the roving focus to `stop`. An embedded control gets the
+    /// keyboard focus of the window.
+    fn focus_stop(&mut self, cx: &mut ControlContext<'_>, stop: Option<usize>) {
+        self.toolbar.focused = stop;
+        self.toolbar.chevron = stop.is_none();
+        if let Some(index) = stop
+            && let ToolbarItemKind::Control { node, .. } = self.toolbar.items[index].kind
+        {
+            let _ = cx.tree_mut().set_focus(Some(node));
+        }
+        cx.request_paint();
+    }
+
+    /// The overflowed embedded control that the menu command `id` names.
+    fn control_item(&self, id: CommandId) -> Option<usize> {
+        self.layout.overflow.iter().copied().find(|index| {
+            matches!(
+                self.toolbar.items[*index].kind,
+                ToolbarItemKind::Control { .. }
+            ) && control_command(*index) == id
+        })
+    }
+
     fn activate(&mut self, cx: &mut ControlContext<'_>, index: usize) {
         if let ToolbarItemKind::Command { command, .. } = self.toolbar.items[index].kind
             && let Ok(Some(command)) = self.commands.activate(command)
@@ -924,9 +1022,10 @@ impl HostedToolbar {
         }
     }
 
-    /// Opens the overflow menu below the chevron at host `time`. Returns
-    /// false when nothing overflows.
-    fn open_menu(&mut self, time: f64) -> bool {
+    /// Opens the overflow menu below the chevron at host `time`; a
+    /// `keyboard` open highlights the first item. Returns false when
+    /// nothing overflows.
+    fn open_menu(&mut self, time: f64, keyboard: bool) -> bool {
         let Some(button) = self.layout.overflow_button else {
             return false;
         };
@@ -939,7 +1038,7 @@ impl HostedToolbar {
                 (ToolbarArea::Left, false) | (ToolbarArea::Right, true) => Placement::After,
                 (ToolbarArea::Left, true) | (ToolbarArea::Right, false) => Placement::Before,
             };
-            self.menu.open_beside(button, side, time, false);
+            self.menu.open_beside(button, side, time, keyboard);
         }
         true
     }
@@ -959,6 +1058,17 @@ impl HostedToolbar {
     }
 
     fn respond(&mut self, cx: &mut ControlContext<'_>, response: MenuResponse) {
+        if let MenuResponse::Activated(id) = response
+            && let Some(index) = self.control_item(id)
+        {
+            // An overflowed embedded control: the application presents it.
+            self.menu.close(cx.time());
+            cx.emit(ControlMessage::OpenChanged(false));
+            cx.emit(ControlMessage::ItemActivated(index));
+            cx.request_semantics();
+            cx.request_paint();
+            return;
+        }
         if self.menu.finish(cx, response) {
             cx.emit(ControlMessage::OpenChanged(false));
             cx.request_semantics();
@@ -997,9 +1107,11 @@ impl HostedToolbar {
                     .overflow_button
                     .is_some_and(|button| button.contains(position))
                 {
+                    self.toolbar.focused = None;
+                    self.toolbar.chevron = true;
                     if self.menu.is_open() {
                         self.dismiss_menu(cx);
-                    } else if self.open_menu(cx.time()) {
+                    } else if self.open_menu(cx.time(), false) {
                         cx.emit(ControlMessage::OpenChanged(true));
                         cx.request_paint();
                         cx.request_semantics();
@@ -1015,6 +1127,7 @@ impl HostedToolbar {
                 };
                 if self.toolbar.items[index].focusable(&self.commands) {
                     self.toolbar.focused = Some(index);
+                    self.toolbar.chevron = false;
                 }
                 cx.request_paint();
                 EventReply::Stop
@@ -1023,7 +1136,7 @@ impl HostedToolbar {
                 let Some(index) = pressed else {
                     return EventReply::Continue;
                 };
-                if self.toolbar.parts.hovered == Some(index) {
+                if index != CHEVRON && self.toolbar.parts.hovered == Some(index) {
                     self.activate(cx, index);
                 }
                 EventReply::Stop
@@ -1044,6 +1157,30 @@ impl HostedToolbar {
             }
             let response = self.menu.key(key);
             self.respond(cx, response);
+            return EventReply::Stop;
+        }
+        let horizontal = self.toolbar.area.horizontal();
+        let opens = matches!(key, Key::Enter | Key::Space) || (horizontal && key == Key::ArrowDown);
+        if self.toolbar.chevron && opens {
+            if self.open_menu(cx.time(), true) {
+                cx.emit(ControlMessage::OpenChanged(true));
+                cx.request_paint();
+                cx.request_semantics();
+            }
+            return EventReply::Stop;
+        }
+        let stops = self.stops();
+        let current = if self.toolbar.chevron {
+            stops.iter().position(Option::is_none)
+        } else {
+            let focused = self.toolbar.focused;
+            stops
+                .iter()
+                .position(|stop| stop.is_some() && *stop == focused)
+        };
+        let rtl = self.direction == LayoutDirection::Rtl;
+        if let Some(next) = hosted::rove(key, current.unwrap_or(0), stops.len(), horizontal, rtl) {
+            self.focus_stop(cx, stops[next]);
             return EventReply::Stop;
         }
         let before = self.toolbar.focused;
@@ -1070,8 +1207,59 @@ impl HostedToolbar {
     }
 }
 
+impl HostedToolbar {
+    /// Takes the thickness, the spacing, and the item lengths from the
+    /// `Toolbar` recipe.
+    fn geometry(&mut self, cx: &MeasureContext<'_>) {
+        let query = |slot| StyleQuery::new(ControlKind::Toolbar, slot);
+        let root = cx.style(query(Slot::Root));
+        let item = cx.style(query(Slot::Item));
+        let rule = cx.style(query(Slot::Separator));
+        self.toolbar.thickness = root.min_height;
+        self.toolbar.spacing = root.gap;
+        self.toolbar.button_length = item.min_width.max(item.min_height);
+        self.toolbar.separator = rule.min_width + rule.padding.horizontal();
+    }
+
+    /// Focus that enters the toolbar returns to the last focused item, or
+    /// goes to the first stop that is not an embedded control.
+    fn enter(&mut self) {
+        let control = |index: usize| {
+            matches!(
+                self.toolbar.items[index].kind,
+                ToolbarItemKind::Control { .. }
+            )
+        };
+        let stops = self.stops();
+        let last = if self.toolbar.chevron {
+            Some(None)
+        } else {
+            self.toolbar
+                .focused
+                .filter(|index| !control(*index))
+                .map(Some)
+        };
+        let entry = last.filter(|stop| stops.contains(stop)).or_else(|| {
+            stops
+                .iter()
+                .copied()
+                .find(|stop| stop.is_none_or(|index| !control(index)))
+        });
+        if let Some(stop) = entry {
+            self.toolbar.focused = stop;
+            self.toolbar.chevron = stop.is_none();
+        }
+    }
+}
+
+/// The menu command of the overflowed embedded control at item `index`.
+fn control_command(index: usize) -> CommandId {
+    CommandId(u64::MAX - index as u64)
+}
+
 impl CustomControl for HostedToolbar {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
+        self.geometry(cx);
         let length = self.toolbar.natural_length();
         let thickness = self.toolbar.thickness;
         let size = if self.toolbar.area.horizontal() {
@@ -1083,19 +1271,23 @@ impl CustomControl for HostedToolbar {
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.geometry(cx);
         self.direction = cx.direction;
         self.layout = self.toolbar.layout(bounds, cx.direction);
         let mut commands = Vec::new();
         let mut items = Vec::new();
         for index in &self.layout.overflow {
-            if let ToolbarItemKind::Command { command, label } = &self.toolbar.items[*index].kind {
-                commands.push(*command);
-                items.push(MenuItem::action(label.clone(), *command));
-            }
+            let (id, label) = match &self.toolbar.items[*index].kind {
+                ToolbarItemKind::Command { command, label } => (*command, label),
+                ToolbarItemKind::Control { label, .. } => (control_command(*index), label),
+                _ => continue,
+            };
+            commands.push(id);
+            items.push(MenuItem::action(label.clone(), id));
         }
         if commands != self.menu_items {
-            // Embedded controls stay with the view layer, so the menu
-            // lists only the overflowed commands.
+            // An overflowed embedded control is a menu row that reports
+            // `ItemActivated` with its item index.
             self.menu = MenuPopup::new(items);
             for command in &commands {
                 if let Ok(state) = self.commands.state(*command) {
@@ -1119,15 +1311,7 @@ impl CustomControl for HostedToolbar {
             ControlEvent::Pointer(pointer) => self.pointer(cx, *pointer, pressed),
             ControlEvent::Key(KeyEvent::Down { key, .. }) => self.key(cx, *key),
             ControlEvent::FocusChanged(true) => {
-                // Focus entering the toolbar goes to the first item.
-                if self.toolbar.focused.is_none() {
-                    self.toolbar.handle_key(
-                        Key::Home,
-                        &self.layout,
-                        &self.commands,
-                        self.direction,
-                    );
-                }
+                self.enter();
                 cx.request_paint();
                 EventReply::Continue
             }
@@ -1177,7 +1361,13 @@ impl CustomControl for HostedToolbar {
             self.menu.close(time);
             return self.layout.overflow_button.is_some();
         }
-        self.open_menu(time)
+        self.open_menu(time, false)
+    }
+
+    /// An empty toolbar, or one with no item that takes focus, is not a
+    /// Tab stop.
+    fn focusable(&self) -> bool {
+        (self.toolbar.items.iter()).any(|item| item.visible && item.focusable(&self.commands))
     }
 }
 
@@ -1188,7 +1378,7 @@ impl CustomControl for StatusBar {
         let sections: f64 = self.sections.iter().map(|section| section.width).sum();
         Measured::new(
             cx.constraints
-                .constrain(Size::new(message + sections, self.height)),
+                .constrain(Size::new(message + sections, style.min_height)),
         )
     }
 
@@ -1219,19 +1409,6 @@ impl CustomControl for StatusBar {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         StatusBar::semantics(self, strings)
-    }
-
-    fn perform(
-        &mut self,
-        cx: &mut ControlContext<'_>,
-        action: SemanticAction,
-        _value: Option<&str>,
-    ) -> bool {
-        if action != SemanticAction::Focus {
-            return false;
-        }
-        cx.request_focus();
-        true
     }
 
     fn focusable(&self) -> bool {
