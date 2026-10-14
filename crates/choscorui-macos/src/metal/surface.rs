@@ -416,6 +416,10 @@ fn present_blank(gpu: &Gpu, surface: &mut Surface) {
     // The frame must reach the window server before the window closes.
     WAIT_UNTIL_SCHEDULED.send(&command_buffer, ());
     surface.presented = (1, 1);
+    // The window has no content again. The window server can report such
+    // a window as occluded, so its next first frame draws when the window
+    // is visible, as at startup.
+    surface.presented_once = false;
 }
 
 /// Moves `window` to Core Graphics for the rest of its life and repaints
