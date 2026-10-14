@@ -94,6 +94,9 @@ pub struct SemanticState {
     pub range: Option<SemanticRange>,
     /// True for a dialog that keeps input inside it while it is open.
     pub modal: bool,
+    /// True for a container whose content is still loading, such as a
+    /// region of skeleton placeholders.
+    pub busy: bool,
 }
 
 /// The numeric value of a range node, its bounds, and its step.
@@ -123,6 +126,9 @@ impl std::fmt::Debug for SemanticState {
         }
         if self.modal {
             out.field("modal", &self.modal);
+        }
+        if self.busy {
+            out.field("busy", &self.busy);
         }
         out.finish()
     }

@@ -7,8 +7,8 @@ use choscorui_compose::Runtime;
 use choscorui_compose::view::{
     AlertDialog, AnyView, AspectRatio, AvatarGroup, Calendar, Checkbox, Command, CommandLink,
     Configured, Cx, DropdownMenu, Env, FontChooser, Frame, GroupBox, Kbd, NumericDisplay,
-    ScrollBar, StackedContainer, State, Switch, Text, Toaster, ToolBox, ToolButton, View, ViewExt,
-    ViewHost,
+    ScrollBar, Skeleton, StackedContainer, State, Switch, Text, Toaster, ToolBox, ToolButton,
+    VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls as controls;
 use choscorui_controls::{
@@ -192,6 +192,20 @@ fn an_aspect_ratio_box_holds_any_view() {
     let (outer, inner) = (host.tree().bounds(node), host.tree().bounds(child));
     assert_eq!(outer.unwrap().size, Size::new(320.0, 180.0));
     assert_eq!(inner.unwrap().size, Size::new(320.0, 180.0));
+}
+
+#[test]
+fn a_busy_region_holds_hidden_skeletons() {
+    let mut host = host(|_| {
+        VStack::new((Skeleton::new("Loading the title", 0.0, 16.0),))
+            .accessibility_label("Posts")
+            .accessibility_busy(true)
+            .into_any()
+    });
+    let region = host.find("Posts").unwrap();
+    assert!(host.semantic(region).unwrap().state.busy);
+    let skeleton = host.find("Loading the title").unwrap();
+    assert!(host.semantic(skeleton).unwrap().state.hidden);
 }
 
 #[test]

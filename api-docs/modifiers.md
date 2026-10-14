@@ -161,6 +161,23 @@ Modifiers: every [`ViewExt`](#viewext) method applies to this view.
 
 ### Methods
 
+#### `Styled::accessibility_busy`
+
+```rust
+pub fn accessibility_busy<M>(self, busy: impl IntoLive<bool, M>) -> Self
+```
+
+Marks the view as busy while its content loads, such as a region
+of skeleton placeholders.
+
+##### Examples
+
+```rust
+let feed = VStack::new((Skeleton::new("Loading posts", 0.0, 48.0),))
+    .accessibility_label("Posts")
+    .accessibility_busy(true);
+```
+
 #### `Styled::accessibility_hidden`
 
 ```rust

@@ -242,6 +242,7 @@ pub(crate) enum Modifier {
     Access(AccessField, Live<String>),
     AccessHidden(Live<bool>),
     AccessRole(SemanticRole),
+    AccessBusy(Live<bool>),
     Shortcut(Key, ShortcutModifiers, Rc<dyn Fn()>),
     OnMessage(Handler),
     Focused(Binding<bool>),
@@ -717,6 +718,18 @@ modifiers! {
     /// let panel = Text::new("General settings").accessibility_role(SemanticRole::TabPanel);
     /// ```
     fn accessibility_role(role: SemanticRole) => Modifier::AccessRole(role);
+    /// Marks the view as busy while its content loads, such as a region
+    /// of skeleton placeholders.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let feed = VStack::new((Skeleton::new("Loading posts", 0.0, 48.0),))
+    ///     .accessibility_label("Posts")
+    ///     .accessibility_busy(true);
+    /// ```
+    fn accessibility_busy<M>(busy: impl IntoLive<bool, M>) => Modifier::AccessBusy(busy.into_live());
     /// Runs `action` for `key` with `modifiers` while focus is in the
     /// view, or anywhere when no closer view declares the same keys.
     ///
@@ -1703,6 +1716,13 @@ fn apply(
             let node = inner_node;
             cx.bind(hidden, move |inner, hidden| {
                 inner.data(node).access.hidden = hidden;
+                inner.touch(node, Dirty::SEMANTICS);
+            });
+        }
+        Modifier::AccessBusy(busy) => {
+            let node = inner_node;
+            cx.bind(busy, move |inner, busy| {
+                inner.data(node).access.busy = busy;
                 inner.touch(node, Dirty::SEMANTICS);
             });
         }

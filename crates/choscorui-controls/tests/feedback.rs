@@ -149,6 +149,13 @@ fn skeleton_pulses_unless_motion_is_reduced() {
     assert!(!h.host.animating(&h.tree, 1.0));
     let mut circle = Harness::new(Skeleton::new("Loading", 48.0, 48.0).circle());
     assert_eq!(circle.measure().height, 48.0);
+    // A zero width fills a bounded width and takes a minimum otherwise.
+    let mut line = Harness::new(Skeleton::new("Loading", 0.0, 16.0));
+    assert_eq!(line.measure().width, 64.0);
+    assert!(
+        line.semantics().state.hidden,
+        "assistive technology skips it"
+    );
 }
 
 #[test]

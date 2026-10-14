@@ -116,6 +116,9 @@ pub fn skeleton(_: &PageCx) -> AnyView {
             )),
         ),
     ))
+    // The page is a loading region: its skeletons are hidden.
+    .accessibility_busy(true)
+    .into_any()
 }
 
 pub fn empty(_: &PageCx) -> AnyView {

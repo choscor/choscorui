@@ -218,6 +218,7 @@ Every example assumes `use choscorui::prelude::*;`.
 
 ### Controls modifiers
 
+- [`accessibility_busy`](modifiers-controls.md#accessibility_busy) modifier: Marks the view as busy while its content loads, such as a region of skeleton placeholders.
 - [`accessibility_hidden`](modifiers-controls.md#accessibility_hidden) modifier: Hides the view and its descendants from assistive technology.
 - [`accessibility_hint`](modifiers-controls.md#accessibility_hint) modifier: What happens when the view is used, for assistive technology.
 - [`accessibility_label`](modifiers-controls.md#accessibility_label) modifier: The name that assistive technology reads.

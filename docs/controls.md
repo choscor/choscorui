@@ -4247,7 +4247,13 @@ behavior.
   reduced motion stops the turn at the next paint.
 - A skeleton is a muted block that pulses between full and half opacity
   every 2 s. `Skeleton::new(label, width, height)` with a zero width fills
-  the width it is given. `circle()` rounds it fully.
+  the width it is given. Without a bounded width, it is 64 pt wide.
+  `circle()` rounds it fully.
+- A skeleton is decoration, so its node is hidden from assistive
+  technology. Mark the container of the skeletons with
+  `.accessibility_busy(true)` while the content loads. The container
+  node then has the `busy` state. The macOS bridge does not publish this
+  state, because `NSAccessibility` has no property for it.
 - With reduced motion, the recipe motion is zero: the spinner does not
   turn and the skeleton does not pulse. Neither asks for animation frames
   then.
@@ -4262,6 +4268,7 @@ behavior.
 | --- | --- |
 | Role | `ProgressIndicator` (AXProgressIndicator) |
 | Name / value | label / none |
+| State | skeleton: hidden |
 | Actions | none |
 
 [feedback.rs](../crates/choscorui-controls/tests/feedback.rs) pins this

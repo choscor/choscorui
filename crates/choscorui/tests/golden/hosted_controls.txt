@@ -697,7 +697,7 @@ PopTransform
 PopClip
 # skeleton Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 200.0, height: 16.0 } }
-semantics SemanticNode { role: ProgressIndicator, name: "Loading", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [], text: None }
+semantics SemanticNode { role: ProgressIndicator, name: "Loading", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: true }, relations: [], actions: [], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 200.0, height: 16.0 } })
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 200.0, height: 16.0 } }, radius: 8.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 PopClip

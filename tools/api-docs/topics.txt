@@ -274,6 +274,7 @@ presentation choscorui::prelude::ViewExt::file_importer
 presentation choscorui::prelude::ViewExt::file_exporter
 controls choscorui::prelude::ViewExt::accessibility_hidden
 controls choscorui::prelude::ViewExt::accessibility_role
+controls choscorui::prelude::ViewExt::accessibility_busy
 controls choscorui::prelude::ViewExt::accessibility_hint
 controls choscorui::prelude::ViewExt::accessibility_label
 controls choscorui::prelude::ViewExt::accessibility_value

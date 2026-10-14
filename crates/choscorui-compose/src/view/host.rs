@@ -146,6 +146,8 @@ pub(crate) struct Access {
     pub relations: Vec<choscorui_core::SemanticRelation>,
     /// The role that replaces the role of the view.
     pub role: Option<SemanticRole>,
+    /// Whether the content of the view is still loading.
+    pub busy: bool,
 }
 
 impl Access {
@@ -159,6 +161,7 @@ impl Access {
             || self.invalid
             || !self.relations.is_empty()
             || self.role.is_some()
+            || self.busy
     }
 }
 
@@ -1743,6 +1746,7 @@ impl ViewHost {
             semantic.description.clone_from(hint);
         }
         semantic.state.invalid |= access.invalid;
+        semantic.state.busy |= access.busy;
         for relation in &access.relations {
             if !semantic.relations.contains(relation) {
                 semantic.relations.push(*relation);

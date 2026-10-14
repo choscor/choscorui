@@ -137,8 +137,8 @@ impl CustomControl for Spinner {
 }
 
 /// A placeholder block that pulses while content loads. It takes no
-/// focus; its accessible name says what is loading. With reduced motion,
-/// it does not pulse.
+/// focus, and assistive technology skips it: mark the container busy
+/// while it loads. With reduced motion, it does not pulse.
 pub struct Skeleton {
     label: String,
     size: Size,
@@ -148,7 +148,7 @@ pub struct Skeleton {
 
 impl Skeleton {
     /// A block of `width` by `height` points. A width of zero fills the
-    /// width it is given.
+    /// width it is given, and is 64 pt without a bounded width.
     pub fn new(label: impl Into<String>, width: f64, height: f64) -> Self {
         Self {
             label: label.into(),
@@ -169,10 +169,12 @@ impl Skeleton {
 impl CustomControl for Skeleton {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let max = cx.constraints.max.width;
-        let width = if self.size.width > 0.0 || !max.is_finite() {
+        let width = if self.size.width > 0.0 {
             self.size.width
-        } else {
+        } else if max.is_finite() {
             max
+        } else {
+            cx.tokens.spacing * 16.0
         };
         Measured {
             size: Size::new(width, self.size.height),
@@ -204,7 +206,10 @@ impl CustomControl for Skeleton {
     }
 
     fn semantics(&self) -> SemanticNode {
-        hosted::node(SemanticRole::ProgressIndicator, &self.label, Vec::new())
+        // A placeholder is decoration: the busy container speaks for it.
+        let mut node = hosted::node(SemanticRole::ProgressIndicator, &self.label, Vec::new());
+        node.state.hidden = true;
+        node
     }
 
     fn focusable(&self) -> bool {
