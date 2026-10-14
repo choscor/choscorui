@@ -206,7 +206,10 @@ impl NativeWindow {
             }
         }
         for request in self.window.take_accessibility_actions() {
-            host.perform(request.node, request.action, request.value.as_deref());
+            match request.part {
+                Some(part) => host.perform_part(request.node, part, request.action),
+                None => host.perform(request.node, request.action, request.value.as_deref()),
+            };
         }
         let input = host.text_input().unwrap_or_default();
         self.window.set_text_input_state(TextInputState {

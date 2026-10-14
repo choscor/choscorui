@@ -1,6 +1,6 @@
 # switch Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
+semantics SemanticNode { role: Switch, name: "Airplane mode", description: "", value: None, state: SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 229, green: 229, blue: 229, alpha: 255 } }
@@ -245,7 +245,7 @@ DrawText { baseline: Point { x: 98.39999999999999, y: 89.9 }, text: "Right click
 PopClip
 # menubar Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 54.800000000000004, height: 36.0 } }
-semantics SemanticNode { role: Menu, name: "Menu", description: "", value: Some("File"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }, relations: [], actions: [ShowMenu, Expand, Focus], text: None }
+semantics SemanticNode { role: MenuBar, name: "Menu", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }, relations: [], actions: [ShowMenu, Expand, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 54.800000000000004, height: 36.0 } })
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 54.800000000000004, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 54.800000000000004, height: 36.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
@@ -1549,7 +1549,7 @@ DrawText { baseline: Point { x: 26.0, y: 38.525 }, text: "Profile", font_family:
 PopClip
 # switch default Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
+semantics SemanticNode { role: Switch, name: "Airplane mode", description: "", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 140.10000000000002, height: 18.4 } })
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 18.4 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
@@ -1558,7 +1558,7 @@ DrawText { baseline: Point { x: 50.0, y: 24.099999999999998 }, text: "Airplane m
 PopClip
 # switch sm Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 132.10000000000002, height: 14.0 } }
-semantics SemanticNode { role: Checkbox, name: "Airplane mode", description: "switch", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
+semantics SemanticNode { role: Switch, name: "Airplane mode", description: "", value: None, state: SemanticState { disabled: false, checked: Some(true), selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 132.10000000000002, height: 14.0 } })
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 24.0, height: 14.0 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 24.0, height: 14.0 } }, radius: 9999.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }

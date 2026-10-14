@@ -136,16 +136,16 @@ fn a_right_to_left_menubar_opens_and_closes_submenus_toward_the_left() {
     h.focus();
     h.key(Key::ArrowDown);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "More");
+    assert_eq!(h.focused_part(), "More");
     h.key(Key::ArrowLeft);
-    assert_eq!(h.semantics().description, "Share", "the submenu opens");
-    assert_eq!(h.semantics().value.as_deref(), Some("File"));
+    assert_eq!(h.focused_part(), "Share", "the submenu opens");
+    assert_eq!(h.selected_part(), "File");
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().description, "More", "the submenu closes");
+    assert_eq!(h.focused_part(), "More", "the submenu closes");
     h.key(Key::ArrowRight);
     assert_eq!(
-        h.semantics().value.as_deref(),
-        Some("Edit"),
+        h.selected_part(),
+        "Edit",
         "at the root, ArrowRight goes back in reading order and wraps"
     );
 }

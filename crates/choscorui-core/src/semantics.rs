@@ -1,4 +1,4 @@
-use crate::{NodeId, Rect, Tree};
+use crate::{NodeId, Rect, SemanticParts, Tree};
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -43,6 +43,12 @@ pub enum SemanticRole {
     Image,
     Link,
     ScrollBar,
+    /// The bar of menu titles at the top of a window or a control.
+    MenuBar,
+    /// One menu title in a menu bar. It opens its menu.
+    MenuBarItem,
+    /// A checkbox that looks and acts like an on and off switch.
+    Switch,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -96,6 +102,8 @@ pub struct SemanticRange {
     pub value: i64,
     pub minimum: i64,
     pub maximum: i64,
+    /// The change of one increment or decrement.
+    pub step: i64,
 }
 
 /// Lists `range` only when the node has one, and `modal` only when it is
@@ -167,6 +175,12 @@ pub struct SemanticEntry {
     pub collection: Option<SemanticCollection>,
     /// Absolute position of a realized item inside its collection.
     pub item_index: Option<usize>,
+    /// The key of the part of node `id` that this entry publishes, or
+    /// `None` for the node itself. See [`SemanticParts`].
+    pub part: Option<u64>,
+    /// The key of the part that contains this part, or `None` when the
+    /// entry is directly under `parent`.
+    pub parent_part: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -180,6 +194,14 @@ pub enum SemanticChange {
     Focus {
         old: Option<NodeId>,
         new: Option<NodeId>,
+        /// The key of the focused part of `new`, or `None` when the node
+        /// itself has the focus.
+        part: Option<u64>,
+    },
+    /// The name, value, or state of one part of a node changed.
+    Part {
+        node: NodeId,
+        part: u64,
     },
 }
 
@@ -207,7 +229,8 @@ pub struct SemanticTree {
     nodes: HashMap<NodeId, SemanticNode>,
     collections: HashMap<NodeId, SemanticCollection>,
     item_indices: HashMap<NodeId, usize>,
-    focus: Option<NodeId>,
+    parts: HashMap<NodeId, SemanticParts>,
+    focus: Option<(NodeId, Option<u64>)>,
 }
 
 impl SemanticTree {
@@ -305,12 +328,54 @@ impl SemanticTree {
         })
     }
 
+    /// Publishes `parts` as the child nodes of `id`, and returns the
+    /// changes. A change of the part count, a key, a parent, or a role is a
+    /// tree change; other changes are [`SemanticChange::Part`].
+    pub fn set_parts(
+        &mut self,
+        id: NodeId,
+        parts: SemanticParts,
+    ) -> Result<Vec<SemanticChange>, SemanticError> {
+        if !self.nodes.contains_key(&id) {
+            return Err(SemanticError::MissingNode);
+        }
+        let old = if parts.is_empty() {
+            self.parts.remove(&id)
+        } else {
+            self.parts.insert(id, parts)
+        };
+        let new = self.parts.get(&id).map_or(&[][..], SemanticParts::parts);
+        let old = old.as_ref().map_or(&[][..], SemanticParts::parts);
+        let same_shape = old.len() == new.len()
+            && old.iter().zip(new).all(|(old, new)| {
+                old.key == new.key && old.parent == new.parent && old.node.role == new.node.role
+            });
+        if !same_shape {
+            return Ok(vec![SemanticChange::Tree]);
+        }
+        Ok(old
+            .iter()
+            .zip(new)
+            .filter(|(old, new)| old != new)
+            .map(|(_, new)| SemanticChange::Part {
+                node: id,
+                part: new.key,
+            })
+            .collect())
+    }
+
+    /// The published parts of `id`.
+    pub fn parts(&self, id: NodeId) -> Option<&SemanticParts> {
+        self.parts.get(&id)
+    }
+
     /// Removes the semantic node of `id`, which stays in the tree.
     /// Returns true when there was one.
     pub fn remove(&mut self, id: NodeId) -> bool {
         self.collections.remove(&id);
         self.item_indices.remove(&id);
-        if self.focus == Some(id) {
+        self.parts.remove(&id);
+        if self.focus.is_some_and(|(node, _)| node == id) {
             self.focus = None;
         }
         self.nodes.remove(&id).is_some()
@@ -322,14 +387,20 @@ impl SemanticTree {
             .is_some_and(|node| node.actions.contains(&action))
     }
 
+    /// Follows the focus of `tree` and the focused part of the focused
+    /// node. Returns the change when either moved.
     pub fn sync_focus(&mut self, tree: &Tree) -> Option<SemanticChange> {
         let new = tree.focus().filter(|id| self.nodes.contains_key(id));
-        if self.focus == new {
+        let part = new
+            .and_then(|id| self.parts.get(&id))
+            .and_then(SemanticParts::focused_key);
+        let focus = new.map(|id| (id, part));
+        if self.focus == focus {
             return None;
         }
-        let old = self.focus;
-        self.focus = new;
-        Some(SemanticChange::Focus { old, new })
+        let old = self.focus.map(|(id, _)| id);
+        self.focus = focus;
+        Some(SemanticChange::Focus { old, new, part })
     }
 
     pub fn validate(&self, tree: &Tree) -> Result<(), SemanticError> {
@@ -359,8 +430,9 @@ impl SemanticTree {
             self.nodes.remove(id);
             self.collections.remove(id);
             self.item_indices.remove(id);
+            self.parts.remove(id);
         }
-        if self.focus.is_some_and(|id| !tree.contains(id)) {
+        if self.focus.is_some_and(|(id, _)| !tree.contains(id)) {
             self.focus = None;
         }
         removed
@@ -374,15 +446,37 @@ impl SemanticTree {
                 continue;
             };
             let next_parent = if let Some(node) = self.nodes.get(&id) {
+                let focused = tree.focus == Some(id);
+                let parts = self.parts.get(&id);
+                let focused_part = parts.and_then(SemanticParts::focused);
                 result.push(SemanticEntry {
                     id,
                     parent: semantic_parent,
                     bounds: retained.bounds,
-                    focused: tree.focus == Some(id),
+                    focused: focused && focused_part.is_none(),
                     node: node.clone(),
                     collection: self.collections.get(&id).copied(),
                     item_index: self.item_indices.get(&id).copied(),
+                    part: None,
+                    parent_part: None,
                 });
+                let parts = parts.map_or(&[][..], SemanticParts::parts);
+                for (position, part) in parts.iter().enumerate() {
+                    result.push(SemanticEntry {
+                        id,
+                        parent: Some(id),
+                        bounds: part.bounds,
+                        focused: focused && focused_part == Some(position),
+                        node: part.node.clone(),
+                        collection: part.collection,
+                        item_index: part.item_index,
+                        part: Some(part.key),
+                        parent_part: part
+                            .parent
+                            .and_then(|parent| parts.get(parent))
+                            .map(|parent| parent.key),
+                    });
+                }
                 Some(id)
             } else {
                 semantic_parent

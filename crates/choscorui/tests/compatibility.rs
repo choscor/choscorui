@@ -25,7 +25,7 @@ use choscorui::controls::{
 use choscorui::core::{
     AccessibilityPreferences, Axis, BaseColor, Color, ColorRole, ColorScheme, Constraints,
     CrossAlign, DesignTokens, DisplayList, FormLayout, GridLayout, Icon, InputModality, Insets,
-    ItemKey, Key, KeyEvent, LayoutDirection, LinearLayout, Localizer, NodeId, Point, Rect,
+    ItemKey, Key, KeyEvent, LayoutDirection, LinearLayout, NodeId, Point, Rect, SemanticParts,
     SemanticRole, Size, StringListModel, ThemeOverride, ThemeResolver, Tree,
 };
 use std::fmt::Write;
@@ -213,16 +213,10 @@ fn control_semantics() {
     writeln!(
         out,
         "{:?}",
-        Slider::new("Âm lượng", range, SliderOrientation::Horizontal)
-            .semantics(Localizer::builtin())
+        Slider::new("Âm lượng", range, SliderOrientation::Horizontal).semantics()
     )
     .unwrap();
-    writeln!(
-        out,
-        "{:?}",
-        SpinBox::new("Số lượng", range).semantics(Localizer::builtin())
-    )
-    .unwrap();
+    writeln!(out, "{:?}", SpinBox::new("Số lượng", range).semantics()).unwrap();
     writeln!(
         out,
         "{:?}",
@@ -252,18 +246,77 @@ fn control_semantics() {
     let styles = Styles::new();
     for (name, factory) in catalog::every_control() {
         for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
-            let (_, host, node) = mount_hosted(&factory, &themes, &styles, direction);
-            let node = host.get(node).unwrap().semantics();
+            let (mut tree, mut host, node) = mount_hosted(&factory, &themes, &styles, direction);
+            let semantic = host.get(node).unwrap().semantics();
             writeln!(
                 out,
                 "{name} {direction:?}: role {:?} name {:?} value {:?} state {:?} actions {:?}",
-                node.role, node.name, node.value, node.state, node.actions
+                semantic.role, semantic.name, semantic.value, semantic.state, semantic.actions
             )
             .unwrap();
+            write_parts(&mut out, &host.parts(node));
+            if host.set_open(&mut tree, node, true) {
+                let env = HostEnv::new(&themes, &styles, &EstimatedText).direction(direction);
+                host.arrange(&tree, &env);
+                writeln!(out, "  open:").unwrap();
+                write_parts(&mut out, &host.parts(node));
+            }
         }
     }
     views::tooltip_semantics(&mut out);
     golden("control_semantics", &out);
+}
+
+/// One line for each semantic part: its key, parent, role, name, value,
+/// the state flags that are set, and the actions.
+fn write_parts(out: &mut String, parts: &SemanticParts) {
+    for (position, part) in parts.parts().iter().enumerate() {
+        let node = &part.node;
+        let state = &node.state;
+        let mut flags = Vec::new();
+        for (set, flag) in [
+            (state.disabled, "disabled"),
+            (state.read_only, "read-only"),
+            (state.invalid, "invalid"),
+            (state.hidden, "hidden"),
+            (parts.focused() == Some(position), "focused"),
+        ] {
+            if set {
+                flags.push(flag.to_owned());
+            }
+        }
+        for (value, flag) in [
+            (state.checked, "checked"),
+            (state.selected, "selected"),
+            (state.expanded, "expanded"),
+        ] {
+            if let Some(value) = value {
+                flags.push(format!("{flag}={value}"));
+            }
+        }
+        if let Some(range) = state.range {
+            flags.push(format!(
+                "range={}..={} at {} step {}",
+                range.minimum, range.maximum, range.value, range.step
+            ));
+        }
+        if let Some(index) = part.item_index {
+            flags.push(format!("item={index}"));
+        }
+        writeln!(
+            out,
+            "  part {} in {:?}: {:?} {:?} value {:?} desc {:?} [{}] {:?}",
+            part.key,
+            part.parent,
+            node.role,
+            node.name,
+            node.value,
+            node.description,
+            flags.join(" "),
+            node.actions
+        )
+        .unwrap();
+    }
 }
 
 /// Views mounted through the compose `ViewHost`: modifier order, and a

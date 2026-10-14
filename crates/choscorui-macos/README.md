@@ -22,7 +22,7 @@ The application builds a `SemanticTree`, takes a `snapshot`, and passes it with 
 - A node that stays in the snapshot keeps its identity and its native element. The window updates the attributes of that element in place.
 - The projection retires a node that is not in the snapshot. The window releases its native element, and the projection never uses the identity again.
 
-Each update sets the role, subrole, frame in screen coordinates, enabled state, focus, expanded state, selected state, label, help text, and value. A checked state becomes an `NSNumber` value. A `SemanticRange` sets the value, `accessibilityMinValue`, and `accessibilityMaxValue` as `NSNumber` values, saturated to `NSInteger`. Editable text also sets the selected text range and the character count in UTF-16 units. `LabelledBy` relations set `accessibilityTitleUIElement`, and `DescribedBy` and `Controls` relations set `accessibilityLinkedUIElements`.
+Each update sets the role, subrole, frame in screen coordinates, enabled state, focus, expanded state, selected state, label, help text, and value. A checked state becomes an `NSNumber` value. A `SemanticRange` sets the value, `accessibilityMinValue`, and `accessibilityMaxValue` as `NSNumber` values, saturated to `NSInteger`. AppKit has no step attribute, so the bridge does not use `SemanticRange::step`. Editable text also sets the selected text range and the character count in UTF-16 units. `LabelledBy` relations set `accessibilityTitleUIElement`, and `DescribedBy` and `Controls` relations set `accessibilityLinkedUIElements`.
 
 [`tests/accessibility.rs`](tests/accessibility.rs) pins the identity and retirement rules.
 
@@ -35,9 +35,11 @@ Each update sets the role, subrole, frame in screen coordinates, enabled state, 
 | `Window` | `AXWindow` |
 | `Button`, `ColumnHeader` | `AXButton` |
 | `Checkbox` | `AXCheckBox` |
+| `Switch` | `AXCheckBox` with the `AXSwitch` subrole |
 | `RadioButton`, `Tab` | `AXRadioButton` |
 | `TextField` | `AXTextField`, or `AXTextArea` for multiline text |
 | `PasswordField` | `AXTextField` with the `AXSecureTextField` subrole |
+| `SearchField` | `AXTextField` with the `AXSearchField` subrole |
 | `StaticText` | `AXStaticText` |
 | `List` | `AXList` |
 | `Table` | `AXTable` |
@@ -51,6 +53,9 @@ Each update sets the role, subrole, frame in screen coordinates, enabled state, 
 | `ProgressIndicator` | `AXProgressIndicator` |
 | `Menu` | `AXMenu` |
 | `MenuItem` | `AXMenuItem` |
+| `MenuBar` | `AXMenuBar` |
+| `MenuBarItem` | `AXMenuBarItem` |
+| `PopUpButton` | `AXPopUpButton` |
 | `ComboBox` | `AXComboBox` |
 | `Tooltip` | `AXHelpTag` |
 | `Toolbar` | `AXToolbar` |
@@ -67,7 +72,8 @@ The projection turns each `SemanticChange` into an `AccessibilityNotification`. 
 | `Tree` (nodes added, removed, or moved) | `NSAccessibilityLayoutChangedNotification` | Content view |
 | `Label` | `NSAccessibilityTitleChangedNotification` | Element |
 | `Value`, `State`, `ValueAndState` | `NSAccessibilityValueChangedNotification`, plus `NSAccessibilitySelectedTextChangedNotification` for text | Element |
-| `Focus` to a node | `NSAccessibilityFocusedUIElementChangedNotification` | Element |
+| `Focus` to a node or a part | `NSAccessibilityFocusedUIElementChangedNotification` | Element |
+| `Part` | `NSAccessibilityValueChangedNotification` | Element of the part |
 | `Focus` cleared | `NSAccessibilityFocusedUIElementChangedNotification` | Content view |
 
 A live update with no focused element uses `Window::announce(message, priority)`. It posts `NSAccessibilityAnnouncementRequestedNotification` on the application. `AnnouncementPriority::High` interrupts the current speech. The window ignores an empty message.
@@ -90,6 +96,12 @@ The native element class adds these AppKit methods. Each one queues an `Accessib
 The bridge queues a request only when the node declares that action in its `SemanticNode`. Otherwise the callback does nothing. The window also calls these setters during an update. In that case, the callback passes the call to AppKit and queues nothing.
 
 Call `Window::take_accessibility_actions` after each event pump. Route each request into the same control input as the keyboard or the pointer. Each action callback catches a panic, so a panic never unwinds into AppKit.
+
+### Parts
+
+A control without a retained node for each part publishes its parts through `CustomControl::semantic_parts`, for example menu items, tabs, or table cells. The semantic tree keeps them with `SemanticTree::set_parts`. The snapshot gives each part an entry with the node `id` and the part key. The projection gives each part its own native element under the node, or under its parent part. The part that has the keyboard focus is the focused element, and the node itself is not focused.
+
+An action on a part queues an `AccessibilityActionRequest` with the part key. The application routes it to `ViewHost::perform_part`. `Activate` on a part clicks the center of the part.
 
 ### Collections
 

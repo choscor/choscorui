@@ -502,6 +502,11 @@ c_functions! {
         pub(crate) safe static NSAccessibilityOutlineRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityMenuRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityMenuItemRole: &'static Obj<NSString>;
+        // SAFETY: AppKit exports these role and subrole strings as
+        // immutable `NSString` constants that live for the whole process.
+        pub(crate) safe static NSAccessibilityMenuBarRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilityMenuBarItemRole: &'static Obj<NSString>;
+        pub(crate) safe static NSAccessibilitySwitchSubrole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityComboBoxRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityPopUpButtonRole: &'static Obj<NSString>;
         pub(crate) safe static NSAccessibilityHelpTagRole: &'static Obj<NSString>;

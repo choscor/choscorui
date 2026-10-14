@@ -12,8 +12,8 @@ use choscorui_controls::{
 use choscorui_core::{
     BackendCapabilities, Constraints, DesignTokens, DisplayCommand, DisplayList, InputModality,
     Key, KeyEvent, LayoutDirection, NodeId, Point, PointerButton, PointerDetails, PointerEvent,
-    Rect, SemanticAction, SemanticNode, ServiceBackend, ServiceError, Services, Size, Support,
-    ThemeResolver, Tree,
+    Rect, SemanticAction, SemanticNode, SemanticParts, ServiceBackend, ServiceError, Services,
+    Size, Support, ThemeResolver, Tree,
 };
 
 use std::cell::RefCell;
@@ -209,6 +209,36 @@ impl Harness {
 
     pub fn semantics(&self) -> SemanticNode {
         self.host.get(self.node).unwrap().semantics()
+    }
+
+    /// The parts that the control publishes as child nodes.
+    pub fn parts(&self) -> SemanticParts {
+        self.host.parts(self.node)
+    }
+
+    /// The name of the part that has the focus, or an empty string.
+    pub fn focused_part(&self) -> String {
+        let parts = self.parts();
+        parts
+            .focused()
+            .map(|position| parts.parts()[position].node.name.clone())
+            .unwrap_or_default()
+    }
+
+    /// The name of the first selected part, or an empty string.
+    pub fn selected_part(&self) -> String {
+        self.parts()
+            .parts()
+            .iter()
+            .find(|part| part.node.state.selected == Some(true))
+            .map(|part| part.node.name.clone())
+            .unwrap_or_default()
+    }
+
+    /// Runs `action` on the part with `key`.
+    pub fn perform_part(&mut self, key: u64, action: SemanticAction) -> bool {
+        self.host
+            .perform_part(&mut self.tree, self.node, key, action)
     }
 
     pub fn messages(&mut self) -> Vec<ControlMessage> {

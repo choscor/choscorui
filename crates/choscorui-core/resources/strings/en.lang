@@ -23,7 +23,6 @@ choscorui.validation.missing_row = The row no longer exists
 choscorui.validation.rejected = The value was rejected
 
 # Accessibility names and descriptions.
-choscorui.switch = switch
 choscorui.toggle = toggle
 choscorui.dial = Dial
 choscorui.modal = Modal
@@ -34,7 +33,6 @@ choscorui.font.fallback = Not installed; using {font}
 choscorui.combobox.no_results = No results
 choscorui.list.no_results = No results
 choscorui.color.channels = Red {red}, Green {green}, Blue {blue}, Opacity {opacity}%
-choscorui.range = Range {min} to {max}
 choscorui.zoom = Zoom {percent}%
 choscorui.overflow = Value too large to display
 choscorui.shortcut.recording = Recording shortcut; press Escape to cancel

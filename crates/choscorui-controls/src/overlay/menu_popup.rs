@@ -8,7 +8,9 @@ use crate::menu::{DropdownMenu, MenuCheck, MenuItem, MenuResponse};
 use crate::popup::{Placement, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use crate::{CommandError, CommandId, CommandRegistry, CommandState};
-use choscorui_core::{Key, LayoutDirection, Point, PointerEvent, Rect, WheelUnit};
+use choscorui_core::{
+    Key, LayoutDirection, Point, PointerEvent, Rect, SemanticParts, SemanticRole, WheelUnit,
+};
 
 /// An open or closed dropdown menu that a hosted control owns.
 pub(crate) struct MenuPopup {
@@ -328,11 +330,31 @@ impl MenuPopup {
         }
     }
 
-    /// The label of the highlighted item of the deepest open level.
-    pub fn highlighted_label(&self) -> Option<&str> {
-        let level = self.menu.depth() - 1;
-        let index = self.menu.highlighted()?;
-        self.menu.level_items(level).get(index)?.label()
+    /// Adds each open level as a `Menu` part, under `parent` for the root
+    /// and under the submenu item that opened it for the others, with its
+    /// items. A menu in place puts its root items under `parent`. The
+    /// highlighted item of the deepest level gets the focus.
+    pub fn semantic_parts(&self, parent: Option<usize>, parts: &mut SemanticParts) {
+        if !self.is_open() && !self.in_place {
+            return;
+        }
+        let mut parent = parent;
+        let mut focused = None;
+        for (level, LevelPanel { panel, rows }) in self.levels().into_iter().enumerate() {
+            let menu = if level == 0 && self.in_place {
+                parent
+            } else {
+                parts.push(parent, SemanticRole::Menu, "", panel);
+                Some(parts.len() - 1)
+            };
+            focused = self
+                .menu
+                .semantic_parts(level, &self.commands, rows, menu, parts);
+            parent = focused;
+        }
+        if focused.is_some() {
+            parts.set_focused(focused);
+        }
     }
 
     /// Paints every open panel with the reveal animation.

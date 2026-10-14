@@ -8,8 +8,8 @@ use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{CommandId, CommandState, Shortcut};
 use choscorui_core::{
-    EventPhase, EventReply, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, Point, PointerButton, PointerEvent,
+    Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 /// An area that opens a menu at the pointer on a secondary click or a
@@ -195,12 +195,13 @@ impl CustomControl for ContextMenu {
         };
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
         node.value = Some(self.hint.clone());
-        if let Some(label) = self.popup.highlighted_label().filter(|_| self.is_open()) {
-            node.description = label.to_string();
-        }
         node.state.expanded = Some(self.popup.is_open());
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.popup.semantic_parts(None, parts);
     }
 
     fn perform(
@@ -612,20 +613,30 @@ impl CustomControl for Menubar {
         } else {
             Vec::new()
         };
-        let mut node = hosted::node(SemanticRole::Menu, &self.name, actions);
-        if let Some(menu) = self.menus.get(self.current) {
-            node.value = Some(menu.title.clone());
-            if let Some(label) = menu
-                .popup
-                .highlighted_label()
-                .filter(|_| self.open.is_some())
-            {
-                node.description = label.to_string();
-            }
-        }
+        let mut node = hosted::node(SemanticRole::MenuBar, &self.name, actions);
         node.state.expanded = Some(self.open.is_some());
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// Each title is a `MenuBarItem` with its open menu under it. The
+    /// current title has the focus, and the highlighted item of an open
+    /// menu takes it.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        for (index, (menu, bounds)) in self.menus.iter().zip(&self.triggers).enumerate() {
+            let open = self.open == Some(index);
+            let title = parts.push(None, SemanticRole::MenuBarItem, &menu.title, *bounds);
+            title.node.state.expanded = Some(open);
+            title.node.state.selected = Some(index == self.current);
+            title.node.actions.push(SemanticAction::Activate);
+            let position = parts.len() - 1;
+            if index == self.current {
+                parts.set_focused(Some(position));
+            }
+            if open {
+                menu.popup.semantic_parts(Some(position), parts);
+            }
+        }
     }
 
     fn perform(

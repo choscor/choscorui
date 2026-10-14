@@ -76,7 +76,8 @@ fn slider_builders_set_the_bounds_and_the_step() {
             .into_any()
     });
     let (slider, semantics) = node(&mut host, "Level");
-    assert_eq!(semantics.description, "Range -10 to 10");
+    let range = semantics.state.range.unwrap();
+    assert_eq!((range.minimum, range.maximum, range.step), (-10, 10, 2));
     host.perform(slider, SemanticAction::Increment, None);
     host.flush();
     assert_eq!(take(&level).get(), 2);
@@ -92,7 +93,8 @@ fn a_reversed_range_clamps_and_reports_once() {
             .into_any()
     });
     let (_, semantics) = node(&mut host, "Level");
-    assert_eq!(semantics.description, "Range 10 to 10");
+    let range = semantics.state.range.unwrap();
+    assert_eq!((range.minimum, range.maximum), (10, 10));
     assert_eq!(semantics.value.as_deref(), Some("10"));
     assert!(one_clamp(&mut host).contains("reversed"));
 }

@@ -3,7 +3,7 @@
 //! language of the window.
 
 use choscorui_compose::Runtime;
-use choscorui_compose::view::{AnyView, Cx, Env, Input, State, Switch, View, ViewHost};
+use choscorui_compose::view::{AnyView, Cx, Env, Input, State, Toggle, View, ViewHost};
 use choscorui_controls::{CharClass, EstimatedText, InputMask, NumberError, ValidationState};
 use choscorui_core::{Catalog, DesignTokens, Feedback, Locale, NodeId, SemanticAction, Size};
 use std::cell::Cell;
@@ -149,7 +149,7 @@ fn the_controls_speak_the_language_of_the_window() {
         let on = cx.state(false);
         let amount = cx.state(String::from("5"));
         (
-            Switch::new("Wi-Fi", on.binding()),
+            Toggle::new("Bold", on.binding()),
             Input::new("Amount", amount.binding()).with(move |mut input| {
                 input.set_validation(invalid());
                 input
@@ -165,8 +165,8 @@ fn the_controls_speak_the_language_of_the_window() {
             .expect("the node has semantics")
             .description
     };
-    assert_eq!(description(&mut english, "Wi-Fi"), "switch");
-    assert_eq!(description(&mut vietnamese, "Wi-Fi"), "công tắc");
+    assert_eq!(description(&mut english, "Bold"), "toggle");
+    assert_eq!(description(&mut vietnamese, "Bold"), "nút bật tắt");
     assert!(description(&mut english, "Amount").contains("Must be at least 10"));
     assert!(description(&mut vietnamese, "Amount").contains("Phải từ 10 trở lên"));
 
@@ -174,11 +174,11 @@ fn the_controls_speak_the_language_of_the_window() {
     let mut catalog = Catalog::new();
     catalog.insert(
         &Locale::parse("en").unwrap(),
-        "choscorui.switch",
-        "on-off switch",
+        "choscorui.toggle",
+        "on-off toggle",
     );
     let (mut custom, _) = host_with(env("en", catalog), build);
-    assert_eq!(description(&mut custom, "Wi-Fi"), "on-off switch");
+    assert_eq!(description(&mut custom, "Bold"), "on-off toggle");
     assert!(
         description(&mut custom, "Amount").contains("Must be at least 10"),
         "the other ids keep the built-in messages"

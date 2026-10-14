@@ -76,7 +76,7 @@ fn a_secondary_click_opens_the_menu_at_the_pointer() {
     let frame = h.host.get(h.node).unwrap().overlay().expect("open");
     assert_eq!(frame.origin, at, "the menu opens at the pointer");
     h.hover(row(at, 1));
-    assert_eq!(h.semantics().description, "Forward");
+    assert_eq!(h.focused_part(), "Forward");
     h.click(row(at, 1));
     assert_eq!(
         h.messages(),
@@ -120,11 +120,11 @@ fn shift_f10_and_the_menu_key_open_the_menu_at_the_center() {
     h.key(Key::F(10));
     let frame = h.host.get(h.node).unwrap().overlay().expect("open");
     assert_eq!(frame.origin, center, "the menu opens at the area's center");
-    assert_eq!(h.semantics().description, "Back", "the first item");
+    assert_eq!(h.focused_part(), "Back", "the first item");
     h.modifiers(ShortcutModifiers::default());
     h.key(Key::Escape);
     h.key(Key::ContextMenu);
-    assert_eq!(h.semantics().description, "Back");
+    assert_eq!(h.focused_part(), "Back");
     assert_eq!(
         h.messages(),
         [
@@ -142,12 +142,12 @@ fn keys_move_the_highlight_and_checks_follow_their_kind() {
     h.focus();
     h.key(Key::Enter);
     assert_eq!(h.semantics().state.expanded, Some(true));
-    assert_eq!(h.semantics().description, "Back", "the first item");
+    assert_eq!(h.focused_part(), "Back", "the first item");
     // Skip the separators to the checkbox item.
     for _ in 0..3 {
         h.key(Key::ArrowDown);
     }
-    assert_eq!(h.semantics().description, "Show Bookmarks");
+    assert_eq!(h.focused_part(), "Show Bookmarks");
     h.messages();
     h.key(Key::Enter);
     assert_eq!(
@@ -159,7 +159,7 @@ fn keys_move_the_highlight_and_checks_follow_their_kind() {
     );
     assert!(h.perform(SemanticAction::ShowMenu, None));
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "Colm Tuite");
+    assert_eq!(h.focused_part(), "Colm Tuite");
     h.key(Key::Enter);
     h.key(Key::Space);
     h.key(Key::Escape);
@@ -224,11 +224,11 @@ fn a_submenu_opens_beside_its_row() {
     assert!(both.size.width > root.size.width, "the submenu is beside");
     assert_eq!(both.origin, root.origin);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Save Page…");
+    assert_eq!(h.focused_part(), "Save Page…");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Delete");
+    assert_eq!(h.focused_part(), "Delete");
     h.key(Key::ArrowLeft);
-    assert_eq!(h.semantics().description, "More Tools");
+    assert_eq!(h.focused_part(), "More Tools");
     assert_eq!(h.host.get(h.node).unwrap().overlay().unwrap(), root);
 
     let mut rtl = Harness::with_direction(area(), LayoutDirection::Rtl);
@@ -265,18 +265,30 @@ fn menubar_titles_rove_and_open_their_menus() {
     let mut h = Harness::new(bar());
     assert_eq!(h.measure().height, 36.0);
     assert_eq!(texts(&h.paint()), ["File", "Edit", "View"]);
-    assert_eq!(h.semantics().role, SemanticRole::Menu);
+    assert_eq!(h.semantics().role, SemanticRole::MenuBar);
+    let titles: Vec<_> = h
+        .parts()
+        .parts()
+        .iter()
+        .map(|part| part.node.role)
+        .collect();
+    assert_eq!(titles, [SemanticRole::MenuBarItem; 3]);
     h.focus();
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().value.as_deref(), Some("Edit"));
+    assert_eq!(h.focused_part(), "Edit");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Undo");
+    assert_eq!(h.focused_part(), "Undo");
+    let parts = h.parts();
+    let undo = &parts.parts()[parts.focused().unwrap()];
+    let menu = &parts.parts()[undo.parent.unwrap()];
+    assert_eq!(menu.node.role, SemanticRole::Menu);
+    assert_eq!(parts.parts()[menu.parent.unwrap()].node.name, "Edit");
+    assert_eq!(parts.parts()[1].node.state.expanded, Some(true));
     // Right at the root moves the open menu to the next title.
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().value.as_deref(), Some("View"));
-    assert_eq!(h.semantics().description, "Reload");
+    assert_eq!(h.focused_part(), "Reload");
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().value.as_deref(), Some("File"), "it wraps");
+    assert_eq!(h.focused_part(), "Back", "it wraps to the first menu");
     h.key(Key::Escape);
     assert_eq!(h.semantics().state.expanded, Some(false));
     let messages = h.messages();
@@ -290,6 +302,17 @@ fn menubar_titles_rove_and_open_their_menus() {
     );
 }
 
+/// The title of the open menu.
+fn open_title(h: &Harness) -> String {
+    let parts = h.parts();
+    parts
+        .parts()
+        .iter()
+        .find(|part| part.node.state.expanded == Some(true))
+        .map(|part| part.node.name.clone())
+        .unwrap_or_default()
+}
+
 #[test]
 fn menubar_pointer_opens_switches_and_activates() {
     let mut h = Harness::new(bar());
@@ -299,11 +322,10 @@ fn menubar_pointer_opens_switches_and_activates() {
     h.click(file);
     let frame = h.host.get(h.node).unwrap().overlay().expect("open");
     assert_eq!(frame.origin.y, bounds.max_y() - 4.0 + 4.0);
-    let host = h.host.get(h.node).unwrap();
-    assert_eq!(host.semantics().value.as_deref(), Some("File"));
+    assert_eq!(open_title(&h), "File");
     let edit_x = bounds.origin.x + bounds.size.width / 2.0;
     h.hover(Point::new(edit_x, bounds.center().y));
-    assert_eq!(h.semantics().value.as_deref(), Some("Edit"));
+    assert_eq!(open_title(&h), "Edit");
     let frame = h.host.get(h.node).unwrap().overlay().unwrap();
     h.messages();
     h.click(row(frame.origin, 1));
@@ -320,7 +342,7 @@ fn menubar_pointer_opens_switches_and_activates() {
     let file = Point::new(bounds.max_x() - 10.0, bounds.center().y);
     rtl.click(file);
     let frame = rtl.host.get(rtl.node).unwrap().overlay().unwrap();
-    assert_eq!(rtl.semantics().value.as_deref(), Some("File"));
+    assert_eq!(open_title(&rtl), "File");
     assert!(frame.max_x() <= bounds.max_x(), "File is at the right end");
 }
 
@@ -401,5 +423,24 @@ fn an_outside_press_closes_a_menubar_menu_with_dismissed() {
             ControlMessage::OpenChanged(false),
             ControlMessage::Dismissed
         ]
+    );
+}
+
+#[test]
+fn an_assistive_press_on_a_menubar_title_opens_its_menu() {
+    let mut h = Harness::new(bar());
+    h.measure();
+    assert!(h.perform_part(1, SemanticAction::Activate));
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    let parts = h.parts();
+    let names: Vec<_> = parts
+        .parts()
+        .iter()
+        .map(|part| part.node.name.as_str())
+        .collect();
+    assert_eq!(names, ["File", "Edit", "", "Undo", "Redo", "View"]);
+    assert!(
+        !h.perform_part(99, SemanticAction::Activate),
+        "no such part"
     );
 }

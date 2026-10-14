@@ -43,8 +43,8 @@ fn switch_flips_on_click_keys_and_actions_and_slides_its_thumb() {
     assert_eq!(h.semantics().state.checked, Some(false));
     assert!(h.perform(SemanticAction::Activate, None));
     let node = h.semantics();
-    assert_eq!(node.role, SemanticRole::Checkbox);
-    assert_eq!(node.description, "switch");
+    assert_eq!(node.role, SemanticRole::Switch);
+    assert_eq!(node.description, "", "the role names the switch");
     assert_eq!(node.state.checked, Some(true));
     assert_eq!(texts(&list), ["Airplane mode"]);
 

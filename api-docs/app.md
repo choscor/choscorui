@@ -1741,6 +1741,15 @@ pub fn perform(&mut self, node: NodeId, action: SemanticAction, value: Option<&s
 
 Performs an assistive action on `node`.
 
+#### `ViewHost::perform_part`
+
+```rust
+pub fn perform_part(&mut self, node: NodeId, part: u64, action: SemanticAction) -> bool
+```
+
+Performs an assistive action on part `part` of `node`, a child node
+that the control publishes. See `ControlHost::perform_part`.
+
 #### `ViewHost::pointer`
 
 ```rust

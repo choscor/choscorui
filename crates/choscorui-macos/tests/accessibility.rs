@@ -1,6 +1,6 @@
 use choscorui_core::{
-    Point, Rect, SemanticAction, SemanticChange, SemanticNode, SemanticRole, SemanticState,
-    SemanticTree, Size, Tree,
+    Point, Rect, SemanticAction, SemanticChange, SemanticNode, SemanticParts, SemanticRole,
+    SemanticState, SemanticTree, Size, Tree,
 };
 use choscorui_macos::{AccessibilityNotification, AccessibilityProjection};
 
@@ -106,4 +106,51 @@ fn focus_notifications_and_actions_use_declared_semantic_capabilities() {
             .is_err()
     );
     assert_eq!(projection.take_actions()[0].node, button);
+}
+
+#[test]
+fn parts_get_their_own_elements_focus_and_actions() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 100.0));
+    let tabs = tree
+        .attach(tree.root(), rect(0.0, 0.0, 200.0, 30.0))
+        .unwrap();
+    tree.set_focusable(tabs, true).unwrap();
+    let mut semantics = SemanticTree::new();
+    semantics
+        .set(
+            tabs,
+            semantic(SemanticRole::TabList, "Views", vec![]),
+            &tree,
+        )
+        .unwrap();
+    let mut parts = SemanticParts::new();
+    for (index, name) in ["List", "Grid"].into_iter().enumerate() {
+        let tab = parts.push(
+            None,
+            SemanticRole::Tab,
+            name,
+            rect(index as f64 * 100.0, 0.0, 100.0, 30.0),
+        );
+        tab.node.actions = vec![SemanticAction::Activate];
+    }
+    parts.set_focused(Some(1));
+    semantics.set_parts(tabs, parts).unwrap();
+    tree.set_focus(Some(tabs)).unwrap();
+    let focus = semantics.sync_focus(&tree).unwrap();
+    let mut projection = AccessibilityProjection::new();
+    let update = projection.reconcile(&semantics.snapshot(&tree), &[focus]);
+    assert_eq!(update.elements.len(), 3);
+    let node = update.elements[0].identity;
+    let grid = &update.elements[2];
+    assert_eq!((grid.part, grid.parent), (Some(1), Some(node)));
+    assert!(grid.focused && !update.elements[0].focused);
+    assert_eq!(
+        update.notifications,
+        vec![AccessibilityNotification::FocusChanged(grid.identity)]
+    );
+    projection
+        .request_action(grid.identity, SemanticAction::Activate)
+        .unwrap();
+    let request = &projection.take_actions()[0];
+    assert_eq!((request.node, request.part), (tabs, Some(1)));
 }

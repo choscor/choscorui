@@ -1578,6 +1578,18 @@ impl ViewHost {
         handled
     }
 
+    /// Performs an assistive action on part `part` of `node`, a child node
+    /// that the control publishes. See [`ControlHost::perform_part`].
+    pub fn perform_part(&mut self, node: NodeId, part: u64, action: SemanticAction) -> bool {
+        let handled = self
+            .inner
+            .controls
+            .perform_part(&mut self.inner.tree, node, part, action);
+        self.inner.needs_paint = true;
+        self.after_input();
+        handled
+    }
+
     /// Moves keyboard focus to `node`.
     pub fn focus(&mut self, node: Option<NodeId>) {
         self.inner.controls.move_focus(&mut self.inner.tree, node);
@@ -1630,6 +1642,11 @@ impl ViewHost {
                     match self.inner.semantics.set(node, semantic, &self.inner.tree) {
                         Ok(SemanticChange::None) => {}
                         Ok(change) => changes.push(change),
+                        Err(error) => self.inner.report(ViewError::Semantics(error)),
+                    }
+                    let parts = self.inner.controls.parts(node);
+                    match self.inner.semantics.set_parts(node, parts) {
+                        Ok(part_changes) => changes.extend(part_changes),
                         Err(error) => self.inner.report(ViewError::Semantics(error)),
                     }
                 }

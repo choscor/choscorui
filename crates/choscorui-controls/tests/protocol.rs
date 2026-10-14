@@ -346,7 +346,7 @@ fn menus_open() {
     ));
     assert!(open(&mut h, true));
     assert_eq!(expanded(&h), Some(true));
-    assert_eq!(value(&h).as_deref(), Some("File"));
+    assert_eq!(h.selected_part(), "File");
     assert!(open(&mut h, false));
     assert_eq!(expanded(&h), Some(false));
     h.set_enabled(false);

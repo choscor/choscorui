@@ -127,7 +127,6 @@ its text with `Condition::message`.
 | `choscorui.validation.read_only` | | This cell is read-only |
 | `choscorui.validation.missing_row` | | The row no longer exists |
 | `choscorui.validation.rejected` | | The value was rejected |
-| `choscorui.switch` | | switch (the description of a Switch) |
 | `choscorui.toggle` | | toggle (the description of a Toggle) |
 | `choscorui.dial` | | Dial |
 | `choscorui.modal` | | Modal (the description of a modal dialog) |
@@ -135,7 +134,6 @@ its text with `Condition::message`.
 | `choscorui.font` | | Font (the name of a FontChooser) |
 | `choscorui.font.fallback` | `font` | Not installed; using {font} |
 | `choscorui.color.channels` | `red`, `green`, `blue`, `opacity` | Red {red}, Green {green}, Blue {blue}, Opacity {opacity}% |
-| `choscorui.range` | `min`, `max` | Range {min} to {max} |
 | `choscorui.zoom` | `percent` | Zoom {percent}% |
 | `choscorui.overflow` | | Value too large to display |
 | `choscorui.shortcut.recording` | | Recording shortcut; press Escape to cancel |

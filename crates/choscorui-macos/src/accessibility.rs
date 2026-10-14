@@ -34,6 +34,9 @@ pub struct AccessibilityIdentity(pub(crate) u64);
 pub struct AccessibilityElement {
     pub identity: AccessibilityIdentity,
     pub node: NodeId,
+    /// The key of the part of `node` that the element shows, or `None` for
+    /// the node itself.
+    pub part: Option<u64>,
     pub parent: Option<AccessibilityIdentity>,
     pub bounds: Rect,
     pub focused: bool,
@@ -79,6 +82,9 @@ pub struct AccessibilityUpdate {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessibilityActionRequest {
     pub node: NodeId,
+    /// The key of the part of `node` that the action is for, or `None` for
+    /// the node itself.
+    pub part: Option<u64>,
     pub action: SemanticAction,
     /// The new value for [`SemanticAction::SetValue`], as text.
     pub value: Option<String>,
@@ -107,7 +113,7 @@ impl std::error::Error for AccessibilityActionError {}
 #[derive(Default)]
 pub struct AccessibilityProjection {
     next_identity: u64,
-    identities: HashMap<NodeId, AccessibilityIdentity>,
+    identities: HashMap<(NodeId, Option<u64>), AccessibilityIdentity>,
     elements: HashMap<AccessibilityIdentity, AccessibilityElement>,
     actions: Vec<AccessibilityActionRequest>,
 }
@@ -125,7 +131,10 @@ impl AccessibilityProjection {
         snapshot: &[SemanticEntry],
         changes: &[SemanticChange],
     ) -> AccessibilityUpdate {
-        let live: HashSet<_> = snapshot.iter().map(|entry| entry.id).collect();
+        let live: HashSet<_> = snapshot
+            .iter()
+            .map(|entry| (entry.id, entry.part))
+            .collect();
         let removed_nodes: Vec<_> = self
             .identities
             .keys()
@@ -142,24 +151,27 @@ impl AccessibilityProjection {
         retired.sort_by_key(|identity| identity.0);
 
         for entry in snapshot {
-            self.identities.entry(entry.id).or_insert_with(|| {
-                let identity = AccessibilityIdentity(self.next_identity);
-                self.next_identity = self
-                    .next_identity
-                    .checked_add(1)
-                    .expect("accessibility identity exhausted");
-                identity
-            });
+            self.identities
+                .entry((entry.id, entry.part))
+                .or_insert_with(|| {
+                    let identity = AccessibilityIdentity(self.next_identity);
+                    self.next_identity = self
+                        .next_identity
+                        .checked_add(1)
+                        .expect("accessibility identity exhausted");
+                    identity
+                });
         }
         let mut elements = Vec::with_capacity(snapshot.len());
         for entry in snapshot {
-            let identity = self.identities[&entry.id];
+            let identity = self.identities[&(entry.id, entry.part)];
             let element = AccessibilityElement {
                 identity,
                 node: entry.id,
+                part: entry.part,
                 parent: entry
                     .parent
-                    .and_then(|id| self.identities.get(&id).copied()),
+                    .and_then(|id| self.identities.get(&(id, entry.parent_part)).copied()),
                 bounds: entry.bounds,
                 focused: entry.focused,
                 semantic: entry.node.clone(),
@@ -176,31 +188,38 @@ impl AccessibilityProjection {
                 SemanticChange::Tree => Some(AccessibilityNotification::LayoutChanged),
                 SemanticChange::Label(node) => self
                     .identities
-                    .get(&node)
+                    .get(&(node, None))
                     .copied()
                     .map(AccessibilityNotification::LabelChanged),
                 SemanticChange::Value(node) => self
                     .identities
-                    .get(&node)
+                    .get(&(node, None))
                     .copied()
                     .map(AccessibilityNotification::ValueChanged),
                 SemanticChange::ValueAndState(node) => self
                     .identities
-                    .get(&node)
+                    .get(&(node, None))
                     .copied()
                     .map(AccessibilityNotification::ValueChanged),
                 SemanticChange::State(node) => self
                     .identities
-                    .get(&node)
+                    .get(&(node, None))
                     .copied()
                     .map(AccessibilityNotification::StateChanged),
                 SemanticChange::Focus {
-                    new: Some(node), ..
+                    new: Some(node),
+                    part,
+                    ..
                 } => self
                     .identities
-                    .get(&node)
+                    .get(&(node, part))
                     .copied()
                     .map(AccessibilityNotification::FocusChanged),
+                SemanticChange::Part { node, part } => self
+                    .identities
+                    .get(&(node, Some(part)))
+                    .copied()
+                    .map(AccessibilityNotification::ValueChanged),
                 SemanticChange::Focus { new: None, .. } => {
                     Some(AccessibilityNotification::FocusCleared)
                 }
@@ -229,6 +248,7 @@ impl AccessibilityProjection {
         }
         self.actions.push(AccessibilityActionRequest {
             node: element.node,
+            part: element.part,
             action,
             value: None,
         });

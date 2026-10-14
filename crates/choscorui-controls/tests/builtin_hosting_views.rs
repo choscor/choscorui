@@ -608,7 +608,7 @@ fn a_hosted_dropdown_menu_runs_commands_by_key_pointer_and_action() {
 
     h.focus();
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Copy");
+    assert_eq!(h.focused_part(), "Copy");
     h.key(Key::Enter);
     // The submenu opens beside its row and floats over other controls.
     h.key(Key::End);

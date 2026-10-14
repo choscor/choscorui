@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn menus_open_from_the_keyboard() {
         for (id, name, role) in [
-            ("menubar", "Main menu", SemanticRole::Menu),
+            ("menubar", "Main menu", SemanticRole::MenuBar),
             ("context-menu", "Page actions", SemanticRole::Group),
             ("popover", "Open popover", SemanticRole::Button),
         ] {

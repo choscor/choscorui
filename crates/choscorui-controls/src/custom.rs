@@ -14,8 +14,9 @@ use choscorui_core::{
     AnnouncementPriority, CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty,
     DisplayList, EngineError, EventPhase, EventReply, Feedback, InputModality, Key, KeyEvent,
     LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId, Point,
-    PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError,
-    SemanticNode, SemanticTree, Services, TextInputInfo, ThemeResolver, Tree, TreeError,
+    PointerButton, PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange,
+    SemanticError, SemanticNode, SemanticParts, SemanticTree, Services, TextInputInfo,
+    ThemeResolver, Tree, TreeError,
 };
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -324,6 +325,16 @@ pub trait CustomControl {
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         let _ = strings;
         self.semantics()
+    }
+
+    /// Adds the parts of the control, such as items, tabs, buttons, or
+    /// cells, as child nodes with bounds in window coordinates, and marks
+    /// the part that has the keyboard focus. A large collection adds only
+    /// the parts in view. The host publishes them with the node. A part
+    /// that lists [`SemanticAction::Activate`] gets a press at its center
+    /// from [`ControlHost::perform_part`]. The default adds nothing.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let _ = (strings, parts);
     }
 
     /// The selection, the marked text, and the caret rectangle of an
@@ -1499,6 +1510,7 @@ impl ControlHost {
                 if change != SemanticChange::None {
                     changes.push(change);
                 }
+                changes.extend(semantics.set_parts(*node, self.parts(*node))?);
             }
             // Keep paint/layout requests for the caller's frame loop.
             let rest = [Dirty::LAYOUT, Dirty::PAINT]
@@ -1509,6 +1521,43 @@ impl ControlHost {
             }
         }
         Ok(changes)
+    }
+
+    /// The parts that `node` publishes as child nodes, disabled with the
+    /// node.
+    pub fn parts(&self, node: NodeId) -> SemanticParts {
+        let mut parts = SemanticParts::new();
+        if let Some(control) = self.controls.get(&node) {
+            control.semantic_parts(&self.strings.0, &mut parts);
+            if self.disabled.contains(&node) {
+                parts.disable();
+            }
+        }
+        parts
+    }
+
+    /// Routes an assistive-technology action to part `part` of `node`.
+    /// [`SemanticAction::Activate`] presses and releases the primary
+    /// button at the center of the part, as a click does. Returns false
+    /// when the part is gone or does not list the action.
+    pub fn perform_part(
+        &mut self,
+        tree: &mut Tree,
+        node: NodeId,
+        part: u64,
+        action: SemanticAction,
+    ) -> bool {
+        let parts = self.parts(node);
+        let Some(part) = parts.get(part).filter(|part| {
+            action == SemanticAction::Activate && part.node.actions.contains(&action)
+        }) else {
+            return false;
+        };
+        let position = part.bounds.center();
+        let button = PointerButton::Primary;
+        self.dispatch_pointer(tree, PointerEvent::Down { position, button });
+        self.dispatch_pointer(tree, PointerEvent::Up { position, button });
+        true
     }
 
     /// Routes an assistive-technology action (VoiceOver press, increment,

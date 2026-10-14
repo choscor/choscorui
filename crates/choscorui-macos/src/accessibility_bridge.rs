@@ -12,13 +12,14 @@ use crate::ffi::appkit::{
     NSAccessibilityFocusedUIElementChangedNotification, NSAccessibilityGroupRole,
     NSAccessibilityHelpTagRole, NSAccessibilityImageRole, NSAccessibilityIncrementorRole,
     NSAccessibilityLayoutChangedNotification, NSAccessibilityLinkRole, NSAccessibilityListRole,
-    NSAccessibilityMenuItemRole, NSAccessibilityMenuRole, NSAccessibilityOutlineRole,
-    NSAccessibilityPopUpButtonRole, NSAccessibilityPostNotification,
-    NSAccessibilityProgressIndicatorRole, NSAccessibilityRadioButtonRole, NSAccessibilityRowRole,
-    NSAccessibilityScrollAreaRole, NSAccessibilityScrollBarRole, NSAccessibilitySearchFieldSubrole,
+    NSAccessibilityMenuBarItemRole, NSAccessibilityMenuBarRole, NSAccessibilityMenuItemRole,
+    NSAccessibilityMenuRole, NSAccessibilityOutlineRole, NSAccessibilityPopUpButtonRole,
+    NSAccessibilityPostNotification, NSAccessibilityProgressIndicatorRole,
+    NSAccessibilityRadioButtonRole, NSAccessibilityRowRole, NSAccessibilityScrollAreaRole,
+    NSAccessibilityScrollBarRole, NSAccessibilitySearchFieldSubrole,
     NSAccessibilitySecureTextFieldSubrole, NSAccessibilitySelectedTextChangedNotification,
-    NSAccessibilitySliderRole, NSAccessibilityStaticTextRole, NSAccessibilityTableRole,
-    NSAccessibilityTextAreaRole, NSAccessibilityTextFieldRole,
+    NSAccessibilitySliderRole, NSAccessibilityStaticTextRole, NSAccessibilitySwitchSubrole,
+    NSAccessibilityTableRole, NSAccessibilityTextAreaRole, NSAccessibilityTextFieldRole,
     NSAccessibilityTitleChangedNotification, NSAccessibilityToolbarRole,
     NSAccessibilityValueChangedNotification, NSAccessibilityWindowRole, NSView, NSWindow,
     SET_ACCESSIBILITY_CHILDREN, SET_ACCESSIBILITY_COLUMN_COUNT, SET_ACCESSIBILITY_ENABLED,
@@ -58,6 +59,7 @@ pub(crate) type AccessibilityActionQueue = Arc<Mutex<VecDeque<AccessibilityActio
 #[derive(Clone)]
 struct NativeAccessibilityBinding {
     node: choscorui_core::NodeId,
+    part: Option<u64>,
     actions: Vec<SemanticAction>,
     queue: AccessibilityActionQueue,
     updating: bool,
@@ -109,6 +111,7 @@ fn queue_accessibility_action(
         .unwrap()
         .push_back(AccessibilityActionRequest {
             node: binding.node,
+            part: binding.part,
             action,
             value: None,
         });
@@ -173,6 +176,7 @@ pub(crate) fn set_value(
         .unwrap()
         .push_back(AccessibilityActionRequest {
             node: binding.node,
+            part: binding.part,
             action: SemanticAction::SetValue,
             value: Some(value),
         });
@@ -195,6 +199,7 @@ pub(crate) fn set_focused(element: &Obj<ChoscoruiV2AccessibilityElement>, focuse
         .unwrap()
         .push_back(AccessibilityActionRequest {
             node: binding.node,
+            part: binding.part,
             action: SemanticAction::Focus,
             value: None,
         });
@@ -269,6 +274,7 @@ impl Window {
                 native.addr(),
                 NativeAccessibilityBinding {
                     node: element.node,
+                    part: element.part,
                     actions: element.semantic.actions.clone(),
                     queue: Arc::clone(&self.accessibility_actions),
                     updating: true,
@@ -412,6 +418,7 @@ fn apply_attributes(
     let subrole = match semantic.role {
         SemanticRole::PasswordField => Some(NSAccessibilitySecureTextFieldSubrole),
         SemanticRole::SearchField => Some(NSAccessibilitySearchFieldSubrole),
+        SemanticRole::Switch => Some(NSAccessibilitySwitchSubrole),
         _ => None,
     };
     SET_ACCESSIBILITY_SUBROLE.send(native, (subrole,));
@@ -491,7 +498,7 @@ fn native_accessibility_role(role: SemanticRole) -> &'static Obj<NSString> {
     match role {
         SemanticRole::Window => NSAccessibilityWindowRole,
         SemanticRole::Button => NSAccessibilityButtonRole,
-        SemanticRole::Checkbox => NSAccessibilityCheckBoxRole,
+        SemanticRole::Checkbox | SemanticRole::Switch => NSAccessibilityCheckBoxRole,
         SemanticRole::RadioButton | SemanticRole::Tab => NSAccessibilityRadioButtonRole,
         SemanticRole::RadioGroup | SemanticRole::TabList | SemanticRole::TabPanel => {
             NSAccessibilityGroupRole
@@ -512,6 +519,8 @@ fn native_accessibility_role(role: SemanticRole) -> &'static Obj<NSString> {
         SemanticRole::Tree => NSAccessibilityOutlineRole,
         SemanticRole::Menu => NSAccessibilityMenuRole,
         SemanticRole::MenuItem => NSAccessibilityMenuItemRole,
+        SemanticRole::MenuBar => NSAccessibilityMenuBarRole,
+        SemanticRole::MenuBarItem => NSAccessibilityMenuBarItemRole,
         SemanticRole::ComboBox => NSAccessibilityComboBoxRole,
         SemanticRole::PopUpButton => NSAccessibilityPopUpButtonRole,
         SemanticRole::Tooltip => NSAccessibilityHelpTagRole,

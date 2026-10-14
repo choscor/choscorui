@@ -6,7 +6,7 @@ use choscorui_controls::{
 use choscorui_controls::{EstimatedText, PaintContext, Styles, VisualState};
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemKey, Key, LayoutDirection, Localizer,
-    Point, Rect, SemanticAction, Size, Tree,
+    Point, Rect, SemanticAction, SemanticParts, Size, Tree,
 };
 use std::time::Duration;
 
@@ -269,8 +269,16 @@ fn dropdown_menu_keyboard_skips_disabled_opens_submenus_and_type_selects() {
     assert_eq!(menu.highlighted(), Some(0));
     menu.handle_key(Key::ArrowDown, &commands);
     assert_eq!(menu.highlighted(), Some(3), "skips disabled and separator");
-    let semantics = menu.semantics(0, &commands);
+    let mut parts = SemanticParts::new();
+    let panel = Rect::new(Point::new(0.0, 0.0), menu.level_size(0, 200.0));
+    let focused = menu.semantic_parts(0, &commands, panel, None, &mut parts);
+    let semantics: Vec<_> = parts.parts().iter().map(|part| &part.node).collect();
     assert_eq!(semantics.len(), 4);
+    assert_eq!(
+        focused,
+        Some(2),
+        "the highlighted item, after the separator"
+    );
     assert!(semantics[1].state.disabled);
     assert_eq!(semantics[0].state.checked, None, "not checkable");
     assert_eq!(semantics[2].state.checked, Some(true));
@@ -458,8 +466,14 @@ fn dropdown_menu_takes_metrics_and_look_from_the_menu_recipe() {
         Some(rect(4.0, 4.0 + 32.0 + 9.0, 192.0, 32.0))
     );
 
-    let semantics = menu.semantics(0, &commands);
+    let mut parts = SemanticParts::new();
+    menu.semantic_parts(0, &commands, panel, None, &mut parts);
+    let semantics: Vec<_> = parts.parts().iter().map(|part| &part.node).collect();
     assert_eq!(semantics[1].state.checked, Some(true));
+    assert_eq!(
+        parts.parts()[1].bounds,
+        menu.item_rect(0, panel, 2).unwrap()
+    );
     assert_eq!(semantics[2].state.checked, Some(false));
 
     menu.handle_key(Key::End, &commands);

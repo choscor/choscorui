@@ -40,6 +40,8 @@ mod scroll;
 pub use scroll::ScrollViewport;
 mod stack_window;
 pub use stack_window::UniformStack;
+mod semantic_parts;
+pub use semantic_parts::{SemanticPart, SemanticParts};
 mod semantics;
 pub use semantics::{
     AnnouncementPriority, SemanticAction, SemanticChange, SemanticCollection, SemanticEntry,

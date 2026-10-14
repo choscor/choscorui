@@ -1,7 +1,7 @@
 use choscorui_core::{
     Axis, CrossAlign, Insets, LayoutDirection, LinearLayout, Point, Rect, SemanticAction,
-    SemanticChange, SemanticNode, SemanticRelation, SemanticRole, SemanticState, SemanticText,
-    SemanticTree, Size, Tree,
+    SemanticChange, SemanticNode, SemanticParts, SemanticRelation, SemanticRole, SemanticState,
+    SemanticText, SemanticTree, Size, Tree,
 };
 
 fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
@@ -180,7 +180,8 @@ fn focus_and_action_dispatch_require_declared_capabilities() {
         semantics.sync_focus(&tree),
         Some(SemanticChange::Focus {
             old: None,
-            new: Some(button)
+            new: Some(button),
+            part: None,
         })
     );
     assert_eq!(semantics.sync_focus(&tree), None);
@@ -280,4 +281,128 @@ fn virtualized_collections_report_total_size_and_absolute_item_index() {
         None,
         "pruned index"
     );
+}
+
+#[test]
+fn parts_publish_child_entries_and_the_focused_part() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 200.0, 100.0));
+    let menu = tree
+        .attach(tree.root(), rect(0.0, 0.0, 120.0, 60.0))
+        .unwrap();
+    tree.set_focusable(menu, true).unwrap();
+    let mut semantics = SemanticTree::new();
+    semantics
+        .set(menu, node(SemanticRole::Menu, "File"), &tree)
+        .unwrap();
+    let build = |checked: bool, focused: usize| {
+        let mut parts = SemanticParts::new();
+        parts.push(
+            None,
+            SemanticRole::MenuItem,
+            "Open",
+            rect(0.0, 0.0, 120.0, 20.0),
+        );
+        let save = parts.push(
+            None,
+            SemanticRole::MenuItem,
+            "Save",
+            rect(0.0, 20.0, 120.0, 20.0),
+        );
+        save.node.state.checked = Some(checked);
+        parts.push(
+            Some(1),
+            SemanticRole::StaticText,
+            "⌘S",
+            rect(90.0, 20.0, 30.0, 20.0),
+        );
+        parts.set_focused(Some(focused));
+        parts
+    };
+    assert_eq!(
+        semantics.set_parts(menu, build(false, 0)).unwrap(),
+        vec![SemanticChange::Tree]
+    );
+    tree.set_focus(Some(menu)).unwrap();
+    assert_eq!(
+        semantics.sync_focus(&tree),
+        Some(SemanticChange::Focus {
+            old: None,
+            new: Some(menu),
+            part: Some(0),
+        })
+    );
+    let snapshot = semantics.snapshot(&tree);
+    let entries: Vec<_> = snapshot
+        .iter()
+        .map(|entry| (entry.part, entry.parent_part, entry.focused))
+        .collect();
+    assert_eq!(
+        entries,
+        vec![
+            (None, None, false),
+            (Some(0), None, true),
+            (Some(1), None, false),
+            (Some(2), Some(1), false),
+        ],
+        "the focused part is focused, not the node"
+    );
+    assert_eq!(
+        semantics.set_parts(menu, build(true, 1)).unwrap(),
+        vec![SemanticChange::Part {
+            node: menu,
+            part: 1
+        }]
+    );
+    assert_eq!(
+        semantics.sync_focus(&tree),
+        Some(SemanticChange::Focus {
+            old: Some(menu),
+            new: Some(menu),
+            part: Some(1),
+        })
+    );
+    let mut fewer = SemanticParts::new();
+    fewer.push(
+        None,
+        SemanticRole::MenuItem,
+        "Open",
+        rect(0.0, 0.0, 120.0, 20.0),
+    );
+    assert_eq!(
+        semantics.set_parts(menu, fewer).unwrap(),
+        vec![SemanticChange::Tree]
+    );
+    assert_eq!(semantics.parts(menu).unwrap().len(), 1);
+}
+
+#[test]
+fn collection_parts_keep_their_key_when_the_visible_range_moves() {
+    let mut parts = SemanticParts::new();
+    parts
+        .push(
+            None,
+            SemanticRole::Row,
+            "Row 40",
+            rect(0.0, 0.0, 10.0, 10.0),
+        )
+        .item(40);
+    let mut moved = SemanticParts::new();
+    moved
+        .push(
+            None,
+            SemanticRole::Row,
+            "Row 39",
+            rect(0.0, 0.0, 10.0, 10.0),
+        )
+        .item(39);
+    moved
+        .push(
+            None,
+            SemanticRole::Row,
+            "Row 40",
+            rect(0.0, 10.0, 10.0, 10.0),
+        )
+        .item(40);
+    assert_eq!(parts.parts()[0].key, moved.parts()[1].key);
+    assert_eq!(moved.parts()[1].item_index, Some(40));
 }

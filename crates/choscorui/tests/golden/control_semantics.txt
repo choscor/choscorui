@@ -1,13 +1,13 @@
 ButtonSemantics { role: "button", name: "Lưu", enabled: true, focused: true, actions: [Activate] }
 CheckboxSemantics { role: "checkbox", name: "Ghi nhớ", checked: true, mixed: false, invalid: false, enabled: true, focused: true, actions: [Activate, SetValue(false), SetValue(true)] }
 TextFieldSemantics { role: "text field", name: "Tên", value: "Nguyễn", enabled: true, focused: true, validation: Valid, announcement: None, actions: [SetValue], character_count_utf16: 6, selection_utf16: 6..6, secure: false }
-SemanticNode { role: Slider, name: "Âm lượng", description: "Range 0 to 100", value: Some("40"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [SetValue, Increment, Decrement, Focus], text: None }
-SemanticNode { role: SpinButton, name: "Số lượng", description: "Range 0 to 100", value: Some("40"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [SetValue, Increment, Decrement, Focus], text: None }
-SemanticNode { role: ProgressIndicator, name: "Tải", description: "", value: Some("30%"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10 } }, relations: [], actions: [], text: None }
+SemanticNode { role: Slider, name: "Âm lượng", description: "", value: Some("40"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 40, minimum: 0, maximum: 100, step: 5 } }, relations: [], actions: [SetValue, Increment, Decrement, Focus], text: None }
+SemanticNode { role: SpinButton, name: "Số lượng", description: "", value: Some("40"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 40, minimum: 0, maximum: 100, step: 5 } }, relations: [], actions: [SetValue, Increment, Decrement, Focus], text: None }
+SemanticNode { role: ProgressIndicator, name: "Tải", description: "", value: Some("30%"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10, step: 1 } }, relations: [], actions: [], text: None }
 SemanticNode { role: ComboBox, name: "Thành phố", description: "", value: Some(""), state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }, relations: [], actions: [ShowMenu, SetValue, Focus], text: None }
 SemanticNode { role: List, name: "Danh sách", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Focus], text: None }
-switch Ltr: role Checkbox name "Airplane mode" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
-switch Rtl: role Checkbox name "Airplane mode" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+switch Ltr: role Switch name "Airplane mode" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+switch Rtl: role Switch name "Airplane mode" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 toggle Ltr: role Button name "Bold" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 toggle Rtl: role Button name "Bold" value None state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 toggle-group Ltr: role RadioGroup name "Alignment" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
@@ -15,7 +15,9 @@ toggle-group Rtl: role RadioGroup name "Alignment" value Some("") state Semantic
 kbd Ltr: role StaticText name "⌘K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 kbd Rtl: role StaticText name "⌘K" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 select Ltr: role ComboBox name "Status" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, SetValue, Focus]
+  open:
 select Rtl: role ComboBox name "Status" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, SetValue, Focus]
+  open:
 input Ltr: role TextField name "Email" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
 input Rtl: role TextField name "Email" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
 input-group Ltr: role TextField name "Search" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
@@ -27,19 +29,47 @@ input-otp Rtl: role TextField name "Code" value Some("") state SemanticState { d
 field-text Ltr: role StaticText name "We never share it." value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 field-text Rtl: role StaticText name "We never share it." value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 date-picker Ltr: role Button name "Due date" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 date-picker Rtl: role Button name "Due date" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 range-slider Ltr: role Slider name "Price" value Some("20 – 80") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, Focus]
 range-slider Rtl: role Slider name "Price" value Some("20 – 80") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, Focus]
 context-menu Ltr: role Group name "Area" value Some("Right click here") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Focus]
+  open:
+  part 0 in None: Menu "" value None desc "" [] []
+  part 1 in Some(0): MenuItem "Back" value None desc "" [focused selected=true] [Activate]
+  part 2 in Some(0): MenuItem "Forward" value None desc "" [selected=false] [Activate]
 context-menu Rtl: role Group name "Area" value Some("Right click here") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Focus]
-menubar Ltr: role Menu name "Menu" value Some("File") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, Focus]
-menubar Rtl: role Menu name "Menu" value Some("File") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, Focus]
+  open:
+  part 0 in None: Menu "" value None desc "" [] []
+  part 1 in Some(0): MenuItem "Back" value None desc "" [focused selected=true] [Activate]
+  part 2 in Some(0): MenuItem "Forward" value None desc "" [selected=false] [Activate]
+menubar Ltr: role MenuBar name "Menu" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, Focus]
+  part 0 in None: MenuBarItem "File" value None desc "" [focused selected=true expanded=false] [Activate]
+  open:
+  part 0 in None: MenuBarItem "File" value None desc "" [selected=true expanded=true] [Activate]
+  part 1 in Some(0): Menu "" value None desc "" [] []
+  part 2 in Some(1): MenuItem "Back" value None desc "" [focused selected=true] [Activate]
+  part 3 in Some(1): MenuItem "Forward" value None desc "" [selected=false] [Activate]
+menubar Rtl: role MenuBar name "Menu" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, Focus]
+  part 0 in None: MenuBarItem "File" value None desc "" [focused selected=true expanded=false] [Activate]
+  open:
+  part 0 in None: MenuBarItem "File" value None desc "" [selected=true expanded=true] [Activate]
+  part 1 in Some(0): Menu "" value None desc "" [] []
+  part 2 in Some(1): MenuItem "Back" value None desc "" [focused selected=true] [Activate]
+  part 3 in Some(1): MenuItem "Forward" value None desc "" [selected=false] [Activate]
 popover Ltr: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 popover Rtl: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 hover-card Ltr: role Link name "@nextjs" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 hover-card Rtl: role Link name "@nextjs" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 dialog Ltr: role Button name "Edit" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 dialog Rtl: role Button name "Edit" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 command Ltr: role ComboBox name "Commands" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false } actions [Activate, SetValue, Focus]
 command Rtl: role ComboBox name "Commands" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false } actions [Activate, SetValue, Focus]
 breadcrumb Ltr: role Group name "Path" value Some("Button") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
@@ -47,9 +77,13 @@ breadcrumb Rtl: role Group name "Path" value Some("Button") state SemanticState 
 pagination Ltr: role Group name "Pages" value Some("3") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Increment, Decrement, Focus]
 pagination Rtl: role Group name "Pages" value Some("3") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Increment, Decrement, Focus]
 navigation-menu Ltr: role Group name "Site" value Some("Docs") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 navigation-menu Rtl: role Group name "Site" value Some("Docs") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 sidebar Ltr: role Group name "Navigation" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false } actions [Activate, Collapse, Focus]
+  open:
 sidebar Rtl: role Group name "Navigation" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(true), read_only: false, invalid: false, hidden: false } actions [Activate, Collapse, Focus]
+  open:
 card Ltr: role Group name "Login" value Some("Enter your email.") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 card Rtl: role Group name "Login" value Some("Enter your email.") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 badge Ltr: role Link name "New" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
@@ -77,7 +111,9 @@ toaster Rtl: role Group name "Notifications" value Some("Event created") state S
 aspect-ratio Ltr: role Image name "Photo" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 aspect-ratio Rtl: role Image name "Photo" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 collapsible Ltr: role Group name "Starred" value Some("first") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 collapsible Rtl: role Group name "Starred" value Some("first") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Expand, Focus]
+  open:
 accordion Ltr: role Group name "FAQ" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus, Expand]
 accordion Rtl: role Group name "FAQ" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus, Expand]
 item-group Ltr: role List name "Settings" value Some("Profile, Billing") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
@@ -98,20 +134,24 @@ checkbox Ltr: role Checkbox name "Remember me" value Some("false") state Semanti
 checkbox Rtl: role Checkbox name "Remember me" value Some("false") state SemanticState { disabled: false, checked: Some(false), selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, SetValue, Focus]
 text-field Ltr: role TextField name "Name" value Some("Ada") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
 text-field Rtl: role TextField name "Name" value Some("Ada") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Focus]
-slider Ltr: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
-slider Rtl: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
-spin-box Ltr: role SpinButton name "Copies" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
-spin-box Rtl: role SpinButton name "Copies" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
-progress Ltr: role ProgressIndicator name "Upload" value Some("30%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10 } } actions []
-progress Rtl: role ProgressIndicator name "Upload" value Some("30%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10 } } actions []
+slider Ltr: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 25, minimum: 0, maximum: 100, step: 1 } } actions [SetValue, Increment, Decrement, Focus]
+slider Rtl: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 25, minimum: 0, maximum: 100, step: 1 } } actions [SetValue, Increment, Decrement, Focus]
+spin-box Ltr: role SpinButton name "Copies" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 25, minimum: 0, maximum: 100, step: 1 } } actions [SetValue, Increment, Decrement, Focus]
+spin-box Rtl: role SpinButton name "Copies" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 25, minimum: 0, maximum: 100, step: 1 } } actions [SetValue, Increment, Decrement, Focus]
+progress Ltr: role ProgressIndicator name "Upload" value Some("30%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10, step: 1 } } actions []
+progress Rtl: role ProgressIndicator name "Upload" value Some("30%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, range: SemanticRange { value: 3, minimum: 0, maximum: 10, step: 1 } } actions []
 label Ltr: role StaticText name "Email" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 label Rtl: role StaticText name "Email" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []
 separator Ltr: role Group name "" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: true } actions []
 separator Rtl: role Group name "" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: true } actions []
 combobox Ltr: role ComboBox name "Fruit" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, SetValue, Focus]
+  open:
 combobox Rtl: role ComboBox name "Fruit" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, SetValue, Focus]
+  open:
 font-chooser Ltr: role ComboBox name "Font" value Some("Menlo") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, SetValue, Focus]
+  open:
 font-chooser Rtl: role ComboBox name "Font" value Some("Menlo") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, SetValue, Focus]
+  open:
 radio-group Ltr: role RadioGroup name "Delivery" value Some("Standard") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
 radio-group Rtl: role RadioGroup name "Delivery" value Some("Standard") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
 tabs Ltr: role TabList name "Sections" value Some("Account") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [SetValue, Increment, Decrement, Focus]
@@ -125,9 +165,15 @@ stack Rtl: role Group name "Pages" value Some("1") state SemanticState { disable
 scroll-area Ltr: role ScrollArea name "Log" value Some("0%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, Focus]
 scroll-area Rtl: role ScrollArea name "Log" value Some("0%") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, Focus]
 alert-dialog Ltr: role Dialog name "Delete file?" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: true } actions []
+  open:
 alert-dialog Rtl: role Dialog name "Delete file?" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: true } actions []
+  open:
 dropdown-menu Ltr: role Menu name "Edit" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
+  part 0 in None: MenuItem "Copy" value None desc "" [selected=false] [Activate]
+  part 1 in None: MenuItem "More" value None desc "" [selected=false expanded=false] [Activate]
 dropdown-menu Rtl: role Menu name "Edit" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
+  part 0 in None: MenuItem "Copy" value None desc "" [selected=false] [Activate]
+  part 1 in None: MenuItem "More" value None desc "" [selected=false expanded=false] [Activate]
 calendar Ltr: role Table name "Due" value Some("May 15, 2024") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
 calendar Rtl: role Table name "Due" value Some("May 15, 2024") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
 date-time-edit Ltr: role SpinButton name "Start" value Some("May 15, 2024") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, Focus]
@@ -139,11 +185,17 @@ tool-button Rtl: role Checkbox name "Bold" value None state SemanticState { disa
 command-link Ltr: role Button name "Install" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 command-link Rtl: role Button name "Install" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
 native-select Ltr: role PopUpButton name "Status" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, SetValue, Focus]
+  open:
 native-select Rtl: role PopUpButton name "Status" value Some("") state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [ShowMenu, Expand, SetValue, Focus]
+  open:
 sheet Ltr: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 sheet Rtl: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 drawer Ltr: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 drawer Rtl: role Button name "Open" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false } actions [Activate, Focus]
+  open:
 dial Ltr: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, SetValue, Focus]
 dial Rtl: role Slider name "Volume" value Some("25") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Increment, Decrement, SetValue, Focus]
 numeric-display Ltr: role StaticText name "Count" value Some("0") state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions []

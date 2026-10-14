@@ -186,10 +186,12 @@ fn label_press(control: NodeId) -> InternalHandler {
             return;
         }
         inner.controls.move_focus(&mut inner.tree, Some(control));
-        let toggles = inner
-            .controls
-            .get(control)
-            .is_some_and(|control| control.semantics().role == SemanticRole::Checkbox);
+        let toggles = inner.controls.get(control).is_some_and(|control| {
+            matches!(
+                control.semantics().role,
+                SemanticRole::Checkbox | SemanticRole::Switch
+            )
+        });
         if toggles {
             inner
                 .controls

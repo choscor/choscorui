@@ -740,6 +740,19 @@ fn perform(&mut self, context: &mut ControlContext<'_>, action: SemanticAction, 
 
 Performs an assistive action listed in `semantics().actions`.
 
+#### `CustomControl::semantic_parts`
+
+```rust
+fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts)
+```
+
+Adds the parts of the control, such as items, tabs, buttons, or
+cells, as child nodes with bounds in window coordinates, and marks
+the part that has the keyboard focus. A large collection adds only
+the parts in view. The host publishes them with the node. A part
+that lists `SemanticAction::Activate` gets a press at its center
+from `ControlHost::perform_part`. The default adds nothing.
+
 #### `CustomControl::semantics`
 
 ```rust

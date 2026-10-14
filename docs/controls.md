@@ -1262,7 +1262,7 @@ not in the list sets it to `None`.
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | label / the integer value |
-| State | disabled; the description is "Range min to max" |
+| State | disabled; `range` gives the value, the bounds, and the step |
 | Actions | `SetValue`, `Increment`, `Decrement`, `Focus` while enabled |
 
 **As a view.** `Slider::new(name, value).range(0..=100).step(1).page(10)`
@@ -1355,7 +1355,7 @@ These limits are the defaults. Invalid limits and values clamp and report a
 | --- | --- |
 | Role | `SpinButton` (AXIncrementor) |
 | Name / value | label / the integer value |
-| State | disabled; the description is `choscorui.range` ("Range min to max") |
+| State | disabled; `range` gives the value, the bounds, and the step |
 | Actions | `SetValue`, `Increment`, `Decrement`, `Focus` while enabled |
 
 **As a view.** `SpinBox::new(name, value).range(1..=99).step(1).page(10)`
@@ -2147,16 +2147,18 @@ pin this behavior.
 | Shortcut | `Shortcut` | xs `muted-foreground` text with widest tracking, at the end |
 | Separator | `Separator` | 1 pt `border` line with 4 pt above and below, across the panel |
 
-| Field | `DropdownMenu::semantics(level, commands)`, one node per item |
+| Field | `DropdownMenu::semantic_parts(level, commands, rows, parent, parts)`, one part per item |
 | --- | --- |
 | Role | `MenuItem` (AXMenuItem) |
 | Name / value | label / -; the shortcut text is the description |
 | State | disabled, checked for a checkable action, selected when highlighted, expanded for an open submenu |
 | Actions | `Activate` while enabled |
 
-Separators have no node. In a control host, the menu publishes one
-`Menu` node with its name. The description is the highlighted label, and
-the actions are `Activate` and `Focus`.
+Separators have no part. `semantic_parts` returns the position of the
+highlighted item. In a control host, the menu publishes one `Menu` node
+with its name, and the actions `Activate` and `Focus`. Its items are
+parts of the node, and the highlighted item has the focus. An open submenu
+is a `Menu` part under its item.
 
 [popup.rs](../crates/choscorui-controls/tests/popup.rs) pins this behavior.
 
@@ -2848,7 +2850,7 @@ behavior and the look.
 
 | Field | `Switch::semantics` |
 | --- | --- |
-| Role | `Checkbox` (AXCheckBox), description "switch" |
+| Role | `Switch` (AXCheckBox with the AXSwitch subrole) |
 | Name / value | label / - |
 | State | checked, disabled |
 | Actions | `Activate` and `Focus` while enabled |
@@ -3319,11 +3321,14 @@ Both controls own a `DropdownMenu` and the states of its commands. The
 
 | Field | `ContextMenu::semantics` | `Menubar::semantics` |
 | --- | --- | --- |
-| Role | `Group` (AXGroup) | `Menu` (AXMenu) |
-| Name / value | name / hint text | name / current title |
-| Description | the highlighted item while open | the highlighted item while open |
+| Role | `Group` (AXGroup) | `MenuBar` (AXMenuBar) |
+| Name / value | name / hint text | name / - |
 | State | expanded, disabled | expanded, disabled |
 | Actions | `ShowMenu` and `Focus` while enabled | `ShowMenu`, `Expand` or `Collapse`, and `Focus` while enabled |
+| Parts | the open menu: a `Menu` part with its items, as in [DropdownMenu](#dropdownmenu) | a `MenuBarItem` (AXMenuBarItem) part for each title, expanded while its menu is open, with `Activate`; the open menu under its title |
+
+The current title has the focus. The highlighted item of an open menu
+takes the focus.
 
 `set_open` opens the context menu at the center of the area, or the menu of
 the current menu bar title. It closes an open menu. `set_value` returns
@@ -4514,6 +4519,35 @@ and gives it to the platform accessibility API.
 - `snapshot` walks the retained tree in order. Each entry has its semantic
   parent, layout bounds, focus, collection size, and item index.
 - `supports(id, action)` is true only when the node lists the action.
+- A `SemanticRange` in the state gives the whole-number value, the
+  minimum, the maximum, and the step of a range node. A range node does
+  not put its bounds in the description.
+
+### Parts
+
+A hosted control has one retained node. Its parts, for example menu
+items, tabs, buttons, and table cells, are child nodes in the
+`SemanticParts` that `CustomControl::semantic_parts` fills.
+
+- `SemanticParts::push(parent, role, name, bounds)` adds a part under the
+  node, or under an earlier part. The bounds are in window coordinates.
+- `set_focused(position)` marks the part that has the keyboard focus. That
+  part is the focused entry of the snapshot, and the node is not focused.
+  The focused part of a control is never only a description or a value of
+  the node.
+- `SemanticPart::item(index)` gives the absolute position of an item in a
+  collection. The part key becomes the item index, so the part keeps its
+  identity when the visible range moves.
+- A control with a large model adds only the parts in view.
+- The host publishes the parts with the node through
+  `SemanticTree::set_parts`. A disabled control publishes disabled parts
+  with no actions.
+- `ControlHost::perform_part` and `ViewHost::perform_part` run an assistive
+  action on a part. `Activate` clicks the center of the part.
+
+The `control_semantics` golden in
+[compatibility.rs](../crates/choscorui/tests/compatibility.rs) records
+the parts of each control, closed and open.
 
 ### Notifications
 
@@ -4529,7 +4563,8 @@ notification (see [platform-macos.md](platform-macos.md)).
 | `Value(id)` | The value or the text metrics changed. |
 | `State(id)` | The state changed. |
 | `ValueAndState(id)` | The value and the state changed. |
-| `Focus { old, new }` | Focus moved or cleared. |
+| `Focus { old, new, part }` | Focus moved or cleared, or it moved to a different part of the focused node. |
+| `Part { node, part }` | The name, value, or state of one part changed. |
 
 For a live message with no focused element, the application uses an announcement.
 `AnnouncementPriority::High` interrupts current speech.

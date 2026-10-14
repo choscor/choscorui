@@ -40,6 +40,16 @@ fn node(host: &mut ViewHost, name: &str) -> NodeId {
         .unwrap_or_else(|| panic!("no node named {name}"))
 }
 
+/// The name of the focused part of `node`: the highlighted menu item.
+fn highlighted(host: &mut ViewHost, node: NodeId) -> String {
+    let (snapshot, _) = host.semantics();
+    snapshot
+        .into_iter()
+        .find(|entry| entry.id == node && entry.part.is_some() && entry.focused)
+        .map(|entry| entry.node.name)
+        .unwrap_or_default()
+}
+
 fn bounds(host: &mut ViewHost, name: &str) -> Rect {
     let node = node(host, name);
     host.tree().bounds(node).unwrap()
@@ -346,7 +356,7 @@ fn context_menu_closes_on_escape_and_opens_for_show_menu() {
     let panel = host.tree().bounds(menu).unwrap();
     let center = bounds(&mut host, "Target").center();
     assert!((panel.min_x() - center.x).abs() < 0.5);
-    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    assert_eq!(highlighted(&mut host, menu), "Copy");
     // Tab stays in the menu.
     host.focus_next(false);
     assert_eq!(host.tree().focus(), Some(menu));
@@ -413,14 +423,14 @@ fn context_menu_opens_from_the_keyboard_with_the_first_row_highlighted() {
         (panel.min_y() - center.y).abs() < 0.5,
         "{panel:?} at {center:?}"
     );
-    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    assert_eq!(highlighted(&mut host, menu), "Copy");
     press(&mut host, Key::Enter);
     assert!(shown(&mut host, "chosen copied"));
     assert_eq!(host.tree().focus(), Some(target), "focus returns");
     // The Menu key opens it too.
     assert!(press(&mut host, Key::ContextMenu));
     let menu = focused_menu(&mut host);
-    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    assert_eq!(highlighted(&mut host, menu), "Copy");
     press(&mut host, Key::Escape);
     // A secondary click after a keyboard open highlights no row.
     pointer(
@@ -432,7 +442,7 @@ fn context_menu_opens_from_the_keyboard_with_the_first_row_highlighted() {
     );
     let menu = focused_menu(&mut host);
     press(&mut host, Key::ArrowDown);
-    assert_eq!(host.semantic(menu).unwrap().description, "Copy");
+    assert_eq!(highlighted(&mut host, menu), "Copy");
     assert_eq!(host.take_errors(), Vec::new());
 }
 
@@ -448,13 +458,13 @@ fn the_keyboard_opens_the_innermost_context_menu_of_the_focus() {
     host.focus(Some(inner));
     press(&mut host, Key::ContextMenu);
     let menu = focused_menu(&mut host);
-    assert_eq!(host.semantic(menu).unwrap().description, "Inner item");
+    assert_eq!(highlighted(&mut host, menu), "Inner item");
     press(&mut host, Key::Escape);
     let outer = node(&mut host, "Outer area");
     host.focus(Some(outer));
     press_with(&mut host, Key::F(10), SHIFT);
     let menu = focused_menu(&mut host);
-    assert_eq!(host.semantic(menu).unwrap().description, "Outer item");
+    assert_eq!(highlighted(&mut host, menu), "Outer item");
     let panel = host.tree().bounds(menu).unwrap();
     let center = bounds(&mut host, "Outer area").center();
     assert!(
@@ -504,7 +514,7 @@ fn nested_context_menus_open_the_innermost_one() {
     );
     let menu = focused_menu(&mut host);
     press(&mut host, Key::ArrowDown);
-    assert_eq!(host.semantic(menu).unwrap().description, "Inner item");
+    assert_eq!(highlighted(&mut host, menu), "Inner item");
     press(&mut host, Key::Escape);
     let outer = bounds(&mut host, "Outer area").center();
     pointer(
@@ -516,7 +526,7 @@ fn nested_context_menus_open_the_innermost_one() {
     );
     let menu = focused_menu(&mut host);
     press(&mut host, Key::ArrowDown);
-    assert_eq!(host.semantic(menu).unwrap().description, "Outer item");
+    assert_eq!(highlighted(&mut host, menu), "Outer item");
     assert_eq!(host.take_errors(), Vec::new());
 }
 
@@ -562,7 +572,7 @@ fn dropdown_menu_follows_its_binding() {
     // The keys skip the disabled action.
     press(&mut host, Key::ArrowDown);
     press(&mut host, Key::ArrowDown);
-    let highlighted = host.semantic(menu).unwrap().description;
+    let highlighted = highlighted(&mut host, menu);
     assert_eq!(highlighted, "Move to");
     press(&mut host, Key::ArrowUp);
     press(&mut host, Key::Enter);

@@ -14,8 +14,9 @@ use crate::style::{
 };
 use crate::{Button, CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    ColorRole, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    ColorRole, EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, SemanticState,
+    Size,
 };
 
 /// What a tool button does on press.
@@ -537,11 +538,12 @@ impl CustomControl for HostedToolButton {
         node.actions.push(SemanticAction::Focus);
         if self.button.menu != ToolButtonMenu::None {
             node.state.expanded = Some(self.popup.is_open());
-            if let Some(label) = self.popup.highlighted_label().filter(|_| self.is_open()) {
-                node.description = label.to_string();
-            }
         }
         node
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.popup.semantic_parts(None, parts);
     }
 
     fn perform(

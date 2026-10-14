@@ -9,9 +9,9 @@ use crate::style::{
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, Point,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
-    fold_for_search,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
+    Measured, Point, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    SemanticState, Size, fold_for_search,
 };
 
 /// How an action shows its command's checked state.
@@ -416,42 +416,49 @@ impl DropdownMenu {
         }
     }
 
-    pub fn semantics(&self, level: usize, commands: &CommandRegistry) -> Vec<SemanticNode> {
-        self.level_items(level)
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| {
-                let label = item.label()?;
-                Some(SemanticNode {
-                    role: SemanticRole::MenuItem,
-                    name: label.to_owned(),
-                    description: match item {
-                        MenuItem::Action {
-                            shortcut: Some(shortcut),
-                            ..
-                        } => shortcut.clone(),
-                        _ => String::new(),
-                    },
-                    value: None,
-                    state: SemanticState {
-                        disabled: !Self::enabled(item, commands),
-                        checked: Self::checked(item, commands),
-                        selected: Some(self.path.get(level) == Some(&Some(index))),
-                        expanded: matches!(item, MenuItem::Submenu { .. }).then(|| {
-                            self.path.len() > level + 1 && self.path[level] == Some(index)
-                        }),
-                        ..SemanticState::default()
-                    },
-                    relations: Vec::new(),
-                    actions: if Self::enabled(item, commands) {
-                        vec![SemanticAction::Activate]
-                    } else {
-                        Vec::new()
-                    },
-                    text: None,
-                })
-            })
-            .collect()
+    /// Adds the items of open level `level`, laid out from `rows`, as
+    /// `MenuItem` parts under `parent`. Returns the position of the part
+    /// of the highlighted item.
+    pub fn semantic_parts(
+        &self,
+        level: usize,
+        commands: &CommandRegistry,
+        rows: Rect,
+        parent: Option<usize>,
+        parts: &mut SemanticParts,
+    ) -> Option<usize> {
+        let mut highlighted = None;
+        for (index, item) in self.level_items(level).iter().enumerate() {
+            let (Some(label), Some(bounds)) = (item.label(), self.item_rect(level, rows, index))
+            else {
+                continue;
+            };
+            let enabled = Self::enabled(item, commands);
+            let current = self.path.get(level) == Some(&Some(index));
+            let part = parts.push(parent, SemanticRole::MenuItem, label, bounds);
+            if let MenuItem::Action {
+                shortcut: Some(shortcut),
+                ..
+            } = item
+            {
+                part.node.description.clone_from(shortcut);
+            }
+            part.node.state = SemanticState {
+                disabled: !enabled,
+                checked: Self::checked(item, commands),
+                selected: Some(current),
+                expanded: matches!(item, MenuItem::Submenu { .. })
+                    .then(|| current && self.path.len() > level + 1),
+                ..SemanticState::default()
+            };
+            if enabled {
+                part.node.actions.push(SemanticAction::Activate);
+            }
+            if current {
+                highlighted = Some(parts.len() - 1);
+            }
+        }
+        highlighted
     }
 
     /// The flags the item recipe reads for item `index` of `level`.
@@ -803,11 +810,11 @@ impl CustomControl for HostedDropdownMenu {
         if self.popup.menu.highlighted().is_some() {
             actions.insert(0, SemanticAction::Activate);
         }
-        let mut node = crate::hosted::node(SemanticRole::Menu, &self.name, actions);
-        if let Some(label) = self.popup.highlighted_label() {
-            node.description = label.to_string();
-        }
-        node
+        crate::hosted::node(SemanticRole::Menu, &self.name, actions)
+    }
+
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        self.popup.semantic_parts(None, parts);
     }
 
     fn perform(
