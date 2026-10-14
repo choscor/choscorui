@@ -73,7 +73,7 @@ The baselines are from the reference machine, measured on 2026-10-14 with the Me
 
 The frames that move content do not meet their 8.3 ms budgets yet. The time includes the work of the application before `set_display_list`. Then the window server shows the frame one or two refreshes after the GPU finishes it. A resize also waits for the window server to change the window frame.
 
-The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
+The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. The component behavior fixes of October 2026 add 0.21 MiB: control states, semantic parts, and gallery demos. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ The release executable grows in 16 KiB pages. The size budget is the measured si
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `windows.first_frame_ms.p95` | 26–35 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.07 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 2.924 MiB | ≤ 2.940 |
+| `size.choscorui-gallery_mib` | 3.131 MiB | ≤ 3.147 |
 
 These correctness counters have a budget of 0:
 
