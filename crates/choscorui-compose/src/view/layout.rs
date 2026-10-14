@@ -480,7 +480,9 @@ fn stack_axis(inner: &Inner, parent: NodeId) -> Option<Axis> {
 }
 
 /// A thin line across a stack: horizontal in a vertical stack, vertical
-/// in a horizontal one.
+/// in a horizontal one. A horizontal line makes its stack take the width
+/// offered; a vertical line spans the height of its row, but does not
+/// make the row taller.
 ///
 /// # Examples
 ///
@@ -491,22 +493,49 @@ fn stack_axis(inner: &Inner, parent: NodeId) -> Option<Axis> {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Divider;
 
-impl View for Divider {
-    fn mount(self, cx: &mut Cx) {
-        divider_node(cx);
+impl Divider {
+    /// A divider with `orientation`, in any parent.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::SeparatorOrientation;
+    /// let rule = ZStack::new(Divider::oriented(SeparatorOrientation::Vertical));
+    /// ```
+    pub fn oriented(orientation: SeparatorOrientation) -> impl View {
+        Oriented(orientation)
     }
 }
 
-/// A new separator control across the parent stack. The `Separator`
-/// recipe gives its thickness and color.
+impl View for Divider {
+    fn mount(self, cx: &mut Cx) {
+        let vertical = stack_axis(cx.inner, cx.parent) == Some(Axis::Horizontal);
+        divider_node(
+            cx,
+            if vertical {
+                SeparatorOrientation::Vertical
+            } else {
+                SeparatorOrientation::Horizontal
+            },
+        );
+    }
+}
+
+/// A divider with an explicit orientation.
+struct Oriented(SeparatorOrientation);
+
+impl View for Oriented {
+    fn mount(self, cx: &mut Cx) {
+        divider_node(cx, self.0);
+    }
+}
+
+/// A new separator control across the parent. The `Separator` recipe
+/// gives its thickness and color.
 #[inline(never)]
-fn divider_node(cx: &mut Cx) {
-    let vertical = stack_axis(cx.inner, cx.parent) == Some(Axis::Horizontal);
-    let orientation = if vertical {
-        SeparatorOrientation::Vertical
-    } else {
-        SeparatorOrientation::Horizontal
-    };
+fn divider_node(cx: &mut Cx, orientation: SeparatorOrientation) {
+    let vertical = orientation == SeparatorOrientation::Vertical;
     let node = cx.control(Box::new(Separator::new(orientation)));
     let style = LayoutStyle {
         align_self: Some(ItemAlign::Stretch),
@@ -515,12 +544,15 @@ fn divider_node(cx: &mut Cx) {
     if let Err(error) = cx.inner.engine.set_style(&cx.inner.tree, node, style) {
         cx.inner.report(super::host::ViewError::Layout(error));
     }
-    // A divider spans its stack, so the stack takes the space offered.
-    let flex = Flex {
-        wide: !vertical,
-        tall: vertical,
-    };
-    cx.inner.make_flexible(node, flex);
+    // A horizontal divider spans its stack, so the stack takes the width
+    // offered. A vertical one stretches to the row height only.
+    if !vertical {
+        let flex = Flex {
+            wide: true,
+            tall: false,
+        };
+        cx.inner.make_flexible(node, flex);
+    }
 }
 
 /// A column of a [`Grid`].

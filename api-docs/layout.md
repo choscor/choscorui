@@ -159,7 +159,9 @@ pub struct Divider;
 ```
 
 A thin line across a stack: horizontal in a vertical stack, vertical
-in a horizontal one.
+in a horizontal one. A horizontal line makes its stack take the width
+offered; a vertical line spans the height of its row, but does not
+make the row taller.
 
 #### Examples
 
@@ -168,6 +170,22 @@ let view = VStack::new((Text::new("Above"), Divider, Text::new("Below")));
 ```
 
 Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `Divider::oriented`
+
+```rust
+pub fn oriented(orientation: SeparatorOrientation) -> impl View
+```
+
+A divider with `orientation`, in any parent.
+
+##### Examples
+
+```rust
+let rule = ZStack::new(Divider::oriented(SeparatorOrientation::Vertical));
+```
 
 ## `Dock`
 

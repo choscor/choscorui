@@ -974,6 +974,31 @@ fn a_divider_spans_the_frame_around_its_stack() {
 }
 
 #[test]
+fn a_vertical_divider_does_not_make_its_row_tall() {
+    use choscorui_compose::view::{Divider, Frame, ViewExt};
+    use choscorui_controls::SeparatorOrientation;
+    let mut row = host(VStack::new((
+        HStack::new((Text::new("left"), Divider, Text::new("right"))),
+        Text::new("below"),
+    )));
+    let (left, below) = (bounds(&mut row, "left"), bounds(&mut row, "below"));
+    assert!(below.min_y() - left.max_y() < 20.0, "{left:?} {below:?}");
+    // An explicit orientation overrides the stack axis.
+    let mut column = host(VStack::new((
+        Text::new("top"),
+        Divider::oriented(SeparatorOrientation::Vertical).frame(Frame::new().height(40.0)),
+        Text::new("end"),
+    )));
+    let border = DesignTokens::light().color(ColorRole::Border);
+    let list = column.paint();
+    let line = list.commands().iter().find_map(|command| match command {
+        choscorui_core::DisplayCommand::FillRect { rect, color } if *color == border => Some(*rect),
+        _ => None,
+    });
+    assert_eq!(line.expect("a vertical line").size, Size::new(1.0, 40.0));
+}
+
+#[test]
 fn wrapping_text_gives_up_width_in_a_full_row() {
     use choscorui_compose::view::{Frame, ViewExt};
     let long = "a status line long enough to need more than one line in this row";

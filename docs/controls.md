@@ -735,8 +735,11 @@ behavior.
 **As a view.** `Label::new(text)` mounts a `Label::hosted` label with
 literal or catalog text. The view builds a new label when the locale
 changes. `Divider` mounts a `Separator` across its stack: horizontal in
-a vertical stack, and vertical in a horizontal stack. The `Separator`
-recipe gives its thickness and color, so
+a vertical stack, and vertical in a horizontal stack.
+`Divider::oriented(orientation)` sets the orientation in any parent. A
+horizontal divider makes its stack take the width offered. A vertical
+divider spans the height of its row, but it does not make the row
+taller. The `Separator` recipe gives its thickness and color, so
 `.recipe(ControlKind::Separator, recipe)` changes it.
 
 [static_controls.rs](../crates/choscorui-controls/tests/static_controls.rs) and
