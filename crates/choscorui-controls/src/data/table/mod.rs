@@ -14,10 +14,10 @@ use crate::popup::gap_anchor;
 use crate::style::PaintContext;
 use crate::{CommandState, EditCommand, TextField};
 use choscorui_core::{
-    EventPhase, EventReply, InputModality, ItemKey, ItemModel, Key, KeyEvent, Measured,
+    EventPhase, EventReply, InputModality, ItemKey, ItemModel, Key, KeyEvent, Localizer, Measured,
     PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode,
-    SemanticAction, SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter,
-    TextInputInfo,
+    SemanticAction, SemanticCollection, SemanticNode, SemanticParts, SemanticRole, SortFilterProxy,
+    SortOrder, TextFilter, TextInputInfo,
 };
 use layout::Geometry;
 
@@ -785,34 +785,127 @@ impl DataTable {
     }
 
     /// What the focused part says, for semantics.
-    fn focused_text(&self) -> String {
-        match self.focus {
-            Stop::Filter => self
-                .filter
-                .as_ref()
-                .map(|(editor, _)| editor.placeholder().to_string())
-                .unwrap_or_default(),
-            Stop::Columns => self.columns_label.clone().unwrap_or_default(),
-            Stop::Previous => self.labels[0].clone(),
-            Stop::Next => self.labels[1].clone(),
-            Stop::Grid => {
-                let columns = self.columns();
-                match (self.cell.row, columns.get(self.cell.column)) {
-                    (None, Some(Column::Data(column))) => self.header(*column),
-                    (Some(row), Some(_)) => match self.page_keys().get(row) {
-                        Some(key) => columns
-                            .iter()
-                            .filter_map(|column| match column {
-                                Column::Data(column) => Some(self.text(*key, *column)),
-                                Column::Check => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        None => String::new(),
-                    },
-                    _ => String::new(),
-                }
+    /// The filter field, the columns button with its open menu, a `Row`
+    /// part for the header and for each row on the page, and the page
+    /// buttons. A header row has a `ColumnHeader` part for each data
+    /// column, with the sort order as the description. A row is selected
+    /// with the selection, and has a `Checkbox` part and a `Cell` part for
+    /// each data column. The focused stop or cell is the focused part.
+    fn table_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let g = &self.geometry;
+        let focus = |parts: &mut SemanticParts, focused: bool| {
+            if focused {
+                parts.set_focused(Some(parts.len() - 1));
             }
+        };
+        if let Some((editor, _)) = &self.filter {
+            let part = parts.push(
+                None,
+                SemanticRole::SearchField,
+                editor.placeholder(),
+                g.filter,
+            );
+            part.node.value = Some(editor.value().to_owned());
+            focus(parts, self.focus == Stop::Filter);
+        }
+        if let Some(label) = &self.columns_label {
+            let part = hosted::pressable(
+                parts,
+                None,
+                SemanticRole::PopUpButton,
+                label,
+                g.columns,
+                true,
+            );
+            part.node.state.expanded = Some(self.menu.is_open());
+            focus(parts, self.focus == Stop::Columns);
+            self.menu.semantic_parts(Some(parts.len() - 1), parts);
+        }
+        let columns = self.columns();
+        let data = columns
+            .iter()
+            .filter(|column| matches!(column, Column::Data(_)))
+            .count();
+        parts.set_collection(SemanticCollection {
+            item_count: self.order.len(),
+            column_count: Some(data),
+        });
+        let grid = |row: Option<usize>, column: usize| {
+            self.focus == Stop::Grid && self.cell == Cell { row, column }
+        };
+        parts.push(None, SemanticRole::Row, &self.name, g.header);
+        let header = Some(parts.len() - 1);
+        for (index, column) in columns.iter().enumerate() {
+            let rect = self.cell_rect(index, g.header);
+            let Column::Data(column) = *column else {
+                // The header check box selects every row.
+                let role = SemanticRole::Checkbox;
+                let part = hosted::pressable(parts, header, role, &self.name, rect, true);
+                let all = !self.order.is_empty() && self.shown_selected == self.order.len();
+                part.node.state.checked = Some(all);
+                focus(parts, grid(None, index));
+                continue;
+            };
+            let name = self.header(column);
+            let part =
+                hosted::pressable(parts, header, SemanticRole::ColumnHeader, &name, rect, true);
+            part.node.description = match self.sort() {
+                Some((sorted, SortOrder::Ascending)) if sorted == column => {
+                    strings.message("choscorui.column.ascending", &[])
+                }
+                Some((sorted, SortOrder::Descending)) if sorted == column => {
+                    strings.message("choscorui.column.descending", &[])
+                }
+                _ => String::new(),
+            };
+            focus(parts, grid(None, index));
+        }
+        let first = self.page * self.page_size;
+        for (row, (key, rect)) in self.page_keys().iter().zip(&g.rows).enumerate() {
+            let selected = self.selection.is_selected(*key);
+            let cells: Vec<String> = columns
+                .iter()
+                .filter_map(|column| match column {
+                    Column::Data(column) => Some(self.text(*key, *column)),
+                    Column::Check => None,
+                })
+                .collect();
+            let part = parts.push(None, SemanticRole::Row, &cells.join(", "), *rect);
+            part.node.state.selected = Some(selected);
+            part.item(first + row);
+            let parent = Some(parts.len() - 1);
+            let mut texts = cells.iter();
+            for (index, column) in columns.iter().enumerate() {
+                let rect = self.cell_rect(index, *rect);
+                let part = match column {
+                    Column::Check => {
+                        // The check box takes the name of the row.
+                        let name = cells.first().map_or("", String::as_str);
+                        let role = SemanticRole::Checkbox;
+                        let part = hosted::pressable(parts, parent, role, name, rect, true);
+                        part.node.state.checked = Some(selected);
+                        part
+                    }
+                    Column::Data(_) => {
+                        let text = texts.next().map_or("", String::as_str);
+                        hosted::pressable(parts, parent, SemanticRole::Cell, text, rect, true)
+                    }
+                };
+                part.node.state.selected = Some(selected);
+                focus(parts, grid(Some(row), index));
+            }
+        }
+        for (stop, label, rect, enabled) in [
+            (Stop::Previous, &self.labels[0], g.previous, self.page > 0),
+            (
+                Stop::Next,
+                &self.labels[1],
+                g.next,
+                self.page < self.last_page(),
+            ),
+        ] {
+            hosted::pressable(parts, None, SemanticRole::Button, label, rect, enabled);
+            focus(parts, self.focus == stop);
         }
     }
 }
@@ -922,10 +1015,13 @@ impl CustomControl for DataTable {
             .status
             .as_ref()
             .map(|status| status(self.shown_selected, self.order.len()));
-        node.description = self.focused_text();
         node.state.expanded = self.columns_label.as_ref().map(|_| self.menu.is_open());
         node.state.disabled = !self.enabled;
         node
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.table_parts(strings, parts);
     }
 
     fn perform(

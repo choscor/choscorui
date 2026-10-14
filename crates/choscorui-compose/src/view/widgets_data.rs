@@ -17,7 +17,8 @@ use choscorui_controls::{
     HeaderColumn, MeasureContext, PaintContext,
 };
 use choscorui_core::{
-    EventReply, ItemModel, Measured, Rect, SemanticAction, SemanticNode, SemanticRole, SortOrder,
+    EventReply, ItemModel, Localizer, Measured, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, SortOrder,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -99,6 +100,10 @@ impl CustomControl for HeaderLeaf {
 
     fn semantics(&self) -> SemanticNode {
         CustomControl::semantics(&self.header)
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.header.semantic_parts(strings, parts);
     }
 
     fn perform(

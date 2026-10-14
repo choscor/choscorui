@@ -701,7 +701,7 @@ pub(crate) mod tests {
         press(&mut page, Key::ArrowRight, ShortcutModifiers::default());
         press(&mut page, Key::ArrowDown, ShortcutModifiers::default());
         assert!(page.host.find("Asia › Japan").is_some());
-        assert_eq!(page.value("Places").as_deref(), Some("Japan"));
+        assert_eq!(page.focused_part("Places").as_deref(), Some("Japan"));
     }
 
     #[test]

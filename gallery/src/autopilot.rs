@@ -373,7 +373,13 @@ fn exercise_canvas(host: &mut ViewHost) -> Option<(Option<String>, bool, usize, 
     };
     let hit = center(201);
     drag(host, hit, hit);
-    let named = host.semantic(canvas)?.value;
+    // The item under the click is the focused part of the canvas.
+    let named = host
+        .semantics()
+        .0
+        .into_iter()
+        .find(|entry| entry.id == canvas && entry.part.is_some() && entry.focused)
+        .map(|entry| entry.node.name);
     // Items are 28 units square on a 40-unit grid; start and end the band
     // 18 units outside them so the press lands on empty space. The band
     // spans items 0, 1, 200 and 201 and stops short of column 2.

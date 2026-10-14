@@ -2026,7 +2026,8 @@ declares the full item count and the index of each realized item (see
 
 **In a control host.** `with_model` gives the view its own model and
 delegate. A hosted view is one node: it realizes no child nodes and paints
-only the rows in the viewport, plus the overscan. It takes the offered size.
+only the rows in the viewport, plus the overscan. It publishes those rows
+as parts. It takes the offered size.
 A press with a click count of two or more activates the row. Typed text arrives as
 text for type-ahead. A secondary press selects the row, but no message
 reports the context menu. Rows that the model must fetch are not reported.
@@ -2050,8 +2051,12 @@ reports the context menu. Rows that the model must fetch are not reported.
   press or selection.
 - `with_caption(text)` adds a caption under the footer rows. The caption
   describes the view.
-- A hosted view publishes no row nodes. Thus its description reads the
-  caption, then the cells of each footer row.
+- A hosted view publishes a part for each row in view, plus the
+  overscan, with the `item_semantics` node. Each part has its absolute
+  item index, and the node has the full row count as its collection. The
+  current row is the focused part.
+- The footer rows are not items. Thus the description reads the caption,
+  then the cells of each footer row.
 
 **As a view.** `List::new(name, model, selection)` mounts a hosted view
 with a `TextItemDelegate` and styled rows. `selection` follows the
@@ -2098,11 +2103,13 @@ this behavior.
 | --- | --- |
 | Role | `ColumnHeader` (AXButton) |
 | Name / value | title / `ascending` or `descending` on the sorted column |
-| State | selected for the focused column; the width is the description |
+| State | the width is the description |
 | Actions | `Activate`, `Focus` |
 
-**In a control host.** A hosted header is one tab stop. Its node is the node
-of the focused column. A sort change reports `ItemActivated(column)`, and
+**In a control host.** A hosted header is one tab stop. Its node is a
+`Group` with the actions of the focused column. Each column is a
+`ColumnHeader` part with its `column_semantics`, and the focused column is
+the focused part. A sort change reports `ItemActivated(column)`, and
 `sort` returns the order. A resize reports `Changed(Index(column))`, and
 `widths` returns the widths. A press on a column edge captures the pointer
 until the release. A press on a cell also captures the pointer, and the
@@ -2195,8 +2202,12 @@ A 1 pt `Separator` divider marks the end of each column.
 - Columns follow reading order, so ArrowLeft and ArrowRight mirror in
   right-to-left layouts. Keyboard focus rings the focused column just
   inside its edges.
-- The node has the `Tree` role, the name, and the focused path item as its
-  value. Its only action is `Focus`.
+- The node has the `Tree` role and the name. Its only action is `Focus`.
+- Each column is a `List` part, named by the item that it lists, with
+  its row count as the collection. Each row in view is a `ListItem` part
+  with its row index, selected on the path. A row with children is
+  expanded while the next column lists them. The path item of the
+  focused column is the focused part.
 
 **As a view.** `ColumnBrowser::new(name, model, path)` mounts a
 `HostedColumnBrowser`. `model` makes the tree model in the view's
@@ -2908,7 +2919,10 @@ order. The Select All edit command selects all items. A selection change
 
 sends `Changed(Indices(ids))`, and Enter sends `ItemActivated(id)`, with
 `SceneItemId` numbers. Delete and Backspace remove the selected items from
-the scene. The hosted node publishes only the container.
+the scene. The hosted node publishes the accessible items in view as parts,
+with the `item_semantics` nodes and their indexes. The node has the count
+of accessible items as its collection. The focused item is the focused
+part.
 
 **In a view.** The `Canvas` view of `choscorui-compose` holds a
 `CanvasView` with no scene items and draws with a closure. Its node is an
@@ -4158,9 +4172,24 @@ without an animation. `set_open` returns false.
 | --- | --- |
 | Role | `Table` (AXTable) |
 | Name / value | name / status line |
-| Description | the focused header, row cells, button, or filter placeholder |
-| State | expanded with a column menu, disabled |
+| Parts | see below |
+| State | expanded with a column menu, disabled; the collection gives the filtered row count and the data column count |
 | Actions | `Activate`, `Focus`, `Increment` and `Decrement` when a page applies, `SetValue` on the filter |
+
+The parts of a `DataTable` are as follows. The focused stop or cell is
+the focused part.
+
+- The filter is a `SearchField` part, with the placeholder as the name
+  and the filter text as the value.
+- The columns button is a `PopUpButton` part. The open column menu is a
+  `Menu` part under it.
+- The header is a `Row` part. It has a `Checkbox` part that selects every
+  row, and a `ColumnHeader` part for each data column. The sort column
+  has "ascending" or "descending" as the description.
+- Each row on the page is a `Row` part with its absolute item index. It
+  is selected with the selection. It has a `Checkbox` part and a `Cell`
+  part for each data column.
+- The page buttons are `Button` parts. A button is disabled at an end.
 
 `set_value` takes `Indices` of source rows as the selection, or `Text` for
 the filter input. `set_open` opens and closes the column menu. Each call
@@ -4887,6 +4916,8 @@ items, tabs, buttons, and table cells, are child nodes in the
   collection. The part key becomes the item index, so the part keeps its
   identity when the visible range moves.
 - A control with a large model adds only the parts in view.
+  `SemanticParts::set_collection` then gives the node the full item
+  count.
 - The host publishes the parts with the node through
   `SemanticTree::set_parts`. A disabled control publishes disabled parts
   with no actions.

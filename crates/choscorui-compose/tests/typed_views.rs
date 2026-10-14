@@ -356,7 +356,15 @@ fn a_header_binds_its_sort_and_reports_resizes() {
     assert_eq!(take(&sorted).get(), Some((0, SortOrder::Descending)));
     take(&sorted).set(Some((0, SortOrder::Ascending)));
     host.flush();
-    assert_eq!(value(&mut host, node).as_deref(), Some("ascending"));
+    // The column is a part of the header node.
+    let (snapshot, _) = host.semantics();
+    let column = snapshot
+        .into_iter()
+        .find(|entry| entry.node.name == "Name" && entry.part.is_some());
+    assert_eq!(
+        column.and_then(|entry| entry.node.value).as_deref(),
+        Some("ascending")
+    );
     host.focus(Some(node));
     press(&mut host, Key::Character('+'));
     host.flush();

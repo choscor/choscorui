@@ -237,7 +237,7 @@ impl DataTable {
     }
 
     /// The rectangle of the visible column `index` in the row `row`.
-    fn cell_rect(&self, index: usize, row: Rect) -> Rect {
+    pub(super) fn cell_rect(&self, index: usize, row: Rect) -> Rect {
         let (_, x, width) = self.geometry.cells[index];
         Rect::from_xywh(x, row.origin.y, width, row.size.height)
     }

@@ -15,8 +15,8 @@ use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
     DisplayList, DisplayListError, EventPhase, EventReply, GestureEvent, Key, KeyEvent, Localizer,
     Measured, Paint, Path, Point, PointerButton, PointerEvent, Rect, Scene, SceneItemId,
-    SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
-    StrokeStyle, Transform, WheelUnit,
+    SemanticAction, SemanticCollection, SemanticNode, SemanticParts, SemanticRole, SemanticState,
+    Size, StrokeStyle, Transform, WheelUnit,
 };
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -1005,6 +1005,22 @@ impl CustomControl for HostedCanvas {
 
     fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
         self.view.semantics(&mut self.scene.borrow_mut(), strings).0
+    }
+
+    /// A part for each accessible item in view, with its index among all
+    /// accessible items, and their count as the collection. The focused
+    /// item is the focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let scene = &mut self.scene.borrow_mut();
+        parts.set_collection(self.view.semantics(scene, strings).1);
+        for (id, index, node, bounds) in self.view.item_semantics(scene) {
+            let part = parts.push(None, node.role, "", bounds);
+            part.node = node;
+            part.item(index);
+            if self.view.focus() == Some(id) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

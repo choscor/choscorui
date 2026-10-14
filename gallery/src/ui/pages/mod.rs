@@ -124,6 +124,25 @@ pub mod tests {
             let node = self.node(name);
             self.host.semantic(node).and_then(|node| node.value)
         }
+
+        /// The name of the focused part of the node named `name`.
+        pub fn focused_part(&mut self, name: &str) -> Option<String> {
+            let node = self.node(name);
+            let (snapshot, _) = self.host.semantics();
+            snapshot
+                .into_iter()
+                .find(|entry| entry.id == node && entry.part.is_some() && entry.focused)
+                .map(|entry| entry.node.name)
+        }
+
+        /// The semantic value of the part named `name`.
+        pub fn part_value(&mut self, name: &str) -> Option<String> {
+            let (snapshot, _) = self.host.semantics();
+            snapshot
+                .into_iter()
+                .find(|entry| entry.part.is_some() && entry.node.name == name)
+                .and_then(|entry| entry.node.value)
+        }
     }
 
     #[test]

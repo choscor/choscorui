@@ -45,6 +45,7 @@ impl SemanticPart {
 pub struct SemanticParts {
     parts: Vec<SemanticPart>,
     focused: Option<usize>,
+    collection: Option<SemanticCollection>,
 }
 
 impl SemanticParts {
@@ -92,6 +93,17 @@ impl SemanticParts {
     /// The position of the part that has the keyboard focus.
     pub fn focused(&self) -> Option<usize> {
         self.focused
+    }
+
+    /// Gives the node itself the full size of the collection that its
+    /// parts are items of, for a node that adds only the items in view.
+    pub fn set_collection(&mut self, collection: SemanticCollection) {
+        self.collection = Some(collection);
+    }
+
+    /// The collection of the node, from [`Self::set_collection`].
+    pub fn collection(&self) -> Option<SemanticCollection> {
+        self.collection
     }
 
     pub fn parts(&self) -> &[SemanticPart] {

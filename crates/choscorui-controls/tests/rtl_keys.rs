@@ -166,14 +166,10 @@ fn a_right_to_left_header_runs_its_columns_from_the_right() {
     let bounds = h.bounds();
     let y = bounds.center().y;
     h.click(Point::new(bounds.max_x() - 50.0, y));
-    assert_eq!(
-        h.semantics().name,
-        "Name",
-        "the first column is at the right"
-    );
+    assert_eq!(h.focused_part(), "Name", "the first column is at the right");
     h.focus();
     h.key(Key::ArrowLeft);
-    assert_eq!(h.semantics().name, "Size");
+    assert_eq!(h.focused_part(), "Size");
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "Name");
+    assert_eq!(h.focused_part(), "Name");
 }

@@ -13,8 +13,8 @@ use choscorui::controls::{
     ControlValue, CustomControl, HostedCanvas, MAX_ZOOM, MIN_ZOOM, MeasureContext, PaintContext,
 };
 use choscorui::core::{
-    Color, ColorRole, EventReply, ItemShape, ItemStyle, Measured, Point, Rect, Scene, SceneItem,
-    SemanticAction, SemanticNode, SemanticRole, Size, Space, TextPreset,
+    Color, ColorRole, EventReply, ItemShape, ItemStyle, Localizer, Measured, Point, Rect, Scene,
+    SceneItem, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size, Space, TextPreset,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -69,8 +69,8 @@ fn scene(env: &Env) -> Scene {
 
 /// A hosted canvas whose zoom is a value: a `Number` value zooms about
 /// the viewport center, and a zoom by wheel or key reports
-/// `Changed(Number(zoom))`. Its semantic value names the focused item,
-/// since the hosted canvas publishes no node per item.
+/// `Changed(Number(zoom))`. The hosted canvas publishes the items in view
+/// as parts.
 struct ZoomCanvas {
     canvas: Rc<RefCell<HostedCanvas>>,
 }
@@ -100,11 +100,15 @@ impl CustomControl for ZoomCanvas {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let mut canvas = self.canvas.borrow_mut();
-        let mut node = canvas.semantics();
-        let focus = canvas.view().focus();
-        node.value = focus.and_then(|id| canvas.scene_mut().item(id).map(|item| item.name.clone()));
-        node
+        self.canvas.borrow().semantics()
+    }
+
+    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
+        self.canvas.borrow().semantics_in(strings)
+    }
+
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        self.canvas.borrow().semantic_parts(strings, parts);
     }
 
     fn perform(
@@ -298,7 +302,7 @@ mod tests {
         };
         let hit = center(201);
         drag(&mut page, hit, hit);
-        assert_eq!(page.value("Canvas").as_deref(), Some("Node 201"));
+        assert_eq!(page.focused_part("Canvas").as_deref(), Some("Node 201"));
         assert!(page.host.find("Zoom 200% · 1 selected").is_some());
         // Items are 28 units square on a 40-unit grid; start and end the
         // band 18 units outside them so the press lands on empty space.

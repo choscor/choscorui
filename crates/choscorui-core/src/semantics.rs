@@ -335,8 +335,10 @@ impl SemanticTree {
     }
 
     /// Publishes `parts` as the child nodes of `id`, and returns the
-    /// changes. A change of the part count, a key, a parent, or a role is a
-    /// tree change; other changes are [`SemanticChange::Part`].
+    /// changes. A change of the part count, a key, a parent, a role, or
+    /// the collection of `parts` is a tree change; other changes are
+    /// [`SemanticChange::Part`]. Parts without a collection keep the
+    /// collection of `id`.
     pub fn set_parts(
         &mut self,
         id: NodeId,
@@ -345,6 +347,10 @@ impl SemanticTree {
         if !self.nodes.contains_key(&id) {
             return Err(SemanticError::MissingNode);
         }
+        let collection = match parts.collection() {
+            Some(collection) => self.set_collection(id, Some(collection))?,
+            None => SemanticChange::None,
+        };
         let old = if parts.is_empty() {
             self.parts.remove(&id)
         } else {
@@ -356,7 +362,7 @@ impl SemanticTree {
             && old.iter().zip(new).all(|(old, new)| {
                 old.key == new.key && old.parent == new.parent && old.node.role == new.node.role
             });
-        if !same_shape {
+        if !same_shape || collection != SemanticChange::None {
             return Ok(vec![SemanticChange::Tree]);
         }
         Ok(old

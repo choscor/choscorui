@@ -16,8 +16,8 @@ use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
     CivilDate, EditableModel, EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent,
     LayoutDirection, Locale, Localizer, Measured, ModelError, Point, PointerButton, PointerEvent,
-    Rect, Role, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, SortOrder,
-    UndoStack, Value, WheelUnit,
+    Rect, Role, SemanticAction, SemanticCollection, SemanticNode, SemanticParts, SemanticRole,
+    SemanticState, Size, SortOrder, UndoStack, Value, WheelUnit,
 };
 use std::collections::HashMap;
 
@@ -66,6 +66,8 @@ pub struct HeaderView {
     pressed: Option<usize>,
     /// The start edge of the first column in reading order.
     origin_x: f64,
+    /// The bounds of the last arrange in a control host.
+    bounds: Rect,
     rtl: bool,
     /// Hover and press of the cells.
     tracked: Parts,
@@ -84,6 +86,7 @@ impl HeaderView {
             resizing: None,
             pressed: None,
             origin_x: 0.0,
+            bounds: Rect::default(),
             rtl: false,
             tracked: Parts::default(),
         }
@@ -268,10 +271,7 @@ impl HeaderView {
             name: entry.title.clone(),
             description: strings.message("choscorui.column.width", &[("width", &width)]),
             value,
-            state: SemanticState {
-                selected: Some(column == self.focused),
-                ..SemanticState::default()
-            },
+            state: SemanticState::default(),
             relations: Vec::new(),
             actions: vec![SemanticAction::Activate, SemanticAction::Focus],
             text: None,
@@ -934,6 +934,7 @@ impl CustomControl for HeaderView {
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.rtl = cx.rtl();
+        self.bounds = bounds;
         self.origin_x = if self.rtl {
             bounds.max_x()
         } else {
@@ -1017,9 +1018,38 @@ impl CustomControl for HeaderView {
         self.semantics_in(Localizer::builtin())
     }
 
-    fn semantics_in(&self, strings: &Localizer) -> SemanticNode {
-        self.column_semantics(self.focused, strings)
-            .unwrap_or_else(|| crate::hosted::node(SemanticRole::ColumnHeader, "", Vec::new()))
+    /// A `Group` with the actions of the focused column.
+    fn semantics_in(&self, _strings: &Localizer) -> SemanticNode {
+        let actions = if self.columns.is_empty() {
+            Vec::new()
+        } else {
+            vec![SemanticAction::Activate, SemanticAction::Focus]
+        };
+        crate::hosted::node(SemanticRole::Group, "", actions)
+    }
+
+    /// A `ColumnHeader` part for each column. The focused column is the
+    /// focused part.
+    fn semantic_parts(&self, strings: &Localizer, parts: &mut SemanticParts) {
+        let bounds = self.bounds;
+        let mut offset = 0.0;
+        for (index, column) in self.columns.iter().enumerate() {
+            let x = if self.rtl {
+                bounds.max_x() - offset - column.width
+            } else {
+                bounds.origin.x + offset
+            };
+            offset += column.width;
+            let Some(mut node) = self.column_semantics(index, strings) else {
+                continue;
+            };
+            node.actions = vec![SemanticAction::Activate];
+            let rect = Rect::from_xywh(x, bounds.origin.y, column.width, bounds.size.height);
+            parts.push(None, SemanticRole::ColumnHeader, "", rect).node = node;
+            if index == self.focused {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(
@@ -1540,18 +1570,57 @@ impl CustomControl for HostedColumnBrowser {
     }
 
     fn semantics(&self) -> SemanticNode {
-        let mut node =
-            crate::hosted::node(SemanticRole::Tree, &self.name, vec![SemanticAction::Focus]);
-        node.value = self
-            .browser
-            .path()
-            .get(self.browser.focused_column())
-            .map(|key| {
-                self.model()
-                    .data(*key, 0, Role::Display)
-                    .to_display_string()
+        crate::hosted::node(SemanticRole::Tree, &self.name, vec![SemanticAction::Focus])
+    }
+
+    /// A `List` part for each column, named by the item that it lists,
+    /// with its row count as the collection. Each row in view is a
+    /// `ListItem` part with its row index, selected on the path. The path
+    /// item of the focused column is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let model = self.model();
+        let page = self.page();
+        let label = |key: ItemKey| model.data(key, 0, Role::Display).to_display_string();
+        let path = self.browser.path();
+        for (column, parent) in self.parents().iter().enumerate() {
+            let rect = self.column_rect(column);
+            let name = parent.map_or_else(|| self.name.clone(), label);
+            let list = parts.push(None, SemanticRole::List, &name, rect);
+            let count = model.row_count(*parent);
+            list.collection = Some(SemanticCollection {
+                item_count: count,
+                column_count: None,
             });
-        node
+            let list = Some(parts.len() - 1);
+            let offset = self.offset(column);
+            let first = (offset / self.row_height).floor() as usize;
+            for row in first..count.min(first + page + 2) {
+                let Some(key) = model.key(*parent, row) else {
+                    continue;
+                };
+                let y = rect.origin.y + row as f64 * self.row_height - offset;
+                let entry = Rect::from_xywh(rect.origin.x, y, rect.size.width, self.row_height);
+                let item = crate::hosted::pressable(
+                    parts,
+                    list,
+                    SemanticRole::ListItem,
+                    &label(key),
+                    entry,
+                    true,
+                );
+                let selected = path.get(column) == Some(&key);
+                item.node.state.selected = Some(selected);
+                if model.has_children(key) || model.can_fetch_more(Some(key)) {
+                    item.node.state.expanded = Some(path.get(column + 1).is_some() && selected);
+                }
+                // Each column numbers its rows from 0, so the column also
+                // goes in the key.
+                item.item(row).key += (column as u64) << 32;
+                if selected && column == self.browser.focused_column() {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
     }
 
     fn perform(

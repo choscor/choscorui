@@ -15,10 +15,11 @@ use crate::style::{
     draw_text, paint_box,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection, Measured,
-    NodeId, Point, PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand,
+    EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection, Localizer,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand,
     SelectionMode, SemanticAction, SemanticChange, SemanticCollection, SemanticError, SemanticNode,
-    SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit, visible_keys,
+    SemanticParts, SemanticRole, SemanticState, SemanticTree, Size, Tree, TreeError, WheelUnit,
+    visible_keys,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -851,8 +852,8 @@ impl ItemView {
 
     /// Semantic node for the view container.
     pub fn semantics(&self) -> SemanticNode {
-        // A hosted view publishes no row nodes, so the description also
-        // reads the footer rows after the caption.
+        // The footer rows are not items, so the description reads them
+        // after the caption.
         let footer = self.footer.iter().map(|row| {
             row.iter()
                 .filter(|cell| !cell.is_empty())
@@ -891,7 +892,12 @@ impl ItemView {
 
     /// Semantic node for one realized item.
     pub fn item_semantics(&self, model: &dyn ItemModel, item: &RealizedItem) -> SemanticNode {
-        let has_children = model.has_children(item.key) || model.can_fetch_more(Some(item.key));
+        self.key_semantics(model, item.key)
+    }
+
+    /// Semantic node for the item with `key`.
+    fn key_semantics(&self, model: &dyn ItemModel, key: ItemKey) -> SemanticNode {
+        let has_children = model.has_children(key) || model.can_fetch_more(Some(key));
         let role = match self.role {
             SemanticRole::Tree => SemanticRole::TreeItem,
             SemanticRole::Table => SemanticRole::Row,
@@ -899,25 +905,21 @@ impl ItemView {
         };
         let mut actions = vec![SemanticAction::Activate, SemanticAction::Focus];
         if has_children {
-            actions.push(if self.expanded.contains(&item.key) {
+            actions.push(if self.expanded.contains(&key) {
                 SemanticAction::Collapse
             } else {
                 SemanticAction::Expand
             });
         }
         actions.push(SemanticAction::ShowMenu);
-        let accessible = model.data(item.key, 0, Role::Accessibility);
+        let accessible = model.data(key, 0, Role::Accessibility);
         let name = if accessible.is_none() {
-            model.data(item.key, 0, Role::Display).to_display_string()
+            model.data(key, 0, Role::Display).to_display_string()
         } else {
             accessible.to_display_string()
         };
         let value = (1..model.column_count())
-            .map(|column| {
-                model
-                    .data(item.key, column, Role::Display)
-                    .to_display_string()
-            })
+            .map(|column| model.data(key, column, Role::Display).to_display_string())
             .filter(|text| !text.is_empty())
             .collect::<Vec<_>>()
             .join(", ");
@@ -927,8 +929,8 @@ impl ItemView {
             description: String::new(),
             value: (!value.is_empty()).then_some(value),
             state: SemanticState {
-                selected: Some(self.selection.is_selected(item.key)),
-                expanded: has_children.then_some(self.expanded.contains(&item.key)),
+                selected: Some(self.selection.is_selected(key)),
+                expanded: has_children.then_some(self.expanded.contains(&key)),
                 ..SemanticState::default()
             },
             relations: Vec::new(),
@@ -1404,6 +1406,29 @@ impl CustomControl for ItemView {
 
     fn semantics(&self) -> SemanticNode {
         ItemView::semantics(self)
+    }
+
+    /// A part for each row in view, with its absolute index, and the row
+    /// count as the collection. The current row is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let Some(source) = &self.source else {
+            return;
+        };
+        let model = source.model.as_ref();
+        parts.set_collection(SemanticCollection {
+            item_count: self.order.len(),
+            column_count: (model.column_count() > 1).then_some(model.column_count()),
+        });
+        let current = self.current();
+        for index in self.visible_range() {
+            let key = self.order[index];
+            let part = parts.push(None, SemanticRole::ListItem, "", self.item_rect(index));
+            part.node = self.key_semantics(model, key);
+            part.item(index);
+            if current == Some(key) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

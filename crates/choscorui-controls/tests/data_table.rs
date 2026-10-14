@@ -92,18 +92,21 @@ fn the_table_pages_rows_and_reports_its_status() {
 fn keys_walk_the_tab_stops_and_the_grid() {
     let mut h = Harness::new(table());
     h.focus();
-    assert_eq!(h.semantics().description, "Filter emails...");
+    assert_eq!(h.focused_part(), "Filter emails...");
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Columns");
+    assert_eq!(h.focused_part(), "Columns");
     assert!(tab(&mut h));
     // The grid starts on the header checkbox; move to the Amount header.
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "Amount");
+    assert_eq!(h.focused_part(), "Amount");
     h.key(Key::Enter);
     h.key(Key::Enter);
     h.key(Key::ArrowDown);
+    assert_eq!(h.focused_part(), "$874.00");
+    let parts = h.parts();
+    let cell = &parts.parts()[parts.focused().unwrap()];
     assert_eq!(
-        h.semantics().description,
+        parts.parts()[cell.parent.unwrap()].node.name,
         "success, silas22@example.com, $874.00",
         "descending by amount"
     );
@@ -123,7 +126,7 @@ fn keys_walk_the_tab_stops_and_the_grid() {
         "the header checkbox selects the page"
     );
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Next", "Previous is disabled");
+    assert_eq!(h.focused_part(), "Next", "Previous is disabled");
     assert!(!tab(&mut h));
 }
 
@@ -255,7 +258,7 @@ fn hiding_the_sort_column_clears_the_sort() {
     tab(&mut h);
     h.key(Key::ArrowRight);
     h.key(Key::Enter);
-    assert_eq!(h.semantics().description, "Status");
+    assert_eq!(h.focused_part(), "Status");
     assert!(texts(&h.paint()).contains(&"carmella@example.com".to_string()));
     h.chord(
         ShortcutModifiers {
@@ -264,7 +267,7 @@ fn hiding_the_sort_column_clears_the_sort() {
         },
         Key::Tab,
     );
-    assert_eq!(h.semantics().description, "Columns");
+    assert_eq!(h.focused_part(), "Columns");
     h.key(Key::Enter);
     h.key(Key::Enter);
     h.set_time(1.0);
@@ -283,12 +286,12 @@ fn a_click_on_an_empty_area_keeps_the_inner_focus() {
     let mut h = Harness::new(table());
     h.focus();
     tab(&mut h);
-    assert_eq!(h.semantics().description, "Columns");
+    assert_eq!(h.focused_part(), "Columns");
     h.host.move_focus(&mut h.tree, None);
     let bounds = h.bounds();
     // The gap between the toolbar and the table.
     h.click(Point::new(bounds.center().x, bounds.origin.y + 36.0 + 8.0));
-    assert_eq!(h.semantics().description, "Columns");
+    assert_eq!(h.focused_part(), "Columns");
 }
 
 #[test]

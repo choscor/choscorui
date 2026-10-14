@@ -231,10 +231,16 @@ fn a_hosted_header_sorts_resizes_and_moves_between_columns() {
     assert_eq!(h.bounds().size.width, 180.0);
     let y = h.bounds().center().y;
     h.click(Point::new(60.0, y));
-    assert_eq!(h.semantics().role, SemanticRole::ColumnHeader);
-    assert_eq!(h.semantics().value.as_deref(), Some("ascending"));
+    assert_eq!(h.focused_node().unwrap().role, SemanticRole::ColumnHeader);
+    assert_eq!(
+        h.focused_node().unwrap().value.as_deref(),
+        Some("ascending")
+    );
     h.click(Point::new(60.0, y));
-    assert_eq!(h.semantics().value.as_deref(), Some("descending"));
+    assert_eq!(
+        h.focused_node().unwrap().value.as_deref(),
+        Some("descending")
+    );
     let edge = Point::new(110.0, y);
     press(
         &mut h,
@@ -256,10 +262,10 @@ fn a_hosted_header_sorts_resizes_and_moves_between_columns() {
             button: PointerButton::Primary,
         },
     );
-    assert_eq!(h.semantics().description, "120 points wide");
+    assert_eq!(h.focused_node().unwrap().description, "120 points wide");
     h.focus();
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().name, "Size");
+    assert_eq!(h.focused_node().unwrap().name, "Size");
     h.key(Key::Enter);
     assert!(h.perform(SemanticAction::Activate, None));
     assert_eq!(
@@ -317,7 +323,14 @@ fn a_hosted_column_browser_reports_its_path() {
     assert!(set_value(&mut h, ControlValue::Indices(vec![0, 0])));
     assert!(!set_value(&mut h, ControlValue::Indices(vec![5])));
     assert!(h.messages().is_empty());
-    assert_eq!(h.semantics().value.as_deref(), Some("Report"));
+    let parts = h.parts();
+    let selected = |name: &str| {
+        parts
+            .parts()
+            .iter()
+            .any(|part| part.node.name == name && part.node.state.selected == Some(true))
+    };
+    assert!(selected("Report"), "the path item is selected");
     assert!(h.perform(SemanticAction::Focus, None));
     h.set_enabled(false);
     h.key(Key::ArrowLeft);

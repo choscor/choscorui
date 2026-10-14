@@ -856,13 +856,13 @@ mod tests {
     fn header_view_sorts_the_products_by_the_focused_column() {
         let mut page = Harness::new("header-view");
         assert!(page.act("Name", SemanticAction::Activate));
-        assert_eq!(page.value("Name").as_deref(), Some("ascending"));
+        assert_eq!(page.part_value("Name").as_deref(), Some("ascending"));
         assert!(page.act("Products", SemanticAction::Focus));
         press_key(&mut page, Key::Home);
         let first = page.value("Products").unwrap_or_default();
         assert!(first.starts_with("Bánh mì, "), "{first}");
         assert!(page.act("Name", SemanticAction::Activate));
-        assert_eq!(page.value("Name").as_deref(), Some("descending"));
+        assert_eq!(page.part_value("Name").as_deref(), Some("descending"));
         // The caption and the total row describe the table.
         let table = page.node("Products");
         assert_eq!(
