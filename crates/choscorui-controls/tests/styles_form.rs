@@ -426,7 +426,10 @@ fn assert_choice_box(tokens: &DesignTokens, kind: ControlKind, corner: Corners) 
     assert_eq!(disabled.opacity, 0.5);
 }
 
-fn assert_label(tokens: &DesignTokens, query: StyleQuery) {
+/// Checks a form label. `invalid` is the foreground of the invalid
+/// label: `Destructive` for a choice, and `Foreground` for a label that
+/// has no invalid state.
+fn assert_label(tokens: &DesignTokens, query: StyleQuery, invalid: ColorRole) {
     let label = get(tokens, query);
     let mut text = tokens.text(TextSize::Sm, FontWeight::MEDIUM);
     text.line_height = text.size;
@@ -436,9 +439,8 @@ fn assert_label(tokens: &DesignTokens, query: StyleQuery) {
     );
     let disabled = get(tokens, query.state(VisualState::DISABLED));
     assert_eq!(disabled.opacity, 0.5);
-    // An invalid label uses the destructive foreground.
-    let invalid = get(tokens, query.state(VisualState::INVALID));
-    assert_eq!(invalid.foreground, tokens.color(ColorRole::Destructive));
+    let invalid_label = get(tokens, query.state(VisualState::INVALID));
+    assert_eq!(invalid_label.foreground, tokens.color(invalid));
 }
 
 #[test]
@@ -482,7 +484,11 @@ fn checkbox_matches_its_reference_table() {
         assert_choice_box(&tokens, ControlKind::Checkbox, Corners::all(4.0));
         let icon = get(&tokens, StyleQuery::new(ControlKind::Checkbox, Slot::Root));
         assert_eq!(icon.icon_size, 14.0);
-        assert_label(&tokens, StyleQuery::new(ControlKind::Checkbox, Slot::Label));
+        assert_label(
+            &tokens,
+            StyleQuery::new(ControlKind::Checkbox, Slot::Label),
+            ColorRole::Destructive,
+        );
     }
 }
 
@@ -506,7 +512,7 @@ fn radio_group_matches_its_reference_table() {
             )
         );
         assert_eq!(get(&tokens, query(Slot::Group)).gap, 12.0);
-        assert_label(&tokens, query(Slot::Label));
+        assert_label(&tokens, query(Slot::Label), ColorRole::Destructive);
     }
 }
 
@@ -575,7 +581,12 @@ fn switch_matches_its_reference_table() {
                 );
             }
         }
-        assert_label(&tokens, StyleQuery::new(ControlKind::Switch, Slot::Label));
+        // A switch has no invalid state, so its label does not change.
+        assert_label(
+            &tokens,
+            StyleQuery::new(ControlKind::Switch, Slot::Label),
+            ColorRole::Foreground,
+        );
     }
 }
 
@@ -729,7 +740,11 @@ fn slider_matches_its_reference_table() {
 #[test]
 fn label_matches_its_reference_table() {
     for tokens in schemes() {
-        assert_label(&tokens, StyleQuery::new(ControlKind::Label, Slot::Root));
+        assert_label(
+            &tokens,
+            StyleQuery::new(ControlKind::Label, Slot::Root),
+            ColorRole::Foreground,
+        );
     }
 }
 

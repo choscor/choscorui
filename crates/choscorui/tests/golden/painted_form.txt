@@ -4397,10 +4397,7 @@ opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #e7000bff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #e7000bff
-= rest: hovered pressed focused focus-visible checked indeterminate selected open highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ## radio-group
 sizes default
 slot root: root track range thumb icon content header title description footer action trigger value placeholder item item-indicator separator shortcut group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
@@ -4927,10 +4924,7 @@ opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #e7000bff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #e7000bff
-= rest: hovered pressed focused focus-visible checked indeterminate selected open highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ### switch default sm root
 # rest
 shadow 10,10 24x14 r9999 offset 0,1 blur2 spread0 #0000000d
@@ -4974,10 +4968,7 @@ opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
-# invalid
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #e7000bff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #e7000bff
-= rest: hovered pressed focused focus-visible checked indeterminate selected open highlighted
+= rest: hovered pressed focused focus-visible invalid checked indeterminate selected open highlighted
 ## textarea
 sizes default
 slot root: root track thumb indicator label content header title description footer action trigger value item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress

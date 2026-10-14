@@ -195,7 +195,7 @@ fn checkbox(cx: &Cx) -> ResolvedStyle {
     style.radius = Corners::all(4.0);
     style.icon_size = 14.0;
     if cx.q.slot == Slot::Label {
-        return label(cx);
+        return invalid_label(cx);
     }
     style
 }
@@ -210,7 +210,7 @@ fn radio(cx: &Cx) -> ResolvedStyle {
             style.radius = Corners::all(cx.r(RadiusScale::Full));
             style
         }
-        Slot::Label => label(cx),
+        Slot::Label => invalid_label(cx),
         Slot::Group => {
             let mut style = cx.base();
             style.gap = cx.sp(3.0);
@@ -577,7 +577,7 @@ fn field(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Label => {
             // A label that wraps a whole field becomes a selectable card.
-            let mut style = label(cx);
+            let mut style = invalid_label(cx);
             style.gap = cx.sp(2.0);
             style.text.line_height = style.text.size * 1.375;
             if cx.q.variant.0 == 1 {
@@ -779,15 +779,21 @@ fn kbd(cx: &Cx) -> ResolvedStyle {
     style
 }
 
-/// A form label: small, medium weight, and tight leading. An invalid
-/// label uses the destructive foreground.
+/// A form label: small, medium weight, and tight leading.
 pub(crate) fn label(cx: &Cx) -> ResolvedStyle {
     let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM);
     style.text.line_height = style.text.size;
     style.gap = cx.sp(2.0);
+    disabled(&mut style, cx);
+    style
+}
+
+/// The label of a choice or a field, which can be invalid: an invalid
+/// label uses the destructive foreground.
+fn invalid_label(cx: &Cx) -> ResolvedStyle {
+    let mut style = label(cx);
     if cx.s().invalid() {
         style.foreground = cx.c(ColorRole::Destructive);
     }
-    disabled(&mut style, cx);
     style
 }

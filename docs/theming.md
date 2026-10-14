@@ -304,7 +304,8 @@ Only fields have an invalid state. The recipe has two invalid looks:
 
 While focus shows, an invalid control keeps the focus ring and the
 `destructive` border. Thus focus stays visible. The label of an invalid
-checkbox or radio option uses `destructive` text.
+checkbox, radio option, or field uses `destructive` text. Other labels,
+such as the switch label, do not change.
 
 `paint_slot` is the general slot painter. It paints the drop shadows, the
 ring, the backdrop blur, the background, the inset shadows, and the border,
