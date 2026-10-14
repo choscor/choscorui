@@ -3,7 +3,7 @@
 mod hosted;
 
 use choscorui_controls::{Command, CommandItem, ControlMessage, ControlValue};
-use choscorui_core::{Icon, Key, Point, SemanticAction, SemanticRole};
+use choscorui_core::{Icon, Key, Point, PointerButton, PointerEvent, SemanticAction, SemanticRole};
 use hosted::{Harness, texts};
 
 fn groups() -> Vec<(String, Vec<CommandItem>)> {
@@ -161,4 +161,96 @@ fn a_large_palette_publishes_only_the_rows_in_view() {
     assert_eq!(last.node.name, "Command 3");
     assert_eq!(last.item_index, Some(3));
     assert!(parts.len() < 20, "{} parts", parts.len());
+}
+
+fn calendar_point(h: &Harness) -> Point {
+    let bounds = h.bounds();
+    Point::new(
+        bounds.center().x,
+        bounds.origin.y + 4.0 + 32.0 + 4.0 + 28.0 + 16.0,
+    )
+}
+
+#[test]
+fn a_command_runs_only_when_the_press_and_the_release_land_on_it() {
+    let mut h = Harness::new(palette());
+    h.measure();
+    let calendar = calendar_point(&h);
+    let emoji = Point::new(calendar.x, calendar.y + 32.0);
+    let button = PointerButton::Primary;
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Down {
+            position: calendar,
+            button,
+        },
+    );
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Up {
+            position: emoji,
+            button,
+        },
+    );
+    assert!(h.messages().is_empty(), "a drag to another command");
+    h.click(emoji);
+    assert_eq!(h.messages(), [ControlMessage::ItemActivated(1)]);
+}
+
+#[test]
+fn home_end_and_the_page_keys_move_the_highlight() {
+    let items = (0..1_000)
+        .map(|index| CommandItem::new(format!("Command {index}")))
+        .collect();
+    let mut h = Harness::new(Command::new(
+        "Commands",
+        "Search",
+        vec![(String::new(), items)],
+    ));
+    h.measure();
+    h.focus();
+    let index = |h: &Harness| {
+        let parts = h.parts();
+        parts.parts()[parts.focused().unwrap()].item_index.unwrap()
+    };
+    h.key(Key::End);
+    assert_eq!(index(&h), 999);
+    h.key(Key::Home);
+    assert_eq!(index(&h), 0);
+    h.key(Key::PageDown);
+    let page = index(&h);
+    assert!(page > 1, "a page moves by the rows in view, not {page}");
+    h.key(Key::PageDown);
+    assert_eq!(index(&h), 2 * page);
+    h.key(Key::PageUp);
+    assert_eq!(index(&h), page);
+    assert!(
+        h.paint().commands().len() < 200,
+        "only the rows in view paint"
+    );
+}
+
+#[test]
+fn the_inline_palette_has_nothing_to_dismiss() {
+    let mut h = Harness::new(palette());
+    h.measure();
+    assert!(!h.perform(SemanticAction::Dismiss, None));
+    assert!(h.messages().is_empty());
+}
+
+#[test]
+fn the_dialog_form_keeps_its_top_while_the_list_filters() {
+    let mut h = Harness::new(Command::dialog(
+        "Open palette",
+        "Commands",
+        "Type a command…",
+        groups(),
+    ));
+    h.focus();
+    h.key(Key::Enter);
+    let top = |h: &Harness| h.parts().parts()[0].bounds.origin.y;
+    let before = top(&h);
+    assert!(h.text("bil"));
+    h.measure();
+    assert_eq!(top(&h), before);
 }

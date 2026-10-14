@@ -365,9 +365,10 @@ fn command(cx: &Cx) -> ResolvedStyle {
             style.foreground = cx.c(ColorRole::PopoverForeground);
             style.radius = Corners::all(cx.r(RadiusScale::Xl));
             style.padding = Edges::all(cx.sp(1.0));
+            // The inline palette is this wide, and the dialog form at most.
+            style.max_width = cx.sp(112.0);
             if cx.q.size == crate::style::ControlSize::Lg {
                 style.ring = cx.ring(1.0, cx.a(ColorRole::Foreground, 0.1));
-                style.max_width = 448.0;
             }
             style
         }

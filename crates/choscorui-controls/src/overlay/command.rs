@@ -102,8 +102,14 @@ pub struct Command {
     editor: TextField,
     empty: String,
     rows: Vec<Row>,
+    /// Each shown item and its row, in order.
+    shown: Vec<(usize, usize)>,
     /// The number of items that match the search text.
     matched: usize,
+    /// The item under the press, which runs when the release lands on it.
+    pressed: Option<usize>,
+    /// The top of the dialog form, kept while the list filters.
+    top: Option<f64>,
     /// The highlighted item, by its index across all groups.
     highlighted: Option<usize>,
     scroll: f64,
@@ -134,7 +140,10 @@ impl Command {
             editor: field,
             empty: String::new(),
             rows: Vec::new(),
+            shown: Vec::new(),
             matched: 0,
+            pressed: None,
+            top: None,
             highlighted: None,
             scroll: 0.0,
             metrics: Metrics::default(),
@@ -228,11 +237,33 @@ impl Command {
             .collect()
     }
 
-    fn enabled_matches(&self) -> Vec<usize> {
-        self.matches()
-            .into_iter()
-            .filter(|index| self.item(*index).is_some_and(|item| item.enabled))
-            .collect()
+    fn enabled(&self, index: usize) -> bool {
+        self.item(index).is_some_and(|item| item.enabled)
+    }
+
+    /// The position in `shown` of item `index`.
+    fn position(&self, index: usize) -> Option<usize> {
+        self.shown
+            .binary_search_by_key(&index, |(item, _)| *item)
+            .ok()
+    }
+
+    /// The first enabled item from position `from` of `shown`, toward
+    /// the end or the start.
+    fn enabled_from(&self, from: usize, forward: bool) -> Option<usize> {
+        let found = if forward {
+            self.shown
+                .get(from..)?
+                .iter()
+                .find(|(index, _)| self.enabled(*index))
+        } else {
+            let end = (from + 1).min(self.shown.len());
+            self.shown[..end]
+                .iter()
+                .rev()
+                .find(|(index, _)| self.enabled(*index))
+        };
+        found.map(|(index, _)| *index)
     }
 
     /// Rebuilds the rows for the search text and highlights the first
@@ -243,6 +274,7 @@ impl Command {
         let mut rows = Vec::new();
         let mut top = 0.0;
         let mut first = 0;
+        let mut self_shown = Vec::new();
         for (group, (label, items)) in self.groups.iter().enumerate() {
             let shown: Vec<usize> = (first..first + items.len())
                 .filter(|index| matches.binary_search(index).is_ok())
@@ -269,6 +301,7 @@ impl Command {
                 top += m.label;
             }
             for index in shown {
+                self_shown.push((index, rows.len()));
                 rows.push(Row {
                     kind: RowKind::Item(index),
                     top,
@@ -279,8 +312,9 @@ impl Command {
             top += m.group_padding;
         }
         self.rows = rows;
+        self.shown = self_shown;
         self.matched = matches.len();
-        self.highlighted = self.enabled_matches().first().copied();
+        self.highlighted = self.enabled_from(0, true);
         self.scroll = 0.0;
     }
 
@@ -300,46 +334,49 @@ impl Command {
         (self.content_height() - self.list.size.height).max(0.0)
     }
 
-    /// The row rectangle of item `index` with the scroll applied.
-    fn item_rect(&self, index: usize) -> Option<Rect> {
-        let row = self
-            .rows
-            .iter()
-            .find(|row| row.kind == RowKind::Item(index))?;
+    /// The rectangle of `row` with the scroll applied.
+    fn row_rect(&self, row: &Row) -> Rect {
         let inset = self.metrics.group_padding;
-        Some(Rect::from_xywh(
+        Rect::from_xywh(
             self.list.origin.x + inset,
             self.list.origin.y + row.top - self.scroll,
             self.list.size.width - 2.0 * inset,
             row.height,
-        ))
+        )
     }
 
+    /// The rows in view, found by a binary search.
+    fn visible_rows(&self) -> &[Row] {
+        let first = self
+            .rows
+            .partition_point(|row| row.top + row.height < self.scroll);
+        let bottom = self.scroll + self.list.size.height;
+        let end = first + self.rows[first..].partition_point(|row| row.top <= bottom);
+        &self.rows[first..end]
+    }
+
+    /// The enabled item under `point`, found by a binary search.
     fn item_at(&self, point: choscorui_core::Point) -> Option<usize> {
         if !self.list.contains(point) {
             return None;
         }
-        self.rows.iter().find_map(|row| match row.kind {
-            RowKind::Item(index)
-                if self
-                    .item_rect(index)
-                    .is_some_and(|rect| rect.contains(point))
-                    && self.item(index).is_some_and(|item| item.enabled) =>
-            {
+        let y = point.y - self.list.origin.y + self.scroll;
+        let at = self.rows.partition_point(|row| row.top + row.height <= y);
+        let row = self.rows.get(at)?;
+        match row.kind {
+            RowKind::Item(index) if self.row_rect(row).contains(point) && self.enabled(index) => {
                 Some(index)
             }
             _ => None,
-        })
+        }
     }
 
     fn highlight(&mut self, index: Option<usize>) {
         self.highlighted = index;
-        let Some(row) = index.and_then(|index| {
-            self.rows
-                .iter()
-                .find(|row| row.kind == RowKind::Item(index))
-                .copied()
-        }) else {
+        let Some(row) = index
+            .and_then(|index| self.position(index))
+            .map(|at| self.rows[self.shown[at].1])
+        else {
             return;
         };
         let height = self.list.size.height;
@@ -351,20 +388,29 @@ impl Command {
         self.scroll = self.scroll.clamp(0.0, self.max_scroll());
     }
 
-    /// Moves the highlight one enabled match forward or back. It stops at
-    /// the ends.
-    fn step(&mut self, forward: bool) {
-        let matches = self.enabled_matches();
-        let next = match self
-            .highlighted
-            .and_then(|current| matches.iter().position(|index| *index == current))
-        {
-            Some(at) if forward => matches.get(at + 1).or(matches.get(at)),
-            Some(at) => matches.get(at.saturating_sub(1)),
-            None if forward => matches.first(),
-            None => matches.last(),
+    /// Moves the highlight `count` shown items forward or back, to the
+    /// nearest enabled item. It stops at the ends.
+    fn step(&mut self, forward: bool, count: usize) {
+        let last = self.shown.len().saturating_sub(1);
+        let next = match self.highlighted.and_then(|index| self.position(index)) {
+            Some(at) if forward => self
+                .enabled_from((at + count).min(last), true)
+                .or_else(|| self.enabled_from(last, false)),
+            Some(at) => self
+                .enabled_from(at.saturating_sub(count), false)
+                .or_else(|| self.enabled_from(0, true)),
+            None if forward => self.enabled_from(0, true),
+            None => self.enabled_from(last, false),
         };
-        self.highlight(next.copied());
+        if next.is_some() {
+            self.highlight(next);
+        }
+    }
+
+    /// The number of items that fit in the list, for PageUp and PageDown.
+    fn page(&self) -> usize {
+        let item = self.metrics.item.max(1.0);
+        ((self.list.size.height / item).floor() as usize).max(1)
     }
 
     fn run(&mut self, cx: &mut ControlContext<'_>, index: usize) {
@@ -387,6 +433,7 @@ impl Command {
         if open {
             self.editor.replace_value("");
             self.filter();
+            self.top = None;
         }
         true
     }
@@ -405,7 +452,12 @@ impl Command {
 
     fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> Option<EventReply> {
         match key {
-            Key::ArrowDown | Key::ArrowUp => self.step(key == Key::ArrowDown),
+            Key::ArrowDown | Key::ArrowUp => self.step(key == Key::ArrowDown, 1),
+            Key::PageDown | Key::PageUp => self.step(key == Key::PageDown, self.page()),
+            Key::Home => self.highlight(self.enabled_from(0, true)),
+            Key::End => {
+                self.highlight(self.enabled_from(self.shown.len().saturating_sub(1), false))
+            }
             Key::Enter => {
                 if let Some(index) = self.highlighted {
                     self.run(cx, index);
@@ -433,14 +485,24 @@ impl Command {
                 Some(EventReply::Stop)
             }
             PointerEvent::Down { position, .. } if self.list.contains(position) => {
+                self.pressed = self.item_at(position);
                 cx.request_focus();
                 Some(EventReply::Stop)
             }
+            // A command runs when the press and the release land on it.
             PointerEvent::Up { position, .. } if self.list.contains(position) => {
-                if let Some(index) = self.item_at(position) {
+                let pressed = self.pressed.take();
+                if let Some(index) = self
+                    .item_at(position)
+                    .filter(|index| pressed == Some(*index))
+                {
                     self.run(cx, index);
                 }
                 Some(EventReply::Stop)
+            }
+            PointerEvent::Up { .. } => {
+                self.pressed = None;
+                None
             }
             PointerEvent::Move { position } => {
                 if let Some(index) = self.item_at(position)
@@ -448,6 +510,7 @@ impl Command {
                 {
                     self.highlighted = Some(index);
                     cx.request_paint();
+                    cx.request_semantics();
                 }
                 None
             }
@@ -545,17 +608,9 @@ impl Command {
             let style = cx.style(self.style_query(Slot::Description, VisualState::NONE));
             cx.label(list, &self.empty, &style, TextAlign::Center);
         }
-        let inset = self.metrics.group_padding;
-        for row in &self.rows {
-            let rect = Rect::from_xywh(
-                list.origin.x + inset,
-                list.origin.y + row.top - self.scroll,
-                list.size.width - 2.0 * inset,
-                row.height,
-            );
-            if rect.max_y() < list.origin.y || rect.origin.y > list.max_y() {
-                continue;
-            }
+        let glyph = cx.style(self.style_query(Slot::Icon, VisualState::NONE));
+        for row in self.visible_rows() {
+            let rect = self.row_rect(row);
             match row.kind {
                 RowKind::Label(group) => {
                     let style = cx.style(self.style_query(Slot::GroupLabel, VisualState::NONE));
@@ -590,7 +645,7 @@ impl Command {
                     cx.slot(rect, &style, |cx, inner| {
                         let mut text = inner;
                         if let Some(icon) = item.icon {
-                            let size = style.icon_size.max(16.0);
+                            let size = glyph.icon_size;
                             let x = if cx.rtl {
                                 inner.max_x() - size
                             } else {
@@ -631,30 +686,33 @@ impl CustomControl for Command {
             };
         }
         self.read_metrics(cx);
+        let root = cx.style(self.style_query(Slot::Root, VisualState::NONE));
         Measured {
-            size: Size::new(448.0, self.natural_height(cx)),
+            size: Size::new(root.max_width, self.natural_height(cx)),
             baseline: None,
         }
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.read_metrics(cx);
+        if self.viewport != cx.viewport {
+            self.top = None;
+        }
         self.viewport = cx.viewport;
         let root = cx.style(self.style_query(Slot::Root, VisualState::NONE));
         self.motion_ms = cx
             .style(self.style_query(Slot::Overlay, VisualState::NONE))
             .motion_ms;
         let panel = if self.dialog.is_some() {
-            // The dialog form is centered in the window.
+            // The dialog form opens centered in the window. Its top stays
+            // while the list filters, and the form stays in the window.
             let viewport = cx.viewport;
             let width = root.max_width.min(viewport.size.width - 32.0);
             let height = self.natural_height(cx);
-            Rect::from_xywh(
-                viewport.center().x - width / 2.0,
-                viewport.origin.y + (viewport.size.height - height) / 2.0,
-                width,
-                height,
-            )
+            let centered = viewport.origin.y + (viewport.size.height - height) / 2.0;
+            let top = *self.top.get_or_insert(centered);
+            let top = top.min(viewport.max_y() - height).max(viewport.origin.y);
+            Rect::from_xywh(viewport.center().x - width / 2.0, top, width, height)
         } else {
             bounds
         };
@@ -810,20 +868,8 @@ impl CustomControl for Command {
             column_count: None,
         });
         let list = Some(parts.len() - 1);
-        let first = self
-            .rows
-            .partition_point(|row| row.top + row.height < self.scroll);
-        let inset = self.metrics.group_padding;
-        for row in &self.rows[first..] {
-            if row.top - self.scroll > self.list.size.height {
-                break;
-            }
-            let bounds = Rect::from_xywh(
-                self.list.origin.x + inset,
-                self.list.origin.y + row.top - self.scroll,
-                self.list.size.width - 2.0 * inset,
-                row.height,
-            );
+        for row in self.visible_rows() {
+            let bounds = self.row_rect(row);
             match row.kind {
                 RowKind::Label(group) => {
                     parts.push(
@@ -888,6 +934,8 @@ impl CustomControl for Command {
                 cx.request_layout();
                 changed
             }
+            // The inline form has nothing to dismiss.
+            SemanticAction::Dismiss if self.dialog.is_none() => false,
             SemanticAction::Dismiss => {
                 self.change_open(cx, false);
                 cx.emit(ControlMessage::Dismissed);

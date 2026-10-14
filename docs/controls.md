@@ -3627,25 +3627,32 @@ is disabled. `set_value` returns false.
   shown command is hidden, and separators sit between shown groups.
 - The first enabled command that shows is highlighted after each change.
   ArrowDown and ArrowUp move the highlight over enabled commands and stop
-  at the ends. Hover highlights a command.
-- Enter or a click runs the highlighted command and emits
-  `ItemActivated(index)`. The index counts every command of every group in
-  order. A disabled command does not run.
+  at the ends. PageDown and PageUp move it by the rows in view. Home and
+  End go to the first and the last enabled command. Hover highlights a
+  command.
+- Enter runs the highlighted command and emits `ItemActivated(index)`.
+  The index counts every command of every group in order. A click runs a
+  command only when the press and the release are on it. A disabled
+  command does not run.
+- Paint, hit tests, and key moves look only at the rows in view, so a
+  large list stays fast.
 - The list grows with its rows up to 300 pt, then scrolls. It keeps the
   highlight in view. `with_empty(text)` shows `text` when nothing matches.
 - **`Command::dialog`.** An outline button opens the palette centered in a
-  modal dialog, with an empty search. Running a command closes it. Escape,
-  a press outside the palette, or `Dismiss` closes it and emits
-  `Dismissed`.
+  modal dialog, with an empty search. The top of the palette stays at its
+  open position while the list filters, and the palette stays in the
+  window. Running a command closes it. Escape, a press outside the
+  palette, or `Dismiss` closes it and emits `Dismissed`. The inline
+  palette has nothing to dismiss: `Dismiss` returns false.
 - `CommandItem::with_icon` adds a leading icon, `with_shortcut` adds the
   shortcut text at the end, and `disabled` shows the command without
   letting it run.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Palette | `Root` | `popover` fill, radius xl, 4 pt padding; in a dialog, a 1 pt ring at 10% `foreground` and at most 448 pt wide |
+| Palette | `Root` | `popover` fill, radius xl, 4 pt padding, 448 pt (112 spacing units) wide inline and at most that wide in a dialog; in a dialog, a 1 pt ring at 10% `foreground` |
 | Input | `Input` | 32 pt high, `input` fill and border at 30%, radius lg, 8 pt side padding and gap |
-| Search icon | `Icon` | 16 pt at 50% opacity |
+| Search icon | `Icon` | 16 pt at 50% opacity; command icons take the same size |
 | Group | `Group` | 4 pt padding |
 | Group label | `GroupLabel` | xs medium `muted-foreground` text |
 | Command | `Item` | 32 pt high, radius sm (lg in the dialog form); `muted` fill while highlighted or selected |
