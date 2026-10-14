@@ -22,10 +22,10 @@ use crate::ui::pages::datetime::{LIMITED, date_time, today};
 use crate::ui::pages::system::capability_rows;
 use crate::ui::shell::{Theme, WindowState};
 use choscorui::compose::view::ViewHost;
-use choscorui::controls::{DateTimeEdit, DateTimeKind, ShortcutModifiers};
+use choscorui::controls::{ControlKind, DateTimeEdit, DateTimeKind, ShortcutModifiers};
 use choscorui::core::{
     BaseColor, Key, KeyEvent, Locale, Localizer, NodeId, Point, PointerButton, PointerEvent,
-    SemanticAction, SemanticNode, SemanticRole, StatusItemSpec, Support, WheelUnit, WindowGeometry,
+    SemanticAction, SemanticNode, StatusItemSpec, Support, WheelUnit, WindowGeometry,
 };
 use choscorui::{AppContext, WindowId};
 use std::time::{Duration, Instant};
@@ -161,14 +161,14 @@ fn semantic(host: &mut ViewHost, name: &str) -> Option<SemanticNode> {
     host.semantic(node)
 }
 
-/// The canvas control: the list whose description reports the zoom. The
-/// sidebar button and the page title share its name, which is translated.
+/// The canvas control, found by its control kind. The sidebar button and
+/// the page title share its name, which is translated.
 fn canvas_node(host: &mut ViewHost) -> Option<NodeId> {
     host.semantics()
         .0
         .into_iter()
         .find(|entry| {
-            entry.node.role == SemanticRole::List && entry.node.description.starts_with("Zoom ")
+            entry.part.is_none() && host.control_kind(entry.id) == Some(ControlKind::Canvas)
         })
         .map(|entry| entry.id)
 }
@@ -426,8 +426,10 @@ fn restores(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext, saved: &Saved) 
     let dock = gallery.open(cx, page_index("dock"), "", &saved.state, false);
     settle(cx);
     let window = state(gallery, canvas);
-    let zoom = format!("Zoom {:.0}%", saved.state.canvas_zoom * 100.0);
     let host = host(cx, canvas);
+    // The canvas reports its zoom in the language of the window.
+    let percent = (saved.state.canvas_zoom * 100.0).round().to_string();
+    let zoom = host.env().text("choscorui.zoom", &[("percent", &percent)]);
     let shown = canvas_node(host)
         .and_then(|node| host.semantic(node))
         .map(|node| node.description);
