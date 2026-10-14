@@ -7,16 +7,11 @@ use std::path::Path;
 
 /// Each file that mounts a gallery control, how many mounts it has, and
 /// which controls they are.
-const OWN: [(&str, usize, &str); 5] = [
+const OWN: [(&str, usize, &str); 4] = [
     (
         "pages/containers/dock.rs",
         2,
         "DockView draws the dock layout",
-    ),
-    (
-        "pages/containers/tool_box.rs",
-        2,
-        "ToolBoxPages draws the text of each tool box page",
     ),
     (
         "pages/data.rs",

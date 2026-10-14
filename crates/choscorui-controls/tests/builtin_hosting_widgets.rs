@@ -878,6 +878,22 @@ fn a_hosted_tool_box_opens_pages() {
 }
 
 #[test]
+fn a_hosted_tool_box_paints_the_open_page_text_and_takes_focus() {
+    let titles = ["General", "Advanced"].map(String::from).to_vec();
+    let pages = ["Name and icon", "Cache"].map(String::from).to_vec();
+    let mut h = Harness::new(ToolBox::new(titles).with_page_texts(pages));
+    assert_eq!(
+        texts(&h.paint()),
+        vec!["General", "Advanced", "Name and icon"]
+    );
+    assert!(set_value(&mut h, ControlValue::Index(Some(1))));
+    assert_eq!(texts(&h.paint()), vec!["General", "Advanced", "Cache"]);
+    assert!(h.semantics().actions.contains(&SemanticAction::Focus));
+    assert!(h.perform(SemanticAction::Focus, None));
+    assert!(h.messages().is_empty());
+}
+
+#[test]
 fn a_hosted_numeric_display_shows_a_value_and_takes_no_input() {
     let mut h = Harness::new(NumericDisplay::new(4, NumberBase::Decimal).hosted("Count"));
     assert!(!h.host.get(h.node).unwrap().focusable());

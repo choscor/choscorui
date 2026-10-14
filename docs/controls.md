@@ -983,22 +983,27 @@ node as its child. No pages report a build error.
   item, the title, and a chevron that points up on the open page.
   `header_height` is one line of text and 16 pt above and below. The host
   paints the page.
+- `with_page_texts(texts)` gives each page a text. A control host paints
+  the text of the open page with the `Accordion` `Content` look. The text
+  wraps in the page, and the lines past the end of the page are cut.
 - In a control host, one node publishes the focused header. A click on a
-  header opens its page.
+  header opens its page. The node also has the `Focus` action, which moves
+  the keyboard focus to the tool box.
 
 | Field | `ToolBox::header_semantics`, one node per header |
 | --- | --- |
 | Role | `Button` (AXButton) |
 | Name / value | page title / - |
 | State | expanded for the open page |
-| Actions | `Activate`, `Expand` |
+| Actions | `Activate`, `Expand`; `Focus` on the hosted node |
 
 `ToolBox` has no handler for these actions. The host maps them to `open`.
 
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pins this behavior.
 
 **As a view.** `ToolBox::new(titles, open)` edits a `Binding<usize>`
-through the `Index` value in both directions. The application paints the
+through the `Index` value in both directions. To show a text in each page,
+call `with_page_texts` in `.with_env`. Otherwise, the application paints the
 open page in the area under the headers.
 
 ### Text editing

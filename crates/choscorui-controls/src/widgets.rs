@@ -7,6 +7,7 @@ use crate::custom::{
     ControlContext, ControlEvent, ControlHost, ControlMessage, ControlValue, CustomControl,
     MeasureContext,
 };
+use crate::form::measured::paint_wrapped;
 use crate::form::step_text::{Repeat, StepText, text_rect};
 use crate::hosted::{self, Parts};
 use crate::style::{
@@ -1279,6 +1280,8 @@ impl CustomControl for HostedDial {
 #[derive(Clone, Debug)]
 pub struct ToolBox {
     titles: Vec<String>,
+    /// The text that a host paints in each page.
+    texts: Vec<String>,
     current: usize,
     focused: usize,
     /// In a control host: the header height, the bounds, and the hovered
@@ -1292,12 +1295,21 @@ impl ToolBox {
     pub fn new(titles: Vec<String>) -> Self {
         Self {
             titles,
+            texts: Vec::new(),
             current: 0,
             focused: 0,
             header: 0.0,
             bounds: Rect::default(),
             parts: Parts::default(),
         }
+    }
+    /// Gives the pages `texts`, in the order of the titles. A host paints
+    /// the text of the open page wrapped in the page, with the
+    /// `Accordion` content look, and cuts the lines past its end.
+    #[must_use]
+    pub fn with_page_texts(mut self, texts: Vec<String>) -> Self {
+        self.texts = texts;
+        self
     }
     pub fn current(&self) -> usize {
         self.current
@@ -1514,14 +1526,28 @@ impl CustomControl for ToolBox {
     fn paint(&self, cx: &mut PaintContext<'_>) {
         let focus_visible = cx.state.focus_visible();
         ToolBox::paint(self, cx, self.header, focus_visible);
+        let Some(text) = self.texts.get(self.current) else {
+            return;
+        };
+        let (_, page) = self.layout(cx.bounds, self.header);
+        let style = cx.style(StyleQuery::new(ControlKind::Accordion, Slot::Content));
+        cx.list.push_clip(page);
+        paint_wrapped(cx, page, text, &style, TextAlign::Start);
+        let _ = cx.list.pop_clip();
     }
 
-    /// The node of the focused header, as `header_semantics` gives it.
+    /// The node of the focused header, as `header_semantics` gives it,
+    /// which assistive technology can also focus.
     fn semantics(&self) -> SemanticNode {
-        self.header_semantics()
+        let mut node = self
+            .header_semantics()
             .into_iter()
             .nth(self.focused)
-            .unwrap_or_else(|| hosted::node(SemanticRole::Group, "", Vec::new()))
+            .unwrap_or_else(|| hosted::node(SemanticRole::Group, "", Vec::new()));
+        if !self.titles.is_empty() {
+            node.actions.push(SemanticAction::Focus);
+        }
+        node
     }
 
     fn perform(
@@ -1530,6 +1556,10 @@ impl CustomControl for ToolBox {
         action: SemanticAction,
         _value: Option<&str>,
     ) -> bool {
+        if action == SemanticAction::Focus && !self.titles.is_empty() {
+            cx.request_focus();
+            return true;
+        }
         if !matches!(action, SemanticAction::Activate | SemanticAction::Expand) {
             return false;
         }
