@@ -302,6 +302,27 @@ pub(crate) fn detach(window: usize) {
     {
         INVALIDATE_LINK.send(link, ());
     }
+    let fix = std::env::var("DIAG_FIX").unwrap_or_default();
+    let has = |n: &str| fix.split(',').any(|x| x == n);
+    if let Some(s) = &surface {
+        let _pool = Pool::new();
+        if has("forget") {
+            forget_presentations(&s.shared);
+        }
+        if has("contents") {
+            crate::ffi::quartz::SET_LAYER_CONTENTS.send(&s.layer, (None,));
+        }
+        if has("device") {
+            SET_LAYER_DEVICE.send(&s.layer, (None,));
+        }
+        if has("unhost") {
+            SET_VIEW_LAYER.send(&s.view, (None,));
+            SET_WANTS_LAYER.send(&s.view, (false,));
+        }
+        if has("flush") {
+            let _ = crate::ffi::quartz::TRANSACTION_FLUSH.class_send(());
+        }
+    }
 }
 
 /// Moves `window` to Core Graphics for the rest of its life and repaints
@@ -493,7 +514,8 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
     }
     // Startup and live resize present inside the Core Animation
     // transaction, so the content matches the window frame.
-    let transaction = !surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ());
+    let transaction = (!surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ()))
+        && !std::env::var("DIAG_FIX").unwrap_or_default().contains("notx");
     if transaction != surface.transaction {
         SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (transaction,));
         surface.transaction = transaction;

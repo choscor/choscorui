@@ -1024,6 +1024,9 @@ impl Window {
     pub fn close(&mut self) {
         if !self.closed {
             let _pool = Pool::new();
+            if std::env::var("DIAG_FIX").unwrap_or_default().contains("early") {
+                metal::surface::detach(self.window.addr());
+            }
             // setReleasedWhenClosed:NO keeps ownership after close.
             CLOSE.send(&self.window, ());
             self.closed = true;

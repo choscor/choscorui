@@ -15,6 +15,7 @@ use super::sdk::{c_functions, ffi_struct};
 objc_class!(CALayer: NSObject);
 objc_class!(CAMetalLayer: CALayer: NSObject);
 objc_class!(CADisplayLink: NSObject);
+objc_class!(CATransaction: NSObject);
 objc_protocol!(CAMetalDrawable);
 
 ffi_struct! {
@@ -45,6 +46,8 @@ messages! {
         () -> Autoreleased<CAMetalDrawable>;
     pub(crate) SET_CONTENTS_SCALE: instance CALayer, c"setContentsScale:", (f64) -> ();
     pub(crate) SET_LAYER_OPAQUE: instance CALayer, c"setOpaque:", (bool) -> ();
+    pub(crate) SET_LAYER_CONTENTS: instance CALayer, c"setContents:", (Option<&Obj<NSObject>>) -> ();
+    pub(crate) TRANSACTION_FLUSH: class CATransaction, c"flush", () -> ();
     pub(crate) DRAWABLE_TEXTURE: instance CAMetalDrawable, c"texture",
         () -> Option<&Obj<MTLTexture>>;
 
