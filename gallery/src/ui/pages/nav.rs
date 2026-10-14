@@ -4,7 +4,7 @@
 use crate::ui::page::{Build, PageCx, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Breadcrumb, Cx, Env, HStack, NavigationMenu, Pagination, Sidebar, View,
+    AnyView, Breadcrumb, Cx, Env, HStack, NavigationMenu, Pagination, Sidebar, View, ViewExt,
 };
 use choscorui::controls::{
     ControlSize, NavigationLink, SheetSide, SidebarCollapse, SidebarItem, SidebarItemVariant,
@@ -49,6 +49,14 @@ pub fn breadcrumb(_: &PageCx) -> AnyView {
             )
             .with(|breadcrumb| breadcrumb.with_collapsed(1..4)),
         ),
+        section(
+            t!("breadcrumb.disabled"),
+            Breadcrumb::new(
+                t!("breadcrumb.disabled_name"),
+                trail(&["breadcrumb.home", "breadcrumb.documentation"]),
+            )
+            .disabled(true),
+        ),
     ))
 }
 
@@ -80,6 +88,17 @@ impl View for PaginationPage {
                     20,
                     many.binding(),
                 ),
+            ),
+            section(
+                t!("pagination.disabled"),
+                Pagination::new(
+                    t!("pagination.locked"),
+                    previous(),
+                    next(),
+                    5,
+                    cx.state(2).binding(),
+                )
+                .disabled(true),
             ),
         ))
     }
@@ -113,7 +132,7 @@ fn menus(env: &Env) -> Vec<(String, Vec<NavigationLink>)> {
             ],
         ),
         (
-            text(env, "breadcrumb.components"),
+            text(env, "navigation-menu.components"),
             vec![
                 link(
                     "navigation-menu.alert_dialog",
@@ -135,9 +154,15 @@ fn menus(env: &Env) -> Vec<(String, Vec<NavigationLink>)> {
 }
 
 pub fn navigation_menu(_: &PageCx) -> AnyView {
-    column(section(
-        t!("navigation-menu.section"),
-        NavigationMenu::new(t!("navigation-menu.name"), menus),
+    column((
+        section(
+            t!("navigation-menu.section"),
+            NavigationMenu::new(t!("navigation-menu.name"), menus),
+        ),
+        section(
+            t!("navigation-menu.disabled"),
+            NavigationMenu::new(t!("navigation-menu.disabled_name"), menus).disabled(true),
+        ),
     ))
 }
 
@@ -147,7 +172,7 @@ fn sidebar_groups(env: &Env) -> Vec<(String, Vec<SidebarItem>)> {
         (
             text("sidebar.application"),
             vec![
-                SidebarItem::new(text("breadcrumb.home"), Icon::House),
+                SidebarItem::new(text("sidebar.home"), Icon::House),
                 SidebarItem::new(text("sidebar.inbox"), Icon::Inbox).with_badge("24"),
                 SidebarItem::new(text("sidebar.calendar"), Icon::Calendar),
                 SidebarItem::new(text("sidebar.search"), Icon::Search)
@@ -244,10 +269,18 @@ impl View for SidebarPage {
             .into_any(),
             right.into_any(),
         ]);
+        let disabled = make(
+            "sidebar.disabled_name",
+            SidebarVariant::Sidebar,
+            SidebarCollapse::None,
+            ControlSize::Default,
+        )
+        .disabled(true);
         column((
             section(t!("sidebar.section_first"), first),
             section(t!("sidebar.section_second"), second),
             section(t!("sidebar.section_third"), third),
+            section(t!("sidebar.disabled"), disabled),
         ))
     }
 }

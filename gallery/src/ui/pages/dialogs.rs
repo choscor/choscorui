@@ -1,7 +1,7 @@
 //! Dialogs: a modal alert with ordered buttons beside a modeless note,
 //! input dialogs with validation, the color picker, and the font dialog.
 
-use crate::ui::page::{Build, PageCx, column, row};
+use crate::ui::page::{Build, PageCx, column, row, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     self, AlertDialog, AnyView, Binding, Button, Card, Cx, Dynamic, Env, Fill, FontDialog, Frame,
@@ -329,6 +329,15 @@ impl View for ColorPickerPage {
                 ),
                 _ => None,
             }),
+            section(
+                t!("color-picker.disabled"),
+                view::ColorPicker::new(
+                    t!("color-picker.locked"),
+                    cx.state(ColorPicker::new(TEAL).hex()).binding(),
+                )
+                .frame(Frame::new().width(300.0))
+                .disabled(true),
+            ),
         ))
     }
 }
@@ -358,10 +367,10 @@ struct FontDialogPage;
 impl View for FontDialogPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let style = cx.state(TextStyle::new("Georgia", 22.0));
-        let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
-        column((
+        let dialog = |preview: &'static str, style: Binding<TextStyle>| {
+            let families = FAMILIES.iter().map(|family| (*family).to_owned()).collect();
             FontDialog::new(
-                t!("font-dialog.preview"),
+                t!(preview),
                 (
                     t!("font-dialog.family"),
                     t!("font-dialog.size"),
@@ -369,13 +378,21 @@ impl View for FontDialogPage {
                     t!("font-dialog.italic"),
                 ),
                 families,
-                style.binding(),
-            ),
+                style,
+            )
+        };
+        let locked = cx.state(TextStyle::new("Menlo", 14.0));
+        column((
+            dialog("font-dialog.preview", style.binding()),
             readout(t!(
                 "font-dialog.readout",
                 family = move || style.with(|style| style.family.clone()).unwrap_or_default(),
                 size = move || style.with(|style| style.size).unwrap_or_default(),
             )),
+            section(
+                t!("font-dialog.disabled"),
+                dialog("font-dialog.locked_preview", locked.binding()).disabled(true),
+            ),
         ))
     }
 }

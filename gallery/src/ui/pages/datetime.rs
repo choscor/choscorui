@@ -79,6 +79,15 @@ impl View for CalendarPage {
                         .with_dropdown_caption(1926, 2026)
                 }),
             ),
+            section(
+                t!("calendar.disabled"),
+                chooser(
+                    "calendar.booked",
+                    CalendarMode::Multiple,
+                    cx.state(days(&[1, 2])).binding(),
+                )
+                .disabled(true),
+            ),
         ))
     }
 }
@@ -101,7 +110,7 @@ pub fn calendar(_: &PageCx) -> AnyView {
 
 /// The English label of the range-limited editor, `date-time-edit.limited`
 /// in the catalogs; scripted checks find it by this name.
-pub(crate) const LIMITED: &str = "Meeting (Oct 2026, 09:00 – 17:00 on the 12th)";
+pub(crate) const LIMITED: &str = "Meeting (12 Oct 2026, 09:00 – 17:00)";
 
 /// The office hours that the limited editor allows.
 fn limits() -> (CivilDateTime, CivilDateTime) {
@@ -227,7 +236,7 @@ mod tests {
     #[test]
     fn the_limited_editor_clamps_hours_outside_office_hours() {
         let mut page = Harness::new("date-time-edit");
-        let message = "Outside the allowed range; Return clamps it";
+        let message = "Outside the allowed range; Return or leaving the field clamps it";
         assert!(page.host.find(message).is_none());
         assert!(page.act(LIMITED, SemanticAction::Focus));
         for _ in 0..5 {

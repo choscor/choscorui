@@ -3367,6 +3367,8 @@ false.
 
 ### Popover
 
+- The panel shows a title and a description only. To show fields or
+  other views in a popover, use the `popover` view modifier.
 - The trigger is an outline button. A press, Enter, or Space opens or
   closes the panel. Escape closes it and emits `Dismissed`. A press
   outside the panel, focus loss, and disabling also close it and emit
@@ -3409,6 +3411,9 @@ is disabled. `set_value` returns false.
 
 ### Dialog
 
+- The panel shows a title, a description, and buttons only. To show
+  fields or other views, use the `dialog`, `sheet`, or `drawer` view
+  modifier.
 - The trigger is an outline button. A press, Enter, Space, or `Activate`
   opens the panel. The control is modal while the panel is open.
 - **Focus.** The default footer button (the last one with the default

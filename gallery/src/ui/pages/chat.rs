@@ -1,7 +1,7 @@
 //! Chat components: messages, attachments, markers, the message
 //! scroller, and questionnaires.
 
-use crate::ui::page::{Build, PageCx, column, portrait, section};
+use crate::ui::page::{Build, PageCx, column, person, portrait, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     self, AnyView, Cx, Env, Frame, HStack, HorizontalAlignment, Marker, MessageScroller, VStack,
@@ -40,7 +40,7 @@ pub fn message(_: &PageCx) -> AnyView {
     column((
         section(
             t!("message.start"),
-            view::Message::new("Ana Lee", |env: &Env| {
+            view::Message::new(t!("people.ana"), |env: &Env| {
                 vec![
                     Bubble::new(text(env, "message.lunch")).with_variant(BubbleVariant::Muted),
                     Bubble::new(text(env, "message.new_place"))
@@ -48,10 +48,11 @@ pub fn message(_: &PageCx) -> AnyView {
                         .with_reactions("👍 2"),
                 ]
             })
-            .with(|message| {
+            .with_env(|message, env| {
+                let name = text(env, "people.ana");
                 message
-                    .with_avatar(Avatar::new("Ana Lee", "AL").with_image(portrait()))
-                    .with_header("Ana Lee · 12:01")
+                    .with_avatar(person(env, "ana").with_image(portrait()))
+                    .with_header(env.text("message.header", &[("name", &name)]))
             })
             .frame(wide()),
         ),
@@ -158,6 +159,15 @@ pub fn attachment(_: &PageCx) -> AnyView {
             .alignment(HorizontalAlignment::Leading)
             .spacing(Space::S3),
         ),
+        section(
+            t!("attachment.disabled"),
+            attachment_view("draft.docx", |env, attachment| {
+                attachment
+                    .with_detail("640 KB")
+                    .with_remove(remove(env, "draft.docx"))
+            })
+            .disabled(true),
+        ),
     ))
 }
 
@@ -213,6 +223,7 @@ pub fn marker(_: &PageCx) -> AnyView {
 /// 500 messages, every third one a reply.
 fn conversation(env: &Env) -> Vec<Message> {
     let you = text(env, "message.you");
+    let ana = person(env, "ana");
     let mut conversation = Vec::new();
     for index in 1..=500 {
         let number = index.to_string();
@@ -226,13 +237,13 @@ fn conversation(env: &Env) -> Vec<Message> {
             .align_end()
         } else {
             Message::new(
-                "Ana Lee",
+                text(env, "people.ana"),
                 vec![
                     Bubble::new(env.text("message-scroller.message", &args))
                         .with_variant(BubbleVariant::Muted),
                 ],
             )
-            .with_avatar(Avatar::new("Ana Lee", "AL"))
+            .with_avatar(ana.clone())
         };
         conversation.push(message);
     }
@@ -289,14 +300,12 @@ struct QuestionnairePage;
 
 impl View for QuestionnairePage {
     fn body(&self, cx: &mut Cx) -> impl View {
-        let current = cx.state(0_usize);
-        column(section(
-            t!("questionnaire.caption"),
+        let mut survey = |name: &'static str, current: usize| {
             view::Questionnaire::new(
-                t!("questionnaire.name"),
+                t!(name),
                 questions,
                 questionnaire_labels,
-                current.binding(),
+                cx.state(current).binding(),
             )
             .with_env(|questionnaire, env| {
                 let progress = env.clone();
@@ -308,7 +317,14 @@ impl View for QuestionnairePage {
                     )
                 })
             })
-            .frame(wide()),
+            .frame(wide())
+        };
+        column((
+            section(t!("questionnaire.caption"), survey("questionnaire.name", 0)),
+            section(
+                t!("questionnaire.disabled"),
+                survey("questionnaire.closed", 1).disabled(true),
+            ),
         ))
     }
 }

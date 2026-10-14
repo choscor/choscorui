@@ -1,7 +1,9 @@
 //! Data display components: cards, badges, avatars, carousels, the data
 //! table, and charts.
 
-use crate::ui::page::{Build, PageCx, column, portrait, row, section, stateful};
+use crate::ui::page::{
+    Build, PageCx, column, person, portrait, row, section, stateful, status_line,
+};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     AnyView, Avatar, AvatarGroup, Badge, Card, Carousel, Chart, Configured, Cx, DataTable, Env,
@@ -15,27 +17,40 @@ use choscorui::core::{Icon, ItemData, ItemModel, ListStore, Role, Value};
 pub fn card(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let (login, reports) = (cx.env().clone(), cx.env().clone());
+        let (env, status) = (cx.env().clone(), cx.state(String::new()));
+        let said = env.clone();
+        let report = move |key: &'static str| status.set(said.text(key, &[]));
         column((
             section(
                 t!("card.header_action"),
-                Card::new(t!("card.login_title"), t!("card.login_description")).with(move |card| {
-                    let text = |key| login.text(key, &[]);
-                    card.with_action(text("card.sign_up"), ButtonVariant::Link)
-                        .with_content(text("card.login_content"))
-                        .with_footer(text("card.login_google"), ButtonVariant::Outline)
-                        .with_footer(text("card.login"), ButtonVariant::Default)
-                }),
+                Card::new(t!("card.login_title"), t!("card.login_description"))
+                    .with(move |card| {
+                        let text = |key| login.text(key, &[]);
+                        card.with_action(text("card.sign_up"), ButtonVariant::Link)
+                            .with_content(text("card.login_content"))
+                            .with_footer(text("card.login_google"), ButtonVariant::Outline)
+                            .with_footer(text("card.login"), ButtonVariant::Default)
+                    })
+                    .on_item({
+                        let report = report.clone();
+                        move |index| {
+                            report(
+                                ["card.signing_up", "card.google", "card.logging_in"][index.min(2)],
+                            );
+                        }
+                    }),
             ),
             section(
                 t!("card.small"),
-                Card::new(t!("card.reports_title"), t!("card.reports_description")).with(
-                    move |card| {
+                Card::new(t!("card.reports_title"), t!("card.reports_description"))
+                    .with(move |card| {
                         card.with_content(reports.text("card.reports_content", &[]))
                             .with_footer(reports.text("card.manage", &[]), ButtonVariant::Outline)
                             .with_size(ControlSize::Sm)
-                    },
-                ),
+                    })
+                    .on_item(move |_| report("card.managing")),
             ),
+            status_line(status),
         ))
     })
 }
@@ -83,14 +98,13 @@ pub fn badge(_: &PageCx) -> AnyView {
 
 /// A group of three people at `size`, named by the catalog string `name`.
 fn team(name: &'static str, size: ControlSize, count: Option<&'static str>) -> impl View {
-    let people: Vec<_> = vec![
-        controls::Avatar::new("Ana Lee", "AL").with_image(portrait()),
-        controls::Avatar::new("Bao Tran", "BT"),
-        controls::Avatar::new("Chi Vo", "CV"),
-    ]
-    .into_iter()
-    .map(|avatar| avatar.with_size(size))
-    .collect();
+    let people = move |env: &Env| {
+        vec![
+            person(env, "ana").with_image(portrait()).with_size(size),
+            person(env, "bao").with_size(size),
+            person(env, "chi").with_size(size),
+        ]
+    };
     AvatarGroup::new(t!(name), people).with(move |group| {
         let group = group.with_size(size);
         match count {
@@ -100,25 +114,27 @@ fn team(name: &'static str, size: ControlSize, count: Option<&'static str>) -> i
     })
 }
 
+/// The avatar view of the sample person `key`.
+fn face(key: &'static str) -> Avatar {
+    Avatar::new(t!(format!("people.{key}")), "").with_env(move |_, env| person(env, key))
+}
+
 pub fn avatar(_: &PageCx) -> AnyView {
-    let ana = || Avatar::new("Ana Lee", "AL").with(|avatar| avatar.with_image(portrait()));
+    let ana = || face("ana").with(|avatar| avatar.with_image(portrait()));
     column((
-        section(
-            t!("avatar.image_fallback"),
-            row((ana(), Avatar::new("Bao Tran", "BT"))),
-        ),
+        section(t!("avatar.image_fallback"), row((ana(), face("bao")))),
         section(
             t!("avatar.sizes"),
             row([ControlSize::Sm, ControlSize::Default, ControlSize::Lg]
                 .into_iter()
-                .map(|size| Avatar::new("Chi Vo", "CV").with(move |avatar| avatar.with_size(size)))
+                .map(|size| face("chi").with(move |avatar| avatar.with_size(size)))
                 .collect::<Vec<_>>()),
         ),
         section(
             t!("avatar.badges"),
             row((
-                Avatar::new("Ana Lee", "AL").with(|avatar| avatar.with_badge(None)),
-                Avatar::new("Bao Tran", "BT").with(|avatar| {
+                face("ana").with(|avatar| avatar.with_badge(None)),
+                face("bao").with(|avatar| {
                     avatar
                         .with_size(ControlSize::Lg)
                         .with_badge(Some(Icon::Plus))
@@ -169,6 +185,10 @@ pub fn carousel(_: &PageCx) -> AnyView {
                         .with_orientation(Orientation::Vertical)
                         .with_per_view(2)
                 }),
+            ),
+            section(
+                t!("carousel.disabled"),
+                carousel_of(cx, "carousel.paused", 3).disabled(true),
             ),
         ))
     })
