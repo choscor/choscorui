@@ -271,16 +271,6 @@ impl Transitions {
             .retain(|node, track| keep(*node) || track.running() || track.pending.is_some());
     }
 
-    /// The ring and corners of the first slot of `node` that painted a
-    /// ring in its last paint, when the node has a record.
-    pub fn ring(&self, node: NodeId) -> Option<(Ring, super::Corners)> {
-        let state = self.state.borrow();
-        state.tracks.get(&node)?.slots.iter().find_map(|slot| {
-            let style = &slot.last;
-            style.ring.map(|ring| (ring, style.radius))
-        })
-    }
-
     /// Drops the record of `node`.
     pub fn remove(&self, node: NodeId) {
         self.state.borrow_mut().tracks.remove(&node);

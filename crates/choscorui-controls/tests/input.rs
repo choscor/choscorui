@@ -294,12 +294,24 @@ fn invalid_otp_rings_its_group_until_it_has_focus() {
 fn focus_frame_draws_the_ring_of_the_focused_control() {
     let mut h = Harness::new(Checkbox::new("Terms", false).with_invalid(true));
     h.focus();
-    h.paint();
-    let mut list = DisplayList::new();
     let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
+    let rings = |list: &DisplayList| {
+        list.commands()
+            .iter()
+            .filter(|command| matches!(command, DisplayCommand::StrokeRoundedRect { color, .. } if *color == ring))
+            .count()
+    };
+    // The ring eases in from the first paint.
+    h.paint();
+    h.set_time(1.0);
+    // In a frame, the control leaves its ring to the frame.
+    let mut own = DisplayList::new();
+    h.host.paint(&h.tree, &mut own, &h.env().framed(true));
+    assert_eq!(rings(&own), 0, "the control paints no ring");
+    let mut list = DisplayList::new();
     let mut cx = PaintContext::new(&mut list, h.bounds(), &tokens, &styles, &EstimatedText);
     FocusFrame.paint(&mut cx, &h.tree, &h.host);
-    let ring = tokens.ring_color(tokens.color(ColorRole::Ring));
     // The 4 pt box radius, not the md radius of the theme ring.
     assert!(
         list.commands().iter().any(|command| matches!(

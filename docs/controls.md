@@ -2816,10 +2816,13 @@ back with the content rectangle of each shown panel, in paint order.
 - `FocusFrame::paint` paints a focus ring outside the node. A container
   that clips its children still shows focus. The ring shows only while
   focus is visible.
-- The ring is the ring that the focused control painted last, with its
-  radius. Thus the frame does not cover the ring of an invalid field with
-  another ring. A control that painted no ring gets the theme's focus ring
-  at radius md.
+- A host painted with `HostEnv::framed(true)` does not paint the ring of
+  the focused node. The node leaves its first ring in
+  `ControlHost::framed_ring` as a `FramedRing`. The `FramedRing` has the
+  box of the part, the radius of each corner, and the ring of the state.
+  The frame paints that ring, so the ring shows once, with the shape of
+  the part. A control that left no ring gets the focus ring of the
+  context tokens at radius md.
 - `SizeGrip::press` records the start. `drag` returns a new content size,
   clamped to the minimum and the maximum. `release` ends the drag.
 - In right-to-left layouts, the grip sits at the bottom-left and grows to
@@ -2837,7 +2840,10 @@ back with the content rectangle of each shown panel, in paint order.
   the node that has the focus.
 - **As a view.** The `FocusFrame` view of `choscorui-compose` paints the
   ring after its content, outside the clip of the containers in the
-  content. It paints only for focus in its content.
+  content. It paints only for focus in its content. The focused control
+  paints no ring of its own. The frame ring takes the offsets and the
+  motion transforms between the frame and the focused node, and the
+  tokens of the focused node.
 - **As a view.** `SizeGrip::new(minimum, maximum, on_resize)` runs
   `on_resize` with the size of each `Changed(Range)` message. Give a pane
   size with `.value`, and size the pane with a live `.frame`, such as

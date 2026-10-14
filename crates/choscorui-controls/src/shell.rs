@@ -508,8 +508,7 @@ impl Toolbar {
                     let state = VisualState::FOCUS_VISIBLE;
                     let style = cx.style(query(Slot::Item).state(state));
                     if let Some(ring) = style.ring {
-                        let radius = style.radius.top_start;
-                        let _ = cx.list.draw_ring(*rect, radius, ring.width, ring.color);
+                        cx.ring_around(*rect, style.radius.top_start, ring);
                     }
                 }
                 ToolbarItemKind::Control { .. } | ToolbarItemKind::FlexibleSpace => {}

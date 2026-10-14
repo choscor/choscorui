@@ -119,14 +119,37 @@ fn the_focus_frame_draws_the_ring_outside_the_clip() {
     let rect = bounds(&mut host, "First");
     let list = host.paint();
     let depths = rings_around(&list, rect, width);
-    // The button draws its own ring inside the clip; the frame draws one
-    // outside it.
-    assert!(depths.contains(&0), "rings at clip depths {depths:?}");
+    // The frame draws the ring outside the clip, and the button draws none.
+    assert_eq!(depths, vec![0], "rings at clip depths");
     assert!(press(&mut host, Key::Tab));
     let second = bounds(&mut host, "Second");
     let list = host.paint();
     assert!(rings_around(&list, second, width).contains(&0));
     assert!(!rings_around(&list, rect, width).contains(&0));
+}
+
+#[test]
+fn the_focus_frame_moves_the_ring_with_the_focused_node() {
+    let width = DesignTokens::light().ring_width;
+    let moved = choscorui_compose::view::Button::new("Moved", || {})
+        .frame(Frame::size(80.0, 30.0))
+        .offset(Point::new(10.0, 5.0));
+    let mut host = host(FocusFrame::new(VStack::new(moved).clip_shape()));
+    let node = node(&mut host, "Moved");
+    host.focus(Some(node));
+    host.layout();
+    let rect = bounds(&mut host, "Moved");
+    let list = host.paint();
+    let commands = list.commands();
+    let ring = rect.inset(-width / 2.0);
+    let at = commands
+        .iter()
+        .rposition(|command| {
+            matches!(command, DisplayCommand::StrokeRoundedRect { rect, .. } if *rect == ring)
+        })
+        .expect("a ring");
+    let offset = choscorui_core::Transform::translate(10.0, 5.0);
+    assert_eq!(commands[at - 1], DisplayCommand::PushTransform(offset));
 }
 
 #[test]

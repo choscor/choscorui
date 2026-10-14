@@ -179,7 +179,7 @@ mod style;
 pub use style::{
     AddonAlign, AlertVariant, AttachmentState, BadgeVariant, BubbleVariant, ButtonVariant,
     CalendarDay, Content, ControlKind, ControlSize, Corners, Cursor, DefaultRecipe, ELLIPSIS,
-    Edges, EmptyMediaVariant, EstimatedText, FieldOrientation, ItemVariant, KbdVariant,
+    Edges, EmptyMediaVariant, EstimatedText, FieldOrientation, FramedRing, ItemVariant, KbdVariant,
     MarkerVariant, MenuItemVariant, Orientation, PaintContext, Recipe, ResolvedStyle, Ring,
     ShapedText, SheetSide, SidebarItemVariant, SidebarVariant, Sides, Slot, StyleCacheStats,
     StyleQuery, Styles, TabsVariant, TextAlign, TextLine, TextMeasure, TextOverflow, ToastVariant,

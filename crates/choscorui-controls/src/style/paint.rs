@@ -1,7 +1,7 @@
 //! The general slot painter and text helpers that every control uses.
 
 use super::{
-    ControlKind, Corners, Cursor, Orientation, ResolvedStyle, Slot, StyleQuery, Styles,
+    ControlKind, Corners, Cursor, Orientation, ResolvedStyle, Ring, Slot, StyleQuery, Styles,
     Transitions, VisualState,
 };
 use choscorui_core::grapheme_boundaries;
@@ -180,6 +180,35 @@ pub fn fill_area(list: &mut DisplayList, rect: Rect, rtl: bool, paint: &Paint) {
     match paint.solid_color() {
         Some(color) => list.fill_rect(rect, color),
         None => fill_shape(list, rect, &Corners::ZERO, rtl, paint),
+    }
+}
+
+/// A focus ring that a control inside a focus frame leaves to the frame:
+/// the box that it rings, the physical radius of each corner clockwise
+/// from the top left, and the ring. The frame paints it outside the clip
+/// of the containers between them, so the ring shows once.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FramedRing {
+    pub rect: Rect,
+    pub radii: [f64; 4],
+    pub ring: Ring,
+}
+
+impl FramedRing {
+    /// Strokes the ring just outside the box, following each corner.
+    pub fn paint(&self, list: &mut DisplayList) {
+        let [first, ..] = self.radii;
+        let (width, color) = (self.ring.width, self.ring.color);
+        if self.radii.iter().all(|radius| *radius == first) {
+            let _ = list.draw_ring(self.rect, first, width, color);
+        } else {
+            let half = width / 2.0;
+            let grown = self
+                .radii
+                .map(|radius| if radius > 0.0 { radius + half } else { 0.0 });
+            let path = Path::rounded_rect_corners(self.rect.inset(-half), grown);
+            let _ = list.stroke_path(path, Paint::Solid(color), StrokeStyle::new(width));
+        }
     }
 }
 
@@ -524,6 +553,9 @@ pub struct PaintContext<'a> {
     pointer: Option<(Point, &'a Cell<Cursor>)>,
     /// True inside the group opacity of a disabled control.
     dimmed: bool,
+    /// Where the focused node in a focus frame leaves its ring, in place
+    /// of painting it.
+    framed: Option<&'a Cell<Option<FramedRing>>>,
 }
 
 impl<'a> PaintContext<'a> {
@@ -551,6 +583,7 @@ impl<'a> PaintContext<'a> {
             transitions: None,
             pointer: None,
             dimmed: false,
+            framed: None,
         }
     }
 
@@ -606,6 +639,54 @@ impl<'a> PaintContext<'a> {
             transitions: self.transitions,
             pointer: self.pointer,
             dimmed: self.dimmed,
+            framed: self.framed,
+        }
+    }
+
+    /// Leaves the first focus ring of the node in `sink` for its focus
+    /// frame, and paints no ring.
+    #[must_use]
+    pub(crate) fn framed(mut self, sink: &'a Cell<Option<FramedRing>>) -> Self {
+        self.framed = Some(sink);
+        self
+    }
+
+    /// Leaves `ring` around `rect` to the focus frame, when the node has
+    /// one. Returns true when it did, so the caller paints no ring.
+    fn leave_ring(&mut self, rect: Rect, radii: [f64; 4], ring: Ring) -> bool {
+        let Some(sink) = self.framed else {
+            return false;
+        };
+        if sink.get().is_none() {
+            sink.set(Some(FramedRing { rect, radii, ring }));
+        }
+        true
+    }
+
+    /// Paints the box of a slot like [`paint_box`]. Inside a focus frame,
+    /// the frame paints the ring.
+    pub fn paint_box(&mut self, rect: Rect, style: &ResolvedStyle) {
+        let ring = style
+            .ring
+            .filter(|ring| ring.width > 0.0 && ring.color.alpha > 0);
+        let radii = clamp_corners(style.radius).physical(self.rtl);
+        match ring {
+            Some(ring) if self.leave_ring(rect, radii, ring) => {
+                let plain = ResolvedStyle {
+                    ring: None,
+                    ..style.clone()
+                };
+                paint_box(self.list, rect, &plain, self.rtl);
+            }
+            _ => paint_box(self.list, rect, style, self.rtl),
+        }
+    }
+
+    /// Strokes `ring` just outside `rect` with corner `radius`. Inside a
+    /// focus frame, the frame paints it.
+    pub fn ring_around(&mut self, rect: Rect, radius: f64, ring: Ring) {
+        if !self.leave_ring(rect, [radius; 4], ring) {
+            let _ = self.list.draw_ring(rect, radius, ring.width, ring.color);
         }
     }
 
@@ -679,7 +760,7 @@ impl<'a> PaintContext<'a> {
         if faded {
             let _ = self.list.push_opacity(style.opacity.clamp(0.0, 1.0));
         }
-        paint_box(self.list, rect, style, self.rtl);
+        self.paint_box(rect, style);
         self.cursor(rect, style.cursor);
         let inner = content_rect(rect, style, self.rtl);
         content(&mut self.at(inner), inner);
@@ -709,9 +790,7 @@ impl<'a> PaintContext<'a> {
     pub fn ring_inside(&mut self, rect: Rect, style: &ResolvedStyle) {
         if let Some(ring) = style.ring.filter(|ring| ring.width > 0.0) {
             let radius = style.radius.top_start;
-            let _ = self
-                .list
-                .draw_ring(rect.inset(ring.width), radius, ring.width, ring.color);
+            self.ring_around(rect.inset(ring.width), radius, ring);
         }
     }
 

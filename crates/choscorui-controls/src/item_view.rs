@@ -12,7 +12,7 @@ use crate::custom::{
 use crate::hosted::Parts;
 use crate::style::{
     ControlKind, PaintContext, Slot, StyleQuery, TextAlign, TextLine, VisualState, content_rect,
-    draw_text, paint_box,
+    draw_text,
 };
 use choscorui_core::{
     EventPhase, EventReply, Icon, ItemKey, ItemModel, Key, KeyEvent, LayoutDirection, Localizer,
@@ -1071,7 +1071,7 @@ impl ItemDelegate for TextItemDelegate {
             cx.style(query(Slot::Cell)),
             cx.style(query(Slot::Indicator)),
         );
-        paint_box(cx.list, rect, &row, cx.rtl);
+        cx.paint_box(rect, &row);
         let mut text = content_rect(rect, &cell, cx.rtl);
         if column == 0 {
             let indent = state.depth as f64 * state.indent;
@@ -1215,7 +1215,7 @@ impl ItemView {
             let query = |slot| StyleQuery::new(ControlKind::Table, slot);
             let (footer, cell) = (cx.style(query(Slot::Footer)), cx.style(query(Slot::Cell)));
             let area = Rect::from_xywh(view.origin.x, top, view.size.width, self.footer_height());
-            paint_box(cx.list, area, &footer, cx.rtl);
+            cx.paint_box(area, &footer);
             for row in &self.footer {
                 let widths = if columns.is_empty() {
                     vec![view.size.width]

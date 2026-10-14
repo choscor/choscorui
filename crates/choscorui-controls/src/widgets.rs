@@ -1889,26 +1889,32 @@ impl FocusFrame {
     }
 
     /// Draws the focus ring while focus is visible. The ring is the one
-    /// that the focused control in `host` painted last, so the frame does
-    /// not cover a field's own ring with another ring. A control that
-    /// painted no ring gets the theme's focus ring at radius md.
+    /// that the focused control in `host` left at its last paint, with
+    /// the shape of its part and the color of its state; a host painted
+    /// with [`HostEnv::framed`](crate::HostEnv::framed) leaves it in place
+    /// of painting it, so the ring shows once. A control that left no ring
+    /// gets the focus ring of `cx.tokens` at radius md: give the context
+    /// the tokens of the focused node.
     pub fn paint(&self, cx: &mut PaintContext<'_>, tree: &Tree, host: &ControlHost) {
         let Some(rect) = self.rect(tree) else {
             return;
         };
-        let Some(focused) = tree.focus().filter(|focused| tree.focus_visible(*focused)) else {
+        if !tree
+            .focus()
+            .is_some_and(|focused| tree.focus_visible(focused))
+        {
             return;
-        };
+        }
         let tokens = cx.tokens;
-        let (width, color, radius) = match host.painted_ring(focused) {
-            Some((ring, corners)) => (ring.width, ring.color, corners.top_start),
-            None => (
-                tokens.ring_width,
-                tokens.ring_color(tokens.color(ColorRole::Ring)),
-                tokens.radius(RadiusScale::Md),
-            ),
-        };
-        let _ = cx.list.draw_ring(rect, radius, width, color);
+        let ring = host.framed_ring().unwrap_or(crate::style::FramedRing {
+            rect,
+            radii: [tokens.radius(RadiusScale::Md); 4],
+            ring: crate::style::Ring {
+                width: tokens.ring_width,
+                color: tokens.ring_color(tokens.color(ColorRole::Ring)),
+            },
+        });
+        ring.paint(cx.list);
     }
 }
 

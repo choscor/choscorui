@@ -1028,6 +1028,24 @@ A context that paints into `list` inside `bounds`, left-to-right,
 with no visual state, at time zero, with the built-in English
 messages.
 
+#### `PaintContext::paint_box`
+
+```rust
+pub fn paint_box(&mut self, rect: Rect, style: &ResolvedStyle)
+```
+
+Paints the box of a slot like `paint_box`. Inside a focus frame,
+the frame paints the ring.
+
+#### `PaintContext::ring_around`
+
+```rust
+pub fn ring_around(&mut self, rect: Rect, radius: f64, ring: Ring)
+```
+
+Strokes `ring` just outside `rect` with corner `radius`. Inside a
+focus frame, the frame paints it.
+
 #### `PaintContext::ring_inside`
 
 ```rust

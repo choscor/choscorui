@@ -13,9 +13,9 @@ mod variants;
 pub(crate) use kind::variant_enum;
 pub use kind::{ControlKind, ControlSize, Orientation, Slot, Variant};
 pub use paint::{
-    Content, ELLIPSIS, EstimatedText, PaintContext, ShapedText, TextAlign, TextLine, TextMeasure,
-    TextOverflow, align_x, content_rect, draw_icon, draw_text, fill_shape, paint_box, paint_slot,
-    truncate_end,
+    Content, ELLIPSIS, EstimatedText, FramedRing, PaintContext, ShapedText, TextAlign, TextLine,
+    TextMeasure, TextOverflow, align_x, content_rect, draw_icon, draw_text, fill_shape, paint_box,
+    paint_slot, truncate_end,
 };
 pub(crate) use paint::{choice_size, fill_area, join_segment, paint_choice, paint_in};
 pub use recipe::{DefaultRecipe, Recipe, StyleCacheStats, StyleQuery, Styles};

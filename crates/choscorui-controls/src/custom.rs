@@ -110,6 +110,9 @@ pub struct HostEnv<'a> {
     pub direction: LayoutDirection,
     /// Monotonic time in seconds.
     pub time: f64,
+    /// True when a focus frame paints the ring of the focused node, so
+    /// the node paints none.
+    pub framed: bool,
 }
 
 impl<'a> HostEnv<'a> {
@@ -120,7 +123,16 @@ impl<'a> HostEnv<'a> {
             text,
             direction: LayoutDirection::Ltr,
             time: 0.0,
+            framed: false,
         }
+    }
+
+    /// A focus frame paints the ring of the focused node: the node leaves
+    /// it in [`ControlHost::framed_ring`].
+    #[must_use]
+    pub fn framed(mut self, framed: bool) -> Self {
+        self.framed = framed;
+        self
     }
 
     #[must_use]
@@ -476,6 +488,9 @@ pub struct ControlHost {
     /// `dialogs`, which keep the focus to give back.
     modal_focus: Vec<(NodeId, DialogId)>,
     dialogs: DialogStack,
+    /// The ring that the focused node left for its focus frame at its
+    /// last paint.
+    framed_ring: Cell<Option<crate::style::FramedRing>>,
 }
 
 /// The messages of a host: the built-in ones of the root locale until the
@@ -930,13 +945,11 @@ impl ControlHost {
             || tree.pointer_capture() == Some(node)
     }
 
-    /// The ring and corners that `node` painted last, from the first of
-    /// its slots with a ring. A node that is not hot has no record.
-    pub fn painted_ring(
-        &self,
-        node: NodeId,
-    ) -> Option<(crate::style::Ring, crate::style::Corners)> {
-        self.transitions.ring(node)
+    /// The first ring that the focused node left for its focus frame at
+    /// its last paint, in the coordinates of the node's parent. A node
+    /// paints none in a frame, so the ring shows once.
+    pub fn framed_ring(&self) -> Option<crate::style::FramedRing> {
+        self.framed_ring.get()
     }
 
     /// The counters of the transition store.
@@ -1366,6 +1379,10 @@ impl ControlHost {
         let eased = self.transitions.begin(node, hot, state, env.time);
         if eased {
             cx = cx.transitions(&self.transitions);
+        }
+        if env.framed && state.focus_visible() && tree.focus() == Some(node) {
+            self.framed_ring.set(None);
+            cx = cx.framed(&self.framed_ring);
         }
         // A disabled control fades as one group, not slot by slot, with
         // the opacity of a disabled button. The group eases like a slot.

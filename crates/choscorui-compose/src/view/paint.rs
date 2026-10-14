@@ -18,13 +18,19 @@ pub(crate) fn paint(inner: &Inner, list: &mut DisplayList) {
     let raw = inner.themes.base();
     let tokens = inner.themes.finish(raw);
     let clip = inner.tree.bounds(root).unwrap_or_default();
+    // In a focus frame, the frame paints the ring of the focused node.
+    let framed = std::iter::successors(inner.tree.focus(), |id| inner.tree.parent(*id))
+        .any(|id| inner.nodes.get(&id).is_some_and(|data| data.focus_frame));
     let env = HostEnv::new(&inner.themes, &inner.styles, &*inner.text)
         .direction(inner.direction)
-        .time(inner.time);
+        .time(inner.time)
+        .framed(framed);
     let mut painter = Painter {
         inner,
         env: &env,
         list,
+        transforms: Vec::new(),
+        focus: None,
     };
     painter.node(root, &raw, &tokens, clip);
     inner.controls.paint_overlays(&inner.tree, list, &env);
@@ -68,6 +74,11 @@ struct Painter<'a, 'e> {
     inner: &'a Inner,
     env: &'a HostEnv<'e>,
     list: &'a mut DisplayList,
+    /// The transforms pushed on the way down to the node in paint.
+    transforms: Vec<Transform>,
+    /// The transforms and the tokens of the focused node, from its paint,
+    /// for the focus frame around it.
+    focus: Option<(Vec<Transform>, DesignTokens)>,
 }
 
 impl Painter<'_, '_> {
@@ -108,6 +119,8 @@ impl Painter<'_, '_> {
                     .is_ok()
             {
                 pushed.push(Pop::Transform);
+                let offset = Transform::translate(decor.offset.x, decor.offset.y);
+                self.transforms.push(offset);
             }
             if let Some(motion) = &data.motion {
                 let (opacity, transform) = motion.effect(&tokens, bounds, self.env.time);
@@ -116,6 +129,7 @@ impl Painter<'_, '_> {
                 }
                 if transform != Transform::IDENTITY && self.list.push_transform(transform).is_ok() {
                     pushed.push(Pop::Transform);
+                    self.transforms.push(transform);
                 }
             }
             let radius = decor
@@ -161,14 +175,32 @@ impl Painter<'_, '_> {
                 .controls
                 .paint_node(&inner.tree, node, self.list, self.env, &tokens);
         }
+        if inner.tree.focus() == Some(node) {
+            self.focus = Some((self.transforms.clone(), tokens));
+        }
         if self.frames_focus(node) {
-            let mut cx = PaintContext::new(self.list, bounds, &tokens, &inner.styles, &*inner.text);
+            // The ring takes the transforms between the frame and the
+            // focused node, and the tokens of the focused node.
+            let (transforms, focused) = self.focus.take().unwrap_or((Vec::new(), tokens));
+            let below = transforms.get(self.transforms.len()..).unwrap_or_default();
+            let moved = below
+                .iter()
+                .filter(|transform| self.list.push_transform(**transform).is_ok())
+                .count();
+            let mut cx =
+                PaintContext::new(self.list, bounds, &focused, &inner.styles, &*inner.text);
             FocusFrame.paint(&mut cx, &inner.tree, &inner.controls);
+            for _ in 0..moved {
+                let _ = self.list.pop_transform();
+            }
         }
         for pop in pushed.into_iter().rev() {
             let _ = match pop {
                 Pop::Opacity => self.list.pop_opacity(),
-                Pop::Transform => self.list.pop_transform(),
+                Pop::Transform => {
+                    self.transforms.pop();
+                    self.list.pop_transform()
+                }
                 Pop::Clip => self.list.pop_clip(),
             };
         }
