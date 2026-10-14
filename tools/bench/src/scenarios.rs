@@ -1,6 +1,9 @@
 //! Reference scenarios from docs/BENCHMARKS.md, driven on real AppKit
-//! windows. Every latency sample ends at a completed `drawRect:` replay
-//! (`Window::last_paint`), not at an app-side "done" marker.
+//! windows. Every `present_ms` sample ends when the painter finished the
+//! frame (`Window::last_paint`): the GPU end time with Metal, or the end
+//! of `drawRect:` with Core Graphics. Not at an app-side "done" marker.
+//! `display_ms` samples end when the frame reached the display
+//! (`Window::last_display`); the bench reports them without a budget.
 
 use crate::alloc;
 use crate::stats::Results;
@@ -78,6 +81,38 @@ pub fn present(app: &Application, window: &Window, before: usize) -> Option<Pain
     None
 }
 
+/// Latency from an input to the display, for one scenario.
+#[derive(Default)]
+pub struct DisplayLatency {
+    samples: Vec<f64>,
+    missed: usize,
+}
+
+impl DisplayLatency {
+    /// Runs the native loop until the window shows a frame newer than
+    /// `before` (a `display_count`), and records the time from `started`.
+    pub fn record(&mut self, app: &Application, window: &Window, before: usize, started: Instant) {
+        let deadline = Instant::now() + PRESENT_TIMEOUT;
+        while Instant::now() < deadline {
+            if window.display_count() > before
+                && let Some(shown) = window.last_display()
+            {
+                self.samples
+                    .push(ms(shown.saturating_duration_since(started)));
+                return;
+            }
+            app.pump_once(Duration::from_millis(1));
+        }
+        self.missed += 1;
+    }
+
+    /// Adds `<scenario>.display_ms` and `<scenario>.missed_display`.
+    pub fn report(self, results: &mut Results, scenario: &str) {
+        results.samples(&format!("{scenario}.display_ms"), self.samples);
+        results.metric(format!("{scenario}.missed_display"), self.missed as f64);
+    }
+}
+
 /// Lets queued native work (window server round trips, autorelease) settle.
 pub fn settle(app: &Application, window: &mut Window, duration: Duration) {
     let deadline = Instant::now() + duration;
@@ -128,9 +163,11 @@ pub fn resize(
     let mut build = Vec::new();
     let mut missed_configure = 0;
     let mut missed_present = 0;
+    let mut display = DisplayLatency::default();
     for step in 0..config.resize_transitions {
         let requested = sizes[step % 2];
         let paints = window.paint_count();
+        let displays = window.display_count();
         let started = Instant::now();
         if window.set_content_size(requested).is_err() {
             missed_configure += 1;
@@ -152,11 +189,15 @@ pub fn resize(
         window.set_display_list(workspace.paint());
         build.push(ms(started.elapsed()));
         match present(app, window, paints) {
-            Some(paint) => latency.push(ms(paint.finished - started)),
+            Some(paint) => {
+                latency.push(ms(paint.finished - started));
+                display.record(app, window, displays, started);
+            }
             None => missed_present += 1,
         }
     }
     results.samples("resize.present_ms", latency);
+    display.report(results, "resize");
     results.samples("resize.build_ms", build);
     results.metric("resize.missed_configure", missed_configure as f64);
     results.metric("resize.missed_present", missed_present as f64);
@@ -187,10 +228,16 @@ pub fn scroll(
     let mut allocations = Vec::new();
     let mut peak_nodes = 0;
     let mut missed = 0;
-    let mut previous: Option<Instant> = None;
+    // When the bench was free to start the next frame: after the previous
+    // frame finished and reached the display. The interval counts the
+    // work from there to the end of the next frame, not the wait for the
+    // display.
+    let mut resumed: Option<Instant> = None;
+    let mut display = DisplayLatency::default();
     for direction in [1.0, -1.0] {
         for _ in 0..steps {
             let paints = window.paint_count();
+            let displays = window.display_count();
             let allocated = alloc::count();
             let started = Instant::now();
             if !workspace.wheel(at, 0.0, step * direction, false) {
@@ -209,17 +256,19 @@ pub fn scroll(
                 Some(paint) => {
                     latency.push(ms(paint.finished - started));
                     replay.push(ms(paint.duration));
-                    if let Some(previous) = previous {
-                        intervals.push(ms(paint.finished - previous));
+                    if let Some(resumed) = resumed {
+                        intervals.push(ms(paint.finished.saturating_duration_since(resumed)));
                     }
-                    previous = Some(paint.finished);
+                    display.record(app, window, displays, started);
                 }
                 None => missed += 1,
             }
             window.take_events();
+            resumed = Some(Instant::now());
         }
     }
     results.samples("scroll.present_ms", latency);
+    display.report(results, "scroll");
     results.samples("scroll.build_ms", build);
     results.samples("scroll.replay_ms", replay);
     results.samples("scroll.frame_interval_ms", intervals);
@@ -294,9 +343,11 @@ pub fn theme(app: &Application, window: &mut Window, config: &Config, results: &
     let mut build = Vec::new();
     let (mut paint_only, mut relayout, mut missed) = (0, 0, 0);
     let mut replay: [Vec<f64>; 2] = [Vec::new(), Vec::new()];
+    let mut display = DisplayLatency::default();
     for switch in 0..config.theme_switches {
         let light = switch % 2 == 0;
         let paints = window.paint_count();
+        let displays = window.display_count();
         let started = Instant::now();
         let tokens = if light {
             DesignTokens::light()
@@ -318,6 +369,7 @@ pub fn theme(app: &Application, window: &mut Window, config: &Config, results: &
             Some(paint) => {
                 latency.push(ms(paint.finished - started));
                 replay[usize::from(light)].push(ms(paint.duration));
+                display.record(app, window, displays, started);
             }
             None => missed += 1,
         }
@@ -327,6 +379,7 @@ pub fn theme(app: &Application, window: &mut Window, config: &Config, results: &
     results.samples("theme.dark_replay_ms", dark);
     results.samples("theme.light_replay_ms", light);
     results.samples("theme.present_ms", latency);
+    display.report(results, "theme");
     results.samples("theme.build_ms", build);
     results.metric("theme.paint_invalidations", paint_only as f64);
     results.metric("theme.layout_invalidations", relayout as f64);

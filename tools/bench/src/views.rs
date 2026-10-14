@@ -1,7 +1,7 @@
 //! The view-update scenario: one state change in a large view tree. The
 //! work and the number of changed nodes must not grow with the tree.
 
-use crate::scenarios::{Config, ms, present, settle};
+use crate::scenarios::{Config, DisplayLatency, ms, present, settle};
 use crate::stats::Results;
 use choscorui_compose::view::{
     ForEach, HStack, HorizontalAlignment, ScrollView, Spacer, Text, VStack, ViewExt, ViewHost,
@@ -82,14 +82,19 @@ pub fn views(app: &Application, window: &mut Window, config: &Config, results: &
 
     let (mut update, mut latency, mut dirty) = (Vec::new(), Vec::new(), Vec::new());
     let mut missed = 0;
+    let mut display = DisplayLatency::default();
     for step in 0..config.view_updates {
         let paints = window.paint_count();
+        let displays = window.display_count();
         let started = Instant::now();
         dirty.push(change(&mut host, &values, step) as f64);
         window.set_display_list(host.paint());
         update.push(ms(started.elapsed()));
         match present(app, window, paints) {
-            Some(paint) => latency.push(ms(paint.finished - started)),
+            Some(paint) => {
+                latency.push(ms(paint.finished - started));
+                display.record(app, window, displays, started);
+            }
             None => missed += 1,
         }
         window.take_events();
@@ -100,6 +105,7 @@ pub fn views(app: &Application, window: &mut Window, config: &Config, results: &
     results.metric("views.dirty_growth", peak - small_dirty as f64);
     results.samples("views.update_ms", update);
     results.samples("views.present_ms", latency);
+    display.report(results, "views");
     results.metric("views.missed_present", missed as f64);
     results.metric("views.errors", host.take_errors().len() as f64);
 }

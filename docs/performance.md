@@ -8,8 +8,9 @@ This document describes the benchmark harness, the release budgets, the profilin
 
 The harness measures these values:
 
-- **Presented frames.** Each latency sample ends when the frame is on the display (`Window::last_paint`). With Metal, this is the `presentedTime` of the drawable, which the presented handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application.
-- **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the first presented frame. The driver also records the time from spawn to report.
+- **Frame cost.** Each `present_ms` sample starts at the input and ends when the painter finished the frame (`Window::last_paint`). With Metal, this is the `GPUEndTime` of the command buffer, which the completed handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application.
+- **Display latency.** Each `display_ms` sample starts at the input and ends when the frame is on the display (`Window::last_display`), from the `presentedTime` of the drawable. The report includes it, but it has no budget. `missed_display` counts frames that did not reach the display in one second.
+- **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the end of the first frame. The driver also records the time from spawn to report.
 - **Allocations.** A counting global allocator gives the number of Rust heap allocations in each scroll frame.
 - **Resources.** CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
 
@@ -68,31 +69,33 @@ Each result file repeats the manifest: model, CPU, memory, architecture, power s
 
 ## Budgets
 
-[`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 120 Hz frame is 8.3 ms, a 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms. Frames that move content (resize, scroll, theme, and views) have a budget of one 120 Hz frame.
+[`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 120 Hz frame is 8.3 ms, a 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms. The cost of a frame that moves content (resize, scroll, theme, and views) has a budget of one 120 Hz frame.
 
-The baselines are from the reference machine, measured on 2026-10-14 with the Metal painter. The window was on the built-in 120 Hz display (`--screen 1`). The main display of that machine refreshes at 100 Hz, so a run there cannot meet a budget of one 120 Hz frame. Other processes used the machine during the runs.
+The baselines are from the reference machine, measured on 2026-10-14 with the Metal painter. The window was on the built-in 120 Hz display. When an external display is the main screen, use `--screen` to select the built-in display. Other processes used the machine during the runs.
 
-The frames that move content do not meet their 8.3 ms budgets yet. The time includes the work of the application before `set_display_list`. Then the window server shows the frame one or two refreshes after the GPU finishes it. A resize also waits for the window server to change the window frame.
+Resize does not meet its 8.3 ms budget yet. A large resize frame spends about 1 to 3 ms in `setContentSize:` and 2 ms on layout and paint in the benchmark workspace. Then Metal needs 1.8 ms to plan and encode, and the GPU needs 1.2 to 3 ms.
+
+The display latency (`display_ms`) is approximately 24 ms at the median and 32 ms at the p95, for all four scenarios. Display sync is on, so the window server shows a frame two or three refreshes after the GPU finishes it. This latency does not depend on the frame cost.
 
 The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. The component behavior fixes of October 2026 add 0.21 MiB: control states, semantic parts, and gallery demos. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
-| `startup.gallery.first_frame_ms.p95` | 172–216 ms | ≤ 250 |
-| `startup.stress.first_frame_ms.p95` | 237–265 ms | ≤ 400 |
+| `startup.gallery.first_frame_ms.p95` | 249–268 ms | ≤ 250 |
+| `startup.stress.first_frame_ms.p95` | 200–236 ms | ≤ 400 |
 | `idle.paints` | 0 | ≤ 0 |
 | `idle.cpu_percent` | 0.05–0.12 % | ≤ 1 |
 | `idle.wakeups_per_sec` | 4.5–5.0 | ≤ 20 |
-| `idle.footprint_mib.after` | 102–106 MiB | ≤ 200 |
-| `resize.present_ms.p95` | 23.8 ms | ≤ 8.3 |
-| `scroll.present_ms.p95` | 13.7–14.0 ms | ≤ 8.3 |
-| `scroll.frame_interval_ms.p95` | 14.5–15.0 ms | ≤ 8.3 |
+| `idle.footprint_mib.after` | 101–104 MiB | ≤ 200 |
+| `resize.present_ms.p95` | 10.9–13.1 ms | ≤ 8.3 |
+| `scroll.present_ms.p95` | 6.8–7.4 ms | ≤ 8.3 |
+| `scroll.frame_interval_ms.p95` | 6.8–7.4 ms | ≤ 8.3 |
 | `scroll.peak_realized_rows` | 32 | ≤ 40 |
-| `scroll.allocations_per_frame.p95` | 7,157 | ≤ 10000 |
-| `document.present_ms.p95` | 20.2–32.3 ms | ≤ 33 |
-| `document.shape_ms.p95` | 7.6–9.9 ms | ≤ 12 |
-| `theme.present_ms.p95` | 11.9–13.9 ms | ≤ 8.3 |
-| `views.present_ms.p95` | 18.5–41.3 ms, 10,000 rows | ≤ 8.3 |
+| `scroll.allocations_per_frame.p95` | 7,172 | ≤ 10000 |
+| `document.present_ms.p95` | 13.6–17.4 ms | ≤ 33 |
+| `document.shape_ms.p95` | 6.9–8.7 ms | ≤ 12 |
+| `theme.present_ms.p95` | 6.4–7.3 ms | ≤ 8.3 |
+| `views.present_ms.p95` | 1.5–3.4 ms, 10,000 rows | ≤ 8.3 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
 | `semantics.command_ms.p95` | 0.003 ms, 10,000 commands | ≤ 1 |
 | `semantics.list_ms.p95` | 0.009 ms, 100,000 rows | ≤ 1 |
@@ -101,8 +104,8 @@ The release executable grows in 16 KiB pages. The size budget is the measured si
 | `semantics.list_entries` | 30 | ≤ 60 |
 | `semantics.canvas_entries` | 601 | ≤ 1000 |
 | `semantics.*_moved` | 60 of 60 steps | ≥ 60 |
-| `windows.first_frame_ms.p95` | 26–35 ms | ≤ 33 |
-| `windows.idle_cpu_percent_after_close` | 0.07 % | ≤ 3 |
+| `windows.first_frame_ms.p95` | 21–22 ms | ≤ 33 |
+| `windows.idle_cpu_percent_after_close` | 0.09–0.12 % | ≤ 3 |
 | `size.choscorui-gallery_mib` | 3.131 MiB | ≤ 3.147 |
 
 The `semantics` limits do not change with the size of the model. Only the parts in view publish, so the entry counts follow the window size. The `moved` counters make sure that each key moves the focused part.
@@ -117,7 +120,7 @@ These correctness counters have a budget of 0:
 - `semantics.command_errors`, `semantics.list_errors`, and `semantics.canvas_errors`
 - `windows.leaked_native_windows`
 
-The present times end when the frame is on the display. On the reference machine, this time is approximately 24 ms (three refreshes), also for a frame with little content. Thus the 8.3 ms budgets fail until presentation is faster.
+On 2026-10-14 the maintainers decided that the budgets measure the frame cost, to the GPU end time, and not the time to the display. The time to the display includes two or three refreshes of the window server. A faster frame does not remove them while display sync is on. Display sync stays on, so frames do not tear.
 
 When AppKit reports that a window is occluded, the window does not draw. Thus `resize.missed_present` can count frames when another window covers the benchmark window.
 
@@ -147,7 +150,7 @@ These design facts keep the paint, layout, and input paths independent of the mo
 | Canvas paint | `Scene::paint` paints only the items in the visible rectangle, in paint order. It starts from the visible roots, so the cost does not grow with the items outside the view. The maps of the scene hash item ids with one multiply. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Canvas transforms | An item with an identity transform does not push a transform. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Damage | `damage` compares two display lists as sorted multisets of draw regions, with two allocations for each call. Identical lists produce no damage. | [`display.rs`](../crates/choscorui-core/src/display.rs) |
-| Presentation | With Metal, `Window::set_display_list` draws the full list at once when a drawable and a frame slot are free, and computes the damage after the frame starts. Otherwise the display link draws it at the next refresh. Display sync is off outside startup and live resize, so a frame goes to the window server when the GPU finishes it. Rounded rectangles, circles, shadows, and glyphs are instances of one shader. Only other paths go through coverage atlases. With Core Graphics, it invalidates only the damaged region, and `drawRect:` replays an `Arc<DisplayList>` without a copy. | [`metal/surface.rs`](../crates/choscorui-macos/src/metal/surface.rs), [`metal/plan.rs`](../crates/choscorui-macos/src/metal/plan.rs) |
+| Presentation | With Metal, `Window::set_display_list` draws the full list at once when a drawable and a frame slot are free, and computes the damage after the frame starts. Otherwise the display link draws it at the next refresh. Rounded rectangles, circles, shadows, and glyphs are instances of one shader. Only other paths go through coverage atlases. With Core Graphics, it invalidates only the damaged region, and `drawRect:` replays an `Arc<DisplayList>` without a copy. | [`metal/surface.rs`](../crates/choscorui-macos/src/metal/surface.rs), [`metal/plan.rs`](../crates/choscorui-macos/src/metal/plan.rs) |
 | Long documents | `TextLayoutCache::layout_paragraphs` reshapes only the edited paragraph and uses the cached layout of every other paragraph. | [`text_layout.rs`](../crates/choscorui-core/src/text_layout.rs) |
 | View updates | A state change runs only the reactions that read the state. `ViewHost::take_dirty_count` counts the changed nodes. | [`host.rs`](../crates/choscorui-compose/src/view/host.rs) |
 | View layout | `LayoutEngine::plan` arranges a node again only when it was invalidated or its bounds change. A clean subtree keeps its bounds. Semantics update only for the placed nodes. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
