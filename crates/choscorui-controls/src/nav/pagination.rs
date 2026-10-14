@@ -6,8 +6,8 @@ use crate::custom::{
 use crate::hosted::{self, Parts};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 /// The most page slots, ellipses included, before pages collapse.
@@ -389,11 +389,33 @@ impl CustomControl for Pagination {
         };
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
         node.value = (self.pages > 0).then(|| (self.current + 1).to_string());
-        if let Some(stop) = self.stops().get(self.focus) {
-            node.description = self.label(self.parts[*stop].0);
-        }
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Button` part for each arrow, a `Link` part for each page, the
+    /// current page selected, and a `StaticText` part for each ellipsis.
+    /// The focused stop is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let focused = self.stops().get(self.focus).copied();
+        for (index, (part, rect)) in self.parts.iter().enumerate() {
+            let (role, name) = match part {
+                Part::Page(_) => (SemanticRole::Link, self.label(*part)),
+                Part::Ellipsis => (SemanticRole::StaticText, "…".to_owned()),
+                _ => (SemanticRole::Button, self.label(*part)),
+            };
+            let enabled = self.enabled_part(*part);
+            let node = &mut hosted::pressable(parts, None, role, &name, *rect, enabled).node;
+            if let Part::Page(page) = part {
+                node.state.selected = Some(*page == self.current);
+            }
+            if *part == Part::Ellipsis {
+                node.state.disabled = false;
+            }
+            if focused == Some(index) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(

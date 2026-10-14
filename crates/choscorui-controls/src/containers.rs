@@ -1115,7 +1115,7 @@ impl HostedResizable {
     pub fn handle_semantics(&self, index: usize) -> SemanticNode {
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
-            &self.handle_name(index),
+            self.handle_name(index),
             vec![
                 SemanticAction::Increment,
                 SemanticAction::Decrement,
@@ -1248,7 +1248,7 @@ impl crate::CustomControl for HostedResizable {
         }
         let mut node = crate::hosted::node(
             SemanticRole::Slider,
-            &self.handle_name(self.active),
+            self.handle_name(self.active),
             vec![
                 SemanticAction::Increment,
                 SemanticAction::Decrement,

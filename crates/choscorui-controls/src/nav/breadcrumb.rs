@@ -9,8 +9,8 @@ use crate::overlay::menu_popup::MenuPopup;
 use crate::popup::gap_anchor;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -156,7 +156,7 @@ impl Breadcrumb {
     }
 
     fn hidden_labels(&self) -> String {
-        self.items[self.hidden.clone()].join("\n")
+        self.items[self.hidden.clone()].join(", ")
     }
 
     /// Opens the menu below the ellipsis at `time`. A `keyboard` open
@@ -484,14 +484,35 @@ impl CustomControl for Breadcrumb {
         };
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
         node.value = self.items.last().cloned();
-        node.description = match self.stops().get(self.focus).map(|stop| self.parts[*stop].0) {
-            Some(Part::Link(index)) => self.items[index].clone(),
-            Some(Part::Ellipsis) => self.hidden_labels(),
-            _ => String::new(),
-        };
         node.state.expanded = (!self.hidden.is_empty()).then_some(self.menu.is_open());
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Link` part for each link and for the current page, which is
+    /// selected, and a `PopUpButton` part for the ellipsis with the open
+    /// menu under it. The focused stop is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let focused = self.stops().get(self.focus).copied();
+        for (index, (part, rect)) in self.parts.iter().enumerate() {
+            let (role, name, link) = match part {
+                Part::Link(item) => (SemanticRole::Link, self.items[*item].clone(), true),
+                Part::Current(item) => (SemanticRole::Link, self.items[*item].clone(), false),
+                Part::Ellipsis => (SemanticRole::PopUpButton, self.hidden_labels(), true),
+                Part::Separator => continue,
+            };
+            let node = &mut hosted::pressable(parts, None, role, &name, *rect, link).node;
+            node.state.disabled = false;
+            node.state.selected = matches!(part, Part::Current(_)).then_some(true);
+            node.state.expanded = (*part == Part::Ellipsis).then(|| self.menu.is_open());
+            let position = parts.len() - 1;
+            if focused == Some(index) {
+                parts.set_focused(Some(position));
+            }
+            if *part == Part::Ellipsis {
+                self.menu.semantic_parts(Some(position), parts);
+            }
+        }
     }
 
     fn perform(

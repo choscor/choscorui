@@ -77,7 +77,7 @@ fn the_breadcrumb_ellipsis_shows_the_ring_on_keyboard_focus() {
     h.focus();
     let home = rings(&mut h);
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Components\nDocs");
+    assert_eq!(h.focused_part(), "Components, Docs");
     let ellipsis = rings(&mut h);
     assert_eq!((home.len(), ellipsis.len()), (1, 1));
     assert!(

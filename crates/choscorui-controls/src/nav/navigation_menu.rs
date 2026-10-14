@@ -6,8 +6,9 @@ use crate::hosted::{self, Parts, Reveal};
 use crate::popup::{Placement, gap_anchor, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, Size,
+    EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer, Measured, Point,
+    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
+    Size,
 };
 
 /// How long the pointer rests on a trigger before its panel opens, in
@@ -771,20 +772,42 @@ impl CustomControl for NavigationMenu {
             Vec::new()
         };
         let mut node = hosted::node(SemanticRole::Group, &self.name, actions);
-        match self.focus {
-            Focus::Trigger(item) => {
-                node.value = self.items.get(item).map(|(label, _)| label.clone());
-            }
-            Focus::Link(link) => {
-                if let Some(entry) = self.open.and_then(|item| self.items[item].1.get(link)) {
-                    node.value = Some(entry.title.clone());
-                    node.description = entry.description.clone();
-                }
-            }
-        }
         node.state.expanded = Some(self.open.is_some());
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `PopUpButton` part for each trigger with links, expanded while its
+    /// panel is open, or a `Link` part for a trigger without links. The
+    /// open panel adds a `Link` part for each link under its trigger. The
+    /// focused trigger or link is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        for (item, ((label, links), rect)) in self.items.iter().zip(&self.triggers).enumerate() {
+            let role = if links.is_empty() {
+                SemanticRole::Link
+            } else {
+                SemanticRole::PopUpButton
+            };
+            let trigger = &mut hosted::pressable(parts, None, role, label, *rect, true).node;
+            if !links.is_empty() {
+                trigger.state.expanded = Some(self.open == Some(item));
+            }
+            let parent = parts.len() - 1;
+            if self.focus == Focus::Trigger(item) {
+                parts.set_focused(Some(parent));
+            }
+            if self.open != Some(item) {
+                continue;
+            }
+            for (index, (entry, rect)) in links.iter().zip(&self.links).enumerate() {
+                let role = SemanticRole::Link;
+                let link = hosted::pressable(parts, Some(parent), role, &entry.title, *rect, true);
+                link.node.description.clone_from(&entry.description);
+                if self.focus == Focus::Link(index) {
+                    parts.set_focused(Some(parts.len() - 1));
+                }
+            }
+        }
     }
 
     fn perform(

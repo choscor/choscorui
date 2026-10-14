@@ -45,11 +45,11 @@ fn breadcrumb_links_are_tab_stops_and_the_ellipsis_opens_a_menu() {
         "the current page"
     );
     h.focus();
-    assert_eq!(h.semantics().description, "Home");
+    assert_eq!(h.focused_part(), "Home");
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(0)]);
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().description, "Components\nDocs");
+    assert_eq!(h.focused_part(), "Components, Docs");
     h.key(Key::Enter);
     assert_eq!(h.semantics().state.expanded, Some(true));
     h.key(Key::ArrowDown);
@@ -94,7 +94,7 @@ fn pagination_collapses_pages_and_moves_with_keys() {
         "seven slots with one ellipsis"
     );
     h.focus();
-    assert_eq!(h.semantics().description, "1", "Previous is disabled");
+    assert_eq!(h.focused_part(), "1", "Previous is disabled");
     assert!(tab(&mut h));
     h.key(Key::Enter);
     assert_eq!(
@@ -102,7 +102,7 @@ fn pagination_collapses_pages_and_moves_with_keys() {
         [ControlMessage::Changed(ControlValue::Index(Some(1)))]
     );
     assert_eq!(h.semantics().value.as_deref(), Some("2"));
-    assert_eq!(h.semantics().description, "2", "focus stays on the page");
+    assert_eq!(h.focused_part(), "2", "focus stays on the page");
     let mut middle = Harness::new(pages(5));
     assert_eq!(
         texts(&middle.paint()),
@@ -113,7 +113,7 @@ fn pagination_collapses_pages_and_moves_with_keys() {
         ..ShortcutModifiers::default()
     });
     middle.focus();
-    assert_eq!(middle.semantics().description, "Next");
+    assert_eq!(middle.focused_part(), "Next");
     middle.modifiers(ShortcutModifiers::default());
     middle.key(Key::Space);
     assert_eq!(middle.semantics().value.as_deref(), Some("7"));
@@ -192,9 +192,9 @@ fn navigation_menu_keys_open_panels_and_activate_links() {
     let mut h = Harness::new(site());
     assert_eq!(h.measure().height, 36.0);
     h.focus();
-    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+    assert_eq!(h.focused_part(), "Getting started");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().value.as_deref(), Some("Introduction"));
+    assert_eq!(h.focused_part(), "Introduction");
     h.key(Key::ArrowDown);
     h.key(Key::Enter);
     assert_eq!(
@@ -205,10 +205,10 @@ fn navigation_menu_keys_open_panels_and_activate_links() {
             ControlMessage::OpenChanged(false),
         ]
     );
-    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+    assert_eq!(h.focused_part(), "Getting started");
     h.key(Key::ArrowRight);
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().value.as_deref(), Some("Docs"));
+    assert_eq!(h.focused_part(), "Docs");
     h.key(Key::Enter);
     assert_eq!(h.messages(), [ControlMessage::ItemActivated(7)]);
 }
@@ -223,10 +223,10 @@ fn navigation_menu_tab_walks_through_the_open_panel() {
     assert!(panel.size.width > 480.0, "four links take two columns");
     for title in ["Alert Dialog", "Hover Card", "Progress", "Scroll-area"] {
         assert!(tab(&mut h));
-        assert_eq!(h.semantics().value.as_deref(), Some(title));
+        assert_eq!(h.focused_part(), title);
     }
     assert!(tab(&mut h));
-    assert_eq!(h.semantics().value.as_deref(), Some("Docs"));
+    assert_eq!(h.focused_part(), "Docs");
     assert_eq!(
         h.semantics().state.expanded,
         Some(false),
@@ -265,7 +265,7 @@ fn navigation_links_move_as_a_grid() {
     h.focus();
     h.key(Key::ArrowRight);
     h.key(Key::ArrowDown);
-    let value = |h: &Harness| h.semantics().value.unwrap_or_default();
+    let value = |h: &Harness| h.focused_part();
     assert_eq!(value(&h), "Alert Dialog");
     for (key, title) in [
         (Key::ArrowRight, "Hover Card"),
@@ -289,10 +289,10 @@ fn a_hover_switch_moves_link_focus_to_the_trigger() {
     h.focus();
     h.key(Key::ArrowRight);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().value.as_deref(), Some("Alert Dialog"));
+    assert_eq!(h.focused_part(), "Alert Dialog");
     let bounds = h.bounds();
     h.hover(Point::new(bounds.origin.x + 10.0, bounds.center().y));
-    assert_eq!(h.semantics().value.as_deref(), Some("Getting started"));
+    assert_eq!(h.focused_part(), "Getting started");
 }
 
 #[test]

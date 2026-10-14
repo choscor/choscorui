@@ -46,11 +46,11 @@ fn items_rove_and_select_and_command_b_collapses() {
         assert!(painted.contains(&text.to_string()), "{text}");
     }
     h.focus();
-    assert_eq!(h.semantics().description, "Toggle sidebar");
+    assert_eq!(h.focused_part(), "Toggle sidebar");
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Inbox");
+    assert_eq!(h.focused_part(), "Inbox");
     h.key(Key::End);
-    assert_eq!(h.semantics().description, "Settings");
+    assert_eq!(h.focused_part(), "Settings");
     h.key(Key::Enter);
     assert_eq!(
         h.messages(),
@@ -139,12 +139,12 @@ fn an_icon_sidebar_keeps_its_icons_when_collapsed() {
     assert_eq!(h.measure().width, 48.0);
     assert_eq!(h.semantics().state.expanded, Some(false));
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Inbox", "items stay reachable");
+    assert_eq!(h.focused_part(), "Inbox", "items stay reachable");
     assert!(texts(&h.paint()).is_empty(), "labels hide");
 
     let mut fixed = Harness::new(sidebar().with_collapse(SidebarCollapse::None));
     fixed.focus();
-    assert_eq!(fixed.semantics().description, "Inbox", "no toggle");
+    assert_eq!(fixed.focused_part(), "Inbox", "no toggle");
     assert!(!fixed.perform(SemanticAction::Collapse, None));
 }
 
@@ -176,7 +176,7 @@ fn a_narrow_window_shows_the_sidebar_as_a_sheet() {
     for _ in 0..5 {
         assert!(tab(&mut h), "focus stays in the sheet");
     }
-    assert_eq!(h.semantics().description, "Toggle sidebar", "it wraps");
+    assert_eq!(h.focused_part(), "Toggle sidebar", "it wraps");
     h.key(Key::Escape);
     assert_eq!(
         h.messages(),
@@ -252,7 +252,7 @@ fn arrows_open_and_close_a_sub_menu_and_move_into_it() {
     h.key(Key::ArrowDown);
     h.key(Key::ArrowDown);
     let node = h.semantics();
-    assert_eq!(node.description, "Projects");
+    assert_eq!(h.focused_part(), "Projects");
     assert_eq!(node.state.expanded, Some(false), "the sub-menu state");
     assert!(node.actions.contains(&SemanticAction::Expand));
 
@@ -264,7 +264,7 @@ fn arrows_open_and_close_a_sub_menu_and_move_into_it() {
     assert_eq!(h.measure().height, closed + 28.0 * 2.0 + 4.0 + 4.0 + 4.0);
     assert!(texts(&h.paint()).contains(&"Design".to_string()));
     h.key(Key::ArrowRight);
-    assert_eq!(h.semantics().description, "Design");
+    assert_eq!(h.focused_part(), "Design");
     h.key(Key::ArrowDown);
     h.key(Key::Enter);
     assert_eq!(
@@ -273,7 +273,7 @@ fn arrows_open_and_close_a_sub_menu_and_move_into_it() {
     );
     assert_eq!(h.semantics().value.as_deref(), Some("Sales"));
     h.key(Key::ArrowLeft);
-    assert_eq!(h.semantics().description, "Projects", "back to the item");
+    assert_eq!(h.focused_part(), "Projects", "back to the item");
     h.key(Key::ArrowLeft);
     relayout(&mut h);
     assert_eq!(h.measure().height, closed);
@@ -327,7 +327,7 @@ fn a_sub_menu_item_on_the_icon_rail_expands_the_sidebar() {
     assert_eq!(h.measure().width, 48.0);
     h.key(Key::ArrowDown);
     h.key(Key::ArrowDown);
-    assert_eq!(h.semantics().description, "Projects");
+    assert_eq!(h.focused_part(), "Projects");
     h.key(Key::ArrowRight);
     assert!(h.messages().is_empty(), "no sub-menu on the rail");
     h.key(Key::Enter);
@@ -335,7 +335,7 @@ fn a_sub_menu_item_on_the_icon_rail_expands_the_sidebar() {
     relayout(&mut h);
     assert_eq!(h.measure().width, 256.0);
     assert!(texts(&h.paint()).contains(&"Design".to_string()));
-    assert_eq!(h.semantics().description, "Projects", "focus stays on it");
+    assert_eq!(h.focused_part(), "Projects", "focus stays on it");
 }
 
 #[test]

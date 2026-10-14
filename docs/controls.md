@@ -3715,7 +3715,7 @@ modal dialog behind a trigger button. The chosen row reports `.on_item`.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / current page |
-| Description | the focused link, or the hidden items for the ellipsis |
+| Parts | a `Link` part for each link and the current page, which is selected; a `PopUpButton` part for the ellipsis, named by the hidden items, with the open menu under it; the focused stop is the focused part |
 | State | expanded with a collapsed range, disabled |
 | Actions | `Activate` and `Focus` while enabled, with two or more items |
 
@@ -3753,7 +3753,7 @@ item is hidden. `set_value` returns false.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / current page number, none without pages |
-| Description | the label of the focused part |
+| Parts | a `Button` part for each arrow, disabled at an end; a `Link` part for each page, the current page selected; a `StaticText` part for each ellipsis; the focused stop is the focused part |
 | State | disabled |
 | Actions | `Activate`, `Increment`, `Decrement`, and `Focus` while enabled, with pages |
 
@@ -3810,8 +3810,8 @@ last page. `set_open` returns false.
 | Field | `NavigationMenu::semantics` |
 | --- | --- |
 | Role | `Group` (AXGroup) |
-| Name / value | name / focused trigger or link title |
-| Description | the focused link's description |
+| Name / value | name / - |
+| Parts | a `PopUpButton` part for each trigger with links, expanded while open, or a `Link` part; the open panel adds a `Link` part for each link, with its description, under its trigger; the focused trigger or link is the focused part |
 | State | expanded, disabled |
 | Actions | `Activate`, `Expand` or `Collapse`, and `Focus` while enabled |
 
@@ -3892,7 +3892,7 @@ false.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / selected item |
-| Description | the focused item, or the toggle name |
+| Parts | a `Button` part for the toggle; a `StaticText` part for each group label; a `Link` part for each item, the selected one selected, with the badge as the value; a `Button` part for an item with a sub-menu, expanded while open, with its sub-items under it; the focused row is the focused part |
 | State | expanded (the focused sub-menu while the labels show, else the sidebar), disabled |
 | Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while enabled; these act on the focused sub-menu while the labels show, else on a sidebar that collapses |
 

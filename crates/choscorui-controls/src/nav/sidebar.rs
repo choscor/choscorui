@@ -11,8 +11,8 @@ use crate::style::{
 };
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
+    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size, Transform,
 };
 
 /// Below this window width the sidebar becomes a sheet, in points.
@@ -1055,17 +1055,60 @@ impl CustomControl for Sidebar {
             .selected
             .and_then(|index| self.item(index))
             .map(|item| item.label.clone());
-        node.description = match self.focused() {
-            Some(Part::Toggle) => self.toggle.clone(),
-            Some(Part::Item(index)) => self
-                .item(index)
-                .map(|item| item.label.clone())
-                .unwrap_or_default(),
-            _ => String::new(),
-        };
         node.state.expanded = Some(expanded);
         node.state.disabled = !self.enabled;
         node
+    }
+
+    /// A `Button` part for the toggle, a `StaticText` part for each group
+    /// label, and a `Link` part for each item, the selected one selected.
+    /// An item with a sub-menu is a `Button`, expanded while open, with
+    /// its sub-items under it. The focused row is the focused part.
+    fn semantic_parts(&self, _strings: &Localizer, parts: &mut SemanticParts) {
+        let entries = self.entries();
+        let focused = self.focused();
+        // The part position of each item, for its sub-items.
+        let mut positions = vec![None; entries.len()];
+        for (part, rect) in self.active() {
+            let (role, name, parent) = match *part {
+                Part::Toggle => (SemanticRole::Button, self.toggle.as_str(), None),
+                Part::Label(group) => match self.groups.get(group) {
+                    Some((label, _)) => (SemanticRole::StaticText, label.as_str(), None),
+                    None => continue,
+                },
+                Part::Item(index) => match entries.get(index) {
+                    Some(entry) if entry.has_menu() => {
+                        (SemanticRole::Button, entry.item.label.as_str(), None)
+                    }
+                    Some(entry) => {
+                        let parent = entry.parent.and_then(|parent| positions[parent]);
+                        (SemanticRole::Link, entry.item.label.as_str(), parent)
+                    }
+                    None => continue,
+                },
+                Part::Menu(_) => continue,
+            };
+            let pressable = role != SemanticRole::StaticText;
+            let node = &mut hosted::pressable(parts, parent, role, name, *rect, pressable).node;
+            node.state.disabled = false;
+            match *part {
+                Part::Toggle => node.state.expanded = Some(self.is_expanded()),
+                Part::Item(index) if role == SemanticRole::Button => {
+                    node.state.expanded = Some(self.open.contains(&index));
+                }
+                Part::Item(index) => {
+                    node.state.selected = Some(self.selected == Some(index));
+                    node.value = entries[index].item.badge.clone();
+                }
+                _ => {}
+            }
+            if let Part::Item(index) = *part {
+                positions[index] = Some(parts.len() - 1);
+            }
+            if focused == Some(*part) {
+                parts.set_focused(Some(parts.len() - 1));
+            }
+        }
     }
 
     fn perform(
