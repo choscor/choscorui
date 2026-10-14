@@ -143,6 +143,7 @@ fn accordion(cx: &Cx) -> ResolvedStyle {
             style.padding = Edges::axes(0.0, cx.sp(4.0));
             style.underline = s.interactive_hover();
             style.icon_size = 16.0;
+            style.gap = cx.sp(4.0);
             focus(&mut style, cx);
             disabled(&mut style, cx);
             style

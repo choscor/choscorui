@@ -8,7 +8,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, DisplayList, Icon, Image, Key, KeyEvent,
-    LayoutDirection, Point, SemanticAction, SemanticRole,
+    LayoutDirection, Point, PointerButton, PointerEvent, SemanticAction, SemanticRole,
 };
 use hosted::{Harness, paints, texts};
 
@@ -159,6 +159,8 @@ fn accordion_headers_are_tab_stops_and_multiple_items_open() {
             ControlMessage::Changed(ControlValue::Indices(vec![0, 1])),
         ]
     );
+    // The height grows over the open animation.
+    assert!(h.host.advance(&mut h.tree, 1.0));
     assert!(h.measure().height > closed);
     assert!(tab(&mut h));
     assert!(!tab(&mut h), "Tab leaves after the last header");
@@ -180,6 +182,69 @@ fn accordion_click_toggles_and_chevron_mirrors() {
     );
     let rtl = Harness::with_direction(Accordion::new("FAQ", faq()), LayoutDirection::Rtl);
     assert_eq!(texts(&rtl.paint()).len(), 3);
+}
+
+#[test]
+fn accordion_height_animates_and_the_last_item_has_no_border() {
+    let one = faq().into_iter().take(1).collect();
+    let header = Harness::new(Accordion::new("FAQ", one)).measure().height;
+    let mut h = Harness::new(Accordion::new("FAQ", faq()));
+    let closed = h.measure().height;
+    assert_eq!(closed, header * 3.0 + 2.0, "two borders between three items");
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.measure().height, closed, "the height starts closed");
+    let frame = h.host.next_deadline(&h.tree).expect("a frame timer");
+    assert!(h.host.advance(&mut h.tree, frame + 0.05));
+    let middle = h.measure().height;
+    assert!(middle > closed, "{middle} > {closed}");
+    while let Some(frame) = h.host.next_deadline(&h.tree) {
+        h.host.advance(&mut h.tree, frame);
+    }
+    let open = h.measure().height;
+    assert!(open > middle, "{open} > {middle}");
+}
+
+#[test]
+fn a_disabled_accordion_item_is_skipped_and_only_primary_releases_toggle() {
+    let mut h = Harness::new(Accordion::new("FAQ", faq()).with_disabled(1));
+    h.focus();
+    h.key(Key::ArrowDown);
+    assert_eq!(h.semantics().description, "Is it animated?");
+    let bounds = h.bounds();
+    let header = bounds.size.height / 3.0;
+    h.click(Point::new(bounds.origin.x + 20.0, bounds.origin.y + header * 1.5));
+    assert!(h.messages().is_empty(), "the disabled item does not toggle");
+    let first = Point::new(bounds.origin.x + 20.0, bounds.origin.y + 10.0);
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Down {
+            position: first,
+            button: PointerButton::Primary,
+        },
+    );
+    h.host.dispatch_pointer(
+        &mut h.tree,
+        PointerEvent::Up {
+            position: first,
+            button: PointerButton::Secondary,
+        },
+    );
+    assert!(h.messages().is_empty(), "a secondary release does not toggle");
+}
+
+#[test]
+fn collapsible_items_fade_out_before_they_leave() {
+    let mut h = Harness::new(
+        Collapsible::new("Repositories", "Toggle", "first", vec!["second".into()]).open(),
+    );
+    let open = h.measure().height;
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.measure().height, open, "the item stays while it fades");
+    let end = h.host.next_deadline(&h.tree).expect("the fade end");
+    assert!(h.host.advance(&mut h.tree, end));
+    assert!(h.measure().height < open);
 }
 
 #[test]

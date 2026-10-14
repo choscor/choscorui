@@ -13,7 +13,8 @@ use choscorui_core::{
 /// A collapsible section. The header shows the title and a toggle
 /// button. The summary item always shows; the other items show while the
 /// section is open. The toggle, Enter, Space, `Expand`, and `Collapse`
-/// open or close it and emit `OpenChanged`.
+/// open or close it and emit `OpenChanged`. The items fade in on open and
+/// fade out on close.
 pub struct Collapsible {
     title: String,
     toggle_label: String,
@@ -28,6 +29,8 @@ pub struct Collapsible {
     toggle: Rect,
     boxes: Vec<Rect>,
     motion_ms: u32,
+    /// The host time of the last open change or timer.
+    clock: f64,
     enabled: bool,
 }
 
@@ -51,6 +54,7 @@ impl Collapsible {
             toggle: Rect::default(),
             boxes: Vec::new(),
             motion_ms: 0,
+            clock: 0.0,
             enabled: true,
         }
     }
@@ -75,8 +79,11 @@ impl Collapsible {
             .size(ControlSize::Xs)
     }
 
+    /// The boxes that show: the summary, and the items while the section
+    /// is open or fades out.
     fn shown(&self) -> usize {
-        1 + if self.reveal.open {
+        let closing = self.reveal.animating(self.motion_ms, self.clock);
+        1 + if self.reveal.open || closing {
             self.items.len()
         } else {
             0
@@ -88,6 +95,7 @@ impl Collapsible {
             return;
         }
         self.reveal.set(open, cx.time());
+        self.clock = cx.time();
         cx.emit(ControlMessage::OpenChanged(open));
         cx.request_layout();
         cx.request_paint();
@@ -109,6 +117,12 @@ impl Collapsible {
 impl CustomControl for Collapsible {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let toggle = cx.style(Self::toggle_query(VisualState::NONE));
+        let content = cx.style(StyleQuery::new(ControlKind::Collapsible, Slot::Content));
+        self.motion_ms = if cx.tokens.motion.reduced {
+            0
+        } else {
+            content.motion_ms
+        };
         let max = cx.constraints.max.width;
         // An unbounded section is as wide as an input.
         let width = if max.is_finite() {
@@ -127,8 +141,6 @@ impl CustomControl for Collapsible {
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         let toggle = cx.style(Self::toggle_query(VisualState::NONE));
-        let content = cx.style(StyleQuery::new(ControlKind::Collapsible, Slot::Content));
-        self.motion_ms = content.motion_ms;
         let side = toggle.min_height;
         self.header = Rect::from_xywh(bounds.origin.x, bounds.origin.y, bounds.size.width, side);
         let x = if cx.rtl() {
@@ -152,6 +164,13 @@ impl CustomControl for Collapsible {
         let pressed = self.tracked.pressed;
         self.tracked
             .track(cx, event, |point| toggle.contains(point).then_some(()));
+        if matches!(event, ControlEvent::Timer) {
+            // The close fade ended: drop the faded items.
+            self.clock = cx.time();
+            cx.request_layout();
+            cx.request_paint();
+            return EventReply::Continue;
+        }
         let outcome = self.press.event(cx, event);
         match outcome {
             PressOutcome::Activated(Some(_))
@@ -210,6 +229,12 @@ impl CustomControl for Collapsible {
 
     fn animating(&self, time: f64) -> bool {
         self.reveal.animating(self.motion_ms, time)
+    }
+
+    /// The end of a close fade, when the items leave the layout.
+    fn deadline(&self) -> Option<f64> {
+        let closing = !self.reveal.open && self.reveal.animating(self.motion_ms, self.clock);
+        closing.then(|| self.reveal.changed_at + f64::from(self.motion_ms) / 1000.0)
     }
 
     fn semantics(&self) -> SemanticNode {

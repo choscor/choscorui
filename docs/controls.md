@@ -4192,7 +4192,9 @@ behavior.
   close the section and emit `OpenChanged`. A click on the title does
   nothing. Only the toggle shows the hover and press, and a release off
   the toggle does nothing.
-- The items fade in with the content motion. The height changes at once.
+- The items fade in on open and fade out on close, with the content
+  motion. On open the height grows at once. On close the faded items
+  leave the layout when the fade ends.
 - The toggle sits at the left in a right-to-left layout.
 
 | Part | Slot | Value |
@@ -4221,19 +4223,22 @@ behavior.
   closes the open one. `multiple()` lets items open together.
 - Each header is a tab stop. ArrowDown, ArrowUp, Home, and End move
   between the headers.
-- Enter, Space, a click, or `Activate` toggles the focused item and emits
-  `Changed(Indices(open))`. `Expand` and `Collapse` act on the focused
-  item.
-- The chevron turns over while the item opens. The content fades in. With
-  reduced motion, both change at once.
+- Enter, Space, a primary click, or `Activate` toggles the focused item
+  and emits `Changed(Indices(open))`. `Expand` and `Collapse` act on the
+  focused item. A release of another button does not toggle.
+- `with_disabled(index)` disables one item. Its header dims, takes no
+  focus, and does not toggle. An index past the items changes nothing.
+- The chevron turns over while the item opens. The content fades, and
+  its height grows or shrinks, over the content motion. A timer lays out
+  each frame. With reduced motion, all change at once.
 - The chevron sits at the left in a right-to-left layout.
-- A long title wraps beside the chevron, and the header grows for each
-  line.
+- A long title wraps beside the chevron, 16 pt from it, and the header
+  grows for each line.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Item | `Item` | 1 pt `border` line below |
-| Header | `Trigger` | sm medium text, 16 pt padding above and below, underline on hover, focus ring |
+| Item | `Item` | 1 pt `border` line below; none below the last item |
+| Header | `Trigger` | sm medium text, 16 pt padding above and below, 16 pt gap to the chevron, underline on hover, focus ring |
 | Chevron | `Icon` | 16 pt `muted-foreground` icon |
 | Content | `Content` | sm text, 16 pt below, 200 ms motion |
 
@@ -4243,7 +4248,7 @@ behavior.
 | Name / value | name / titles of the open items |
 | Description | the title of the focused item |
 | State | expanded (focused item), disabled |
-| Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while enabled |
+| Actions | `Activate`, `Focus`, and `Expand` or `Collapse` while the control and the focused item are enabled |
 
 `set_value` takes `Indices` of the open items and shows them without an
 animation. A single accordion rejects more than one index. `set_open`

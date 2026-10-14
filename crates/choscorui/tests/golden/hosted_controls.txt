@@ -787,29 +787,27 @@ StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 50.5 }, size: Size 
 DrawText { baseline: Point { x: 313.5, y: 72.9 }, text: "first", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PopClip
 # accordion Ltr
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 106.0 } }
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 105.0 } }
 semantics SemanticNode { role: Group, name: "FAQ", description: "One", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }, relations: [], actions: [Activate, Focus, Expand], text: None }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 106.0 } })
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 105.0 } })
 FillRect { rect: Rect { origin: Point { x: 10.0, y: 62.0 }, size: Size { width: 480.0, height: 1.0 } }, color: Color { red: 229, green: 229, blue: 229, alpha: 255 } }
 DrawText { baseline: Point { x: 10.0, y: 40.9 }, text: "One", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PushTransform(Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 })
 StrokePath { path: Path { elements: [MoveTo(Point { x: 478.0, y: 34.0 }), LineTo(Point { x: 482.0, y: 38.0 }), LineTo(Point { x: 486.0, y: 34.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
 PopTransform
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 115.0 }, size: Size { width: 480.0, height: 1.0 } }, color: Color { red: 229, green: 229, blue: 229, alpha: 255 } }
 DrawText { baseline: Point { x: 10.0, y: 93.9 }, text: "Two", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PushTransform(Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 })
 StrokePath { path: Path { elements: [MoveTo(Point { x: 478.0, y: 87.0 }), LineTo(Point { x: 482.0, y: 91.0 }), LineTo(Point { x: 486.0, y: 87.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
 PopTransform
 PopClip
 # accordion Rtl
-bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 106.0 } }
-PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 106.0 } })
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 105.0 } }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 105.0 } })
 FillRect { rect: Rect { origin: Point { x: 10.0, y: 62.0 }, size: Size { width: 480.0, height: 1.0 } }, color: Color { red: 229, green: 229, blue: 229, alpha: 255 } }
 DrawText { baseline: Point { x: 466.9, y: 40.9 }, text: "One", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PushTransform(Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 })
 StrokePath { path: Path { elements: [MoveTo(Point { x: 14.0, y: 34.0 }), LineTo(Point { x: 18.0, y: 38.0 }), LineTo(Point { x: 22.0, y: 34.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
 PopTransform
-FillRect { rect: Rect { origin: Point { x: 10.0, y: 115.0 }, size: Size { width: 480.0, height: 1.0 } }, color: Color { red: 229, green: 229, blue: 229, alpha: 255 } }
 DrawText { baseline: Point { x: 466.9, y: 93.9 }, text: "Two", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 PushTransform(Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 })
 StrokePath { path: Path { elements: [MoveTo(Point { x: 14.0, y: 87.0 }), LineTo(Point { x: 18.0, y: 91.0 }), LineTo(Point { x: 22.0, y: 87.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }

@@ -113,20 +113,20 @@ text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
 ### collapsible default default trigger
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
-fill-rect 26,34.58 15.400000000000002x1 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
+fill-rect 42,34.58 15.400000000000002x1 #0a0a0aff
 # focus-visible
 stroke 8.5,8.5 123x39 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x35 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
 = rest: pressed focused invalid checked indeterminate selected open highlighted
 ### collapsible default default item
@@ -160,20 +160,20 @@ text "Aa" at 26,24.9 system-ui 14 w400 t0 #0a0a0aff
 ### accordion default default trigger
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 # hovered
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
-fill-rect 26,34.58 15.400000000000002x1 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
+fill-rect 42,34.58 15.400000000000002x1 #0a0a0aff
 # focus-visible
 stroke 8.5,8.5 123x39 r9.5 w3 #a1a1a180
 stroke 10.5,10.5 119x35 r7.5 w1 #a1a1a1ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 # disabled
 opacity 0.5 {
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 42,32.9 system-ui 14 w500 t0 #0a0a0aff
 }
 = rest: pressed focused invalid checked indeterminate selected open highlighted
 ### accordion default default item

@@ -11,16 +11,22 @@ use choscorui_core::{
     Rect, SemanticAction, SemanticNode, SemanticRole, Size, Transform,
 };
 
+/// One frame of a height animation, in seconds.
+const FRAME: f64 = 1.0 / 60.0;
+
 /// An accordion. Each item has a header and content text. A single
 /// accordion keeps at most one item open; `multiple()` lets items open
 /// together. Each header is a tab stop, and ArrowDown, ArrowUp, Home, and
 /// End move between the headers. Enter, Space, or a click toggles an item
-/// and emits `Changed(Indices(open))`.
+/// and emits `Changed(Indices(open))`. The content height animates.
 pub struct Accordion {
     name: String,
     items: Vec<(String, String)>,
     multiple: bool,
     reveals: Vec<Reveal>,
+    disabled: Vec<bool>,
+    /// The host time of the last layout frame of an animation.
+    clock: f64,
     focus: usize,
     pressed: Option<usize>,
     hovered: Option<usize>,
@@ -39,6 +45,8 @@ impl Accordion {
             items,
             multiple: false,
             reveals: vec![Reveal::default(); count],
+            disabled: vec![false; count],
+            clock: 0.0,
             focus: 0,
             pressed: None,
             hovered: None,
@@ -65,8 +73,34 @@ impl Accordion {
         self
     }
 
+    /// Disables the item at `index`: its header takes no focus and does
+    /// not toggle. An index past the items changes nothing.
+    #[must_use]
+    pub fn with_disabled(mut self, index: usize) -> Self {
+        if let Some(disabled) = self.disabled.get_mut(index) {
+            *disabled = true;
+        }
+        self
+    }
+
     fn query(slot: Slot) -> StyleQuery {
         StyleQuery::new(ControlKind::Accordion, slot)
+    }
+
+    /// The enabled items, which are the tab stops.
+    fn stops(&self) -> Vec<usize> {
+        (0..self.items.len())
+            .filter(|index| !self.disabled[*index])
+            .collect()
+    }
+
+    /// Moves focus to the stop at `stop`.
+    fn focus_stop(&mut self, cx: &mut ControlContext<'_>, stop: usize) {
+        if let Some(index) = self.stops().get(stop) {
+            self.focus = *index;
+        }
+        cx.request_paint();
+        cx.request_semantics();
     }
 
     fn open(&self) -> Vec<usize> {
@@ -76,7 +110,11 @@ impl Accordion {
     }
 
     fn toggle(&mut self, cx: &mut ControlContext<'_>, index: usize) {
+        if self.disabled[index] {
+            return;
+        }
         let time = cx.time();
+        self.clock = time;
         let open = !self.reveals[index].open;
         if open && !self.multiple {
             for reveal in &mut self.reveals {
@@ -91,22 +129,36 @@ impl Accordion {
     }
 
     /// The header height of `index` in `width`: the title wraps beside
-    /// the chevron.
+    /// the chevron, with the trigger gap between them.
     fn header_height(&self, cx: &MeasureContext<'_>, index: usize, width: f64) -> f64 {
         let trigger = cx.style(Self::query(Slot::Trigger));
-        let room = (width - trigger.padding.horizontal() - trigger.icon_size).max(0.0);
+        let room =
+            (width - trigger.padding.horizontal() - trigger.icon_size - trigger.gap).max(0.0);
         let title = wrapped_height(&self.items[index].0, &trigger.text, room, cx.text);
         title.max(trigger.text.line_height) + trigger.padding.vertical()
     }
 
-    /// The content height of `index` when open, with its bottom padding.
+    /// The content height of `index`, with its bottom padding, at the
+    /// point of its open or close animation.
     fn content_height(&self, cx: &MeasureContext<'_>, index: usize, width: f64) -> f64 {
-        if !self.reveals[index].open {
+        let reveal = self.reveals[index];
+        let progress = reveal.progress(cx.tokens, self.motion_ms, self.clock);
+        if progress <= 0.0 {
             return 0.0;
         }
         let content = cx.style(Self::query(Slot::Content));
-        wrapped_height(&self.items[index].1, &content.text, width, cx.text)
-            + content.padding.block_end
+        let full = wrapped_height(&self.items[index].1, &content.text, width, cx.text)
+            + content.padding.block_end;
+        full * progress.min(1.0)
+    }
+
+    /// The border under `index`: none under the last item.
+    fn border(&self, index: usize, width: f64) -> f64 {
+        if index + 1 < self.items.len() {
+            width
+        } else {
+            0.0
+        }
     }
 
     fn header_at(&self, point: Point) -> Option<usize> {
@@ -119,6 +171,7 @@ impl Accordion {
 impl CustomControl for Accordion {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let item = cx.style(Self::query(Slot::Item));
+        self.motion_ms = cx.style(Self::query(Slot::Content)).motion_ms;
         let max = cx.constraints.max.width;
         // An unbounded accordion takes the width of a medium container.
         let width = if max.is_finite() {
@@ -130,7 +183,7 @@ impl CustomControl for Accordion {
             .map(|index| {
                 self.header_height(cx, index, width)
                     + self.content_height(cx, index, width)
-                    + item.border_width
+                    + self.border(index, item.border_width)
             })
             .sum();
         Measured {
@@ -152,7 +205,7 @@ impl CustomControl for Accordion {
                 let head = Rect::from_xywh(bounds.origin.x, y, width, header);
                 let height = self.content_height(cx, index, width);
                 let body = Rect::from_xywh(bounds.origin.x, head.max_y(), width, height);
-                y = body.max_y() + item.border_width;
+                y = body.max_y() + self.border(index, item.border_width);
                 (head, body)
             })
             .collect();
@@ -162,8 +215,17 @@ impl CustomControl for Accordion {
         if cx.phase() != EventPhase::Target {
             return EventReply::Continue;
         }
-        let count = self.items.len();
+        let stops = self.stops();
+        let count = stops.len();
+        let stop = stops.iter().position(|index| *index == self.focus).unwrap_or(0);
         match event {
+            ControlEvent::Timer => {
+                // Lay out the next frame of a height animation.
+                self.clock = cx.time();
+                cx.request_layout();
+                cx.request_paint();
+                EventReply::Continue
+            }
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
                 button: PointerButton::Primary,
@@ -171,6 +233,9 @@ impl CustomControl for Accordion {
                 let Some(index) = self.header_at(*position) else {
                     return EventReply::Continue;
                 };
+                if self.disabled[index] {
+                    return EventReply::Stop;
+                }
                 self.pressed = Some(index);
                 self.focus = index;
                 cx.request_focus();
@@ -178,9 +243,12 @@ impl CustomControl for Accordion {
                 cx.request_paint();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, .. }) if self.pressed.is_some() => {
+            ControlEvent::Pointer(PointerEvent::Up { position, button }) if self.pressed.is_some() => {
                 cx.capture_pointer(false);
-                let hit = self.header_at(*position);
+                // Only the primary button toggles.
+                let hit = self
+                    .header_at(*position)
+                    .filter(|_| *button == PointerButton::Primary);
                 if let Some(index) = self.pressed.take().filter(|index| hit == Some(*index)) {
                     self.toggle(cx, index);
                 }
@@ -201,26 +269,22 @@ impl CustomControl for Accordion {
                 EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => match *key {
-                Key::Tab => match hosted::tab_stop(self.focus, count, cx.modifiers().shift) {
+                Key::Tab => match hosted::tab_stop(stop, count, cx.modifiers().shift) {
                     Some(next) => {
-                        self.focus = next;
-                        cx.request_paint();
-                        cx.request_semantics();
+                        self.focus_stop(cx, next);
                         EventReply::Stop
                     }
                     None => EventReply::Continue,
                 },
                 Key::Enter | Key::Space if !repeat => {
-                    if self.focus < count {
+                    if self.focus < self.items.len() {
                         self.toggle(cx, self.focus);
                     }
                     EventReply::Stop
                 }
-                key => match hosted::rove(key, self.focus, count, false, self.rtl) {
+                key => match hosted::rove(key, stop, count, false, self.rtl) {
                     Some(next) => {
-                        self.focus = next;
-                        cx.request_paint();
-                        cx.request_semantics();
+                        self.focus_stop(cx, next);
                         EventReply::Stop
                     }
                     None => EventReply::Continue,
@@ -228,11 +292,12 @@ impl CustomControl for Accordion {
             },
             ControlEvent::FocusChanged(focused) => {
                 if *focused && self.pressed.is_none() {
-                    self.focus = if cx.modifiers().shift {
+                    let first = if cx.modifiers().shift {
                         count.saturating_sub(1)
                     } else {
                         0
                     };
+                    self.focus = stops.get(first).copied().unwrap_or(0);
                 }
                 cx.request_paint();
                 cx.request_semantics();
@@ -257,25 +322,29 @@ impl CustomControl for Accordion {
                     host.focus_visible() && self.focus == index,
                 )
                 .set(VisualState::OPEN, self.reveals[index].open)
-                .set(VisualState::DISABLED, host.disabled());
+                .set(VisualState::DISABLED, host.disabled() || self.disabled[index]);
             let trigger = cx.style(Self::query(Slot::Trigger).state(state));
+            let border = self.border(index, item.border_width);
             let row = Rect::from_xywh(
                 head.origin.x,
                 head.origin.y,
                 head.size.width,
-                body.max_y() - head.origin.y + item.border_width,
+                body.max_y() - head.origin.y + border,
             );
-            cx.slot(row, &item, |_, _| {});
+            if border > 0.0 {
+                cx.slot(row, &item, |_, _| {});
+            }
             cx.slot(*head, &trigger, |cx, inner| {
                 let icon = trigger.icon_size;
+                let room = icon + trigger.gap;
                 let label = Rect::from_xywh(
                     if cx.rtl {
-                        inner.origin.x + icon
+                        inner.origin.x + room
                     } else {
                         inner.origin.x
                     },
                     inner.origin.y,
-                    (inner.size.width - icon).max(0.0),
+                    (inner.size.width - room).max(0.0),
                     inner.size.height,
                 );
                 paint_wrapped(cx, label, title, &trigger, TextAlign::Start);
@@ -303,13 +372,13 @@ impl CustomControl for Accordion {
                 let progress = self.reveals[index].progress(cx.tokens, self.motion_ms, cx.time);
                 let faded =
                     progress < 1.0 && cx.list.push_opacity(progress.clamp(0.0, 1.0)).is_ok();
-                let text_rect = Rect::from_xywh(
-                    body.origin.x,
-                    body.origin.y,
-                    body.size.width,
-                    body.size.height - content.padding.block_end,
-                );
+                // The text keeps its full height; the growing body clips it.
+                let full = wrapped_height(text, &content.text, body.size.width, cx.text);
+                let text_rect =
+                    Rect::from_xywh(body.origin.x, body.origin.y, body.size.width, full);
+                cx.list.push_clip(*body);
                 paint_wrapped(cx, text_rect, text, &content, TextAlign::Start);
+                let _ = cx.list.pop_clip();
                 if faded {
                     let _ = cx.list.pop_opacity();
                 }
@@ -323,9 +392,19 @@ impl CustomControl for Accordion {
             .any(|reveal| reveal.animating(self.motion_ms, time))
     }
 
+    /// While the height animates, a timer each frame lays out the next
+    /// height.
+    fn deadline(&self) -> Option<f64> {
+        let running = self
+            .reveals
+            .iter()
+            .any(|reveal| reveal.animating(self.motion_ms, self.clock));
+        running.then_some(self.clock + FRAME)
+    }
+
     fn semantics(&self) -> SemanticNode {
         let mut actions = Vec::new();
-        if self.enabled && !self.items.is_empty() {
+        if self.enabled && self.disabled.get(self.focus) == Some(&false) {
             actions.extend([SemanticAction::Activate, SemanticAction::Focus]);
             actions.push(if self.reveals[self.focus].open {
                 SemanticAction::Collapse
@@ -359,6 +438,9 @@ impl CustomControl for Accordion {
         let Some(open) = self.reveals.get(self.focus).map(|reveal| reveal.open) else {
             return false;
         };
+        if self.disabled[self.focus] {
+            return false;
+        }
         match action {
             SemanticAction::Activate => self.toggle(cx, self.focus),
             SemanticAction::Expand if !open => self.toggle(cx, self.focus),
@@ -370,7 +452,7 @@ impl CustomControl for Accordion {
     }
 
     fn focusable(&self) -> bool {
-        !self.items.is_empty()
+        !self.stops().is_empty()
     }
 
     fn set_enabled(&mut self, enabled: bool) {
