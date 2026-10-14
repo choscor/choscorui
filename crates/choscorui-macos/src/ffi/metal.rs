@@ -93,6 +93,17 @@ ffi_struct! {
         pub(crate) width: usize,
         pub(crate) height: usize,
     }
+
+    /// `MTLViewport`.
+    #[derive(Clone, Copy, Debug, Default, PartialEq)]
+    pub(crate) struct MTLViewport = MTLViewport {
+        pub(crate) x as originX: f64,
+        pub(crate) y as originY: f64,
+        pub(crate) width: f64,
+        pub(crate) height: f64,
+        pub(crate) near as znear: f64,
+        pub(crate) far as zfar: f64,
+    }
 }
 
 encode_as!(MTLClearColor, "{?=dddd}");
@@ -100,6 +111,7 @@ encode_as!(MTLOrigin, "{?=QQQ}");
 encode_as!(MTLSize, "{?=QQQ}");
 encode_as!(MTLRegion, "{?={?=QQQ}{?=QQQ}}");
 encode_as!(MTLScissorRect, "{?=QQQQ}");
+encode_as!(MTLViewport, "{?=dddddd}");
 
 impl MTLOrigin {
     /// The origin `(x, y, 0)` of a 2D texture.
@@ -208,6 +220,8 @@ messages! {
         (usize, usize, usize, usize, usize) -> ();
     pub(crate) SET_SCISSOR_RECT: instance MTLRenderCommandEncoder, c"setScissorRect:",
         (MTLScissorRect) -> ();
+    pub(crate) SET_VIEWPORT: instance MTLRenderCommandEncoder, c"setViewport:",
+        (MTLViewport) -> ();
     pub(crate) END_RENDER_ENCODING: instance MTLRenderCommandEncoder, c"endEncoding", () -> ();
 
     pub(crate) COPY_TEXTURE: instance MTLBlitCommandEncoder,

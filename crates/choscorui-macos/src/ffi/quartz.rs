@@ -45,6 +45,10 @@ messages! {
         () -> Autoreleased<CAMetalDrawable>;
     pub(crate) SET_CONTENTS_SCALE: instance CALayer, c"setContentsScale:", (f64) -> ();
     pub(crate) SET_LAYER_OPAQUE: instance CALayer, c"setOpaque:", (bool) -> ();
+    pub(crate) SET_CONTENTS_GRAVITY: instance CALayer, c"setContentsGravity:",
+        (&Obj<NSString>) -> ();
+    pub(crate) SET_MASKS_TO_BOUNDS: instance CALayer, c"setMasksToBounds:", (bool) -> ();
+    pub(crate) CONTENTS_ARE_FLIPPED: instance CALayer, c"contentsAreFlipped", () -> bool;
     pub(crate) DRAWABLE_TEXTURE: instance CAMetalDrawable, c"texture",
         () -> Option<&Obj<MTLTexture>>;
 
@@ -63,6 +67,10 @@ messages! {
 
 c_functions! {
     #[link(name = "QuartzCore", kind = "framework")]
+    statics {
+        pub(crate) safe static kCAGravityTopLeft: &'static Obj<NSString>;
+        pub(crate) safe static kCAGravityBottomLeft: &'static Obj<NSString>;
+    }
     functions {
         // The current host time in seconds, the clock of `presentedTime`.
         pub(crate) safe fn CACurrentMediaTime() -> f64;

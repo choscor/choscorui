@@ -12,7 +12,7 @@ use super::class::{AnyClass, AnyProtocol, ClassType, IsA, Obj, Receiver, Sel};
 use super::encode::Bool;
 use super::encode::Encode;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
-use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize, MTLViewport};
 use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
 use super::runtime;
@@ -242,6 +242,7 @@ plain_value!(
     MTLSize,
     MTLRegion,
     MTLScissorRect,
+    MTLViewport,
     CAFrameRateRange
 );
 

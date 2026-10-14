@@ -236,8 +236,9 @@ struct PaintState {
     first_paint: Option<PaintTiming>,
     displays: usize,
     last_display: Option<std::time::Instant>,
-    /// The sorted draw regions of `list`, for the damage of the next list.
-    regions: choscorui_core::DrawRegions,
+    /// The sorted draw regions of `list`, for the damage of the next list,
+    /// or `None` when no damage needed them yet.
+    regions: Option<choscorui_core::DrawRegions>,
     last_damage: Option<choscorui_core::Rect>,
     cursor: choscorui_core::CursorShape,
     drop_formats: Vec<choscorui_core::DragFormat>,
@@ -624,6 +625,11 @@ impl Application {
         if !ffi::is_main_thread() {
             return Err(Error::WrongThread);
         }
+        // The main thread draws every frame. Without this class, a process
+        // started outside an app bundle can draw on efficiency cores, and
+        // a frame then takes several times longer. The class is a hint, so
+        // a failure leaves the application usable.
+        ffi::make_user_interactive();
         metal::prepare();
         let _pool = Pool::new()?;
         let application = SHARED_APPLICATION
@@ -716,7 +722,7 @@ impl Application {
             first_paint: None,
             displays: 0,
             last_display: None,
-            regions: choscorui_core::DrawRegions::default(),
+            regions: Some(choscorui_core::DrawRegions::default()),
             last_damage: None,
             cursor: Default::default(),
             drop_formats: Vec::new(),

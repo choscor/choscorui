@@ -4,17 +4,19 @@
 
 use super::coverage::{ATLAS_SIZE, EDGE_WORDS, PixelBox};
 use super::plan::{ATLAS_LIMIT, BlurPass, Op, Plan, Source, Target};
+use super::surface::drawable_size;
 use super::{COLOR_FORMAT, Gpu};
 use crate::ffi::Obj;
 use crate::ffi::metal::{
     BLIT_ENCODER, COPY_TEXTURE, DRAW_PRIMITIVES, END_BLIT_ENCODING, END_RENDER_ENCODING,
     LOAD_ACTION_CLEAR, LOAD_ACTION_DONT_CARE, LOAD_ACTION_LOAD, MTLBuffer, MTLClearColor,
     MTLCommandBuffer, MTLOrigin, MTLRenderCommandEncoder, MTLScissorRect, MTLSize, MTLTexture,
-    PASS_ATTACHMENT_AT, PASS_COLOR_ATTACHMENTS, PIXEL_FORMAT_R16_FLOAT, PIXEL_FORMAT_RGBA8,
-    PRIMITIVE_TRIANGLE, PRIMITIVE_TRIANGLE_STRIP, RENDER_ENCODER, RENDER_PASS_DESCRIPTOR,
-    SET_ATTACHMENT_TEXTURE, SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER, SET_FRAGMENT_SAMPLER,
-    SET_FRAGMENT_TEXTURE, SET_LOAD_ACTION, SET_PIPELINE, SET_SCISSOR_RECT, SET_STORE_ACTION,
-    SET_VERTEX_BUFFER, STORE_ACTION_STORE, new_buffer, set_fragment_ints, set_vertex_floats,
+    MTLViewport, PASS_ATTACHMENT_AT, PASS_COLOR_ATTACHMENTS, PIXEL_FORMAT_R16_FLOAT,
+    PIXEL_FORMAT_RGBA8, PRIMITIVE_TRIANGLE, PRIMITIVE_TRIANGLE_STRIP, RENDER_ENCODER,
+    RENDER_PASS_DESCRIPTOR, SET_ATTACHMENT_TEXTURE, SET_CLEAR_COLOR, SET_FRAGMENT_BUFFER,
+    SET_FRAGMENT_SAMPLER, SET_FRAGMENT_TEXTURE, SET_LOAD_ACTION, SET_PIPELINE, SET_SCISSOR_RECT,
+    SET_STORE_ACTION, SET_VERTEX_BUFFER, SET_VIEWPORT, STORE_ACTION_STORE, new_buffer,
+    set_fragment_ints, set_vertex_floats,
 };
 use crate::ffi::retained::Retained;
 use std::collections::HashMap;
@@ -25,7 +27,11 @@ const BLUR_LIMIT: usize = 8;
 /// The textures that one window draws with, kept between frames.
 #[derive(Default)]
 pub(super) struct Targets {
+    /// The pixel size of the frame and group textures, which can be
+    /// larger than the frame, as the drawables can.
     size: (usize, usize),
+    /// The pixel size of the last frame.
+    last: (usize, usize),
     frame: Option<Retained<MTLTexture>>,
     groups: Vec<Retained<MTLTexture>>,
     /// The coverage atlas texture slots, at most [`ATLAS_LIMIT`].
@@ -36,10 +42,15 @@ pub(super) struct Targets {
 }
 
 impl Targets {
-    /// Drops the textures of another frame size.
-    fn fit(&mut self, width: usize, height: usize) {
-        if self.size != (width, height) {
-            self.size = (width, height);
+    /// Drops the frame and group textures when a frame of `frame` pixels
+    /// needs another size. While the size changes from frame to frame,
+    /// as in a resize, the textures keep the largest size, so a resize
+    /// step does not allocate new ones. See [`drawable_size`].
+    fn fit(&mut self, frame: (usize, usize)) {
+        let size = drawable_size(self.size, self.last, frame);
+        self.last = frame;
+        if self.size != size {
+            self.size = size;
             self.frame = None;
             self.groups.clear();
         }
@@ -62,12 +73,14 @@ impl Targets {
     }
 }
 
-/// Records a pass that clears `output` to transparent.
+/// Records a pass that clears `output`, a texture of `size` pixels, to
+/// transparent.
 pub(super) fn clear(
     command_buffer: &Obj<MTLCommandBuffer>,
     output: &Obj<MTLTexture>,
+    size: (usize, usize),
 ) -> Option<()> {
-    let pass = begin_render(command_buffer, output, LOAD_ACTION_CLEAR)?;
+    let pass = begin_render(command_buffer, output, LOAD_ACTION_CLEAR, size)?;
     END_RENDER_ENCODING.send(&pass, ());
     Some(())
 }
@@ -110,10 +123,10 @@ struct Encoder<'a> {
     clear_groups: Vec<bool>,
 }
 
-/// Records `plan` into `command_buffer`, drawing into `output`, a BGRA8
-/// texture of the plan's size. Returns `None` when Metal could not create
-/// a buffer, a texture, or an encoder; the command buffer must then not
-/// be committed.
+/// Records `plan` into `command_buffer`, drawing into the top-left part
+/// of `output`, a BGRA8 texture of at least the plan's size. Returns
+/// `None` when Metal could not create a buffer, a texture, or an
+/// encoder; the command buffer must then not be committed.
 pub(super) fn encode(
     gpu: &Gpu,
     targets: &mut Targets,
@@ -121,18 +134,19 @@ pub(super) fn encode(
     command_buffer: &Obj<MTLCommandBuffer>,
     output: &Obj<MTLTexture>,
 ) -> Option<()> {
-    targets.fit(plan.width, plan.height);
+    targets.fit((plan.width, plan.height));
+    let (width, height) = targets.size;
     let device = &gpu.device;
     let frame = if plan.reads_frame {
         texture_in(&mut targets.frame, || {
-            gpu.target_texture(COLOR_FORMAT, plan.width, plan.height)
+            gpu.target_texture(COLOR_FORMAT, width, height)
         })?
         .clone()
     } else {
         output.retain()
     };
     while targets.groups.len() < plan.groups as usize {
-        let group = gpu.target_texture(COLOR_FORMAT, plan.width, plan.height)?;
+        let group = gpu.target_texture(COLOR_FORMAT, width, height)?;
         targets.groups.push(group);
     }
     let slots = atlas_slots(plan);
@@ -203,7 +217,8 @@ pub(super) fn encode(
         encoder.end_pass();
     }
     if plan.reads_frame {
-        let pass = begin_render(command_buffer, output, LOAD_ACTION_DONT_CARE)?;
+        let frame_area = (plan.width, plan.height);
+        let pass = begin_render(command_buffer, output, LOAD_ACTION_DONT_CARE, frame_area)?;
         SET_PIPELINE.send(&pass, (&gpu.copy,));
         SET_FRAGMENT_TEXTURE.send(&pass, (Some(&*encoder.frame), 0));
         DRAW_PRIMITIVES.send(&pass, (PRIMITIVE_TRIANGLE, 0, 3, 1, 0));
@@ -229,11 +244,14 @@ fn atlas_slots(plan: &Plan) -> usize {
     atlases.min(ATLAS_LIMIT) as usize
 }
 
-/// A render pass into `texture` with `load` for its one attachment.
+/// A render pass into `texture` with `load` for its one attachment. Its
+/// viewport is the top-left `area` of the texture, in pixels, so a frame
+/// fills that part of a drawable that is larger than the frame.
 fn begin_render(
     command_buffer: &Obj<MTLCommandBuffer>,
     texture: &Obj<MTLTexture>,
     load: usize,
+    area: (usize, usize),
 ) -> Option<Retained<MTLRenderCommandEncoder>> {
     let descriptor = RENDER_PASS_DESCRIPTOR.class_send(()).ok()??;
     let attachments = PASS_COLOR_ATTACHMENTS.send(&descriptor, ())?;
@@ -242,14 +260,30 @@ fn begin_render(
     SET_LOAD_ACTION.send(attachment, (load,));
     SET_STORE_ACTION.send(attachment, (STORE_ACTION_STORE,));
     SET_CLEAR_COLOR.send(attachment, (MTLClearColor::default(),));
-    RENDER_ENCODER.send(command_buffer, (&descriptor,))
+    let encoder = RENDER_ENCODER.send(command_buffer, (&descriptor,))?;
+    SET_VIEWPORT.send(
+        &encoder,
+        (MTLViewport {
+            width: area.0 as f64,
+            height: area.1 as f64,
+            far: 1.0,
+            ..MTLViewport::default()
+        },),
+    );
+    Some(encoder)
 }
 
 impl Encoder<'_> {
     /// Adds the edges of `atlas` into its texture slot.
     fn coverage(&mut self, atlas: u32) -> Option<()> {
         let texture = self.slot(atlas)?;
-        let pass = begin_render(self.command_buffer, texture, LOAD_ACTION_CLEAR)?;
+        let side = ATLAS_SIZE as usize;
+        let pass = begin_render(
+            self.command_buffer,
+            texture,
+            LOAD_ACTION_CLEAR,
+            (side, side),
+        )?;
         let edges = self.plan.edges.get(atlas as usize)?;
         if !edges.is_empty() {
             let words: Vec<u32> = edges.iter().map(|value| value.to_bits()).collect();
@@ -297,7 +331,8 @@ impl Encoder<'_> {
             LOAD_ACTION_LOAD
         };
         let texture = self.target_texture(target).clone();
-        let encoder = begin_render(self.command_buffer, &texture, load)?;
+        let area = (self.plan.width, self.plan.height);
+        let encoder = begin_render(self.command_buffer, &texture, load, area)?;
         SET_PIPELINE.send(&encoder, (&self.gpu.ui,));
         SET_VERTEX_BUFFER.send(&encoder, (Some(&*self.instances), 0, 0));
         let viewport = [self.plan.width as f32, self.plan.height as f32];
@@ -412,7 +447,7 @@ impl Encoder<'_> {
         if let Some(radii) = radii {
             for direction in [[1, 0], [0, 1]] {
                 for radius in radii {
-                    let pass = begin_render(self.command_buffer, &to, LOAD_ACTION_DONT_CARE)?;
+                    let pass = begin_render(self.command_buffer, &to, LOAD_ACTION_DONT_CARE, size)?;
                     SET_PIPELINE.send(&pass, (&self.gpu.blur,));
                     SET_FRAGMENT_TEXTURE.send(&pass, (Some(&*from), 0));
                     let radius = i32::try_from(radius).unwrap_or(i32::MAX);

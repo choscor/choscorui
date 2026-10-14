@@ -265,6 +265,22 @@ fn scene_spatial_queries_match_brute_force() {
             let mut list = DisplayList::new();
             scene.paint(&mut list, query).unwrap();
             assert!(list.is_balanced(), "seed {seed}");
+
+            // A rectangle too large for the grid finds the items without
+            // the grid, and paint culls each one by its bounds. It paints
+            // the same list as a rectangle around all the items, which the
+            // grid finds.
+            let all = order
+                .iter()
+                .filter_map(|id| scene.world_bounds(*id))
+                .reduce(Rect::union);
+            if let Some(all) = all {
+                let (mut grid, mut whole) = (DisplayList::new(), DisplayList::new());
+                let in_grid = scene.paint(&mut grid, all.inset(-1.0)).unwrap();
+                let everywhere = Rect::new(Point::new(-1.0e6, -1.0e6), Size::new(2.0e6, 2.0e6));
+                let in_whole = scene.paint(&mut whole, everywhere).unwrap();
+                assert_eq!((in_grid, &grid), (in_whole, &whole), "seed {seed}");
+            }
         }
     }
 }

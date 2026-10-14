@@ -629,12 +629,15 @@ impl CanvasView {
                 style,
             )
         };
-        // Only the selected items in view get an outline.
-        for id in scene.items_in_rect(self.visible_scene_rect()) {
-            if self.selection.contains(&id)
-                && let Some(bounds) = scene.world_bounds(id)
-            {
-                outline(list, self.transform().apply_rect(bounds), false)?;
+        // Only the selected items in view get an outline. Without a
+        // selection, the paint does not query the items in view again.
+        if !self.selection.is_empty() {
+            for id in scene.items_in_rect(self.visible_scene_rect()) {
+                if self.selection.contains(&id)
+                    && let Some(bounds) = scene.world_bounds(id)
+                {
+                    outline(list, self.transform().apply_rect(bounds), false)?;
+                }
             }
         }
         // The focused item shows a dashed outline while the canvas has

@@ -31,11 +31,12 @@ use crate::ffi::metal::{
 };
 use crate::ffi::quartz::{
     ADD_TO_RUN_LOOP, CACurrentMediaTime, CADisplayLink, CAFrameRateRange, CAMetalLayer,
-    DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_SCALE, SET_DRAWABLE_SIZE,
-    SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE, SET_LAYER_DEVICE, SET_LAYER_OPAQUE,
-    SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED, SET_MAXIMUM_DRAWABLE_COUNT,
-    SET_PREFERRED_FRAME_RATE_RANGE, SET_PRESENTS_WITH_TRANSACTION, SET_VIEW_LAYER, SET_WANTS_LAYER,
-    view_display_link,
+    CONTENTS_ARE_FLIPPED, DRAWABLE_TEXTURE, INVALIDATE_LINK, NEXT_DRAWABLE, SET_CONTENTS_GRAVITY,
+    SET_CONTENTS_SCALE, SET_DRAWABLE_SIZE, SET_FRAMEBUFFER_ONLY, SET_LAYER_COLORSPACE,
+    SET_LAYER_DEVICE, SET_LAYER_OPAQUE, SET_LAYER_PIXEL_FORMAT, SET_LINK_PAUSED,
+    SET_MASKS_TO_BOUNDS, SET_MAXIMUM_DRAWABLE_COUNT, SET_PREFERRED_FRAME_RATE_RANGE,
+    SET_PRESENTS_WITH_TRANSACTION, SET_VIEW_LAYER, SET_WANTS_LAYER, kCAGravityBottomLeft,
+    kCAGravityTopLeft, view_display_link,
 };
 use crate::ffi::retained::{Retained, alloc_init};
 use crate::{PaintHandle, PaintTiming, Poster};
@@ -101,6 +102,9 @@ struct Surface {
     shared: Arc<Shared>,
     targets: Targets,
     pending: bool,
+    /// True while the pending frame follows a change of the size or the
+    /// scale, so it draws the whole window whatever the list draws.
+    resized: bool,
     /// True once AppKit reported the occlusion state of the window. Until
     /// then, a window on screen counts as visible.
     occlusion_reported: bool,
@@ -108,7 +112,11 @@ struct Surface {
     /// When the last frame went to the GPU.
     committed: Option<Instant>,
     transaction: bool,
-    size: (usize, usize),
+    /// The pixel size of the drawables of the layer, which can be larger
+    /// than the frame. See [`drawable_size`].
+    drawable: (usize, usize),
+    /// The pixel size of the last frame.
+    frame: (usize, usize),
     scale: f64,
     /// The pixel size of the frame that the window presented last.
     presented: (usize, usize),
@@ -244,6 +252,10 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
     SET_FRAMEBUFFER_ONLY.send(&layer, (true,));
     SET_MAXIMUM_DRAWABLE_COUNT.send(&layer, (DRAWABLES,));
     SET_LAYER_OPAQUE.send(&layer, (false,));
+    // A frame fills the top-left part of a drawable that can be larger
+    // (see `drawable_size`). The layer shows nothing outside its bounds,
+    // and `render` makes it show that part without a scale.
+    SET_MASKS_TO_BOUNDS.send(&layer, (true,));
     SET_PRESENTS_WITH_TRANSACTION.send(&layer, (true,));
     // A layer-hosting view: the layer first, then `wantsLayer`.
     SET_VIEW_LAYER.send(view, (Some(layer.upcast()),));
@@ -278,11 +290,13 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
         shared,
         targets: Targets::default(),
         pending: true,
+        resized: true,
         occlusion_reported: false,
         presented_once: false,
         committed: None,
         transaction: true,
-        size: (0, 0),
+        drawable: (0, 0),
+        frame: (0, 0),
         scale: 0.0,
         presented: (0, 0),
     };
@@ -398,7 +412,8 @@ fn present_blank(gpu: &Gpu, surface: &mut Surface) {
             height: 1.0,
         },),
     );
-    surface.size = (1, 1);
+    surface.drawable = (1, 1);
+    surface.frame = (1, 1);
     let Some(drawable) = NEXT_DRAWABLE.send(&surface.layer, ()) else {
         return;
     };
@@ -408,7 +423,7 @@ fn present_blank(gpu: &Gpu, surface: &mut Surface) {
     let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) else {
         return;
     };
-    if clear(&command_buffer, texture).is_none() {
+    if clear(&command_buffer, texture, (1, 1)).is_none() {
         return;
     }
     PRESENT_DRAWABLE.send(&command_buffer, (drawable.as_drawable(),));
@@ -461,6 +476,7 @@ pub(crate) fn window_changed(window: usize) {
         let mut surfaces = surfaces.borrow_mut();
         let surface = surfaces.get_mut(&window)?;
         surface.pending = true;
+        surface.resized = true;
         Some(surface.link.clone())
     });
     match link {
@@ -468,6 +484,18 @@ pub(crate) fn window_changed(window: usize) {
         Some(None) => drive(window),
         None => {}
     }
+}
+
+/// True when the next frame of `window` draws all of it, because the
+/// window was shown or changed size or scale, and the frame did not draw
+/// yet. False for a window that paints with Core Graphics.
+pub(crate) fn redraws_all(window: usize) -> bool {
+    SURFACES.with(|surfaces| {
+        surfaces
+            .borrow()
+            .get(&window)
+            .is_some_and(|surface| surface.pending && surface.resized)
+    })
 }
 
 /// Draws a waiting frame of `window` when AppKit reports a new occlusion
@@ -535,7 +563,10 @@ fn drive(window: usize) {
                 wait = true;
             } else {
                 match render(gpu, surface) {
-                    Frame::Presented => surface.pending = false,
+                    Frame::Presented => {
+                        surface.pending = false;
+                        surface.resized = false;
+                    }
                     Frame::NoDrawable => wait = true,
                     Frame::Failed => return true,
                 }
@@ -589,23 +620,59 @@ fn view_size(view: &Obj<NSView>, scale: f64) -> Option<((usize, usize), f64)> {
         .then_some(((width as usize, height as usize), scale))
 }
 
+/// The drawable size for a frame of `frame` pixels, after a frame of
+/// `last` pixels on drawables of `current` pixels.
+///
+/// A new drawable size makes the layer allocate new drawables, and the
+/// GPU must map and clear the memory of each one before the first frame
+/// in it. While the size changes from frame to frame, as in a resize, the
+/// drawables therefore stay at the largest size so far, and the frame
+/// fills their top-left part. The first frame at an unchanged size gives
+/// the drawables the size of the frame again.
+pub(super) fn drawable_size(
+    current: (usize, usize),
+    last: (usize, usize),
+    frame: (usize, usize),
+) -> (usize, usize) {
+    if frame == last {
+        frame
+    } else {
+        (current.0.max(frame.0), current.1.max(frame.1))
+    }
+}
+
 fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
     let Some((size, scale)) = backing_size(&surface.view) else {
         // An empty view shows nothing.
         return Frame::Presented;
     };
-    if size != surface.size || scale != surface.scale {
+    let drawable = if scale == surface.scale {
+        drawable_size(surface.drawable, surface.frame, size)
+    } else {
+        size
+    };
+    if drawable != surface.drawable || scale != surface.scale {
         SET_CONTENTS_SCALE.send(&surface.layer, (scale,));
         SET_DRAWABLE_SIZE.send(
             &surface.layer,
             (NSSize {
-                width: size.0 as f64,
-                height: size.1 as f64,
+                width: drawable.0 as f64,
+                height: drawable.1 as f64,
             },),
         );
-        surface.size = size;
+        // "Top" is the largest y of the layer. AppKit flips the layer of
+        // the flipped content view, and then its top is at the bottom of
+        // the window.
+        let gravity = if CONTENTS_ARE_FLIPPED.send(&surface.layer, ()) {
+            kCAGravityBottomLeft
+        } else {
+            kCAGravityTopLeft
+        };
+        SET_CONTENTS_GRAVITY.send(&surface.layer, (gravity,));
+        surface.drawable = drawable;
         surface.scale = scale;
     }
+    surface.frame = size;
     // Startup and live resize present inside the Core Animation
     // transaction, so the content matches the window frame.
     let transaction = !surface.presented_once || IN_LIVE_RESIZE.send(&surface.view, ());

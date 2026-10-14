@@ -5,7 +5,7 @@ use super::block::Block;
 use super::class::{AnyClass, AnyProtocol, Obj, Receiver, ReceiverKind, Sel};
 use super::encode::Bool;
 use super::geometry::{CGAffineTransform, NSPoint, NSRange, NSRect, NSSize};
-use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize};
+use super::metal::{MTLClearColor, MTLOrigin, MTLRegion, MTLScissorRect, MTLSize, MTLViewport};
 use super::msg::{Autoreleased, Init, Shared, Utf8};
 use super::quartz::CAFrameRateRange;
 use super::retained::Retained;
@@ -119,6 +119,7 @@ header_as!(Typed:
     MTLSize => "MTLSize",
     MTLRegion => "MTLRegion",
     MTLScissorRect => "MTLScissorRect",
+    MTLViewport => "MTLViewport",
     CAFrameRateRange => "CAFrameRateRange",
     &AnyClass => "Class",
     &AnyProtocol => "Protocol *",

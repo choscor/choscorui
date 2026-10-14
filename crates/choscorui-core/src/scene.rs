@@ -7,7 +7,7 @@ use crate::{
     Color, DisplayList, DisplayListError, FillRule, Image, ImageSampling, Paint, Path, Point, Rect,
     SemanticRole, Size, StrokeStyle, SvgDocument, Transform,
 };
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
@@ -37,7 +37,6 @@ impl Hasher for IdHasher {
 }
 
 type IdMap<V> = HashMap<SceneItemId, V, BuildHasherDefault<IdHasher>>;
-type IdSet = HashSet<SceneItemId, BuildHasherDefault<IdHasher>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ItemShape {
@@ -825,14 +824,13 @@ impl Scene {
         list: &mut DisplayList,
         visible: Rect,
     ) -> Result<usize, DisplayListError> {
-        let ids = self.items_in_rect(visible);
-        let set: IdSet = ids.iter().copied().collect();
         let mut painted = 0;
         // `ids` is in paint order, so its roots come in sibling order. A
         // root outside `visible` is never visited, so the cost follows
         // the visible items, not the scene size.
+        let ids = self.items_in_rect(visible);
         for root in ids.iter().filter(|id| self.nodes[id].parent.is_none()) {
-            painted += self.paint_subtree(list, *root, &set)?;
+            painted += self.paint_subtree(list, *root, visible)?;
         }
         Ok(painted)
     }
@@ -847,13 +845,15 @@ impl Scene {
         &self,
         list: &mut DisplayList,
         id: SceneItemId,
-        visible: &IdSet,
+        visible: Rect,
     ) -> Result<usize, DisplayListError> {
-        // Groups and their descendants are culled together by bounds.
-        if !visible.contains(&id) {
+        let node = &self.nodes[&id];
+        // Groups and their descendants are culled together by bounds. A
+        // hidden item has no bounds, so it and its descendants paint
+        // nothing.
+        if !node.bounds.is_some_and(|bounds| bounds.intersects(visible)) {
             return Ok(0);
         }
-        let node = &self.nodes[&id];
         let opacity = node.item.style.opacity.clamp(0.0, 1.0);
         if opacity < 1.0 {
             list.push_opacity(opacity)?;

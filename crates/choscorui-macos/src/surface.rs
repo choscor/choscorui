@@ -102,26 +102,44 @@ impl Window {
     /// drawing changed is invalidated.
     pub fn set_display_list(&self, list: DisplayList) {
         let _pool = Pool::new();
-        if *self.paint.lock().unwrap().list == list {
-            return;
-        }
-        // The window keeps the sorted draw regions of its list, so the
-        // damage computes the regions of the new list only. The lock is
-        // not held meanwhile, because the frame handlers take it.
-        let regions = list.sorted_draw_regions();
+        let window = self.ns_window().addr();
+        let old = {
+            let paint = self.paint.lock().unwrap();
+            if *paint.list == list {
+                return;
+            }
+            Arc::clone(&paint.list)
+        };
+        let (damage, regions, previous) = if metal::surface::redraws_all(window) {
+            // The window changed size, so its next frame draws all of it,
+            // and the new list goes into that frame. The damage would not
+            // change what draws, so the regions wait until a damage needs
+            // them.
+            let size = read_content_size(self.ns_window());
+            (Some(Rect::new(Point::new(0.0, 0.0), size)), None, None)
+        } else {
+            // The window keeps the sorted draw regions of its list, so the
+            // damage computes the regions of the new list only. The lock
+            // is not held meanwhile, because the frame handlers take it.
+            let regions = list.sorted_draw_regions();
+            let kept = self.paint.lock().unwrap().regions.take();
+            let previous = kept.unwrap_or_else(|| old.sorted_draw_regions());
+            (previous.damage(&regions), Some(regions), Some(previous))
+        };
         let mut paint = self.paint.lock().unwrap();
-        let damage = paint.regions.damage(&regions);
         // The old list and regions drop at the end, after the frame starts.
         let _replaced = (
             std::mem::replace(&mut paint.list, Arc::new(list)),
             std::mem::replace(&mut paint.regions, regions),
+            previous,
+            old,
         );
         let Some(region) = damage else {
             return;
         };
         paint.last_damage = Some(region);
         drop(paint);
-        if metal::surface::request_frame(self.ns_window().addr()) {
+        if metal::surface::request_frame(window) {
             return;
         }
         // Round out and pad one point so antialiased edges repaint too.

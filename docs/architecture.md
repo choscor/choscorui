@@ -196,7 +196,7 @@ The application owns the main loop. Each turn of the loop moves one native event
 5. The controls change their state and mark nodes with `Dirty::LAYOUT`, `Dirty::PAINT`, or `Dirty::SEMANTICS`.
 6. Layout writes new bounds into the tree for the changed nodes.
 7. The application paints into a new `DisplayList` and gives it to `Window::set_display_list`.
-8. `set_display_list` compares the old and the new list, and computes the damaged region. A list without damage schedules no frame.
+8. `set_display_list` compares the old and the new list, and computes the damaged region. A list without damage schedules no frame. After a change of the window size, the next frame draws the whole window, so the damage is the whole window.
 9. The Metal painter draws the full list into the next drawable of the window's `CAMetalLayer` and presents it at once. When no drawable or frame slot is free, the view's display link tries again on the next display refresh. The link stops when no frame waits.
 10. When the window paints with Core Graphics, `set_display_list` calls `choscorui_core::damage` and invalidates only the changed region. AppKit then calls `drawRect:`, and the backend replays the list through Core Graphics and Core Text.
 

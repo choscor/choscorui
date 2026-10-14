@@ -16,7 +16,7 @@ The backend links only system frameworks: AppKit, Foundation, Core Foundation, C
 
 `Application`, `Window`, and the other native handles are neither `Send` nor `Sync`. Use them on the main thread only. `Application::new` returns `Error::WrongThread` on another thread.
 
-`Application::new` makes the process a regular application and installs the application delegate. Then it calls `finishLaunching`, so the application keeps the open-document events at launch. The application does not take control of your main loop. Use one of these models:
+`Application::new` makes the process a regular application and installs the application delegate. It gives the main thread the user-interactive quality of service, as an application bundle gets from the system. Then it calls `finishLaunching`, so the application keeps the open-document events at launch. The application does not take control of your main loop. Use one of these models:
 
 - **Your own loop.** Call `Application::dispatch_next_event(timeout)` in a loop. It waits for one AppKit event, dispatches it, and returns `true` when an event arrived. The run loop also runs timers and posted tasks while it waits.
 - **The AppKit loop.** Call `Application::run`. It blocks until `Application::stop` or `Poster::request_stop`.
@@ -79,7 +79,7 @@ A `Key` event names the navigation and editing keys, F1 to F20, and the Menu key
 
 An identical display list schedules no frame. Each window paints its display list with one of two painters:
 
-- **Metal**, the default. The content view hosts a `CAMetalLayer`, and the GPU draws the full display list into each frame. The display link of the view paces the frames at the refresh rate of the display, and it stops when no frame waits. After its first frame, an occluded or minimized window draws no frames. The first frame draws when the window is visible, because the window server can report a window without content as occluded. At startup and during a live resize, the frame goes inside the Core Animation transaction, so the content and the window frame change together. The window server can keep the last frame of a closed window. Thus, a closed window presents a blank frame of one pixel and releases its textures.
+- **Metal**, the default. The content view hosts a `CAMetalLayer`, and the GPU draws the full display list into each frame. The display link of the view paces the frames at the refresh rate of the display, and it stops when no frame waits. After its first frame, an occluded or minimized window draws no frames. The first frame draws when the window is visible, because the window server can report a window without content as occluded. At startup and during a live resize, the frame goes inside the Core Animation transaction, so the content and the window frame change together. The window server can keep the last frame of a closed window. Thus, a closed window presents a blank frame of one pixel and releases its textures. While the window size changes from frame to frame, the drawables keep the largest size, and each frame fills their top-left part. The first frame at an unchanged size makes the drawables the size of the window again.
 - **Core Graphics**, the fallback. `Window::set_display_list` invalidates only the region that changed, and Core Graphics paints that region on the CPU in `drawRect:`.
 
 A window uses Core Graphics when one of these conditions is true:

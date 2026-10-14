@@ -350,6 +350,7 @@ fn sdk_headers_compile() {
         super::graphics::SDK_CONSTS,
         super::keys::SDK_CONSTS,
         super::process::SDK_CONSTS,
+        super::thread::SDK_CONSTS,
         super::text::SDK_CONSTS,
         super::user_notifications::SDK_CONSTS,
         super::metal::SDK_CONSTS,

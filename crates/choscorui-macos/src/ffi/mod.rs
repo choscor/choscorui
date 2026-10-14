@@ -36,4 +36,4 @@ pub(crate) mod user_notifications;
 
 pub(crate) use class::Obj;
 pub(crate) use retained::Pool;
-pub(crate) use thread::is_main_thread;
+pub(crate) use thread::{is_main_thread, make_user_interactive};
