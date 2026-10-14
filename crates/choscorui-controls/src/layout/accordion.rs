@@ -217,7 +217,10 @@ impl CustomControl for Accordion {
         }
         let stops = self.stops();
         let count = stops.len();
-        let stop = stops.iter().position(|index| *index == self.focus).unwrap_or(0);
+        let stop = stops
+            .iter()
+            .position(|index| *index == self.focus)
+            .unwrap_or(0);
         match event {
             ControlEvent::Timer => {
                 // Lay out the next frame of a height animation.
@@ -243,7 +246,9 @@ impl CustomControl for Accordion {
                 cx.request_paint();
                 EventReply::Stop
             }
-            ControlEvent::Pointer(PointerEvent::Up { position, button }) if self.pressed.is_some() => {
+            ControlEvent::Pointer(PointerEvent::Up { position, button })
+                if self.pressed.is_some() =>
+            {
                 cx.capture_pointer(false);
                 // Only the primary button toggles.
                 let hit = self
@@ -322,7 +327,10 @@ impl CustomControl for Accordion {
                     host.focus_visible() && self.focus == index,
                 )
                 .set(VisualState::OPEN, self.reveals[index].open)
-                .set(VisualState::DISABLED, host.disabled() || self.disabled[index]);
+                .set(
+                    VisualState::DISABLED,
+                    host.disabled() || self.disabled[index],
+                );
             let trigger = cx.style(Self::query(Slot::Trigger).state(state));
             let border = self.border(index, item.border_width);
             let row = Rect::from_xywh(

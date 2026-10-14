@@ -6,7 +6,7 @@ use super::{Kept, fill, first_selected, item_view, rows};
 use crate::ui::page::PageCx;
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Binding, Button, Configured, Cx, Dynamic, Edges, Either, Env, Frame,
+    self, Alignment, AnyView, Binding, Button, Configured, Cx, Dynamic, Edges, Either, Env, Frame,
     HStack, HorizontalAlignment, Input, Spacer, State, Text, VStack, VerticalAlignment, View,
     ViewExt, ZStack,
 };
@@ -17,7 +17,7 @@ use choscorui::controls::{
 };
 use choscorui::core::{
     ColorRole, ItemData, ItemKey, ItemModel, Key, LayoutDirection, Locale, ModelError, Rect, Role,
-    SelectionMode, SemanticRole, Size, Space, TextPreset, TreeStore, Value,
+    SelectionMode, SemanticRole, Size, SortOrder, Space, TextPreset, TreeStore, Value,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -144,17 +144,20 @@ fn products(env: &Env, count: usize) -> TreeStore<Product> {
     store
 }
 
+/// The product columns, titled in `env`.
+fn product_columns(env: &Env) -> Vec<HeaderColumn> {
+    (0..COLUMNS.len())
+        .zip([200.0, 100.0, 100.0, 90.0])
+        .map(|(column, width)| HeaderColumn {
+            title: column_title(env, column),
+            width,
+            min_width: 50.0,
+        })
+        .collect()
+}
+
 fn product_header(env: &Env) -> Rc<RefCell<HeaderView>> {
-    Rc::new(RefCell::new(HeaderView::new(
-        (0..COLUMNS.len())
-            .zip([200.0, 100.0, 100.0, 90.0])
-            .map(|(column, width)| HeaderColumn {
-                title: column_title(env, column),
-                width,
-                min_width: 50.0,
-            })
-            .collect(),
-    )))
+    Rc::new(RefCell::new(HeaderView::new(product_columns(env))))
 }
 
 /// The hosted `header`. A resize writes the new widths to `widths`;
@@ -186,16 +189,23 @@ impl View for HeaderViewPage {
         let count = 60;
         let total: i64 = (0..count).map(quantity).sum();
         let model = SharedModel::proxied(products(cx.env(), count));
-        let header = product_header(cx.env());
-        let widths = cx.state(header.borrow().widths());
+        let columns = product_columns(cx.env());
+        let widths = cx.state(columns.iter().map(|column| column.width).collect());
         let revision = cx.state(0_u64);
         let selected = cx.state(Vec::new());
+        let sort = cx.state(None::<(usize, SortOrder)>);
         let sorted = model.clone();
-        let bar = header_bar(header, widths, move |header| {
-            let sort = header.sort();
-            sorted.reproxy(|proxy| proxy.set_sort(sort));
-            revision.update(|revision| *revision += 1);
-        });
+        // A new sort reorders the rows under the header.
+        let sorting = Binding::new(
+            move || sort.get(),
+            move |order| {
+                sort.set(order);
+                sorted.reproxy(|proxy| proxy.set_sort(order));
+                revision.update(|revision| *revision += 1);
+            },
+        );
+        let bar = view::HeaderView::new(product_columns, sorting)
+            .on_resize(move |sizes| widths.set(sizes));
         let (shown, named, kept) = (model.clone(), model.clone(), Kept::default());
         let list = rows(ControlKind::Table, &model, revision, selected, move |env| {
             // New widths or a sort keep the view and its scroll offset.

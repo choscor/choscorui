@@ -190,7 +190,11 @@ fn accordion_height_animates_and_the_last_item_has_no_border() {
     let header = Harness::new(Accordion::new("FAQ", one)).measure().height;
     let mut h = Harness::new(Accordion::new("FAQ", faq()));
     let closed = h.measure().height;
-    assert_eq!(closed, header * 3.0 + 2.0, "two borders between three items");
+    assert_eq!(
+        closed,
+        header * 3.0 + 2.0,
+        "two borders between three items"
+    );
     h.focus();
     h.key(Key::Enter);
     assert_eq!(h.measure().height, closed, "the height starts closed");
@@ -213,7 +217,10 @@ fn a_disabled_accordion_item_is_skipped_and_only_primary_releases_toggle() {
     assert_eq!(h.semantics().description, "Is it animated?");
     let bounds = h.bounds();
     let header = bounds.size.height / 3.0;
-    h.click(Point::new(bounds.origin.x + 20.0, bounds.origin.y + header * 1.5));
+    h.click(Point::new(
+        bounds.origin.x + 20.0,
+        bounds.origin.y + header * 1.5,
+    ));
     assert!(h.messages().is_empty(), "the disabled item does not toggle");
     let first = Point::new(bounds.origin.x + 20.0, bounds.origin.y + 10.0);
     h.host.dispatch_pointer(
@@ -230,7 +237,10 @@ fn a_disabled_accordion_item_is_skipped_and_only_primary_releases_toggle() {
             button: PointerButton::Secondary,
         },
     );
-    assert!(h.messages().is_empty(), "a secondary release does not toggle");
+    assert!(
+        h.messages().is_empty(),
+        "a secondary release does not toggle"
+    );
 }
 
 #[test]
