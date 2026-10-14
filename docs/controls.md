@@ -344,9 +344,16 @@ output of each kind, variant, size, slot, and key state.
 - A button is not a field, so it has no invalid state. Put the error of a
   form on the field.
 - `CommandLink` paints an arrow, a title, and a description in an outline
-  item row. A `Button` on the same node gives the behavior.
+  item row. It resolves through `ControlKind::Item` with the `Outline`
+  variant and the `HIGHLIGHTED` state, as a link row. A `Button` on the
+  same node gives the behavior.
+- The description line sits one spacing unit under the title, with the
+  line height of the `Description` slot.
 - `CommandLink::hosted` puts the link and a `Button` for a command on one
   hosted node. The node adds the link description to the button semantics.
+  The pressed look comes from the button: it shows while the pointer that
+  pressed the link is inside it, or while Space holds it down. Hover and
+  press fill the row with `muted`.
 
 | Size | Height | Inline padding | Gap | Radius | Icon |
 | --- | --- | --- | --- | --- | --- |

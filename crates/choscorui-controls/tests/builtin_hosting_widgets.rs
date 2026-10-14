@@ -11,7 +11,7 @@ use choscorui_controls::{
     ShortcutModifiers, SizeGrip, TextEditor, ToolBox, ToolButton, ToolButtonMenu,
 };
 use choscorui_core::{
-    Feedback, ItemKey, Key, LayoutDirection, Locale, Point, PointerButton, PointerEvent,
+    Feedback, ItemKey, Key, KeyEvent, LayoutDirection, Locale, Point, PointerButton, PointerEvent,
     SemanticAction, SemanticRole, Size,
 };
 use hosted::{Harness, fills, texts};
@@ -662,6 +662,32 @@ fn a_hosted_command_link_activates_like_a_button() {
         texts(&h.paint()),
         vec!["Install", "Add the app to the dock"]
     );
+    // The pressed look comes from the button: Space held down fills the
+    // row. Each paint is after the 100 ms fill motion.
+    let mut time = 0.0;
+    let mut settled = |h: &mut Harness| {
+        // The first paint starts the motion, and the second ends it.
+        for _ in 0..2 {
+            time += 1.0;
+            h.set_time(time);
+            h.paint();
+        }
+        format!("{:?}", h.paint())
+    };
+    let link = CommandLink::new("Install", "Add the app to the dock");
+    let mut p = Harness::new(link.hosted(CommandId(3)));
+    p.focus();
+    let idle = settled(&mut p);
+    let space = |h: &mut Harness, event| h.host.dispatch_key(&mut h.tree, event);
+    let down = KeyEvent::Down {
+        key: Key::Space,
+        repeat: false,
+    };
+    space(&mut p, down);
+    assert_ne!(settled(&mut p), idle);
+    space(&mut p, KeyEvent::Up { key: Key::Space });
+    assert_eq!(settled(&mut p), idle);
+    assert_eq!(p.messages(), vec![ControlMessage::Activated]);
     h.set_enabled(false);
     h.click(h.bounds().center());
     assert!(!h.perform(SemanticAction::Activate, None));

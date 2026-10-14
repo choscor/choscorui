@@ -300,6 +300,12 @@ impl Button {
         Ok(activated.then_some(self.command))
     }
 
+    /// True while a hosted button shows the pressed look: a press whose
+    /// pointer is still inside, or Space held down.
+    pub(crate) fn is_pressed(&self) -> bool {
+        self.enabled && ((self.pointer_armed && self.pointer_inside) || self.space_armed)
+    }
+
     /// The flags the button recipe reads.
     pub fn visual_state(&self, tree: &Tree, id: NodeId) -> VisualState {
         let pressed = self.enabled
@@ -394,11 +400,9 @@ impl crate::CustomControl for Button {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let pressed =
-            self.enabled && ((self.pointer_armed && self.pointer_inside) || self.space_armed);
         let state = cx
             .state
-            .set(VisualState::PRESSED, pressed)
+            .set(VisualState::PRESSED, self.is_pressed())
             .set(VisualState::OPEN, self.expanded);
         self.paint_state(cx, state);
     }

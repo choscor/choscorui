@@ -247,7 +247,7 @@ fn item(cx: &Cx) -> ResolvedStyle {
             if s.highlighted() {
                 // A link row or a command link.
                 style.cursor = Cursor::Pointer;
-                if s.interactive_hover() {
+                if s.interactive_hover() || s.pressed() && !s.disabled() {
                     style.background = cx.c(ColorRole::Muted).into();
                 }
             }

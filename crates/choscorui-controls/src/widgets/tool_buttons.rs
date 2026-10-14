@@ -14,8 +14,8 @@ use crate::style::{
 };
 use crate::{Button, CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    ColorRole, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerButton,
-    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
+    ColorRole, EventPhase, EventReply, Icon, Key, KeyEvent, Measured, Point, PointerEvent, Rect,
+    SemanticAction, SemanticNode, SemanticRole, SemanticState, Size,
 };
 
 /// What a tool button does on press.
@@ -653,7 +653,14 @@ impl CommandLink {
                 title.text.line_height,
             );
             cx.label(text, &self.title, &title, TextAlign::Start);
-            let below = text.translate(0.0, title.text.line_height + 4.0);
+            // The description line sits one spacing unit under the title,
+            // with its own line height.
+            let below = Rect::from_xywh(
+                text.origin.x,
+                text.max_y() + cx.tokens.spacing,
+                text.size.width,
+                description.text.line_height,
+            );
             cx.label(below, &self.description, &description, TextAlign::Start);
         });
     }
@@ -664,8 +671,6 @@ impl CommandLink {
         HostedCommandLink {
             button: Button::new(self.title.clone(), command),
             link: self,
-            pressed: false,
-            enabled: true,
         }
     }
 }
@@ -677,9 +682,6 @@ impl CommandLink {
 pub struct HostedCommandLink {
     link: CommandLink,
     button: Button,
-    /// True while a press or Space holds the link down.
-    pressed: bool,
-    enabled: bool,
 }
 
 impl CustomControl for HostedCommandLink {
@@ -694,8 +696,9 @@ impl CustomControl for HostedCommandLink {
             .width(&self.link.title, &title.text)
             .max(cx.text.width(&self.link.description, &description.text));
         let width = root.padding.horizontal() + media.icon_size + root.gap + text;
-        // The description line sits 4 pt under the title, as `paint` draws.
-        let lines = title.text.line_height + 4.0 + description.text.line_height;
+        // The description line sits one spacing unit under the title, as
+        // `paint` draws.
+        let lines = title.text.line_height + cx.tokens.spacing + description.text.line_height;
         let height = (root.padding.vertical() + lines).max(root.min_height);
         // In less room, the title and the description truncate.
         let size = Size::new(width.max(root.min_width), height);
@@ -703,29 +706,13 @@ impl CustomControl for HostedCommandLink {
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        if cx.phase() == EventPhase::Target {
-            match event {
-                ControlEvent::Pointer(PointerEvent::Down {
-                    position,
-                    button: PointerButton::Primary,
-                }) => self.pressed = cx.bounds().contains(*position),
-                ControlEvent::Key(KeyEvent::Down {
-                    key: Key::Space, ..
-                }) => self.pressed = true,
-                ControlEvent::Pointer(PointerEvent::Up { .. })
-                | ControlEvent::Key(KeyEvent::Up { key: Key::Space })
-                | ControlEvent::FocusChanged(false)
-                | ControlEvent::Dismiss => self.pressed = false,
-                _ => {}
-            }
-        }
         self.button.event(cx, event)
     }
 
+    /// The button gives the pressed look: only while the pointer is over
+    /// the link, or while Space holds it down.
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        let state = cx
-            .state
-            .set(VisualState::PRESSED, self.pressed && self.enabled);
+        let state = cx.state.set(VisualState::PRESSED, self.button.is_pressed());
         self.link.paint(cx, state);
     }
 
@@ -745,8 +732,6 @@ impl CustomControl for HostedCommandLink {
     }
 
     fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-        self.pressed &= enabled;
         CustomControl::set_enabled(&mut self.button, enabled);
     }
 }
