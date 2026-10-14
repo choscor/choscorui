@@ -121,7 +121,7 @@ fn window_churn(app: &Application, count: usize) {
                 window.set_display_list(themed(
                     Size::new(260.0, 180.0),
                     &DesignTokens::dark(),
-                    f % 2 == 0,
+                    f % 2 == 1,
                 ));
                 assert!(wait_for_paint(app, &window, before), "extra frame paints");
             }
@@ -314,6 +314,14 @@ fn main() {
         if let Ok(out) = std::process::Command::new("footprint").arg(&pid).output() {
             for line in String::from_utf8_lossy(&out.stdout).lines().take(28) {
                 eprintln!("DIAG {label} | {line}");
+            }
+        }
+        if label == "end" {
+            if let Ok(out) = std::process::Command::new("sudo").args(["-n", "footprint", "--unmapped", "-v", &pid]).output() {
+                let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+                for line in text.lines().filter(|l| l.contains("nmapped") || l.contains("owned") || l.contains("Owned") || l.contains("[")).take(150) {
+                    eprintln!("DIAG {label} unmapped | {line}");
+                }
             }
         }
         if let Ok(out) = std::process::Command::new("heap").arg(&pid).output() {
