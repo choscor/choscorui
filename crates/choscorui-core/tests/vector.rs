@@ -383,3 +383,17 @@ fn rounded_rect_paths_report_their_rect_and_radii() {
     ]);
     assert_eq!(skewed.as_rounded_rect(), None);
 }
+
+#[test]
+fn ellipse_paths_report_their_bounds() {
+    let rect = Rect::from_xywh(4.0, 6.0, 40.0, 20.0);
+    assert_eq!(Path::ellipse(rect).as_ellipse(), Some(rect));
+    let moved = Path::ellipse(rect).transformed(Transform::translate(0.3, 7.1));
+    let bounds = moved.as_ellipse().unwrap();
+    assert!((bounds.origin.y - 13.1).abs() < 1e-9 && (bounds.size.width - 40.0).abs() < 1e-9);
+    assert_eq!(Path::rounded_rect(rect, 10.0).as_ellipse(), None);
+    assert_eq!(Path::rect(rect).as_ellipse(), None);
+    let squashed =
+        Path::ellipse(rect).transformed(Transform::scale(1.0, 0.5).then(Transform::rotate(0.3)));
+    assert_eq!(squashed.as_ellipse(), None);
+}

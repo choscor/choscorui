@@ -30,6 +30,37 @@ pub struct Path {
 /// Kappa for approximating a quarter circle with one cubic Bézier.
 const KAPPA: f64 = 0.552_284_749_830_793_4;
 
+/// The elements of [`Path::ellipse`]: four cubic quarter arcs.
+fn ellipse_elements(rect: Rect) -> [PathElement; 6] {
+    let c = rect.center();
+    let (rx, ry) = (rect.size.width / 2.0, rect.size.height / 2.0);
+    let (kx, ky) = (rx * KAPPA, ry * KAPPA);
+    [
+        PathElement::MoveTo(Point::new(c.x + rx, c.y)),
+        PathElement::CubicTo(
+            Point::new(c.x + rx, c.y + ky),
+            Point::new(c.x + kx, c.y + ry),
+            Point::new(c.x, c.y + ry),
+        ),
+        PathElement::CubicTo(
+            Point::new(c.x - kx, c.y + ry),
+            Point::new(c.x - rx, c.y + ky),
+            Point::new(c.x - rx, c.y),
+        ),
+        PathElement::CubicTo(
+            Point::new(c.x - rx, c.y - ky),
+            Point::new(c.x - kx, c.y - ry),
+            Point::new(c.x, c.y - ry),
+        ),
+        PathElement::CubicTo(
+            Point::new(c.x + kx, c.y - ry),
+            Point::new(c.x + rx, c.y - ky),
+            Point::new(c.x + rx, c.y),
+        ),
+        PathElement::Close,
+    ]
+}
+
 impl Path {
     pub fn new() -> Self {
         Self::default()
@@ -186,19 +217,23 @@ impl Path {
         let Some(PathElement::MoveTo(start)) = self.elements.first() else {
             return None;
         };
-        let lines: Vec<Point> = self
-            .elements
-            .iter()
-            .filter_map(|element| match element {
-                PathElement::LineTo(point) => Some(*point),
-                _ => None,
-            })
-            .collect();
+        // A rounded rectangle has three or four line segments.
+        let mut lines = [Point::default(); 4];
+        let mut count = 0;
+        for element in &self.elements {
+            if let PathElement::LineTo(point) = element {
+                *lines.get_mut(count)? = *point;
+                count += 1;
+            }
+        }
         let rect = self.bounds();
         let (l, t, r, b) = (rect.min_x(), rect.min_y(), rect.max_x(), rect.max_y());
-        let radii = match lines.as_slice() {
-            [_, _, _] => [0.0; 4],
-            [first, second, third, _] => [start.x - l, r - first.x, b - second.y, third.x - l],
+        let radii = match count {
+            3 => [0.0; 4],
+            4 => {
+                let [first, second, third, _] = lines;
+                [start.x - l, r - first.x, b - second.y, third.x - l]
+            }
             _ => return None,
         };
         let candidate = Self::rounded_rect_corners(rect, radii);
@@ -224,33 +259,40 @@ impl Path {
     }
 
     pub fn ellipse(rect: Rect) -> Self {
-        let c = rect.center();
-        let (rx, ry) = (rect.size.width / 2.0, rect.size.height / 2.0);
-        let (kx, ky) = (rx * KAPPA, ry * KAPPA);
-        let mut path = Self::with_capacity(6);
-        path.move_to(Point::new(c.x + rx, c.y))
-            .cubic_to(
-                Point::new(c.x + rx, c.y + ky),
-                Point::new(c.x + kx, c.y + ry),
-                Point::new(c.x, c.y + ry),
-            )
-            .cubic_to(
-                Point::new(c.x - kx, c.y + ry),
-                Point::new(c.x - rx, c.y + ky),
-                Point::new(c.x - rx, c.y),
-            )
-            .cubic_to(
-                Point::new(c.x - rx, c.y - ky),
-                Point::new(c.x - kx, c.y - ry),
-                Point::new(c.x, c.y - ry),
-            )
-            .cubic_to(
-                Point::new(c.x + kx, c.y - ry),
-                Point::new(c.x + rx, c.y - ky),
-                Point::new(c.x + rx, c.y),
-            )
-            .close();
-        path
+        Self {
+            elements: ellipse_elements(rect).to_vec(),
+        }
+    }
+
+    /// The bounds of this path when it is [`Path::ellipse`] of them, also
+    /// after a translation. A painter can then draw the shape
+    /// analytically.
+    pub fn as_ellipse(&self) -> Option<Rect> {
+        let [PathElement::MoveTo(_), _, _, _, _, PathElement::Close] = self.elements.as_slice()
+        else {
+            return None;
+        };
+        let rect = self.bounds();
+        let tolerance = 1e-9
+            * (1.0
+                + rect.size.width.abs()
+                + rect.size.height.abs()
+                + rect.min_x().abs()
+                + rect.min_y().abs());
+        let near =
+            |p: &Point, q: &Point| (p.x - q.x).abs() <= tolerance && (p.y - q.y).abs() <= tolerance;
+        let same = ellipse_elements(rect)
+            .iter()
+            .zip(&self.elements)
+            .all(|pair| match pair {
+                (PathElement::MoveTo(p), PathElement::MoveTo(q)) => near(p, q),
+                (PathElement::CubicTo(a, b, p), PathElement::CubicTo(c, d, q)) => {
+                    near(a, c) && near(b, d) && near(p, q)
+                }
+                (PathElement::Close, PathElement::Close) => true,
+                _ => false,
+            });
+        same.then_some(rect)
     }
 
     pub fn polygon(points: &[Point]) -> Self {

@@ -1,8 +1,8 @@
 //! Text for the Metal painter: shaped lines, the fonts of their runs, and
 //! glyph atlases that Core Text rasterizes into.
 //!
-//! A glyph is keyed by font, glyph, pixel size, offset in sixteenths of
-//! a pixel, and dark or light ink. Outline glyphs keep their coverage in
+//! A glyph is keyed by font, glyph, pixel size, offset in the pixel, and
+//! dark or light ink. Outline glyphs keep their coverage in
 //! an alpha atlas; glyphs of color fonts keep premultiplied colors in a
 //! color atlas. A full atlas starts over in a new texture, so frames that
 //! still read the old one keep their glyphs.
@@ -28,14 +28,16 @@ use crate::ffi::text::{
 use crate::text_layout::run_font;
 use choscorui_core::{FontSlant, Point, TextRun};
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
-/// The offsets of a glyph in each pixel, on each axis. Core Graphics
-/// places glyphs at fractions of a pixel, so the atlas keeps glyphs at
-/// sixteenths of a pixel.
-pub(super) const SUBPIXELS: f64 = 16.0;
+/// The offsets of a glyph in each pixel, across and down. Core Graphics
+/// places glyphs at fractions of a pixel. Offsets across change the look
+/// of stems most, so they have finer steps.
+pub(super) const SUBPIXELS: [u8; 2] = [16, 4];
 
-const LINE_LIMIT: usize = 1024;
+/// The lines that each generation of the line cache keeps.
+const LINE_LIMIT: usize = 4096;
 const FONT_LIMIT: usize = 256;
 const MONO_ATLAS: u32 = 2048;
 const COLOR_ATLAS: u32 = 1024;
@@ -62,14 +64,72 @@ pub(super) struct GlyphEntry {
     pub(super) top: i32,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+/// The style and text of a shaped line.
 struct LineKey {
     text: String,
     family: String,
-    size: u64,
-    weight: u16,
-    slant: FontSlant,
-    tracking: u64,
+    style: LineStyle,
+}
+
+/// The size, weight, slant, and tracking of a shaped line.
+type LineStyle = (u64, u16, FontSlant, u64);
+
+impl LineKey {
+    fn matches(&self, text: &str, family: &str, style: LineStyle) -> bool {
+        self.text == text && self.family == family && self.style == style
+    }
+}
+
+/// The hash of a line, so a lookup needs no owned key.
+fn line_hash(text: &str, family: &str, style: LineStyle) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    (text, family, style).hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Shaped lines by hash, in two generations. A line that the current
+/// generation lacks moves up from the previous one. When the current
+/// generation is full, it becomes the previous one, so the lines of
+/// recent frames stay.
+#[derive(Default)]
+struct Lines {
+    current: HashMap<u64, (LineKey, Rc<Vec<LineRun>>)>,
+    previous: HashMap<u64, (LineKey, Rc<Vec<LineRun>>)>,
+}
+
+impl Lines {
+    fn get(
+        &mut self,
+        hash: u64,
+        text: &str,
+        family: &str,
+        style: LineStyle,
+    ) -> Option<Rc<Vec<LineRun>>> {
+        if let Some((key, runs)) = self.current.get(&hash)
+            && key.matches(text, family, style)
+        {
+            return Some(Rc::clone(runs));
+        }
+        let (key, runs) = self.previous.remove(&hash)?;
+        if !key.matches(text, family, style) {
+            return None;
+        }
+        let found = Rc::clone(&runs);
+        self.insert(hash, key, runs);
+        Some(found)
+    }
+
+    fn insert(&mut self, hash: u64, key: LineKey, runs: Rc<Vec<LineRun>>) {
+        if self.current.len() >= LINE_LIMIT {
+            self.previous = std::mem::take(&mut self.current);
+        }
+        self.current.insert(hash, (key, runs));
+    }
+
+    fn clear(&mut self) {
+        self.current.clear();
+        self.previous.clear();
+    }
 }
 
 struct Atlas {
@@ -135,8 +195,8 @@ pub(super) struct Text {
     font_ids: HashMap<(String, u64), FontId>,
     /// The fonts of pre-shaped runs, apart from the fonts of shaped lines,
     /// because a PostScript name does not always find the font of a line.
-    run_font_ids: HashMap<(String, u64), FontId>,
-    lines: HashMap<LineKey, Rc<Vec<LineRun>>>,
+    run_font_ids: HashMap<String, HashMap<u64, FontId>>,
+    lines: Lines,
     glyphs: HashMap<GlyphKey, Option<GlyphEntry>>,
     mono: Atlas,
     color: Atlas,
@@ -148,7 +208,7 @@ impl Text {
             fonts: Vec::new(),
             font_ids: HashMap::new(),
             run_font_ids: HashMap::new(),
-            lines: HashMap::new(),
+            lines: Lines::default(),
             glyphs: HashMap::new(),
             mono: Atlas::new(MONO_ATLAS, PIXEL_FORMAT_R8, 1),
             color: Atlas::new(COLOR_ATLAS, PIXEL_FORMAT_RGBA8, 4),
@@ -185,27 +245,33 @@ impl Text {
     /// The font of a pre-shaped glyph run, by PostScript name. It is the
     /// font that Core Graphics draws the run with.
     pub(super) fn named_font(&mut self, name: &str, size: f64) -> Option<FontId> {
-        let key = (name.to_owned(), size.to_bits());
-        if let Some(id) = self.run_font_ids.get(&key) {
+        if let Some(id) = self
+            .run_font_ids
+            .get(name)
+            .and_then(|sizes| sizes.get(&size.to_bits()))
+        {
             return Some(*id);
         }
         let id = self.register(run_font(name, size)?);
-        self.run_font_ids.insert(key, id);
+        self.run_font_ids
+            .entry(name.to_owned())
+            .or_default()
+            .insert(size.to_bits(), id);
         Some(id)
     }
 
     /// The runs of a line of `text`, shaped as `DrawText` shapes it.
     pub(super) fn line(&mut self, text: &str, run: &TextRun<'_>) -> Option<Rc<Vec<LineRun>>> {
-        let key = LineKey {
-            text: text.to_owned(),
-            family: run.family.to_owned(),
-            size: run.size.to_bits(),
-            weight: run.weight.0,
-            slant: run.slant,
-            tracking: run.tracking.to_bits(),
-        };
-        if let Some(runs) = self.lines.get(&key) {
-            return Some(Rc::clone(runs));
+        let family = run.family;
+        let style = (
+            run.size.to_bits(),
+            run.weight.0,
+            run.slant,
+            run.tracking.to_bits(),
+        );
+        let hash = line_hash(text, family, style);
+        if let Some(runs) = self.lines.get(hash, text, family, style) {
+            return Some(runs);
         }
         let shaped = ShapedLine::styled(text, run).ok()?;
         let mut runs = Vec::new();
@@ -230,16 +296,18 @@ impl Text {
                     .collect(),
             });
         }
-        if self.lines.len() >= LINE_LIMIT {
-            self.lines.clear();
-        }
         let runs = Rc::new(runs);
-        self.lines.insert(key, Rc::clone(&runs));
+        let key = LineKey {
+            text: text.to_owned(),
+            family: family.to_owned(),
+            style,
+        };
+        self.lines.insert(hash, key, Rc::clone(&runs));
         Some(runs)
     }
 
     /// The atlas entry of `glyph` of `font` at `scale` pixels per point,
-    /// shifted right and down by `subpixel` sixteenths of a pixel, for
+    /// shifted right and down by `subpixel` steps of [`SUBPIXELS`], for
     /// light or dark text. `None` means that the glyph draws nothing.
     pub(super) fn glyph(
         &mut self,
@@ -319,7 +387,10 @@ fn rasterize(font: &CTFont, glyph: u16, scale: f64, subpixel: [u8; 2], ink: Ink)
     if bounds.size.width <= 0.0 || bounds.size.height <= 0.0 || scale.is_nan() || scale <= 0.0 {
         return None;
     }
-    let shift = subpixel.map(|part| f64::from(part) / SUBPIXELS);
+    let shift = [
+        f64::from(subpixel[0]) / f64::from(SUBPIXELS[0]),
+        f64::from(subpixel[1]) / f64::from(SUBPIXELS[1]),
+    ];
     let left = (bounds.origin.x * scale).floor() - 1.0;
     let right = ((bounds.origin.x + bounds.size.width) * scale + shift[0]).ceil() + 1.0;
     let top = (-(bounds.origin.y + bounds.size.height) * scale).floor() - 1.0;

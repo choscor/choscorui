@@ -184,6 +184,10 @@ fn color_words(color: Color) -> [f32; 4] {
     [color.red, color.green, color.blue, color.alpha].map(|v| f32::from(v) / 255.0)
 }
 
+/// How far glyphs reach above and below the baseline, in font sizes.
+/// The values hold the tall marks of Vietnamese and of decorative fonts.
+const LINE_REACH: [f64; 2] = [3.0, 2.0];
+
 /// A rectangle far from every pixel, for a stroke without an inside.
 const NOWHERE: [f32; 4] = [1.0e9, 1.0e9, 1.0e9 + 1.0, 1.0e9 + 1.0];
 
@@ -352,27 +356,26 @@ impl<'a> Builder<'a> {
             DisplayCommand::StrokeRect { rect, color, width } => {
                 let mut style = StrokeStyle::new(*width);
                 style.join = LineJoin::Miter;
-                self.stroke(&Path::rect(*rect), &Paint::Solid(*color), &style);
+                self.stroke_rounded(*rect, [0.0; 4], &Paint::Solid(*color), &style);
             }
             DisplayCommand::FillRoundedRect {
                 rect,
                 radius,
                 color,
-            } => self.fill(
-                &Path::rounded_rect(*rect, *radius),
-                &Paint::Solid(*color),
-                FillRule::NonZero,
-            ),
+            } => {
+                let radii = [clamp_radius(*rect, *radius); 4];
+                self.fill_shape(*rect, radii, &Paint::Solid(*color));
+            }
             DisplayCommand::StrokeRoundedRect {
                 rect,
                 radius,
                 color,
                 width,
-            } => self.stroke(
-                &Path::rounded_rect(*rect, *radius),
-                &Paint::Solid(*color),
-                &StrokeStyle::new(*width),
-            ),
+            } => {
+                let radii = [clamp_radius(*rect, *radius); 4];
+                let style = StrokeStyle::new(*width);
+                self.stroke_rounded(*rect, radii, &Paint::Solid(*color), &style);
+            }
             DisplayCommand::FillPath { path, paint, rule } => self.fill(path, paint, *rule),
             DisplayCommand::StrokePath { path, paint, style } => self.stroke(path, paint, style),
             DisplayCommand::DrawImage {
@@ -406,7 +409,8 @@ impl<'a> Builder<'a> {
                 tracking,
                 color,
             } => {
-                if color.alpha == 0 || text.is_empty() {
+                if color.alpha == 0 || text.is_empty() || !self.line_visible(*baseline, *font_size)
+                {
                     return;
                 }
                 let run = TextRun {
@@ -425,7 +429,10 @@ impl<'a> Builder<'a> {
                 }
             }
             DisplayCommand::DrawGlyphs { origin, run, color } => {
-                if color.alpha == 0 || run.glyphs.is_empty() {
+                if color.alpha == 0
+                    || run.glyphs.is_empty()
+                    || !self.line_visible(*origin, run.size)
+                {
                     return;
                 }
                 let Some(font) = self.caches.text.named_font(&run.font, run.size) else {
@@ -524,6 +531,17 @@ impl<'a> Builder<'a> {
             device.max_y().min(clip[3]),
         ];
         (bounds[0] < bounds[2] && bounds[1] < bounds[3]).then_some(bounds)
+    }
+
+    /// False when no glyph of a line with its baseline at `baseline` and
+    /// a font of `size` points can be in the clip. Lines out of view then
+    /// need no shaping and no glyph lookups.
+    fn line_visible(&self, baseline: Point, size: f64) -> bool {
+        // Glyphs reach at most this many font sizes above and below the
+        // baseline. The line can be of any width.
+        let (above, below) = (LINE_REACH[0] * size, LINE_REACH[1] * size);
+        let band = Rect::from_xywh(-1.0e7, baseline.y - above, 2.0e7, above + below);
+        self.visible(band).is_some()
     }
 
     /// Records an instance with the current clips.
@@ -652,6 +670,10 @@ impl<'a> Builder<'a> {
             self.fill_shape(rect, radii, paint);
             return;
         }
+        if let Some(rect) = path.as_ellipse().filter(is_circle) {
+            self.fill_shape(rect, [rect.size.width / 2.0; 4], paint);
+            return;
+        }
         let device = path.transformed(self.state.device);
         let polygons: Vec<Vec<Point>> = device
             .flatten(TOLERANCE)
@@ -683,24 +705,17 @@ impl<'a> Builder<'a> {
         if paint.is_transparent() || !style.is_valid() {
             return;
         }
-        let half = style.width / 2.0;
         if style.dash.is_empty()
             && let Some((rect, radii)) = path.as_rounded_rect()
+            && self.stroke_rounded(rect, radii, paint, style)
         {
-            // Joins only show at square corners.
-            let square_corner = radii.iter().any(|radius| *radius <= 0.0);
-            if !(square_corner && style.join == LineJoin::Bevel) {
-                let outer = radii.map(|radius| {
-                    if radius > 0.0 || style.join == LineJoin::Round {
-                        radius + half
-                    } else {
-                        0.0
-                    }
-                });
-                let inner = radii.map(|radius| (radius - half).max(0.0));
-                self.stroke_shape(rect, outer, inner, half, paint);
-                return;
-            }
+            return;
+        }
+        if style.dash.is_empty()
+            && let Some(rect) = path.as_ellipse().filter(is_circle)
+            && self.stroke_rounded(rect, [rect.size.width / 2.0; 4], paint, style)
+        {
+            return;
         }
         let local_scale = self.local_scale();
         let tolerance = TOLERANCE / local_scale;
@@ -711,6 +726,37 @@ impl<'a> Builder<'a> {
             .map(|polygon| polygon.into_iter().map(|p| device.apply(p)).collect())
             .collect();
         self.fill_polygons(polygons, paint, FillRule::NonZero);
+    }
+
+    /// Strokes the outline of a rounded rectangle without dashes. Returns
+    /// `false`, and draws nothing, for bevel joins at square corners,
+    /// which need the path stroke.
+    fn stroke_rounded(
+        &mut self,
+        rect: Rect,
+        radii: [f64; 4],
+        paint: &Paint,
+        style: &StrokeStyle,
+    ) -> bool {
+        // Joins only show at square corners.
+        let square_corner = radii.iter().any(|radius| *radius <= 0.0);
+        if square_corner && style.join == LineJoin::Bevel {
+            return false;
+        }
+        if paint.is_transparent() || !style.is_valid() {
+            return true;
+        }
+        let half = style.width / 2.0;
+        let outer = radii.map(|radius| {
+            if radius > 0.0 || style.join == LineJoin::Round {
+                radius + half
+            } else {
+                0.0
+            }
+        });
+        let inner = radii.map(|radius| (radius - half).max(0.0));
+        self.stroke_shape(rect, outer, inner, half, paint);
+        true
     }
 
     /// Strokes a rounded rectangle: the area between its outline grown
@@ -1119,8 +1165,8 @@ impl<'a> Builder<'a> {
         let upright = device.b == 0.0 && device.c == 0.0 && device.a > 0.0 && device.a == device.d;
         let (instance, bounds, color_glyph) = if upright {
             let point = device.apply(pen);
-            let (x, sub_x) = split_pixel(point.x);
-            let (y, sub_y) = split_pixel(point.y);
+            let (x, sub_x) = split_pixel(point.x, SUBPIXELS[0]);
+            let (y, sub_y) = split_pixel(point.y, SUBPIXELS[1]);
             let Some(entry) =
                 self.caches
                     .text
@@ -1189,12 +1235,26 @@ impl<'a> Builder<'a> {
     }
 }
 
-/// Splits a device coordinate into a whole pixel and the nearest
-/// glyph offset in that pixel.
-fn split_pixel(value: f64) -> (f64, u8) {
+/// True when an ellipse with the bounds `rect` is a circle, which the
+/// rounded rectangle shader draws.
+fn is_circle(rect: &Rect) -> bool {
+    (rect.size.width - rect.size.height).abs() <= 1e-9 * rect.size.width.abs().max(1.0)
+}
+
+/// The radius of [`Path::rounded_rect`] for `rect` and `radius`.
+fn clamp_radius(rect: Rect, radius: f64) -> f64 {
+    radius
+        .min(rect.size.width / 2.0)
+        .min(rect.size.height / 2.0)
+        .max(0.0)
+}
+
+/// Splits a device coordinate into a whole pixel and the nearest of
+/// `steps` glyph offsets in that pixel.
+fn split_pixel(value: f64, steps: u8) -> (f64, u8) {
     let whole = value.floor();
-    let part = ((value - whole) * SUBPIXELS).round();
-    if part >= SUBPIXELS {
+    let part = ((value - whole) * f64::from(steps)).round();
+    if part >= f64::from(steps) {
         (whole + 1.0, 0)
     } else {
         (whole, part as u8)

@@ -287,20 +287,34 @@ pub(crate) fn request_frame(window: usize) -> bool {
     attached
 }
 
-/// Draws `window` again when it became visible, changed size, or moved
-/// to another display.
+/// Draws `window` again at the next display refresh after it was shown,
+/// changed size, or moved to another display. The frame waits for the
+/// refresh, so a display list that the application sets in the meantime
+/// goes into the same frame.
 pub(crate) fn window_changed(window: usize) {
-    request_frame(window);
+    let link = SURFACES.with(|surfaces| {
+        let mut surfaces = surfaces.borrow_mut();
+        let surface = surfaces.get_mut(&window)?;
+        surface.pending = true;
+        Some(surface.link.clone())
+    });
+    match link {
+        Some(Some(link)) => SET_LINK_PAUSED.send(&link, (false,)),
+        Some(None) => drive(window),
+        None => {}
+    }
 }
 
-/// Draws `window` again when AppKit reports a new occlusion state.
+/// Draws a waiting frame of `window` when AppKit reports a new occlusion
+/// state. A window that becomes visible keeps the frame that it showed
+/// last, so it draws only a frame that waits.
 pub(crate) fn occlusion_changed(window: usize) {
     SURFACES.with(|surfaces| {
         if let Some(surface) = surfaces.borrow_mut().get_mut(&window) {
             surface.occlusion_reported = true;
         }
     });
-    request_frame(window);
+    drive(window);
 }
 
 /// The display-link callback of a content view.
