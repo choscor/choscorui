@@ -85,14 +85,23 @@ pub mod tests {
         }
 
         pub fn with(id: &str, tokens: DesignTokens, tag: &str, enabled: bool) -> Self {
+            Self::with_env(id, tokens, Self::env(tag), enabled)
+        }
+
+        /// The environment of the gallery catalog in language `tag`.
+        pub fn env(tag: &str) -> Env {
+            let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
+            let (catalog, _, _) = crate::strings::load(&resources);
+            Env::new(Rc::new(catalog), Locale::parse(tag).unwrap())
+        }
+
+        /// Page `id` in `env`, for example with test services.
+        pub fn with_env(id: &str, tokens: DesignTokens, env: Env, enabled: bool) -> Self {
             let runtime = Runtime::new();
             let cx = PageCx {
                 store: PageStore::new(&runtime, &PageState::default()),
             };
             let build = super::find(id).unwrap_or_else(|| panic!("page {id} has no view"));
-            let resources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
-            let (catalog, _, _) = crate::strings::load(&resources);
-            let env = Env::new(Rc::new(catalog), Locale::parse(tag).unwrap());
             let mut host = ViewHost::new(
                 Size::new(900.0, 700.0),
                 tokens,

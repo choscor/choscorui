@@ -1069,9 +1069,14 @@ desktop.notification_sent = Notification sent
 desktop.notification_failed = Notification failed: {error}
 desktop.backend = Backend: {backend}
 desktop.capabilities = Capabilities of the {backend} backend
-desktop.toggle_status_item = Toggle status item
+desktop.status_item = Status item in the menu bar
 desktop.who_opens = Who opens https:// links?
 desktop.send_notification = Send a notification
+desktop.status_item_tooltip = The status item of the Desktop page
+desktop.remove_status_item = Remove the status item
+desktop.notification_waiting = The notification waits for permission
+desktop.notification_clicked = Notification clicked
+desktop.unsupported_reason = The {backend} backend does not support this
 # Pages: dialogs, containers
 alert-dialog.title = Unsaved changes
 alert-dialog.message = Do you want to save the changes you made to “{file}”?

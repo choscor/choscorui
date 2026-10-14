@@ -1062,9 +1062,14 @@ desktop.notification_sent = Đã gửi thông báo
 desktop.notification_failed = Gửi thông báo thất bại: {error}
 desktop.backend = Backend: {backend}
 desktop.capabilities = Khả năng của backend {backend}
-desktop.toggle_status_item = Bật/tắt biểu tượng trạng thái
+desktop.status_item = Biểu tượng trạng thái trên thanh menu
 desktop.who_opens = Ứng dụng nào mở liên kết https://?
 desktop.send_notification = Gửi thông báo
+desktop.status_item_tooltip = Biểu tượng trạng thái của trang Tích hợp máy tính
+desktop.remove_status_item = Gỡ biểu tượng trạng thái
+desktop.notification_waiting = Thông báo đang chờ được cấp quyền
+desktop.notification_clicked = Đã bấm vào thông báo
+desktop.unsupported_reason = Backend {backend} không hỗ trợ tính năng này
 # Pages: dialogs, containers
 alert-dialog.title = Thay đổi chưa lưu
 alert-dialog.message = Bạn có muốn lưu các thay đổi đã thực hiện trong “{file}” không?
