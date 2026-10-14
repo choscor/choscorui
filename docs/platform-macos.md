@@ -71,7 +71,7 @@ A panic in a native callback does not unwind into AppKit. The backend catches it
 | `Key { event, modifiers }` | Key down and key up. A key-down while text is marked goes only to the input method, so it sends no `Key` event. |
 | `Text { text }` | Committed text from an ordinary key press. |
 | `Ime(ImeEvent)` | Input method composition. See [Input methods](#input-methods). |
-| `Occluded(bool)` | The window became fully hidden, or partly visible again. |
+| `Occluded(bool)` | The window became fully hidden, or partly visible again. The app host sends it to the controls as `WindowVisible`. |
 | `Drag(DragEvent)` | A drag over the content view. See [Clipboard and drag and drop](#clipboard-and-drag-and-drop). |
 | `DragEnded(DragOperation)` | A drag that the window started has ended. |
 

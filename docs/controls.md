@@ -4327,8 +4327,9 @@ behavior.
   it is updated or dismissed. `with_variant` with another variant after
   `Loading` sets `TOAST_DURATION` again, unless a duration was set. An
   update starts the timer again.
-- The toaster gets no input about the window activity, so the timers do
-  not pause while the window is inactive or hidden.
+- While the window is fully hidden, the timers pause. The host reports
+  this with `WindowVisible(false)`. A toast that shows in an inactive
+  window that you can see still closes on time.
 - **Hover and focus.** While the pointer rests on the stack, or the stack
   has focus, the stack expands and the timers pause. They resume with the
   time that was left.
@@ -4744,6 +4745,10 @@ behavior.
   or to the control itself. When the control stops being modal, focus
   goes back to the node that had it before.
 - `move_focus` sends `FocusChanged` to the old and the new control.
+- `set_window_visible(visible)` sends `WindowVisible(visible)` to every
+  control, also to a disabled one. The view host calls it when the
+  window becomes fully hidden, or visible again. On macOS, this comes
+  from `WindowEvent::Occluded`.
 - The host sends `Hover(true)` and `Hover(false)` to each control on the
   path under the pointer when the path changes.
 - An open overlay gets pointer events inside its rectangle first. A press

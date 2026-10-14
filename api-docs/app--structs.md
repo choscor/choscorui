@@ -1517,6 +1517,15 @@ pub fn set_waker(&mut self, waker: impl Fn() + 'static)
 Calls `waker` whenever state changes outside input handling, so
 the window can schedule a frame.
 
+#### `ViewHost::set_window_visible`
+
+```rust
+pub fn set_window_visible(&mut self, visible: bool)
+```
+
+Tells the controls that the window became fully hidden (`false`)
+or visible again (`true`). Toasts pause their time while hidden.
+
 #### `ViewHost::size`
 
 ```rust

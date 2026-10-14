@@ -49,6 +49,10 @@ pub enum ControlEvent {
     Dismiss,
     /// The host time reached the control's [`CustomControl::deadline`].
     Timer,
+    /// The window became fully hidden (`false`) or visible again
+    /// (`true`). Every control gets it, also a disabled one. A control
+    /// pauses the timers that a person must see, such as a toast's time.
+    WindowVisible(bool),
     /// The user pressed one of the control's
     /// [`CustomControl::window_shortcuts`], and the focused control did
     /// not use the key.
@@ -795,7 +799,10 @@ impl ControlHost {
         if self.disabled.contains(&node)
             && !matches!(
                 event,
-                ControlEvent::FocusChanged(_) | ControlEvent::Hover(_) | ControlEvent::Dismiss
+                ControlEvent::FocusChanged(_)
+                    | ControlEvent::Hover(_)
+                    | ControlEvent::Dismiss
+                    | ControlEvent::WindowVisible(_)
             )
         {
             return EventReply::Continue;
@@ -1494,6 +1501,17 @@ impl ControlHost {
             self.deliver(tree, *node, EventPhase::Target, &ControlEvent::Timer);
         }
         !due.is_empty() || !ended.is_empty()
+    }
+
+    /// Sends [`ControlEvent::WindowVisible`] to every control, for
+    /// example when the whole window is covered or minimized.
+    pub fn set_window_visible(&mut self, tree: &mut Tree, visible: bool) {
+        let mut nodes: Vec<NodeId> = self.controls.keys().copied().collect();
+        nodes.sort_unstable();
+        let event = ControlEvent::WindowVisible(visible);
+        for node in nodes {
+            self.deliver(tree, node, EventPhase::Target, &event);
+        }
     }
 
     /// The earliest deadline of a visible control.

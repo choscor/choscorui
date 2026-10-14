@@ -1362,6 +1362,16 @@ impl ViewHost {
         self.inner.controls.next_deadline(&self.inner.tree)
     }
 
+    /// Tells the controls that the window became fully hidden (`false`)
+    /// or visible again (`true`). Toasts pause their time while hidden.
+    pub fn set_window_visible(&mut self, visible: bool) {
+        self.inner
+            .controls
+            .set_window_visible(&mut self.inner.tree, visible);
+        self.inner.needs_paint = true;
+        self.after_input();
+    }
+
     /// Sets the time and fires due control timers.
     pub fn advance(&mut self, time: f64) -> bool {
         self.inner.time = time;

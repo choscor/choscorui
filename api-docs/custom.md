@@ -464,6 +464,7 @@ pub enum ControlEvent {
     Hover(bool),
     Dismiss,
     Timer,
+    WindowVisible(bool),
     Shortcut(Shortcut),
 }
 ```
@@ -489,6 +490,9 @@ Input delivered to a control.
   `ControlMessage::Dismissed`. Reply `Stop` when a popup closed, so
   that the host consumes the press.
 - `Timer`: The host time reached the control's [`CustomControl::deadline`](#customcontroldeadline).
+- `WindowVisible(bool)`: The window became fully hidden (`false`) or visible again
+  (`true`). Every control gets it, also a disabled one. A control
+  pauses the timers that a person must see, such as a toast's time.
 - `Shortcut(Shortcut)`: The user pressed one of the control's
   [`CustomControl::window_shortcuts`](#customcontrolwindow_shortcuts), and the focused control did
   not use the key.

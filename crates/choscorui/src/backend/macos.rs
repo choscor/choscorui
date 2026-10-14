@@ -205,6 +205,7 @@ impl NativeWindow {
                 WindowEvent::Ime(event) => {
                     host.composition(composition(event));
                 }
+                WindowEvent::Occluded(occluded) => host.set_window_visible(!occluded),
                 _ => {}
             }
         }

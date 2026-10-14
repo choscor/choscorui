@@ -49,7 +49,8 @@ impl Entry {
 /// A stack of toasts at a corner of the window. The app pushes toasts
 /// through a [`Toasts`] handle. The newest toast is at the front. While
 /// the pointer rests on the stack, or the stack has focus, the stack
-/// expands and the timers pause.
+/// expands and the timers pause. The timers also pause while the window
+/// is hidden.
 ///
 /// The action and the close buttons are tab stops. An action emits
 /// `ItemActivated(id)` and closes its toast. A close button, Escape on a
@@ -64,6 +65,8 @@ pub struct Toaster {
     entries: Vec<Entry>,
     hovered: bool,
     focused: bool,
+    /// The window is fully hidden, so nobody sees the toasts.
+    hidden: bool,
     /// The focused tab stop, and the pressed button.
     focus: usize,
     parts: Parts<(ToastId, Button)>,
@@ -88,6 +91,7 @@ impl Toaster {
             entries: Vec::new(),
             hovered: false,
             focused: false,
+            hidden: false,
             focus: 0,
             parts: Parts::default(),
             viewport: Rect::default(),
@@ -120,7 +124,7 @@ impl Toaster {
     }
 
     fn paused(&self) -> bool {
-        self.hovered || self.focused
+        self.hovered || self.focused || self.hidden
     }
 
     /// The entries that show, front first.
@@ -167,7 +171,7 @@ impl Toaster {
         }
     }
 
-    /// Hover or focus changed from `was` paused.
+    /// Hover, focus, or window visibility changed from `was` paused.
     fn repause(&mut self, cx: &mut ControlContext<'_>, was: bool) {
         let now = self.paused();
         if was && !now {
@@ -738,6 +742,12 @@ impl CustomControl for Toaster {
                 EventReply::Continue
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) => self.key(cx, *key, *repeat),
+            ControlEvent::WindowVisible(visible) => {
+                let was = self.paused();
+                self.hidden = !*visible;
+                self.repause(cx, was);
+                EventReply::Continue
+            }
             ControlEvent::FocusChanged(focused) => {
                 self.parts.track(cx, event, |_| None);
                 let was = self.paused();

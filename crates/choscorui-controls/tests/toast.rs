@@ -221,3 +221,22 @@ fn a_variant_after_loading_restores_the_duration() {
         .with_variant(ToastVariant::Info);
     assert_eq!(kept.duration, None, "an explicit duration stays");
 }
+
+#[test]
+fn a_hidden_window_pauses_the_timers() {
+    let toasts = Toasts::new();
+    let mut h = Harness::new(Toaster::new("Notifications", toasts.clone(), "Close"));
+    toasts.push(Toast::new("Saved"));
+    advance(&mut h, 0.0);
+    h.set_time(1.0);
+    h.host.set_window_visible(&mut h.tree, false);
+    assert_eq!(h.host.next_deadline(&h.tree), None, "paused while hidden");
+    assert!(!advance(&mut h, 10.0));
+    assert!(stack(&h).is_some(), "the toast waits for the window");
+    h.host.set_window_visible(&mut h.tree, true);
+    assert_eq!(
+        h.host.next_deadline(&h.tree),
+        Some(10.0 + TOAST_DURATION - 1.0),
+        "the timer resumes with what was left"
+    );
+}
