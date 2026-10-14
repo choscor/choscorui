@@ -24,6 +24,7 @@ The harness measures these values:
 | `theme` | Switch between a light theme and a structurally different dark theme on 240 controls, 100 times | `theme.present_ms` |
 | `document` | Type 1,000 edits in the middle of a 100,000-character document with Vietnamese, CJK, emoji, combining marks, and right-to-left text | `document.present_ms`, `document.shape_ms`, `document.caret_mismatches` |
 | `views` | Change the state of one row in a scrolling column of 10,000 view rows, 200 times. A column of 1,000 rows gives the comparison count | `views.present_ms`, `views.update_ms`, `views.dirty_nodes`, `views.dirty_growth` |
+| `semantics` | Press a key 60 times in a `Command` of 10,000 commands, a `List` of 100,000 rows, and a canvas of 20,000 items, then read the semantics after each press | `semantics.*_ms`, `semantics.*_entries`, `semantics.*_moved` |
 | `windows` | Open, resize, and close 20 windows, two times | `windows.first_frame_ms`, `windows.leaked_native_windows`, `windows.idle_cpu_percent_after_close` |
 | `size` | Read the size of the release executables | `size.choscorui-gallery_mib` |
 
@@ -93,9 +94,18 @@ The release executable grows in 16 KiB pages. The size budget is the measured si
 | `theme.present_ms.p95` | 11.9–13.9 ms | ≤ 8.3 |
 | `views.present_ms.p95` | 18.5–41.3 ms, 10,000 rows | ≤ 8.3 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
+| `semantics.command_ms.p95` | 0.003 ms, 10,000 commands | ≤ 1 |
+| `semantics.list_ms.p95` | 0.009 ms, 100,000 rows | ≤ 1 |
+| `semantics.canvas_ms.p95` | 0.12 ms, 20,000 items | ≤ 1 |
+| `semantics.command_entries` | 13 | ≤ 40 |
+| `semantics.list_entries` | 30 | ≤ 60 |
+| `semantics.canvas_entries` | 601 | ≤ 1000 |
+| `semantics.*_moved` | 60 of 60 steps | ≥ 60 |
 | `windows.first_frame_ms.p95` | 26–35 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.07 % | ≤ 3 |
 | `size.choscorui-gallery_mib` | 3.131 MiB | ≤ 3.147 |
+
+The `semantics` limits do not change with the size of the model. Only the parts in view publish, so the entry counts follow the window size. The `moved` counters make sure that each key moves the focused part.
 
 These correctness counters have a budget of 0:
 
@@ -104,6 +114,7 @@ These correctness counters have a budget of 0:
 - `resize.missed_present`, `scroll.missed_present`, `document.missed_present`, `theme.missed_present`, and `windows.missed_present`
 - `document.caret_mismatches`
 - `views.dirty_growth`, `views.missed_present`, and `views.errors`
+- `semantics.command_errors`, `semantics.list_errors`, and `semantics.canvas_errors`
 - `windows.leaked_native_windows`
 
 The present times end when the frame is on the display. On the reference machine, this time is approximately 24 ms (three refreshes), also for a frame with little content. Thus the 8.3 ms budgets fail until presentation is faster.

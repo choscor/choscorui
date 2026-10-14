@@ -48,6 +48,22 @@ views.dirty_growth <= 0
 views.missed_present <= 0
 views.errors <= 0
 
+# Semantics of large models: 10,000 commands, 100,000 list rows, and a
+# 20,000-item canvas. Only the parts in view publish, so the entries and
+# the time of a key step and a semantics read do not grow with the model.
+semantics.command_ms.p95 <= 1
+semantics.list_ms.p95 <= 1
+semantics.canvas_ms.p95 <= 1
+semantics.command_entries <= 40
+semantics.list_entries <= 60
+semantics.canvas_entries <= 1000
+semantics.command_moved >= 60
+semantics.list_moved >= 60
+semantics.canvas_moved >= 60
+semantics.command_errors <= 0
+semantics.list_errors <= 0
+semantics.canvas_errors <= 0
+
 # Open, resize, and close 20 windows twice.
 windows.first_frame_ms.p95 <= 33
 windows.leaked_native_windows <= 0

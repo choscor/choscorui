@@ -17,6 +17,8 @@ mod stats;
 #[cfg(target_os = "macos")]
 mod scenarios;
 #[cfg(target_os = "macos")]
+mod semantics;
+#[cfg(target_os = "macos")]
 mod sys;
 #[cfg(target_os = "macos")]
 mod views;
@@ -60,8 +62,17 @@ mod alloc {
 }
 
 #[cfg(target_os = "macos")]
-const SCENARIOS: [&str; 9] = [
-    "startup", "idle", "resize", "scroll", "theme", "document", "views", "windows", "size",
+const SCENARIOS: [&str; 10] = [
+    "startup",
+    "idle",
+    "resize",
+    "scroll",
+    "theme",
+    "document",
+    "views",
+    "semantics",
+    "windows",
+    "size",
 ];
 
 #[cfg(target_os = "macos")]
@@ -190,6 +201,9 @@ fn main() {
     });
     step("views", &mut |r| {
         views::views(&app, &mut window, &config, r)
+    });
+    step("semantics", &mut |r| {
+        semantics::semantics(window.content_size(), r)
     });
     window.close();
     drop(window);
