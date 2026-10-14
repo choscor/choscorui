@@ -8,6 +8,8 @@ use choscorui_core::{
     Value,
 };
 use hosted::{Harness, texts};
+use std::cell::Cell;
+use std::rc::Rc;
 
 struct Payment(&'static str, &'static str, f64);
 
@@ -212,6 +214,63 @@ fn the_status_counts_only_selected_rows_inside_the_filter() {
         h.semantics().value.as_deref(),
         Some("1 of 1 row(s) selected."),
         "ken99 is selected but the filter hides it"
+    );
+    assert!(
+        texts(&h.paint()).contains(&"1 of 1 row(s) selected.".to_string()),
+        "the painted status counts the same rows"
+    );
+}
+
+/// A row that counts the model reads of every row.
+struct Counted(usize, Rc<Cell<usize>>);
+
+impl ItemData for Counted {
+    fn data(&self, _: usize, role: Role) -> Value {
+        self.1.set(self.1.get() + 1);
+        match role {
+            Role::Display | Role::Sort => Value::Text(format!("row {}", self.0)),
+            _ => Value::None,
+        }
+    }
+}
+
+#[test]
+fn a_selection_change_in_a_large_table_does_not_read_every_row() {
+    let reads = Rc::new(Cell::new(0));
+    let mut store = ListStore::new(1);
+    store.set_headers(["Name"]);
+    let rows: Vec<Counted> = (0..100_000)
+        .map(|row| Counted(row, reads.clone()))
+        .collect();
+    store.insert(None, 0, rows).unwrap();
+    let mut h = Harness::new(
+        DataTable::new("Rows", Box::new(store), "Previous", "Next")
+            .with_filter("Filter", None)
+            .with_status(|selected, total| format!("{selected} of {total}")),
+    );
+    h.focus();
+    // "row 1" matches 11,111 rows.
+    assert!(h.text("row 1"));
+    assert_eq!(h.semantics().value.as_deref(), Some("0 of 11111"));
+    assert!(tab(&mut h));
+    h.key(Key::ArrowDown);
+    reads.set(0);
+    h.key(Key::Space);
+    for _ in 0..4 {
+        h.key(Key::ArrowDown);
+    }
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    h.chord(shift, Key::Space);
+    assert_eq!(h.semantics().value.as_deref(), Some("5 of 11111"));
+    h.key(Key::Space);
+    assert_eq!(h.semantics().value.as_deref(), Some("4 of 11111"));
+    assert!(
+        reads.get() < 100,
+        "{} reads: a click reads the changed rows, not the model",
+        reads.get()
     );
 }
 

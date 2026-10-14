@@ -463,7 +463,7 @@ impl DataTable {
         let g = &self.geometry;
         if let Some(status) = &self.status {
             let style = cx.style(query(Slot::Caption));
-            let text = status(self.selection.len(), self.order.len());
+            let text = status(self.shown_selected, self.order.len());
             cx.label(g.status, &text, &style, TextAlign::Start);
         }
         for (stop, part, rect, label, enabled) in [

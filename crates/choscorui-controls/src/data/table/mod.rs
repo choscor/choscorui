@@ -20,6 +20,7 @@ use choscorui_core::{
     SortOrder, TextFilter, TextInputInfo,
 };
 use layout::Geometry;
+use std::collections::HashMap;
 
 /// A column of the grid: the selection checkboxes or a model column.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -79,6 +80,8 @@ pub struct DataTable {
     proxy: SortFilterProxy,
     /// The filtered rows in display order.
     order: Vec<ItemKey>,
+    /// The index in `order` of each filtered row.
+    index_of: HashMap<ItemKey, usize>,
     selection: Selection,
     hidden: Vec<bool>,
     filter: Option<(TextField, Option<usize>)>,
@@ -114,6 +117,7 @@ impl DataTable {
             model,
             proxy: SortFilterProxy::new(),
             order: Vec::new(),
+            index_of: HashMap::new(),
             selection: Selection::new(),
             hidden: vec![false; columns],
             filter: None,
@@ -260,16 +264,14 @@ impl DataTable {
         true
     }
 
-    /// Counts the selected rows that the filter shows.
+    /// Counts the selected rows that the filter shows. The work is the
+    /// selection size, not the filtered rows.
     fn count_selected(&mut self) {
-        self.shown_selected = if self.selection.is_empty() {
-            0
-        } else {
-            self.order
-                .iter()
-                .filter(|key| self.selection.is_selected(**key))
-                .count()
-        };
+        self.shown_selected = self
+            .selection
+            .keys()
+            .filter(|key| self.index_of.contains_key(key))
+            .count();
     }
 
     /// Rebuilds the display order from the proxy.
@@ -278,6 +280,12 @@ impl DataTable {
         let view = self.proxy.view(self.model.as_ref());
         self.order = (0..view.row_count(None))
             .filter_map(|row| view.key(None, row))
+            .collect();
+        self.index_of = self
+            .order
+            .iter()
+            .enumerate()
+            .map(|(index, key)| (*key, index))
             .collect();
         self.page = self.page.min(self.last_page());
         self.count_selected();
@@ -337,12 +345,41 @@ impl DataTable {
     }
 
     fn emit_selection(&mut self, cx: &mut ControlContext<'_>) {
-        self.count_selected();
         cx.emit(ControlMessage::Changed(ControlValue::Indices(
             self.selected_rows(),
         )));
         cx.request_paint();
         cx.request_semantics();
+    }
+
+    /// Toggles `key`, a row that the filter shows, and moves the anchor
+    /// to it.
+    fn toggle_key(&mut self, key: ItemKey) {
+        let index_of = &self.index_of;
+        self.selection.apply_indexed(
+            SelectionMode::Multi,
+            SelectionCommand::Toggle,
+            key,
+            &self.order,
+            |item| index_of.get(&item).copied(),
+        );
+        if self.selection.is_selected(key) {
+            self.shown_selected += 1;
+        } else {
+            self.shown_selected -= 1;
+        }
+    }
+
+    /// Adds the filtered rows `range` to the selection. The work is the
+    /// rows of the range, not every filtered row.
+    fn select_range(&mut self, range: std::ops::RangeInclusive<usize>) {
+        let keys = &self.order[range];
+        let added = keys
+            .iter()
+            .filter(|key| !self.selection.is_selected(**key))
+            .count();
+        self.selection.select_all(keys);
+        self.shown_selected += added;
     }
 
     /// Toggles `row` of the page. With `extend`, it adds every row from
@@ -351,7 +388,7 @@ impl DataTable {
         let Some(key) = self.page_keys().get(row).copied() else {
             return;
         };
-        let position = |key| self.order.iter().position(|item| *item == key);
+        let position = |key| self.index_of.get(&key).copied();
         let range = self
             .selection
             .anchor()
@@ -359,38 +396,32 @@ impl DataTable {
             .and_then(position)
             .zip(position(key));
         match range {
-            Some((anchor, end)) => {
-                let (low, high) = (anchor.min(end), anchor.max(end));
-                let keys = self.order[low..=high].to_vec();
-                self.selection.select_all(&keys);
-            }
-            None => {
-                let order = self.order.clone();
-                self.selection
-                    .apply(SelectionMode::Multi, SelectionCommand::Toggle, key, &order);
-            }
+            Some((anchor, end)) => self.select_range(anchor.min(end)..=anchor.max(end)),
+            None => self.toggle_key(key),
         }
         self.emit_selection(cx);
     }
 
     /// Selects every row that the filter shows, on every page.
     fn select_all_rows(&mut self, cx: &mut ControlContext<'_>) {
-        let order = self.order.clone();
-        if self.selection.select_all(&order) {
+        if self.selection.select_all(&self.order) {
+            self.shown_selected = self.order.len();
             self.emit_selection(cx);
         }
     }
 
     fn toggle_page(&mut self, cx: &mut ControlContext<'_>) {
-        let keys = self.page_keys().to_vec();
+        let start = (self.page * self.page_size).min(self.order.len());
+        let end = (start + self.page_size).min(self.order.len());
+        if start == end {
+            return;
+        }
         if self.page_check() == Some(true) {
-            for key in keys {
-                let order = self.order.clone();
-                self.selection
-                    .apply(SelectionMode::Multi, SelectionCommand::Toggle, key, &order);
+            for row in start..end {
+                self.toggle_key(self.order[row]);
             }
         } else {
-            self.selection.select_all(&keys);
+            self.select_range(start..=end - 1);
         }
         self.emit_selection(cx);
     }

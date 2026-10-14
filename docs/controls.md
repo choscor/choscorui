@@ -4200,10 +4200,14 @@ without an animation. `set_open` returns false.
   the locale format, and a `Float` has two fraction digits.
 - `with_empty(text)` shows text when no row matches. `with_status(format)`
   shows a status line from two counts: the selected rows that the filter
-  shows, and the filtered rows. Use a plural message for the line.
+  shows, and the filtered rows. A selected row that the filter hides is
+  not in the first count. The painted line and the semantic value are
+  the same text. Use a plural message for the line.
 - A click on an empty area of the table focuses the table but keeps the
   inner focus. Keyboard focus starts at the first or the last tab stop.
-- Paint reads only the rows on the page.
+- Paint reads only the rows on the page. A selection change does work
+  only for the changed rows. The table keeps an index from row key to
+  filtered row, and it updates the selected count in place.
 
 | Part | Slot | Value |
 | --- | --- | --- |
