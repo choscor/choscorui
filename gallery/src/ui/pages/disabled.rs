@@ -19,6 +19,7 @@ const PAGES: &[(&str, ControlKind)] = &[
     ("color-picker", ControlKind::ColorPicker),
     ("command", ControlKind::Command),
     ("context-menu", ControlKind::Menu),
+    ("custom-control", ControlKind::Slider),
     ("date-picker", ControlKind::DatePicker),
     ("decimal-spin-box", ControlKind::Input),
     ("dock", ControlKind::Dock),
