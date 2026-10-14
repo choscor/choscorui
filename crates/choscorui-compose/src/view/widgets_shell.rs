@@ -4,8 +4,9 @@
 //! fires one.
 
 use super::configured::Configured;
+use super::control_ref::ControlRef;
 use super::env::Env;
-use super::state::IntoLive;
+use super::state::{Binding, IntoLive};
 use super::text::TextContent;
 use super::widgets::{Items, label, text};
 use choscorui_controls as controls;
@@ -78,14 +79,31 @@ impl Configured<controls::StatusBar> {
 
 /// Dockable panels around a center area, as `layout` arranges them.
 /// Activating a tab reports the panel id through `.on_item`, and closing
-/// a panel runs `.on_dismiss`.
+/// a panel runs `.on_dismiss`. `.arrangement` keeps the saved text of the
+/// arrangement in a binding. A hosted dock paints the text of each panel
+/// and of the center: give them with `DockPanel::with_text` and
+/// `DockLayout::with_center_text`.
 ///
 /// # Examples
 ///
 /// ```
 /// # use choscorui_compose::view::*;
-/// # use choscorui_controls::DockLayout;
-/// let dock = Dock::new(|_: &Env| DockLayout::new(28.0));
+/// # use choscorui_controls::{DockArea, DockLayout, DockPanel, DockTarget, PanelId};
+/// struct Editor;
+///
+/// impl View for Editor {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let saved = cx.state(String::new());
+///         Dock::new(|_: &Env| {
+///             let mut dock = DockLayout::new(28.0).with_center_text("Editor");
+///             let files = DockPanel::new("files", "Files").with_text("12 files");
+///             let target = DockTarget::Tab { area: DockArea::Left, group: 0 };
+///             let _ = dock.add(PanelId(1), files, target);
+///             dock
+///         })
+///         .arrangement(saved.binding())
+///     }
+/// }
 /// ```
 pub type Dock = Configured<DockLayout>;
 
@@ -93,6 +111,23 @@ impl Configured<DockLayout> {
     /// A dock with the layout that `layout` makes.
     pub fn new(layout: impl Fn(&Env) -> DockLayout + 'static) -> Self {
         Configured::custom(ControlKind::Dock, layout)
+    }
+
+    /// Keeps the arrangement in `saved`, as the text of
+    /// [`DockLayout::save`]. Each change that the user makes in the dock
+    /// writes the text. New text restores its arrangement in the dock;
+    /// text that does not restore keeps the arrangement that the dock has.
+    #[must_use]
+    pub fn arrangement(self, saved: Binding<String>) -> Self {
+        let dock = ControlRef::new();
+        let read = dock.clone();
+        self.control_ref(&dock)
+            .value(move || ControlValue::Text(saved.get()))
+            .on_message(move |_| {
+                if let Some(text) = read.with(DockLayout::save) {
+                    saved.set(text);
+                }
+            })
     }
 }
 

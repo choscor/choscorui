@@ -198,17 +198,45 @@ pub type Dock = Configured<DockLayout>;
 
 Dockable panels around a center area, as `layout` arranges them.
 Activating a tab reports the panel id through `.on_item`, and closing
-a panel runs `.on_dismiss`.
+a panel runs `.on_dismiss`. `.arrangement` keeps the saved text of the
+arrangement in a binding. A hosted dock paints the text of each panel
+and of the center: give them with `DockPanel::with_text` and
+`DockLayout::with_center_text`.
 
 #### Examples
 
 ```rust
-let dock = Dock::new(|_: &Env| DockLayout::new(28.0));
+struct Editor;
+
+impl View for Editor {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let saved = cx.state(String::new());
+        Dock::new(|_: &Env| {
+            let mut dock = DockLayout::new(28.0).with_center_text("Editor");
+            let files = DockPanel::new("files", "Files").with_text("12 files");
+            let target = DockTarget::Tab { area: DockArea::Left, group: 0 };
+            let _ = dock.add(PanelId(1), files, target);
+            dock
+        })
+        .arrangement(saved.binding())
+    }
+}
 ```
 
 Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
+
+#### `Dock::arrangement`
+
+```rust
+pub fn arrangement(self, saved: Binding<String>) -> Self
+```
+
+Keeps the arrangement in `saved`, as the text of
+`DockLayout::save`. Each change that the user makes in the dock
+writes the text. New text restores its arrangement in the dock;
+text that does not restore keeps the arrangement that the dock has.
 
 #### `Dock::new`
 

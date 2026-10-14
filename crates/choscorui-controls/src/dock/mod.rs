@@ -54,6 +54,8 @@ pub struct DockPanel {
     pub title: String,
     pub closable: bool,
     pub floatable: bool,
+    /// The text that a control host paints in the panel content.
+    pub text: String,
 }
 
 impl DockPanel {
@@ -63,7 +65,16 @@ impl DockPanel {
             title: title.into(),
             closable: true,
             floatable: true,
+            text: String::new(),
         }
+    }
+
+    /// Gives the panel a text that a control host paints at the top of
+    /// the panel content.
+    #[must_use]
+    pub fn with_text(mut self, text: impl Into<String>) -> Self {
+        self.text = text.into();
+        self
     }
 }
 
@@ -200,6 +211,8 @@ pub struct DockLayout {
     floating: Vec<(PanelId, Rect)>,
     hidden: BTreeMap<PanelId, PanelLocation>,
     tab_height: f64,
+    /// The text that a control host paints in the middle of the center.
+    center_text: String,
     /// Focus and drag state in a control host.
     hosted: HostState,
 }
@@ -216,8 +229,16 @@ impl DockLayout {
             floating: Vec::new(),
             hidden: BTreeMap::new(),
             tab_height,
+            center_text: String::new(),
             hosted: HostState::default(),
         }
+    }
+
+    /// Gives the center a text that a control host paints in its middle.
+    #[must_use]
+    pub fn with_center_text(mut self, text: impl Into<String>) -> Self {
+        self.center_text = text.into();
+        self
     }
 
     /// Registers a panel at its default location.

@@ -560,6 +560,49 @@ fn a_dock_mounts_its_layout_and_reports_a_closed_panel() {
     assert!(closed.get());
 }
 
+/// A dock with Files on the left and Console at the bottom.
+fn two_panels() -> DockLayout {
+    let mut dock = DockLayout::new(24.0);
+    let tab = |area| DockTarget::Tab { area, group: 0 };
+    let _ = dock.add(
+        PanelId(1),
+        DockPanel::new("files", "Files"),
+        tab(choscorui_controls::DockArea::Left),
+    );
+    let _ = dock.add(
+        PanelId(2),
+        DockPanel::new("console", "Console"),
+        tab(choscorui_controls::DockArea::Bottom),
+    );
+    dock
+}
+
+#[test]
+fn a_dock_keeps_its_arrangement_in_a_binding() {
+    let saved: Slot<String> = slot();
+    let shared = saved.clone();
+    let mut host = host(move |cx| {
+        let arrangement = cx.state(String::new());
+        shared.set(Some(arrangement));
+        Dock::new(|_| two_panels())
+            .arrangement(arrangement.binding())
+            .into_any()
+    });
+    let arrangement = take(&saved);
+    // A closed panel writes the new arrangement.
+    let files = host.find("Files").unwrap();
+    host.perform(files, SemanticAction::Dismiss, None);
+    host.layout();
+    let mut closed = two_panels();
+    let _ = closed.close(PanelId(1));
+    assert_eq!(arrangement.get(), closed.save());
+    // New text restores its arrangement in the dock.
+    arrangement.set(two_panels().save());
+    host.flush();
+    assert!(host.find("Files").is_some());
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
 /// The leaf nodes under `node`.
 fn leaves(host: &ViewHost, node: NodeId, found: &mut Vec<NodeId>) {
     match host.tree().children(node) {

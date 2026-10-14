@@ -2855,6 +2855,12 @@ panel is on top.
   collapses the area to its 80 pt minimum, and the next double click
   restores the extent.
 - The tabs, the close buttons, and the splitters show hover and press.
+- **Texts.** The node paints the text of `DockLayout::with_center_text`
+  in the middle of the center. It paints the text of
+  `DockPanel::with_text` at the top of the panel content, 8 points in.
+  The texts use the `Card` `Description` look.
+- **Value.** `set_value(Text)` restores the `save` text. Text that does
+  not restore keeps the layout.
 - The node is a `Group` with the actions of the focused tab or
   splitter. It publishes a `Tab` part for each tab and floating title
   bar, and a `Slider` part for each splitter. The focused tab or splitter
@@ -2862,10 +2868,13 @@ panel is on top.
 
 **As a view.** `Dock::new(layout)` mounts the `DockLayout` that `layout`
 makes from the environment. `on_item` receives the id of an activated panel.
-`on_dismiss` runs when a panel closes. The view paints the dock only, and
-it does not place panel content. To show content, wrap the `DockLayout`
-in a `CustomControl` and paint with `DockLayout::paint_hosted`. It calls
-back with the content rectangle of each shown panel, in paint order.
+`on_dismiss` runs when a panel closes. `.arrangement(saved)` keeps the
+`save` text in a `Binding<String>`: each message of the dock writes the
+text, and new text restores its layout. The view paints the panel and
+center texts, and it does not place other panel content. To show other
+content, wrap the `DockLayout` in a `CustomControl` and paint with
+`DockLayout::paint_hosted`. It calls back with the content rectangle of
+each shown panel, in paint order.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) and
 [dock.rs](../crates/choscorui-controls/tests/dock.rs) pin this behavior.

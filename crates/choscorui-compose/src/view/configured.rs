@@ -75,8 +75,8 @@ pub struct Configured<C> {
     changes: Vec<Change<C>>,
     /// Changes of the mounted control in place.
     updates: Vec<Update<C>>,
-    /// The reference that the app reads the mounted control through.
-    reference: Option<ControlRef<C>>,
+    /// The references that read the mounted control.
+    references: Vec<ControlRef<C>>,
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
     handlers: Vec<Handler>,
@@ -110,7 +110,7 @@ impl<C: CustomControl + 'static> Configured<C> {
             build: Rc::new(move |env| build(env).map_err(|error| error.to_string())),
             changes: Vec::new(),
             updates: Vec::new(),
-            reference: None,
+            references: Vec::new(),
             value: None,
             open: None,
             handlers: Vec::new(),
@@ -174,7 +174,7 @@ impl<C: CustomControl + 'static> Configured<C> {
     /// Points `reference` at the mounted control, so the app can read it.
     #[must_use]
     pub fn control_ref(mut self, reference: &ControlRef<C>) -> Self {
-        self.reference = Some(reference.clone());
+        self.references.push(reference.clone());
         self
     }
 
@@ -328,25 +328,26 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             build,
             changes,
             updates,
-            reference,
+            mut references,
             value,
             open,
             handlers,
             limits,
             notes,
         } = self;
-        let shared =
-            (reference.is_some() || !updates.is_empty()).then(|| reference.unwrap_or_default());
+        // The updates change the control through a reference of their own.
+        let shared = (!references.is_empty() || !updates.is_empty()).then(ControlRef::new);
+        references.extend(shared.clone());
         let updates = Rc::new(updates);
-        let (built, applied) = (shared.clone(), updates.clone());
+        let applied = updates.clone();
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
             let control = changes
                 .iter()
                 .fold(control, |control, change| change(control, env));
-            let Some(reference) = &built else {
+            if references.is_empty() {
                 return Ok(Box::new(control));
-            };
+            }
             let control = Rc::new(RefCell::new(control));
             // The updates track their reads in reactions of their own.
             Runtime::untracked(|| {
@@ -354,7 +355,9 @@ impl<C: CustomControl + 'static> View for Configured<C> {
                     update(&mut control.borrow_mut(), env);
                 }
             });
-            reference.set(control.clone());
+            for reference in &references {
+                reference.set(control.clone());
+            }
             Ok(Box::new(Shared::new(control)))
         });
         let mut view = ControlView::configured(build, kind, value, open, handlers);

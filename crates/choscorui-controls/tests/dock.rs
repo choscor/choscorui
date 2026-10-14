@@ -1,6 +1,7 @@
 //! The dock in a control host: floating panels, tab drags with drop
-//! targets, tab close, extent limits, hidden panel places, and the order
-//! of its tab stops.
+//! targets, tab close, extent limits, hidden panel places, the order of
+//! its tab stops, the panel and center texts, and a saved arrangement as
+//! its value.
 
 mod hosted;
 
@@ -339,4 +340,33 @@ fn tab_stops_follow_reading_order() {
             "Notes"
         ]
     );
+}
+
+#[test]
+fn a_hosted_dock_paints_its_texts_and_takes_a_saved_arrangement() {
+    let mut layout = DockLayout::new(24.0).with_center_text("Editor");
+    let tab = |area| DockTarget::Tab { area, group: 0 };
+    let files = DockPanel::new("files", "Files").with_text("Files panel");
+    layout.add(FILES, files, tab(DockArea::Left)).unwrap();
+    let console = DockPanel::new("console", "Console");
+    layout.add(CONSOLE, console, tab(DockArea::Bottom)).unwrap();
+    let mut moved = layout.clone();
+    moved.dock(CONSOLE, tab(DockArea::Right)).unwrap();
+    let mut h = Harness::new(layout);
+    h.place(BOUNDS);
+    let painted = texts(&h.paint());
+    for text in ["Editor", "Files", "Files panel", "Console"] {
+        assert!(painted.contains(&text.to_owned()), "{text} in {painted:?}");
+    }
+    let value = ControlValue::Text(moved.save());
+    assert!(h.host.set_value(&mut h.tree, h.node, &value));
+    let invalid = ControlValue::Text("not a dock".into());
+    assert!(!h.host.set_value(&mut h.tree, h.node, &invalid));
+    assert!(
+        !h.host
+            .set_value(&mut h.tree, h.node, &ControlValue::Number(1.0))
+    );
+    // The panel text follows the panel to its new area.
+    assert!(texts(&h.paint()).contains(&"Files panel".to_owned()));
+    assert!(h.messages().is_empty());
 }

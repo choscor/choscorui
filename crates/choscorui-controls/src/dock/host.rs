@@ -18,6 +18,8 @@ use choscorui_core::{
 
 /// The side of the square close button in a tab.
 const CLOSE: f64 = 16.0;
+/// The inset of a panel text from the edges of the panel content.
+const TEXT_INSET: f64 = 8.0;
 /// How far the pointer moves before a press on a tab becomes a drag.
 const DRAG_SLOP: f64 = 4.0;
 /// The depth of the drop zone along each edge of the dock.
@@ -774,8 +776,29 @@ impl crate::CustomControl for DockLayout {
         }
     }
 
+    /// Paints the dock, the center text in the middle of the center, and
+    /// the text of each shown panel at the top of its content, with the
+    /// `Card` description look.
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        self.paint_hosted(cx, &mut |_, _, _| {});
+        let style = cx.style(StyleQuery::new(ControlKind::Card, Slot::Description));
+        if !self.center_text.is_empty() {
+            let center = self.arrange(cx.bounds).center;
+            cx.label(center, &self.center_text, &style, TextAlign::Center);
+        }
+        self.paint_hosted(cx, &mut |cx, panel, content| {
+            let Some(text) = self.panel(panel).map(|panel| panel.text.as_str()) else {
+                return;
+            };
+            if text.is_empty() {
+                return;
+            }
+            let inner = content.inset(TEXT_INSET);
+            let line = Rect::new(
+                inner.origin,
+                Size::new(inner.size.width, style.text.line_height),
+            );
+            cx.label(line, text, &style, TextAlign::Start);
+        });
     }
 
     fn semantics(&self) -> SemanticNode {
@@ -847,5 +870,14 @@ impl crate::CustomControl for DockLayout {
         if !enabled {
             self.hosted.drag = None;
         }
+    }
+
+    /// Takes the saved text of an arrangement, as [`DockLayout::save`]
+    /// gives it. Text that does not restore keeps the arrangement.
+    fn set_value(&mut self, value: &ControlValue) -> bool {
+        let ControlValue::Text(saved) = value else {
+            return false;
+        };
+        *saved == self.save() || self.restore(saved).is_ok()
     }
 }
