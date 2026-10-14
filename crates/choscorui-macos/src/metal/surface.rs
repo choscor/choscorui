@@ -83,6 +83,7 @@ struct Surface {
     paint: PaintHandle,
     shared: Arc<Shared>,
     targets: Targets,
+    queue: Option<Retained<crate::ffi::metal::MTLCommandQueue>>,
     pending: bool,
     /// True once AppKit reported the occlusion state of the window. Until
     /// then, a window on screen counts as visible.
@@ -258,6 +259,11 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
         paint,
         shared,
         targets: Targets::default(),
+        queue: if std::env::var("DIAG_FIX").unwrap_or_default().contains("queue") {
+            crate::ffi::metal::NEW_COMMAND_QUEUE.send(&gpu.device, ())
+        } else {
+            None
+        },
         pending: true,
         occlusion_reported: false,
         presented_once: false,
@@ -536,7 +542,8 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         return Frame::NoDrawable;
     };
     let plan = plan::build(gpu, &list, size.0, size.1, scale);
-    let Some(command_buffer) = COMMAND_BUFFER.send(&gpu.queue, ()) else {
+    let queue = surface.queue.as_deref().unwrap_or(&gpu.queue);
+    let Some(command_buffer) = COMMAND_BUFFER.send(queue, ()) else {
         return Frame::Failed;
     };
     let encoded = encode(gpu, &mut surface.targets, &plan, &command_buffer, texture);

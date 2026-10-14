@@ -115,6 +115,16 @@ fn window_churn(app: &Application, count: usize) {
         ));
         if !noshow {
             assert!(wait_for_paint(app, &window, before), "churn window paints");
+            let frames: usize = std::env::var("DIAG_FRAMES").ok().and_then(|f| f.parse().ok()).unwrap_or(1);
+            for f in 1..frames {
+                let before = window.paint_count();
+                window.set_display_list(themed(
+                    Size::new(260.0, 180.0),
+                    &DesignTokens::dark(),
+                    f % 2 == 0,
+                ));
+                assert!(wait_for_paint(app, &window, before), "extra frame paints");
+            }
         }
         open.push(window);
     }

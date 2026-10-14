@@ -21,15 +21,11 @@ jobs:
         run: cargo test -p choscorui-macos --test lifetime_smoke --locked --no-run
       - name: churn base
         run: DIAG_ONLY=churn  cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn shared_empty
-        run: DIAG_ONLY=churn DIAG_FIX=shared_empty cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn texleak
-        run: DIAG_ONLY=churn DIAG_FIX=texleak cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn storm
-        run: DIAG_ONLY=churn DIAG_ONLY=storm cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn storm-shared
-        run: DIAG_ONLY=churn DIAG_ONLY=storm DIAG_FIX=shared_empty cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn storm-cg
-        run: DIAG_ONLY=churn DIAG_ONLY=storm CHOSCORUI_PAINTER=core-graphics cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
-      - name: churn all-shared
-        run: DIAG_ONLY=churn DIAG_ONLY= DIAG_FIX=shared_empty cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
+      - name: churn queue
+        run: DIAG_ONLY=churn DIAG_FIX=queue cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
+      - name: churn frames4
+        run: DIAG_ONLY=churn DIAG_FRAMES=4 cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
+      - name: churn frames4-queue
+        run: DIAG_ONLY=churn DIAG_FRAMES=4 DIAG_FIX=queue cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
+      - name: churn storm-queue
+        run: DIAG_ONLY=churn DIAG_ONLY=storm DIAG_FIX=queue cargo test -p choscorui-macos --test lifetime_smoke --locked 2>&1 | grep -E 'DIAG (round|grown)|Owned physical|panicked'
