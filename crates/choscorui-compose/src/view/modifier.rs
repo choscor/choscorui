@@ -8,7 +8,7 @@ use super::View;
 use super::env::{Corner, Elevation, Env, Fill, Metric};
 use super::file_dialog::{self, DialogResult};
 use super::fragment::FragmentId;
-use super::host::{Cx, Flex, Handler, Inner, Layer, ShortcutEntry, ViewError};
+use super::host::{Cx, Flex, Handler, Inner, Layer, PressEntry, ShortcutEntry, ViewError};
 use super::layout::{Alignment, parent_tokens};
 use super::menus::{self, MenuChoice};
 use super::present::{Placement, Presentation, present};
@@ -244,6 +244,8 @@ pub(crate) enum Modifier {
     AccessRole(SemanticRole),
     AccessBusy(Live<bool>),
     Shortcut(Key, ShortcutModifiers, Rc<dyn Fn()>),
+    KeyPress(Key, Rc<dyn Fn()>),
+    Press(Rc<dyn Fn(Point)>),
     OnMessage(Handler),
     Focused(Binding<bool>),
     Focusable(bool),
@@ -745,6 +747,40 @@ modifiers! {
     ///     .keyboard_shortcut(Key::Character('s'), command, || println!("save"));
     /// ```
     fn keyboard_shortcut(key: Key, modifiers: ShortcutModifiers, action: impl Fn() + 'static) => Modifier::Shortcut(key, modifiers, Rc::new(action));
+    /// Runs `action` for a press of `key` with no modifier keys while the
+    /// keyboard focus is in the view. The view takes the key before the
+    /// focused control, so the control does not get it. A view that the
+    /// focus is in more deeply wins. A control that records every key,
+    /// such as a recording `KeySequenceEdit`, still gets the key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_core::Key;
+    /// struct Search;
+    ///
+    /// impl View for Search {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let query = cx.state(String::new());
+    ///         Input::new("Search", query.binding())
+    ///             .on_key_press(Key::Escape, move || query.set(String::new()))
+    ///     }
+    /// }
+    /// ```
+    fn on_key_press(key: Key, action: impl Fn() + 'static) => Modifier::KeyPress(key, Rc::new(action));
+    /// Runs `action` with the position of each primary press on the
+    /// controls of the view, from the top-left corner of the view. It runs
+    /// before the control under the press handles the press, and does not
+    /// stop it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// let card = Text::new("Map").on_press(|point| println!("pressed at {point:?}"));
+    /// ```
+    fn on_press(action: impl Fn(Point) + 'static) => Modifier::Press(Rc::new(action));
     /// Runs `action` when the control commits its input, for example
     /// Return in a text input.
     ///
@@ -1745,6 +1781,18 @@ fn apply(
                 action,
             });
         }
+        Modifier::KeyPress(key, action) => {
+            cx.inner.key_presses.push(ShortcutEntry {
+                node: inner_node,
+                key,
+                modifiers: ShortcutModifiers::default(),
+                action,
+            });
+        }
+        Modifier::Press(action) => cx.inner.presses.push(PressEntry {
+            node: inner_node,
+            action,
+        }),
         Modifier::OnMessage(handler) => cx.inner.data(inner_node).handlers.push(handler),
         Modifier::Focused(binding) => {
             let node = inner_node;

@@ -806,6 +806,32 @@ Moves the painted view without changing its layout.
 let badge = Text::new("3").offset(Point::new(4.0, -4.0));
 ```
 
+#### `Styled::on_key_press`
+
+```rust
+pub fn on_key_press(self, key: Key, action: impl Fn() + 'static) -> Self
+```
+
+Runs `action` for a press of `key` with no modifier keys while the
+keyboard focus is in the view. The view takes the key before the
+focused control, so the control does not get it. A view that the
+focus is in more deeply wins. A control that records every key,
+such as a recording `KeySequenceEdit`, still gets the key.
+
+##### Examples
+
+```rust
+struct Search;
+
+impl View for Search {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let query = cx.state(String::new());
+        Input::new("Search", query.binding())
+            .on_key_press(Key::Escape, move || query.set(String::new()))
+    }
+}
+```
+
 #### `Styled::on_message`
 
 ```rust
@@ -822,6 +848,23 @@ let save = Button::new("Save", || {}).on_message(|message| {
         println!("saved");
     }
 });
+```
+
+#### `Styled::on_press`
+
+```rust
+pub fn on_press(self, action: impl Fn(Point) + 'static) -> Self
+```
+
+Runs `action` with the position of each primary press on the
+controls of the view, from the top-left corner of the view. It runs
+before the control under the press handles the press, and does not
+stop it.
+
+##### Examples
+
+```rust
+let card = Text::new("Map").on_press(|point| println!("pressed at {point:?}"));
 ```
 
 #### `Styled::on_submit`

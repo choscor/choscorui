@@ -161,7 +161,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`Questionnaire`](controls--type-aliases-1.md#questionnaire) type alias: Questions that show one at a time, with Previous, Skip, Next, and Submit buttons that `labels` names.
 - [`RadioGroup`](controls--type-aliases-1.md#radiogroup) type alias: Radio buttons, one for each option; `selected` edits the chosen option.
 - [`RangeSlider`](controls--type-aliases-1.md#rangeslider) type alias: Low and high values along one track; `values` edits both.
-- [`ScrollBar`](controls--type-aliases-1.md#scrollbar) type alias: A standalone scroll bar named `name` over `content` points, of which `viewport` show; `offset` edits the scroll position.
+- [`ScrollBar`](controls--type-aliases-2.md#scrollbar) type alias: A standalone scroll bar named `name` over `content` points, of which `viewport` show; `offset` edits the scroll position.
 - [`Select`](controls--type-aliases-2.md#select) type alias: A trigger with a popup list; `selected` edits the chosen option.
 - [`Sidebar`](controls--type-aliases-2.md#sidebar) type alias: Grouped navigation items; `selected` edits the chosen item.
 - [`SizeGrip`](controls--type-aliases-2.md#sizegrip) type alias: A grip in the bottom trailing corner that resizes its window.
@@ -231,7 +231,9 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`focusable`](modifiers-controls.md#focusable) modifier: Whether keyboard focus can stop on the view.
 - [`focused`](modifiers-controls.md#focused) modifier: Keeps `focused` true while the view has keyboard focus; setting it moves focus to the view.
 - [`keyboard_shortcut`](modifiers-controls.md#keyboard_shortcut) modifier: Runs `action` for `key` with `modifiers` while focus is in the view, or anywhere when no closer view declares the same keys.
+- [`on_key_press`](modifiers-controls.md#on_key_press) modifier: Runs `action` for a press of `key` with no modifier keys while the keyboard focus is in the view.
 - [`on_message`](modifiers-controls.md#on_message) modifier: Calls `handler` with each message of the view's control.
+- [`on_press`](modifiers-controls.md#on_press) modifier: Runs `action` with the position of each primary press on the controls of the view, from the top-left corner of the view.
 - [`on_submit`](modifiers-controls.md#on_submit) modifier: Runs `action` when the control commits its input, for example Return in a text input.
 
 ### Presentation modifiers
@@ -313,6 +315,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`Configured`](custom.md#configured) struct: A control of type `C` as a view.
 - [`ControlContext`](custom.md#controlcontext) struct: What a control may do while handling an event.
 - [`ControlEvent`](custom.md#controlevent) enum: Input delivered to a control.
+- [`ControlRef`](custom.md#controlref) struct: The control that a view mounted, which the app can read after the mount, for example the scroll offset of a list.
 - [`ControlView`](custom.md#controlview) struct: A control mounted as a view.
 - [`CustomControl`](custom.md#customcontrol) trait: A control mounted in a `ControlHost`.
 - [`CustomView`](custom.md#customview) trait: The low-level extension point for new controls: a type that measures, paints, reports semantics, and handles events through the control protocol.

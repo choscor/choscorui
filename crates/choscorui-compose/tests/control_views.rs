@@ -1,20 +1,21 @@
 //! Headless tests of the views over control models: the focus frame, the
 //! input dialog, the font dialog, the button group, the sidebar shortcut,
-//! and the invalid state of form views.
+//! the invalid state of form views, the keys and presses that a view
+//! takes, and the changes in place of a mounted control.
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    ButtonGroup, Checkbox, Cx, Env, FocusFrame, FontDialog, Frame, HStack, InputDialog, Sidebar,
-    Text, VStack, View, ViewExt, ViewHost,
+    Button, ButtonGroup, Checkbox, ControlRef, Cx, Env, FocusFrame, FontDialog, Frame, HStack,
+    Input, InputDialog, List, Sidebar, Text, VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls::{
-    ButtonGroupMember, ButtonVariant, CommandId, EstimatedText, InputKind, InputValue,
-    ShortcutModifiers, SidebarItem, TextMeasure,
+    ButtonGroupMember, ButtonVariant, CommandId, EstimatedText, InputKind, InputValue, ItemView,
+    ShortcutModifiers, SidebarItem, TextItemDelegate, TextMeasure,
 };
 use choscorui_core::{
     Catalog, DesignTokens, DisplayCommand, DisplayList, FontSlant, FontWeight, Icon, Key, KeyEvent,
-    Locale, Point, PointerButton, PointerEvent, Rect, SemanticAction, Size, TextRun, TextStyle,
-    TypeSpec,
+    Locale, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticRole, Size,
+    StringListModel, TextRun, TextStyle, TypeSpec,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -607,5 +608,132 @@ fn the_button_group_view_runs_buttons_and_binds_toggles() {
     press(&mut host, Key::ArrowRight);
     perform(&mut host, "Pin", SemanticAction::Activate, None);
     assert!(host.find("runs 1 checked [2]").is_some());
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Keys and presses that a view takes
+
+/// A search field that Escape clears and ArrowDown counts, and a button
+/// that reports where a press lands.
+struct Search {
+    pressed: Rc<RefCell<Vec<Point>>>,
+}
+
+impl View for Search {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let query = cx.state(String::from("phở"));
+        let down = cx.state(0_usize);
+        let pressed = self.pressed.clone();
+        VStack::new((
+            Input::new("Search", query.binding())
+                .on_key_press(Key::Escape, move || query.set(String::new()))
+                .on_key_press(Key::ArrowDown, move || down.update(|down| *down += 1)),
+            Text::new(move || format!("query {} down {}", query.get(), down.get())),
+            Button::new("Go", || {}).on_press(move |point| pressed.borrow_mut().push(point)),
+        ))
+    }
+}
+
+#[test]
+fn a_view_takes_its_keys_before_the_focused_control() {
+    let pressed = Rc::new(RefCell::new(Vec::new()));
+    let mut host = host(Search {
+        pressed: pressed.clone(),
+    });
+    assert!(!press(&mut host, Key::Escape), "no focus, no key");
+    let search = node(&mut host, "Search");
+    host.focus(Some(search));
+    assert!(press(&mut host, Key::ArrowDown));
+    assert!(press(&mut host, Key::Escape));
+    assert!(host.find("query  down 1").is_some());
+    // A key with a modifier goes to the control.
+    let shift = ShortcutModifiers {
+        shift: true,
+        ..ShortcutModifiers::default()
+    };
+    let key = KeyEvent::Down {
+        key: Key::ArrowDown,
+        repeat: false,
+    };
+    host.key(key, shift);
+    host.layout();
+    assert!(host.find("query  down 1").is_some());
+    // A press reports its position from the corner of the view.
+    let go = bounds(&mut host, "Go");
+    let at = Point::new(go.origin.x + 3.0, go.origin.y + 4.0);
+    let (button, none) = (PointerButton::Primary, ShortcutModifiers::default());
+    host.pointer(
+        PointerEvent::Down {
+            position: at,
+            button,
+        },
+        none,
+    );
+    host.pointer(
+        PointerEvent::Up {
+            position: at,
+            button,
+        },
+        none,
+    );
+    assert_eq!(*pressed.borrow(), vec![Point::new(3.0, 4.0)]);
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+// ---------------------------------------------------------------------------
+// Changes in place and control references
+
+/// A table of 200 rows whose column widths change in place, and whose
+/// scroll offset the app reads through a reference.
+struct Rows {
+    table: ControlRef<ItemView>,
+    builds: Rc<std::cell::Cell<usize>>,
+}
+
+impl View for Rows {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selection = cx.state(Vec::new());
+        let wide = cx.state(false);
+        let builds = self.builds.clone();
+        VStack::new((
+            List::from_view(
+                move |_: &Env| {
+                    builds.set(builds.get() + 1);
+                    let model = StringListModel::from_strings((0..200).map(|i| format!("Row {i}")));
+                    ItemView::new("Rows", SemanticRole::Table, 20.0)
+                        .with_model(Box::new(model), Box::new(TextItemDelegate::table()))
+                },
+                selection.binding(),
+            )
+            .update(move |view, _| {
+                view.set_column_widths(vec![if wide.get() { 300.0 } else { 100.0 }]);
+            })
+            .control_ref(&self.table)
+            .frame(Frame::size(300.0, 200.0)),
+            Button::new("Widen", move || wide.set(true)),
+        ))
+    }
+}
+
+#[test]
+fn an_update_changes_the_control_in_place_and_a_reference_reads_it() {
+    let table = ControlRef::new();
+    assert!(table.with(ItemView::offset).is_none(), "not mounted yet");
+    let builds = Rc::new(std::cell::Cell::new(0));
+    let mut host = host(Rows {
+        table: table.clone(),
+        builds: builds.clone(),
+    });
+    let rows = node(&mut host, "Rows");
+    host.focus(Some(rows));
+    press(&mut host, Key::End);
+    let offset = table.with(ItemView::offset).unwrap();
+    assert!(offset > 0.0, "the list scrolls to the end");
+    perform(&mut host, "Widen", SemanticAction::Activate, None);
+    // The control keeps its scroll offset and its current row.
+    assert_eq!(table.with(ItemView::offset), Some(offset));
+    assert_eq!(table.with(|view| view.current().is_some()), Some(true));
+    assert_eq!(builds.get(), 1, "no new build");
     assert_eq!(host.take_errors(), Vec::new());
 }

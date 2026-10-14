@@ -1470,6 +1470,37 @@ Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
 
 ### Methods
 
+#### `List::from_view`
+
+```rust
+pub fn from_view(build: impl Fn(&Env) -> ItemView + 'static, selection: Binding<Vec<usize>>) -> Self
+```
+
+The item view that `build` makes, for a list or a table with its
+own role, delegate, row height, footer, or caption. `selection`
+edits the positions of the selected rows.
+
+##### Examples
+
+```rust
+struct Prices;
+
+impl View for Prices {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selection = cx.state(Vec::new());
+        List::from_view(
+            |_: &Env| {
+                let model = StringListModel::from_strings(["Phở", "Bánh mì"]);
+                ItemView::new("Prices", SemanticRole::Table, 24.0)
+                    .with_model(Box::new(model), Box::new(TextItemDelegate::table()))
+                    .with_caption("Prices in đồng")
+            },
+            selection.binding(),
+        )
+    }
+}
+```
+
 #### `List::new`
 
 ```rust
@@ -1950,52 +1981,3 @@ pub fn step(self, step: f64) -> Self
 
 The snap step of the values. A step that is not positive becomes
 1 and reports a `ViewError::Clamped`.
-
-## `ScrollBar`
-
-type alias in `choscorui::prelude::ScrollBar`
-
-```rust
-pub type ScrollBar = Configured<ScrollBar>;
-```
-
-A standalone scroll bar named `name` over `content` points, of which
-`viewport` show; `offset` edits the scroll position. The arrow keys
-move one line, 16 points until `.line_step` changes it.
-
-#### Examples
-
-```rust
-use choscorui_compose::view::{Cx, ScrollBar, View};
-use choscorui_controls::ScrollOrientation;
-
-struct Log;
-
-impl View for Log {
-    fn body(&self, cx: &mut Cx) -> impl View {
-        let top = cx.state(0.0);
-        ScrollBar::new("Log", ScrollOrientation::Vertical, 1000.0, 200.0, top.binding())
-            .line_step(20.0)
-    }
-}
-```
-
-Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
-
-### Methods
-
-#### `ScrollBar::line_step`
-
-```rust
-pub fn line_step(self, step: f64) -> Self
-```
-
-The distance of one arrow key.
-
-#### `ScrollBar::new`
-
-```rust
-pub fn new<M>(name: impl IntoLive<TextContent, M>, orientation: ScrollOrientation, content: f64, viewport: f64, offset: Binding<f64>) -> Self
-```
-
-A scroll bar named `name` for `content` in a `viewport`, with its position in `offset`.

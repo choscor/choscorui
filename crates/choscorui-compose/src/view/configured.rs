@@ -5,16 +5,21 @@
 
 use super::View;
 use super::control::{ControlView, SharedNotes};
+use super::control_ref::{ControlRef, Shared};
 use super::env::Env;
 use super::host::Cx;
 use super::limits::{Limits, SharedLimits};
 use super::state::{Binding, IntoLive, Live};
+use crate::reactive::Runtime;
 use choscorui_controls::{CommandId, ControlKind, ControlMessage, ControlValue, CustomControl};
+use choscorui_core::Dirty;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
 type Change<C> = Rc<dyn Fn(C, &Env) -> C>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
+type Update<C> = Rc<dyn Fn(&mut C, &Env)>;
 
 /// A control of type `C` as a view. The view builds the control from the
 /// environment, so catalog strings follow the locale; options from
@@ -68,6 +73,10 @@ pub struct Configured<C> {
     kind: ControlKind,
     build: Build<C>,
     changes: Vec<Change<C>>,
+    /// Changes of the mounted control in place.
+    updates: Vec<Update<C>>,
+    /// The reference that the app reads the mounted control through.
+    reference: Option<ControlRef<C>>,
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
     handlers: Vec<Handler>,
@@ -100,6 +109,8 @@ impl<C: CustomControl + 'static> Configured<C> {
             kind,
             build: Rc::new(move |env| build(env).map_err(|error| error.to_string())),
             changes: Vec::new(),
+            updates: Vec::new(),
+            reference: None,
             value: None,
             open: None,
             handlers: Vec::new(),
@@ -123,6 +134,47 @@ impl<C: CustomControl + 'static> Configured<C> {
     #[must_use]
     pub fn with_env(mut self, change: impl Fn(C, &Env) -> C + 'static) -> Self {
         self.changes.push(Rc::new(change));
+        self
+    }
+
+    /// Changes the mounted control in place with `change`, after each
+    /// build and whenever a state that `change` reads changes. Unlike
+    /// [`Configured::with_env`], a change here does not build the control
+    /// again, so the control keeps what the user did with it, such as the
+    /// scroll offset and the selection of a list.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::ViewLayout;
+    /// # use choscorui_core::{ItemModel, StringListModel};
+    /// struct Photos;
+    ///
+    /// impl View for Photos {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let (selection, grid) = (cx.state(Vec::new()), cx.state(false));
+    ///         let model = || Box::new(StringListModel::from_strings(["Hồ Gươm"])) as Box<dyn ItemModel>;
+    ///         List::new("Photos", model, selection.binding()).update(move |view, _| {
+    ///             view.set_layout(if grid.get() {
+    ///                 ViewLayout::Grid { item_width: 120.0 }
+    ///             } else {
+    ///                 ViewLayout::List
+    ///             });
+    ///         })
+    ///     }
+    /// }
+    /// ```
+    #[must_use]
+    pub fn update(mut self, change: impl Fn(&mut C, &Env) + 'static) -> Self {
+        self.updates.push(Rc::new(change));
+        self
+    }
+
+    /// Points `reference` at the mounted control, so the app can read it.
+    #[must_use]
+    pub fn control_ref(mut self, reference: &ControlRef<C>) -> Self {
+        self.reference = Some(reference.clone());
         self
     }
 
@@ -275,22 +327,55 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             kind,
             build,
             changes,
+            updates,
+            reference,
             value,
             open,
             handlers,
             limits,
             notes,
         } = self;
+        let shared =
+            (reference.is_some() || !updates.is_empty()).then(|| reference.unwrap_or_default());
+        let updates = Rc::new(updates);
+        let (built, applied) = (shared.clone(), updates.clone());
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
             let control = changes
                 .iter()
                 .fold(control, |control, change| change(control, env));
-            Ok(Box::new(control))
+            let Some(reference) = &built else {
+                return Ok(Box::new(control));
+            };
+            let control = Rc::new(RefCell::new(control));
+            // The updates track their reads in reactions of their own.
+            Runtime::untracked(|| {
+                for update in applied.iter() {
+                    update(&mut control.borrow_mut(), env);
+                }
+            });
+            reference.set(control.clone());
+            Ok(Box::new(Shared::new(control)))
         });
         let mut view = ControlView::configured(build, kind, value, open, handlers);
         view.limits = limits;
         view.notes = notes;
-        view.mount(cx);
+        let node = view.mount_node(cx);
+        let Some(reference) = shared else {
+            return;
+        };
+        for update in updates.iter().cloned() {
+            let (reference, env) = (reference.clone(), cx.env().clone());
+            cx.react(move |inner| {
+                let Some(control) = reference.get() else {
+                    return;
+                };
+                let Ok(mut control) = control.try_borrow_mut() else {
+                    return;
+                };
+                update(&mut control, &env);
+                inner.touch(node, Dirty::LAYOUT.with(Dirty::SEMANTICS));
+            });
+        }
     }
 }

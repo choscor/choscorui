@@ -2107,7 +2107,11 @@ with a `TextItemDelegate` and styled rows. `selection` follows the
 selection mode, and `on_item` receives `ItemActivated`.
 `List::table(name, model, selection)` mounts a hosted table with
 `TextItemDelegate::table` and the `Table` kind. Its selection binds in the
-same way.
+same way. `List::from_view(build, selection)` mounts the `ItemView` that
+`build` makes, for a view with its own role, delegate, row height, footer,
+or caption. Use `.update` for column widths and the layout, so the view
+keeps its scroll offset and selection. A `ControlRef` reads the mounted
+view, for example its offset and row height.
 
 [item_view.rs](../crates/choscorui-controls/tests/item_view.rs),
 [builtin_hosting_views.rs](../crates/choscorui-controls/tests/builtin_hosting_views.rs),

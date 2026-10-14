@@ -884,6 +884,12 @@ impl ControlHost {
 
     /// Where a pointer event at `point` goes: an open overlay, then the
     /// hit node, kept inside an open modal.
+    /// The control that a pointer event at `point` goes to: the captured
+    /// control, an open overlay, or the control under the point.
+    pub fn pointer_target(&self, tree: &Tree, point: Point) -> Option<NodeId> {
+        self.route(tree, point)
+    }
+
     fn route(&self, tree: &Tree, point: Point) -> Option<NodeId> {
         if let Some(capture) = tree.pointer_capture() {
             return Some(capture);

@@ -1373,6 +1373,44 @@ impl Configured<controls::ItemView> {
         .bind(selection, ControlValue::Indices, as_indices)
     }
 
+    /// The item view that `build` makes, for a list or a table with its
+    /// own role, delegate, row height, footer, or caption. `selection`
+    /// edits the positions of the selected rows.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use choscorui_compose::view::*;
+    /// # use choscorui_controls::{ItemView, TextItemDelegate};
+    /// # use choscorui_core::{SemanticRole, StringListModel};
+    /// struct Prices;
+    ///
+    /// impl View for Prices {
+    ///     fn body(&self, cx: &mut Cx) -> impl View {
+    ///         let selection = cx.state(Vec::new());
+    ///         List::from_view(
+    ///             |_: &Env| {
+    ///                 let model = StringListModel::from_strings(["Phở", "Bánh mì"]);
+    ///                 ItemView::new("Prices", SemanticRole::Table, 24.0)
+    ///                     .with_model(Box::new(model), Box::new(TextItemDelegate::table()))
+    ///                     .with_caption("Prices in đồng")
+    ///             },
+    ///             selection.binding(),
+    ///         )
+    ///     }
+    /// }
+    /// ```
+    pub fn from_view(
+        build: impl Fn(&Env) -> controls::ItemView + 'static,
+        selection: Binding<Vec<usize>>,
+    ) -> Self {
+        Configured::custom(ControlKind::ListView, build).bind(
+            selection,
+            ControlValue::Indices,
+            as_indices,
+        )
+    }
+
     /// How many rows the user can select; the default is
     /// `SelectionMode::Extended`.
     #[must_use]

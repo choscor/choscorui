@@ -20,9 +20,9 @@ use choscorui_core::{
     AnnouncementPriority, Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList,
     EngineError, Feedback, GestureEvent, GridPlacement, InputModality, ItemAlign, Key, KeyEvent,
     LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length, Measured, NodeId, Point,
-    PointerDetails, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry,
-    SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError,
-    ThemeOverride, ThemeResolver, Track, Tree, TreeError,
+    PointerButton, PointerDetails, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange,
+    SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo,
+    ThemeError, ThemeOverride, ThemeResolver, Track, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -267,6 +267,13 @@ pub(crate) struct ShortcutEntry {
     pub action: Rc<dyn Fn()>,
 }
 
+/// An action that runs with the position of each primary press in a
+/// view, before the control under the press handles it.
+pub(crate) struct PressEntry {
+    pub node: NodeId,
+    pub action: Rc<dyn Fn(Point)>,
+}
+
 /// The runtime's state. Live properties change it through reactions.
 pub(crate) struct Inner {
     pub tree: Tree,
@@ -294,6 +301,10 @@ pub(crate) struct Inner {
     pub direction: LayoutDirection,
     pub time: f64,
     pub shortcuts: Vec<ShortcutEntry>,
+    /// Keys that a view takes before the focused control in it.
+    pub key_presses: Vec<ShortcutEntry>,
+    /// The press actions of the views.
+    pub presses: Vec<PressEntry>,
     errors: Vec<ViewError>,
     /// Nodes whose children changed, for child alignment and grid cells.
     arrange: BTreeSet<NodeId>,
@@ -830,6 +841,9 @@ impl Inner {
         }
         self.shortcuts
             .retain(|entry| self.tree.contains(entry.node));
+        self.key_presses
+            .retain(|entry| self.tree.contains(entry.node));
+        self.presses.retain(|entry| self.tree.contains(entry.node));
         self.controls.prune(&self.tree);
         self.engine.prune(&self.tree);
         self.themes.prune(&self.tree);
@@ -1046,6 +1060,8 @@ impl ViewHost {
             direction: LayoutDirection::Ltr,
             time: 0.0,
             shortcuts: Vec::new(),
+            key_presses: Vec::new(),
+            presses: Vec::new(),
             errors: Vec::new(),
             arrange: BTreeSet::new(),
             scrolls: BTreeSet::new(),
@@ -1444,11 +1460,41 @@ impl ViewHost {
     ) {
         self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
+        if let PointerEvent::Down {
+            position,
+            button: PointerButton::Primary,
+        } = event
+        {
+            self.observe_press(position);
+        }
         self.inner
             .controls
             .dispatch_pointer_with(&mut self.inner.tree, event, details);
         self.inner.needs_paint = true;
         self.after_input();
+    }
+
+    /// Runs the press action of each view that has the control under
+    /// `position`, with the position from the top-left corner of the view.
+    fn observe_press(&mut self, position: Point) {
+        if self.inner.presses.is_empty() {
+            return;
+        }
+        let tree = &self.inner.tree;
+        let Some(target) = self.inner.controls.pointer_target(tree, position) else {
+            return;
+        };
+        let actions: Vec<_> = (self.inner.presses.iter())
+            .filter(|entry| tree.is_within(target, entry.node))
+            .filter_map(|entry| {
+                let origin = tree.bounds(entry.node)?.origin;
+                let local = Point::new(position.x - origin.x, position.y - origin.y);
+                Some((entry.action.clone(), local))
+            })
+            .collect();
+        for (action, local) in actions {
+            action(local);
+        }
     }
 
     /// Routes a trackpad gesture, such as a pinch, to the control under
@@ -1470,6 +1516,18 @@ impl ViewHost {
     pub fn key(&mut self, event: KeyEvent, modifiers: ShortcutModifiers) -> bool {
         self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
+        // A view takes its keys before the focused control in it, unless
+        // the control records every key.
+        if let KeyEvent::Down { key, .. } = event
+            && modifiers == ShortcutModifiers::default()
+            && !self.inner.controls.captures_keys(&self.inner.tree)
+            && let Some(action) = self.key_press(key)
+        {
+            action();
+            self.inner.needs_paint = true;
+            self.after_input();
+            return true;
+        }
         // The focused control gets the key first; shortcuts run only for a
         // key that it refuses, and never for a repeat.
         let mut handled = self
@@ -1532,6 +1590,15 @@ impl ViewHost {
             }
         }
         best.map(|(entry, _)| entry.action.clone())
+    }
+
+    /// The action of the view closest to the focus that takes `key`.
+    fn key_press(&self, key: Key) -> Option<Rc<dyn Fn()>> {
+        let focus = self.inner.tree.focus()?;
+        (self.inner.key_presses.iter())
+            .filter(|entry| entry.key == key && self.inner.tree.is_within(focus, entry.node))
+            .min_by_key(|entry| self.depth_between(focus, entry.node))
+            .map(|entry| entry.action.clone())
     }
 
     fn depth_between(&self, node: NodeId, ancestor: NodeId) -> usize {

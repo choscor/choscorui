@@ -100,6 +100,8 @@ Each hosted control of `choscorui::controls` has a view. Some views have more th
 
 A control view changes its control with `.with(change)` after each build. For example, `.with(move |checkbox| checkbox.with_invalid(invalid.get()))` marks a `Checkbox` invalid while `invalid` is true. The view builds the control again when `invalid` changes, and keeps its value. Only fields take `with_invalid`: `Checkbox`, `RadioGroup`, `Combobox`, and `DatePicker`. A button, a switch, or a toggle has no invalid state. Use `.with_env(change)` when the change needs the environment, for example a placeholder from the catalog.
 
+`.update(change)` changes the mounted control in place, after each build and when a state that `change` reads changes. The control is not built again, so it keeps the user's changes, for example the scroll offset and the selection of a list. `.control_ref(&reference)` points a `ControlRef` at the mounted control. `ControlRef::with(read)` reads the control, and returns `None` before the mount.
+
 The range views set their limits with builders, so they need no `IntegerRange`:
 
 - `Slider`, `SpinBox`, and `Dial` take `.range(0..=100)`, `.step(1)`, and `.page(10)`. These are also the defaults. `Dial` also takes `.wrapping(true)`.
@@ -484,6 +486,8 @@ Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disable
 An action does not get the `AppContext`. To open or close a window or to quit, put a request in shared state, and act on it in `App::on_tick`.
 
 `.keyboard_shortcut(key, modifiers, action)` runs an action while focus is in the view, or anywhere when no closer view declares the same keys. `.on_submit(action)` runs when a control commits its input, for example Return in a text input.
+
+`.on_key_press(key, action)` runs an action for a key with no modifier keys while focus is in the view. The view takes the key before the focused control. For example, Escape can clear a search field, and ArrowDown can move to the results. `.on_press(action)` gets the position of each primary press in the view, before the control under the press handles it.
 
 ```rust,no_run
 use choscorui::prelude::*;

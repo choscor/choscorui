@@ -267,9 +267,16 @@ impl Current {
 }
 
 impl View for ControlView {
+    fn mount(self, cx: &mut Cx) {
+        self.mount_node(cx);
+    }
+}
+
+impl ControlView {
+    /// Mounts the view and returns the node of its control.
     // Out of line, so that each `Configured<C>` adds only its build.
     #[inline(never)]
-    fn mount(self, cx: &mut Cx) {
+    pub(super) fn mount_node(self, cx: &mut Cx) -> NodeId {
         self.notes.borrow_mut().report(cx.inner);
         let current: Rc<Current> = Rc::default();
         let node = match self.source {
@@ -319,6 +326,7 @@ impl View for ControlView {
                 inner.touch(node, Dirty::PAINT.with(Dirty::SEMANTICS));
             });
         }
+        node
     }
 }
 

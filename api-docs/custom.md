@@ -157,6 +157,14 @@ fn starred(on: Binding<bool>) -> Configured<Toggle> {
 }
 ```
 
+#### `Configured::control_ref`
+
+```rust
+pub fn control_ref(self, reference: &ControlRef<C>) -> Self
+```
+
+Points `reference` at the mounted control, so the app can read it.
+
 #### `Configured::custom`
 
 ```rust
@@ -227,6 +235,38 @@ pub fn try_custom<E: Display>(kind: ControlKind, build: impl Fn(&Env) -> Result<
 A view of the control that `build` makes, for a constructor that
 can fail. A failed build reports `ViewError::Control` and keeps
 the control that the node has.
+
+#### `Configured::update`
+
+```rust
+pub fn update(self, change: impl Fn(&mut C, &Env) + 'static) -> Self
+```
+
+Changes the mounted control in place with `change`, after each
+build and whenever a state that `change` reads changes. Unlike
+[`Configured::with_env`](#configuredwith_env), a change here does not build the control
+again, so the control keeps what the user did with it, such as the
+scroll offset and the selection of a list.
+
+##### Examples
+
+```rust
+struct Photos;
+
+impl View for Photos {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let (selection, grid) = (cx.state(Vec::new()), cx.state(false));
+        let model = || Box::new(StringListModel::from_strings(["Hồ Gươm"])) as Box<dyn ItemModel>;
+        List::new("Photos", model, selection.binding()).update(move |view, _| {
+            view.set_layout(if grid.get() {
+                ViewLayout::Grid { item_width: 120.0 }
+            } else {
+                ViewLayout::List
+            });
+        })
+    }
+}
+```
 
 #### `Configured::value`
 
@@ -496,6 +536,59 @@ Input delivered to a control.
 - `Shortcut(Shortcut)`: The user pressed one of the control's
   [`CustomControl::window_shortcuts`](#customcontrolwindow_shortcuts), and the focused control did
   not use the key.
+
+## `ControlRef`
+
+struct in `choscorui::prelude::ControlRef`
+
+```rust
+pub struct ControlRef<C>(/* private field */);
+```
+
+The control that a view mounted, which the app can read after the
+mount, for example the scroll offset of a list. Give it to the view
+with [`Configured::control_ref`](#configuredcontrol_ref). It is empty until the view mounts,
+and it follows each new build of the control.
+
+#### Examples
+
+```rust
+struct Fruits;
+
+impl View for Fruits {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let selection = cx.state(Vec::new());
+        let model = || Box::new(StringListModel::from_strings(["Apple"])) as Box<dyn ItemModel>;
+        let list = ControlRef::new();
+        let offset = list.clone();
+        VStack::new((
+            List::new("Fruits", model, selection.binding()).control_ref(&list),
+            Button::new("Offset", move || {
+                println!("{:?}", offset.with(|view| view.offset()));
+            }),
+        ))
+    }
+}
+```
+
+### Methods
+
+#### `ControlRef::new`
+
+```rust
+pub fn new() -> Self
+```
+
+An empty reference.
+
+#### `ControlRef::with`
+
+```rust
+pub fn with<R>(&self, read: impl FnOnce(&C) -> R) -> Option<R>
+```
+
+Reads the mounted control with `read`. Returns `None` before the
+view mounts, and while the control handles an event.
 
 ## `ControlView`
 

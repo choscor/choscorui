@@ -224,6 +224,7 @@ text choscorui::prelude::t
 custom choscorui::prelude::Canvas
 custom choscorui::prelude::CanvasContext
 custom choscorui::prelude::Configured
+custom choscorui::prelude::ControlRef
 custom choscorui::prelude::ControlView
 custom choscorui::prelude::CustomView
 custom choscorui::controls::CustomControl
@@ -285,5 +286,7 @@ controls choscorui::prelude::ViewExt::disabled
 controls choscorui::prelude::ViewExt::focusable
 controls choscorui::prelude::ViewExt::focused
 controls choscorui::prelude::ViewExt::keyboard_shortcut
+controls choscorui::prelude::ViewExt::on_key_press
 controls choscorui::prelude::ViewExt::on_message
+controls choscorui::prelude::ViewExt::on_press
 controls choscorui::prelude::ViewExt::on_submit
