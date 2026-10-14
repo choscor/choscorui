@@ -636,7 +636,6 @@ sidebar.disabled = Disabled
 sidebar.disabled_name = Disabled sidebar
 dropdown-menu.prompt = Click the button or press Space on it.
 dropdown-menu.trigger = Edit ▾
-dropdown-menu.edit = Edit
 dropdown-menu.cut = Cut
 dropdown-menu.copy = Copy
 dropdown-menu.paste = Paste

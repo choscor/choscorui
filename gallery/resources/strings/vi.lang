@@ -632,7 +632,6 @@ sidebar.disabled = Đã tắt
 sidebar.disabled_name = Thanh bên bị tắt
 dropdown-menu.prompt = Nhấp vào nút hoặc nhấn phím Space trên nút.
 dropdown-menu.trigger = Sửa ▾
-dropdown-menu.edit = Sửa
 dropdown-menu.cut = Cắt
 dropdown-menu.copy = Sao chép
 dropdown-menu.paste = Dán

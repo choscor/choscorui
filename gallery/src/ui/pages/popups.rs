@@ -3,114 +3,64 @@
 use crate::ui::page::{Build, PageCx, caption, column, section, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Button, DropdownMenu, Env, HStack, State, Text, Toggle, View, ViewExt,
+    AnyView, Button, Env, HStack, MenuChoice, State, Text, Toggle, ViewExt,
 };
-use choscorui::controls::{ButtonVariant, CommandId, CommandState, MenuCheck, MenuItem, Placement};
+use choscorui::controls::{ButtonVariant, Placement};
 use choscorui::core::{ColorRole, FontWeight, Space, TextPreset};
 
-const CUT: CommandId = CommandId(1);
-const COPY: CommandId = CommandId(2);
-const PASTE: CommandId = CommandId(3);
-const WRAP: CommandId = CommandId(4);
-const EMAIL: CommandId = CommandId(5);
-const MESSAGES: CommandId = CommandId(6);
-const BY_NAME: CommandId = CommandId(7);
-const BY_DATE: CommandId = CommandId(8);
-const DELETE: CommandId = CommandId(9);
-
-/// The translation of `key`, for strings that controls keep.
+/// The translation of `key`, for strings that the readout keeps.
 fn text(env: &Env, key: &str) -> String {
     env.text(key, &[])
 }
 
-fn menu_items(env: &Env) -> Vec<MenuItem> {
-    let with_shortcut = |key: &str, command, shortcut: &str| {
-        MenuItem::action(text(env, key), command).with_shortcut(shortcut)
-    };
-    vec![
-        with_shortcut("dropdown-menu.cut", CUT, "⌘X"),
-        with_shortcut("dropdown-menu.copy", COPY, "⌘C"),
-        with_shortcut("dropdown-menu.paste_nothing", PASTE, "⌘V"),
-        MenuItem::Separator,
-        MenuItem::action(text(env, "dropdown-menu.wrap"), WRAP).with_check(MenuCheck::Checkbox),
-        MenuItem::submenu(
-            text(env, "dropdown-menu.share"),
-            vec![
-                MenuItem::action(text(env, "dropdown-menu.email"), EMAIL),
-                MenuItem::action(text(env, "dropdown-menu.messages"), MESSAGES),
-            ],
-        ),
-        MenuItem::Separator,
-        MenuItem::action(text(env, "dropdown-menu.by_name"), BY_NAME).with_check(MenuCheck::Radio),
-        MenuItem::action(text(env, "dropdown-menu.by_date"), BY_DATE).with_check(MenuCheck::Radio),
-        MenuItem::Separator,
-        MenuItem::action(text(env, "dropdown-menu.delete"), DELETE).destructive(),
-    ]
-}
-
-/// The readout for a chosen command.
-fn chose(env: &Env, command: CommandId) -> String {
-    let key = match command {
-        CUT => "dropdown-menu.cut",
-        COPY => "dropdown-menu.copy",
-        PASTE => "dropdown-menu.paste",
-        WRAP => "dropdown-menu.wrap",
-        EMAIL => "dropdown-menu.share_email",
-        BY_NAME => "dropdown-menu.by_name",
-        BY_DATE => "dropdown-menu.by_date",
-        DELETE => "dropdown-menu.delete",
-        _ => "dropdown-menu.share_messages",
-    };
-    env.text("dropdown-menu.chose", &[("name", &text(env, key))])
-}
-
-/// The Edit menu: Paste is disabled, Wrap shows `wrap`, and the sort
-/// order radio items show `by_date`. A choice updates `last` with a readout
-/// in `env` and closes the menu, as Escape does.
-fn edit_menu(
-    env: Env,
+/// The Edit menu: Paste is disabled, Wrap flips `wrap`, and the sort
+/// order radio rows set `by_date`. A choice sets `last` to a readout in
+/// `env`'s language. The modifier closes the menu after a choice.
+fn edit_items(
+    env: &Env,
     wrap: State<bool>,
     by_date: State<bool>,
     last: State<String>,
-    open: State<bool>,
-) -> impl View {
-    DropdownMenu::new(t!("dropdown-menu.edit"), menu_items)
-        .with(move |mut menu| {
-            let disabled = CommandState {
-                enabled: false,
-                checked: false,
-            };
-            let wrapped = CommandState {
-                enabled: true,
-                checked: wrap.get(),
-            };
-            let _ = menu.set_command(PASTE, disabled);
-            let _ = menu.set_command(WRAP, wrapped);
-            for order in [BY_NAME, BY_DATE] {
-                let state = CommandState {
-                    enabled: true,
-                    checked: by_date.get() == (order == BY_DATE),
-                };
-                let _ = menu.set_command(order, state);
-            }
-            menu
-        })
-        .on_command(move |command| {
-            if command == WRAP {
-                wrap.update(|on| *on = !*on);
-            }
-            if command == BY_NAME || command == BY_DATE {
-                by_date.set(command == BY_DATE);
-            }
-            last.set(chose(&env, command));
-            open.set(false);
-        })
-        .on_dismiss(move || open.set(false))
+) -> Vec<MenuChoice> {
+    let report = |key: &'static str| {
+        let env = env.clone();
+        move || last.set(env.text("dropdown-menu.chose", &[("name", &text(&env, key))]))
+    };
+    let action = |label: &'static str, readout: &'static str, shortcut: &str| {
+        MenuChoice::action(t!(label), report(readout)).shortcut(shortcut)
+    };
+    vec![
+        action("dropdown-menu.cut", "dropdown-menu.cut", "⌘X"),
+        action("dropdown-menu.copy", "dropdown-menu.copy", "⌘C"),
+        action("dropdown-menu.paste_nothing", "dropdown-menu.paste", "⌘V").disabled(true),
+        MenuChoice::separator(),
+        MenuChoice::checkbox(t!("dropdown-menu.wrap"), wrap.binding()),
+        MenuChoice::submenu(
+            t!("dropdown-menu.share"),
+            vec![
+                MenuChoice::action(
+                    t!("dropdown-menu.email"),
+                    report("dropdown-menu.share_email"),
+                ),
+                MenuChoice::action(
+                    t!("dropdown-menu.messages"),
+                    report("dropdown-menu.share_messages"),
+                ),
+            ],
+        ),
+        MenuChoice::separator(),
+        MenuChoice::radio(t!("dropdown-menu.by_name"), by_date.binding(), false),
+        MenuChoice::radio(t!("dropdown-menu.by_date"), by_date.binding(), true),
+        MenuChoice::separator(),
+        MenuChoice::action(t!("dropdown-menu.delete"), report("dropdown-menu.delete"))
+            .destructive(),
+    ]
 }
 
-/// A button that opens a popup menu; Paste is disabled, Wrap toggles a
-/// check mark, two radio items choose a sort order, and Delete has the
-/// destructive look. Arrow keys, Return, and Escape work inside the menu.
+/// A button that opens a popup menu through the `dropdown_menu`
+/// modifier; Paste is disabled, Wrap toggles a check mark, two radio rows
+/// choose a sort order, and Delete has the destructive look. Arrow keys,
+/// Return, and Escape work inside the menu.
 pub fn dropdown_menu(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let open = cx.state(false);
@@ -121,9 +71,7 @@ pub fn dropdown_menu(_: &PageCx) -> AnyView {
         column((
             Button::new(t!("dropdown-menu.trigger"), move || open.set(true))
                 .variant(ButtonVariant::Outline)
-                .popover(open.binding(), move || {
-                    edit_menu(env.clone(), wrap, by_date, last, open)
-                }),
+                .dropdown_menu(open.binding(), edit_items(&env, wrap, by_date, last)),
             Text::new(move || last.get())
                 .text_style(TextPreset::Small)
                 .foreground(ColorRole::MutedForeground),
@@ -224,21 +172,22 @@ mod tests {
     #[test]
     fn dropdown_menu_opens_from_its_button_and_escape_closes_it() {
         let mut page = Harness::new("dropdown-menu");
-        assert!(page.host.find("Edit").is_none());
+        assert!(page.host.find("Cut").is_none());
         assert!(page.act("Edit ▾", SemanticAction::Activate));
-        assert!(page.host.find("Edit").is_some());
+        assert!(page.host.find("Cut").is_some());
         assert!(press(&mut page, Key::Escape));
-        assert!(page.host.find("Edit").is_none());
+        assert!(page.host.find("Cut").is_none());
     }
 
     #[test]
     fn choosing_a_menu_action_reports_it_and_closes_the_menu() {
         let mut page = Harness::new("dropdown-menu");
         assert!(page.act("Edit ▾", SemanticAction::Activate));
+        // A menu that the keys open highlights its first row, Cut.
         assert!(press(&mut page, Key::ArrowDown));
         assert!(press(&mut page, Key::Enter));
-        assert!(page.host.find("Chose “Cut”").is_some());
-        assert!(page.host.find("Edit").is_none());
+        assert!(page.host.find("Chose “Copy”").is_some());
+        assert!(page.host.find("Cut").is_none());
     }
 
     /// Whether a tooltip with `text` shows.
