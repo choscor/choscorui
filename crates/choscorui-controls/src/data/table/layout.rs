@@ -6,7 +6,7 @@ use crate::style::{
     ButtonVariant, Content, ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot,
     StyleQuery, TextAlign, TextMeasure, VisualState,
 };
-use choscorui_core::{Icon, Point, Rect, Size, SortOrder};
+use choscorui_core::{Icon, ItemKey, Locale, Point, Rect, Role, Size, SortOrder, Value};
 
 /// Where the parts of the table are.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -208,6 +208,34 @@ impl DataTable {
         geometry
     }
 
+    /// A numeric column (its first row sorts by a number) aligns to the
+    /// end. Other columns align to the start.
+    fn align(&self, column: usize) -> TextAlign {
+        let numeric = self.order.first().is_some_and(|key| {
+            matches!(
+                self.model.data(*key, column, Role::Sort),
+                Value::Int(_) | Value::Float(_)
+            )
+        });
+        if numeric {
+            TextAlign::End
+        } else {
+            TextAlign::Start
+        }
+    }
+
+    /// The display text of a cell. A number shows in the locale format:
+    /// an `Int` with digit groups, and a `Float` with two fraction digits.
+    fn cell_text(&self, key: ItemKey, column: usize, locale: &Locale) -> String {
+        match self.model.data(key, column, Role::Display) {
+            Value::Int(value) => locale.format_integer(value),
+            Value::Float(value) => locale
+                .format_decimal(value, 2)
+                .unwrap_or_else(|_| value.to_string()),
+            value => value.to_display_string(),
+        }
+    }
+
     /// The rectangle of the visible column `index` in the row `row`.
     fn cell_rect(&self, index: usize, row: Rect) -> Rect {
         let (_, x, width) = self.geometry.cells[index];
@@ -344,15 +372,18 @@ impl DataTable {
                         Some((sorted, SortOrder::Descending)) if sorted == *column => {
                             Some(Icon::ArrowDown)
                         }
-                        _ => None,
+                        // A sortable column that is not sorted shows a
+                        // neutral icon.
+                        _ => Some(Icon::ChevronsUpDown),
                     };
                     let content = Content {
                         leading: None,
                         label: &label,
                         trailing,
                     };
+                    let align = self.align(*column);
                     cx.slot(rect, &style, |cx, inner| {
-                        content.draw(cx, inner, &style, TextAlign::Start);
+                        content.draw(cx, inner, &style, align);
                     });
                 }
             }
@@ -397,9 +428,10 @@ impl DataTable {
                     }
                     Column::Data(column) => {
                         let style = cx.style(query(Slot::Cell).state(state));
-                        let text = self.text(*key, *column);
+                        let text = self.cell_text(*key, *column, cx.strings.locale());
+                        let align = self.align(*column);
                         cx.slot(cell, &style, |cx, inner| {
-                            cx.label(inner, &text, &style, TextAlign::Start);
+                            cx.label(inner, &text, &style, align);
                         });
                     }
                 }

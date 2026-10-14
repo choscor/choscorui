@@ -3787,13 +3787,16 @@ without an animation. `set_open` returns false.
   `Changed(Text(filter))`.
 - **Columns.** `with_column_menu(label)` adds a menu button at the toolbar
   end. Each menu item shows or hides one column. `with_hidden(column)`
-  hides a column at the start.
+  hides a column at the start. One data column always stays visible, so
+  its menu item is disabled. Hiding the sort column clears the sort.
 - The column menu opens below its button with the end edges aligned.
   `place_popup` keeps it in the window. A press on the table outside the
   open menu only closes the menu and emits `Dismissed`.
 - **Sort.** A click on a header, or Enter or Space on a header cell,
   sorts by that column. Each activation goes from ascending to
-  descending to source order. An arrow after the label shows the order.
+  descending to source order. A sort change goes to the first page. An
+  arrow after the label shows the order. A column that is not sorted
+  shows a neutral up-down icon.
 - **Selection.** The first column holds checkboxes. A row checkbox, or
   Space on a row, toggles the row. The header checkbox toggles every row
   on the page, and shows a mixed mark when some are selected. Each change
@@ -3804,8 +3807,14 @@ without an animation. `set_open` returns false.
   buttons are tab stops. In the grid, arrow keys move between cells and
   follow the reading order. Home and End go to the first and the last
   column.
+- **Numbers.** A column whose first row sorts by a number aligns its
+  header and cells to the end. An `Int` or `Float` display value shows in
+  the locale format, and a `Float` has two fraction digits.
 - `with_empty(text)` shows text when no row matches. `with_status(format)`
-  shows a status line from the selected and the filtered row counts.
+  shows a status line from two counts: the selected rows that the filter
+  shows, and the filtered rows. Use a plural message for the line.
+- A click on an empty area of the table focuses the table but keeps the
+  inner focus. Keyboard focus starts at the first or the last tab stop.
 - Paint reads only the rows on the page.
 
 | Part | Slot | Value |

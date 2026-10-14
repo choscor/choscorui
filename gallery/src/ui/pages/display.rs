@@ -232,10 +232,11 @@ pub fn data_table(_: &PageCx) -> AnyView {
                     .with_column_menu(options.text("data-table.columns", &[]))
                     .with_empty(options.text("data-table.empty", &[]))
                     .with_status(move |selected, total| {
-                        let (selected, total) = (selected.to_string(), total.to_string());
-                        status.text(
+                        let selected = status.locale().format_integer(selected as i64);
+                        status.plural(
                             "data-table.status",
-                            &[("selected", &selected), ("total", &total)],
+                            total as u64,
+                            &[("selected", &selected)],
                         )
                     })
                     .with_page_size(5)

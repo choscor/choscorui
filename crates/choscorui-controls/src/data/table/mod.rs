@@ -14,9 +14,10 @@ use crate::popup::gap_anchor;
 use crate::style::PaintContext;
 use crate::{CommandState, TextField};
 use choscorui_core::{
-    EventPhase, EventReply, ItemKey, ItemModel, Key, KeyEvent, Measured, PointerButton,
-    PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode, SemanticAction,
-    SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter, TextInputInfo,
+    EventPhase, EventReply, InputModality, ItemKey, ItemModel, Key, KeyEvent, Measured,
+    PointerButton, PointerEvent, Rect, Role, Selection, SelectionCommand, SelectionMode,
+    SemanticAction, SemanticNode, SemanticRole, SortFilterProxy, SortOrder, TextFilter,
+    TextInputInfo,
 };
 use layout::Geometry;
 
@@ -92,6 +93,8 @@ pub struct DataTable {
     cell: Cell,
     pressed: Option<Part>,
     hovered: Option<Part>,
+    /// The selected rows that the filter shows.
+    shown_selected: usize,
     geometry: Geometry,
     enabled: bool,
     rtl: bool,
@@ -125,6 +128,7 @@ impl DataTable {
             cell: Cell::default(),
             pressed: None,
             hovered: None,
+            shown_selected: 0,
             geometry: Geometry::default(),
             enabled: true,
             rtl: false,
@@ -166,8 +170,9 @@ impl DataTable {
         self
     }
 
-    /// Shows a status line under the table, such as "2 of 5 row(s)
-    /// selected.", formatted from the selected and the filtered counts.
+    /// Shows a status line under the table, such as "2 of 5 rows
+    /// selected.", formatted from the count of selected rows that the
+    /// filter shows and the count of filtered rows.
     #[must_use]
     pub fn with_status(mut self, status: impl Fn(usize, usize) -> String + 'static) -> Self {
         self.status = Some(Box::new(status));
@@ -218,11 +223,53 @@ impl DataTable {
     }
 
     fn sync_menu(&mut self, column: usize) {
+        // The last visible data column cannot hide.
+        let last =
+            !self.hidden[column] && self.hidden.iter().filter(|hidden| !**hidden).count() == 1;
         let state = CommandState {
-            enabled: true,
+            enabled: !last,
             checked: !self.hidden[column],
         };
         let _ = self.menu.set_command(CommandId(column as u64), state);
+    }
+
+    /// Hides or shows `column`. The last visible data column stays, and
+    /// hiding the sort column clears the sort.
+    fn toggle_column(&mut self, column: usize) -> bool {
+        let Some(hidden) = self.hidden.get(column).copied() else {
+            return false;
+        };
+        if !hidden && self.hidden.iter().filter(|hidden| !**hidden).count() == 1 {
+            return false;
+        }
+        self.hidden[column] = !hidden;
+        if !hidden
+            && self
+                .proxy
+                .sort()
+                .is_some_and(|(sorted, _)| sorted == column)
+        {
+            self.proxy.set_sort(None);
+            self.sync();
+        }
+        for column in 0..self.hidden.len() {
+            self.sync_menu(column);
+        }
+        let count = self.columns().len();
+        self.cell.column = self.cell.column.min(count - 1);
+        true
+    }
+
+    /// Counts the selected rows that the filter shows.
+    fn count_selected(&mut self) {
+        self.shown_selected = if self.selection.is_empty() {
+            0
+        } else {
+            self.order
+                .iter()
+                .filter(|key| self.selection.is_selected(**key))
+                .count()
+        };
     }
 
     /// Rebuilds the display order from the proxy.
@@ -233,6 +280,7 @@ impl DataTable {
             .filter_map(|row| view.key(None, row))
             .collect();
         self.page = self.page.min(self.last_page());
+        self.count_selected();
     }
 
     fn last_page(&self) -> usize {
@@ -288,7 +336,8 @@ impl DataTable {
         }
     }
 
-    fn emit_selection(&self, cx: &mut ControlContext<'_>) {
+    fn emit_selection(&mut self, cx: &mut ControlContext<'_>) {
+        self.count_selected();
         cx.emit(ControlMessage::Changed(ControlValue::Indices(
             self.selected_rows(),
         )));
@@ -320,7 +369,8 @@ impl DataTable {
         self.emit_selection(cx);
     }
 
-    /// Sorts by `column`: ascending, descending, then source order.
+    /// Sorts by `column`: ascending, descending, then source order. A
+    /// sort change shows the first page.
     fn cycle_sort(&mut self, cx: &mut ControlContext<'_>, column: usize) {
         let next = match self.proxy.sort() {
             Some((current, SortOrder::Ascending)) if current == column => {
@@ -331,15 +381,14 @@ impl DataTable {
         };
         self.proxy.set_sort(next);
         self.sync();
+        self.show_page(0);
+        cx.request_layout();
         cx.request_paint();
         cx.request_semantics();
     }
 
-    fn set_page(&mut self, cx: &mut ControlContext<'_>, page: usize) {
-        let page = page.min(self.last_page());
-        if page == self.page {
-            return;
-        }
+    /// Shows `page` and keeps the focused cell and stop on it.
+    fn show_page(&mut self, page: usize) {
         self.page = page;
         let rows = self.page_keys().len();
         if let Some(row) = self.cell.row
@@ -351,6 +400,14 @@ impl DataTable {
         if !self.stops().contains(&self.focus) {
             self.focus = Stop::Grid;
         }
+    }
+
+    fn set_page(&mut self, cx: &mut ControlContext<'_>, page: usize) {
+        let page = page.min(self.last_page());
+        if page == self.page {
+            return;
+        }
+        self.show_page(page);
         cx.request_layout();
         cx.request_paint();
         cx.request_semantics();
@@ -419,13 +476,9 @@ impl DataTable {
         match response {
             MenuResponse::None => {}
             MenuResponse::Activated(CommandId(column)) => {
-                let column = column as usize;
-                if let Some(hidden) = self.hidden.get_mut(column) {
-                    *hidden = !*hidden;
-                    self.sync_menu(column);
-                    let count = self.columns().len();
-                    self.cell.column = self.cell.column.min(count - 1);
+                if self.toggle_column(column as usize) {
                     cx.request_layout();
+                    cx.request_semantics();
                 }
                 self.close_menu(cx);
             }
@@ -761,7 +814,9 @@ impl CustomControl for DataTable {
                 EventReply::Continue
             }
             ControlEvent::FocusChanged(true) => {
-                if self.pressed.is_none() {
+                // A press keeps the inner focus; the press itself moves it
+                // to the part under the pointer.
+                if cx.input_modality() == InputModality::Keyboard {
                     let stops = self.stops();
                     self.focus = if cx.modifiers().shift {
                         stops[stops.len() - 1]
@@ -822,7 +877,7 @@ impl CustomControl for DataTable {
         node.value = self
             .status
             .as_ref()
-            .map(|status| status(self.selection.len(), self.order.len()));
+            .map(|status| status(self.shown_selected, self.order.len()));
         node.description = self.focused_text();
         node.state.expanded = self.columns_label.as_ref().map(|_| self.menu.is_open());
         node.state.disabled = !self.enabled;
@@ -886,6 +941,7 @@ impl CustomControl for DataTable {
                 };
                 self.selection.clear();
                 self.selection.select_all(&keys);
+                self.count_selected();
                 true
             }
             ControlValue::Text(_) => {

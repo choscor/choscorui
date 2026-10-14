@@ -12,10 +12,10 @@ use crate::style::{
 use crate::{DialogId, DialogStack, EditCommand, Modality, Shortcut, ShortcutModifiers};
 use choscorui_core::{
     AnnouncementPriority, CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty,
-    DisplayList, EngineError, EventPhase, EventReply, Feedback, Key, KeyEvent, LayoutDirection,
-    LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId, Point, PointerDetails,
-    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError, SemanticNode, SemanticTree,
-    Services, TextInputInfo, ThemeResolver, Tree, TreeError,
+    DisplayList, EngineError, EventPhase, EventReply, Feedback, InputModality, Key, KeyEvent,
+    LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId, Point,
+    PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticError,
+    SemanticNode, SemanticTree, Services, TextInputInfo, ThemeResolver, Tree, TreeError,
 };
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -199,6 +199,12 @@ impl ControlContext<'_> {
     /// The modifier keys held during the event.
     pub fn modifiers(&self) -> ShortcutModifiers {
         self.modifiers
+    }
+    /// How the user moves focus now: `Pointer` after a press, `Keyboard`
+    /// after a key. A control that keeps an inner focus restores it only
+    /// on keyboard focus.
+    pub fn input_modality(&self) -> InputModality {
+        self.tree.input_modality()
     }
     /// The click count of the pointer event: 2 for a double click and 3
     /// for a triple click, within the system double-click interval.

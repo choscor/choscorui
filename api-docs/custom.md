@@ -339,6 +339,16 @@ pub fn focus_bounds(&self) -> Option<Rect>
 The bounds of the focused node, for a control that acts for a
 focused descendant, such as a context menu that opens at it.
 
+#### `ControlContext::input_modality`
+
+```rust
+pub fn input_modality(&self) -> InputModality
+```
+
+How the user moves focus now: `Pointer` after a press, `Keyboard`
+after a key. A control that keeps an inner focus restores it only
+on keyboard focus.
+
 #### `ControlContext::is_focused`
 
 ```rust

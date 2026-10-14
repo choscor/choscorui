@@ -2,7 +2,7 @@
 
 mod hosted;
 
-use choscorui_controls::{ControlMessage, ControlValue, DataTable};
+use choscorui_controls::{ControlMessage, ControlValue, DataTable, ShortcutModifiers};
 use choscorui_core::{
     ItemData, Key, KeyEvent, LayoutDirection, ListStore, Point, Role, SemanticAction, SemanticRole,
     Value,
@@ -185,4 +185,126 @@ fn clicks_sort_and_select_and_rtl_mirrors() {
         [ControlMessage::Changed(ControlValue::Indices(vec![0]))],
         "the checkboxes are at the right"
     );
+}
+
+fn select(h: &mut Harness, rows: Vec<usize>) {
+    let node = h.node;
+    assert!(
+        h.host
+            .set_value(&mut h.tree, node, &ControlValue::Indices(rows))
+    );
+}
+
+#[test]
+fn the_status_counts_only_selected_rows_inside_the_filter() {
+    let mut h = Harness::new(table());
+    select(&mut h, vec![0, 1]);
+    assert_eq!(
+        h.semantics().value.as_deref(),
+        Some("2 of 5 row(s) selected.")
+    );
+    h.focus();
+    assert!(h.text("ab"));
+    assert_eq!(
+        h.semantics().value.as_deref(),
+        Some("1 of 1 row(s) selected."),
+        "ken99 is selected but the filter hides it"
+    );
+}
+
+#[test]
+fn a_sort_change_returns_to_the_first_page() {
+    let mut h = Harness::new(table());
+    assert!(h.perform(SemanticAction::Increment, None));
+    h.focus();
+    tab(&mut h);
+    tab(&mut h);
+    h.key(Key::End);
+    h.key(Key::Enter);
+    assert!(
+        texts(&h.paint()).contains(&"$242.00".to_string()),
+        "the smallest amount is on the first page"
+    );
+    assert!(!h.perform(SemanticAction::Decrement, None), "first page");
+}
+
+#[test]
+fn the_last_visible_column_does_not_hide() {
+    let mut h = Harness::new(
+        DataTable::new("Payments", Box::new(payments()), "Previous", "Next")
+            .with_column_menu("Columns")
+            .with_hidden(0)
+            .with_hidden(1),
+    );
+    h.focus();
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().state.expanded, Some(true));
+    // Amount is the only visible column, so its menu item is disabled.
+    for _ in 0..2 {
+        h.key(Key::ArrowDown);
+    }
+    h.key(Key::Enter);
+    assert!(texts(&h.paint()).contains(&"$316.00".to_string()));
+}
+
+#[test]
+fn hiding_the_sort_column_clears_the_sort() {
+    let mut h = Harness::new(table());
+    h.focus();
+    tab(&mut h);
+    tab(&mut h);
+    h.key(Key::ArrowRight);
+    h.key(Key::Enter);
+    assert_eq!(h.semantics().description, "Status");
+    assert!(texts(&h.paint()).contains(&"carmella@example.com".to_string()));
+    h.chord(
+        ShortcutModifiers {
+            shift: true,
+            ..ShortcutModifiers::default()
+        },
+        Key::Tab,
+    );
+    assert_eq!(h.semantics().description, "Columns");
+    h.key(Key::Enter);
+    h.key(Key::Enter);
+    h.set_time(1.0);
+    let bounds = h.bounds();
+    h.place(bounds);
+    let painted = texts(&h.paint());
+    assert!(!painted.contains(&"Status".to_string()));
+    assert!(
+        !painted.contains(&"carmella@example.com".to_string()),
+        "the rows return to the source order"
+    );
+}
+
+#[test]
+fn a_click_on_an_empty_area_keeps_the_inner_focus() {
+    let mut h = Harness::new(table());
+    h.focus();
+    tab(&mut h);
+    assert_eq!(h.semantics().description, "Columns");
+    h.host.move_focus(&mut h.tree, None);
+    let bounds = h.bounds();
+    // The gap between the toolbar and the table.
+    h.click(Point::new(bounds.center().x, bounds.origin.y + 36.0 + 8.0));
+    assert_eq!(h.semantics().description, "Columns");
+}
+
+#[test]
+fn numbers_use_the_locale_format() {
+    struct Count(i64);
+    impl ItemData for Count {
+        fn data(&self, _: usize, role: Role) -> Value {
+            match role {
+                Role::Display | Role::Sort => Value::Int(self.0),
+                _ => Value::None,
+            }
+        }
+    }
+    let mut store = ListStore::new(1);
+    store.set_headers(["Count"]);
+    store.insert(None, 0, vec![Count(1280)]).unwrap();
+    let h = Harness::new(DataTable::new("Counts", Box::new(store), "P", "N"));
+    assert!(texts(&h.paint()).contains(&"1,280".to_string()));
 }
