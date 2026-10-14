@@ -233,7 +233,10 @@ impl Sidebar {
     /// the items, or of an item with a sub-menu, selects nothing.
     #[must_use]
     pub fn with_selected(mut self, item: usize) -> Self {
-        let fits = self.entries().get(item).is_some_and(|entry| !entry.has_menu());
+        let fits = self
+            .entries()
+            .get(item)
+            .is_some_and(|entry| !entry.has_menu());
         self.selected = fits.then_some(item);
         if fits {
             self.open_parent(item);
@@ -812,7 +815,8 @@ impl Sidebar {
                 let label = entries.get(*index).map_or("", |entry| &entry.item.label);
                 let width = (cx.text.width(label, &style.text) + style.padding.horizontal())
                     .min(style.max_width);
-                let height = (style.text.line_height + style.padding.vertical()).max(style.min_height);
+                let height =
+                    (style.text.line_height + style.padding.vertical()).max(style.min_height);
                 let x = if before {
                     row.origin.x - gap - width
                 } else {

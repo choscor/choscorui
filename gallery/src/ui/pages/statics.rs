@@ -2,27 +2,16 @@
 
 use crate::ui::page::{PageCx, column, section};
 use choscorui::compose::t;
-use choscorui::compose::view::{AnyView, Divider, Frame, HStack, Text, VStack, ViewExt};
-use choscorui::core::{FontWeight, Space, TextPreset};
+use choscorui::compose::view::{AnyView, Divider, Frame, HStack, Label, VStack, ViewExt};
+use choscorui::core::Space;
 
+/// Labels in the label recipe; the second one is disabled.
 pub fn label(_: &PageCx) -> AnyView {
-    let rows = [
-        ("label.email", false),
-        ("label.disabled", true),
-        ("label.vietnamese", false),
-        ("label.cjk", false),
-    ];
-    let label = |(key, disabled): (&str, bool)| {
-        Text::new(t!(key))
-            .text_style(TextPreset::Small)
-            .font_weight(FontWeight::MEDIUM)
-            .opacity(if disabled { 0.5 } else { 1.0 })
-    };
     column((
-        label(rows[0]),
-        label(rows[1]),
-        label(rows[2]),
-        label(rows[3]),
+        Label::new(t!("label.email")),
+        Label::new(t!("label.disabled")).disabled(true),
+        Label::new(t!("label.vietnamese")),
+        Label::new(t!("label.cjk")),
     ))
 }
 

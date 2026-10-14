@@ -9,11 +9,12 @@ mod tool_box;
 use crate::ui::page::{Build, PageCx, caption, column, stateful};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Dynamic, Env, FocusFrame, Frame, HStack, HorizontalAlignment,
-    Resizable, Spacer, StackedContainer, Text, VStack, View, ViewExt, ZStack,
+    Alignment, AnyView, Button, Checkbox, Cx, Dynamic, Edges, Env, FocusFrame, Frame, GroupBox,
+    HStack, HorizontalAlignment, RadioGroup, Resizable, Spacer, StackedContainer, Tabs, Text,
+    VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{ButtonVariant, SplitOrientation};
-use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space, TextPreset};
+use choscorui::core::{ColorRole, FontWeight, RadiusScale, Space};
 
 pub use dock::dock;
 pub use grip::size_grip;
@@ -38,49 +39,69 @@ fn fill() -> Frame {
 // ---------------------------------------------------------------------------
 // Group box
 
-/// Two titled groups of related buttons.
-pub fn group_box(_: &PageCx) -> AnyView {
-    stateful(|cx| {
-        column((
-            group(
-                cx.env(),
-                "group-box.shipping",
-                [
-                    "group-box.standard",
-                    "group-box.express",
-                    "group-box.pick_up",
-                ],
-            ),
-            group(
-                cx.env(),
-                "group-box.notifications",
-                ["group-box.email", "group-box.sms", "group-box.push"],
-            ),
-        ))
-        .button_variant(ButtonVariant::Outline)
-    })
+/// `members` in a group box titled by the catalog string `title`, clear
+/// of the title.
+fn group(title: &'static str, members: impl View) -> impl View {
+    ZStack::new((
+        GroupBox::new(t!(title)),
+        members.padding(Edges::new(Space::S10, Space::S4, Space::S4, Space::S4)),
+    ))
+    .alignment(Alignment::TOP_LEADING)
+    .frame(
+        Frame::new()
+            .min_width(400.0)
+            .alignment(Alignment::TOP_LEADING),
+    )
 }
 
-/// The group titled `title` with a button for each of `members`, all
-/// catalog keys.
-fn group(env: &Env, title: &'static str, members: [&'static str; 3]) -> impl View + use<> {
-    let buttons: Vec<_> = members
+/// Radio buttons for `options`, named by the catalog string `name`.
+fn radios(cx: &mut Cx, name: &'static str, options: [&'static str; 3]) -> impl View + use<> {
+    let selected = cx.state(0usize);
+    let labels = move |env: &Env| options.map(|option| env.text(option, &[])).to_vec();
+    RadioGroup::new(t!(name), labels, selected.binding())
+}
+
+/// A check box for each of `options`, the first one checked.
+fn checks(cx: &mut Cx, options: [&'static str; 3]) -> impl View + use<> {
+    let boxes: Vec<_> = options
         .into_iter()
-        .map(|label| Button::new(t!(label), || {}))
+        .enumerate()
+        .map(|(index, option)| Checkbox::new(t!(option), cx.state(index == 0).binding()))
         .collect();
-    panel(
-        VStack::new((
-            Text::new(t!(title))
-                .text_style(TextPreset::Small)
-                .font_weight(FontWeight::MEDIUM),
-            HStack::new(buttons).spacing(Space::S2),
-        ))
+    VStack::new(boxes)
         .alignment(HorizontalAlignment::Leading)
-        .spacing(Space::S3)
-        .padding(Space::S4)
-        .frame(Frame::new().min_width(400.0).alignment(Alignment::LEADING)),
-    )
-    .accessibility_label(env.text(title, &[]))
+        .spacing(Space::S2)
+}
+
+/// Titled groups of related controls: a radio group, check boxes, and a
+/// disabled group.
+pub fn group_box(_: &PageCx) -> AnyView {
+    stateful(|cx| {
+        let shipping_options = [
+            "group-box.standard",
+            "group-box.express",
+            "group-box.pick_up",
+        ];
+        column((
+            group(
+                "group-box.shipping",
+                radios(cx, "group-box.shipping_method", shipping_options),
+            ),
+            group(
+                "group-box.notifications",
+                checks(cx, ["group-box.email", "group-box.sms", "group-box.push"]),
+            ),
+            group(
+                "group-box.locked",
+                radios(
+                    cx,
+                    "group-box.payment_method",
+                    ["group-box.card", "group-box.transfer", "group-box.cash"],
+                ),
+            )
+            .disabled(true),
+        ))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -152,51 +173,35 @@ const STACK_PAGES: [(&str, &str); 3] = [
 /// Settings page `index` on the card surface.
 fn stack_page(env: &Env, index: usize) -> impl View + use<> {
     let (title, body) = STACK_PAGES[index];
-    let title = env.text(title, &[]);
     panel(
         VStack::new((
-            Text::new(title.clone()).font_weight(FontWeight::MEDIUM),
+            Text::new(t!(title)).font_weight(FontWeight::MEDIUM),
             caption(t!(body)),
-            Spacer::new(),
-            Button::new(t!("stacked.reset", page = title.clone()), || {}),
         ))
         .alignment(HorizontalAlignment::Leading)
         .spacing(Space::S1)
         .padding(Space::S4)
         .frame(fill()),
     )
-    .accessibility_label(title)
+    .accessibility_label(env.text(title, &[]))
 }
 
-/// Three panels with a selector; only the current one shows. The
-/// selector under the current panel's button is underlined.
+/// Three panels with a tab list; only the current panel shows.
 pub fn stacked(_: &PageCx) -> AnyView {
     stateful(|cx| {
         let current = cx.state(0usize);
         let env = cx.env().clone();
-        let selectors: Vec<_> = STACK_PAGES
-            .iter()
-            .enumerate()
-            .map(|(index, (title, _))| {
-                VStack::new((
-                    Button::new(t!(*title), move || current.set(index))
-                        .frame(Frame::new().width(110.0)),
-                    Spacer::new()
-                        .frame(Frame::new().width(94.0).height(2.0))
-                        .background(ColorRole::Primary)
-                        .opacity(move || if current.get() == index { 1.0 } else { 0.0 }),
-                ))
-                .spacing(Space::S1)
-            })
-            .collect();
+        let titles = |env: &Env| STACK_PAGES.map(|(title, _)| env.text(title, &[])).to_vec();
         let stack = ZStack::new((
             StackedContainer::new(t!("stacked.settings_pages"), STACK_PAGES.len(), current),
             Dynamic::new(move || stack_page(&env, current.get())),
         ))
         .alignment(Alignment::FILL)
         .frame(Frame::size(420.0, 160.0));
-        column((HStack::new(selectors).spacing(Space::S2), stack))
-            .button_variant(ButtonVariant::Outline)
+        column((
+            Tabs::new(t!("stacked.selector"), titles, current.binding()),
+            stack,
+        ))
     })
 }
 
@@ -278,13 +283,16 @@ mod tests {
     #[test]
     fn group_boxes_name_their_groups() {
         let mut page = Harness::new("group-box");
-        for title in ["Shipping", "Notifications"] {
-            let group = page.node(title);
-            let node = page.host.semantic(group).unwrap();
-            assert_eq!(node.role, SemanticRole::Group, "{title}");
+        assert_eq!(page.value("Shipping method").as_deref(), Some("Standard"));
+        assert!(page.act("Shipping method", SemanticAction::Increment));
+        assert_eq!(page.value("Shipping method").as_deref(), Some("Express"));
+        for name in ["Email", "SMS", "Push"] {
+            let node = page.node(name);
+            let node = page.host.semantic(node).unwrap();
+            assert_eq!(node.role, SemanticRole::Checkbox, "{name}");
         }
-        assert!(page.host.find("Pick up").is_some());
-        assert!(page.host.find("Push").is_some());
+        // The locked group's options take no input.
+        assert!(!page.act("Payment method", SemanticAction::Increment));
     }
 
     #[test]
@@ -330,11 +338,23 @@ mod tests {
     fn the_selectors_show_one_stack_page_at_a_time() {
         let mut page = Harness::new("stacked");
         assert_eq!(page.value("Settings pages").as_deref(), Some("1"));
-        assert!(page.host.find("Reset General").is_some());
-        assert!(page.act("Network", SemanticAction::Activate));
+        assert!(
+            page.host
+                .find("Name, language, and startup behavior.")
+                .is_some()
+        );
+        assert!(page.act("Settings page", SemanticAction::Increment));
         assert_eq!(page.value("Settings pages").as_deref(), Some("2"));
-        assert!(page.host.find("Reset General").is_none());
-        assert!(page.host.find("Reset Network").is_some());
+        assert!(
+            page.host
+                .find("Name, language, and startup behavior.")
+                .is_none()
+        );
+        assert!(
+            page.host
+                .find("Proxies, timeouts, and offline mode.")
+                .is_some()
+        );
     }
 
     #[test]
