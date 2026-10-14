@@ -50,6 +50,8 @@ define_classes! {
             => crate::view_pointer_event;
         Super(NSResponder) c"scrollWheel:" (event: Option<&Obj<NSEvent>>)
             => crate::view_pointer_event;
+        Super(NSResponder) c"magnifyWithEvent:" (event: Option<&Obj<NSEvent>>)
+            => crate::view_gesture_event;
         Super(NSResponder) c"mouseDragged:" (event: Option<&Obj<NSEvent>>)
             => crate::view_pointer_event;
         Super(NSResponder) c"rightMouseDragged:" (event: Option<&Obj<NSEvent>>)

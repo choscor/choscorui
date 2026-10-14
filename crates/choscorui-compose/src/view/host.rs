@@ -18,11 +18,11 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     AnnouncementPriority, Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList,
-    EngineError, Feedback, GridPlacement, InputModality, ItemAlign, Key, KeyEvent, LayoutDirection,
-    LayoutEngine, LayoutKind, LayoutStyle, Length, Measured, NodeId, Point, PointerDetails,
-    PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticError,
-    SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError, ThemeOverride,
-    ThemeResolver, Track, Tree, TreeError,
+    EngineError, Feedback, GestureEvent, GridPlacement, InputModality, ItemAlign, Key, KeyEvent,
+    LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length, Measured, NodeId, Point,
+    PointerDetails, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange, SemanticEntry,
+    SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo, ThemeError,
+    ThemeOverride, ThemeResolver, Track, Tree, TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1424,6 +1424,20 @@ impl ViewHost {
             .dispatch_pointer_with(&mut self.inner.tree, event, details);
         self.inner.needs_paint = true;
         self.after_input();
+    }
+
+    /// Routes a trackpad gesture, such as a pinch, to the control under
+    /// it and then its ancestors. Returns true when a control used it.
+    pub fn gesture(&mut self, event: GestureEvent, modifiers: ShortcutModifiers) -> bool {
+        self.modifiers = modifiers;
+        self.inner.controls.set_modifiers(modifiers);
+        let used = self
+            .inner
+            .controls
+            .dispatch_gesture(&mut self.inner.tree, event);
+        self.inner.needs_paint |= used;
+        self.after_input();
+        used
     }
 
     /// Routes a key event: a declared shortcut first, then the focused

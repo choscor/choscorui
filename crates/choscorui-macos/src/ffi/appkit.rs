@@ -165,6 +165,7 @@ messages! {
         c"hasPreciseScrollingDeltas", () -> bool;
     pub(crate) SCROLLING_DELTA_X: instance NSEvent, c"scrollingDeltaX", () -> f64;
     pub(crate) SCROLLING_DELTA_Y: instance NSEvent, c"scrollingDeltaY", () -> f64;
+    pub(crate) MAGNIFICATION: instance NSEvent, c"magnification", () -> f64;
     pub(crate) BUTTON_NUMBER: instance NSEvent, c"buttonNumber", () -> isize;
     pub(crate) CLICK_COUNT: instance NSEvent, c"clickCount", () -> isize;
     pub(crate) KEY_CODE: instance NSEvent, c"keyCode", () -> u16;

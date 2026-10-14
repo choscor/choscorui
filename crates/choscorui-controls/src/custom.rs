@@ -12,9 +12,9 @@ use crate::style::{
 use crate::{DialogId, DialogStack, EditCommand, Modality, Shortcut, ShortcutModifiers};
 use choscorui_core::{
     AnnouncementPriority, CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty,
-    DisplayList, EngineError, EventPhase, EventReply, Feedback, InputModality, Key, KeyEvent,
-    LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId, Point,
-    PointerButton, PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange,
+    DisplayList, EngineError, EventPhase, EventReply, Feedback, GestureEvent, InputModality, Key,
+    KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId,
+    Point, PointerButton, PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange,
     SemanticError, SemanticNode, SemanticParts, SemanticTree, Services, TextInputInfo,
     ThemeResolver, Tree, TreeError,
 };
@@ -29,6 +29,9 @@ pub enum ControlEvent {
     Key(KeyEvent),
     /// Committed text (typing or IME) while focused.
     Text(String),
+    /// A trackpad gesture over the control, such as a pinch. It goes to
+    /// the control under the gesture, then bubbles to its ancestors.
+    Gesture(GestureEvent),
     /// Input method composition while focused. A control that does not
     /// use it gets the committed text as [`ControlEvent::Text`].
     Compose(CompositionEvent),
@@ -997,6 +1000,30 @@ impl ControlHost {
         tree.dispatch_pointer_to(target, event, |tree, node, phase, event| {
             self.deliver(tree, node, phase, &ControlEvent::Pointer(event))
         });
+    }
+
+    /// Routes a trackpad gesture to the control under its position, then
+    /// to its ancestors until one stops it. A gesture with no position,
+    /// such as `ScrollEnded`, goes to no control. Returns true when a
+    /// control stopped the gesture.
+    pub fn dispatch_gesture(&mut self, tree: &mut Tree, event: GestureEvent) -> bool {
+        let position = match event {
+            GestureEvent::Magnify { position, .. }
+            | GestureEvent::Rotate { position, .. }
+            | GestureEvent::SmartMagnify { position } => position,
+            GestureEvent::ScrollEnded => return false,
+        };
+        let mut node = self.route(tree, position);
+        let mut phase = EventPhase::Target;
+        while let Some(current) = node.filter(|node| tree.contains(*node)) {
+            let reply = self.deliver(tree, current, phase, &ControlEvent::Gesture(event));
+            if reply == EventReply::Stop {
+                return true;
+            }
+            phase = EventPhase::Bubble;
+            node = tree.parent(current);
+        }
+        false
     }
 
     /// Routes a key event to the focused control, through its ancestors.

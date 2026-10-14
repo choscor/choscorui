@@ -1,10 +1,13 @@
+mod hosted;
+
 use choscorui_controls::{
-    CanvasInput, CanvasView, EstimatedText, MAX_ZOOM, PaintContext, Styles, VisualState,
+    CanvasInput, CanvasResponse, CanvasView, ControlMessage, ControlValue, DRAG_THRESHOLD,
+    EditCommand, EstimatedText, MAX_ZOOM, PaintContext, ShortcutModifiers, Styles, VisualState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, ItemShape, ItemStyle, Key,
-    Localizer, Paint, Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction, SemanticRole,
-    Size,
+    Color, ColorRole, DesignTokens, DisplayCommand, DisplayList, GestureEvent, ItemShape,
+    ItemStyle, Key, Localizer, Paint, Point, Rect, Scene, SceneItem, SceneItemId, SemanticAction,
+    SemanticRole, Size,
 };
 
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -273,4 +276,181 @@ fn two_views_share_a_scene_with_independent_state() {
     let mut list = DisplayList::new();
     assert_eq!(paint(&overview, &mut scene, &mut list), 3);
     assert_eq!(scene.world_bounds(ids[0]).unwrap().origin.x, 10.0);
+}
+
+fn press(view: &mut CanvasView, scene: &mut Scene, at: Point, extend: bool) -> CanvasResponse {
+    view.handle(scene, CanvasInput::Press { at, extend })
+}
+
+fn key(key: Key) -> CanvasInput {
+    CanvasInput::Key { key, shift: false }
+}
+
+#[test]
+fn tab_leaves_at_the_ends_and_cycling_wraps() {
+    let (mut scene, ids) = scene();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 100.0));
+    for _ in 0..3 {
+        view.handle(&mut scene, key(Key::Tab));
+    }
+    assert_eq!(view.focus(), Some(ids[2]));
+    let past = view.handle(&mut scene, key(Key::Tab));
+    assert_eq!(past, CanvasResponse::default(), "Tab leaves the canvas");
+    assert_eq!(view.focus(), Some(ids[2]));
+    view.handle(&mut scene, CanvasInput::Cycle { forward: true });
+    assert_eq!(view.focus(), Some(ids[0]), "the cycle wraps");
+    let back = view.handle(
+        &mut scene,
+        CanvasInput::Key {
+            key: Key::Tab,
+            shift: true,
+        },
+    );
+    assert!(back.handled);
+    assert_eq!(view.focus(), None, "back to the canvas itself");
+    let out = view.handle(
+        &mut scene,
+        CanvasInput::Key {
+            key: Key::Tab,
+            shift: true,
+        },
+    );
+    assert_eq!(
+        out,
+        CanvasResponse::default(),
+        "Shift+Tab leaves the canvas"
+    );
+}
+
+#[test]
+fn a_click_in_a_selection_selects_one_item_and_a_drag_waits_for_the_threshold() {
+    let (mut scene, ids) = scene();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 100.0));
+    view.handle(&mut scene, CanvasInput::SelectAll);
+    assert_eq!(view.selection().len(), 3);
+    let at = Point::new(120.0, 20.0);
+    press(&mut view, &mut scene, at, false);
+    let small = Point::new(at.x + DRAG_THRESHOLD - 1.0, at.y);
+    assert_eq!(
+        view.handle(&mut scene, CanvasInput::Drag { at: small })
+            .moved,
+        None
+    );
+    let release = view.handle(&mut scene, CanvasInput::Release { at: small });
+    assert!(release.selection_changed);
+    assert_eq!(
+        view.selection().iter().copied().collect::<Vec<_>>(),
+        [ids[1]]
+    );
+}
+
+#[test]
+fn escape_cancels_a_drag_and_a_rubber_band() {
+    let (mut scene, ids) = scene();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 100.0));
+    press(&mut view, &mut scene, Point::new(20.0, 20.0), false);
+    view.handle(
+        &mut scene,
+        CanvasInput::Drag {
+            at: Point::new(60.0, 30.0),
+        },
+    );
+    assert_eq!(scene.world_bounds(ids[0]).unwrap().origin.x, 40.0);
+    let cancel = view.handle(&mut scene, key(Key::Escape));
+    assert_eq!(cancel.moved, Some((vec![ids[0]], -40.0, -10.0)));
+    assert_eq!(scene.world_bounds(ids[0]), Some(rect(0.0, 0.0, 50.0, 50.0)));
+    assert_eq!(view.selection().len(), 1, "the selection stays");
+
+    press(&mut view, &mut scene, Point::new(390.0, 90.0), true);
+    view.handle(
+        &mut scene,
+        CanvasInput::Drag {
+            at: Point::new(-1.0, -1.0),
+        },
+    );
+    assert_eq!(view.selection().len(), 2, "the band toggles all three");
+    view.handle(&mut scene, key(Key::Escape));
+    assert_eq!(
+        view.selection().iter().copied().collect::<Vec<_>>(),
+        [ids[0]]
+    );
+    assert!(view.rubber_band().is_none());
+}
+
+#[test]
+fn a_nudge_keeps_the_item_in_view_and_outlines_stay_in_view() {
+    let (mut scene, ids) = scene();
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 160.0, 100.0));
+    press(&mut view, &mut scene, Point::new(120.0, 20.0), false);
+    for _ in 0..3 {
+        view.handle(
+            &mut scene,
+            CanvasInput::Key {
+                key: Key::ArrowRight,
+                shift: true,
+            },
+        );
+    }
+    let bounds = scene.world_bounds(ids[1]).unwrap();
+    assert!(
+        view.visible_scene_rect().contains_rect(bounds),
+        "{bounds:?}"
+    );
+
+    // Many selected items out of view paint no outline.
+    let mut scene = Scene::new();
+    for i in 0..2000 {
+        let shape = ItemShape::Rect(rect(f64::from(i) * 60.0, 0.0, 50.0, 50.0));
+        scene
+            .add(SceneItem::new(
+                shape,
+                ItemStyle::filled(Color::rgba8(0, 0, 0, 255)),
+            ))
+            .unwrap();
+    }
+    let mut view = CanvasView::new("Diagram", rect(0.0, 0.0, 160.0, 100.0));
+    view.handle(&mut scene, CanvasInput::SelectAll);
+    let mut list = DisplayList::new();
+    paint(&view, &mut scene, &mut list);
+    let strokes = list
+        .commands()
+        .iter()
+        .filter(|command| matches!(command, DisplayCommand::StrokePath { .. }))
+        .count();
+    assert_eq!(strokes, 3, "the three items in view");
+}
+
+#[test]
+fn a_hosted_canvas_zooms_with_a_pinch_cycles_with_option_and_selects_all() {
+    let (scene, ids) = scene();
+    let canvas = CanvasView::new("Diagram", rect(0.0, 0.0, 400.0, 100.0)).hosted(scene);
+    let mut h = hosted::Harness::new(canvas);
+    let at = h.bounds().center();
+    let gesture = GestureEvent::Magnify {
+        position: at,
+        scale: 2.0,
+    };
+    assert!(h.host.dispatch_gesture(&mut h.tree, gesture));
+    assert_eq!(h.semantics().description, "Zoom 200%");
+    h.focus();
+    h.chord(
+        ShortcutModifiers {
+            option: true,
+            ..ShortcutModifiers::default()
+        },
+        Key::ArrowLeft,
+    );
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(vec![
+            ids[2].0 as usize
+        ]))],
+        "Option+ArrowLeft wraps to the last item"
+    );
+    assert!(h.host.dispatch_edit(&mut h.tree, EditCommand::SelectAll));
+    let all = ids.iter().map(|id| id.0 as usize).collect();
+    assert_eq!(
+        h.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(all))]
+    );
 }

@@ -2802,26 +2802,36 @@ These types have no semantic node.
   already selected. `extend` toggles it.
 - The item becomes the focus. If the item is selected, a drag moves all
   selected movable items.
+- A click on one item of a selection, with no drag, selects that item
+  alone.
 - **Press on empty space.** A plain press clears the selection, then starts
   a rubber band. With `extend`, the band toggles items against the old
   selection.
-- **Drag** moves items at once, with no threshold, or changes the band.
-  **Release** ends it. A move has no cancel.
+- **Drag** moves items after the pointer goes `DRAG_THRESHOLD` (3 pt) from
+  the press, or changes the band at once. **Release** ends it.
+- Escape during a drag moves the items back, or restores the selection
+  from before the band, and keeps the selection.
 - **Wheel** pans. With `zoom`, it zooms about the pointer. **Magnify**
   zooms about the pointer.
 - Zoom clamps to `MIN_ZOOM`..`MAX_ZOOM`.
 - **Keys.** The arrow keys nudge selected movable items by 1 point, or 10
-  with Shift. With no movable selection, they pan the view.
-- Tab and Shift+Tab move focus and selection through the visible
-  selectable items, and wrap.
-- Space toggles the focused item. Enter activates it. Escape clears the
-  selection, and does not undo a move.
+  with Shift. The view scrolls to keep the focused item, or the first
+  moved item, in view. With no movable selection, they pan the view.
+- Tab and Shift+Tab move focus and selection through the selectable items
+  that show, in paint order, and scroll the item into view. Tab past the
+  last item leaves the canvas. Shift+Tab from the first item goes back to
+  the canvas itself, and then leaves it. The search starts at the focused
+  item, so it does not walk the whole scene.
+- `Cycle` moves focus to the next or the previous item, and wraps at the
+  ends. `SelectAll` selects every selectable item.
+- Space toggles the focused item. Enter activates it. Escape with no drag
+  clears the selection.
 - Delete and Backspace request deletion of the selection. `+` or `=` increases
   the zoom, `-` decreases the zoom, and `0` sets the zoom to 100%.
 - The view has no disabled state. The host checks focus.
 - **Semantic actions.** `perform` with `Focus` focuses the item and
   scrolls it into view. `Activate` focuses the item and selects it alone.
-- **Look.** `paint` outlines each selected item with the `Canvas`
+- **Look.** `paint` outlines each selected item in view with the `Canvas`
   `Indicator` border, 1 pt `primary`, 2 pt outside the item. While the
   canvas has focus, the focused item gets a dashed outline. With no
   focused item, keyboard focus shows the focus ring just inside the
@@ -2841,11 +2851,17 @@ These types have no semantic node.
 | Actions | `Focus` | `Focus`, and `Activate` when selectable |
 
 The container declares the count of accessible items. Only items in view
-get a node, with their index among all accessible items.
+get a node, with their index among all accessible items. The scene keeps
+the count and the indexes until the order, a visibility, or a role
+changes, so a move does not recount them.
 
 **In a control host.** `CanvasView::hosted(scene)` makes a control that
 owns the scene. Its viewport follows the node's bounds. Shift or Command
-extends a press, and Command makes the wheel zoom. A selection change
+extends a press, and Command makes the wheel zoom. A trackpad pinch
+arrives as a `Gesture` event and zooms about the pointer. Option and an
+arrow key cycle focus: ArrowRight and ArrowDown go forward, in reading
+order. The Select All edit command selects all items. A selection change
+
 sends `Changed(Indices(ids))`, and Enter sends `ItemActivated(id)`, with
 `SceneItemId` numbers. Delete and Backspace remove the selected items from
 the scene. The hosted node publishes only the container.
@@ -4618,6 +4634,9 @@ behavior.
   and bubble phases. A press on a focusable control focuses it.
 - When the control's `hit` returns false for the pointer position, the
   host gives the event to the parent node. The default `hit` returns true.
+- `dispatch_gesture` routes a trackpad gesture, such as a pinch, to the
+  control under it as `ControlEvent::Gesture`, then to its ancestors until
+  one stops it. A gesture with no position goes to no control.
 - `dispatch_key` routes a key event through the tree and returns whether a
   control stopped it. `dispatch_text` gives committed text to the focused
   control.

@@ -94,259 +94,259 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
+switch
+toggle
+toggle-group
+select
+input
+input-group
+textarea
+input-otp
+date-picker
+range-slider
+range-slider (inside)
+context-menu
+menubar
+popover
+hover-card
+dialog
+command
+breadcrumb
+breadcrumb (inside)
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+navigation-menu
+sidebar
+card
+badge
+carousel
+data-table
+chart
+alert
+empty
+toaster
+toaster (inside)
+collapsible
+accordion
+accordion (inside)
+item-group
+item-group (inside)
+attachment
+message-scroller
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+button
+checkbox
+text-field
+slider
+spin-box
+combobox
+font-chooser
+radio-group
+tabs
+resizable
+scroll-area
+dropdown-menu
+calendar
+calendar (inside)
+calendar (inside)
+date-time-edit
+button-group
+tool-button
+command-link
+native-select
+sheet
+drawer
+dial
+tool-box
+item-view
+header-view
+column-browser
+toolbar
+dock
+color-picker
+decimal-spin-box
+scroll-bar
+key-sequence-edit
+text-editor
 # backward
 canvas
 canvas (inside)
 canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
+text-editor
+key-sequence-edit
+scroll-bar
+decimal-spin-box
+color-picker
+dock
+dock (inside)
+dock (inside)
+dock (inside)
+toolbar
+column-browser
+header-view
+item-view
+tool-box
+dial
+drawer
+sheet
+native-select
+command-link
+tool-button
+button-group
+date-time-edit
+calendar
+calendar (inside)
+calendar (inside)
+dropdown-menu
+scroll-area
+resizable
+tabs
+radio-group
+font-chooser
+combobox
+spin-box
+slider
+text-field
+checkbox
+button
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+message-scroller
+attachment
+item-group
+item-group (inside)
+accordion
+accordion (inside)
+collapsible
+toaster
+toaster (inside)
+empty
+alert
+chart
+data-table
+carousel
+badge
+card
+sidebar
+navigation-menu
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+breadcrumb
+breadcrumb (inside)
+command
+dialog
+hover-card
+popover
+menubar
+context-menu
+range-slider
+range-slider (inside)
+date-picker
+input-otp
+textarea
+input-group
+input
+select
+toggle-group
+toggle
+switch
+canvas
+text-editor
+key-sequence-edit
+scroll-bar
+decimal-spin-box
+color-picker
+dock
+toolbar
+column-browser
+header-view
+item-view
+tool-box
+dial
+drawer
+sheet
+native-select
+command-link
+tool-button
+button-group
+date-time-edit
+calendar
+calendar (inside)
+calendar (inside)
+dropdown-menu
+scroll-area
+resizable
+tabs
+radio-group
+font-chooser
+combobox
+spin-box
+slider
+text-field
+checkbox
+button
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+message-scroller
+attachment
+item-group
+item-group (inside)
+accordion
+accordion (inside)
+collapsible
+toaster
+toaster (inside)
+empty
+alert
+chart
+data-table
+carousel
+badge
+card
+sidebar
+navigation-menu
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+breadcrumb
+breadcrumb (inside)
+command
+dialog
+hover-card
+popover
+menubar
+context-menu
+range-slider
+range-slider (inside)
+date-picker
+input-otp
+textarea
+input-group
+input
+select
+toggle-group
+toggle
 # every hosted control Rtl
 # forward
 switch
@@ -437,256 +437,256 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
+switch
+toggle
+toggle-group
+select
+input
+input-group
+textarea
+input-otp
+date-picker
+range-slider
+range-slider (inside)
+context-menu
+menubar
+popover
+hover-card
+dialog
+command
+breadcrumb
+breadcrumb (inside)
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+navigation-menu
+sidebar
+card
+badge
+carousel
+data-table
+chart
+alert
+empty
+toaster
+toaster (inside)
+collapsible
+accordion
+accordion (inside)
+item-group
+item-group (inside)
+attachment
+message-scroller
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+button
+checkbox
+text-field
+slider
+spin-box
+combobox
+font-chooser
+radio-group
+tabs
+resizable
+scroll-area
+dropdown-menu
+calendar
+calendar (inside)
+calendar (inside)
+date-time-edit
+button-group
+tool-button
+command-link
+native-select
+sheet
+drawer
+dial
+tool-box
+item-view
+header-view
+column-browser
+toolbar
+dock
+color-picker
+decimal-spin-box
+scroll-bar
+key-sequence-edit
+text-editor
 # backward
 canvas
 canvas (inside)
 canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
-canvas (inside)
+text-editor
+key-sequence-edit
+scroll-bar
+decimal-spin-box
+color-picker
+dock
+dock (inside)
+dock (inside)
+dock (inside)
+toolbar
+column-browser
+header-view
+item-view
+tool-box
+dial
+drawer
+sheet
+native-select
+command-link
+tool-button
+button-group
+date-time-edit
+calendar
+calendar (inside)
+calendar (inside)
+dropdown-menu
+scroll-area
+resizable
+tabs
+radio-group
+font-chooser
+combobox
+spin-box
+slider
+text-field
+checkbox
+button
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+message-scroller
+attachment
+item-group
+item-group (inside)
+accordion
+accordion (inside)
+collapsible
+toaster
+toaster (inside)
+empty
+alert
+chart
+data-table
+carousel
+badge
+card
+sidebar
+navigation-menu
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+breadcrumb
+breadcrumb (inside)
+command
+dialog
+hover-card
+popover
+menubar
+context-menu
+range-slider
+range-slider (inside)
+date-picker
+input-otp
+textarea
+input-group
+input
+select
+toggle-group
+toggle
+switch
+canvas
+text-editor
+key-sequence-edit
+scroll-bar
+decimal-spin-box
+color-picker
+dock
+toolbar
+column-browser
+header-view
+item-view
+tool-box
+dial
+drawer
+sheet
+native-select
+command-link
+tool-button
+button-group
+date-time-edit
+calendar
+calendar (inside)
+calendar (inside)
+dropdown-menu
+scroll-area
+resizable
+tabs
+radio-group
+font-chooser
+combobox
+spin-box
+slider
+text-field
+checkbox
+button
+questionnaire
+questionnaire (inside)
+questionnaire (inside)
+message-scroller
+attachment
+item-group
+item-group (inside)
+accordion
+accordion (inside)
+collapsible
+toaster
+toaster (inside)
+empty
+alert
+chart
+data-table
+carousel
+badge
+card
+sidebar
+navigation-menu
+pagination
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+pagination (inside)
+breadcrumb
+breadcrumb (inside)
+command
+dialog
+hover-card
+popover
+menubar
+context-menu
+range-slider
+range-slider (inside)
+date-picker
+input-otp
+textarea
+input-group
+input
+select
+toggle-group
+toggle

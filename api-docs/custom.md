@@ -457,6 +457,7 @@ pub enum ControlEvent {
     Pointer(PointerEvent),
     Key(KeyEvent),
     Text(String),
+    Gesture(GestureEvent),
     Compose(CompositionEvent),
     Edit(EditCommand),
     FocusChanged(bool),
@@ -474,6 +475,8 @@ Input delivered to a control.
 - `Pointer(PointerEvent)`
 - `Key(KeyEvent)`
 - `Text(String)`: Committed text (typing or IME) while focused.
+- `Gesture(GestureEvent)`: A trackpad gesture over the control, such as a pinch. It goes to
+  the control under the gesture, then bubbles to its ancestors.
 - `Compose(CompositionEvent)`: Input method composition while focused. A control that does not
   use it gets the committed text as `ControlEvent::Text`.
 - `Edit(EditCommand)`: An Edit menu command, or its Command-key chord that no control

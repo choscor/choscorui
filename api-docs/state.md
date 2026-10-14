@@ -187,7 +187,7 @@ State that the component owns, starting at `initial`.
 pub fn stored<T: StoredValue>(&mut self, key: &str, default: T) -> State<T>
 ```
 
-State that the environment's [`Storage`](app.md#storage) keeps under `key`, like
+State that the environment's [`Storage`](app--structs.md#storage) keeps under `key`, like
 state that the user's settings hold. It starts at the stored value,
 or at `default` when no value is stored, and each change writes it
 back. A stored value of another type gives `default` and reports

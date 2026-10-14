@@ -8,17 +8,19 @@
 use crate::custom::{
     ControlContext, ControlEvent, ControlMessage, ControlValue, CustomControl, MeasureContext,
 };
+use crate::editing::EditCommand;
 use crate::hosted::Routed;
 use crate::style::fill_area;
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery};
 use choscorui_core::{
-    DisplayList, DisplayListError, EventReply, Key, KeyEvent, Localizer, Measured, Paint, Path,
-    Point, PointerButton, PointerEvent, Rect, Scene, SceneItemId, SemanticAction,
-    SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size, StrokeStyle, Transform,
-    WheelUnit,
+    DisplayList, DisplayListError, EventPhase, EventReply, GestureEvent, Key, KeyEvent, Localizer,
+    Measured, Paint, Path, Point, PointerButton, PointerEvent, Rect, Scene, SceneItemId,
+    SemanticAction, SemanticCollection, SemanticNode, SemanticRole, SemanticState, Size,
+    StrokeStyle, Transform, WheelUnit,
 };
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::ops::Range;
 
 /// Points that one wheel line pans in a control host.
 const WHEEL_LINE: f64 = 20.0;
@@ -56,7 +58,18 @@ pub enum CanvasInput {
         key: Key,
         shift: bool,
     },
+    /// Moves focus to the next or the previous selectable item, and wraps
+    /// at the ends (Option and an arrow key in a control host).
+    Cycle {
+        forward: bool,
+    },
+    /// Selects every selectable item (Command-A in a control host).
+    SelectAll,
 }
+
+/// How far, in view points, a press on a selected item moves before the
+/// items follow it.
+pub const DRAG_THRESHOLD: f64 = 3.0;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CanvasResponse {
@@ -68,15 +81,25 @@ pub struct CanvasResponse {
     pub delete_requested: Vec<SceneItemId>,
     /// Return on the focused item.
     pub activated: Option<SceneItemId>,
+    /// The view used the input, although it changed nothing that
+    /// repaints, such as Tab back to the canvas itself.
+    pub handled: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Gesture {
     None,
-    /// Dragging selected items; last scene point.
+    /// A press on the selected `item` at the view point `start`. The
+    /// selection moves once the pointer passes the drag threshold; `last`
+    /// is the last scene point and `total` the scene delta so far. A
+    /// release before the threshold selects only `item` when `collapse`.
     Move {
+        start: Point,
         last: Point,
-        moved: bool,
+        dragging: bool,
+        total: (f64, f64),
+        item: SceneItemId,
+        collapse: bool,
     },
     /// Rubber band from a view-space anchor.
     Band {
@@ -238,19 +261,24 @@ impl CanvasView {
                 match hit {
                     Some(id) => {
                         let before = self.selection.clone();
+                        let collapse = !extend && self.selection.contains(&id);
                         if extend {
                             if !self.selection.remove(&id) {
                                 self.selection.insert(id);
                             }
-                        } else if !self.selection.contains(&id) {
+                        } else if !collapse {
                             self.selection = BTreeSet::from([id]);
                         }
                         self.focus = Some(id);
                         response.selection_changed = before != self.selection;
                         self.gesture = if self.selection.contains(&id) {
                             Gesture::Move {
+                                start: at,
                                 last: point,
-                                moved: false,
+                                dragging: false,
+                                total: (0.0, 0.0),
+                                item: id,
+                                collapse: collapse && self.selection.len() > 1,
                             }
                         } else {
                             Gesture::None
@@ -272,18 +300,34 @@ impl CanvasView {
                 response.repaint = true;
             }
             CanvasInput::Drag { at } => match self.gesture {
-                Gesture::Move { last, .. } => {
+                Gesture::Move {
+                    start,
+                    last,
+                    dragging,
+                    total,
+                    item,
+                    collapse,
+                } => {
+                    if !dragging && (at.x - start.x).hypot(at.y - start.y) < DRAG_THRESHOLD {
+                        return response;
+                    }
                     let point = self.view_to_scene(at);
                     let (dx, dy) = (point.x - last.x, point.y - last.y);
                     let ids = self.movable(scene);
+                    let mut total = total;
                     if (dx != 0.0 || dy != 0.0) && !ids.is_empty() {
                         scene.move_by(&ids, dx, dy);
+                        total = (total.0 + dx, total.1 + dy);
                         response.moved = Some((ids, dx, dy));
                         response.repaint = true;
                     }
                     self.gesture = Gesture::Move {
+                        start,
                         last: point,
-                        moved: true,
+                        dragging: true,
+                        total,
+                        item,
+                        collapse,
                     };
                 }
                 Gesture::Band { anchor, extend, .. } => {
@@ -310,6 +354,18 @@ impl CanvasView {
             },
             CanvasInput::Release { .. } => {
                 response.repaint = matches!(self.gesture, Gesture::Band { .. });
+                // A click on one item of a selection selects only it.
+                if let Gesture::Move {
+                    dragging: false,
+                    collapse: true,
+                    item,
+                    ..
+                } = self.gesture
+                {
+                    self.selection = BTreeSet::from([item]);
+                    response.selection_changed = true;
+                    response.repaint = true;
+                }
                 self.gesture = Gesture::None;
             }
             CanvasInput::Wheel { dx, dy, at, zoom } => {
@@ -323,8 +379,99 @@ impl CanvasView {
                 response.repaint = self.zoom_at(at, self.zoom * factor);
             }
             CanvasInput::Key { key, shift } => self.handle_key(scene, key, shift, &mut response),
+            CanvasInput::Cycle { forward } => {
+                let next = self
+                    .step_focus(scene, forward)
+                    .or_else(|| Self::wrap(scene, forward));
+                if let Some(id) = next {
+                    self.focus_item(scene, id, &mut response);
+                }
+            }
+            CanvasInput::SelectAll => {
+                let len = scene.paint_order().len();
+                let all: BTreeSet<_> = (0..len)
+                    .filter_map(|position| {
+                        let id = *scene.paint_order().get(position)?;
+                        Self::selectable(scene, id).then_some(id)
+                    })
+                    .collect();
+
+                response.selection_changed = all != self.selection;
+                response.repaint = response.selection_changed;
+                self.selection = all;
+            }
         }
         response
+    }
+
+    /// Whether `id` is a selectable item that shows.
+    fn selectable(scene: &Scene, id: SceneItemId) -> bool {
+        scene.item(id).is_some_and(|item| item.selectable) && scene.world_bounds(id).is_some()
+    }
+
+    /// The selectable item after (or before) the focused item in paint
+    /// order. The search starts at the focused item, so its cost follows
+    /// the distance to the next item, not the size of the scene.
+    fn step_focus(&self, scene: &mut Scene, forward: bool) -> Option<SceneItemId> {
+        let at = self.focus.and_then(|id| scene.paint_index(id));
+        let len = scene.paint_order().len();
+        match (at, forward) {
+            (Some(at), true) => Self::find(scene, at + 1..len, false),
+            (None, true) => Self::find(scene, 0..len, false),
+            (Some(at), false) => Self::find(scene, 0..at, true),
+            (None, false) => None,
+        }
+    }
+
+    /// The first (or the last) selectable item, for a cycle that wraps.
+    fn wrap(scene: &mut Scene, forward: bool) -> Option<SceneItemId> {
+        let len = scene.paint_order().len();
+        Self::find(scene, 0..len, !forward)
+    }
+
+    /// The first selectable item at the paint positions `range`, or the
+    /// last when `back`.
+    fn find(scene: &mut Scene, range: Range<usize>, back: bool) -> Option<SceneItemId> {
+        let mut positions: Box<dyn Iterator<Item = usize>> = if back {
+            Box::new(range.rev())
+        } else {
+            Box::new(range)
+        };
+        positions.find_map(|position| {
+            let id = *scene.paint_order().get(position)?;
+            Self::selectable(scene, id).then_some(id)
+        })
+    }
+
+    /// Focuses and selects `id`, and scrolls it into view.
+    fn focus_item(&mut self, scene: &Scene, id: SceneItemId, response: &mut CanvasResponse) {
+        self.focus = Some(id);
+        self.selection = BTreeSet::from([id]);
+        self.ensure_visible(scene, id);
+        response.selection_changed = true;
+        response.repaint = true;
+    }
+
+    /// Escape during a drag: the moved items go back, or the rubber band
+    /// restores the selection from before it. Returns false when no drag
+    /// is in progress.
+    fn cancel_gesture(&mut self, scene: &mut Scene, response: &mut CanvasResponse) -> bool {
+        match std::mem::replace(&mut self.gesture, Gesture::None) {
+            Gesture::None => return false,
+            Gesture::Move { total, .. } => {
+                let ids = self.movable(scene);
+                if total != (0.0, 0.0) && !ids.is_empty() {
+                    scene.move_by(&ids, -total.0, -total.1);
+                    response.moved = Some((ids, -total.0, -total.1));
+                }
+            }
+            Gesture::Band { .. } => {
+                response.selection_changed = self.selection != self.band_base;
+                self.selection = self.band_base.clone();
+            }
+        }
+        response.repaint = true;
+        true
     }
 
     fn movable(&self, scene: &Scene) -> Vec<SceneItemId> {
@@ -352,8 +499,12 @@ impl CanvasView {
         };
         if let Some((dx, dy)) = nudge {
             let ids = self.movable(scene);
-            if !ids.is_empty() {
+            if let Some(first) = ids.first().copied() {
                 scene.move_by(&ids, dx, dy);
+                // The view follows the focused item, or the first moved
+                // item.
+                let shown = self.focus.filter(|focus| ids.contains(focus));
+                self.ensure_visible(scene, shown.unwrap_or(first));
                 response.moved = Some((ids, dx, dy));
                 response.repaint = true;
             } else {
@@ -365,34 +516,18 @@ impl CanvasView {
         let center = self.viewport.center();
         match key {
             Key::Tab => {
-                // Focus cycles through selectable items in paint order.
-                let order: Vec<_> = scene
-                    .paint_order()
-                    .to_vec()
-                    .into_iter()
-                    .filter(|id| {
-                        scene
-                            .item(*id)
-                            .is_some_and(|item| item.selectable && item.visible)
-                    })
-                    .collect();
-                if order.is_empty() {
-                    return;
+                // Focus moves through the selectable items in paint order.
+                // Shift+Tab from the first item goes back to the canvas,
+                // and Tab past the last item leaves it.
+                match self.step_focus(scene, !shift) {
+                    Some(id) => self.focus_item(scene, id, response),
+                    None if shift && self.focus.is_some() => {
+                        self.focus = None;
+                        response.handled = true;
+                        response.repaint = true;
+                    }
+                    None => {}
                 }
-                let position = self
-                    .focus
-                    .and_then(|focus| order.iter().position(|id| *id == focus));
-                let next = match (position, shift) {
-                    (None, false) => 0,
-                    (None, true) => order.len() - 1,
-                    (Some(p), false) => (p + 1) % order.len(),
-                    (Some(p), true) => (p + order.len() - 1) % order.len(),
-                };
-                self.focus = Some(order[next]);
-                self.selection = BTreeSet::from([order[next]]);
-                self.ensure_visible(scene, order[next]);
-                response.selection_changed = true;
-                response.repaint = true;
             }
             Key::Space => {
                 if let Some(focus) = self.focus {
@@ -404,6 +539,7 @@ impl CanvasView {
                 }
             }
             Key::Enter => response.activated = self.focus,
+            Key::Escape if self.cancel_gesture(scene, response) => {}
             Key::Escape => {
                 if !self.selection.is_empty() {
                     self.selection.clear();
@@ -485,8 +621,11 @@ impl CanvasView {
                 style,
             )
         };
-        for id in &self.selection {
-            if let Some(bounds) = scene.world_bounds(*id) {
+        // Only the selected items in view get an outline.
+        for id in scene.items_in_rect(self.visible_scene_rect()) {
+            if self.selection.contains(&id)
+                && let Some(bounds) = scene.world_bounds(id)
+            {
                 outline(list, self.transform().apply_rect(bounds), false)?;
             }
         }
@@ -514,7 +653,7 @@ impl CanvasView {
         scene: &mut Scene,
         strings: &Localizer,
     ) -> (SemanticNode, SemanticCollection) {
-        let count = scene.accessible_items().len();
+        let count = scene.accessible_count();
         let percent = (self.zoom * 100.0).round().to_string();
         (
             SemanticNode {
@@ -541,18 +680,14 @@ impl CanvasView {
         &self,
         scene: &mut Scene,
     ) -> Vec<(SceneItemId, usize, SemanticNode, Rect)> {
-        let visible: BTreeSet<_> = scene
-            .items_in_rect(self.visible_scene_rect())
-            .into_iter()
-            .collect();
         let transform = self.transform();
         scene
-            .accessible_items()
+            .items_in_rect(self.visible_scene_rect())
             .into_iter()
-            .enumerate()
-            .filter(|(_, id)| visible.contains(id))
-            .filter_map(|(index, id)| {
+            .filter_map(|id| {
+                let index = scene.accessible_index(id)?;
                 let item = scene.item(id)?;
+
                 let bounds = transform.apply_rect(scene.world_bounds(id)?);
                 let mut actions = vec![SemanticAction::Focus];
                 if item.selectable {
@@ -617,6 +752,7 @@ impl CanvasView {
             view: self,
             scene: RefCell::new(scene),
             pressed: false,
+            rtl: false,
         }
     }
 }
@@ -635,9 +771,84 @@ pub struct HostedCanvas {
     scene: RefCell<Scene>,
     /// A primary press is down, so moves drag.
     pressed: bool,
+    /// Whether the layout runs right to left, from `arrange`.
+    rtl: bool,
 }
 
 impl HostedCanvas {
+    /// The canvas input for a routed pointer or key event, or `None` when
+    /// the canvas does not use it.
+    fn routed(&mut self, cx: &mut ControlContext<'_>, routed: Routed) -> Option<CanvasInput> {
+        let modifiers = cx.modifiers();
+        Some(match routed {
+            Routed::Pointer(PointerEvent::Down {
+                position,
+                button: PointerButton::Primary,
+            }) => {
+                self.pressed = true;
+                cx.capture_pointer(true);
+                CanvasInput::Press {
+                    at: position,
+                    extend: modifiers.shift || modifiers.command,
+                }
+            }
+            Routed::Pointer(PointerEvent::Move { position }) if self.pressed => {
+                CanvasInput::Drag { at: position }
+            }
+            Routed::Pointer(PointerEvent::Up { position, .. }) if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                CanvasInput::Release { at: position }
+            }
+            Routed::Pointer(PointerEvent::Wheel {
+                position,
+                delta,
+                unit,
+            }) => {
+                let scale = match unit {
+                    WheelUnit::Points => 1.0,
+                    WheelUnit::Lines => WHEEL_LINE,
+                };
+                CanvasInput::Wheel {
+                    dx: delta.x * scale,
+                    dy: delta.y * scale,
+                    at: position,
+                    zoom: modifiers.command,
+                }
+            }
+            // Option and an arrow key move focus between the items.
+            Routed::Key(KeyEvent::Down { key, .. })
+                if modifiers.option && !modifiers.is_chord() =>
+            {
+                match key.in_reading_order(self.rtl) {
+                    Key::ArrowRight | Key::ArrowDown => CanvasInput::Cycle { forward: true },
+                    Key::ArrowLeft | Key::ArrowUp => CanvasInput::Cycle { forward: false },
+                    _ => return None,
+                }
+            }
+            // Command and Control chords go on to the shortcuts.
+            Routed::Key(KeyEvent::Down { key, .. }) if !modifiers.is_chord() => {
+                // Escape during a drag cancels it and ends the press.
+                if key == Key::Escape && self.pressed {
+                    self.pressed = false;
+                    cx.capture_pointer(false);
+                }
+                CanvasInput::Key {
+                    key,
+                    shift: modifiers.shift,
+                }
+            }
+            Routed::Cancel if self.pressed => {
+                self.pressed = false;
+                cx.capture_pointer(false);
+                CanvasInput::Release {
+                    at: self.view.viewport().origin,
+                }
+            }
+            _ => return None,
+        })
+    }
+
     pub fn view(&self) -> &CanvasView {
         &self.view
     }
@@ -671,6 +882,7 @@ impl HostedCanvas {
         }
         let selection_changed = response.selection_changed || !response.delete_requested.is_empty();
         let changed = response.repaint
+            || response.handled
             || selection_changed
             || response.moved.is_some()
             || response.activated.is_some();
@@ -709,63 +921,28 @@ impl CustomControl for HostedCanvas {
         Measured::new(cx.constraints.constrain(size))
     }
 
-    fn arrange(&mut self, _cx: &MeasureContext<'_>, bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
+        self.rtl = cx.rtl();
         self.view.set_viewport(bounds);
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
-        let modifiers = cx.modifiers();
-        let input = match crate::hosted::route(cx, event) {
-            Some(Routed::Pointer(PointerEvent::Down {
-                position,
-                button: PointerButton::Primary,
-            })) => {
-                self.pressed = true;
-                cx.capture_pointer(true);
-                CanvasInput::Press {
-                    at: position,
-                    extend: modifiers.shift || modifiers.command,
+        let input = match (crate::hosted::route(cx, event), event) {
+            // A pinch zooms about the pointer.
+            (_, ControlEvent::Gesture(GestureEvent::Magnify { position, scale })) => {
+                CanvasInput::Magnify {
+                    factor: *scale,
+                    at: *position,
                 }
             }
-            Some(Routed::Pointer(PointerEvent::Move { position })) if self.pressed => {
-                CanvasInput::Drag { at: position }
+            (_, ControlEvent::Edit(EditCommand::SelectAll)) if cx.phase() == EventPhase::Target => {
+                CanvasInput::SelectAll
             }
-            Some(Routed::Pointer(PointerEvent::Up { position, .. })) if self.pressed => {
-                self.pressed = false;
-                cx.capture_pointer(false);
-                CanvasInput::Release { at: position }
-            }
-            Some(Routed::Pointer(PointerEvent::Wheel {
-                position,
-                delta,
-                unit,
-            })) => {
-                let scale = match unit {
-                    WheelUnit::Points => 1.0,
-                    WheelUnit::Lines => WHEEL_LINE,
-                };
-                CanvasInput::Wheel {
-                    dx: delta.x * scale,
-                    dy: delta.y * scale,
-                    at: position,
-                    zoom: modifiers.command,
-                }
-            }
-            // Command and Control chords go on to the shortcuts.
-            Some(Routed::Key(KeyEvent::Down { key, .. })) if !modifiers.is_chord() => {
-                CanvasInput::Key {
-                    key,
-                    shift: modifiers.shift,
-                }
-            }
-            Some(Routed::Cancel) if self.pressed => {
-                self.pressed = false;
-                cx.capture_pointer(false);
-                CanvasInput::Release {
-                    at: self.view.viewport().origin,
-                }
-            }
-            _ => {
+            (Some(routed), _) => match self.routed(cx, routed) {
+                Some(input) => input,
+                None => return EventReply::Continue,
+            },
+            (None, _) => {
                 if let ControlEvent::FocusChanged(_) = event {
                     cx.request_paint();
                 }

@@ -4,9 +4,9 @@
 #![deny(unsafe_code)]
 
 use choscorui_core::{
-    Color, DisplayCommand, DisplayList, Key, KeyEvent, Point, PointerButton, PointerDetails,
-    PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry, SemanticRelation,
-    SemanticRole, SemanticText, Size, TextBuffer, WheelUnit,
+    Color, DisplayCommand, DisplayList, GestureEvent, Key, KeyEvent, Point, PointerButton,
+    PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange, SemanticEntry,
+    SemanticRelation, SemanticRole, SemanticText, Size, TextBuffer, WheelUnit,
 };
 mod ime;
 pub use choscorui_core::{
@@ -66,13 +66,13 @@ use ffi::appkit::{
     EVENT_OTHER_MOUSE_UP, EVENT_RIGHT_MOUSE_DOWN, EVENT_RIGHT_MOUSE_DRAGGED, EVENT_RIGHT_MOUSE_UP,
     EVENT_SCROLL_WHEEL, EVENT_TYPE, FINISH_LAUNCHING, GRAPHICS_CG_CONTEXT,
     HAS_PRECISE_SCROLLING_DELTAS, INIT_WITH_CONTENT_RECT, INIT_WITH_FRAME, INTERPRET_KEY_EVENTS,
-    IS_A_REPEAT, IS_WINDOW_VISIBLE, KEY_CODE, LOCATION_IN_WINDOW, MAKE_KEY_AND_ORDER_FRONT,
-    MODIFIER_CAPS_LOCK, MODIFIER_COMMAND, MODIFIER_CONTROL, MODIFIER_OPTION, MODIFIER_SHIFT,
-    NEXT_EVENT, NSApplication, NSEvent, NSWindow, RUN, SCROLLING_DELTA_X, SCROLLING_DELTA_Y,
-    SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS, SET_ACTIVATION_POLICY, SET_CONTENT_SIZE,
-    SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE, SET_WINDOW_DELEGATE, SHARED_APPLICATION,
-    VIEW_FRAME, VIEW_WINDOW, WINDOW_STYLE_CLOSABLE, WINDOW_STYLE_MINIATURIZABLE,
-    WINDOW_STYLE_RESIZABLE, WINDOW_STYLE_TITLED, WINDOW_TITLE,
+    IS_A_REPEAT, IS_WINDOW_VISIBLE, KEY_CODE, LOCATION_IN_WINDOW, MAGNIFICATION,
+    MAKE_KEY_AND_ORDER_FRONT, MODIFIER_CAPS_LOCK, MODIFIER_COMMAND, MODIFIER_CONTROL,
+    MODIFIER_OPTION, MODIFIER_SHIFT, NEXT_EVENT, NSApplication, NSEvent, NSWindow, RUN,
+    SCROLLING_DELTA_X, SCROLLING_DELTA_Y, SEND_EVENT, SET_ACCEPTS_MOUSE_MOVED_EVENTS,
+    SET_ACTIVATION_POLICY, SET_CONTENT_SIZE, SET_CONTENT_VIEW, SET_RELEASED_WHEN_CLOSED, SET_TITLE,
+    SET_WINDOW_DELEGATE, SHARED_APPLICATION, VIEW_FRAME, VIEW_WINDOW, WINDOW_STYLE_CLOSABLE,
+    WINDOW_STYLE_MINIATURIZABLE, WINDOW_STYLE_RESIZABLE, WINDOW_STYLE_TITLED, WINDOW_TITLE,
 };
 use ffi::foundation::{
     COUNT, DATE_WITH_TIME_INTERVAL_SINCE_NOW, NOTIFICATION_OBJECT, NSDefaultRunLoopMode,
@@ -169,6 +169,11 @@ pub enum WindowEvent {
     },
     Key {
         event: KeyEvent,
+        modifiers: Modifiers,
+    },
+    /// A trackpad gesture over the content view.
+    Gesture {
+        event: GestureEvent,
         modifiers: Modifiers,
     },
     /// Owned committed text from an ordinary key event. IME marked text uses
@@ -432,6 +437,32 @@ fn view_pointer_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&
             modifiers,
             details,
         });
+    }
+}
+
+/// Queues a trackpad pinch as a `Magnify` gesture. AppKit reports the
+/// change of scale, so the gesture scale is one plus it.
+fn view_gesture_event(view: &Obj<ChoscoruiV2ContentView>, native_event: Option<&Obj<NSEvent>>) {
+    let Some((window, native_event)) = event_arguments(view, native_event) else {
+        return;
+    };
+    let location = LOCATION_IN_WINDOW.send(native_event, ());
+    let point = CONVERT_POINT_FROM_VIEW.send(view, (location, None));
+    let scale = 1.0 + MAGNIFICATION.send(native_event, ());
+    if !scale.is_finite() || scale <= 0.0 {
+        return;
+    }
+    let event = GestureEvent::Magnify {
+        position: Point::new(point.x, point.y),
+        scale,
+    };
+    let modifiers = Modifiers::from_native(EVENT_MODIFIER_FLAGS.send(native_event, ()));
+    let queue = window_queues().lock().unwrap().get(&window.addr()).cloned();
+    if let Some(queue) = queue {
+        queue
+            .lock()
+            .unwrap()
+            .push_back(WindowEvent::Gesture { event, modifiers });
     }
 }
 

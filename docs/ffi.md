@@ -107,7 +107,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 ### Content view and text input
 
 - **Ownership.** The window retains its custom flipped content view. Rust releases the +1 creation reference after `setContentView:`.
-- **Events.** The view maps mouse, wheel, key, and `NSTextInputClient` data into owned `WindowEvent` values. Precise scroll deltas keep point units, and coarse deltas keep line units.
+- **Events.** The view maps mouse, wheel, pinch, key, and `NSTextInputClient` data into owned `WindowEvent` values. Precise scroll deltas keep point units, and coarse deltas keep line units. `magnifyWithEvent:` reads `magnification` and drops a scale that is not finite or not positive.
 - **Text input.** Marked text, UTF-16 ranges, candidate-window rectangles, and character-index queries cross the boundary as owned values.
 - **Key equivalents.** `performKeyEquivalent:` returns `NO` unless the text input state has `captures_keys`. Then it queues the key-down event as `keyDown:` does and returns `YES`.
 - **Locks.** `interpretKeyEvents:` runs without the event-queue lock. A fallback for ordinary characters runs only when no text callback occurred.

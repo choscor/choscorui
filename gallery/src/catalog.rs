@@ -479,6 +479,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("Accepted", "result of InputFilter::accept"),
     ("NumberError", "error kind inside ValidationError::Number"),
     ("DateError", "error kind inside ValidationError::Date"),
+    ("DRAG_THRESHOLD", "drag distance constant of CanvasView"),
     ("MAX_ZOOM", "zoom bound constant of CanvasView"),
     ("MenuResponse", "result of DropdownMenu input"),
     ("MIN_ZOOM", "zoom bound constant of CanvasView"),

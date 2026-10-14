@@ -8,7 +8,7 @@ Every example assumes `use choscorui::prelude::*;`.
 
 ## Topics
 
-- App: [app.md](app.md)
+- App: [app--enums.md](app--enums.md), [app--functions.md](app--functions.md), [app--structs.md](app--structs.md), [app--traits.md](app--traits.md)
 - State: [state.md](state.md)
 - Layout: [layout.md](layout.md)
 - Controls: [controls--enums.md](controls--enums.md), [controls--structs.md](controls--structs.md), [controls--traits.md](controls--traits.md), [controls--type-aliases-1.md](controls--type-aliases-1.md), [controls--type-aliases-2.md](controls--type-aliases-2.md)
@@ -20,33 +20,33 @@ Every example assumes `use choscorui::prelude::*;`.
 
 ## App
 
-- [`AnyView`](app.md#anyview) struct: A view of any type.
-- [`App`](app.md#app) struct: A view-based application.
-- [`AppContext`](app.md#appcontext) struct: A running application.
-- [`AppError`](app.md#apperror) enum: What can stop an application from starting.
-- [`BackendCapabilities`](app.md#backendcapabilities) struct: What the running backend can do.
-- [`CommandMenu`](app.md#commandmenu) struct: One menu of the menu bar, with `MenuChoice` rows: actions, check and radio rows, submenus, and separators.
-- [`Either`](app.md#either) enum: One of two views, for a branch whose sides have different types.
-- [`Empty`](app.md#empty) struct: A view that shows nothing.
-- [`FileDialogKind`](app.md#filedialogkind) enum: What a file dialog chooses.
-- [`FileDialogRequest`](app.md#filedialogrequest) struct: A file dialog to show.
-- [`NotificationPermission`](app.md#notificationpermission) enum: Whether the user lets the application post notifications.
-- [`Scene`](app.md#scene) struct: A window to open: its options, its root view, an optional title that follows state, and an optional key that keeps its place between launches.
-- [`ServiceError`](app.md#serviceerror) enum: Why a service call failed.
-- [`Services`](app.md#services) struct: The desktop services of the running backend.
-- [`ShortcutModifiers`](app.md#shortcutmodifiers) struct: The modifier keys that are held with a key or a pointer event, or that a keyboard shortcut needs.
-- [`StatusItemSpec`](app.md#statusitemspec) struct: The item that an application shows in the system status area.
-- [`Storage`](app.md#storage) struct: The settings of an application, shared by its windows.
-- [`StorageError`](app.md#storageerror) enum: A problem with the settings that back stored state.
-- [`StoredValue`](app.md#storedvalue) trait: A value that stored state can hold: one of the `SettingValue` kinds.
-- [`Support`](app.md#support) enum: Whether a backend provides a feature.
-- [`SystemNotification`](app.md#systemnotification) struct: A notification to post.
-- [`View`](app.md#view) trait: A piece of user interface.
-- [`ViewError`](app.md#viewerror) enum: What can go wrong while the runtime updates a view tree.
-- [`ViewHost`](app.md#viewhost) struct: Mounts views on a retained tree and runs them: live properties, layout, paint, semantics, and input.
-- [`WindowId`](app.md#windowid) struct: Identifies an open window for the life of the application.
-- [`WindowOptions`](app.md#windowoptions) struct: The title and the content size of a window to open.
-- [`capabilities`](app.md#capabilities) function: What the current backend provides.
+- [`AnyView`](app--structs.md#anyview) struct: A view of any type.
+- [`App`](app--structs.md#app) struct: A view-based application.
+- [`AppContext`](app--structs.md#appcontext) struct: A running application.
+- [`AppError`](app--enums.md#apperror) enum: What can stop an application from starting.
+- [`BackendCapabilities`](app--structs.md#backendcapabilities) struct: What the running backend can do.
+- [`CommandMenu`](app--structs.md#commandmenu) struct: One menu of the menu bar, with `MenuChoice` rows: actions, check and radio rows, submenus, and separators.
+- [`Either`](app--enums.md#either) enum: One of two views, for a branch whose sides have different types.
+- [`Empty`](app--structs.md#empty) struct: A view that shows nothing.
+- [`FileDialogKind`](app--enums.md#filedialogkind) enum: What a file dialog chooses.
+- [`FileDialogRequest`](app--structs.md#filedialogrequest) struct: A file dialog to show.
+- [`NotificationPermission`](app--enums.md#notificationpermission) enum: Whether the user lets the application post notifications.
+- [`Scene`](app--structs.md#scene) struct: A window to open: its options, its root view, an optional title that follows state, and an optional key that keeps its place between launches.
+- [`ServiceError`](app--enums.md#serviceerror) enum: Why a service call failed.
+- [`Services`](app--structs.md#services) struct: The desktop services of the running backend.
+- [`ShortcutModifiers`](app--structs.md#shortcutmodifiers) struct: The modifier keys that are held with a key or a pointer event, or that a keyboard shortcut needs.
+- [`StatusItemSpec`](app--structs.md#statusitemspec) struct: The item that an application shows in the system status area.
+- [`Storage`](app--structs.md#storage) struct: The settings of an application, shared by its windows.
+- [`StorageError`](app--enums.md#storageerror) enum: A problem with the settings that back stored state.
+- [`StoredValue`](app--traits.md#storedvalue) trait: A value that stored state can hold: one of the `SettingValue` kinds.
+- [`Support`](app--enums.md#support) enum: Whether a backend provides a feature.
+- [`SystemNotification`](app--structs.md#systemnotification) struct: A notification to post.
+- [`View`](app--traits.md#view) trait: A piece of user interface.
+- [`ViewError`](app--enums.md#viewerror) enum: What can go wrong while the runtime updates a view tree.
+- [`ViewHost`](app--structs.md#viewhost) struct: Mounts views on a retained tree and runs them: live properties, layout, paint, semantics, and input.
+- [`WindowId`](app--structs.md#windowid) struct: Identifies an open window for the life of the application.
+- [`WindowOptions`](app--structs.md#windowoptions) struct: The title and the content size of a window to open.
+- [`capabilities`](app--functions.md#capabilities) function: What the current backend provides.
 
 ## State
 

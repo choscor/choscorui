@@ -196,6 +196,9 @@ impl NativeWindow {
                 WindowEvent::Key { event, modifiers } => {
                     host.key(event, shortcut_modifiers(modifiers));
                 }
+                WindowEvent::Gesture { event, modifiers } => {
+                    host.gesture(event, shortcut_modifiers(modifiers));
+                }
                 WindowEvent::Text { text } => {
                     host.text(&text);
                 }

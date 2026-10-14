@@ -222,6 +222,10 @@ pub struct Scene {
     sorted_roots: Vec<SceneItemId>,
     rank: HashMap<SceneItemId, usize>,
     order_dirty: bool,
+    /// The accessible items in paint order, and the index of each.
+    accessible: Vec<SceneItemId>,
+    accessible_rank: HashMap<SceneItemId, usize>,
+    accessible_dirty: bool,
     changes: Vec<SceneChange>,
     revision: u64,
 }
@@ -358,6 +362,9 @@ impl Scene {
         }
         if node.item.z != before.z {
             self.order_dirty = true;
+        }
+        if node.item.visible != before.visible || node.item.role != before.role {
+            self.accessible_dirty = true;
         }
         self.refresh(id);
         self.revision += 1;
@@ -590,6 +597,23 @@ impl Scene {
         self.order = order;
         self.sorted_roots = roots;
         self.order_dirty = false;
+        self.accessible_dirty = true;
+    }
+
+    /// Rebuilds the accessible items after a change of order, visibility,
+    /// or role. A move does not rebuild them.
+    fn ensure_accessible(&mut self) {
+        self.ensure_order();
+        if !self.accessible_dirty {
+            return;
+        }
+        self.accessible = (self.order.iter().copied())
+            .filter(|id| self.nodes[id].item.role.is_some() && self.effectively_visible(*id))
+            .collect();
+        self.accessible_rank = (self.accessible.iter().enumerate())
+            .map(|(index, id)| (*id, index))
+            .collect();
+        self.accessible_dirty = false;
     }
 
     fn sort_siblings(&self, ids: &mut [SceneItemId]) {
@@ -614,6 +638,12 @@ impl Scene {
                 None => return true,
             }
         }
+    }
+
+    /// The position of `id` in [`paint_order`](Self::paint_order).
+    pub fn paint_index(&mut self, id: SceneItemId) -> Option<usize> {
+        self.ensure_order();
+        self.rank.get(&id).copied()
     }
 
     /// Visible items whose bounds intersect `rect`, in paint order.
@@ -820,12 +850,22 @@ impl Scene {
 
     /// Items with an accessible role, in paint order.
     pub fn accessible_items(&mut self) -> Vec<SceneItemId> {
-        self.ensure_order();
-        self.order
-            .iter()
-            .copied()
-            .filter(|id| self.nodes[id].item.role.is_some() && self.effectively_visible(*id))
-            .collect()
+        self.ensure_accessible();
+        self.accessible.clone()
+    }
+
+    /// The number of items with an accessible role. The count is kept
+    /// between changes of order, visibility, or role.
+    pub fn accessible_count(&mut self) -> usize {
+        self.ensure_accessible();
+        self.accessible.len()
+    }
+
+    /// The index of `id` among [`accessible_items`](Self::accessible_items),
+    /// or `None` when it has no accessible role or does not show.
+    pub fn accessible_index(&mut self, id: SceneItemId) -> Option<usize> {
+        self.ensure_accessible();
+        self.accessible_rank.get(&id).copied()
     }
 
     /// Debug/statistics: number of occupied grid cells.
