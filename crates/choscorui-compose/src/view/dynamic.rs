@@ -14,12 +14,12 @@
 //! has no identity that a run can compare, so the key of a `Dynamic` child
 //! is the run, and each run replaces the child.
 
-use super::View;
 use super::env::Env;
 use super::fragment::FragmentId;
 use super::host::{Cx, Inner, ScopeId, ViewError};
 use super::scope;
 use super::state::{IntoLive, Live};
+use super::{AnyView, View};
 use crate::reactive::Runtime;
 use crate::reconcile::plan_keyed;
 use choscorui_core::NodeId;
@@ -94,11 +94,14 @@ where
     fn mount(self, cx: &mut Cx) {
         let choose = self.choose;
         let runs = Cell::new(0_u64);
-        mount_branch(cx, move || {
-            let view = choose();
-            runs.set(runs.get() + 1);
-            (runs.get(), Box::new(move || view) as Box<dyn FnOnce() -> V>)
-        });
+        mount_branch(
+            cx,
+            Box::new(move || {
+                let view = AnyView::new(choose());
+                runs.set(runs.get() + 1);
+                (runs.get(), Box::new(move || view) as Make)
+            }),
+        );
     }
 }
 
@@ -154,15 +157,15 @@ where
 {
     fn mount(self, cx: &mut Cx) {
         let (key, view) = (self.key, Rc::new(self.view));
-        mount_branch(cx, move || {
-            let key = key();
-            let view = Rc::clone(&view);
-            let chosen = key.clone();
-            (
-                key,
-                Box::new(move || view(&chosen)) as Box<dyn FnOnce() -> V>,
-            )
-        });
+        mount_branch(
+            cx,
+            Box::new(move || {
+                let key = key();
+                let view = Rc::clone(&view);
+                let chosen = key.clone();
+                (key, Box::new(move || AnyView::new(view(&chosen))) as Make)
+            }),
+        );
     }
 }
 
@@ -172,13 +175,16 @@ struct Child<K> {
     scope: ScopeId,
 }
 
+/// Makes the view of a [`Dynamic`] or [`Branch`] child.
+type Make = Box<dyn FnOnce() -> AnyView>;
+
 /// Mounts the one keyed child that `next` chooses, and reconciles it with
 /// [`plan_keyed`] whenever state that `next` read changes. The child view
-/// is made only when the plan creates the child.
-fn mount_branch<K, V>(cx: &mut Cx, next: impl Fn() -> (K, Box<dyn FnOnce() -> V>) + 'static)
+/// is made only when the plan creates the child. The child view is type
+/// erased, so each key type has one copy of this function.
+fn mount_branch<K>(cx: &mut Cx, next: Box<dyn Fn() -> (K, Make)>)
 where
     K: Clone + Eq + Hash + 'static,
-    V: View,
 {
     let fragment = cx.inner.fragments.child(cx.fragment);
     let owner = cx.scope;
