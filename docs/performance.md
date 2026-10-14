@@ -77,7 +77,7 @@ Resize does not meet its 8.3 ms budget yet. A large resize frame spends about 1 
 
 The display latency (`display_ms`) is approximately 24 ms at the median and 32 ms at the p95, for all four scenarios. Display sync is on, so the window server shows a frame two or three refreshes after the GPU finishes it. This latency does not depend on the frame cost.
 
-The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. The component behavior fixes of October 2026 add 0.21 MiB: control states, semantic parts, and gallery demos. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
+The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. The component behavior fixes of October 2026 add 0.21 MiB: control states, semantic parts, and gallery demos. The views that replace the last gallery wrappers of built-in controls add 0.03 MiB. They add shared controls, view key and press actions, and dock and tool box texts. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ The release executable grows in 16 KiB pages. The size budget is the measured si
 | `semantics.*_moved` | 60 of 60 steps | ≥ 60 |
 | `windows.first_frame_ms.p95` | 21–22 ms | ≤ 33 |
 | `windows.idle_cpu_percent_after_close` | 0.09–0.12 % | ≤ 3 |
-| `size.choscorui-gallery_mib` | 3.131 MiB | ≤ 3.147 |
+| `size.choscorui-gallery_mib` | 3.178 MiB | ≤ 3.194 |
 
 The `semantics` limits do not change with the size of the model. Only the parts in view publish, so the entry counts follow the window size. The `moved` counters make sure that each key moves the focused part.
 

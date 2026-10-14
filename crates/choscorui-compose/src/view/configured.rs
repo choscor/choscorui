@@ -7,12 +7,13 @@ use super::View;
 use super::control::{ControlView, SharedNotes};
 use super::control_ref::{ControlRef, Shared};
 use super::env::Env;
-use super::host::Cx;
+use super::host::{Cx, Inner};
 use super::limits::{Limits, SharedLimits};
 use super::state::{Binding, IntoLive, Live};
 use crate::reactive::Runtime;
 use choscorui_controls::{CommandId, ControlKind, ControlMessage, ControlValue, CustomControl};
-use choscorui_core::Dirty;
+use choscorui_core::{Dirty, NodeId};
+use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -20,6 +21,64 @@ type Build<C> = Rc<dyn Fn(&Env) -> Result<C, String>>;
 type Change<C> = Rc<dyn Fn(C, &Env) -> C>;
 type Handler = Rc<dyn Fn(&ControlMessage)>;
 type Update<C> = Rc<dyn Fn(&mut C, &Env)>;
+/// Makes the mounted control of a build.
+type Wrap<C> = Rc<dyn Fn(C, &Env) -> Box<dyn CustomControl>>;
+/// Runs with the node of the control after the mount.
+type Mounted = Box<dyn FnOnce(&mut Cx, NodeId)>;
+
+/// The control that the updates and the references of a view share.
+struct Sharing<C> {
+    /// The reference of the updates, followed by the app's references.
+    references: RefCell<Vec<ControlRef<C>>>,
+    updates: RefCell<Vec<Update<C>>>,
+}
+
+impl<C: CustomControl + 'static> Sharing<C> {
+    /// Shares the control of each build: runs the updates on it, and
+    /// points the references at it.
+    fn wrap(self: &Rc<Self>) -> Wrap<C> {
+        let sharing = self.clone();
+        Rc::new(move |control, env| {
+            let control = Rc::new(RefCell::new(control));
+            // The updates track their reads in reactions of their own.
+            Runtime::untracked(|| {
+                for update in sharing.updates.borrow().iter() {
+                    update(&mut control.borrow_mut(), env);
+                }
+            });
+            for reference in sharing.references.borrow().iter() {
+                reference.set(control.clone());
+            }
+            Box::new(Shared::new(control))
+        })
+    }
+
+    /// The reference of the updates.
+    fn own(&self) -> ControlRef<C> {
+        self.references.borrow()[0].clone()
+    }
+}
+
+/// Runs `update` on the control of `reference` in a reaction, and lays
+/// out the node again.
+fn react_update<C: 'static>(
+    cx: &mut Cx,
+    node: NodeId,
+    reference: ControlRef<C>,
+    update: Update<C>,
+) {
+    let env = cx.env().clone();
+    cx.react(move |inner: &mut Inner| {
+        let Some(control) = reference.get() else {
+            return;
+        };
+        let Ok(mut control) = control.try_borrow_mut() else {
+            return;
+        };
+        update(&mut control, &env);
+        inner.touch(node, Dirty::LAYOUT.with(Dirty::SEMANTICS));
+    });
+}
 
 /// A control of type `C` as a view. The view builds the control from the
 /// environment, so catalog strings follow the locale; options from
@@ -73,10 +132,14 @@ pub struct Configured<C> {
     kind: ControlKind,
     build: Build<C>,
     changes: Vec<Change<C>>,
-    /// Changes of the mounted control in place.
-    updates: Vec<Update<C>>,
-    /// The references that read the mounted control.
-    references: Vec<ControlRef<C>>,
+    /// The shared control of the updates and the references, a
+    /// `Sharing<C>`. It is type-erased, so that a view without updates
+    /// or references compiles no code for it.
+    sharing: Option<Rc<dyn Any>>,
+    /// Makes the mounted control from a build, when it is shared.
+    wrap: Option<Wrap<C>>,
+    /// What runs with the node after the mount.
+    mounted: Vec<Mounted>,
     value: Option<Live<ControlValue>>,
     open: Option<Live<bool>>,
     handlers: Vec<Handler>,
@@ -109,8 +172,9 @@ impl<C: CustomControl + 'static> Configured<C> {
             kind,
             build: Rc::new(move |env| build(env).map_err(|error| error.to_string())),
             changes: Vec::new(),
-            updates: Vec::new(),
-            references: Vec::new(),
+            sharing: None,
+            wrap: None,
+            mounted: Vec::new(),
             value: None,
             open: None,
             handlers: Vec::new(),
@@ -167,15 +231,36 @@ impl<C: CustomControl + 'static> Configured<C> {
     /// ```
     #[must_use]
     pub fn update(mut self, change: impl Fn(&mut C, &Env) + 'static) -> Self {
-        self.updates.push(Rc::new(change));
+        let sharing = self.sharing();
+        let update: Update<C> = Rc::new(change);
+        sharing.updates.borrow_mut().push(update.clone());
+        let reference = sharing.own();
+        self.mounted.push(Box::new(move |cx, node| {
+            react_update(cx, node, reference, update);
+        }));
         self
     }
 
     /// Points `reference` at the mounted control, so the app can read it.
     #[must_use]
     pub fn control_ref(mut self, reference: &ControlRef<C>) -> Self {
-        self.references.push(reference.clone());
+        let sharing = self.sharing();
+        sharing.references.borrow_mut().push(reference.clone());
         self
+    }
+
+    /// The shared control of the view, which it makes at the first call.
+    fn sharing(&mut self) -> Rc<Sharing<C>> {
+        if let Some(sharing) = self.sharing.clone().and_then(|any| any.downcast().ok()) {
+            return sharing;
+        }
+        let sharing = Rc::new(Sharing {
+            references: RefCell::new(vec![ControlRef::new()]),
+            updates: RefCell::default(),
+        });
+        self.wrap = Some(sharing.wrap());
+        self.sharing = Some(sharing.clone());
+        sharing
     }
 
     /// Gives the view `limits`, which its build reads and which clamp its
@@ -327,58 +412,36 @@ impl<C: CustomControl + 'static> View for Configured<C> {
             kind,
             build,
             changes,
-            updates,
-            mut references,
+            sharing: _,
+            wrap,
+            mounted,
             value,
             open,
             handlers,
             limits,
             notes,
         } = self;
-        // The updates change the control through a reference of their own.
-        let shared = (!references.is_empty() || !updates.is_empty()).then(ControlRef::new);
-        references.extend(shared.clone());
-        let updates = Rc::new(updates);
-        let applied = updates.clone();
         let build: super::control::Build = Rc::new(move |env| {
             let control = build(env)?;
             let control = changes
                 .iter()
                 .fold(control, |control, change| change(control, env));
-            if references.is_empty() {
-                return Ok(Box::new(control));
-            }
-            let control = Rc::new(RefCell::new(control));
-            // The updates track their reads in reactions of their own.
-            Runtime::untracked(|| {
-                for update in applied.iter() {
-                    update(&mut control.borrow_mut(), env);
-                }
-            });
-            for reference in &references {
-                reference.set(control.clone());
-            }
-            Ok(Box::new(Shared::new(control)))
+            Ok(match &wrap {
+                Some(wrap) => wrap(control, env),
+                None => Box::new(control),
+            })
         });
         let mut view = ControlView::configured(build, kind, value, open, handlers);
         view.limits = limits;
         view.notes = notes;
         let node = view.mount_node(cx);
-        let Some(reference) = shared else {
-            return;
-        };
-        for update in updates.iter().cloned() {
-            let (reference, env) = (reference.clone(), cx.env().clone());
-            cx.react(move |inner| {
-                let Some(control) = reference.get() else {
-                    return;
-                };
-                let Ok(mut control) = control.try_borrow_mut() else {
-                    return;
-                };
-                update(&mut control, &env);
-                inner.touch(node, Dirty::LAYOUT.with(Dirty::SEMANTICS));
-            });
-        }
+        run_mounted(cx, node, mounted);
+    }
+}
+
+/// Runs what a view does with its node after the mount.
+fn run_mounted(cx: &mut Cx, node: NodeId, mounted: Vec<Mounted>) {
+    for mounted in mounted {
+        mounted(cx, node);
     }
 }
