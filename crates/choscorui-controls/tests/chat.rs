@@ -562,3 +562,68 @@ fn message_scroller_keeps_its_place_hovers_bubbles_and_jumps_with_command_arrows
             .any(|text| text.starts_with("Message 199 "))
     );
 }
+
+#[test]
+fn a_single_choice_shows_radio_marks_and_its_arrows_pick() {
+    let survey = |question: Question| Questionnaire::new("Survey", vec![question], labels());
+    let mut single = Harness::new(survey(
+        Question::choice("Which plan fits?", options(&["Free", "Pro"])).required(),
+    ));
+    let side = 16.0;
+    let marks = |list: &DisplayList| -> Vec<f64> {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::StrokeRoundedRect { rect, radius, .. }
+                    if (rect.size.width - side + 1.0).abs() < 0.01 =>
+                {
+                    Some(*radius)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let round = marks(&single.paint());
+    assert_eq!(round.len(), 2, "a mark per choice");
+    assert!(
+        round.iter().all(|radius| *radius >= side / 2.0 - 1.0),
+        "{round:?}"
+    );
+    single.focus();
+    single.key(Key::ArrowDown);
+    assert_eq!(
+        single.messages(),
+        [ControlMessage::Changed(ControlValue::Indices(vec![1]))],
+        "the arrow picks"
+    );
+    single.key(Key::Tab);
+    single.key(Key::ArrowUp);
+    assert!(single.messages().is_empty());
+
+    let mut multiple = Harness::new(survey(Question::multiple(
+        "Which features?",
+        options(&["A", "B"]),
+    )));
+    let square = marks(&multiple.paint());
+    assert!(
+        square.iter().all(|radius| *radius < side / 2.0 - 1.0),
+        "{square:?}"
+    );
+    multiple.focus();
+    multiple.key(Key::ArrowDown);
+    assert!(multiple.messages().is_empty(), "the arrow only moves");
+
+    let mut empty = Harness::new(survey(
+        Question::choice("Which plan fits?", options(&["Free", "Pro"])).required(),
+    ));
+    empty.focus();
+    empty.key(Key::Tab);
+    empty.key(Key::Enter);
+    let node = empty.semantics();
+    assert!(node.state.invalid);
+    assert!(
+        node.description.ends_with("Pick an answer."),
+        "{}",
+        node.description
+    );
+}

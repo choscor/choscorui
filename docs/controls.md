@@ -4702,14 +4702,15 @@ behavior.
 - A questionnaire shows one `Question` at a time, under an optional
   progress line from `with_progress`.
 - `Question::choice` takes one option and `Question::multiple` takes any
-  number. Each row shows a check box, the option, and its number key. A
-  long option wraps between the check box and the key, and the row grows
-  for each line.
+  number. Each row shows a mark, the option, and its number key. The mark
+  is a radio circle with a dot for `choice`, and a check box for
+  `multiple`. A long option wraps between the mark and the key, and the
+  row grows for each line.
 - `Question::freeform` takes typed text. Enter in the text runs Next or
   Submit.
 - The answer and the buttons are tab stops. ArrowUp and ArrowDown move
-  between choices. Space, Enter, a click, or the number keys 1 to 9 pick
-  one.
+  between choices. In a `choice` question, as in radio buttons, they also
+  pick. Space, Enter, a click, or the number keys 1 to 9 pick one.
 - Previous sits at the start. Skip, and Next or Submit, sit at the end.
 - A `required()` question has no Skip button. Next or Submit on an
   unanswered required question shows the error line from
@@ -4726,6 +4727,7 @@ behavior.
 | Choices | `Group` | 12 pt between rows |
 | Choice row | `Choice` | sm text, 1 pt `input` border, radius md, 16 by 14 pt padding, shadow xs; `muted` fill when checked |
 | Check box | `Indicator` | 16 pt box, radius 4 pt, `primary` fill when checked |
+| Radio mark | `RadioGroup` `Root`, `Indicator` | the radio circle and dot, for a single choice |
 | Number key | `Shortcut` | 20 pt key cap, 10 pt mono text |
 | Text answer | `Input` | input box, 36 pt tall |
 | Error | `Error` | sm `destructive` text |
@@ -4735,7 +4737,7 @@ behavior.
 | --- | --- |
 | Role | `Group` (AXGroup) |
 | Name / value | name / current question |
-| Description | the focused option, button, or typed text |
+| Description | the focused option, button, or typed text, then the error line while it shows |
 | State | invalid, disabled |
 | Actions | `Activate` and `Focus` while enabled; `SetValue` for a freeform question |
 
@@ -4744,7 +4746,9 @@ choice question, or `Text` for a freeform answer. `set_open` returns false.
 
 **As a view.** `Questionnaire::new(name, questions, labels, current)` edits
 the shown question through the `Index` value in both directions. Submit runs
-`on_activate`.
+`on_activate`. The view keeps the answers. When the control builds again,
+such as for a new locale, it gets back the picks and the text of each
+question.
 
 [chat.rs](../crates/choscorui-controls/tests/chat.rs) pins this
 behavior.

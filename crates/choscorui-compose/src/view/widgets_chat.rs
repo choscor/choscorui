@@ -10,7 +10,9 @@ use super::text::TextContent;
 use super::widgets::{Items, as_position, label, text, to_position};
 use choscorui_controls as controls;
 use choscorui_controls::{Bubble, ControlKind, Question, QuestionnaireLabels};
-use std::cell::RefCell;
+use choscorui_controls::{ControlMessage, ControlValue, CustomControl};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 /// A chat message: the author's bubbles, with an optional avatar,
 /// header, and footer that `.with` adds. A bubble is content of a
@@ -136,9 +138,50 @@ impl Configured<controls::Questionnaire> {
         current: Binding<usize>,
     ) -> Self {
         let name = label(name);
+        let answers = Rc::new(Answers::default());
+        let record = answers.clone();
         Configured::custom(ControlKind::Questionnaire, move |env| {
-            controls::Questionnaire::new(text(&name, env), questions.items(env), labels(env))
+            let mut control =
+                controls::Questionnaire::new(text(&name, env), questions.items(env), labels(env));
+            answers.restore(&mut control);
+            control
         })
+        .on_message(move |message| record.record(message))
         .bind(current, to_position, as_position)
+    }
+}
+
+/// The answers of a questionnaire view, which a new build of its control
+/// gets back.
+#[derive(Default)]
+struct Answers {
+    current: Cell<usize>,
+    /// The picks or the text of each answered question.
+    values: RefCell<Vec<(usize, ControlValue)>>,
+}
+
+impl Answers {
+    fn record(&self, message: &ControlMessage) {
+        let ControlMessage::Changed(value) = message else {
+            return;
+        };
+        match value {
+            ControlValue::Index(Some(question)) => self.current.set(*question),
+            ControlValue::Indices(_) | ControlValue::Text(_) => {
+                let current = self.current.get();
+                let mut values = self.values.borrow_mut();
+                values.retain(|(question, _)| *question != current);
+                values.push((current, value.clone()));
+            }
+            _ => {}
+        }
+    }
+
+    fn restore(&self, control: &mut controls::Questionnaire) {
+        for (question, value) in self.values.borrow().iter() {
+            control.set_value(&ControlValue::Index(Some(*question)));
+            control.set_value(value);
+        }
+        control.set_value(&ControlValue::Index(Some(self.current.get())));
     }
 }

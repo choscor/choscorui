@@ -896,16 +896,16 @@ bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, hei
 semantics SemanticNode { role: ScrollArea, name: "Chat", description: "", value: Some("Ana: Hi"), state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Increment, Decrement, Focus], text: None }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
-FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 40.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-DrawText { baseline: Point { x: 22.0, y: 34.275 }, text: "Hi", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 26.0 }, size: Size { width: 40.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 22.0, y: 50.275 }, text: "Hi", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopClip
 PopClip
 # message-scroller Rtl
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } }
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 384.0 } })
-FillRoundedRect { rect: Rect { origin: Point { x: 450.0, y: 10.0 }, size: Size { width: 40.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-DrawText { baseline: Point { x: 462.6, y: 34.275 }, text: "Hi", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 450.0, y: 26.0 }, size: Size { width: 40.0, height: 38.75 } }, radius: 14.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 462.6, y: 50.275 }, text: "Hi", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopClip
 PopClip
 # questionnaire Ltr
@@ -915,7 +915,8 @@ PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, h
 DrawText { baseline: Point { x: 10.0, y: 27.6 }, text: "Pick one", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(600), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 54.0 }, size: Size { width: 480.0, height: 48.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 54.5 }, size: Size { width: 479.0, height: 47.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 70.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 70.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 70.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 9998.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
 DrawText { baseline: Point { x: 54.0, y: 82.9 }, text: "A", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 454.0, y: 68.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 454.0, y: 68.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
@@ -923,7 +924,8 @@ StrokeRoundedRect { rect: Rect { origin: Point { x: 454.5, y: 68.5 }, size: Size
 DrawText { baseline: Point { x: 461.25, y: 81.5 }, text: "1", font_family: "ui-monospace", font_size: 10.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 114.0 }, size: Size { width: 480.0, height: 48.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 114.5 }, size: Size { width: 479.0, height: 47.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 130.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 130.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 130.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 9998.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
 DrawText { baseline: Point { x: 54.0, y: 142.9 }, text: "B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 454.0, y: 128.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 454.0, y: 128.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
@@ -939,7 +941,8 @@ PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, h
 DrawText { baseline: Point { x: 419.6, y: 27.6 }, text: "Pick one", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(600), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 54.0 }, size: Size { width: 480.0, height: 48.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 54.5 }, size: Size { width: 479.0, height: 47.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 458.5, y: 70.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawShadow { rect: Rect { origin: Point { x: 458.0, y: 70.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 458.5, y: 70.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 9998.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
 DrawText { baseline: Point { x: 438.3, y: 82.9 }, text: "A", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 68.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 26.0, y: 68.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
@@ -947,7 +950,8 @@ StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 68.5 }, size: Size 
 DrawText { baseline: Point { x: 33.25, y: 81.5 }, text: "1", font_family: "ui-monospace", font_size: 10.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 10.0, y: 114.0 }, size: Size { width: 480.0, height: 48.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 StrokeRoundedRect { rect: Rect { origin: Point { x: 10.5, y: 114.5 }, size: Size { width: 479.0, height: 47.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
-StrokeRoundedRect { rect: Rect { origin: Point { x: 458.5, y: 130.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawShadow { rect: Rect { origin: Point { x: 458.0, y: 130.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 9999.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 458.5, y: 130.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 9998.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
 DrawText { baseline: Point { x: 438.3, y: 142.9 }, text: "B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 128.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
 FillRoundedRect { rect: Rect { origin: Point { x: 26.0, y: 128.0 }, size: Size { width: 20.0, height: 20.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }

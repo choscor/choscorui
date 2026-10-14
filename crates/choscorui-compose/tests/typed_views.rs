@@ -663,3 +663,62 @@ fn a_message_scroller_keeps_its_place_when_a_message_comes() {
         "the view sticks to the bottom"
     );
 }
+
+#[test]
+fn a_questionnaire_keeps_its_answers_when_it_builds_again() {
+    let tick = slot();
+    let shared = tick.clone();
+    let submitted = Rc::new(Cell::new(false));
+    let ran = submitted.clone();
+    let mut host = host(move |cx| {
+        let current = cx.state(0_usize);
+        let rebuild = cx.state(0_u32);
+        shared.set(Some(rebuild));
+        let ran = ran.clone();
+        let questions = move |_: &Env| {
+            // Reading the state builds the control again when it changes.
+            rebuild.get();
+            vec![
+                Question::choice("Color", vec!["Red".into(), "Blue".into()]).required(),
+                Question::choice("Size", vec!["S".into(), "L".into()]).required(),
+            ]
+        };
+        Questionnaire::new("Survey", questions, labels, current.binding())
+            .on_activate(move || ran.set(true))
+            .into_any()
+    });
+    let node = host.find("Survey").unwrap();
+    host.focus(Some(node));
+    press(&mut host, Key::Character('2'));
+    press(&mut host, Key::Tab);
+    press(&mut host, Key::Enter);
+    host.flush();
+    assert_eq!(value(&mut host, node).as_deref(), Some("Size"));
+    host.focus(Some(node));
+    press(&mut host, Key::Character('1'));
+    take(&tick).set(1);
+    host.flush();
+    assert_eq!(value(&mut host, node).as_deref(), Some("Size"));
+    // Back to the first question, whose answer also stays.
+    let run = |host: &mut ViewHost, button: &str| {
+        host.focus(Some(node));
+        for _ in 0..4 {
+            if host.semantic(node).unwrap().description == button {
+                break;
+            }
+            press(host, Key::Tab);
+        }
+        press(host, Key::Enter);
+        host.flush();
+    };
+    run(&mut host, "Previous");
+    assert_eq!(value(&mut host, node).as_deref(), Some("Color"));
+    run(&mut host, "Next");
+    assert_eq!(
+        value(&mut host, node).as_deref(),
+        Some("Size"),
+        "the first answer stays"
+    );
+    run(&mut host, "Submit");
+    assert!(submitted.get(), "the second answer stays");
+}

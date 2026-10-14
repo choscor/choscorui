@@ -135,9 +135,11 @@ struct Geometry {
 }
 
 /// A questionnaire that shows one question at a time. Choice rows show
-/// a check box, the option, and its number key; the number keys 1 to 9
-/// pick an option. The answer and the buttons are tab stops; ArrowUp and
-/// ArrowDown move between the choices, and Space or Enter picks one.
+/// a mark, the option, and its number key; the number keys 1 to 9 pick an
+/// option. The mark is a radio circle for a single choice and a check box
+/// for a multiple choice. The answer and the buttons are tab stops;
+/// ArrowUp and ArrowDown move between the choices, and pick in a single
+/// choice. Space or Enter picks one.
 /// Picking emits `Changed(Indices)`, and typing emits `Changed(Text)`.
 /// Moving to another question emits `Changed(Index(question))`, and
 /// Submit emits `Activated`.
@@ -575,7 +577,17 @@ impl Questionnaire {
                         }
                         EventReply::Stop
                     }
+                    // The arrows of a single choice pick, as radio buttons
+                    // do; those of a multiple choice only move.
                     key => match hosted::rove(key, self.choice, count, false, false) {
+                        Some(next) if self.single() => {
+                            if !self.picked[self.current].contains(&next) {
+                                self.pick(cx, next);
+                            }
+                            self.choice = next;
+                            cx.request_paint();
+                            EventReply::Stop
+                        }
                         Some(next) => {
                             self.choice = next;
                             cx.request_paint();
@@ -633,8 +645,22 @@ impl Questionnaire {
         EventReply::Stop
     }
 
+    /// True when the shown question takes one choice.
+    fn single(&self) -> bool {
+        matches!(
+            self.question().map(|question| &question.answer),
+            Some(Answer::Choices {
+                multiple: false,
+                ..
+            })
+        )
+    }
+
     fn paint_choices(&self, cx: &mut PaintContext<'_>, host: VisualState, options: &[String]) {
         let picked = &self.picked[self.current];
+        // A single choice shows the radio circle and dot of a radio group;
+        // a multiple choice shows a check box.
+        let radio = self.single();
         for (index, (option, rect)) in options.iter().zip(&self.geometry.choices).enumerate() {
             let checked = picked.contains(&index);
             let state = VisualState::NONE
@@ -647,7 +673,12 @@ impl Questionnaire {
                 )
                 .set(VisualState::DISABLED, host.disabled());
             let style = cx.style(Self::query(Slot::Choice).state(state));
-            let indicator = cx.style(Self::query(Slot::Indicator).state(state));
+            let indicator = if radio {
+                cx.style(StyleQuery::new(ControlKind::RadioGroup, Slot::Root).state(state))
+            } else {
+                cx.style(Self::query(Slot::Indicator).state(state))
+            };
+            let dot = cx.style(StyleQuery::new(ControlKind::RadioGroup, Slot::Indicator));
             let shortcut = cx.style(Self::query(Slot::Shortcut));
             cx.slot(*rect, &style, |cx, inner| {
                 let side = indicator.min_width;
@@ -662,10 +693,20 @@ impl Questionnaire {
                     Rect::from_xywh(x, inner.center().y - height / 2.0, width, height)
                 };
                 let mark = at(0.0, side, side);
-                cx.slot(mark, &indicator, |cx, inner| {
-                    if checked {
-                        cx.icon(inner, Icon::Check, &indicator);
+                cx.slot(mark, &indicator, |cx, inner| match (checked, radio) {
+                    (true, true) => {
+                        let center = inner.center();
+                        let (width, height) = (dot.min_width, dot.min_height);
+                        let rect = Rect::from_xywh(
+                            center.x - width / 2.0,
+                            center.y - height / 2.0,
+                            width,
+                            height,
+                        );
+                        cx.slot(rect, &dot, |_, _| {});
                     }
+                    (true, false) => cx.icon(inner, Icon::Check, &indicator),
+                    _ => {}
                 });
                 let used = side + style.gap;
                 let label = at(
@@ -851,6 +892,13 @@ impl CustomControl for Questionnaire {
                 _ => String::new(),
             },
         };
+        if self.invalid {
+            // The error line is part of the description.
+            if !node.description.is_empty() {
+                node.description.push_str(", ");
+            }
+            node.description.push_str(&self.labels.required);
+        }
         node.state.invalid = self.invalid;
         node.state.disabled = !self.enabled;
         node
