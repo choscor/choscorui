@@ -26,9 +26,18 @@ pub struct HeaderColumn {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum HeaderInput {
-    Press { x: f64 },
-    Drag { x: f64 },
-    Release,
+    Press {
+        x: f64,
+    },
+    Drag {
+        x: f64,
+    },
+    /// The pointer release at `x`. A release in the pressed column sorts.
+    Release {
+        x: f64,
+    },
+    /// Ends a press or a resize without a change: the width returns.
+    Cancel,
     Key(Key),
 }
 
@@ -38,9 +47,10 @@ pub struct HeaderResponse {
     pub resized: Option<usize>,
 }
 
-/// Table header: click sorts (ascending, then descending), dragging a
-/// column edge resizes, and the keyboard moves between columns (Left and
-/// Right), sorts (Space or Return), and resizes (`+` and `-`).
+/// Table header: a click sorts (ascending, descending, then no sort),
+/// dragging a column edge resizes, and the keyboard moves between columns
+/// (Left, Right, Home, and End), sorts (Space or Return), and resizes
+/// (`+` and `-`). Escape during a resize restores the width.
 #[derive(Clone, Debug)]
 pub struct HeaderView {
     columns: Vec<HeaderColumn>,
@@ -48,6 +58,8 @@ pub struct HeaderView {
     focused: usize,
     /// The column, the pointer offset, and the width at a resize press.
     resizing: Option<(usize, f64, f64)>,
+    /// The column that a press started on; the release sorts it.
+    pressed: Option<usize>,
     /// The start edge of the first column in reading order.
     origin_x: f64,
     rtl: bool,
@@ -66,6 +78,7 @@ impl HeaderView {
             sort: None,
             focused: 0,
             resizing: None,
+            pressed: None,
             origin_x: 0.0,
             rtl: false,
             tracked: Parts::default(),
@@ -138,13 +151,25 @@ impl HeaderView {
         None
     }
 
+    /// Sorts by `column`: ascending, descending, then no sort.
     fn toggle_sort(&mut self, column: usize) {
-        self.sort = Some(match self.sort {
+        self.sort = match self.sort {
             Some((current, SortOrder::Ascending)) if current == column => {
-                (column, SortOrder::Descending)
+                Some((column, SortOrder::Descending))
             }
-            _ => (column, SortOrder::Ascending),
-        });
+            Some((current, SortOrder::Descending)) if current == column => None,
+            _ => Some((column, SortOrder::Ascending)),
+        };
+    }
+
+    /// Ends a press or a resize. A resize gets its first width back.
+    fn cancel(&mut self, response: &mut HeaderResponse) {
+        self.pressed = None;
+        if let Some((column, _, width)) = self.resizing.take()
+            && self.resize(column, width)
+        {
+            response.resized = Some(column);
+        }
     }
 
     fn resize(&mut self, column: usize, width: f64) -> bool {
@@ -166,8 +191,7 @@ impl HeaderView {
                     self.resizing = Some((edge, offset, self.columns[edge].width));
                 } else if let Some(column) = self.column_at(offset) {
                     self.focused = column;
-                    self.toggle_sort(column);
-                    response.sort_changed = true;
+                    self.pressed = Some(column);
                 }
             }
             HeaderInput::Drag { x } => {
@@ -177,12 +201,24 @@ impl HeaderView {
                     response.resized = Some(column);
                 }
             }
-            HeaderInput::Release => self.resizing = None,
+            HeaderInput::Release { x } => {
+                self.resizing = None;
+                if let Some(column) = self.pressed.take()
+                    && self.column_at(self.offset(x)) == Some(column)
+                {
+                    self.toggle_sort(column);
+                    response.sort_changed = true;
+                }
+            }
+            HeaderInput::Cancel => self.cancel(&mut response),
             HeaderInput::Key(key) => match key.in_reading_order(self.rtl) {
+                Key::Escape => self.cancel(&mut response),
                 Key::ArrowLeft => self.focused = self.focused.saturating_sub(1),
                 Key::ArrowRight => {
                     self.focused = (self.focused + 1).min(self.columns.len().saturating_sub(1))
                 }
+                Key::Home => self.focused = 0,
+                Key::End => self.focused = self.columns.len().saturating_sub(1),
                 Key::Space | Key::Enter if !self.columns.is_empty() => {
                     self.toggle_sort(self.focused);
                     response.sort_changed = true;
@@ -919,31 +955,39 @@ impl CustomControl for HeaderView {
                 button: PointerButton::Primary,
             }) => {
                 self.hosted_input(cx, HeaderInput::Press { x: position.x });
-                if self.resizing.is_some() {
-                    cx.capture_pointer(true);
-                }
+                cx.capture_pointer(true);
                 EventReply::Stop
             }
             Routed::Pointer(PointerEvent::Move { position }) if self.resizing.is_some() => {
                 self.hosted_input(cx, HeaderInput::Drag { x: position.x });
                 EventReply::Stop
             }
-            Routed::Pointer(PointerEvent::Up { .. }) | Routed::Cancel
-                if self.resizing.is_some() =>
+            Routed::Pointer(PointerEvent::Up { position, .. })
+                if self.resizing.is_some() || self.pressed.is_some() =>
             {
-                self.handle(HeaderInput::Release);
+                self.hosted_input(cx, HeaderInput::Release { x: position.x });
                 cx.capture_pointer(false);
                 EventReply::Stop
+            }
+            Routed::Cancel if self.resizing.is_some() || self.pressed.is_some() => {
+                self.hosted_input(cx, HeaderInput::Cancel);
+                cx.capture_pointer(false);
+                EventReply::Continue
             }
             Routed::Key(KeyEvent::Down { key, .. }) => {
                 let handled = matches!(
                     key,
                     Key::ArrowLeft
                         | Key::ArrowRight
+                        | Key::Home
+                        | Key::End
                         | Key::Space
                         | Key::Enter
                         | Key::Character('+' | '=' | '-')
-                );
+                ) || (key == Key::Escape && self.resizing.is_some());
+                if key == Key::Escape && self.resizing.is_some() {
+                    cx.capture_pointer(false);
+                }
                 if !handled {
                     return EventReply::Continue;
                 }
@@ -996,6 +1040,7 @@ impl CustomControl for HeaderView {
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
             self.resizing = None;
+            self.pressed = None;
         }
     }
 }

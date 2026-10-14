@@ -3,9 +3,11 @@
 
 mod hosted;
 
-use choscorui_controls::{ControlMessage, ControlValue, ItemView, TextItemDelegate};
+use choscorui_controls::{
+    ControlMessage, ControlValue, HeaderColumn, HeaderInput, HeaderView, ItemView, TextItemDelegate,
+};
 use choscorui_core::{
-    DisplayCommand, DisplayList, Key, Point, SemanticRole, StringListModel, TreeStore,
+    DisplayCommand, DisplayList, Key, Point, SemanticRole, SortOrder, StringListModel, TreeStore,
 };
 use hosted::{Harness, texts};
 
@@ -75,4 +77,47 @@ fn a_click_on_empty_space_clears_the_selection_and_an_empty_view_says_so() {
     );
     let empty = Harness::new(rows(0));
     assert_eq!(texts(&empty.paint()), vec!["No results"]);
+}
+
+fn header() -> HeaderView {
+    let column = |title: &str| HeaderColumn {
+        title: title.into(),
+        width: 100.0,
+        min_width: 40.0,
+    };
+    HeaderView::new(vec![column("Name"), column("Size"), column("Kind")])
+}
+
+#[test]
+fn a_header_sorts_on_release_in_the_same_column_and_has_a_none_step() {
+    let mut header = header();
+    header.handle(HeaderInput::Press { x: 50.0 });
+    header.handle(HeaderInput::Release { x: 150.0 });
+    assert_eq!(header.sort(), None, "the release left the column");
+    for order in [
+        Some(SortOrder::Ascending),
+        Some(SortOrder::Descending),
+        None,
+    ] {
+        header.handle(HeaderInput::Press { x: 50.0 });
+        header.handle(HeaderInput::Release { x: 60.0 });
+        assert_eq!(header.sort(), order.map(|order| (0, order)));
+    }
+}
+
+#[test]
+fn a_header_goes_home_and_end_and_escape_restores_a_width() {
+    let mut header = header();
+    header.handle(HeaderInput::Key(Key::End));
+    assert_eq!(header.focused_column(), 2);
+    header.handle(HeaderInput::Key(Key::Home));
+    assert_eq!(header.focused_column(), 0);
+    header.handle(HeaderInput::Press { x: 100.0 });
+    header.handle(HeaderInput::Drag { x: 160.0 });
+    assert_eq!(header.widths()[0], 160.0);
+    let response = header.handle(HeaderInput::Key(Key::Escape));
+    assert_eq!(response.resized, Some(0));
+    assert_eq!(header.widths()[0], 100.0);
+    header.handle(HeaderInput::Drag { x: 200.0 });
+    assert_eq!(header.widths()[0], 100.0, "the resize ended");
 }

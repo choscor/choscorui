@@ -1982,12 +1982,15 @@ pin this behavior.
 ### HeaderView
 
 - **Press** within 4 points of a column edge starts a resize.
-- Any other press focuses the column and toggles its sort, on the press. A
-  new column sorts ascending, then descending.
+- Any other press focuses the column. The release in the same column
+  toggles its sort. A new column sorts ascending, then descending, then
+  the sort clears.
 - **Drag** resizes the column, never below `min_width`. **Release** ends the
-  resize.
+  resize. Escape during a resize, or `Cancel`, gives the column its first
+  width again.
 - **Keys.** ArrowLeft and ArrowRight move the focused column and stop at
-  the ends. Space or Enter toggles the sort of the focused column.
+  the ends. Home and End go to the first and the last column. Space or
+  Enter toggles the sort of the focused column.
 - **Right to left.** `set_direction(Rtl)` runs the columns from the right
   edge for presses and drags. `set_origin_x` then sets the right edge of
   the first column. ArrowLeft moves to the next column. `paint` mirrors
@@ -2015,7 +2018,8 @@ pin this behavior.
 of the focused column. A sort change reports `ItemActivated(column)`, and
 `sort` returns the order. A resize reports `Changed(Index(column))`, and
 `widths` returns the widths. A press on a column edge captures the pointer
-until the release. `Activate` sorts the focused column.
+until the release. A press on a cell also captures the pointer, and the
+release sorts only in the same cell. `Activate` sorts the focused column.
 
 **As a view.** `HeaderView::new(columns, sort)` edits a
 `Binding<Option<(usize, SortOrder)>>` in both directions. `restore_sort`

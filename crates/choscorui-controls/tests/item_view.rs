@@ -276,9 +276,16 @@ fn header_sorts_resizes_and_exposes_semantics() {
             min_width: 40.0,
         },
     ]);
-    assert!(header.handle(HeaderInput::Press { x: 150.0 }).sort_changed);
+    assert!(!header.handle(HeaderInput::Press { x: 150.0 }).sort_changed);
+    assert!(
+        header
+            .handle(HeaderInput::Release { x: 150.0 })
+            .sort_changed,
+        "the release sorts"
+    );
     assert_eq!(header.sort(), Some((1, SortOrder::Ascending)));
     header.handle(HeaderInput::Press { x: 150.0 });
+    header.handle(HeaderInput::Release { x: 150.0 });
     assert_eq!(header.sort(), Some((1, SortOrder::Descending)));
     let english = header.column_semantics(1, Localizer::builtin()).unwrap();
     assert_eq!(english.value.as_deref(), Some("descending"));
@@ -293,7 +300,7 @@ fn header_sorts_resizes_and_exposes_semantics() {
     assert_eq!(header.widths()[0], 60.0);
     header.handle(HeaderInput::Drag { x: -100.0 });
     assert_eq!(header.widths()[0], 40.0, "minimum width");
-    header.handle(HeaderInput::Release);
+    header.handle(HeaderInput::Release { x: -100.0 });
     header.handle(HeaderInput::Key(Key::ArrowLeft));
     header.handle(HeaderInput::Key(Key::Character('+')));
     assert_eq!(header.widths()[0], 50.0);
@@ -324,6 +331,7 @@ fn header_paints_cells_sort_icon_and_ring_from_the_table_recipe() {
         },
     ]);
     header.handle(HeaderInput::Press { x: 150.0 });
+    header.handle(HeaderInput::Release { x: 150.0 });
     let tokens = DesignTokens::light();
     let styles = Styles::new();
     let paint = |focus_visible| {

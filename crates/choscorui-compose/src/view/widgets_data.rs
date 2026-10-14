@@ -133,8 +133,8 @@ impl CustomControl for HeaderLeaf {
     }
 }
 
-/// A table header over `columns`. A click or Space sorts by a column,
-/// ascending and then descending, and `sort` edits the sort. Dragging a
+/// A table header over `columns`. A click or Space sorts by a column:
+/// ascending, descending, then no sort. `sort` edits the sort. Dragging a
 /// column edge, or `+` and `-`, resizes the column and runs `.on_resize`
 /// with the new widths. The header keeps its widths when the columns
 /// are made again, for example for a new locale.
