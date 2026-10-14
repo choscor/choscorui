@@ -377,6 +377,7 @@ slider.vertical = Vertical
 slider.disabled = Disabled
 spin-box.copies = Copies (1–99)
 spin-box.temperature = Temperature (−20–40)
+spin-box.disabled = Disabled
 progress.of = {value} of {total}
 progress.download = Download
 progress.indeterminate = Indeterminate (animates while visible)

@@ -99,7 +99,12 @@ impl CustomControl for Marker {
             if self.variant == MarkerVariant::Separator {
                 let line = cx.style(self.query(Slot::Separator));
                 let y = inner.center().y - line.min_height / 2.0;
-                let gap = line.padding.inline_start + root.gap;
+                // Without a label or an icon, one unbroken line shows.
+                let gap = if content > 0.0 {
+                    line.padding.inline_start + root.gap
+                } else {
+                    0.0
+                };
                 let left = (start - gap - inner.origin.x).max(0.0);
                 let right_x = start + content + gap;
                 let right = (inner.max_x() - right_x).max(0.0);

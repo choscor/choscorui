@@ -48,6 +48,7 @@
   - `EXEMPT`: each public export name that is not shown, paired with a short non-empty reason (for example `("SliderStyle", "style for Slider, varied on the slider page")` or `("ContainerError", "error type")`).
 - **Every name classified (Q6).** Every public name of `choscorui-controls` must appear in exactly one of `SHOWN` or `EXEMPT`. This includes items re-exported via `pub use` and items defined directly in `lib.rs` (`pub struct|enum|trait|fn|const|static|type`). No suffix-based auto-skipping.
 - These count as **shown** and get pages: every visible control, plus dialogs (rendered in-window via `DialogStack`), popup menus and tooltips, dock area and panels, toolbar, status bar and main-window composition, canvas view, button recipes (`PillButtonRecipe`, `CommandLinkRecipe`), and a `CustomControl` demo hosted by `ControlHost`.
+  - Note: `PillButtonRecipe` and `CommandLinkRecipe` no longer exist. See [the component behavior fixes spec](2026-10-13-component-behavior-fixes.md).
 - **Coverage test** (std only, in `gallery/tests/coverage.rs` or as a `#[cfg(test)]` module, runs on every OS):
   1. Read `concat!(env!("CARGO_MANIFEST_DIR"), "/../crates/choscorui-controls/src/lib.rs")`.
   2. Collect export names. Handle multi-line `pub use module::{A, B, ...};` blocks, single `pub use module::Name;`, and top-level `pub` item definitions. Ignore `pub(crate)` and anything inside `impl` blocks or nested modules.

@@ -20,11 +20,6 @@ pub(super) fn resolve(cx: &Cx) -> ResolvedStyle {
 
 fn message(cx: &Cx) -> ResolvedStyle {
     match cx.q.slot {
-        Slot::Avatar => {
-            let mut style = cx.base();
-            style.min_width = cx.sp(8.0);
-            style
-        }
         Slot::Content => {
             let mut style = cx.base();
             style.gap = cx.sp(2.5);

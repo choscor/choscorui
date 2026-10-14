@@ -206,7 +206,6 @@ pub(crate) fn badge(cx: &Cx, variant: BadgeVariant) -> ResolvedStyle {
         BadgeVariant::Link => {
             style.foreground = cx.c(ColorRole::Primary);
             style.underline = hover;
-            style.cursor = crate::style::Cursor::Pointer;
         }
     }
     focus(&mut style, cx);

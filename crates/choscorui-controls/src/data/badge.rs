@@ -68,11 +68,19 @@ impl Badge {
                 .set(VisualState::HOVERED, false)
                 .set(VisualState::PRESSED, false)
         };
-        resolve(
+        let mut style = resolve(
             StyleQuery::new(ControlKind::Badge, Slot::Root)
                 .variant(self.variant)
                 .state(state),
-        )
+        );
+        // A link shows the pointing hand, in every variant; static text
+        // keeps the arrow.
+        style.cursor = if self.link {
+            crate::style::Cursor::Pointer
+        } else {
+            crate::style::Cursor::Auto
+        };
+        style
     }
 
     fn content(&self) -> Content<'_> {

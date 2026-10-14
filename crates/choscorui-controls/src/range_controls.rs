@@ -763,6 +763,8 @@ pub struct Progress {
     shown: Cell<f64>,
     /// The fill duration, from the last arrange.
     motion_ms: u32,
+    /// The maximum of a value that a host gives while indeterminate.
+    maximum: u32,
 }
 impl Progress {
     pub fn new(label: impl Into<String>, value: u32, maximum: u32) -> Result<Self, RangeError> {
@@ -777,8 +779,11 @@ impl Progress {
             fill: Cell::new((fraction, Some(f64::NEG_INFINITY))),
             shown: Cell::new(fraction),
             motion_ms: 0,
+            maximum,
         })
     }
+    /// A bar for work of unknown length. A value that a host gives later
+    /// has a maximum of 100.
     pub fn indeterminate(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
@@ -786,13 +791,25 @@ impl Progress {
             fill: Cell::new((0.0, Some(f64::NEG_INFINITY))),
             shown: Cell::new(0.0),
             motion_ms: 0,
+            maximum: 100,
         }
     }
 
     /// Sets a determinate value; the fill moves from where it shows now.
     fn change(&mut self, value: u32, maximum: u32) {
         self.value = Some((value, maximum));
+        self.maximum = maximum;
         self.fill.set((self.shown.get(), None));
+    }
+
+    /// Shows work of unknown length; a later value fills from empty.
+    fn clear(&mut self) -> bool {
+        if self.value.take().is_none() {
+            return false;
+        }
+        self.fill.set((0.0, Some(f64::NEG_INFINITY)));
+        self.shown.set(0.0);
+        true
     }
 
     /// The fill fraction to show at `time`: on the way from the start of
@@ -836,7 +853,7 @@ impl Progress {
     }
     pub fn set_indeterminate(&mut self, tree: &mut Tree, id: NodeId) -> Result<(), TreeError> {
         require_node(tree, id)?;
-        if self.value.take().is_some() {
+        if self.clear() {
             invalidate_value(tree, id)?;
         }
         Ok(())
@@ -1405,15 +1422,22 @@ impl crate::CustomControl for Progress {
         false
     }
 
-    /// Takes a whole `Number` from 0 to the maximum of a determinate bar.
+    /// Takes a whole `Number` from 0 to the maximum, or `Mixed(None)` for
+    /// work of unknown length. The maximum is the last one the bar had,
+    /// or 100 for a bar made indeterminate.
     fn set_value(&mut self, value: &crate::ControlValue) -> bool {
-        match (value, self.value) {
-            (crate::ControlValue::Number(number), Some((_, maximum)))
+        let maximum = self.maximum;
+        match value {
+            crate::ControlValue::Number(number)
                 if number.fract() == 0.0 && (0.0..=f64::from(maximum)).contains(number) =>
             {
                 if self.value != Some((*number as u32, maximum)) {
                     self.change(*number as u32, maximum);
                 }
+                true
+            }
+            crate::ControlValue::Mixed(None) => {
+                self.clear();
                 true
             }
             _ => false,

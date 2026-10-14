@@ -83,7 +83,6 @@ fn assert_message_parts(tokens: &DesignTokens, kind: ControlKind) {
             slot.name()
         );
     }
-    assert_eq!(get(tokens, query(Slot::Avatar)).min_width, 32.0);
     for slot in [Slot::Header, Slot::Footer] {
         let line = get(tokens, query(slot));
         text(

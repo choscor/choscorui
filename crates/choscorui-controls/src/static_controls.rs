@@ -107,7 +107,8 @@ impl Separator {
         self.orientation
     }
 
-    /// Paints a rule of the recipe thickness, centered across the bounds.
+    /// Paints a rule of the recipe thickness, centered across the bounds
+    /// and snapped to whole points, so that it stays sharp at 1x and 2x.
     pub fn paint(self, cx: &mut PaintContext<'_>) {
         let style = cx.style(StyleQuery::new(ControlKind::Separator, Slot::Root).state(cx.state));
         let bounds = cx.bounds;
@@ -117,7 +118,7 @@ impl Separator {
                 Rect::new(
                     Point::new(
                         bounds.origin.x,
-                        bounds.origin.y + (bounds.size.height - thickness) / 2.0,
+                        (bounds.origin.y + (bounds.size.height - thickness) / 2.0).round(),
                     ),
                     Size::new(bounds.size.width, thickness),
                 )
@@ -126,7 +127,7 @@ impl Separator {
                 let thickness = style.min_width.min(bounds.size.width);
                 Rect::new(
                     Point::new(
-                        bounds.origin.x + (bounds.size.width - thickness) / 2.0,
+                        (bounds.origin.x + (bounds.size.width - thickness) / 2.0).round(),
                         bounds.origin.y,
                     ),
                     Size::new(thickness, bounds.size.height),

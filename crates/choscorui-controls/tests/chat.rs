@@ -212,6 +212,25 @@ fn markers_show_label_icon_and_lines() {
 }
 
 #[test]
+fn a_separator_marker_without_a_label_draws_one_unbroken_line() {
+    let border = DesignTokens::light().color(ColorRole::Border);
+    let marker = Harness::new(Marker::new("").with_variant(MarkerVariant::Separator));
+    let inner_width = marker.bounds().size.width;
+    let widths: f64 = marker
+        .paint()
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            DisplayCommand::FillRect { rect, color, .. } if *color == border => {
+                Some(rect.size.width)
+            }
+            _ => None,
+        })
+        .sum();
+    assert_eq!(widths, inner_width, "the two halves meet with no gap");
+}
+
+#[test]
 fn message_scroller_sticks_to_the_bottom() {
     let conversation = Conversation::new();
     let mut h = Harness::new(MessageScroller::new("Chat", conversation.clone()));

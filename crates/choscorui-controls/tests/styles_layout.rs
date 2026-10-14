@@ -316,11 +316,11 @@ fn item_matches_its_reference_table() {
         assert_eq!(focused.ring, focus_ring(&tokens));
 
         let icon = get(&tokens, query(Slot::Media));
-        assert_eq!((icon.icon_size, icon.gap), (16.0, 8.0));
+        assert_eq!(icon.icon_size, 16.0);
         let title = get(&tokens, query(Slot::Title));
         let mut spec = tokens.text(TextSize::Sm, FontWeight::MEDIUM);
         spec.line_height = spec.size * 1.375;
-        assert_eq!((title.text, title.gap), (spec, 8.0));
+        assert_eq!(title.text, spec);
         let separator = get(&tokens, query(Slot::Separator));
         assert_eq!(
             (bg(&separator), separator.min_height, separator.padding),

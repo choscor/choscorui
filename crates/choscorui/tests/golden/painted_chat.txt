@@ -1,10 +1,9 @@
 ## message
 sizes default
-slot root: root track range thumb indicator icon label title description action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error scrollbar panel bar choice progress
+slot root: root track range thumb indicator icon label title description action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error scrollbar panel bar avatar choice progress
 slot content: content
 slot header: header footer
 slot viewport: viewport
-slot avatar: avatar
 ### message default default root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -24,11 +23,6 @@ text "Aa" at 38,32.2 system-ui 12 w500 t0 #737373ff
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 58,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### message default default avatar
-# rest
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## bubble
 sizes default
@@ -2565,11 +2559,10 @@ text "Aa" at 30,15.399999999999999 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## message-scroller
 sizes default
-slot root: root track range thumb indicator icon label title description action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error scrollbar panel bar choice progress
+slot root: root track range thumb indicator icon label title description action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error scrollbar panel bar avatar choice progress
 slot content: content
 slot header: header footer
 slot viewport: viewport
-slot avatar: avatar
 ### message-scroller default default root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2589,11 +2582,6 @@ text "Aa" at 38,32.2 system-ui 12 w500 t0 #737373ff
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 58,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### message-scroller default default avatar
-# rest
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## questionnaire
 sizes default

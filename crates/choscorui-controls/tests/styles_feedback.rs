@@ -187,7 +187,6 @@ fn progress_matches_its_reference_table() {
     for tokens in schemes() {
         let c = |role| tokens.color(role);
         let query = |slot| StyleQuery::new(ControlKind::Progress, slot);
-        assert_eq!(get(&tokens, query(Slot::Root)).gap, 12.0);
         let track = get(&tokens, query(Slot::Track));
         assert_eq!(
             (bg(&track), track.radius, track.min_height),
@@ -202,22 +201,6 @@ fn progress_matches_its_reference_table() {
                 slot.name()
             );
         }
-        let label = get(&tokens, query(Slot::Label));
-        text(
-            &tokens,
-            &label,
-            ColorRole::Foreground,
-            TextSize::Sm,
-            FontWeight::MEDIUM,
-        );
-        let value = get(&tokens, query(Slot::Value));
-        text(
-            &tokens,
-            &value,
-            ColorRole::MutedForeground,
-            TextSize::Sm,
-            FontWeight::NORMAL,
-        );
     }
 }
 
@@ -251,10 +234,7 @@ fn empty_matches_its_reference_table() {
         let query = |slot| StyleQuery::new(ControlKind::Empty, slot);
         let lg = radius(&tokens, RadiusScale::Lg);
         let root = get(&tokens, query(Slot::Root));
-        assert_eq!(
-            (root.padding, root.gap, root.radius),
-            (Edges::all(48.0), 16.0, lg)
-        );
+        assert_eq!((root.padding, root.radius), (Edges::all(48.0), lg));
         let header = get(&tokens, query(Slot::Header));
         assert_eq!((header.gap, header.max_width), (8.0, 384.0));
 

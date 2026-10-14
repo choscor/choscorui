@@ -186,9 +186,10 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 sizes default xs sm
 slot root: root track range thumb indicator icon label trigger value placeholder item item-indicator shortcut group-label overlay handle caption cell row header-cell fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
 slot content: content
-slot header: header footer action
+slot header: header footer
 slot title: title
 slot description: description
+slot action: action
 slot separator: separator
 slot group: group
 slot media: media
@@ -215,17 +216,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default default header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default default description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item default default action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default default separator
 # rest
@@ -243,7 +249,7 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default default media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default xs root
 # rest
@@ -268,17 +274,22 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default xs header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default xs description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item default xs action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default xs separator
 # rest
@@ -296,7 +307,7 @@ text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default xs media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default sm root
 # rest
@@ -321,17 +332,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default sm header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default sm description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item default sm action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item default sm separator
 # rest
@@ -349,7 +365,7 @@ text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item default sm media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline default root
 # rest
@@ -376,17 +392,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline default header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline default description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item outline default action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline default separator
 # rest
@@ -404,7 +425,7 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline default media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline xs root
 # rest
@@ -431,17 +452,22 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline xs header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline xs description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item outline xs action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline xs separator
 # rest
@@ -459,7 +485,7 @@ text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline xs media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline sm root
 # rest
@@ -486,17 +512,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline sm header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline sm description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item outline sm action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item outline sm separator
 # rest
@@ -514,7 +545,7 @@ text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item outline sm media
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted default root
 # rest
@@ -542,17 +573,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted default header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted default description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item muted default action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted default separator
 # rest
@@ -570,7 +606,7 @@ text "Aa" at 42,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted default media
 # rest
 stroke-path M23.333333333333332,26 L16,33.33333333333333 L12.666666666666666,30 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,34.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,34.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted xs root
 # rest
@@ -598,17 +634,22 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted xs header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted xs description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.2 system-ui 12 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item muted xs action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted xs separator
 # rest
@@ -626,9 +667,7 @@ text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted xs media
 # rest
 stroke-path M23.333333333333332,18 L16,25.333333333333332 L12.666666666666666,22 #0a0a0aff w1.3333333333333333 Round Round dash[]
-PushClip(Rect { origin: Point { x: 34.0, y: 12.0 }, size: Size { width: 0.0, height: 20.0 } })
-text "…" at 34,26.9 system-ui 14 w400 t0 #0a0a0aff
-PopClip
+text "…" at 26,26.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted sm root
 # rest
@@ -656,17 +695,22 @@ text "Aa" at 30,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted sm header
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 34,32.9 system-ui 14 w500 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted sm description
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
+### item muted sm action
+# rest
+stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 34,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### item muted sm separator
 # rest
@@ -684,7 +728,7 @@ text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
 ### item muted sm media
 # rest
 stroke-path M23.333333333333332,22 L16,29.333333333333332 L12.666666666666666,26 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "…" at 34,30.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,30.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## typography
 sizes default

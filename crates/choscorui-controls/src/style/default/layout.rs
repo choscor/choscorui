@@ -183,7 +183,6 @@ fn item(cx: &Cx) -> ResolvedStyle {
         }
         Slot::Media => {
             let mut style = cx.base();
-            style.gap = cx.sp(2.0);
             style.icon_size = 16.0;
             if cx.q.variant.0 == 2 {
                 let edge = match size {
@@ -209,7 +208,6 @@ fn item(cx: &Cx) -> ResolvedStyle {
         Slot::Title => {
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM);
             style.text.line_height = style.text.size * 1.375;
-            style.gap = cx.sp(2.0);
             style
         }
         Slot::Description => {
@@ -224,11 +222,13 @@ fn item(cx: &Cx) -> ResolvedStyle {
             style.text.line_height = style.text.size * 1.5;
             style
         }
-        Slot::Action | Slot::Header | Slot::Footer => {
+        Slot::Action => {
             let mut style = cx.base();
             style.gap = cx.sp(2.0);
             style
         }
+        // One line of text each, one row gap from the main row.
+        Slot::Header | Slot::Footer => cx.base(),
         _ => {
             let mut style = text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::NORMAL);
             style.radius = Corners::all(cx.r(RadiusScale::Md));

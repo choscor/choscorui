@@ -62,7 +62,7 @@ fn label_updates_layout_paint_and_accessibility_and_uses_its_recipe() {
 }
 
 #[test]
-fn separator_centers_a_border_rule_in_either_orientation() {
+fn separator_centers_a_border_rule_on_whole_points_in_either_orientation() {
     let tokens = DesignTokens::light();
     let styles = Styles::new();
     let border = tokens.color(ColorRole::Border);
@@ -83,7 +83,8 @@ fn separator_centers_a_border_rule_in_either_orientation() {
     );
     assert!(
         matches!(horizontal.commands(), [DisplayCommand::FillRect { rect: line, color }]
-            if *line == rect(10.0, 24.5, 100.0, 1.0) && *color == border)
+            if *line == rect(10.0, 25.0, 100.0, 1.0) && *color == border),
+        "the rule snaps to a whole point"
     );
     let vertical = paint(
         rect(10.0, 20.0, 10.0, 100.0),
@@ -91,7 +92,7 @@ fn separator_centers_a_border_rule_in_either_orientation() {
     );
     assert!(
         matches!(vertical.commands(), [DisplayCommand::FillRect { rect: line, .. }]
-            if *line == rect(14.5, 20.0, 1.0, 100.0))
+            if *line == rect(15.0, 20.0, 1.0, 100.0))
     );
 }
 

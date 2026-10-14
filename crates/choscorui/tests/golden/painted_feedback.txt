@@ -364,14 +364,12 @@ text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 ## progress
 sizes default
 slot root: root
-slot track: track thumb icon content header title description footer action trigger placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
+slot track: track thumb icon label content header title description footer action trigger value placeholder item item-indicator separator shortcut group group-label overlay handle caption cell row header-cell media fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice progress
 slot range: range indicator
-slot label: label
-slot value: value
 ### progress default default root
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 38,32.9 system-ui 14 w400 t0 #0a0a0aff
+text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### progress default default track
 # rest
@@ -384,16 +382,6 @@ text "Aa" at 26,17.9 system-ui 14 w400 t0 #0a0a0aff
 fill-rect 10,10 120x36 #171717ff
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 26,32.9 system-ui 14 w400 t0 #0a0a0aff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### progress default default label
-# rest
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w500 t0 #0a0a0aff
-= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
-### progress default default value
-# rest
-stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #737373ff w1.3333333333333333 Round Round dash[]
-text "Aa" at 26,32.9 system-ui 14 w400 t0 #737373ff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## skeleton
 sizes default
@@ -453,9 +441,7 @@ slot media: media
 ### empty default default root
 # rest
 stroke-path M71.33333333333333,54 L64,61.33333333333333 L60.666666666666664,58 #0a0a0aff w1.3333333333333333 Round Round dash[]
-PushClip(Rect { origin: Point { x: 82.0, y: 48.0 }, size: Size { width: 0.0, height: 20.0 } })
-text "…" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
-PopClip
+text "…" at 74,62.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### empty default default content
 # rest
@@ -485,9 +471,7 @@ text "Aa" at 26,28.9 system-ui 14 w400 t0 #0a0a0aff
 ### empty icon default root
 # rest
 stroke-path M71.33333333333333,54 L64,61.33333333333333 L60.666666666666664,58 #0a0a0aff w1.3333333333333333 Round Round dash[]
-PushClip(Rect { origin: Point { x: 82.0, y: 48.0 }, size: Size { width: 0.0, height: 20.0 } })
-text "…" at 82,62.9 system-ui 14 w400 t0 #0a0a0aff
-PopClip
+text "…" at 74,62.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### empty icon default content
 # rest

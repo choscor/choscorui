@@ -707,10 +707,12 @@ behavior.
   node is not in the tree.
 - `Label::hosted(text)` makes a label for a control host. It has no node, so
   `set_text` returns `MissingNode`.
-- `Separator` takes no input and publishes no semantic node, because it is
-  decorative. `paint` centers a 1 pt `border` line in either orientation.
-  In a control host, its node is a hidden `Group`.
-- `Label::paint` draws the small medium text at the start of the bounds.
+- `Separator` takes no input. It is decorative, so its node is a hidden
+  `Group` that assistive technology skips. `paint` centers a 1 pt `border`
+  line in either orientation, and snaps it to whole points, so that it
+  stays sharp at 1x and 2x.
+- `Label::paint` draws the small medium text at the start of the bounds,
+  centered vertically.
   A `DISABLED` state in the context gives 50% opacity.
 
 | Part | Kind and slot | Value |
@@ -763,9 +765,10 @@ recipe gives its thickness and color, so
 | --- | --- | --- |
 | Track | `Track` | 6 pt `muted` bar, radius full |
 | Indicator | `Indicator` | `primary` fill, 150 ms motion |
-| Label | `Label` | sm medium `foreground` text |
-| Value | `Value` | sm `muted-foreground` text |
-| Stack | `Root` | 12 pt gap |
+
+The bar paints no label and no value text. Put a `Label` view next to it
+for a visible name. The 6 pt track height is a design choice, and it
+stays.
 
 | Field | `Progress::semantics` |
 | --- | --- |
@@ -776,14 +779,16 @@ recipe gives its thickness and color, so
 
 The macOS bridge publishes the `range` value and bounds as numbers, so
 assistive technology reads the value as a part of the whole. In a control
-host, `set_value` takes a whole `Number` from 0 to the maximum of a
-determinate bar.
+host, `set_value` takes a whole `Number` from 0 to the maximum, or
+`Mixed(None)` for work of unknown length. The maximum is the last one the
+bar had, or 100 for a bar made indeterminate.
 
 **As a view.** `Progress::new(name, value).maximum(10)` shows a live `u32`
 value. The maximum is 100 by default. A maximum of zero becomes 1, and a
 value above the maximum shows a full bar. Each reports a
 `ViewError::Clamped`. `Progress::indeterminate(name)` shows work of unknown
-length.
+length. `Progress::optional(name, value)` takes a live `Option<u32>` and
+shows work of unknown length while the value is `None`.
 
 [range_controls.rs](../crates/choscorui-controls/tests/range_controls.rs) and
 [widgets.rs](../crates/choscorui-controls/tests/widgets.rs) pin this behavior.
@@ -1073,7 +1078,9 @@ behavior.
 - Focus and disabled rules are the same as on `TextField`. `SetValue`
   works without focus and on a read-only editor.
 - **Pointer.** The host sends `PointerDown { clicks, extend }`,
-  `PointerDrag`, and `PointerUp`. The editor does not capture the pointer.
+  `PointerDrag`, and `PointerUp`. `TextEditor` alone does not capture the
+  pointer. In a control host, it captures the pointer from a press to the
+  release, or to a loss of focus.
 - One click places the caret. Two clicks select a word, and three or more
   select a paragraph. A drag extends the selection by that unit.
 - A press while IME text is marked only commits the marked text.
@@ -1402,7 +1409,8 @@ this behavior.
   refuses other keys, and a refused key beeps.
 - A loss of focus commits valid text. It restores the text of the
   committed value when the text is not valid.
-- The control has no disabled state.
+- The control keeps no disabled flag. In a control host, a disabled one
+  gets no input, paints dimmed, and publishes the disabled state.
 - **Look.** `paint` uses the `Input` look of `SpinBox`: the text at the
   start and the steppers at the end. `stepper_rect` returns the stepper
   column. An invalid text sets the `invalid` flag. The steppers show the
@@ -1448,17 +1456,20 @@ directions. It formats numbers in the locale of the environment.
 | Track | `Track` | 6 pt `muted` arc |
 | Value arc | `Range` | 6 pt `primary` arc |
 | Thumb | `Thumb` | the `Slider` thumb; the ring only while hovered |
-| Value text | `Value` | xl2 medium mono `foreground` text |
+
+The dial paints no value text. Show the value in a view next to it.
 
 | Field | `Dial::semantics` |
 | --- | --- |
 | Role | `Slider` (AXSlider) |
 | Name / value | name / the integer value; the description is "Dial" |
-| State | - |
+| State | disabled, from the host |
 | Actions | `Increment`, `Decrement`, `SetValue`, `Focus` |
 
-`Dial` has no handler for these actions. The host maps them to
-`handle_key` and `point_to`.
+`Dial` has no handler for these actions. In a control host, `Increment`
+and `Decrement` go to `handle_key` as ArrowUp and ArrowDown. `SetValue`
+parses an integer, snaps it to the step, and sets it. A pointer press or
+drag goes to `point_to`.
 
 **As a view.** `Dial::new(name, value).range(0..=359).wrapping(true)` mounts
 a `HostedDial`. It edits a `Binding<i32>` through the `Number` value in both
@@ -1471,8 +1482,8 @@ clamp rules of the `Slider` view.
 
 - A press on the thumb starts a drag. A press on the track pages one
   viewport toward the press.
-- A drag follows the thumb travel. `Release` ends the drag. Without a
-  host, the scroll bar has no capture and no cancel.
+- A drag follows the thumb travel. `Release` ends the drag. `ScrollBar`
+  alone does not capture the pointer.
 - The arrow keys on the bar's axis step `line_step` (default 16 points).
   PageUp and PageDown page one viewport. Home and End go to the ends.
 - `set_direction(Rtl)` starts a horizontal bar at the right. The thumb at
@@ -1484,7 +1495,8 @@ clamp rules of the `Slider` view.
 - In a control host, the bar is a tab stop, so its keys work. It captures
   the pointer during a thumb drag and a track press. A held track press
   repeats the paging as a held `SpinBox` stepper, until the thumb reaches
-  the pointer.
+  the pointer. A pointer release, a loss of focus, or `Dismiss` ends the
+  drag or the paging, and the value stays where it is.
 - A disabled bar gets no input, paints dimmed, and publishes the
   disabled state with no actions.
 - **Look.** `paint` fills the bar with the `ScrollArea` `Scrollbar`
@@ -1641,7 +1653,8 @@ scroll view use the same bar.
   with `InvalidPosition` and changes nothing.
 - Semantic `Increment` and `Decrement` use the same step. Semantic `Focus`
   focuses the handle.
-- The control has no disabled state.
+- The control keeps no disabled flag. In a control host, a disabled one
+  gets no input, paints dimmed, and publishes the disabled state.
 - `Splitter` and `SplitterInput` are deprecated aliases of `Resizable` and
   `ResizableInput`.
 - **Look.** `paint_handle` draws a 1 pt `border` line across the split,
@@ -1652,7 +1665,7 @@ scroll view use the same bar.
 | --- | --- | --- |
 | Handle | `Handle` | 1 pt `border` line in a 4 pt hit area, resize cursor across the split |
 | Focus | `Handle`, focus visible | 1 pt `ring` ring |
-| Grip | `Icon` | 4 by 24 pt `border` grip, radius lg |
+| Grip | `Thumb` | 4 by 24 pt `border` grip, radius lg |
 
 | Field | `Resizable::semantics` |
 | --- | --- |
@@ -1860,8 +1873,9 @@ behavior.
 | State | invalid when out of range; the description names the focused field | the description is the month title; expanded while a dropdown has focus | selected when chosen; disabled outside the range |
 | Actions | `Increment`, `Decrement`, `Focus` | `Focus`; `ShowMenu` and `Expand` or `Collapse` while a dropdown has focus | `Activate` when enabled |
 
-`DateTimeEdit` has no handler for these actions. The host maps them to
-`handle_key`.
+`DateTimeEdit` has no handler for these actions. In a control host,
+`Increment` and `Decrement` act as ArrowUp and ArrowDown on the focused
+field, and `Focus` focuses the editor.
 
 **In a control host.** A hosted `DateTimeEdit` maps `Increment` and
 `Decrement` to ArrowUp and ArrowDown. Digits and separators arrive as text.
@@ -3904,9 +3918,11 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 | --- | --- | --- |
 | Badge | `Root` | 20 pt high, radius 4xl, padding 8 by 2 pt, xs medium text, 12 pt icon, 4 pt gap |
 | Default, Secondary | `Root` | `primary` or `secondary` fill; 80% while a link is hovered |
-| Destructive | `Root` | 10% `destructive` fill (20% dark), `destructive` text |
-| Outline | `Root` | 1 pt `border`; `muted` fill while a link is hovered |
-| Ghost, Link | `Root` | no fill; `Link` has `primary` text, underlined while hovered |
+| Destructive | `Root` | 10% `destructive` fill (20% dark), `destructive` text; 20% (30% dark) while a link is hovered |
+| Outline | `Root` | 1 pt `border`; `muted` fill and `muted-foreground` text while a link is hovered |
+| Ghost | `Root` | no fill; `muted` fill (50% dark) and `muted-foreground` text while a link is hovered |
+| Link | `Root` | no fill, `primary` text, underlined while a link is hovered |
+| Cursor | - | the pointing hand over a link in any variant; the arrow over a plain badge |
 
 | Field | `Badge::semantics` |
 | --- | --- |
@@ -4177,7 +4193,7 @@ behavior.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Box | `Root` | 48 pt padding, 16 pt gap, radius lg |
+| Box | `Root` | 48 pt padding, radius lg |
 | Header | `Header` | 8 pt gap, at most 384 pt wide |
 | Icon media | `Media` | 40 pt `muted` box, radius lg, 24 pt icon, 8 pt below |
 | Title | `Title` | lg medium text, tight tracking |
@@ -4368,8 +4384,8 @@ behavior.
 | Link hover | `Root`, hovered and highlighted | `muted` fill |
 | Image media | `Media`, image | 40 pt square, radius sm; `Sm` 32, `Xs` 24 |
 | Icon media | `Media`, icon | 16 pt icon |
-| Header line | `Header` | sm text, 8 pt gap |
-| Footer line | `Footer` | sm text, 8 pt gap |
+| Header line | `Header` | sm text, one row gap above the row |
+| Footer line | `Footer` | sm text, one row gap below the row |
 | Title | `Title` | sm medium text |
 | Description | `Description` | sm `muted-foreground` text; `Xs` uses xs text |
 | Group | `Group` | 16 pt gap; `Sm` 10, `Xs` 8 |
@@ -4399,18 +4415,22 @@ behavior.
   alignments.
 - A `Bubble` wraps its text. It is at most 80% of the content width,
   except a ghost bubble.
-- `with_reactions(text)` shows a pill over the bottom end of the bubble.
+- `with_reactions(text)` shows a pill over the bottom edge of the bubble.
+  The pill is at the end of a start message, and at the start of an end
+  message.
 - `BubbleVariant` selects `Default`, `Secondary`, `Muted`, `Tinted`,
   `Outline`, `Ghost`, or `Destructive`. A bubble under the pointer shows
-  the hover look.
+  the hover look. This is a design choice: the bubble takes no input, but
+  the hover look follows the pointer through a conversation.
 - A message takes no focus.
 
 | Part | Slot | Value |
 | --- | --- | --- |
-| Avatar gap | `Message` `Root` | 8 pt between the avatar and the content |
+| Avatar gap | `Message` `Root` | 8 pt between the avatar and the content; the avatar keeps its own size |
 | Content | `Message` `Content` | 10 pt between the header, the bubbles, and the footer |
 | Bubbles | `Message` `Group` | 8 pt between bubbles |
-| Header and footer | `Message` `Header`, `Footer` | xs medium `muted-foreground` text, 12 pt inline padding |
+| Header | `Message` `Header` | xs medium `muted-foreground` text, 12 pt inline padding |
+| Footer | `Message` `Footer` | the same as the header |
 | Bubble | `Bubble` `Content` | sm text, 1.625 line height, radius xl, 12 by 8 pt padding |
 | Default | `Bubble` `Content`, `Default` | `primary` fill, `primary-foreground` text; 80% fill on hover |
 | Tinted | `Bubble` `Content`, `Tinted` | `primary` hue at OKLCH lightness 0.93 (dark 0.3), 40% chroma; on hover 0.88 (dark 0.35), 50% chroma |
@@ -4474,15 +4494,16 @@ behavior.
 - A marker is a short muted line between messages, such as a date.
 - The default and `Border` markers show an optional icon and the label at
   the start. `Border` adds a line below.
-- The `Separator` marker centers the label between two lines.
+- The `Separator` marker centers the label between two lines. Without a
+  label or an icon, it shows one unbroken line.
 - It takes no focus.
 
 | Part | Slot | Value |
 | --- | --- | --- |
 | Marker | `Root` | sm `muted-foreground` text, 8 pt gap, at least 16 pt tall |
-| Border | `Root`, `Border` | 1 pt `border` line below, 8 pt padding below |
+| Border | `Root`, `Border` variant | 1 pt `border` line below, 8 pt padding below |
 | Icon | `Icon` | 16 pt `muted-foreground` icon |
-| Lines | `Separator` | 1 pt `border` lines, 4 pt from the label |
+| Lines | `Separator` | 1 pt `border` lines, 12 pt from the label: the `Root` gap and 4 pt |
 
 | Field | `Marker::semantics` |
 | --- | --- |

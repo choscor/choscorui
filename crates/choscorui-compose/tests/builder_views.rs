@@ -198,6 +198,27 @@ fn a_progress_bar_clamps_its_maximum_and_value() {
 }
 
 #[test]
+fn an_optional_progress_bar_is_indeterminate_without_a_value() {
+    let sent = slot();
+    let shared = sent.clone();
+    let mut host = host(move |cx| {
+        let value = cx.state(None::<u32>);
+        shared.set(Some(value));
+        Progress::optional("Upload", move || value.get())
+            .maximum(10)
+            .into_any()
+    });
+    assert_eq!(host.take_errors(), Vec::new());
+    assert_eq!(node(&mut host, "Upload").1.value, None);
+    take(&sent).set(Some(4));
+    host.flush();
+    assert_eq!(node(&mut host, "Upload").1.value.as_deref(), Some("40%"));
+    take(&sent).set(None);
+    host.flush();
+    assert_eq!(node(&mut host, "Upload").1.value, None);
+}
+
+#[test]
 fn valid_builders_report_nothing() {
     let mut host = host(|cx| {
         let level = cx.state(40);

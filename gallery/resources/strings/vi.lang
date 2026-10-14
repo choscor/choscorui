@@ -374,6 +374,7 @@ slider.vertical = Dọc
 slider.disabled = Đã tắt
 spin-box.copies = Số bản (1–99)
 spin-box.temperature = Nhiệt độ (−20–40)
+spin-box.disabled = Đã tắt
 progress.of = {value} trên {total}
 progress.download = Tải xuống
 progress.indeterminate = Không xác định (chuyển động khi hiển thị)

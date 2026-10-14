@@ -104,7 +104,7 @@ fn host_vertical() -> ViewHost {
 
 #[test]
 fn a_link_badge_shows_the_pointing_hand() {
-    let badge = Badge::new("Docs").with(|badge| badge.with_variant(BadgeVariant::Link));
+    let badge = Badge::new("Docs").with(|badge| badge.with_variant(BadgeVariant::Link).as_link());
     let mut host = host("en", badge);
     let node = host.find("Docs").expect("the badge node");
     let center = host.tree().bounds(node).unwrap().center();
@@ -115,6 +115,19 @@ fn a_link_badge_shows_the_pointing_hand() {
     assert_eq!(
         cursor_after(&mut host, moved(390.0, 90.0)),
         CursorShape::Arrow
+    );
+}
+
+#[test]
+fn a_plain_badge_in_the_link_look_keeps_the_arrow() {
+    let badge = Badge::new("Docs").with(|badge| badge.with_variant(BadgeVariant::Link));
+    let mut host = host("en", badge);
+    let node = host.find("Docs").expect("the badge node");
+    let center = host.tree().bounds(node).unwrap().center();
+    assert_eq!(
+        cursor_after(&mut host, moved(center.x, center.y)),
+        CursorShape::Arrow,
+        "the badge is not a link, so it does not look clickable"
     );
 }
 

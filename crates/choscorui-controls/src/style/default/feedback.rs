@@ -124,13 +124,8 @@ fn progress(cx: &Cx) -> ResolvedStyle {
             style.motion_ms = cx.motion(150);
             style
         }
-        Slot::Label => text(cx, ColorRole::Foreground, TextSize::Sm, FontWeight::MEDIUM),
-        Slot::Value => muted_text(cx, TextSize::Sm),
-        Slot::Root => {
-            let mut style = cx.base();
-            style.gap = cx.sp(3.0);
-            style
-        }
+        // The control paints only the track and the indicator.
+        Slot::Root => cx.base(),
         _ => {
             let mut style = cx.base();
             style.background = cx.c(ColorRole::Muted).into();
@@ -200,9 +195,9 @@ fn empty(cx: &Cx) -> ResolvedStyle {
             style.max_width = 384.0;
             style
         }
+        // The header and the buttons set the space between the parts.
         _ => {
             let mut style = cx.base();
-            style.gap = cx.sp(4.0);
             style.radius = Corners::all(cx.r(RadiusScale::Lg));
             style.padding = Edges::all(cx.sp(12.0));
             style

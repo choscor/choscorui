@@ -1761,6 +1761,25 @@ pub fn new<M, N>(name: impl IntoLive<TextContent, M>, value: impl IntoLive<u32, 
 
 A progress bar named `name` that shows `value`.
 
+#### `Progress::optional`
+
+```rust
+pub fn optional<M, N>(name: impl IntoLive<TextContent, M>, value: impl IntoLive<Option<u32>, N>) -> Self
+```
+
+A progress bar named `name` that shows `value`, and work of
+unknown length while `value` is `None`.
+
+##### Examples
+
+```rust
+use choscorui_compose::view::{Progress, State, View};
+
+fn upload(sent: State<Option<u32>>) -> impl View {
+    Progress::optional("Upload", move || sent.get()).maximum(10)
+}
+```
+
 ## `Questionnaire`
 
 type alias in `choscorui::prelude::Questionnaire`

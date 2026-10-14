@@ -114,7 +114,7 @@ impl View for SpinBoxPage {
         column((
             row("spin-box.copies", range(1, 99, 2, 1, 10), true),
             row("spin-box.temperature", range(-20, 40, 21, 1, 5), true),
-            row("slider.disabled", range(0, 10, 5, 1, 1), false),
+            row("spin-box.disabled", range(0, 10, 5, 1, 1), false),
         ))
     }
 }

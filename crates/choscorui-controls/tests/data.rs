@@ -4,6 +4,7 @@ mod hosted;
 
 use choscorui_controls::{
     Avatar, AvatarGroup, Badge, BadgeVariant, ButtonVariant, Card, ControlMessage, ControlSize,
+    Cursor,
 };
 use choscorui_core::{
     ColorRole, DesignTokens, DisplayCommand, Image, Key, KeyEvent, LayoutDirection, Point,
@@ -122,6 +123,20 @@ fn a_plain_badge_is_text_and_a_link_badge_activates() {
     assert_eq!(link.messages(), [ControlMessage::ItemActivated(0)]);
     link.key(Key::Enter);
     assert_eq!(link.messages(), [ControlMessage::ItemActivated(0)]);
+}
+
+#[test]
+fn only_a_link_badge_shows_the_pointing_hand() {
+    let cursor = |badge: Badge| {
+        let mut h = Harness::new(badge);
+        h.hover(h.bounds().center());
+        h.paint();
+        h.host.cursor()
+    };
+    let plain = Badge::new("Docs").with_variant(BadgeVariant::Link);
+    assert_eq!(cursor(plain), Cursor::Auto);
+    let link = Badge::new("Docs").with_variant(BadgeVariant::Outline);
+    assert_eq!(cursor(link.as_link()), Cursor::Pointer);
 }
 
 #[test]

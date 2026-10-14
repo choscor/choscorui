@@ -148,6 +148,7 @@ impl Message {
         let content = cx.style(Self::query(Slot::Content));
         let group = cx.style(Self::query(Slot::Group));
         let header = cx.style(Self::query(Slot::Header));
+        let footer = cx.style(Self::query(Slot::Footer));
         let side = self.avatar.as_ref().map_or(0.0, |avatar| avatar.side(cx));
         let avatar_used = if self.avatar.is_some() {
             side + root.gap
@@ -256,8 +257,8 @@ impl Message {
             Rect::from_xywh(start_x, y, width, 0.0)
         } else {
             gap = content.gap;
-            let top = line(header.text.line_height, &mut y, &mut gap);
-            Rect::from_xywh(start_x, top, width, header.text.line_height)
+            let top = line(footer.text.line_height, &mut y, &mut gap);
+            Rect::from_xywh(start_x, top, width, footer.text.line_height)
         };
         let height = (y - rect.origin.y).max(side);
         let avatar_x = if right {
@@ -307,8 +308,9 @@ impl Message {
                 });
             }
         }
-        cx.slot(layout.footer, &header, |cx, inner| {
-            cx.label(inner, &self.footer, &header, align);
+        let footer = cx.style(Self::query(Slot::Footer));
+        cx.slot(layout.footer, &footer, |cx, inner| {
+            cx.label(inner, &self.footer, &footer, align);
         });
     }
 

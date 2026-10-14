@@ -166,6 +166,36 @@ impl Configured<controls::Progress> {
         })
     }
 
+    /// A progress bar named `name` that shows `value`, and work of
+    /// unknown length while `value` is `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use choscorui_compose::view::{Progress, State, View};
+    ///
+    /// fn upload(sent: State<Option<u32>>) -> impl View {
+    ///     Progress::optional("Upload", move || sent.get()).maximum(10)
+    /// }
+    /// ```
+    pub fn optional<M, N>(
+        name: impl IntoLive<TextContent, M>,
+        value: impl IntoLive<Option<u32>, N>,
+    ) -> Self {
+        let name = label(name);
+        let limits = percent();
+        let read = limits.clone();
+        Configured::try_custom(ControlKind::Progress, move |env| {
+            let maximum = read.get().maximum as u32;
+            controls::Progress::new(text(&name, env), 0, maximum)
+        })
+        .limited(limits)
+        .value(value.into_live().map(|value| match value {
+            Some(value) => ControlValue::Number(f64::from(value)),
+            None => ControlValue::Mixed(None),
+        }))
+    }
+
     /// A progress bar for work of unknown length.
     pub fn indeterminate<M>(name: impl IntoLive<TextContent, M>) -> Self {
         let name = label(name);
