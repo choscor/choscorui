@@ -381,3 +381,58 @@ fn questionnaire_mirrors_and_clicks() {
     h.click(Point::new(bounds.origin.x + 10.0, bounds.max_y() - 10.0));
     assert_eq!(h.messages(), [ControlMessage::Activated]);
 }
+
+#[test]
+fn attachment_covers_its_media_and_shows_a_progress_track_only_while_uploading() {
+    let tokens = DesignTokens::light();
+    let wide = Image::from_rgba8(2, 1, vec![255; 8]).unwrap();
+    let h = Harness::new(Attachment::new("cover.png").with_media(AttachmentMedia::Image(wide)));
+    let image = h
+        .paint()
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            DisplayCommand::DrawImage { rect, .. } => Some(*rect),
+            _ => None,
+        });
+    let image = image.expect("the image");
+    assert_eq!(image.size.width, 2.0 * image.size.height, "keeps its ratio");
+    assert_eq!(image.size.height, 40.0, "covers the 40 pt media box");
+
+    let mut idle = Harness::new(Attachment::new("a.txt").with_detail("1 KB").vertical());
+    let mut uploading = Harness::new(
+        Attachment::new("a.txt")
+            .with_detail("1 KB")
+            .vertical()
+            .with_state(AttachmentState::Uploading)
+            .with_progress(0.25),
+    );
+    assert!(idle.measure().height < uploading.measure().height);
+    let list = uploading.paint();
+    let rects = |color| -> Vec<choscorui_core::Rect> {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::FillRect { rect, color: c } if *c == color => Some(*rect),
+                DisplayCommand::FillRoundedRect { rect, color: c, .. } if *c == color => {
+                    Some(*rect)
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let track = rects(tokens.color(ColorRole::Muted));
+    let track = track.last().expect("a muted track");
+    let filled = rects(tokens.color(ColorRole::Primary))[0];
+    assert_eq!(filled.size.width * 4.0, track.size.width);
+
+    let vertical = Harness::new(
+        Attachment::new("cover.png")
+            .vertical()
+            .with_remove("Remove cover.png"),
+    );
+    assert!(
+        paints(&vertical.paint(), tokens.color(ColorRole::Background)),
+        "the remove button has a surface over the media"
+    );
+}

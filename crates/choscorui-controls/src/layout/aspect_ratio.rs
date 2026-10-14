@@ -44,7 +44,7 @@ impl AspectRatio {
 
 /// The rectangle that `image` covers `rect` with, centered, keeping its
 /// own ratio.
-fn cover(image: &Image, rect: Rect) -> Rect {
+pub(crate) fn cover(image: &Image, rect: Rect) -> Rect {
     let (width, height) = (f64::from(image.width()), f64::from(image.height()));
     if width <= 0.0 || height <= 0.0 {
         return rect;

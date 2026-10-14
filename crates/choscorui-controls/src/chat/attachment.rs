@@ -4,6 +4,7 @@
 use crate::custom::{ControlContext, ControlEvent, ControlMessage, CustomControl, MeasureContext};
 use crate::feedback::loading::paint_loader;
 use crate::hosted;
+use crate::layout::cover;
 use crate::style::fill_area;
 use crate::style::{
     AttachmentState, ButtonVariant, ControlKind, ControlSize, PaintContext, Slot, StyleQuery,
@@ -127,9 +128,16 @@ impl Attachment {
             .state(state.set(VisualState::OPEN, self.vertical))
     }
 
-    fn remove_query(state: VisualState) -> StyleQuery {
+    /// The remove button: ghost in a row, and outline over the media
+    /// box of a vertical attachment, so it shows on any image.
+    fn remove_query(&self, state: VisualState) -> StyleQuery {
+        let variant = if self.vertical {
+            ButtonVariant::Outline
+        } else {
+            ButtonVariant::Ghost
+        };
         StyleQuery::new(ControlKind::Button, Slot::Root)
-            .variant(ButtonVariant::Ghost)
+            .variant(variant)
             .size(ControlSize::IconXs)
             .state(state)
     }
@@ -140,7 +148,7 @@ impl Attachment {
         let title = cx.style(self.query(Slot::Title, VisualState::NONE));
         let detail = cx.style(self.query(Slot::Description, VisualState::NONE));
         let remove = if self.remove.is_some() {
-            cx.style(Self::remove_query(VisualState::NONE)).min_height
+            cx.style(self.remove_query(VisualState::NONE)).min_height
         } else {
             0.0
         };
@@ -259,9 +267,11 @@ impl Attachment {
             AttachmentMedia::Image(image) => {
                 let clip = Path::rounded_rect(rect, style.radius.top_start);
                 if cx.list.push_clip_path(clip).is_ok() {
-                    let _ = cx
-                        .list
-                        .draw_image(image.clone(), rect, ImageSampling::Linear);
+                    let _ = cx.list.draw_image(
+                        image.clone(),
+                        cover(image, rect),
+                        ImageSampling::Linear,
+                    );
                     let _ = cx.list.pop_clip();
                 }
             }
@@ -296,7 +306,13 @@ impl CustomControl for Attachment {
         let bar = cx.style(self.query(Slot::Progress, VisualState::NONE));
         let (edge, remove, title_height, detail_height) = self.metrics(cx);
         let max = cx.constraints.max.width;
-        let text_height = title_height + detail_height + bar.min_height * 2.0;
+        // Only an uploading attachment keeps room for its progress line.
+        let bar = if self.state == AttachmentState::Uploading {
+            bar.min_height * 2.0
+        } else {
+            0.0
+        };
+        let text_height = title_height + detail_height + bar;
         let size = if self.vertical {
             let width = root.min_width.min(max);
             let inner = width - root.padding.horizontal();
@@ -365,7 +381,9 @@ impl CustomControl for Attachment {
         cx.label(self.parts.detail, &self.detail, &detail, TextAlign::Start);
         if self.state == AttachmentState::Uploading {
             let bar = cx.style(self.query(Slot::Progress, host));
+            let rail = cx.style(self.query(Slot::Track, host));
             let track = self.parts.bar;
+            fill_area(cx.list, track, cx.rtl, &rail.background);
             let filled = track.size.width * self.progress;
             let x = if cx.rtl {
                 track.max_x() - filled
@@ -384,7 +402,7 @@ impl CustomControl for Attachment {
                 .button
                 .state((), host)
                 .set(VisualState::FOCUS_VISIBLE, host.focus_visible());
-            let style = cx.style(Self::remove_query(state));
+            let style = cx.style(self.remove_query(state));
             cx.slot(self.parts.remove, &style, |cx, inner| {
                 cx.icon(inner, Icon::X, &style);
             });

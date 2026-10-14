@@ -3984,7 +3984,8 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 
 ### Avatar and AvatarGroup
 
-- An avatar shows its image clipped to a circle. Without an image, it
+- An avatar shows its image clipped to a circle. The image covers the
+  circle and keeps its ratio, so its center shows. Without an image, it
   shows the fallback text, such as initials, on a muted circle. Fallback
   text that is too wide gets a smaller type size to fit, and is clipped.
   It does not truncate.
@@ -3995,6 +3996,11 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
   circle that shows the count of people not shown.
 - The group is 2 pt larger than its circles on each side, so that the
   rings stay inside its bounds.
+- The size is `Sm`, `Default`, or `Lg`. Another size counts as
+  `Default`. In bounds larger than its circle, an avatar sits at the
+  center.
+- `AvatarGroup::new` and `with_size` set the size of each avatar to the
+  group size.
 - Avatars take no focus.
 
 | Part | Slot | Value |
@@ -4536,12 +4542,16 @@ behavior.
 
 - The media box, the file name, and the detail line sit in a row.
   `vertical()` stacks the media box over the text.
-- `AttachmentMedia` is an icon or an image that covers the media box.
+- `AttachmentMedia` is an icon or an image that covers the media box. The
+  image keeps its ratio and shows its center.
 - `AttachmentState` selects `Idle`, `Uploading`, `Processing`, `Error`, or
   `Done`. An uploading attachment shows a progress line from
-  `with_progress`. A processing one spins a loader in its media box. An
+  `with_progress` on a muted track. Only an uploading attachment keeps
+  space for the line. A processing one spins a loader in its media box. An
   error shows the destructive border and detail text.
-- `with_remove(label)` adds a ghost remove button at the end. It is the
+- `with_remove(label)` adds a ghost remove button at the end. A vertical
+  attachment shows an outline button over the media box, so the button
+  has a surface on any image. The button is the
   only tab stop. Enter, Space, a click, or `Dismiss` emits `Dismissed`.
   Keyboard focus rings only the remove button.
 - The size is `Default`, `Sm`, or `Xs`.
@@ -4555,7 +4565,8 @@ behavior.
 | Name | `Title` | sm medium text; xs for `Sm` and `Xs` |
 | Detail | `Description` | xs `muted-foreground` text, 2 pt above; `destructive` for an error |
 | Progress | `Progress` | 2 pt `primary` line |
-| Remove | `Button` `Root`, `Ghost`, `IconXs` | ghost icon button with an X |
+| Track | `Track` | 2 pt `muted` line under the progress line |
+| Remove | `Button` `Root`, `Ghost`, `IconXs` | ghost icon button with an X; `Outline` when vertical |
 
 | Field | `Attachment::semantics` |
 | --- | --- |

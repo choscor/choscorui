@@ -3,6 +3,7 @@
 
 use crate::custom::{ControlContext, ControlEvent, CustomControl, MeasureContext};
 use crate::hosted;
+use crate::layout::cover;
 use crate::style::{
     ControlKind, ControlSize, PaintContext, ResolvedStyle, Slot, StyleQuery, TextAlign, TextLine,
     TextOverflow, draw_text,
@@ -42,11 +43,19 @@ impl Avatar {
         self
     }
 
-    /// Sets the size: `Sm`, `Default`, or `Lg`.
+    /// Sets the size: `Sm`, `Default`, or `Lg`. Another size counts as
+    /// `Default`.
     #[must_use]
     pub fn with_size(mut self, size: ControlSize) -> Self {
-        self.size = size;
+        self.size = Self::allowed(size);
         self
+    }
+
+    fn allowed(size: ControlSize) -> ControlSize {
+        match size {
+            ControlSize::Sm | ControlSize::Lg => size,
+            _ => ControlSize::Default,
+        }
     }
 
     /// Shows a badge with an optional icon. The small size has no room
@@ -75,9 +84,11 @@ impl Avatar {
         match &self.image {
             Some(image) => {
                 if cx.list.push_clip_path(Path::ellipse(rect)).is_ok() {
-                    let _ = cx
-                        .list
-                        .draw_image(image.clone(), rect, ImageSampling::Linear);
+                    let _ = cx.list.draw_image(
+                        image.clone(),
+                        cover(image, rect),
+                        ImageSampling::Linear,
+                    );
                     let _ = cx.list.pop_clip();
                 }
             }
@@ -122,9 +133,10 @@ impl CustomControl for Avatar {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
+        // The circle sits at the center of larger bounds.
         let side = cx.style(Self::query(self.size, Slot::Root)).min_width;
-        let bounds = cx.bounds;
-        let rect = Rect::from_xywh(bounds.origin.x, bounds.origin.y, side, side);
+        let center = cx.bounds.center();
+        let rect = Rect::from_xywh(center.x - side / 2.0, center.y - side / 2.0, side, side);
         self.paint_at(cx, rect);
     }
 
@@ -156,6 +168,7 @@ impl AvatarGroup {
             count: None,
             size: ControlSize::Default,
         }
+        .with_size(ControlSize::Default)
     }
 
     /// Ends the group with a circle that shows `count`, such as `+3`.
@@ -165,9 +178,11 @@ impl AvatarGroup {
         self
     }
 
-    /// Sets the size of every avatar: `Sm`, `Default`, or `Lg`.
+    /// Sets the size of every avatar: `Sm`, `Default`, or `Lg`. Another
+    /// size counts as `Default`.
     #[must_use]
     pub fn with_size(mut self, size: ControlSize) -> Self {
+        let size = Avatar::allowed(size);
         self.size = size;
         self.avatars
             .iter_mut()

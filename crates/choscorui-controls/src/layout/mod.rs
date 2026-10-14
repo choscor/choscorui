@@ -8,5 +8,6 @@ mod item;
 
 pub use accordion::Accordion;
 pub use aspect_ratio::AspectRatio;
+pub(crate) use aspect_ratio::cover;
 pub use collapsible::Collapsible;
 pub use item::{Item, ItemGroup, ItemMedia};

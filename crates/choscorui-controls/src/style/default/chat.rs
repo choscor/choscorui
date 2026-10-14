@@ -214,6 +214,12 @@ fn attachment(cx: &Cx) -> ResolvedStyle {
             style.min_height = 2.0;
             style
         }
+        Slot::Track => {
+            let mut style = cx.base();
+            style.background = cx.c(ColorRole::Muted).into();
+            style.min_height = 2.0;
+            style
+        }
         Slot::Action => {
             let mut style = cx.base();
             style.gap = cx.sp(1.0);

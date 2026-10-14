@@ -216,3 +216,41 @@ fn avatar_groups_overlap_and_end_with_a_count() {
     let mut small = Harness::new(AvatarGroup::new("Team", people()).with_size(ControlSize::Sm));
     assert_eq!(small.measure().width, 3.0 * 24.0 - 2.0 * 8.0 + 4.0);
 }
+
+#[test]
+fn avatars_cover_their_circle_center_in_bounds_and_keep_their_group_size() {
+    let draws = |list: &choscorui_core::DisplayList| -> Vec<choscorui_core::Rect> {
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                DisplayCommand::DrawImage { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .collect()
+    };
+    let wide = Image::from_rgba8(2, 1, vec![255; 8]).unwrap();
+    let mut h = Harness::new(Avatar::new("Ana Lee", "AL").with_image(wide));
+    assert_eq!(
+        draws(&h.paint()),
+        [hosted::rect(-6.0, 10.0, 64.0, 32.0)],
+        "the image covers the circle and keeps its ratio"
+    );
+    h.place(hosted::rect(0.0, 0.0, 100.0, 60.0));
+    assert_eq!(draws(&h.paint()), [hosted::rect(18.0, 14.0, 64.0, 32.0)]);
+
+    let mut odd = Harness::new(Avatar::new("Ana Lee", "AL").with_size(ControlSize::Xs));
+    assert_eq!(odd.measure().width, 32.0, "an unknown size is the default");
+
+    let primary = DesignTokens::light().color(ColorRole::Primary);
+    let large = vec![
+        Avatar::new("Ana Lee", "AL")
+            .with_size(ControlSize::Lg)
+            .with_badge(None),
+    ];
+    let group = Harness::new(AvatarGroup::new("Team", large));
+    assert_eq!(
+        rounded_fills(&group.paint(), primary),
+        [hosted::rect(32.0, 32.0, 10.0, 10.0)],
+        "the group sets each avatar size"
+    );
+}
