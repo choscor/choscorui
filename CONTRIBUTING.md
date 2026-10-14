@@ -55,12 +55,24 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test window_smoke --
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test menu_smoke --locked
 NSDeallocateZombies=YES CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui-macos --test lifetime_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui --test app_smoke --locked
+CHOSCORUI_RUN_MACOS_SMOKE=1 cargo test -p choscorui --test metal_parity_smoke --locked
 CHOSCORUI_RUN_MACOS_SMOKE=1 CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p choscorui-macos --test clipboard_smoke --locked
 CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
 CHOSCORUI_GALLERY_SETTINGS=/tmp/gallery.txt CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
 ```
 
 For changes to paint, layout, text, the display list, or the run loop, also run the benchmark check in [docs/performance.md](docs/performance.md).
+
+### Metal shaders
+
+The Metal painter loads the precompiled library `crates/choscorui-macos/src/shaders/ui.metallib`, so a build does not need the Metal toolchain. You need the toolchain only to change `ui.metal`. To change the shaders, do these steps:
+
+1. Install the Metal toolchain: `xcodebuild -downloadComponent MetalToolchain`.
+2. Edit `crates/choscorui-macos/src/shaders/ui.metal`.
+3. Run `scripts/macos/build-shaders.sh`. It writes `ui.metallib` and the stamp file `ui.metallib.stamp`.
+4. Commit the source, the library, and the stamp together.
+
+The test `shader_library_matches_source` of `choscorui-macos` fails when the source or the library does not match the stamp.
 
 The [CI workflow](.github/workflows/ci.yml) and the commands in this document are the reference.
 

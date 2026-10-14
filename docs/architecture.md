@@ -113,7 +113,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-macos
 
-`choscorui-macos` is the supported backend. It contains all hand-written AppKit, Core Foundation, Core Graphics, Core Text, ImageIO, and UserNotifications FFI. All of its `unsafe` code is in the `ffi` module, which declares each message, C function, SDK constant, struct, and callback class. The rest of the crate is safe code. Its main types are `Application`, `Window`, `WindowEvent`, `Poster`, `Timer`, `MainMenu`, `ContextMenu`, `Clipboard`, `SystemFeedback`, `CoreTextShaper`, and the dialog specs. The whole crate has `#![cfg(target_os = "macos")]`, so it is empty on other targets. [platform-macos.md](platform-macos.md) describes the backend, and [ffi.md](ffi.md) records each FFI boundary.
+`choscorui-macos` is the supported backend. It contains all hand-written AppKit, Core Foundation, Core Graphics, Core Text, ImageIO, Metal, Quartz Core, and UserNotifications FFI. All of its `unsafe` code is in the `ffi` module, which declares each message, C function, SDK constant, struct, and callback class. The rest of the crate is safe code. Its main types are `Application`, `Window`, `WindowEvent`, `Poster`, `Timer`, `MainMenu`, `ContextMenu`, `Clipboard`, `SystemFeedback`, `CoreTextShaper`, and the dialog specs. The whole crate has `#![cfg(target_os = "macos")]`, so it is empty on other targets. [platform-macos.md](platform-macos.md) describes the backend, and [ffi.md](ffi.md) records each FFI boundary.
 
 Dependencies: `choscorui-core` only.
 
@@ -196,8 +196,11 @@ The application owns the main loop. Each turn of the loop moves one native event
 5. The controls change their state and mark nodes with `Dirty::LAYOUT`, `Dirty::PAINT`, or `Dirty::SEMANTICS`.
 6. Layout writes new bounds into the tree for the changed nodes.
 7. The application paints into a new `DisplayList` and gives it to `Window::set_display_list`.
-8. `set_display_list` calls `choscorui_core::damage` with the old and the new list. It invalidates only the changed region. An identical list schedules no frame.
-9. AppKit calls `drawRect:`, and the backend replays the display list through Core Graphics and Core Text.
+8. `set_display_list` calls `choscorui_core::damage` with the old and the new list. An identical list schedules no frame.
+9. The Metal painter draws the full list into the next drawable of the window's `CAMetalLayer` and presents it. When no drawable or frame slot is free, the view's display link tries again on the next display refresh. The link stops when no frame waits.
+10. When the window paints with Core Graphics, `set_display_list` invalidates only the changed region. AppKit then calls `drawRect:`, and the backend replays the list through Core Graphics and Core Text.
+
+The Metal painter is the default. A window uses Core Graphics when the Mac has no Metal device or the shaders do not load. `CHOSCORUI_PAINTER=core-graphics` also selects Core Graphics. A command buffer that fails moves the window to Core Graphics for the rest of its life. `Window::painter` tells which painter a window uses.
 
 In each frame, the application also updates its `SemanticTree` and sends the snapshot and the changes to `Window::set_accessibility`. The backend reconciles them into `NSAccessibilityElement` objects and posts the notifications. The application reads actions from assistive technology with `Window::take_accessibility_actions`.
 
@@ -213,7 +216,8 @@ flowchart TD
     layout --> list["DisplayList"]
     list --> setlist["Window::set_display_list"]
     setlist --> damage["damage region"]
-    damage --> painter["drawRect: Core Graphics painter"]
+    damage --> metal["Metal painter on the display link"]
+    damage --> painter["drawRect: Core Graphics fallback"]
     dirty --> semantics["SemanticTree::set"]
     semantics --> bridge["Window::set_accessibility"]
     bridge --> ax["NSAccessibilityElement objects"]

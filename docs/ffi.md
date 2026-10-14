@@ -121,7 +121,18 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 - **Commands.** Each push command maps to exactly one `CGContextSaveGState`. Group opacity uses a transparency layer.
 - **Shadows.** A shadow draws the mask from `Shadow::mask` through `CGContextClipToMask`. Thus, it matches the software renderer.
 - **Backdrop blur.** `BackdropBlur` and `BackdropBlurCorners` read the pixels of a 32-bit bitmap context through `CGBitmapContextGetData`. They check the row stride before they read rows. They blur a copy with `blur_pixels` and draw the copy back in device space, clipped to the rounded rectangle. A context that is not a bitmap context gets no blur. [`render_parity.rs`](../crates/choscorui/tests/render_parity.rs) compares the result with the software renderer.
-- **Damage.** `set_display_list` compares the old and new lists with `choscorui_core::damage`. It calls `setNeedsDisplayInRect:` only for the changed area, so an idle window does not draw.
+- **Damage.** `set_display_list` compares the old and new lists with `choscorui_core::damage`. With Core Graphics, it calls `setNeedsDisplayInRect:` only for the changed area, so an idle window does not draw.
+
+### Metal painter
+
+- **Objects.** `MTLCreateSystemDefaultDevice` and each `new` message return +1 objects that `Retained` releases. The process keeps one device, one command queue, the pipelines, and the samplers in a `OnceLock`.
+- **Library.** `new_library` copies the precompiled `.metallib` bytes into a `dispatch_data_t` with a null destructor. Thus, Metal does not borrow the Rust slice.
+- **Buffers and textures.** `new_buffer` and the `set*Bytes:` messages copy their Rust slices. `replace_region` checks that the region fits in the texture and that the slice holds all its rows. `read_buffer` checks the buffer length, and it reads only after the GPU work completes.
+- **Layer.** The content view hosts a `CAMetalLayer` that the surface owns. `nextDrawable` can return nil. Then the frame stays pending.
+- **Display link.** `displayLinkWithTarget:selector:` makes the link of the content view. The link sends `choscoruiDisplayLinkFired:` on the main thread. The link retains the view, so the drop of a `Window` invalidates its link.
+- **Handler blocks.** The presented handler and the completed handler are global blocks with no captures. Metal calls them on its own threads. They find the frame by the object address in a map behind a `Mutex`, and they change only atomics and that frame's paint state.
+- **Panics.** The display link callback is a method of the content view class, so its trampoline catches a panic. The blocks catch a panic and report it as "the Metal presented handler" or "the Metal completed handler".
+- **Tests.** The Metal parity smoke test compares each frame with the software renderer, and text with Core Graphics captures. The window, app, and lifetime smoke tests also paint with Metal.
 
 ### Images and ImageIO
 
@@ -133,7 +144,7 @@ Smaller structs (`NSPoint`, `NSSize`, `NSRange`) return in registers on both arc
 ### Cursors, capture, and occlusion
 
 - **Cursors.** `resetCursorRects` adds one cursor rectangle for the view bounds. The diagonal resize shapes come from `frameResizeCursorFromPosition:inDirections:` with the top left or top right corner. The crate rejects a custom cursor larger than 256 points, or with a hotspot outside the image.
-- **Capture.** `Window::capture` uses `cacheDisplayInRect:toBitmapImageRep:` and copies the result into an owned sRGB `Image`.
+- **Capture.** With Metal, `Window::capture` draws the display list into a texture and copies it through a shared buffer into an owned sRGB `Image`. With Core Graphics, it uses `cacheDisplayInRect:toBitmapImageRep:` and copies the result.
 - **Occlusion.** `windowDidChangeOcclusionState:` queues `WindowEvent::Occluded`.
 - **Tests.** The smoke test checks idle paint counts, damage rectangles, captured pixel colors, and cursor validation.
 

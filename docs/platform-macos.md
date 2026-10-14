@@ -10,7 +10,7 @@ macOS is the supported platform. The `choscorui-macos` crate is the backend. The
 | Xcode Command Line Tools | A release that supports macOS 15 (`xcode-select --install`) |
 | Rust | 1.88 or later, edition 2024 |
 
-The backend links only system frameworks: AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, and UserNotifications. [`scripts/macos/package.sh`](../scripts/macos/package.sh) builds a universal archive for Apple silicon and Intel when `CHOSCORUI_UNIVERSAL=1` is set.
+The backend links only system frameworks: AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, Metal, Quartz Core, and UserNotifications. [`scripts/macos/package.sh`](../scripts/macos/package.sh) builds a universal archive for Apple silicon and Intel when `CHOSCORUI_UNIVERSAL=1` is set.
 
 ## Application lifecycle and run loop
 
@@ -76,14 +76,27 @@ A panic in a native callback does not unwind into AppKit. The backend catches it
 
 A `Key` event names the navigation and editing keys, F1 to F20, and the Menu key of a PC keyboard (`Key::ContextMenu`). Another key is a lowercase `Key::Character` from the active keyboard layout, or `Key::Other` with the virtual keycode.
 
-`Window::set_display_list` invalidates only the region that changed. An identical display list schedules no frame. Core Graphics paints the display list on the CPU in `drawRect:`.
+An identical display list schedules no frame. Each window paints its display list with one of two painters:
+
+- **Metal**, the default. The content view hosts a `CAMetalLayer`, and the GPU draws the full display list into each frame. The display link of the view paces the frames at the refresh rate of the display, and it stops when no frame waits. An occluded or minimized window draws no frames. At startup and during a live resize, the frame goes inside the Core Animation transaction, so the content and the window frame change together.
+- **Core Graphics**, the fallback. `Window::set_display_list` invalidates only the region that changed, and Core Graphics paints that region on the CPU in `drawRect:`.
+
+A window uses Core Graphics when one of these conditions is true:
+
+1. The Mac has no Metal device.
+2. The shader library or a render pipeline does not load.
+3. The environment variable `CHOSCORUI_PAINTER` is `core-graphics`. Use it to find a problem in a painter, and in tests.
+
+When the GPU fails a frame, the window paints with Core Graphics for the rest of its life and paints all of its content again. `Window::painter()` returns the `Painter` of the window: `Painter::Metal` or `Painter::CoreGraphics`. Both painters draw text from the same Core Text glyph runs at the same positions.
+
+The Metal shaders are in a precompiled library in the crate, so the build does not need the Metal toolchain. [CONTRIBUTING.md](../CONTRIBUTING.md) tells how to compile the shaders again after a change.
 
 Other window operations:
 
 - `set_title`, `title`, `content_size`, `set_content_size`, and `backing_scale_factor` read or change the window frame and title.
 - `set_cursor` sets the pointer shape over the content.
 - `is_occluded` tells you when no part of the window is visible. Pause animations in that case.
-- `capture` renders the content view to an `Image` at the backing scale.
+- `capture` renders the content view to an `Image` at the backing scale. With Metal, the GPU draws the current display list again and reads it back.
 - `geometry`, `set_geometry`, and `screen_visible_frames` save and restore the window placement. See [Settings storage](#settings-storage).
 
 `Window::close` closes the window but keeps the native object. A drop of the `Window` closes it if necessary and releases the native object once. `Application::window_count` returns the number of native windows that AppKit still has.
@@ -223,7 +236,7 @@ AppKit has no global text size, so `text_scale` is always 1.0. Give the applicat
 | `clipboard`, `drag_and_drop`, `input_methods`, `accessibility` | `Supported` |
 | `status_items`, `open_urls`, `system_appearance`, `text_shaping`, `image_codecs` | `Supported` |
 | `notifications` | `Supported` in an app bundle with a bundle identifier, otherwise `Conditional(Condition::AppBundle)` |
-| `gpu_painting` | `Unsupported`, because Core Graphics paints on the CPU |
+| `gpu_painting` | `Supported` when windows paint with Metal. `Unsupported` when the Mac has no usable Metal device or `CHOSCORUI_PAINTER=core-graphics` is set |
 
 The services of `Services` follow these values. On macOS, `post_notification` from a binary that is not in an app bundle returns `ServiceError::Unavailable` with the condition, and the other services are available.
 
