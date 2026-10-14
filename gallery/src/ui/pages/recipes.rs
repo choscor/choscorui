@@ -335,7 +335,8 @@ impl CustomControl for StarRating {
 /// A captioned star rating named by the catalog string `key`, bound to
 /// `value`, with the value in a line under it. The caption repeats the
 /// rating's name, so assistive technology skips it.
-fn rating(key: &'static str, value: State<u8>, enabled: bool) -> impl View {
+fn rating(env: &Env, key: &'static str, value: State<u8>, enabled: bool) -> impl View {
+    let announcer = env.clone();
     let stars = Configured::custom(ControlKind::Slider, move |env| {
         // The binding gives the rating, so a change does not build again.
         StarRating::new(env.text(key, &[]), env.clone())
@@ -348,6 +349,16 @@ fn rating(key: &'static str, value: State<u8>, enabled: bool) -> impl View {
             _ => None,
         },
     )
+    // The value line is also spoken.
+    .on_message(move |message| {
+        if let ControlMessage::Changed(ControlValue::Number(rating)) = message {
+            let value = (*rating as u8).to_string();
+            let line = announcer.text("custom-control.stars", &[("value", &value)]);
+            announcer
+                .announcer()
+                .announce(line, AnnouncementPriority::Medium);
+        }
+    })
     .disabled(!enabled);
     VStack::new((
         Text::new(t!(key))
@@ -364,10 +375,11 @@ fn rating(key: &'static str, value: State<u8>, enabled: bool) -> impl View {
 
 pub fn custom_control(_: &PageCx) -> AnyView {
     stateful(|cx| {
+        let env = cx.env().clone();
         column((
-            rating("custom-control.food", cx.state(4), true),
-            rating("custom-control.service", cx.state(2), true),
-            rating("custom-control.locked", cx.state(3), false),
+            rating(&env, "custom-control.food", cx.state(4), true),
+            rating(&env, "custom-control.service", cx.state(2), true),
+            rating(&env, "custom-control.locked", cx.state(3), false),
         ))
     })
 }
@@ -416,8 +428,14 @@ mod tests {
     fn custom_star_rating_changes_through_assistive_actions_and_keys() {
         let mut page = Harness::new("custom-control");
         assert_eq!(page.value("Service").as_deref(), Some("2 of 5 stars"));
+        page.host.take_announcements();
         page.act("Service", SemanticAction::Increment);
         assert_eq!(page.value("Service").as_deref(), Some("3 of 5 stars"));
+        // The value line is also spoken.
+        assert_eq!(
+            page.host.take_announcements(),
+            [("3 of 5 stars".to_owned(), AnnouncementPriority::Medium)]
+        );
         assert_eq!(page.value("Food").as_deref(), Some("4 of 5 stars"));
         page.act("Food", SemanticAction::Focus);
         page.host.key(
