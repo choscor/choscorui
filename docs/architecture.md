@@ -90,7 +90,7 @@ The `view` module is the declarative view layer:
 - A `View` returns other views from `body`, or creates nodes in its hidden `mount`. The tree is built once.
 - `Cx` creates `State`, `Memo`, and effects. `State`, `Binding`, and `Memo` are `Copy` handles. A stale handle reports `ReactiveError::Disposed` and does not panic.
 - A live property is a `Live` value: a fixed value or a closure. A closure runs again only when a value that it read changes, and it updates only its own node.
-- `Styled` holds the modifiers of a view in one ordered list. A layout modifier after a paint modifier wraps the view in a new node.
+- `Styled` holds the modifiers of a view in one ordered list. A layout modifier after a paint modifier wraps the view in a new node. When a `Styled` view holds a `Styled` view, it does not put the nested view in a new node. Its layout and paint modifiers wrap the outer node of the nested view. Its focus, input, and semantic modifiers go to the control inside the wrappers.
 - Every visual leaf is a `CustomControl` in a `ControlHost`. Environment modifiers become `ThemeResolver` scopes. Local paint modifiers on a control become a recipe set for that instance.
 - `Dynamic` and `Branch` are the scopes of `Option`, `Either`, and `AnyView`: keyed scopes with one child that go through `plan_keyed`. The key of a `Branch` child is the value of its key closure, so the child stays while the key stays. A view value has no identity to compare, so the key of a `Dynamic` child is each run, and each run replaces that child.
 - `ForEach` compares its item keys with `plan_keyed`. An item can make many nodes, so the plan moves the nodes of each item as one fragment, without a wrapper node.

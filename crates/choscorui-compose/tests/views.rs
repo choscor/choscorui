@@ -1366,3 +1366,127 @@ fn a_divider_paints_with_the_separator_recipe() {
     let line = fill_of(&mut custom, red).expect("a red line");
     assert_eq!(line.size, Size::new(400.0, 3.0));
 }
+
+// ---------------------------------------------------------------------------
+// Modifiers on a styled view inside a styled view
+
+/// A tap in two styled views behind opaque types, so that each caller
+/// adds modifiers around the styled view that it gets.
+fn nested_tap(label: &str, action: impl Fn() + 'static) -> impl View {
+    fn padded(label: &str, action: impl Fn() + 'static) -> impl View {
+        tap(label, action).padding(4.0)
+    }
+    padded(label, action).background(ColorRole::Muted)
+}
+
+#[test]
+fn a_focus_binding_on_a_nested_styled_view_focuses_the_control() {
+    use std::cell::Cell;
+    let runtime = Runtime::new();
+    let wanted = runtime.property(false);
+    let taps = Rc::new(Cell::new(0));
+    let escapes = Rc::new(Cell::new(0));
+    let (get, set) = (wanted.clone(), wanted.clone());
+    let (tapped, escaped) = (taps.clone(), escapes.clone());
+    let view = nested_tap("cell", move || tapped.set(tapped.get() + 1))
+        .focused(Binding::new(move || get.get(), move |value| set.set(value)))
+        .on_key_press(Key::Escape, move || escaped.set(escaped.get() + 1));
+    let mut host = ViewHost::new(
+        Size::new(400.0, 300.0),
+        DesignTokens::light(),
+        env(),
+        runtime,
+        Rc::new(EstimatedText),
+    );
+    host.mount(view);
+    host.layout();
+    let cell = host.find("cell").unwrap();
+    wanted.set(true);
+    host.flush();
+    assert_eq!(host.tree().focus(), Some(cell));
+    let press = |host: &mut ViewHost, key| {
+        host.key(
+            KeyEvent::Down { key, repeat: false },
+            choscorui_controls::ShortcutModifiers::default(),
+        )
+    };
+    assert!(press(&mut host, Key::Space));
+    assert_eq!(taps.get(), 1, "the control takes its own keys");
+    assert!(press(&mut host, Key::Escape));
+    assert_eq!(escapes.get(), 1, "the view takes its keys at the control");
+    host.focus(None);
+    host.flush();
+    assert!(
+        !wanted.get(),
+        "the binding follows the focus of the control"
+    );
+    assert_eq!(host.take_errors(), Vec::new());
+}
+
+#[test]
+fn accessibility_modifiers_on_a_nested_styled_view_name_the_control() {
+    let mut host = host(
+        nested_tap("cell", || {})
+            .accessibility_label("Edit name")
+            .accessibility_hint("Return saves"),
+    );
+    let (snapshot, _) = host.semantics();
+    let named: Vec<_> = snapshot
+        .iter()
+        .filter(|entry| entry.node.name == "Edit name")
+        .collect();
+    assert_eq!(named.len(), 1, "one semantic node takes the label");
+    assert_eq!(named[0].node.role, SemanticRole::Button);
+    assert_eq!(named[0].node.description, "Return saves");
+    assert!(
+        snapshot
+            .iter()
+            .all(|entry| entry.node.role != SemanticRole::Group),
+        "no wrapper publishes a group"
+    );
+}
+
+#[test]
+fn nested_layout_and_paint_modifiers_compose_as_one_list() {
+    use choscorui_compose::view::{Button, Fill};
+    let flat = tap("cell", || {})
+        .padding(4.0)
+        .background(ColorRole::Muted)
+        .padding(6.0)
+        .background(ColorRole::Primary);
+    let mut flat = host(flat);
+    let mut nested = host(
+        nested_tap("cell", || {})
+            .padding(6.0)
+            .background(ColorRole::Primary),
+    );
+    let fills = |host: &mut ViewHost| {
+        let list = host.paint();
+        list.commands()
+            .iter()
+            .filter_map(|command| match command {
+                choscorui_core::DisplayCommand::FillRect { rect, color } => Some((*rect, *color)),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(bounds(&mut nested, "cell"), bounds(&mut flat, "cell"));
+    assert_eq!(fills(&mut nested), fills(&mut flat));
+    let primary = DesignTokens::light().color(ColorRole::Primary);
+    let outer = fills(&mut nested)
+        .into_iter()
+        .find_map(|(rect, color)| (color == primary).then_some(rect))
+        .unwrap();
+    assert_eq!(outer.size, Size::new(80.0 + 20.0, 24.0 + 20.0));
+    // A later local style modifier wins over the nested one, and the
+    // nested one stays when the outer list changes another value.
+    fn red_button(red: choscorui_core::Color) -> impl View {
+        Button::new("save", || {}).background(Fill::Color(red))
+    }
+    let red = choscorui_core::Color::rgb8(255, 0, 0);
+    let blue = choscorui_core::Color::rgb8(0, 0, 255);
+    let mut over = host(red_button(red).background(Fill::Color(blue)));
+    assert_eq!(button_fill(&mut over, "save"), blue);
+    let mut kept = host(red_button(red).foreground(ColorRole::Primary));
+    assert_eq!(button_fill(&mut kept, "save"), red);
+}

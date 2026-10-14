@@ -1267,14 +1267,20 @@ fn enter_styled(cx: &mut Cx, modifiers: &[Modifier]) -> (Env, FragmentId) {
 fn finish_styled(cx: &mut Cx, env: &Env, fragment: FragmentId, modifiers: Vec<Modifier>) {
     let only_environment = modifiers.iter().all(Modifier::is_environment);
     if only_environment {
+        cx.inner.fragments.dissolve(fragment);
         return;
     }
     let nodes = cx.inner.fragments.nodes(fragment);
     let single = nodes.len() == 1 && cx.inner.fragments.children(fragment).is_empty();
-    let inner_node = if single {
-        nodes[0]
+    // The node of a nested styled view is the outer node of its wrappers.
+    // Layout and paint modifiers wrap that node. When a control is inside
+    // the wrappers, the other modifiers reach the control.
+    let (outer_node, inner_node) = if single {
+        let content = cx.inner.nodes.get(&nodes[0]).and_then(|data| data.content);
+        (nodes[0], content.unwrap_or(nodes[0]))
     } else {
-        gather(cx, fragment)
+        let node = gather(cx, fragment);
+        (node, node)
     };
     let control = cx
         .inner
@@ -1282,7 +1288,7 @@ fn finish_styled(cx: &mut Cx, env: &Env, fragment: FragmentId, modifiers: Vec<Mo
         .get(&inner_node)
         .is_some_and(|data| data.control && !data.text);
     let mut target = Target {
-        node: inner_node,
+        node: outer_node,
         wrapper: !single,
         painted: false,
     };
@@ -1311,6 +1317,10 @@ fn finish_styled(cx: &mut Cx, env: &Env, fragment: FragmentId, modifiers: Vec<Mo
     if !theme_modifiers.is_empty() {
         apply_theme(cx, target.node, theme_modifiers);
     }
+    if control && target.node != inner_node {
+        cx.inner.data(target.node).content = Some(inner_node);
+    }
+    cx.inner.fragments.dissolve(fragment);
 }
 
 /// The environment for the view's content: the parent's with this list's
@@ -1839,7 +1849,10 @@ fn apply(
 
 /// Registers the control's local patch as a recipe set of its own.
 fn install_patch(cx: &mut Cx, node: NodeId, patch: Rc<RefCell<Patch>>) {
-    let inherited = parent_tokens(cx).recipes;
+    // The patch of a nested styled view is the base, so that the later
+    // modifiers win, as in one list.
+    let own = cx.inner.nodes.get(&node).and_then(|data| data.instance);
+    let inherited = own.unwrap_or_else(|| parent_tokens(cx).recipes);
     let set = cx.inner.new_recipe_set();
     let kind = cx.inner.nodes.get(&node).and_then(|data| data.kind);
     for each in ControlKind::ALL {
@@ -1857,6 +1870,10 @@ fn install_patch(cx: &mut Cx, node: NodeId, patch: Rc<RefCell<Patch>>) {
                 kind,
             }),
         );
+    }
+    // The new set holds the recipes of the nested patch.
+    if let Some(own) = own {
+        cx.inner.styles.remove_set(own);
     }
     cx.inner.data(node).instance = Some(set);
     cx.inner.sync_theme(node);

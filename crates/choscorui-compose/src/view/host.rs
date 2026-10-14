@@ -228,6 +228,10 @@ pub(crate) struct NodeData {
     /// The open and close motion of a presented panel, which moves the
     /// node and its subtree when it paints.
     pub motion: Option<Rc<super::motion::Motion>>,
+    /// The control inside the modifier wrappers of this node. The focus,
+    /// input, and semantic modifiers of an enclosing `Styled` view target
+    /// it.
+    pub content: Option<NodeId>,
 }
 
 /// The axes along which a view takes all the space it is offered, as a

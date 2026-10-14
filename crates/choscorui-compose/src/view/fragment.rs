@@ -111,6 +111,28 @@ impl Fragments {
         self.roots.insert(node, fragment);
     }
 
+    /// Puts the node of a fragment that holds only one node in the
+    /// fragment's place in its owner, and forgets the fragment. A fragment
+    /// with other items, or without an owner, stays.
+    pub(crate) fn dissolve(&mut self, fragment: FragmentId) {
+        let Some(entry) = self.map.get(&fragment) else {
+            return;
+        };
+        let ([Item::Node(node)], Some(owner)) = (entry.items.as_slice(), entry.owner) else {
+            return;
+        };
+        let node = *node;
+        if let Some(entry) = self.map.get_mut(&owner) {
+            for item in &mut entry.items {
+                if *item == Item::Fragment(fragment) {
+                    *item = Item::Node(node);
+                }
+            }
+            self.owners.insert(node, owner);
+        }
+        self.map.remove(&fragment);
+    }
+
     fn set_parent(&mut self, fragment: FragmentId, node: NodeId) {
         if let Some(entry) = self.map.get_mut(&fragment) {
             entry.parent = node;

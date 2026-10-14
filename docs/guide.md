@@ -472,6 +472,8 @@ Each control publishes its role, name, value, state, and actions. You do not bui
 - `.focusable(false)` takes a view out of the keyboard order, and `.focused(binding)` moves focus.
 - `.tooltip(text)` gives the description, and `.context_menu(items)` adds the `ShowMenu` action.
 
+These modifiers apply to the control in a view, also when a function returns a modified view and you add modifiers to it. For example, `.focused(binding)` on `field().padding(Space::S2)` focuses the field, and the field gets the keys.
+
 Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disables every control in a subtree, and a disabled control leaves the keyboard order.
 
 ## Commands, shortcuts, and menus

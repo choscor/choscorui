@@ -472,23 +472,26 @@ impl Editor {
     }
 
     /// The editor of the open edit, in a cell of `size`, named after
-    /// `column`. A bool column edits with a checkbox that Space toggles.
-    /// Return commits, and Escape cancels.
+    /// `column`. Return commits, and Escape cancels.
     fn field(self, column: usize, size: Size) -> impl View {
-        let edit = self.edit.get_untracked().ok().flatten();
-        let boolean = edit.is_some_and(|edit| edit.checked().is_some());
         let focused = self.edit_focused.binding();
         let (committed, cancel) = (self.clone(), self.clone());
-        let editor = if boolean {
+        self.editor(column, size)
+            .focused(focused)
+            .on_key_press(Key::Enter, move || committed.commit())
+            .on_key_press(Key::Escape, move || cancel.close())
+    }
+
+    /// The control that edits column `column` in a cell of `size`. A bool
+    /// column edits with a checkbox that Space toggles.
+    fn editor(self, column: usize, size: Size) -> impl View {
+        let edit = self.edit.get_untracked().ok().flatten();
+        let editor = if edit.is_some_and(|edit| edit.checked().is_some()) {
             Either::Left(self.checkbox(column))
         } else {
             Either::Right(self.input(column))
         };
-        editor
-            .focused(focused)
-            .on_key_press(Key::Enter, move || committed.commit())
-            .on_key_press(Key::Escape, move || cancel.close())
-            .frame(Frame::new().width(size.width).height(size.height))
+        editor.frame(Frame::new().width(size.width).height(size.height))
     }
 
     /// The text field of a text or number column. A number column takes
