@@ -1,17 +1,36 @@
 //! Feedback components: alerts, spinners, skeletons, empty states, and
 //! toasts.
 
-use crate::ui::page::{Build, PageCx, column, row, section, stateful};
+use crate::ui::page::{Build, PageCx, column, person, row, section, stateful, status_line};
 use choscorui::compose::t;
-use choscorui::compose::view::{Alert, AnyView, Button, EmptyState, Skeleton, Spinner, Toaster};
-use choscorui::controls::{
-    AlertVariant, Avatar, ButtonVariant, Toast, ToastPosition, ToastVariant, Toasts,
+use choscorui::compose::view::{
+    Alert, AnyView, Button, EmptyState, Env, HorizontalAlignment, Select, Skeleton, Spinner, Text,
+    Toaster, VStack, View, ViewExt,
 };
-use choscorui::core::Icon;
+use choscorui::controls::{
+    AlertVariant, ButtonVariant, ListEntry, Toast, ToastPosition, ToastVariant, Toasts,
+};
+use choscorui::core::{Icon, Space};
+
+/// `views` top to bottom, aligned at the leading edge.
+fn stack(views: impl View) -> impl View {
+    VStack::new(views)
+        .alignment(HorizontalAlignment::Leading)
+        .spacing(Space::S2)
+}
 
 pub fn alert(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let env = cx.env().clone();
+        let (env, restarted) = (cx.env().clone(), cx.env().clone());
+        let status = cx.state(String::new());
+        let update = move |key: &'static str| {
+            let env = env.clone();
+            Alert::new(t!("alert.update_title"), t!(key)).with(move |alert| {
+                alert
+                    .with_icon(Icon::Info)
+                    .with_action(env.text("alert.restart", &[]), ButtonVariant::Outline)
+            })
+        };
         column((
             section(
                 t!("alert.default"),
@@ -30,25 +49,48 @@ pub fn alert(_: &PageCx) -> AnyView {
             ),
             section(
                 t!("alert.with_actions"),
-                Alert::new(t!("alert.update_title"), t!("alert.update_description")).with(
-                    move |alert| {
-                        alert
-                            .with_icon(Icon::Info)
-                            .with_action(env.text("alert.restart", &[]), ButtonVariant::Outline)
-                    },
-                ),
+                stack((
+                    update("alert.update_description")
+                        .on_item(move |_| status.set(restarted.text("alert.restarting", &[]))),
+                    status_line(status),
+                )),
+            ),
+            section(
+                t!("alert.disabled"),
+                update("alert.update_pending").disabled(true),
             ),
         ))
     })
 }
 
+/// A spinner with its name shown after it. Assistive technology reads
+/// the name from the spinner only.
+fn labeled_spinner(key: &'static str) -> impl View {
+    row((
+        Spinner::new(t!(key)),
+        Text::new(t!(key)).accessibility_hidden(true),
+    ))
+}
+
 pub fn spinner(_: &PageCx) -> AnyView {
-    column(section(
-        t!("spinner.spinner"),
-        row((
-            Spinner::new(t!("spinner.loading")),
-            Spinner::new(t!("spinner.saving")),
-        )),
+    column((
+        section(
+            t!("spinner.spinner"),
+            stack((
+                labeled_spinner("spinner.loading"),
+                labeled_spinner("spinner.saving"),
+            )),
+        ),
+        section(
+            t!("spinner.in_button"),
+            Button::new(t!("spinner.submitting"), || {})
+                .variant(ButtonVariant::Outline)
+                .loading(true),
+        ),
+        section(
+            t!("spinner.disabled"),
+            labeled_spinner("spinner.paused").disabled(true),
+        ),
     ))
 }
 
@@ -59,15 +101,18 @@ pub fn skeleton(_: &PageCx) -> AnyView {
             row((
                 Skeleton::new(t!("skeleton.loading_avatar"), 48.0, 48.0)
                     .with(|skeleton| skeleton.circle()),
-                Skeleton::new(t!("skeleton.loading_name"), 250.0, 16.0),
-                Skeleton::new(t!("skeleton.loading_email"), 200.0, 16.0),
+                stack((
+                    Skeleton::new(t!("skeleton.loading_name"), 250.0, 16.0),
+                    Skeleton::new(t!("skeleton.loading_email"), 200.0, 16.0),
+                )),
             )),
         ),
         section(
             t!("skeleton.card"),
-            row((
+            stack((
                 Skeleton::new(t!("skeleton.loading_image"), 250.0, 125.0),
                 Skeleton::new(t!("skeleton.loading_title"), 250.0, 16.0),
+                Skeleton::new(t!("skeleton.loading_text"), 200.0, 16.0),
             )),
         ),
     ))
@@ -75,34 +120,59 @@ pub fn skeleton(_: &PageCx) -> AnyView {
 
 pub fn empty(_: &PageCx) -> AnyView {
     stateful(|cx| {
-        let (projects, offline) = (cx.env().clone(), cx.env().clone());
+        let env = cx.env().clone();
+        let status = cx.state(String::new());
+        let no_projects = |env: &Env| {
+            let env = env.clone();
+            EmptyState::new(t!("empty.no_projects"), t!("empty.no_projects_description")).with(
+                move |empty| {
+                    let text = |key| env.text(key, &[]);
+                    empty
+                        .with_icon(Icon::Inbox)
+                        .with_action(text("empty.create_project"), ButtonVariant::Default)
+                        .with_action(text("empty.import_project"), ButtonVariant::Outline)
+                },
+            )
+        };
+        let (created, offline, left) = (env.clone(), env.clone(), env.clone());
         column((
             section(
                 t!("empty.icon_media"),
-                EmptyState::new(t!("empty.no_projects"), t!("empty.no_projects_description")).with(
-                    move |empty| {
-                        let text = |key| projects.text(key, &[]);
-                        empty
-                            .with_icon(Icon::Inbox)
-                            .with_action(text("empty.create_project"), ButtonVariant::Default)
-                            .with_action(text("empty.import_project"), ButtonVariant::Outline)
-                    },
-                ),
+                no_projects(&env).on_item(move |index| {
+                    let key = if index == 0 {
+                        "empty.created"
+                    } else {
+                        "empty.imported"
+                    };
+                    status.set(created.text(key, &[]));
+                }),
             ),
             section(
                 t!("empty.avatar_media"),
-                EmptyState::new(t!("empty.offline"), t!("empty.offline_description")).with(
-                    move |empty| {
-                        empty.with_avatar(Avatar::new("Ana Lee", "AL")).with_action(
+                EmptyState::new(t!("empty.offline"), t!("empty.offline_description"))
+                    .with(move |empty| {
+                        empty.with_avatar(person(&offline, "ana")).with_action(
                             offline.text("empty.leave_message", &[]),
                             ButtonVariant::Default,
                         )
-                    },
-                ),
+                    })
+                    .on_item(move |_| status.set(left.text("empty.message_left", &[]))),
             ),
+            status_line(status),
+            section(t!("empty.disabled"), no_projects(&env).disabled(true)),
         ))
     })
 }
+
+/// The toast positions with the catalog keys of their names.
+const POSITIONS: [(ToastPosition, &str); 6] = [
+    (ToastPosition::TopStart, "toast.top_start"),
+    (ToastPosition::TopCenter, "toast.top_center"),
+    (ToastPosition::TopEnd, "toast.top_end"),
+    (ToastPosition::BottomStart, "toast.bottom_start"),
+    (ToastPosition::BottomCenter, "toast.bottom_center"),
+    (ToastPosition::BottomEnd, "toast.bottom_end"),
+];
 
 pub fn toast(_: &PageCx) -> AnyView {
     let toasts = Toasts::new();
@@ -116,11 +186,24 @@ pub fn toast(_: &PageCx) -> AnyView {
             })
             .variant(ButtonVariant::Outline)
         };
-        let toaster = {
-            let toasts = toasts.clone();
-            Toaster::new(t!("toast.notifications"), toasts.clone(), t!("toast.close"))
-                .position(ToastPosition::BottomEnd)
-        };
+        let (position, status) = (cx.state(Some(5)), cx.state(String::new()));
+        let undone = env.clone();
+        let toaster = Toaster::new(t!("toast.notifications"), toasts.clone(), t!("toast.close"))
+            .with(move |toaster| {
+                let at = position.get().and_then(|index| POSITIONS.get(index));
+                toaster.with_position(at.map_or(ToastPosition::BottomEnd, |(at, _)| *at))
+            })
+            .on_item(move |_| status.set(undone.text("toast.restored", &[])));
+        let positions = Select::new(
+            t!("toast.position"),
+            |env: &Env| {
+                POSITIONS
+                    .iter()
+                    .map(|(_, key)| ListEntry::option(env.text(key, &[])))
+                    .collect()
+            },
+            position.binding(),
+        );
         column((
             section(
                 t!("toast.variants"),
@@ -157,11 +240,15 @@ pub fn toast(_: &PageCx) -> AnyView {
             ),
             section(
                 t!("toast.action"),
-                trigger(
-                    "toast.with_action",
-                    Toast::new(text("toast.deleted")).with_action(text("toast.undo")),
-                ),
+                stack((
+                    trigger(
+                        "toast.with_action",
+                        Toast::new(text("toast.deleted")).with_action(text("toast.undo")),
+                    ),
+                    status_line(status),
+                )),
             ),
+            section(t!("toast.placement"), positions),
             section(t!("toast.toaster"), toaster),
         ))
     })

@@ -1749,6 +1749,12 @@ impl ViewHost {
             .map(|entry| entry.id)
     }
 
+    /// The control kind of the control view on `node`, for tests and
+    /// scripted checks that look for a control type.
+    pub fn control_kind(&self, node: NodeId) -> Option<ControlKind> {
+        self.inner.nodes.get(&node).and_then(|data| data.kind)
+    }
+
     /// The published semantic node of `node`.
     pub fn semantic(&mut self, node: NodeId) -> Option<SemanticNode> {
         let (snapshot, _) = self.semantics();

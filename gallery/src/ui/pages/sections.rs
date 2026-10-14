@@ -1,12 +1,12 @@
 //! Layout components: aspect-ratio boxes, collapsible sections,
 //! accordions, and item rows.
 
-use crate::ui::page::{Build, PageCx, column, portrait, section, size_key};
+use crate::ui::page::{Build, PageCx, column, person, portrait, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     Accordion, AnyView, AspectRatio, Collapsible, Cx, Env, Frame, ItemGroup, VStack, View, ViewExt,
 };
-use choscorui::controls::{self, ButtonVariant, ControlSize, Item, ItemMedia, ItemVariant};
+use choscorui::controls::{ButtonVariant, ControlSize, Item, ItemMedia, ItemVariant};
 use choscorui::core::{Icon, Space};
 
 pub fn aspect_ratio(_: &PageCx) -> AnyView {
@@ -34,7 +34,7 @@ impl View for CollapsiblePage {
             section(
                 t!("collapsible.closed"),
                 Collapsible::new(
-                    t!("collapsible.starred", user = "@peduarte", count = 3),
+                    t!("collapsible.starred", user = "@peduarte", count = 3).count(3_u64),
                     t!("collapsible.toggle_repositories"),
                     "@radix-ui/primitives",
                     vec![
@@ -93,6 +93,16 @@ impl View for AccordionPage {
                     .with(|accordion| accordion.multiple())
                     .frame(Frame::new().width(400.0)),
             ),
+            section(
+                t!("accordion.disabled"),
+                Accordion::new(
+                    t!("accordion.archived_faq"),
+                    faq,
+                    cx.state(vec![0]).binding(),
+                )
+                .frame(Frame::new().width(400.0))
+                .disabled(true),
+            ),
         ))
     }
 }
@@ -136,13 +146,12 @@ pub fn item(_: &PageCx) -> AnyView {
                         .with_variant(ItemVariant::Outline)
                         .with_size(ControlSize::Sm)
                         .as_link(),
-                    // A song and its artist stand for user data.
-                    Item::new("Midnight City")
-                        .with_description("Silent Echo")
+                    Item::new(text("item.song"))
+                        .with_description(text("item.artist"))
                         .with_media(ItemMedia::Image(portrait())),
-                    Item::new("Ana Lee")
+                    Item::new(text("people.ana"))
                         .with_description(text("item.last_seen"))
-                        .with_media(ItemMedia::Avatar(controls::Avatar::new("Ana Lee", "AL")))
+                        .with_media(ItemMedia::Avatar(person(env, "ana")))
                         .with_action(text("item.invite"), ButtonVariant::Default),
                 ]
             })
@@ -171,6 +180,20 @@ pub fn item(_: &PageCx) -> AnyView {
                     .collect::<Vec<_>>(),
             )
             .spacing(Space::S4),
+        ),
+        section(
+            t!("item.disabled"),
+            group("item.disabled_name", |env| {
+                let text = |key| env.text(key, &[]);
+                vec![
+                    Item::new(text("item.default"))
+                        .with_description(text("item.default_text"))
+                        .with_variant(ItemVariant::Outline)
+                        .with_action(text("item.open"), ButtonVariant::Outline),
+                ]
+            })
+            .frame(Frame::new().width(420.0))
+            .disabled(true),
         ),
     ))
 }

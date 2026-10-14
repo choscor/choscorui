@@ -1587,6 +1587,15 @@ pub fn composition(&mut self, event: CompositionEvent) -> bool
 Delivers an input method composition `event` to the focused
 control. Returns true when the control used it.
 
+#### `ViewHost::control_kind`
+
+```rust
+pub fn control_kind(&self, node: NodeId) -> Option<ControlKind>
+```
+
+The control kind of the control view on `node`, for tests and
+scripted checks that look for a control type.
+
 #### `ViewHost::controls`
 
 ```rust

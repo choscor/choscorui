@@ -41,6 +41,14 @@ pub fn switch_page(_: &PageCx) -> AnyView {
                     switch(cx, "switch.hotspot", true, SwitchSize::Sm),
                 )),
             ),
+            section(
+                t!("switch.disabled"),
+                row((
+                    switch(cx, "switch.location", false, SwitchSize::Default),
+                    switch(cx, "switch.sync", true, SwitchSize::Default),
+                ))
+                .disabled(true),
+            ),
         ))
     })
 }
@@ -73,10 +81,14 @@ pub fn toggle(_: &PageCx) -> AnyView {
                 .collect();
             row(toggles)
         };
-        let lines = TOGGLE_VARIANTS
+        let mut lines = TOGGLE_VARIANTS
             .into_iter()
             .map(|(variant, key)| section(t!(key), line(cx, variant)).into_any())
             .collect::<Vec<_>>();
+        lines.push(section(
+            t!("toggle.disabled"),
+            line(cx, ToggleVariant::Outline).disabled(true),
+        ));
         column(lines)
     })
 }
@@ -208,14 +220,14 @@ pub fn select(_: &PageCx) -> AnyView {
         .with(move |select| select.with_placeholder(zone_placeholder.clone()));
         column((
             section(
-                t!("switch.default"),
+                t!("select.default"),
                 row((
                     fruit(cx, "select.fruit", None),
                     fruit(cx, "select.fruit", Some(2)),
                 )),
             ),
             section(
-                t!("switch.small"),
+                t!("select.small"),
                 fruit(cx, "select.small_fruit", None)
                     .with(|select| select.with_size(ControlSize::Sm)),
             ),
@@ -257,15 +269,15 @@ pub fn native_select_page(_: &PageCx) -> AnyView {
     stateful(|cx| {
         column((
             section(
-                t!("switch.default"),
+                t!("native-select.default"),
                 native_select(cx, "select.status", ControlSize::Default, false),
             ),
             section(
-                t!("switch.small"),
+                t!("native-select.small"),
                 native_select(cx, "select.small_status", ControlSize::Sm, false),
             ),
             section(
-                t!("select.invalid"),
+                t!("native-select.invalid"),
                 native_select(cx, "select.required_status", ControlSize::Default, true),
             ),
         ))
@@ -301,7 +313,7 @@ pub fn input_page(_: &PageCx) -> AnyView {
                     cx.state("hunter2".to_owned()).binding(),
                 ),
             ),
-            section(t!("select.invalid"), invalid_username(cx)),
+            section(t!("input.invalid"), invalid_username(cx)),
         ))
     })
 }
@@ -427,7 +439,7 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
         // The result of the last button, once there is one.
         Text::new(move || status.get()).hidden(move || status.get().is_empty()),
         section(
-            t!("select.invalid"),
+            t!("input-group.invalid"),
             Field::new(
                 t!("input.email"),
                 input_group("input.email", email, None, |env| {
@@ -444,6 +456,16 @@ fn input_groups(cx: &mut Cx) -> impl View + use<> {
                 !email_fits(&email.get())
             }),
         ),
+        section(
+            t!("input-group.disabled"),
+            input_group(
+                "input-group.disabled_search",
+                cx.state(String::new()),
+                Some("input-group.search_placeholder"),
+                |_| vec![InputGroupAddon::icon(AddonAlign::InlineStart, Icon::Search)],
+            )
+            .disabled(true),
+        ),
     ))
 }
 
@@ -458,13 +480,21 @@ pub fn textarea(_: &PageCx) -> AnyView {
                     .with(move |textarea| textarea.with_placeholder(message.clone())),
             ),
             section(
-                t!("select.invalid"),
+                t!("textarea.invalid"),
                 Textarea::new(t!("textarea.bio"), cx.state(String::new()).binding()).with(
                     move |mut textarea| {
                         textarea.set_invalid(true);
                         textarea.with_placeholder(bio.clone())
                     },
                 ),
+            ),
+            section(
+                t!("textarea.disabled"),
+                Textarea::new(
+                    t!("textarea.notes"),
+                    cx.state(text(cx.env(), "textarea.notes_text")).binding(),
+                )
+                .disabled(true),
             ),
         ))
     })
@@ -487,11 +517,15 @@ pub fn input_otp(_: &PageCx) -> AnyView {
                     .with(|otp| otp.with_groups(vec![2, 2, 2]).alphanumeric()),
             ),
             section(
-                t!("select.invalid"),
+                t!("input-otp.invalid_section"),
                 code(cx, "input-otp.invalid").with(|mut otp| {
                     otp.set_invalid(true);
                     otp
                 }),
+            ),
+            section(
+                t!("input-otp.disabled"),
+                code(cx, "input-otp.disabled_code").disabled(true),
             ),
         ))
     })
@@ -606,8 +640,12 @@ pub fn date_picker(_: &PageCx) -> AnyView {
                 dates(cx, "date-picker.meeting_days", CalendarMode::Multiple),
             ),
             section(
-                t!("select.invalid"),
+                t!("date-picker.invalid"),
                 single(cx, "date-picker.required", None).with(|picker| picker.with_invalid(true)),
+            ),
+            section(
+                t!("date-picker.disabled"),
+                single(cx, "date-picker.locked", Some(today)).disabled(true),
             ),
         ))
     })
@@ -623,7 +661,7 @@ pub fn range_slider(_: &PageCx) -> AnyView {
                     .step(5.0),
             ),
             section(
-                t!("toggle-group.vertical"),
+                t!("range-slider.vertical"),
                 RangeSlider::new(
                     t!("range-slider.temperature"),
                     cx.state((18.0, 24.0)).binding(),
@@ -631,6 +669,12 @@ pub fn range_slider(_: &PageCx) -> AnyView {
                 .range(0.0..=40.0)
                 .step(1.0)
                 .with(|slider| slider.with_orientation(Orientation::Vertical)),
+            ),
+            section(
+                t!("range-slider.disabled"),
+                RangeSlider::new(t!("range-slider.volume"), cx.state((20.0, 60.0)).binding())
+                    .range(0.0..=100.0)
+                    .disabled(true),
             ),
         ))
     })
@@ -660,6 +704,7 @@ pub fn kbd(_: &PageCx) -> AnyView {
                 keys(&["⌥", "⌫"]).with(inverted),
             )),
         ),
+        section(t!("kbd.disabled"), keys(&["⌘", "S"]).disabled(true)),
     ))
 }
 

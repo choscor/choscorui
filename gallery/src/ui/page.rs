@@ -5,15 +5,17 @@
 //! `resources/strings/`, with keys `<page id>.<name>`. Labels take
 //! `t!(key)` and follow the language live. Other strings come from
 //! `Env::text` while the page builds; the shell builds the page again when
-//! the language changes. Personal names, addresses, and file names stand
-//! for user data and stay literal.
+//! the language changes. The names of the sample people are catalog
+//! strings under `people.`, which [`person`] reads. Addresses and file
+//! names stand for user data and stay literal.
 
 use crate::page::PageState;
 use choscorui::compose::view::{
-    AnyView, Cx, HStack, HorizontalAlignment, ScrollView, Text, TextContent, VStack, View, ViewExt,
+    AnyView, Cx, Env, HStack, HorizontalAlignment, ScrollView, State, Text, TextContent, VStack,
+    View, ViewExt,
 };
 use choscorui::compose::{Property, Runtime};
-use choscorui::controls::ControlSize;
+use choscorui::controls::{self, ControlSize};
 use choscorui::core::{ColorRole, Image, Space, TextPreset};
 
 /// Builds a page's view.
@@ -123,4 +125,22 @@ pub fn portrait() -> Image {
         let shade = ((x + y) * 255 / (2 * side - 2)) as u8;
         [shade, 96, 255 - shade, 255]
     })
+}
+
+/// The avatar of the sample person `key`: the name is the catalog string
+/// `people.<key>`, and the initials are `people.<key>_initials`.
+pub fn person(env: &Env, key: &str) -> controls::Avatar {
+    controls::Avatar::new(
+        env.text(&format!("people.{key}"), &[]),
+        env.text(&format!("people.{key}_initials"), &[]),
+    )
+}
+
+/// A muted line that shows the result of the last action in `status`,
+/// once there is one.
+pub fn status_line(status: State<String>) -> impl View {
+    Text::new(move || status.get())
+        .text_style(TextPreset::Small)
+        .foreground(ColorRole::MutedForeground)
+        .hidden(move || status.get().is_empty())
 }

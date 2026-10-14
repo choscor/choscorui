@@ -1,0 +1,60 @@
+//! Guards that each page shows the public control it documents, and a
+//! disabled instance of it.
+
+use super::tests::Harness;
+use choscorui::controls::ControlKind;
+use choscorui::core::NodeId;
+
+/// Each page and the kind of control that it shows disabled.
+const PAGES: &[(&str, ControlKind)] = &[
+    ("switch", ControlKind::Switch),
+    ("toggle", ControlKind::Toggle),
+    ("accordion", ControlKind::Accordion),
+    ("alert", ControlKind::Alert),
+    ("date-picker", ControlKind::DatePicker),
+    ("empty", ControlKind::Empty),
+    ("input-group", ControlKind::InputGroup),
+    ("input-otp", ControlKind::InputOtp),
+    ("item", ControlKind::Item),
+    ("kbd", ControlKind::Kbd),
+    ("range-slider", ControlKind::Slider),
+    ("spinner", ControlKind::Spinner),
+    ("textarea", ControlKind::Textarea),
+];
+
+/// Every node under `node`, depth first.
+fn walk(harness: &Harness, node: NodeId, nodes: &mut Vec<NodeId>) {
+    nodes.push(node);
+    let children = harness
+        .host
+        .tree()
+        .children(node)
+        .unwrap_or_default()
+        .to_vec();
+    for child in children {
+        walk(harness, child, nodes);
+    }
+}
+
+#[test]
+fn every_listed_page_shows_its_control_and_a_disabled_one() {
+    let mut missing = Vec::new();
+    for (page, kind) in PAGES {
+        let harness = Harness::new(page);
+        let mut nodes = Vec::new();
+        walk(&harness, harness.host.tree().root(), &mut nodes);
+        let controls: Vec<_> = nodes
+            .into_iter()
+            .filter(|node| harness.host.control_kind(*node) == Some(*kind))
+            .collect();
+        if controls.is_empty() {
+            missing.push(format!("{page}: no {}", kind.name()));
+        } else if controls
+            .iter()
+            .all(|node| harness.host.controls().is_enabled(*node))
+        {
+            missing.push(format!("{page}: no disabled {}", kind.name()));
+        }
+    }
+    assert!(missing.is_empty(), "{}", missing.join("\n"));
+}
