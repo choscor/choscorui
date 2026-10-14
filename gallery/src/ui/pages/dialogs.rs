@@ -36,7 +36,7 @@ fn save_buttons(env: &Env) -> Vec<DialogButton> {
         DialogButton::new(text("alert-dialog.save"), DialogButtonRole::Accept),
         DialogButton::new(text("alert-dialog.dont_save"), DialogButtonRole::Discard),
         DialogButton::new(text("alert-dialog.cancel"), DialogButtonRole::Reject),
-        DialogButton::new("?", DialogButtonRole::Help),
+        DialogButton::new(text("alert-dialog.help"), DialogButtonRole::Help),
     ]
 }
 
@@ -429,6 +429,17 @@ mod tests {
         assert!(hidden(&mut page, "Unsaved changes"));
         assert!(page.host.find("Chose “Cancel”").is_some());
         assert_eq!(page.host.tree().focus(), Some(trigger), "focus goes back");
+    }
+
+    #[test]
+    fn the_localized_help_button_keeps_the_alert_open() {
+        let mut page = Harness::new("alert-dialog");
+        page.act("Close document…", SemanticAction::Activate);
+        // Tab wraps from the default Save button to Help.
+        assert!(press(&mut page, Key::Tab));
+        assert!(press(&mut page, Key::Space));
+        assert!(page.host.find("Chose “Help”").is_some());
+        assert!(!hidden(&mut page, "Unsaved changes"));
     }
 
     #[test]

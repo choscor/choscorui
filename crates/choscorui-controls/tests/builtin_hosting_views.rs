@@ -6,12 +6,12 @@ mod hosted;
 
 use choscorui_controls::{
     AlertDialog, Calendar, CalendarMode, CanvasView, ColorPicker, ColumnBrowser, CommandId,
-    CommandState, ContainerError, ControlKind, ControlMessage, ControlValue, CustomControl,
-    DateTimeEdit, DateTimeKind, DialogButton, DialogButtonRole, DockArea, DockLayout, DockPanel,
-    DockTarget, DropdownMenu, EstimatedText, GroupBox, HeaderColumn, HeaderView, ItemView,
-    MeasureContext, MenuItem, PanelId, Resizable, ScrollArea, ShortcutModifiers, Slot,
-    SplitOrientation, StackedContainer, StatusBar, StyleQuery, Styles, TextItemDelegate, Toolbar,
-    ToolbarItem,
+    CommandState, ContainerError, ControlKind, ControlMessage, ControlSize, ControlValue,
+    CustomControl, DateTimeEdit, DateTimeKind, DialogButton, DialogButtonRole, DockArea,
+    DockLayout, DockPanel, DockTarget, DropdownMenu, EstimatedText, GroupBox, HeaderColumn,
+    HeaderView, ItemView, MeasureContext, MenuItem, PanelId, Resizable, ScrollArea,
+    ShortcutModifiers, Slot, SplitOrientation, StackedContainer, StatusBar, StyleQuery, Styles,
+    TextItemDelegate, Toolbar, ToolbarItem,
 };
 use choscorui_core::{
     AnnouncementPriority, CivilDate, CivilDateTime, CivilTime, Color, ColorRole, Constraints,
@@ -681,6 +681,57 @@ fn settled_paint(h: &mut Harness) -> DisplayList {
     let list = h.paint();
     h.time -= 10.0;
     list
+}
+
+#[test]
+fn the_help_button_keeps_the_alert_open() {
+    let alert = AlertDialog::new(
+        "Delete file?",
+        "This cannot be undone.",
+        vec![
+            DialogButton::new("Help", DialogButtonRole::Help),
+            DialogButton::new("Keep", DialogButtonRole::Accept),
+        ],
+    );
+    let mut h = Harness::new(alert.hosted());
+    open(&mut h);
+    assert!(h.semantics().state.modal);
+    h.focus();
+    // Help is first in logical order, before the default button.
+    h.key(Key::Tab);
+    h.key(Key::Space);
+    assert_eq!(h.messages(), vec![ControlMessage::ItemActivated(0)]);
+    assert_eq!(h.host.modal(&h.tree), Some(h.node), "still open");
+}
+
+#[test]
+fn a_narrow_alert_stacks_its_buttons_with_the_default_on_top() {
+    let (tokens, styles) = (DesignTokens::light(), Styles::new());
+    let alert = AlertDialog::new(
+        "Delete file?",
+        "This cannot be undone.",
+        vec![
+            DialogButton::new("Cancel and keep the file", DialogButtonRole::Reject),
+            DialogButton::new("Delete the file forever", DialogButtonRole::Accept),
+        ],
+    );
+    let narrow = alert.measure(Size::new(280.0, 600.0), &styles, &tokens, &EstimatedText);
+    let wide = alert.measure(Size::new(800.0, 600.0), &styles, &tokens, &EstimatedText);
+    assert!(narrow.height > wide.height, "the stack is taller");
+    let panel = Rect::new(Point::new(0.0, 0.0), narrow);
+    let rects = alert.button_rects(panel, &styles, &tokens, &EstimatedText, false);
+    let (accept, reject) = (rects[0], rects[1]);
+    assert_eq!(accept.0, 1, "the default button is on top");
+    assert_eq!(reject.0, 0);
+    assert!(accept.1.max_y() < reject.1.origin.y);
+    assert_eq!(accept.1.size.width, reject.1.size.width);
+    // Size sm is narrower, and the media box adds height.
+    let small = alert.clone().with_size(ControlSize::Sm);
+    let small_size = small.measure(Size::new(800.0, 600.0), &styles, &tokens, &EstimatedText);
+    assert_eq!(small_size.width, 320.0);
+    let media = alert.with_media(choscorui_core::Icon::Trash);
+    let media_size = media.measure(Size::new(800.0, 600.0), &styles, &tokens, &EstimatedText);
+    assert!(media_size.height > wide.height + 60.0);
 }
 
 #[test]

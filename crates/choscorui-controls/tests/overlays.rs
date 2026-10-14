@@ -394,11 +394,11 @@ fn panel_offset(h: &mut Harness) -> f64 {
     h.paint()
         .commands()
         .iter()
-        .filter_map(|command| match command {
+        .rev()
+        .find_map(|command| match command {
             DisplayCommand::PushTransform(transform) => Some(transform.ty),
             _ => None,
         })
-        .last()
         .unwrap_or(0.0)
 }
 

@@ -986,6 +986,7 @@ alert-dialog.detail = Các thay đổi sẽ bị mất nếu bạn không lưu.
 alert-dialog.save = Lưu
 alert-dialog.dont_save = Không lưu
 alert-dialog.cancel = Hủy
+alert-dialog.help = Trợ giúp
 alert-dialog.chose = Đã chọn “{button}”
 alert-dialog.none = Chưa mở hộp thoại nào.
 alert-dialog.tip = Mẹo

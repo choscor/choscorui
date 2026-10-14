@@ -2283,6 +2283,7 @@ behavior.
 - Tab moves focus between the buttons in their logical order, also in
   right-to-left layouts. Space activates the focused button. A button
   reports `ItemActivated` with its index, then `OpenChanged(false)`.
+- A `Help` button reports `ItemActivated` and keeps the alert open.
 - Enter activates the `Accept` button. Without one, Enter activates the
   focused button, but never a `Destructive` button.
 - Escape or Command+period activates the `Reject` button. Without one,
@@ -2295,6 +2296,10 @@ behavior.
   draws the scrim, and `paint` draws the panel and its text. The host paints each button with
   `button_variant`: default for `Accept`, destructive for `Destructive`,
   and outline for the rest.
+- When the button row is wider than the panel, the buttons stack at the
+  full width. The default button is at the top.
+- `with_size(ControlSize::Sm)` makes the panel at most 320 pt wide.
+  `with_media(icon)` shows the icon in a muted box above the title.
 
 | Part | Slot | Value |
 | --- | --- | --- |
@@ -2321,7 +2326,7 @@ behavior.
 | --- | --- |
 | Role | `Dialog` (AXGroup) |
 | Name / value | title / -; the message and the detail are the description |
-| State | - |
+| State | modal while the hosted alert is open |
 | Actions | `Dismiss` |
 
 While closed, the hosted alert node is hidden and has no actions.

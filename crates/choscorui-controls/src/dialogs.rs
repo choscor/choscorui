@@ -13,16 +13,16 @@ use crate::custom::{
 use crate::form::measured::{paint_wrapped, wrapped_height};
 use crate::hosted::{self, Parts, Reveal};
 use crate::style::{
-    ButtonVariant, Content, ControlKind, PaintContext, Slot, StyleQuery, Styles, TextAlign,
-    TextMeasure, VisualState, content_rect,
+    ButtonVariant, Content, ControlKind, ControlSize, Edges, PaintContext, ResolvedStyle, Slot,
+    StyleQuery, Styles, TextAlign, TextMeasure, VisualState, content_rect,
 };
 use crate::{
     ComboChange, ComboInput, FontChooser, InputFilter, NumberError, NumberInput, ValidationError,
     ValidationState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Key, KeyEvent,
-    Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
+    Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Icon, Key,
+    KeyEvent, Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
     SemanticAction, SemanticNode, SemanticRole, SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
@@ -1008,6 +1008,10 @@ pub struct AlertDialog {
     pub message: String,
     pub detail: Option<String>,
     pub buttons: Vec<DialogButton>,
+    /// `Sm` makes the panel at most 320 pt wide.
+    pub size: ControlSize,
+    /// An icon in a muted box above the title.
+    pub media: Option<Icon>,
 }
 
 /// Deprecated name of [`AlertDialog`].
@@ -1025,8 +1029,58 @@ impl AlertDialog {
             message: message.into(),
             detail: None,
             buttons,
+            size: ControlSize::Default,
+            media: None,
         }
     }
+
+    /// The alert at `size`: `Sm` is narrower.
+    #[must_use]
+    pub fn with_size(mut self, size: ControlSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// The alert with `icon` in a muted box above the title.
+    #[must_use]
+    pub fn with_media(mut self, icon: Icon) -> Self {
+        self.media = Some(icon);
+        self
+    }
+
+    fn query(&self, slot: Slot) -> StyleQuery {
+        StyleQuery::new(ControlKind::AlertDialog, slot).size(self.size)
+    }
+
+    /// The height of the media box and the gap under it.
+    fn media_height(&self, styles: &Styles, tokens: &DesignTokens) -> f64 {
+        self.media.map_or(0.0, |_| {
+            let media = styles.resolve(tokens, self.query(Slot::Media));
+            media.min_height + media.padding.block_end
+        })
+    }
+
+    /// The button sizes in display order, the gap index, and whether the
+    /// row fits `inner`. A row that does not fit stacks.
+    fn button_row(
+        &self,
+        inner: f64,
+        styles: &Styles,
+        tokens: &DesignTokens,
+        text: &dyn TextMeasure,
+        rtl: bool,
+    ) -> (Vec<usize>, Vec<Size>, usize, bool) {
+        let footer = styles.resolve(tokens, self.query(Slot::Footer));
+        let (order, gap) = order_dialog_buttons(&self.buttons, rtl);
+        let sizes: Vec<Size> = order
+            .iter()
+            .map(|index| self.button_size(*index, styles, tokens, text))
+            .collect();
+        let width = sizes.iter().map(|size| size.width).sum::<f64>()
+            + sizes.len().saturating_sub(1) as f64 * footer.gap;
+        (order, sizes, gap, width <= inner)
+    }
+
     /// Buttons in display order with the gap index.
     pub fn layout(&self, rtl: bool) -> (Vec<&DialogButton>, usize) {
         let (order, gap) = order_dialog_buttons(&self.buttons, rtl);
@@ -1088,10 +1142,11 @@ impl AlertDialog {
         tokens: &DesignTokens,
         text: &dyn TextMeasure,
     ) -> Size {
-        let style = |slot| styles.resolve(tokens, StyleQuery::new(ControlKind::AlertDialog, slot));
+        let style = |slot| styles.resolve(tokens, self.query(slot));
         let (panel, header) = (style(Slot::Root), style(Slot::Header));
         let width = available.width.min(panel.max_width);
         let inner = (width - panel.padding.horizontal()).max(0.0);
+        let (_, sizes, _, fits) = self.button_row(inner, styles, tokens, text, false);
         let lines: Vec<f64> = self
             .texts()
             .map(|(slot, line)| {
@@ -1100,16 +1155,27 @@ impl AlertDialog {
             })
             .collect();
         let gaps = lines.len().saturating_sub(1) as f64 * header.gap;
-        let row = (0..self.buttons.len())
-            .map(|index| self.button_size(index, styles, tokens, text).height)
-            .fold(0.0, f64::max);
-        let height = panel.padding.vertical() + lines.iter().sum::<f64>() + gaps + panel.gap + row;
+        let tallest = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+        // A row that does not fit stacks the buttons.
+        let row = if fits || sizes.is_empty() {
+            tallest
+        } else {
+            let gap = style(Slot::Footer).gap;
+            sizes.len() as f64 * (tallest + gap) - gap
+        };
+        let height = panel.padding.vertical()
+            + self.media_height(styles, tokens)
+            + lines.iter().sum::<f64>()
+            + gaps
+            + panel.gap
+            + row;
         Size::new(width, height.min(available.height))
     }
 
     /// The rect of each button in a panel at `panel`, by index into
     /// `buttons`. Help and Discard sit at the start of the row, and the
-    /// rest at the end, in platform order.
+    /// rest at the end, in platform order. When the row does not fit, the
+    /// buttons stack at the full width, the default button at the top.
     pub fn button_rects(
         &self,
         panel: Rect,
@@ -1118,25 +1184,31 @@ impl AlertDialog {
         text: &dyn TextMeasure,
         rtl: bool,
     ) -> Vec<(usize, Rect)> {
-        let root = styles.resolve(
-            tokens,
-            StyleQuery::new(ControlKind::AlertDialog, Slot::Root),
-        );
-        let footer = styles.resolve(
-            tokens,
-            StyleQuery::new(ControlKind::AlertDialog, Slot::Footer),
-        );
-        let (order, gap) = order_dialog_buttons(&self.buttons, rtl);
-        let sizes: Vec<Size> = order
-            .iter()
-            .map(|index| self.button_size(*index, styles, tokens, text))
-            .collect();
-        let row_height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
-        let y = panel.max_y() - root.padding.block_end - row_height;
+        let root = styles.resolve(tokens, self.query(Slot::Root));
+        let footer = styles.resolve(tokens, self.query(Slot::Footer));
         let (left, right) = (
             panel.origin.x + root.padding.inline_start,
             panel.max_x() - root.padding.inline_end,
         );
+        let (order, sizes, gap, fits) = self.button_row(right - left, styles, tokens, text, rtl);
+        let row_height = sizes.iter().map(|size| size.height).fold(0.0, f64::max);
+        let bottom = panel.max_y() - root.padding.block_end;
+        if !fits {
+            // The last button in display order is the default one, so
+            // the stack lists the order from the end.
+            let count = order.len() as f64;
+            let top = bottom - count * (row_height + footer.gap) + footer.gap;
+            return order
+                .iter()
+                .rev()
+                .enumerate()
+                .map(|(row, index)| {
+                    let y = top + row as f64 * (row_height + footer.gap);
+                    (*index, Rect::from_xywh(left, y, right - left, row_height))
+                })
+                .collect();
+        }
+        let y = bottom - row_height;
         let mut rects = Vec::with_capacity(order.len());
         let mut x = left;
         for (index, size) in order.iter().zip(&sizes).take(gap) {
@@ -1156,7 +1228,7 @@ impl AlertDialog {
     /// Paints the scrim of a modal alert over the context's bounds. Paint
     /// it before the panel.
     pub fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
-        let style = cx.style(StyleQuery::new(ControlKind::AlertDialog, Slot::Overlay));
+        let style = cx.style(self.query(Slot::Overlay));
         let bounds = cx.bounds;
         cx.slot(bounds, &style, |_, _| {});
     }
@@ -1165,11 +1237,26 @@ impl AlertDialog {
     /// wrapped in the panel width, in the context's bounds. The host paints the buttons at [`AlertDialog::button_rects`]
     /// with [`AlertDialog::button_variant`].
     pub fn paint(&self, cx: &mut PaintContext<'_>) {
-        let query = |slot| StyleQuery::new(ControlKind::AlertDialog, slot);
+        let query = |slot| self.query(slot);
         let (panel, header) = (cx.style(query(Slot::Root)), cx.style(query(Slot::Header)));
+        let media = cx.style(query(Slot::Media));
         let bounds = cx.bounds;
         cx.slot(bounds, &panel, |cx, inner| {
             let mut y = inner.origin.y;
+            if let Some(icon) = self.media {
+                let x = if cx.rtl {
+                    inner.max_x() - media.min_width
+                } else {
+                    inner.origin.x
+                };
+                let rect = Rect::from_xywh(x, y, media.min_width, media.min_height);
+                let boxed = ResolvedStyle {
+                    padding: Edges::ZERO,
+                    ..media.clone()
+                };
+                cx.slot(rect, &boxed, |cx, inner| cx.icon(inner, icon, &boxed));
+                y += media.min_height + media.padding.block_end;
+            }
             for (slot, line) in self.texts() {
                 let style = cx.style(query(slot));
                 let height = wrapped_height(line, &style.text, inner.size.width, cx.text)
@@ -1284,9 +1371,14 @@ impl HostedAlertDialog {
         cx.request_semantics();
     }
 
+    /// Reports the button. Each button closes the alert, but Help keeps
+    /// it open.
     fn activate(&mut self, cx: &mut ControlContext<'_>, index: usize) {
-        if index < self.alert.buttons.len() {
-            cx.emit(ControlMessage::ItemActivated(index));
+        let Some(button) = self.alert.buttons.get(index) else {
+            return;
+        };
+        cx.emit(ControlMessage::ItemActivated(index));
+        if button.role != DialogButtonRole::Help {
             self.close(cx);
         }
     }
@@ -1397,7 +1489,7 @@ impl CustomControl for HostedAlertDialog {
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
         self.viewport = cx.viewport;
-        let root = cx.style(StyleQuery::new(ControlKind::AlertDialog, Slot::Root));
+        let root = cx.style(self.alert.query(Slot::Root));
         self.motion_ms = root.motion_ms;
         // The panel keeps a margin of 4 spacing units from the window edges.
         let margin = cx.tokens.spacing * 4.0;
@@ -1470,6 +1562,7 @@ impl CustomControl for HostedAlertDialog {
 
     fn semantics(&self) -> SemanticNode {
         let mut node = self.alert.semantics();
+        node.state.modal = self.reveal.open;
         if !self.reveal.open {
             node.state.hidden = true;
             node.actions.clear();

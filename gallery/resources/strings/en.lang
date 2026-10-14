@@ -993,6 +993,7 @@ alert-dialog.detail = Your changes will be lost if you don't save them.
 alert-dialog.save = Save
 alert-dialog.dont_save = Don't Save
 alert-dialog.cancel = Cancel
+alert-dialog.help = Help
 alert-dialog.chose = Chose “{button}”
 alert-dialog.none = No dialog open.
 alert-dialog.tip = Tip
