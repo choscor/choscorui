@@ -3,7 +3,7 @@
 //! ```sh
 //! cargo build --release -p choscorui-gallery -p choscorui-bench
 //! target/release/choscorui-bench [--quick] [--only startup,scroll] \
-//!     [--out results.txt] [--check bench/budgets.txt]
+//!     [--screen 1] [--out results.txt] [--check bench/budgets.txt]
 //! ```
 //!
 //! Startup launches the gallery and a stress-workload child process and
@@ -92,6 +92,12 @@ fn main() {
         eprintln!("unknown scenario `{unknown}`; expected one of {SCENARIOS:?}");
         std::process::exit(2);
     }
+    let screen = value("--screen").map(|index| {
+        index.parse::<usize>().unwrap_or_else(|_| {
+            eprintln!("--screen takes a screen index, 0 for the main screen");
+            std::process::exit(2);
+        })
+    });
     let budgets = value("--check").map(|path| {
         let text = std::fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("cannot read budgets {path}: {error}"));
@@ -140,6 +146,20 @@ fn main() {
         .expect("window creation must succeed");
     let mut workspace = Workspace::new(size);
     window.set_display_list(workspace.paint());
+    if let Some(screen) = screen {
+        // The window keeps its size and moves to the top-left corner of
+        // the visible frame of that screen.
+        let frames = choscorui_macos::screen_visible_frames().expect("screen frames");
+        let Some(visible) = frames.get(screen) else {
+            eprintln!("no screen {screen}; {} screens are connected", frames.len());
+            std::process::exit(2);
+        };
+        let mut geometry = window.geometry();
+        geometry.frame.origin = visible.origin;
+        window
+            .set_geometry(&geometry)
+            .expect("the window must move to the screen");
+    }
     window.show();
     app.activate();
     scenarios::present(&app, &window, 0);

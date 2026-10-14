@@ -44,6 +44,7 @@ The driver accepts these options:
 | --- | --- |
 | `--quick` | Runs shorter workloads, for development. |
 | `--only scroll,document` | Runs only the named scenarios. An unknown name exits with status 2. |
+| `--screen <index>` | Opens the benchmark window on the screen at `<index>` of `screen_visible_frames`, where 0 is the main screen. Use the screen with the highest refresh rate. |
 | `--out <path>` | Writes the report to `<path>`. |
 | `--check bench/budgets.txt` | Compares the metrics with the budgets and exits with status 1 when a budget fails. |
 
@@ -68,30 +69,32 @@ Each result file repeats the manifest: model, CPU, memory, architecture, power s
 
 [`bench/budgets.txt`](../bench/budgets.txt) holds the release budgets for macOS. Each line has the form `metric <= limit`, and `#` starts a comment. Each limit is above the measured p95 by a stated margin, or at a visible goal. A 120 Hz frame is 8.3 ms, a 60 Hz frame is 16.7 ms, and a 30 Hz frame is 33 ms. Frames that move content (resize, scroll, theme, and views) have a budget of one 120 Hz frame.
 
-The baselines are from the reference machine, measured on 2026-10-14 with the Metal painter. The display refreshes at 120 Hz. The frames that move content do not meet their 8.3 ms budgets yet.
+The baselines are from the reference machine, measured on 2026-10-14 with the Metal painter. The window was on the built-in 120 Hz display (`--screen 1`). The main display of that machine refreshes at 100 Hz, so a run there cannot meet a budget of one 120 Hz frame. Other processes used the machine during the runs.
+
+The frames that move content do not meet their 8.3 ms budgets yet. The time includes the work of the application before `set_display_list`. Then the window server shows the frame one or two refreshes after the GPU finishes it. A resize also waits for the window server to change the window frame.
 
 The release executable grows in 16 KiB pages. The size budget is the measured size plus one page, so a change that adds a page fails the check. The small unwind tables, the size level of the controls, and the type-erased child of `Dynamic` keep the executable small. The Metal painter adds 0.14 MiB. A change that adds a page can raise the budget, with the reason in the change. The budget must not go above 3.25 MiB. Above that, make the code smaller.
 
 | Metric | Baseline | Budget |
 | --- | --- | --- |
-| `startup.gallery.first_frame_ms.p95` | 158–190 ms | ≤ 250 |
-| `startup.stress.first_frame_ms.p95` | 194–270 ms | ≤ 400 |
+| `startup.gallery.first_frame_ms.p95` | 172–216 ms | ≤ 250 |
+| `startup.stress.first_frame_ms.p95` | 237–265 ms | ≤ 400 |
 | `idle.paints` | 0 | ≤ 0 |
-| `idle.cpu_percent` | 0.05–0.08 % | ≤ 1 |
-| `idle.wakeups_per_sec` | 4.4–4.6 | ≤ 20 |
-| `idle.footprint_mib.after` | 97 MiB | ≤ 200 |
-| `resize.present_ms.p95` | 37.7 ms | ≤ 8.3 |
-| `scroll.present_ms.p95` | 28.8 ms | ≤ 8.3 |
-| `scroll.frame_interval_ms.p95` | 30.0 ms | ≤ 8.3 |
+| `idle.cpu_percent` | 0.05–0.12 % | ≤ 1 |
+| `idle.wakeups_per_sec` | 4.5–5.0 | ≤ 20 |
+| `idle.footprint_mib.after` | 102–106 MiB | ≤ 200 |
+| `resize.present_ms.p95` | 23.8 ms | ≤ 8.3 |
+| `scroll.present_ms.p95` | 13.7–14.0 ms | ≤ 8.3 |
+| `scroll.frame_interval_ms.p95` | 14.5–15.0 ms | ≤ 8.3 |
 | `scroll.peak_realized_rows` | 32 | ≤ 40 |
 | `scroll.allocations_per_frame.p95` | 7,157 | ≤ 10000 |
-| `document.present_ms.p95` | 28.8 ms | ≤ 33 |
-| `document.shape_ms.p95` | 6.9–7.7 ms | ≤ 12 |
-| `theme.present_ms.p95` | 18.8 ms | ≤ 8.3 |
-| `views.present_ms.p95` | 28.8 ms, 10,000 rows | ≤ 8.3 |
+| `document.present_ms.p95` | 20.2–32.3 ms | ≤ 33 |
+| `document.shape_ms.p95` | 7.6–9.9 ms | ≤ 12 |
+| `theme.present_ms.p95` | 11.9–13.9 ms | ≤ 8.3 |
+| `views.present_ms.p95` | 18.5–41.3 ms, 10,000 rows | ≤ 8.3 |
 | `views.dirty_nodes` | 1 | ≤ 4 |
-| `windows.first_frame_ms.p95` | 12–17 ms | ≤ 33 |
-| `windows.idle_cpu_percent_after_close` | 0.14 % | ≤ 3 |
+| `windows.first_frame_ms.p95` | 26–35 ms | ≤ 33 |
+| `windows.idle_cpu_percent_after_close` | 0.07 % | ≤ 3 |
 | `size.choscorui-gallery_mib` | 2.924 MiB | ≤ 2.940 |
 
 These correctness counters have a budget of 0:
@@ -130,10 +133,10 @@ These design facts keep the paint, layout, and input paths independent of the mo
 
 | Path | Design | Where |
 | --- | --- | --- |
-| Canvas paint | `Scene::paint` paints only the items in the visible rectangle, in paint order. The scene keeps its sorted roots, so a frame does not sort them again. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
+| Canvas paint | `Scene::paint` paints only the items in the visible rectangle, in paint order. It starts from the visible roots, so the cost does not grow with the items outside the view. The maps of the scene hash item ids with one multiply. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Canvas transforms | An item with an identity transform does not push a transform. | [`scene.rs`](../crates/choscorui-core/src/scene.rs) |
 | Damage | `damage` compares two display lists as sorted multisets of draw regions, with two allocations for each call. Identical lists produce no damage. | [`display.rs`](../crates/choscorui-core/src/display.rs) |
-| Presentation | With Metal, `Window::set_display_list` draws the full list at once when a drawable and a frame slot are free. Otherwise the display link draws it at the next refresh. Rounded rectangles, circles, shadows, and glyphs are instances of one shader. Only other paths go through coverage atlases. With Core Graphics, it invalidates only the damaged region, and `drawRect:` replays an `Arc<DisplayList>` without a copy. | [`metal/surface.rs`](../crates/choscorui-macos/src/metal/surface.rs), [`metal/plan.rs`](../crates/choscorui-macos/src/metal/plan.rs) |
+| Presentation | With Metal, `Window::set_display_list` draws the full list at once when a drawable and a frame slot are free, and computes the damage after the frame starts. Otherwise the display link draws it at the next refresh. Display sync is off outside startup and live resize, so a frame goes to the window server when the GPU finishes it. Rounded rectangles, circles, shadows, and glyphs are instances of one shader. Only other paths go through coverage atlases. With Core Graphics, it invalidates only the damaged region, and `drawRect:` replays an `Arc<DisplayList>` without a copy. | [`metal/surface.rs`](../crates/choscorui-macos/src/metal/surface.rs), [`metal/plan.rs`](../crates/choscorui-macos/src/metal/plan.rs) |
 | Long documents | `TextLayoutCache::layout_paragraphs` reshapes only the edited paragraph and uses the cached layout of every other paragraph. | [`text_layout.rs`](../crates/choscorui-core/src/text_layout.rs) |
 | View updates | A state change runs only the reactions that read the state. `ViewHost::take_dirty_count` counts the changed nodes. | [`host.rs`](../crates/choscorui-compose/src/view/host.rs) |
 | View layout | `LayoutEngine::plan` arranges a node again only when it was invalidated or its bounds change. A clean subtree keeps its bounds. Semantics update only for the placed nodes. | [`layout_engine.rs`](../crates/choscorui-core/src/layout_engine.rs) |
