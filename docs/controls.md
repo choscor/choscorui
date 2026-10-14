@@ -724,6 +724,10 @@ pin this behavior.
 - `with_target()` makes a label that names a control. A primary press and
   release on it emits `Activated`. A label without a target takes no
   input.
+- The compose `Label::target(control)` view puts the label before the
+  control in a row, with the `Label` recipe gap. A click on the label
+  focuses the control, and toggles a checkbox or a switch. The control
+  gets a `LabelledBy` relation to the label.
 - `Separator` takes no input. It is decorative, so its node is a hidden
   `Group` that assistive technology skips. `paint` centers a 1 pt `border`
   line in either orientation, and snaps it to whole points, so that it
@@ -4068,7 +4072,7 @@ in a narrow window. With `SidebarCollapse::None` in a wide window,
 | Title | `Title` | base medium `card-foreground` text, 1.5 line height; sm for `Sm` |
 | Description | `Description` | sm `muted-foreground` text |
 | Content, footer | `Content`, `Footer` | `card-foreground`, 24 pt horizontal padding (16 pt for `Sm`), 12 pt gap |
-| Buttons | `Button` `Root` | default-size buttons in their variants |
+| Buttons | `Button` `Root` | buttons in their variants: default size, or `Sm` in a `Sm` card |
 
 | Field | `Card::semantics` |
 | --- | --- |
