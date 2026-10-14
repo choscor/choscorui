@@ -436,3 +436,40 @@ fn attachment_covers_its_media_and_shows_a_progress_track_only_while_uploading()
         "the remove button has a surface over the media"
     );
 }
+
+#[test]
+fn a_message_holds_its_avatar_and_its_reactions() {
+    let tokens = DesignTokens::light();
+    let h = Harness::new(
+        Message::new("Ana Lee", vec![Bubble::new("Hi")])
+            .with_avatar(Avatar::new("Ana Lee", "AL").with_size(ControlSize::Lg))
+            .with_header("Ana Lee · 12:01"),
+    );
+    let bounds = h.bounds();
+    let avatar = rounded_fills(&h.paint(), tokens.color(ColorRole::Muted))[0];
+    assert!(
+        avatar.max_y() <= bounds.max_y() + 0.01,
+        "{avatar:?} in {bounds:?}"
+    );
+
+    let reactions = "👍 2 ❤️ 5 😂 9 🎉 1 🙏 3";
+    for direction in [LayoutDirection::Ltr, LayoutDirection::Rtl] {
+        let h = Harness::with_direction(
+            Message::new("Ana Lee", vec![Bubble::new("Hi").with_reactions(reactions)]),
+            direction,
+        );
+        let bounds = h.bounds();
+        let list = h.paint();
+        let x = list.commands().iter().find_map(|command| match command {
+            DisplayCommand::DrawText { baseline, text, .. } if text == reactions => {
+                Some(baseline.x)
+            }
+            _ => None,
+        });
+        let x = x.expect("the reactions");
+        assert!(
+            x >= bounds.origin.x && x < bounds.max_x(),
+            "{direction:?}: {x} in {bounds:?}"
+        );
+    }
+}

@@ -4538,7 +4538,9 @@ behavior.
 ### Message and Bubble
 
 - A `Message` stacks a header, its bubbles, and a footer beside an
-  optional avatar. The author names the message.
+  optional avatar. The author names the message. The avatar is beside
+  the first bubble, and the message is at least as tall as the avatar
+  bottom.
 - `align_end()` puts the avatar and the bubbles at the end, such as for
   the messages of the current user. A right-to-left layout mirrors both
   alignments.
@@ -4546,7 +4548,7 @@ behavior.
   except a ghost bubble.
 - `with_reactions(text)` shows a pill over the bottom edge of the bubble.
   The pill is at the end of a start message, and at the start of an end
-  message.
+  message. A pill wider than its bubble stays inside the content area.
 - `BubbleVariant` selects `Default`, `Secondary`, `Muted`, `Tinted`,
   `Outline`, `Ghost`, or `Destructive`. A bubble under the pointer shows
   the hover look. This is a design choice: the bubble takes no input, but

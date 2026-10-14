@@ -232,13 +232,15 @@ impl Message {
                     cx.text.width(&bubble.reactions, &pill.text) + pill.padding.horizontal(),
                     pill.text.line_height + pill.padding.vertical(),
                 );
-                // The pill hangs half below the bubble, inset from its end.
+                // The pill hangs half below the bubble, inset from its end,
+                // and stays inside the content area.
                 let inset = style.padding.inline_end;
                 let x = if right {
                     frame.origin.x + inset
                 } else {
                     frame.max_x() - inset - size.width
                 };
+                let x = x.min(start_x + width - size.width).max(start_x);
                 y += size.height / 2.0;
                 Rect::from_xywh(
                     x,
@@ -260,13 +262,15 @@ impl Message {
             let top = line(footer.text.line_height, &mut y, &mut gap);
             Rect::from_xywh(start_x, top, width, footer.text.line_height)
         };
-        let height = (y - rect.origin.y).max(side);
         let avatar_x = if right {
             rect.max_x() - side
         } else {
             rect.origin.x
         };
         let avatar_y = first_bubble.map_or(rect.origin.y, |frame| frame.origin.y);
+        // The avatar sits beside the first bubble, below the header, so
+        // the message is as tall as the avatar bottom at least.
+        let height = (y - rect.origin.y).max(avatar_y + side - rect.origin.y);
         MessageLayout {
             height,
             avatar: Rect::from_xywh(avatar_x, avatar_y, side, side),
