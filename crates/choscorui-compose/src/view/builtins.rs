@@ -390,6 +390,15 @@ impl Configured<controls::Combobox> {
         })
         .bind(value, ControlValue::Text, as_text)
     }
+
+    /// The text that an empty field shows, for example
+    /// `t!("country.placeholder")`. A state that the text reads updates
+    /// the placeholder when it changes.
+    #[must_use]
+    pub fn placeholder<M>(self, placeholder: impl IntoLive<TextContent, M>) -> Self {
+        let placeholder = label(placeholder);
+        self.with_env(move |combobox, env| combobox.with_placeholder(text(&placeholder, env)))
+    }
 }
 
 /// A multiline plain-text editor that edits `value`.

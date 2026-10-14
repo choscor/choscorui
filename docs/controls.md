@@ -1208,7 +1208,8 @@ behavior.
   the item whose text matches. Empty text commits no item. Other text goes
   back to the last commit.
 - **Placeholder.** `with_placeholder` or `set_placeholder` gives the muted
-  text that shows while the text is empty.
+  text that shows while the text is empty. The `Combobox` view takes
+  `.placeholder(text)`: a catalog string, or a closure that reads a state.
 - **Semantic actions.** `ShowMenu` and `Expand` open the popup.
   `Collapse` and `Dismiss` close it.
 - Semantic `SetValue` commits the item with the same text. Only an

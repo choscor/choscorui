@@ -4,10 +4,10 @@
 
 use choscorui_compose::Runtime;
 use choscorui_compose::view::{
-    AnyView, ColorPicker, ColumnBrowser, Configured, Cx, DateTimeEdit, DecimalSpinBox, Dial, Dock,
-    Env, Frame, HeaderView, Input, InputGroup, ItemGroup, KeySequenceEdit, Label, List, Message,
-    MessageScroller, NumericDisplay, Questionnaire, Select, SizeGrip, State, StatusBar, Toolbar,
-    VStack, View, ViewExt, ViewHost,
+    AnyView, ColorPicker, ColumnBrowser, Combobox, Configured, Cx, DateTimeEdit, DecimalSpinBox,
+    Dial, Dock, Env, Frame, HeaderView, Input, InputGroup, ItemGroup, KeySequenceEdit, Label, List,
+    Message, MessageScroller, NumericDisplay, Questionnaire, Select, SizeGrip, State, StatusBar,
+    Toolbar, VStack, View, ViewExt, ViewHost,
 };
 use choscorui_controls::{
     AddonAlign, Bubble, CommandId, ControlKind, DateTimeKind, DockLayout, DockPanel, DockTarget,
@@ -638,6 +638,26 @@ fn shows(host: &mut ViewHost, text: &str) -> bool {
     host.paint().commands().iter().any(|command| {
         matches!(command, choscorui_core::DisplayCommand::DrawText { text: shown, .. } if shown == text)
     })
+}
+
+#[test]
+fn a_combobox_placeholder_follows_its_state() {
+    let hint = slot();
+    let shared = hint.clone();
+    let mut host = host(move |cx| {
+        let placeholder = cx.state("Pick a country".to_owned());
+        let value = cx.state(String::new());
+        shared.set(Some(placeholder));
+        let countries = vec!["France".to_owned(), "Japan".to_owned()];
+        Combobox::editable("Country", countries, value.binding())
+            .placeholder(move || placeholder.get())
+            .into_any()
+    });
+    assert!(shows(&mut host, "Pick a country"));
+    take(&hint).set("Type a country".to_owned());
+    host.flush();
+    assert!(shows(&mut host, "Type a country"));
+    assert!(!shows(&mut host, "Pick a country"));
 }
 
 #[test]

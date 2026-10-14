@@ -622,6 +622,16 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<String>, se
 
 A combobox named `name` with `items`; `selected` edits the chosen item.
 
+#### `Combobox::placeholder`
+
+```rust
+pub fn placeholder<M>(self, placeholder: impl IntoLive<TextContent, M>) -> Self
+```
+
+The text that an empty field shows, for example
+`t!("country.placeholder")`. A state that the text reads updates
+the placeholder when it changes.
+
 ## `Command`
 
 type alias in `choscorui::prelude::Command`
