@@ -252,3 +252,38 @@ fn dialog_keys_route_default_and_cancel_through_command_state() {
         DialogKeyRoute::Disabled(ok)
     );
 }
+
+#[test]
+fn two_bars_leave_the_corner_free() {
+    let mut tree = Tree::new(rect(0.0, 0.0, 300.0, 300.0));
+    let viewport = tree
+        .attach(tree.root(), rect(0.0, 0.0, 100.0, 100.0))
+        .unwrap();
+    let content = tree
+        .attach(viewport, rect(0.0, 0.0, 1000.0, 1000.0))
+        .unwrap();
+    let mut scroll = ScrollViewport::new(
+        viewport,
+        content,
+        Size::new(1000.0, 1000.0),
+        Size::new(10.0, 20.0),
+    )
+    .unwrap();
+    scroll
+        .arrange(&mut tree, rect(0.0, 0.0, 100.0, 100.0))
+        .unwrap();
+    let mut area = ScrollArea::new(scroll);
+    let vertical = area.vertical_scrollbar(&tree).unwrap();
+    let horizontal = area.horizontal_scrollbar(&tree).unwrap();
+    assert_eq!(vertical.track, rect(90.0, 0.0, 10.0, 90.0));
+    assert_eq!(horizontal.track, rect(0.0, 90.0, 90.0, 10.0));
+    assert!(!vertical.track.intersects(horizontal.track));
+    // At the ends, the thumbs stop at the corner square.
+    let end = ScrollAreaInput::Key(KeyEvent::Down {
+        key: Key::End,
+        repeat: false,
+    });
+    tree.set_focus(Some(area.node())).unwrap();
+    area.handle(&mut tree, end).unwrap();
+    assert_eq!(area.vertical_scrollbar(&tree).unwrap().thumb.max_y(), 90.0);
+}

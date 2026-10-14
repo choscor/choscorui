@@ -1560,6 +1560,10 @@ work does not change with the content size.
   edge in a right-to-left layout. A horizontal bar is at the bottom.
 - The bar shows only when the content is longer than the viewport by more
   than 0.5 pt. Then `track` and `thumb` return its rectangles.
+- The bar does not hide after the scrolling stops, as the automatic
+  scroll bars of macOS do. This is a design choice: the bar always shows
+  that there is more content. The thumb in the `border` color stays
+  quiet.
 - `pointer(event)` returns an `OverlayScrollReply`. A primary press on the
   thumb starts a drag, and a press on the track pages one viewport. A
   move sets the thumb hover and moves a drag. A primary release ends the
@@ -1603,6 +1607,8 @@ takes a press, a drag, and a move before the content under it.
   scroll one page, and Space pages down. Home and End go to the top and
   the bottom.
 - A page keeps one line of overlap.
+- When both bars show, each track stops one bar thickness before the
+  bottom end corner. The thumbs do not overlap there.
 - Semantic `Increment` pages down, and `Decrement` pages up. Semantic
   `Focus` focuses the area.
 - `Cancel`, a primary release, and `set_enabled(false)` end the drag.

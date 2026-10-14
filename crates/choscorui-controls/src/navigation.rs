@@ -113,25 +113,43 @@ impl ScrollArea {
         self.geometry_in(tree.bounds(self.node())?, bar)
     }
 
+    /// Whether `bar` shows in `bounds`: the content is longer than the
+    /// viewport along it by more than 0.5 pt.
+    fn needs(&self, bounds: Rect, bar: Bar) -> bool {
+        let content = self.viewport.content_size();
+        let (visible, total) = match bar {
+            Bar::Vertical => (bounds.size.height, content.height),
+            Bar::Horizontal => (bounds.size.width, content.width),
+        };
+        total > visible + 0.5 && visible > 0.0
+    }
+
     fn geometry_in(&self, bounds: Rect, bar: Bar) -> Option<ScrollbarGeometry> {
+        if !self.needs(bounds, bar) {
+            return None;
+        }
         let content = self.viewport.content_size();
         let offset = self.viewport.offset();
         let (visible, total, position) = match bar {
             Bar::Vertical => (bounds.size.height, content.height, offset.y),
             Bar::Horizontal => (bounds.size.width, content.width, offset.x),
         };
-        if total <= visible + 0.5 || visible <= 0.0 {
-            return None;
-        }
         let t = self.thickness;
+        // With both bars, each track stops before the corner square, so
+        // the thumbs never overlap.
+        let corner = if self.needs(bounds, Bar::Vertical) && self.needs(bounds, Bar::Horizontal) {
+            t
+        } else {
+            0.0
+        };
         let track = match bar {
             Bar::Vertical => Rect::new(
                 Point::new(bounds.max_x() - t, bounds.origin.y),
-                Size::new(t, bounds.size.height),
+                Size::new(t, (bounds.size.height - corner).max(0.0)),
             ),
             Bar::Horizontal => Rect::new(
                 Point::new(bounds.origin.x, bounds.max_y() - t),
-                Size::new(bounds.size.width, t),
+                Size::new((bounds.size.width - corner).max(0.0), t),
             ),
         };
         let length = match bar {
