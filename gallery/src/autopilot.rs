@@ -294,27 +294,48 @@ fn limited_at(hour: u8) -> Option<String> {
     .value
 }
 
-/// Steps the limited editor to its hour field, then jumps outside the
-/// range both ways; Return clamps. Returns whether the jump was flagged
-/// and the two clamped values.
-fn clamp_hours(host: &mut ViewHost) -> Option<(bool, Option<String>, Option<String>)> {
+/// Moves the focus of the limited editor to the section `name`, from
+/// any section.
+fn focus_section(host: &mut ViewHost, name: &str) -> Option<()> {
     let none = ShortcutModifiers::default();
+    for key in [Key::ArrowRight, Key::ArrowLeft] {
+        for _ in 0..8 {
+            if semantic(host, LIMITED)?.description == name {
+                return Some(());
+            }
+            press(host, key, none);
+        }
+    }
+    None
+}
+
+/// Types day `day` into the limited editor, which allows only one day.
+/// Returns whether the editor flags the typed value, and the value after
+/// Return clamps it.
+fn clamp_day(host: &mut ViewHost, day: &str) -> Option<(bool, Option<String>)> {
+    let none = ShortcutModifiers::default();
+    focus_section(host, "Day field")?;
+    for digit in day.chars() {
+        host.text(&digit.to_string());
+        host.layout();
+    }
+    let flagged = semantic(host, LIMITED)?.state.invalid;
+    press(host, Key::Enter, none);
+    Some((flagged, semantic(host, LIMITED)?.value))
+}
+
+/// Types a day after and a day before the one day that the limited
+/// editor allows; Return clamps. The day moves the value out of the
+/// range in a 12-hour and in a 24-hour locale, at any time of day.
+/// Returns whether each typed day was flagged, and the two clamped
+/// values.
+fn clamp_limited(host: &mut ViewHost) -> Option<(bool, Option<String>, Option<String>)> {
     if !act(host, LIMITED, SemanticAction::Focus, None) {
         return None;
     }
-    for _ in 0..5 {
-        if semantic(host, LIMITED)?.description == "Hour field" {
-            break;
-        }
-        press(host, Key::ArrowRight, none);
-    }
-    press(host, Key::End, none);
-    let flagged = semantic(host, LIMITED)?.state.invalid;
-    press(host, Key::Enter, none);
-    let high = semantic(host, LIMITED)?.value;
-    press(host, Key::Home, none);
-    press(host, Key::Enter, none);
-    Some((flagged, high, semantic(host, LIMITED)?.value))
+    let (late, high) = clamp_day(host, "13")?;
+    let (early, low) = clamp_day(host, "11")?;
+    Some((late && early, high, low))
 }
 
 /// The record count that the item view readout shows.
@@ -593,7 +614,7 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         matches!(dates, (true, Some((false, true)), Some((false, true)))),
     );
     show(cx, gallery, main, "date-time-edit");
-    let limited = clamp_hours(host(cx, main));
+    let limited = clamp_limited(host(cx, main));
     check(
         "date/time edit clamps to its 09:00 – 17:00 range",
         limited.is_some_and(|(flagged, high, low)| {
