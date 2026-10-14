@@ -262,7 +262,8 @@ text "Aa" at 36,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ## attachment
 sizes default xs sm lg icon icon-xs icon-sm icon-lg
-slot root: root track range thumb indicator icon label content header footer trigger value placeholder item item-indicator separator shortcut group-label overlay handle caption cell row header-cell fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice
+slot root: root range thumb indicator icon label content header footer trigger value placeholder item item-indicator separator shortcut group-label overlay handle caption cell row header-cell fallback badge close input addon text ellipsis link previous next day weekday legend error viewport scrollbar panel bar avatar choice
+slot track: track
 slot title: title
 slot description: description
 slot action: action
@@ -285,6 +286,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle default track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -337,6 +344,12 @@ stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -391,6 +404,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -443,6 +462,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -495,6 +520,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle icon track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -547,6 +578,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle icon-xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -599,6 +636,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle icon-sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -651,6 +694,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment idle icon-lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment idle icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -703,6 +752,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading default track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -761,6 +816,12 @@ stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -821,6 +882,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -879,6 +946,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -937,6 +1010,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading icon track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -995,6 +1074,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading icon-xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1053,6 +1138,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading icon-sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1111,6 +1202,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment uploading icon-lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment uploading icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1169,6 +1266,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing default track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1227,6 +1330,12 @@ stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1287,6 +1396,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1345,6 +1460,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1403,6 +1524,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing icon track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1461,6 +1588,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing icon-xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1519,6 +1652,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing icon-sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1577,6 +1716,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment processing icon-lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment processing icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1635,6 +1780,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error default track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1693,6 +1844,12 @@ stroke 10.5,10.5 95x35 r9.5 w1 #e7000bff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1753,6 +1910,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1811,6 +1974,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1869,6 +2038,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error icon track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1927,6 +2102,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error icon-xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -1985,6 +2166,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error icon-sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2043,6 +2230,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e7000bff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment error icon-lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment error icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2101,6 +2294,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.9 system-ui 14 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done default track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done default title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2153,6 +2352,12 @@ stroke 10.5,10.5 95x35 r9.5 w1 #e5e5e5ff
 stroke-path M29.333333333333332,24 L22,31.333333333333332 L18.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 38,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2207,6 +2412,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M31.333333333333332,24 L24,31.333333333333332 L20.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2259,6 +2470,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2311,6 +2528,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done icon track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done icon title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2363,6 +2586,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done icon-xs track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done icon-xs title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2415,6 +2644,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done icon-sm track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done icon-sm title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
@@ -2467,6 +2702,12 @@ stroke 10.5,10.5 95x35 r13.5 w1 #e5e5e5ff
 stroke-path M33.33333333333333,24 L26,31.333333333333332 L22.666666666666668,28 #0a0a0aff w1.3333333333333333 Round Round dash[]
 text "Aa" at 44,32.2 system-ui 12 w400 t0 #0a0a0aff
 = rest: hovered pressed focused focus-visible invalid checked indeterminate selected highlighted
+### attachment done icon-lg track
+# rest
+fill-rect 10,10 120x2 #f5f5f5ff
+stroke-path M23.333333333333332,7 L16,14.333333333333332 L12.666666666666666,11 #0a0a0aff w1.3333333333333333 Round Round dash[]
+text "Aa" at 26,15.899999999999999 system-ui 14 w400 t0 #0a0a0aff
+= rest: hovered pressed focused focus-visible disabled invalid checked indeterminate selected open highlighted
 ### attachment done icon-lg title
 # rest
 stroke-path M23.333333333333332,24 L16,31.333333333333332 L12.666666666666666,28 #0a0a0aff w1.3333333333333333 Round Round dash[]

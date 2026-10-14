@@ -466,8 +466,8 @@ StrokeRoundedRect { rect: Rect { origin: Point { x: 9.5, y: 9.5 }, size: Size { 
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 384.0, height: 156.0 } }, radius: 14.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
 DrawText { baseline: Point { x: 326.0, y: 51.6 }, text: "Login", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawText { baseline: Point { x: 239.1, y: 76.9 }, text: "Enter your email.", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 34.0, y: 106.0 }, size: Size { width: 73.9, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-DrawText { baseline: Point { x: 44.0, y: 128.9 }, text: "Sign in", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 33.99999999999997, y: 106.0 }, size: Size { width: 73.9, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 43.99999999999997, y: 128.9 }, text: "Sign in", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopClip
 # badge Ltr
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 35.8, height: 20.0 } }
@@ -712,8 +712,8 @@ semantics SemanticNode { role: Group, name: "No projects", description: "", valu
 PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 206.75 } })
 DrawText { baseline: Point { x: 198.02499999999998, y: 78.3 }, text: "No projects", font_family: "system-ui", font_size: 18.0, font_weight: FontWeight(500), font_slant: Upright, tracking: -0.45, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
 DrawText { baseline: Point { x: 207.64999999999998, y: 110.275 }, text: "Create one.", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
-FillRoundedRect { rect: Rect { origin: Point { x: 216.90000000000003, y: 132.75 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
-DrawText { baseline: Point { x: 226.90000000000003, y: 155.65 }, text: "Create", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+FillRoundedRect { rect: Rect { origin: Point { x: 216.9, y: 132.75 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 226.9, y: 155.65 }, text: "Create", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
 PopClip
 # empty Rtl
 bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 480.0, height: 206.75 } }
