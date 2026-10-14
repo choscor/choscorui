@@ -58,6 +58,9 @@ pub enum Painter {
 /// The most frames of one window that the GPU works on at a time.
 const IN_FLIGHT: usize = 2;
 
+/// The drawables of a layer.
+const DRAWABLES: usize = 3;
+
 /// How long a visible window waits for the presented handler of a frame
 /// that the GPU finished. Sometimes the handler never runs, and the frame
 /// may not be on the display; the window then draws the frame again.
@@ -220,7 +223,7 @@ pub(crate) fn attach(window: &Obj<NSWindow>, paint: PaintHandle, poster: Poster)
         SET_LAYER_COLORSPACE.send(&layer, (space,));
     }
     SET_FRAMEBUFFER_ONLY.send(&layer, (true,));
-    SET_MAXIMUM_DRAWABLE_COUNT.send(&layer, (3,));
+    SET_MAXIMUM_DRAWABLE_COUNT.send(&layer, (DRAWABLES,));
     SET_LAYER_OPAQUE.send(&layer, (false,));
     SET_PRESENTS_WITH_TRANSACTION.send(&layer, (true,));
     // A layer-hosting view: the layer first, then `wantsLayer`.
@@ -386,8 +389,9 @@ fn drive(window: usize) {
             }
         });
         let mut wait = false;
+        // A pending frame can wait for a drawable that a stalled frame
+        // holds, so the check also runs for a pending window.
         let stalled = visible
-            && !surface.pending
             && surface.shared.in_flight.load(Ordering::Acquire) == 0
             && surface.shared.unpresented.load(Ordering::Acquire) > 0
             && surface
@@ -480,6 +484,13 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
         SET_PRESENTS_WITH_TRANSACTION.send(&surface.layer, (transaction,));
         surface.transaction = transaction;
     }
+    // Each frame that waits for its presented handler can hold a
+    // drawable. When the frames hold all of them, `nextDrawable` blocks
+    // until the display frees one, so the display link tries again at the
+    // next refresh instead.
+    if surface.shared.unpresented.load(Ordering::Acquire) >= DRAWABLES {
+        return Frame::NoDrawable;
+    }
     let started = Instant::now();
     let list = Arc::clone(&surface.paint.lock().unwrap().list);
     let Some(drawable) = NEXT_DRAWABLE.send(&surface.layer, ()) else {
@@ -531,12 +542,9 @@ fn render(gpu: &Gpu, surface: &mut Surface) -> Frame {
 }
 
 /// Draws the current display list of a Metal window offscreen and reads
-/// it back as straight-alpha sRGB pixels at the backing scale. Returns
-/// `None` when the window paints with Core Graphics. A capture is not a
-/// paint.
-/// Draws the display list of the Metal surface of `window` offscreen, at
-/// `scale` pixels per point or at the backing scale. `None` means that
-/// the window does not paint with Metal.
+/// it back as straight-alpha sRGB pixels, at `scale` pixels per point or
+/// at the backing scale. Returns `None` when the window paints with Core
+/// Graphics. A capture is not a paint.
 pub(crate) fn capture(window: usize, scale: Option<f64>) -> Option<Result<Image, ImageError>> {
     let gpu = gpu()?;
     SURFACES.with(|surfaces| {
