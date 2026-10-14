@@ -1,7 +1,7 @@
 //! Layout components: aspect-ratio boxes, collapsible sections,
 //! accordions, and item rows.
 
-use crate::ui::page::{Build, PageCx, column, person, portrait, section, size_key};
+use crate::ui::page::{Build, PageCx, column, landscape, person, portrait, section, size_key};
 use choscorui::compose::t;
 use choscorui::compose::view::{
     Accordion, AnyView, AspectRatio, Collapsible, Cx, Env, Frame, ItemGroup, VStack, View, ViewExt,
@@ -14,7 +14,7 @@ pub fn aspect_ratio(_: &PageCx) -> AnyView {
         section(
             t!("aspect-ratio.sixteen_by_nine"),
             AspectRatio::new(t!("aspect-ratio.landscape"), 16.0 / 9.0)
-                .with(|ratio| ratio.with_image(portrait()))
+                .with(|ratio| ratio.with_image(landscape()))
                 .frame(Frame::new().width(320.0)),
         ),
         section(

@@ -4,7 +4,7 @@
 use crate::ui::page::{Build, PageCx, column};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, Frame, HStack, Input,
+    Alignment, AnyView, Button, Configured, Cx, Dynamic, Edges, Env, ForEach, Frame, HStack, Input,
     IntoLive, Spacer, State, Text, TextContent, Toggle, Toolbar, VStack, View, ViewExt, ZStack,
 };
 use choscorui::controls::{
@@ -13,8 +13,8 @@ use choscorui::controls::{
     ToolbarItem,
 };
 use choscorui::core::{
-    ColorRole, EventReply, Localizer, Measured, RadiusScale, Rect, SemanticNode, Space, TextPreset,
-    Tree,
+    ColorRole, EventReply, LayoutDirection, Localizer, Measured, RadiusScale, Rect, SemanticNode,
+    Space, TextPreset, Tree,
 };
 use std::time::Duration;
 
@@ -362,6 +362,7 @@ pub fn status_bar(_: &PageCx) -> AnyView {
 const WINDOW: (f64, f64) = (640.0, 380.0);
 const TOP_TOOLBAR: f64 = 36.0;
 const SIDE_TOOLBAR: f64 = 44.0;
+const END_TOOLBAR: f64 = 72.0;
 const STATUS_BAR: f64 = 24.0;
 
 /// An empty toolbar named and captioned by catalog key `label` on
@@ -377,75 +378,115 @@ fn preview_toolbar(label: &'static str, area: ToolbarArea) -> impl View {
     ))
 }
 
-/// The window preview: toolbars on the chosen edges, an optional status
-/// bar, and the content area that remains. `compose_main_window` gives
-/// the sizes; the side toolbar is on the start edge.
-fn window_preview(env: &Env, top: bool, side: bool, status: bool) -> impl View + use<> {
+/// The toolbars that the main-window page can show, in the order that
+/// `compose_main_window` stacks them inward from their edges.
+#[derive(Clone, Copy)]
+struct Bars {
+    top: bool,
+    /// A second top toolbar below the first one.
+    stacked: bool,
+    bottom: bool,
+    start: bool,
+    end: bool,
+    status: bool,
+}
+
+/// `view` at `frame` of a preview `width` points wide. The frames of
+/// `compose_main_window` are physical, so in a right-to-left layout the
+/// leading inset is measured from the right edge.
+fn placed(view: impl View, frame: Rect, width: f64, rtl: bool) -> impl View {
+    let leading = if rtl {
+        width - frame.max_x()
+    } else {
+        frame.origin.x
+    };
+    // The padding insets the content of the node it is on, so the view
+    // goes in a stack of its own.
+    ZStack::new((view.frame(Frame::size(frame.size.width, frame.size.height)),))
+        .alignment(Alignment::TOP_LEADING)
+        .padding(Edges::new(frame.origin.y, leading, 0.0, 0.0))
+}
+
+/// The window preview: each shown toolbar, the optional status bar, and
+/// the content area at the frames that `compose_main_window` gives. The
+/// side toolbars are on the start and end edges.
+fn window_preview(env: &Env, bars: Bars) -> impl View + use<> {
     let (width, height) = WINDOW;
-    let start = ToolbarArea::start(env.direction());
-    let bars: Vec<(ToolbarArea, f64)> = [
-        (top, ToolbarArea::Top, TOP_TOOLBAR),
-        (side, start, SIDE_TOOLBAR),
+    let direction = env.direction();
+    let rtl = direction == LayoutDirection::Rtl;
+    let toolbars: Vec<(&'static str, ToolbarArea, f64)> = [
+        (
+            bars.top,
+            "main-window.toolbar",
+            ToolbarArea::Top,
+            TOP_TOOLBAR,
+        ),
+        (
+            bars.stacked,
+            "main-window.format_bar",
+            ToolbarArea::Top,
+            TOP_TOOLBAR,
+        ),
+        (
+            bars.bottom,
+            "main-window.find_bar",
+            ToolbarArea::Bottom,
+            TOP_TOOLBAR,
+        ),
+        (
+            bars.start,
+            "main-window.tools",
+            ToolbarArea::start(direction),
+            SIDE_TOOLBAR,
+        ),
+        (
+            bars.end,
+            "main-window.inspector",
+            ToolbarArea::end(direction),
+            END_TOOLBAR,
+        ),
     ]
     .into_iter()
-    .filter_map(|(shown, area, thickness)| shown.then_some((area, thickness)))
+    .filter_map(|(shown, label, area, thickness)| shown.then_some((label, area, thickness)))
     .collect();
+    let areas: Vec<(ToolbarArea, f64)> = toolbars
+        .iter()
+        .map(|(_, area, thickness)| (*area, *thickness))
+        .collect();
     let frames = controls::compose_main_window(
         Rect::from_xywh(0.0, 0.0, width, height),
-        &bars,
-        status.then_some(STATUS_BAR),
+        &areas,
+        bars.status.then_some(STATUS_BAR),
     );
-    let thickness = |area: ToolbarArea| {
-        let index = bars.iter().position(|(bar, _)| *bar == area)?;
-        let frame = frames.toolbars[index];
-        Some(if area == ToolbarArea::Top {
-            frame.size.height
-        } else {
-            frame.size.width
-        })
-    };
-    let (top_height, side_width) = (thickness(ToolbarArea::Top), thickness(start));
-    let status_height = frames.status_bar.map(|bar| bar.size.height);
     let content = Text::new(t!(
         "main-window.content",
         width = format!("{:.0}", frames.content.size.width),
         height = format!("{:.0}", frames.content.size.height)
     ))
     .foreground(ColorRole::MutedForeground)
-    .frame(
-        Frame::new()
-            .max_width(f64::INFINITY)
-            .max_height(f64::INFINITY)
-            .alignment(Alignment::CENTER),
-    )
-    .background(ColorRole::Card)
-    .border(ColorRole::Border, 1.0)
-    .corner_radius(RadiusScale::Lg)
-    .padding(6.0);
-    let middle = HStack::new((
-        side_width
-            .map(|width| preview_toolbar("main-window.tools", start).frame(fill().width(width))),
-        content,
-    ))
-    .spacing(0.0)
-    .frame(
-        Frame::new()
-            .max_width(f64::INFINITY)
-            .max_height(f64::INFINITY),
+    .frame(fill().alignment(Alignment::CENTER))
+    .background(ColorRole::Muted);
+    let toolbars = ForEach::new(
+        toolbars
+            .into_iter()
+            .zip(frames.toolbars.iter().copied())
+            .collect::<Vec<_>>(),
+        |((label, _, _), _)| *label,
+        move |((label, area, _), frame)| placed(preview_toolbar(label, *area), *frame, width, rtl),
     );
-    let window = VStack::new((
-        top_height.map(|height| {
-            preview_toolbar("main-window.toolbar", ToolbarArea::Top).frame(fill().height(height))
-        }),
-        middle,
-        status_height.map(|height| {
-            choscorui::compose::view::StatusBar::new(t!("main-window.status_bar"), Vec::new())
-                .frame(fill().height(height))
-        }),
+    let status = frames.status_bar.map(|frame| {
+        let bar =
+            choscorui::compose::view::StatusBar::new(t!("main-window.status_bar"), Vec::new());
+        placed(bar, frame, width, rtl)
+    });
+    let window = ZStack::new((
+        placed(content, frames.content, width, rtl),
+        toolbars,
+        status,
     ))
-    .spacing(0.0);
+    .alignment(Alignment::TOP_LEADING);
     panel(window)
-        .frame(Frame::size(width, height))
+        .frame(Frame::size(width, height).alignment(Alignment::TOP_LEADING))
         .accessibility_label(env.text("main-window.preview", &[]))
 }
 
@@ -456,17 +497,36 @@ struct MainWindowPage;
 impl View for MainWindowPage {
     fn body(&self, cx: &mut Cx) -> impl View {
         let top = cx.state(true);
-        let side = cx.state(true);
+        let stacked = cx.state(false);
+        let bottom = cx.state(false);
+        let start = cx.state(true);
+        let end = cx.state(false);
         let status = cx.state(true);
         let env = cx.env().clone();
         column((
             HStack::new((
                 Toggle::new(t!("main-window.top_toolbar"), top.binding()),
-                Toggle::new(t!("main-window.side_toolbar"), side.binding()),
+                Toggle::new(t!("main-window.stacked_toolbar"), stacked.binding()),
+                Toggle::new(t!("main-window.bottom_toolbar"), bottom.binding()),
+            ))
+            .spacing(Space::S2),
+            HStack::new((
+                Toggle::new(t!("main-window.start_toolbar"), start.binding()),
+                Toggle::new(t!("main-window.end_toolbar"), end.binding()),
                 Toggle::new(t!("main-window.status_bar"), status.binding()),
             ))
             .spacing(Space::S2),
-            Dynamic::new(move || window_preview(&env, top.get(), side.get(), status.get())),
+            Dynamic::new(move || {
+                let bars = Bars {
+                    top: top.get(),
+                    stacked: stacked.get(),
+                    bottom: bottom.get(),
+                    start: start.get(),
+                    end: end.get(),
+                    status: status.get(),
+                };
+                window_preview(&env, bars)
+            }),
         ))
     }
 }
@@ -587,5 +647,28 @@ mod tests {
         page.act("Status bar", SemanticAction::Activate);
         assert!(page.host.find("Content 596 × 344").is_some());
         assert!(page.host.find("Tools").is_some());
+    }
+
+    #[test]
+    fn the_bottom_end_and_stacked_toolbars_take_their_room() {
+        let mut page = Harness::new("main-window");
+        page.act("Second top toolbar", SemanticAction::Activate);
+        page.act("Bottom toolbar", SemanticAction::Activate);
+        page.act("End toolbar", SemanticAction::Activate);
+        // 380 less two top bars, a bottom bar, and the status bar; 640
+        // less the start and end bars.
+        assert!(page.host.find("Content 524 × 248").is_some());
+        let mut bounds = |name: &str| {
+            let node = page.host.find(name).unwrap();
+            page.host.tree().bounds(node).unwrap()
+        };
+        let (toolbar, format) = (bounds("Toolbar"), bounds("Format bar"));
+        assert_eq!(format.origin.y, toolbar.max_y(), "the second bar stacks");
+        assert_eq!(format.size.height, 36.0);
+        let (find, preview) = (bounds("Find bar"), bounds("Window preview"));
+        assert_eq!(find.max_y(), preview.max_y() - 24.0, "above the status bar");
+        let (tools, inspector) = (bounds("Tools"), bounds("Inspector"));
+        assert_eq!(tools.origin.x, preview.origin.x, "start on the left");
+        assert_eq!(inspector.max_x(), preview.max_x(), "end on the right");
     }
 }

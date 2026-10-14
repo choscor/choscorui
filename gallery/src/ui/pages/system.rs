@@ -4,10 +4,10 @@
 use crate::ui::page::{Build, PageCx, column, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    Alignment, AnyView, Button, Cx, Env, ForEach, Frame, HStack, Localized, Text, VStack, View,
-    ViewExt,
+    Alignment, AnyView, Badge, Button, Cx, Env, ForEach, Frame, HStack, Localized, Text, VStack,
+    View, ViewExt,
 };
-use choscorui::controls::ButtonVariant;
+use choscorui::controls::{BadgeVariant, ButtonVariant};
 use choscorui::core::{
     AnnouncementPriority, BackendCapabilities, Services, Space, StatusItemSpec, Support,
     SystemNotification, TextPreset,
@@ -42,6 +42,16 @@ fn support_text(support: Support) -> Localized {
         Support::Supported => t!("desktop.supported"),
         Support::Unsupported => t!("desktop.unsupported"),
         Support::Conditional(condition) => t!(condition.message_id()),
+    }
+}
+
+/// The badge look of a support level: filled when supported, outlined
+/// when it depends on a condition, and muted when not supported.
+fn support_variant(support: Support) -> BadgeVariant {
+    match support {
+        Support::Supported => BadgeVariant::Default,
+        Support::Conditional(_) => BadgeVariant::Outline,
+        Support::Unsupported => BadgeVariant::Secondary,
     }
 }
 
@@ -142,9 +152,10 @@ impl View for DesktopPage {
                             Text::new(t!(*name))
                                 .text_style(TextPreset::Small)
                                 .frame(Frame::new().width(180.0).alignment(Alignment::LEADING)),
-                            Text::new(support_text(*support))
-                                .text_style(TextPreset::Small)
-                                .opacity(if support.is_supported() { 1.0 } else { 0.5 }),
+                            Badge::new(support_text(*support)).with({
+                                let variant = support_variant(*support);
+                                move |badge| badge.with_variant(variant)
+                            }),
                         ))
                     },
                 ))

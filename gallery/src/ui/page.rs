@@ -118,6 +118,48 @@ pub fn stateful<V: View>(build: impl Fn(&mut Cx) -> V + 'static) -> AnyView {
     Body(build).into_any()
 }
 
+/// A 16:9 landscape scene that stands in for a photo: a sky gradient, a
+/// sun, two rows of hills, and a lake.
+pub fn landscape() -> Image {
+    const WIDTH: u32 = 192;
+    const HEIGHT: u32 = 108;
+    let mix = |a: [f32; 3], b: [f32; 3], t: f32| {
+        let t = t.clamp(0.0, 1.0);
+        let channel = |i: usize| (a[i] + (b[i] - a[i]) * t) as u8;
+        [channel(0), channel(1), channel(2), 255]
+    };
+    Image::from_fn(WIDTH, HEIGHT, move |x, y| {
+        let (u, v) = (x as f32 / WIDTH as f32, y as f32 / HEIGHT as f32);
+        let far = 0.52 + 0.06 * (u * 9.0).sin() + 0.03 * (u * 23.0).cos();
+        let near = 0.68 + 0.05 * (u * 5.0 + 1.3).sin();
+        let lake = 0.84;
+        let (dx, dy) = (u - 0.72, (v - 0.3) * 9.0 / 16.0);
+        if v > lake {
+            mix(
+                [70.0, 130.0, 190.0],
+                [30.0, 70.0, 120.0],
+                (v - lake) / (1.0 - lake),
+            )
+        } else if v > near {
+            mix(
+                [70.0, 140.0, 70.0],
+                [40.0, 95.0, 45.0],
+                (v - near) / (lake - near),
+            )
+        } else if v > far {
+            mix(
+                [120.0, 150.0, 170.0],
+                [90.0, 125.0, 120.0],
+                (v - far) / (near - far),
+            )
+        } else if (dx * dx + dy * dy).sqrt() < 0.06 {
+            [255, 236, 170, 255]
+        } else {
+            mix([70.0, 130.0, 220.0], [250.0, 200.0, 160.0], v / far)
+        }
+    })
+}
+
 /// A small diagonal gradient that stands in for a photo.
 pub fn portrait() -> Image {
     let side = 32u32;
