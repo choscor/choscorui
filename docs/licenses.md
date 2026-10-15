@@ -1,6 +1,6 @@
 # License audit
 
-Last checked on 2026-10-12 against the workspace `Cargo.lock`, the link line of the gallery release build (`otool -L`), and the published crate files. Do the audit again before each release and for each change to the dependency rule (see [releasing.md](releasing.md) and [architecture.md](architecture.md)).
+Last checked on 2026-10-15 against the workspace `Cargo.lock`, the link line of the gallery release build (`otool -L`), and the published crate files. Do the audit again before each release and for each change to the dependency rule (see [releasing.md](releasing.md) and [architecture.md](architecture.md)).
 
 ## Project license
 
