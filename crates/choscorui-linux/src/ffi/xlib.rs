@@ -15,6 +15,7 @@ use super::macros::{c_consts, callback, ffi_struct, ffi_union, libraries, opaque
 use std::cell::RefCell;
 use std::os::fd::BorrowedFd;
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 opaque_types! {
     /// `Display`.
@@ -113,6 +114,7 @@ libraries! {
         pkg_config: "x11",
         package: "libx11-dev",
         functions {
+            fn XInitThreads() -> CInt;
             fn XOpenDisplay(name: *const CChar) -> *mut XDisplay;
             fn XCloseDisplay(display: *mut XDisplay) -> CInt;
             fn XConnectionNumber(display: *mut XDisplay) -> CInt;
@@ -338,6 +340,19 @@ pub(crate) enum ImEvent {
     Commit { window: u32, text: String },
 }
 
+/// The library after `XInitThreads`, or `None` when it does not load.
+/// Each thread of a process can open its own input method, so Xlib must
+/// lock its global state. `XInitThreads` must come before any other Xlib
+/// call.
+fn library() -> Option<&'static Xlib> {
+    static READY: OnceLock<bool> = OnceLock::new();
+    let lib = Xlib::get().ok()?;
+    // SAFETY: the first call of the process, before any other Xlib call
+    // of this crate.
+    let ready = *READY.get_or_init(|| unsafe { (lib.XInitThreads)() } != 0);
+    ready.then_some(lib)
+}
+
 /// An open input method with preedit callbacks.
 pub(crate) struct InputMethod {
     lib: &'static Xlib,
@@ -351,7 +366,7 @@ impl InputMethod {
     /// server of `DISPLAY`. Returns None without libX11, without a UTF-8
     /// locale, or without an input method that takes preedit callbacks.
     pub(crate) fn open() -> Option<Rc<Self>> {
-        let lib = Xlib::get().ok()?;
+        let lib = library()?;
         // SAFETY: null opens the display of `DISPLAY`.
         let display = unsafe { (lib.XOpenDisplay)(std::ptr::null()) };
         if display.is_null() {

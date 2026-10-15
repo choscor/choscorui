@@ -218,9 +218,16 @@ fn ctype_locale(locale: Option<&std::ffi::CStr>) -> Option<std::ffi::CString> {
 }
 
 /// Calls `f` with a UTF-8 `LC_CTYPE`: the one of the environment when it
-/// is UTF-8, or else `C.UTF-8`. Restores the locale after the call.
+/// is UTF-8, or else `C.UTF-8`. Restores the locale after the call. Calls
+/// of other threads wait.
 /// Returns None when no UTF-8 locale is available.
 pub(crate) fn with_utf8_ctype<T>(f: impl FnOnce() -> T) -> Option<T> {
+    // The locale belongs to the process, so one thread at a time changes
+    // it.
+    static LOCALE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCALE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let previous = ctype_locale(None)?;
     let utf8 = |name: &std::ffi::CStr| {
         let name = name.to_string_lossy().to_ascii_lowercase();
