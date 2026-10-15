@@ -7,6 +7,8 @@
 //!
 //! On Linux, `decode_image` and `encode_png` convert between encoded
 //! images and `choscorui_core::Image` with the system codec libraries.
+//! `process_usage` and `CountingAllocator` give the resource figures of
+//! `choscorui-bench` and the lifetime smoke test.
 
 #![deny(unsafe_code)]
 
@@ -36,6 +38,12 @@ pub use x11::*;
 mod ffi;
 #[cfg(target_os = "linux")]
 pub use ffi::LoadError;
+#[cfg(target_os = "linux")]
+pub use ffi::{CountingAllocator, allocation_count};
+#[cfg(target_os = "linux")]
+mod process;
+#[cfg(target_os = "linux")]
+pub use process::{ProcessUsage, ProcessUsageError, process_usage};
 #[cfg(target_os = "linux")]
 mod native;
 #[cfg(target_os = "linux")]

@@ -27,12 +27,14 @@ pub(crate) mod freetype;
 pub(crate) mod gles;
 pub(crate) mod harfbuzz;
 pub(crate) mod libc;
+pub(crate) mod process;
 pub(crate) mod wayland;
 pub(crate) mod x11;
 pub(crate) mod xkb;
 pub(crate) mod xlib;
 
 pub use dl::LoadError;
+pub use process::{CountingAllocator, allocation_count};
 
 /// Reports a panic that a C callback caught. The callback then returns
 /// its fallback value.
@@ -52,6 +54,7 @@ pub(crate) fn declarations() -> (
     let mut libraries = vec![
         dl::check_items(),
         libc::check_items(),
+        process::check_items(),
         wl::WaylandClient::check_items(),
         wayland::cursor::WaylandCursor::check_items(),
         xkb::XkbCommon::check_items(),
@@ -73,6 +76,8 @@ pub(crate) fn declarations() -> (
         libc::PollFd::layout(),
         libc::Timespec::layout(),
         libc::Itimerspec::layout(),
+        process::Timeval::layout(),
+        process::Rusage::layout(),
         wl::WlMessage::layout(),
         wl::WlInterface::layout(),
         wl::WlArray::layout(),
@@ -97,6 +102,7 @@ pub(crate) fn declarations() -> (
     ]);
     let constants = [
         libc::constants(),
+        process::constants(),
         wl::constants(),
         codecs::constants(),
         xkb::constants(),

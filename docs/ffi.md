@@ -331,3 +331,14 @@ The AT-SPI bridge in `src/atspi/` of `choscorui-linux` has no `unsafe` code. It 
 - **Ownership.** The handler holds the model of the windows, not the connection. Thus, the connection and the handler make no reference cycle.
 - **Threads.** The event loop of the UI thread serves the connection. The handler and `publish` run on that thread, and they never run at the same time.
 - **Tests.** `tests/atspi_smoke.rs` calls the objects from a second connection under `at-spi2-registryd`.
+
+## Linux process usage and the counting allocator
+
+`src/ffi/process.rs` declares `getrusage` of the C library with `libc_functions!`. It also holds `CountingAllocator`, because its `GlobalAlloc` implementation is `unsafe`.
+
+- **Calls.** `process_usage` calls `getrusage` with `RUSAGE_SELF` and a `struct rusage` that `ffi_struct!` declares. The binding check compares that layout with `sys/resource.h`.
+- **Files.** The memory sizes come from `/proc/self/status`, which `src/process.rs` reads and parses outside `ffi`.
+- **Allocator.** Each method of `CountingAllocator` adds to an atomic count and forwards its arguments to `System` without change.
+- **Callbacks.** The C library calls no Rust code, so this boundary has no callback.
+- **Threads.** Any thread can call these functions. The count is an atomic value, and the calls keep no state.
+- **Tests.** The unit tests parse a status text and read the usage of the test process. `lifetime_smoke` reads the footprint, and the bench reads the count in each scroll frame.
