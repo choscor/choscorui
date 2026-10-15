@@ -287,6 +287,11 @@ impl Keymap {
         (!raw.is_null()).then_some(Self { lib, raw })
     }
 
+    /// The raw keymap, for the X11 state function.
+    pub(crate) fn raw(&self) -> *mut XkbKeymapRaw {
+        self.raw
+    }
+
     /// True when the key auto-repeats.
     pub(crate) fn repeats(&self, key: u32) -> bool {
         // SAFETY: the keymap is live; any key code is valid input.

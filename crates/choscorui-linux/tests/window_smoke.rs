@@ -2,12 +2,23 @@
 //! `CHOSCORUI_RUN_LINUX_SMOKE=1`, inside `scripts/linux/headless-session.sh`.
 #![cfg(target_os = "linux")]
 
-use choscorui_core::{Color, DisplayList, Point, Rect, Size, WindowOptions};
-use choscorui_linux::{Application, Painter, WindowEvent};
+use choscorui_core::{
+    Color, CursorShape, DisplayList, Image, Point, Rect, Size, WindowGeometry, WindowOptions,
+};
+use choscorui_linux::{Application, BackendKind, Error, Painter, WindowEvent};
 use std::time::{Duration, Instant};
 
 fn enabled() -> bool {
     std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_ok_and(|value| value == "1")
+}
+
+/// The display server that `CHOSCORUI_BACKEND` requests.
+fn requested_backend() -> Option<BackendKind> {
+    match std::env::var("CHOSCORUI_BACKEND").ok()?.as_str() {
+        "wayland" => Some(BackendKind::Wayland),
+        "x11" => Some(BackendKind::X11),
+        _ => None,
+    }
 }
 
 /// Dispatches events until `done` is true, for at most five seconds.
@@ -30,6 +41,9 @@ fn a_window_shows_paints_retitles_and_closes() {
         return;
     }
     let application = Application::new().unwrap();
+    if let Some(requested) = requested_backend() {
+        assert_eq!(application.backend(), requested);
+    }
     let window = application
         .create_window(WindowOptions::new("Smoke", 320.0, 200.0))
         .unwrap();
@@ -50,6 +64,15 @@ fn a_window_shows_paints_retitles_and_closes() {
             .iter()
             .any(|event| matches!(event, WindowEvent::Resized { .. }))
     );
+    // A change paints again after the first image is released: on X11
+    // with MIT-SHM, after its completion event.
+    let mut list = DisplayList::new();
+    list.fill_rect(
+        Rect::new(Point::new(20.0, 20.0), Size::new(50.0, 50.0)),
+        Color::rgb8(200, 100, 40),
+    );
+    window.set_display_list(list);
+    assert!(pump_until(&application, || window.paint_count() > 1));
     window.set_title("Renamed").unwrap();
     assert_eq!(window.title(), "Renamed");
     assert!(window.set_title("bad\0title").is_err());
@@ -95,4 +118,99 @@ fn posted_work_and_timers_run_on_the_ui_thread() {
     let poster = application.poster();
     drop(application);
     assert!(poster.post(|| {}).is_err());
+}
+
+#[test]
+fn x11_geometry_round_trips_on_an_unmapped_window() {
+    if !enabled() || requested_backend() != Some(BackendKind::X11) {
+        return;
+    }
+    let application = Application::new().unwrap();
+    assert_eq!(application.backend(), BackendKind::X11);
+    // Xvfb runs no window manager. The window stays unmapped, so the
+    // server applies the position and the size, and the state goes to
+    // the `_NET_WM_STATE` property directly.
+    let window = application
+        .create_window(WindowOptions::new("Geometry", 320.0, 200.0))
+        .unwrap();
+    let placed = WindowGeometry {
+        frame: Rect::new(Point::new(40.0, 30.0), Size::new(400.0, 300.0)),
+        zoomed: true,
+        full_screen: false,
+    };
+    window.set_geometry(&placed).unwrap();
+    assert_eq!(window.geometry(), placed);
+    let full_screen = WindowGeometry {
+        zoomed: false,
+        full_screen: true,
+        ..placed
+    };
+    window.set_geometry(&full_screen).unwrap();
+    assert_eq!(window.geometry(), full_screen);
+    let mut resized = false;
+    assert!(pump_until(&application, || {
+        resized |= window.take_events().iter().any(|event| {
+            matches!(event, WindowEvent::Resized { size, .. } if *size == Size::new(400.0, 300.0))
+        });
+        resized
+    }));
+    assert_eq!(window.content_size(), Size::new(400.0, 300.0));
+    // The screen of Xvfb is 1280 x 800 at scale 1.
+    assert!(
+        application
+            .screens()
+            .contains(&Rect::new(Point::new(0.0, 0.0), Size::new(1280.0, 800.0)))
+    );
+    // Named and custom cursors apply; the image becomes a RENDER cursor.
+    window.set_cursor(CursorShape::IBeam).unwrap();
+    let image = Image::from_fn(16, 16, |x, _| [255, 0, 0, if x < 8 { 255 } else { 128 }]);
+    window
+        .set_cursor(CursorShape::Custom {
+            image,
+            hotspot: Point::new(8.0, 8.0),
+        })
+        .unwrap();
+    window.close();
+    application
+        .dispatch_next_event(Duration::from_millis(10))
+        .unwrap();
+}
+
+/// The name of the test that runs in child processes with a broken
+/// `DISPLAY`.
+const WITHOUT_DISPLAY: &str = "x11_without_a_display_fails_with_no_display";
+
+#[test]
+fn x11_without_a_display_fails_with_no_display() {
+    // The environment of a process is global, so each case runs in a
+    // child process: one without `DISPLAY`, and one whose `DISPLAY`
+    // names no server.
+    let Some(case) = std::env::var_os("CHOSCORUI_TEST_DISPLAY_CASE") else {
+        for case in ["unset", "missing"] {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    WITHOUT_DISPLAY,
+                    "--exact",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env("CHOSCORUI_TEST_DISPLAY_CASE", case)
+                .env("CHOSCORUI_BACKEND", "x11")
+                .env_remove("WAYLAND_DISPLAY");
+            if case == "unset" {
+                command.env_remove("DISPLAY");
+            } else {
+                command.env("DISPLAY", ":4321");
+            }
+            let status = command.status().unwrap();
+            assert!(status.success(), "the {case} case failed: {status}");
+        }
+        return;
+    };
+    match Application::new() {
+        Err(Error::NoDisplay(reason)) => assert!(!reason.is_empty(), "{case:?}"),
+        Err(error) => panic!("{case:?}: unexpected error {error}"),
+        Ok(_) => panic!("{case:?}: an application without a display server"),
+    }
 }

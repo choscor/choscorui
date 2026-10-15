@@ -254,3 +254,14 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Messages.** The first TIFF decode sets null libtiff error and warning handlers for the process. Thus, libtiff writes nothing to standard error.
 - **Threads.** Each decode makes its own decoder objects, so decode and encode work on any thread.
 - **Tests.** `tests/codecs.rs` decodes a fixture of each format and damaged data. It also hides libtiff with `CHOSCORUI_TEST_HIDE_LIB` in a child process.
+
+## Linux X11
+
+`choscorui-linux` loads libxcb, libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-randr, libxcb-render, libxcb-cursor, and libxkbcommon-x11 through `libraries!` in `src/ffi/x11.rs`. The safe `Connection` type there is the only caller.
+
+- **Callbacks.** These libraries call no Rust code. The client reads each event with `xcb_poll_for_event`, so the X11 backend adds no callback boundary.
+- **Replies and events.** The crate passes null for each reply error, so errors arrive as events. Each reply and event is copied into `Bytes` and freed with `free`. The copy of a generic event removes the `full_sequence` field at byte 32, so the bytes follow the wire format. The binding check pins that offset in `xcb_generic_event_t`.
+- **Ownership.** `Connection` disconnects on drop. The keymap and the state of `xkb_x11_keymap_new_from_device` and `xkb_x11_state_new_from_device` move into the `Keymap` and `State` owners of `src/ffi/xkb.rs`. A cursor context of xcb-cursor lives only during one lookup.
+- **Shared memory.** `SysvSegment` creates a private System V segment and marks it for removal at once. The server attaches it read-only. The client changes the image only after the completion event of the latest `ShmPutImage`.
+- **Threads.** All X11 calls run on the UI thread that owns the `Application`.
+- **Tests.** The binding check compiles each declaration and constant against the headers. `tests/window_smoke.rs` opens, paints, and closes a window on Xvfb, and round-trips the geometry of a window that does not show.

@@ -19,6 +19,7 @@ mod ctypes;
 pub(crate) mod dl;
 pub(crate) mod libc;
 pub(crate) mod wayland;
+pub(crate) mod x11;
 pub(crate) mod xkb;
 
 pub use dl::LoadError;
@@ -44,6 +45,7 @@ pub(crate) fn declarations() -> (
         xkb::XkbCommon::check_items(),
     ];
     libraries.extend(codecs::check_items());
+    libraries.extend(x11::check_items());
     let mut structs = vec![
         libc::PollFd::layout(),
         libc::Timespec::layout(),
@@ -54,11 +56,13 @@ pub(crate) fn declarations() -> (
         wl::WlArgument::layout(),
     ];
     structs.extend(codecs::layouts());
+    structs.extend(x11::layouts());
     let constants = [
         libc::constants(),
         wl::constants(),
         codecs::constants(),
         xkb::constants(),
+        x11::all_constants(),
     ]
     .into_iter()
     .flatten()

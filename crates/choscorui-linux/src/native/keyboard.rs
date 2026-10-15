@@ -232,6 +232,15 @@ impl Keyboard {
         }
     }
 
+    /// The events of a repeated press from a server that repeats keys
+    /// itself, as X11 does with detectable auto-repeat.
+    pub(crate) fn repeat_event(&mut self, code: u32) -> Vec<WindowEvent> {
+        match self.key(code) {
+            Some(key) => self.press(code, key, true),
+            None => Vec::new(),
+        }
+    }
+
     /// Stops the repeat, when the window loses the keyboard.
     pub(crate) fn release_all(&mut self) {
         self.held = None;
@@ -375,5 +384,27 @@ mod tests {
         );
         keyboard.key_event(A, false, start);
         assert_eq!(keyboard.next_repeat(), None);
+    }
+
+    #[test]
+    fn a_server_repeat_is_a_repeated_press_with_text() {
+        let mut keyboard = keyboard();
+        let events = keyboard.repeat_event(A);
+        assert_eq!(
+            events,
+            vec![
+                WindowEvent::Key {
+                    event: KeyEvent::Down {
+                        key: Key::Character('a'),
+                        repeat: true
+                    },
+                    modifiers: Modifiers::default(),
+                },
+                WindowEvent::Ime(ImeEvent::CommitText {
+                    text: "a".to_owned(),
+                    replacement_utf16: None
+                }),
+            ]
+        );
     }
 }
