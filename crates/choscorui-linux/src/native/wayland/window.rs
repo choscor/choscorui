@@ -759,4 +759,9 @@ impl Surface for WaylandWindow {
         let client = self.client.upgrade().ok_or(Error::Closed)?;
         client.begin_drag(self, payload, allowed, preview)
     }
+
+    /// Wayland has no protocol for fake input of a client.
+    fn simulate_pointer(&self, _position: Point, _button: Option<bool>) -> Result<(), Error> {
+        Err(Error::MissingProtocol("fake pointer input"))
+    }
 }

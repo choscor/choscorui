@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libwayland-dev libwayland-bin libxkbcommon-dev libxkbcommon-x11-dev \
         libxcb1-dev libxcb-xkb-dev libxcb-xinput-dev libxcb-shm0-dev \
         libxcb-randr0-dev libxcb-render0-dev libxcb-present-dev libxcb-cursor-dev \
+        libxcb-xtest0-dev \
         libx11-dev libx11-xcb-dev \
         libegl-dev libgles-dev libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri \
         libcairo2-dev libfreetype-dev libharfbuzz-dev libfontconfig-dev \

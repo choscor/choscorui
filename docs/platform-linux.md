@@ -135,7 +135,17 @@ On Wayland, `wl_data_device` carries the selection and the drags. The compositor
 - The center of `preview` follows the pointer.
 - The target window gets `WindowEvent::Drag` events. The source window gets `WindowEvent::DragEnded` with the operation.
 - Wayland has copy and move actions, but no link action.
+- X11 has copy, move, and link actions. The pointer shows no preview.
 - The modifiers follow the PC convention: Ctrl copies, Shift moves, and Ctrl+Shift links. Without a modifier, a drag in the same application moves, and a drag from another application copies.
+
+On X11, the selections of the ICCCM carry the clipboard, and XDND version 5 carries the drags. `clipboard` and `drag_and_drop` are always `Supported` on X11.
+
+- **Clipboard.** A hidden window owns `CLIPBOARD`. It answers `TARGETS`, `TIMESTAMP`, `MULTIPLE`, each MIME type, `UTF8_STRING`, and `TEXT`. It also answers `STRING` with Latin-1 text. `SelectionClear` ends the ownership.
+- **Reads.** A read asks the owner to convert the selection into a property of the hidden window. While it waits, the client answers requests for its own selections and keeps the other events for the event loop. When the other owner offers only `STRING`, the text reads as `text/plain`.
+- **Large data.** Data larger than 256 KiB, or than a quarter of the maximum request length, goes with INCR in chunks. Reads accept INCR too. Each step of a read stops after 2 seconds without data.
+- **Drop targets.** Each window has `XdndAware`. At the first `XdndPosition`, the window decides if it takes the drag, and sends `Enter`. Each `XdndStatus` asks for all positions. On `XdndDrop`, the window reads `XdndSelection` at the time of the drop, and sends `XdndFinished`.
+- **Drag sources.** `begin_drag` needs the left button down on the window. The hidden window owns `XdndSelection` and holds `XdndTypeList` and `XdndActionList`. The client grabs the pointer and sends the messages to the aware window under it. It sends one position at a time, and waits for the status. The source gets `DragEnded` on `XdndFinished`, or `DragOperation::None` after 5 seconds without it.
+- **Tests.** `Window::simulate_pointer` is hidden test support. On X11 it moves the pointer and presses or releases the left button through XTEST. On Wayland it returns `Error::MissingProtocol`.
 
 ## Input methods
 
@@ -183,7 +193,6 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 - Native event loops
 - Windows on the screen and painting
 - Text shaping and fonts
-- Clipboard and drag-and-drop data transfer on X11
 - Input method composition on X11
 - Accessibility
 - Desktop portals

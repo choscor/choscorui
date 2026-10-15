@@ -49,6 +49,12 @@ opaque_types! {
     pub(crate) XcbRandrGetMonitorsReply = "xcb_randr_get_monitors_reply_t";
     /// `xcb_render_query_pict_formats_reply_t`.
     pub(crate) XcbRenderQueryPictFormatsReply = "xcb_render_query_pict_formats_reply_t";
+    /// `xcb_get_selection_owner_reply_t`.
+    pub(crate) XcbGetSelectionOwnerReply = "xcb_get_selection_owner_reply_t";
+    /// `xcb_get_atom_name_reply_t`.
+    pub(crate) XcbGetAtomNameReply = "xcb_get_atom_name_reply_t";
+    /// `xcb_grab_pointer_reply_t`.
+    pub(crate) XcbGrabPointerReply = "xcb_grab_pointer_reply_t";
 }
 
 ffi_struct! {
@@ -153,6 +159,21 @@ ffi_struct! {
 
     /// `xcb_render_query_pict_formats_cookie_t`.
     pub(crate) struct XcbRenderQueryPictFormatsCookie = "xcb_render_query_pict_formats_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_get_selection_owner_cookie_t`.
+    pub(crate) struct XcbGetSelectionOwnerCookie = "xcb_get_selection_owner_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_get_atom_name_cookie_t`.
+    pub(crate) struct XcbGetAtomNameCookie = "xcb_get_atom_name_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_grab_pointer_cookie_t`.
+    pub(crate) struct XcbGrabPointerCookie = "xcb_grab_pointer_cookie_t" {
         pub(crate) sequence: CUint,
     }
 }
@@ -347,6 +368,73 @@ libraries! {
                 cookie: XcbQueryExtensionCookie,
                 e: ErrorOut,
             ) -> *mut XcbQueryExtensionReply;
+            fn xcb_set_selection_owner(
+                c: *mut XcbConnection,
+                owner: u32,
+                selection: u32,
+                time: u32,
+            ) -> XcbVoidCookie;
+            fn xcb_get_selection_owner(
+                c: *mut XcbConnection,
+                selection: u32,
+            ) -> XcbGetSelectionOwnerCookie;
+            fn xcb_get_selection_owner_reply(
+                c: *mut XcbConnection,
+                cookie: XcbGetSelectionOwnerCookie,
+                e: ErrorOut,
+            ) -> *mut XcbGetSelectionOwnerReply;
+            fn xcb_convert_selection(
+                c: *mut XcbConnection,
+                requestor: u32,
+                selection: u32,
+                target: u32,
+                property: u32,
+                time: u32,
+            ) -> XcbVoidCookie;
+            fn xcb_delete_property(c: *mut XcbConnection, window: u32, property: u32) -> XcbVoidCookie;
+            fn xcb_get_atom_name(c: *mut XcbConnection, atom: u32) -> XcbGetAtomNameCookie;
+            fn xcb_get_atom_name_reply(
+                c: *mut XcbConnection,
+                cookie: XcbGetAtomNameCookie,
+                e: ErrorOut,
+            ) -> *mut XcbGetAtomNameReply;
+            fn xcb_grab_pointer(
+                c: *mut XcbConnection,
+                owner_events: u8,
+                grab_window: u32,
+                event_mask: u16,
+                pointer_mode: u8,
+                keyboard_mode: u8,
+                confine_to: u32,
+                cursor: u32,
+                time: u32,
+            ) -> XcbGrabPointerCookie;
+            fn xcb_grab_pointer_reply(
+                c: *mut XcbConnection,
+                cookie: XcbGrabPointerCookie,
+                e: ErrorOut,
+            ) -> *mut XcbGrabPointerReply;
+        }
+    }
+
+    /// libxcb-xtest: fake input, for the smoke tests.
+    pub(crate) struct XcbTest {
+        library: "libxcb-xtest",
+        sonames: ["libxcb-xtest.so.0"],
+        headers: ["xcb/xtest.h"],
+        pkg_config: "xcb-xtest",
+        package: "libxcb-xtest0-dev",
+        functions {
+            fn xcb_test_fake_input(
+                c: *mut XcbConnection,
+                kind: u8,
+                detail: u8,
+                time: u32,
+                root: u32,
+                root_x: i16,
+                root_y: i16,
+                deviceid: u8,
+            ) -> XcbVoidCookie;
         }
     }
 
@@ -663,6 +751,15 @@ c_consts! {
     pub(crate) const XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED: u32 = 65536;
     pub(crate) const XCB_SHM_COMPLETION: u8 = 0;
     pub(crate) const XCB_RENDER_PICT_TYPE_DIRECT: u8 = 1;
+    pub(crate) const XCB_SELECTION_CLEAR: u8 = 29;
+    pub(crate) const XCB_SELECTION_REQUEST: u8 = 30;
+    pub(crate) const XCB_SELECTION_NOTIFY: u8 = 31;
+    pub(crate) const XCB_ATOM_INTEGER: u32 = 19;
+    pub(crate) const XCB_PROPERTY_NEW_VALUE: u8 = 0;
+    pub(crate) const XCB_PROPERTY_DELETE: u8 = 1;
+    pub(crate) const XCB_GRAB_MODE_ASYNC: u8 = 1;
+    pub(crate) const XCB_GRAB_STATUS_SUCCESS: u8 = 0;
+    pub(crate) const XCB_GET_PROPERTY_TYPE_ANY: u32 = 0;
 }
 
 /// The constants and enum values, for the binding check.
@@ -686,6 +783,7 @@ pub(crate) fn check_items() -> Vec<super::checks::LibraryItems> {
         XcbRender::check_items(),
         XcbCursor::check_items(),
         XkbCommonX11::check_items(),
+        XcbTest::check_items(),
     ]
 }
 
@@ -709,6 +807,9 @@ pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
         XcbShmQueryVersionCookie::layout(),
         XcbRandrGetMonitorsCookie::layout(),
         XcbRenderQueryPictFormatsCookie::layout(),
+        XcbGetSelectionOwnerCookie::layout(),
+        XcbGetAtomNameCookie::layout(),
+        XcbGrabPointerCookie::layout(),
     ]
 }
 
@@ -1105,6 +1206,117 @@ impl Connection {
         Some((format, reply.slice(32, length).to_vec()))
     }
 
+    /// Takes a property of any type: its type, its format, and its bytes.
+    /// The server deletes the property, which an INCR transfer needs.
+    pub(crate) fn take_property(&self, window: u32, property: u32) -> Option<(u32, u8, Vec<u8>)> {
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe {
+            (self.xcb.xcb_get_property)(
+                self.raw,
+                1,
+                window,
+                property,
+                XCB_GET_PROPERTY_TYPE_ANY,
+                0,
+                u32::MAX / 4,
+            )
+        };
+        // SAFETY: the cookie is of this connection.
+        let reply =
+            unsafe { (self.xcb.xcb_get_property_reply)(self.raw, cookie, std::ptr::null_mut()) };
+        let reply = take_reply(reply)?;
+        let format = reply.u8(1);
+        let length = reply.u32(16) as usize * usize::from(format / 8);
+        Some((reply.u32(8), format, reply.slice(32, length).to_vec()))
+    }
+
+    pub(crate) fn delete_property(&self, window: u32, property: u32) {
+        // SAFETY: the request has no pointers.
+        unsafe { (self.xcb.xcb_delete_property)(self.raw, window, property) };
+    }
+
+    /// Makes `owner` the owner of `selection` at `time`.
+    pub(crate) fn set_selection_owner(&self, owner: u32, selection: u32, time: u32) {
+        // SAFETY: the request has no pointers.
+        unsafe { (self.xcb.xcb_set_selection_owner)(self.raw, owner, selection, time) };
+    }
+
+    /// The owner of `selection`, or 0 without one.
+    pub(crate) fn selection_owner(&self, selection: u32) -> u32 {
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe { (self.xcb.xcb_get_selection_owner)(self.raw, selection) };
+        // SAFETY: the cookie is of this connection.
+        let reply = unsafe {
+            (self.xcb.xcb_get_selection_owner_reply)(self.raw, cookie, std::ptr::null_mut())
+        };
+        take_reply(reply).map_or(0, |reply| reply.u32(8))
+    }
+
+    /// Asks the owner of `selection` to put `target` in `property` of
+    /// `requestor`.
+    pub(crate) fn convert_selection(
+        &self,
+        requestor: u32,
+        (selection, target, property): (u32, u32, u32),
+        time: u32,
+    ) {
+        // SAFETY: the request has no pointers.
+        unsafe {
+            (self.xcb.xcb_convert_selection)(self.raw, requestor, selection, target, property, time)
+        };
+    }
+
+    /// The name of `atom`.
+    pub(crate) fn atom_name(&self, atom: u32) -> Option<String> {
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe { (self.xcb.xcb_get_atom_name)(self.raw, atom) };
+        // SAFETY: the cookie is of this connection.
+        let reply =
+            unsafe { (self.xcb.xcb_get_atom_name_reply)(self.raw, cookie, std::ptr::null_mut()) };
+        let reply = take_reply(reply)?;
+        let length = usize::from(reply.u16(8));
+        String::from_utf8(reply.slice(32, length).to_vec()).ok()
+    }
+
+    /// Grabs the pointer for `window` with the core events of `mask`.
+    /// Returns true when the grab succeeded.
+    pub(crate) fn grab_pointer(&self, window: u32, mask: u16, time: u32) -> bool {
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe {
+            (self.xcb.xcb_grab_pointer)(
+                self.raw,
+                0,
+                window,
+                mask,
+                XCB_GRAB_MODE_ASYNC,
+                XCB_GRAB_MODE_ASYNC,
+                0,
+                0,
+                time,
+            )
+        };
+        // SAFETY: the cookie is of this connection.
+        let reply =
+            unsafe { (self.xcb.xcb_grab_pointer_reply)(self.raw, cookie, std::ptr::null_mut()) };
+        take_reply(reply).is_some_and(|reply| reply.u8(1) == XCB_GRAB_STATUS_SUCCESS)
+    }
+
+    /// Sends fake input through XTEST: a core event type, its detail, and
+    /// the root position of a motion. Fails without libxcb-xtest.
+    pub(crate) fn fake_input(
+        &self,
+        kind: u8,
+        detail: u8,
+        (x, y): (i16, i16),
+    ) -> Result<(), super::dl::LoadError> {
+        let xtest = XcbTest::get()?;
+        // SAFETY: the request has no pointers.
+        unsafe {
+            (xtest.xcb_test_fake_input)(self.raw, kind, detail, 0, self.screen.root, x, y, 0)
+        };
+        Ok(())
+    }
+
     /// The 32-bit values of a property; empty without the property.
     pub(crate) fn get_property32(&self, window: u32, property: u32, kind: u32) -> Vec<u32> {
         match self.get_property(window, property, kind) {
@@ -1184,15 +1396,27 @@ impl Connection {
 
     /// The position of the origin of `source` in `target`.
     pub(crate) fn translate(&self, source: u32, target: u32) -> Option<(i16, i16)> {
+        self.translate_point(source, target, (0, 0))
+            .map(|(x, y, _)| (x, y))
+    }
+
+    /// The position of `point` of `source` in `target`, and the child of
+    /// `target` that holds it, or 0.
+    pub(crate) fn translate_point(
+        &self,
+        source: u32,
+        target: u32,
+        (x, y): (i16, i16),
+    ) -> Option<(i16, i16, u32)> {
         // SAFETY: the request has no pointers.
         let cookie =
-            unsafe { (self.xcb.xcb_translate_coordinates)(self.raw, source, target, 0, 0) };
+            unsafe { (self.xcb.xcb_translate_coordinates)(self.raw, source, target, x, y) };
         // SAFETY: the cookie is of this connection.
         let reply = unsafe {
             (self.xcb.xcb_translate_coordinates_reply)(self.raw, cookie, std::ptr::null_mut())
         };
         let reply = take_reply(reply)?;
-        Some((reply.i16(12), reply.i16(14)))
+        Some((reply.i16(12), reply.i16(14), reply.u32(8)))
     }
 
     pub(crate) fn set_input_focus(&self, window: u32) {
