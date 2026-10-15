@@ -7,6 +7,7 @@ use crate::ffi::x11::{
     XCB_RENDER_PICT_TYPE_DIRECT,
 };
 use crate::native::types::ResizeEdge;
+use crate::x11_scale::Monitor;
 use choscorui_core::{Point, PointerButton, Rect, Size};
 use std::collections::HashMap;
 
@@ -24,37 +25,41 @@ const P_WIN_GRAVITY: u32 = 512;
 const NORTH_WEST: u32 = 1;
 
 /// The scale of `Xft.dpi` in the resource database text: the DPI over
-/// 96, or 1 without a valid value.
-pub(crate) fn xft_scale(resources: &str) -> f64 {
+/// 96, or None without a valid value.
+pub(crate) fn xft_scale(resources: &str) -> Option<f64> {
     resources
         .lines()
         .find_map(|line| line.strip_prefix("Xft.dpi:"))
         .and_then(|value| value.trim().parse::<f64>().ok())
         .filter(|dpi| dpi.is_finite() && *dpi > 0.0)
-        .map_or(1.0, |dpi| dpi / 96.0)
+        .map(|dpi| dpi / 96.0)
 }
 
-/// The rectangles of the monitors of an `RRGetMonitors` reply, in
-/// pixels.
-pub(crate) fn monitors(reply: &Bytes) -> Vec<Rect> {
+/// The monitors of an `RRGetMonitors` reply: their rectangles in pixels,
+/// their physical sizes, and the primary flag.
+pub(crate) fn monitors(reply: &Bytes) -> Vec<Monitor> {
     let count = reply.u32(12);
     let mut offset = 32;
-    let mut rects = Vec::new();
+    let mut monitors = Vec::new();
     for _ in 0..count {
         let outputs = usize::from(reply.u16(offset + 6));
         let (width, height) = (reply.u16(offset + 12), reply.u16(offset + 14));
         if width > 0 && height > 0 {
-            rects.push(Rect::new(
-                Point::new(
-                    f64::from(reply.i16(offset + 8)),
-                    f64::from(reply.i16(offset + 10)),
+            monitors.push(Monitor {
+                rect: Rect::new(
+                    Point::new(
+                        f64::from(reply.i16(offset + 8)),
+                        f64::from(reply.i16(offset + 10)),
+                    ),
+                    Size::new(f64::from(width), f64::from(height)),
                 ),
-                Size::new(f64::from(width), f64::from(height)),
-            ));
+                millimeters: (reply.u32(offset + 16), reply.u32(offset + 20)),
+                primary: reply.u8(offset + 4) != 0,
+            });
         }
         offset += 24 + outputs * 4;
     }
-    rects
+    monitors
 }
 
 /// The origin of a popup of `size` next to `anchor`, kept on the
@@ -307,9 +312,10 @@ mod tests {
 
     #[test]
     fn xft_dpi_sets_the_scale() {
-        assert_eq!(xft_scale("Xft.antialias:\t1\nXft.dpi:\t144\n"), 1.5);
-        assert_eq!(xft_scale("Xft.dpi: none"), 1.0);
-        assert_eq!(xft_scale(""), 1.0);
+        assert_eq!(xft_scale("Xft.antialias:\t1\nXft.dpi:\t144\n"), Some(1.5));
+        assert_eq!(xft_scale("Xft.dpi: none"), None);
+        assert_eq!(xft_scale("Xft.dpi: 0"), None);
+        assert_eq!(xft_scale(""), None);
     }
 
     #[test]
@@ -320,6 +326,9 @@ mod tests {
         put(&mut reply, 32 + 6, &1u16.to_ne_bytes());
         put(&mut reply, 32 + 12, &1280u16.to_ne_bytes());
         put(&mut reply, 32 + 14, &800u16.to_ne_bytes());
+        put(&mut reply, 32 + 16, &339u32.to_ne_bytes());
+        put(&mut reply, 32 + 20, &212u32.to_ne_bytes());
+        put(&mut reply, 32 + 4, &[1]);
         // The second follows the 24 bytes and the output of the first.
         put(&mut reply, 60 + 8, &1280i16.to_ne_bytes());
         put(&mut reply, 60 + 12, &640u16.to_ne_bytes());
@@ -328,8 +337,16 @@ mod tests {
         assert_eq!(
             monitors(&Bytes::from(reply)),
             vec![
-                Rect::new(Point::new(0.0, 0.0), Size::new(1280.0, 800.0)),
-                Rect::new(Point::new(1280.0, 0.0), Size::new(640.0, 480.0)),
+                Monitor {
+                    rect: Rect::new(Point::new(0.0, 0.0), Size::new(1280.0, 800.0)),
+                    millimeters: (339, 212),
+                    primary: true,
+                },
+                Monitor {
+                    rect: Rect::new(Point::new(1280.0, 0.0), Size::new(640.0, 480.0)),
+                    millimeters: (0, 0),
+                    primary: false,
+                },
             ]
         );
     }

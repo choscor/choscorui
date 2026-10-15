@@ -6,6 +6,8 @@
 //! repeated presses. XInput 2.2 sends the pointer events and the smooth
 //! scroll valuators; without it, core events stand in. The scale is
 //! `Xft.dpi` over 96, from the resource database on the root window.
+//! Without `Xft.dpi`, each window has the physical scale of its RandR
+//! monitor, as `x11_scale` decides.
 
 mod dnd;
 mod ime;
@@ -33,10 +35,11 @@ use crate::ffi::x11::{
     XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED, XCB_KEY_PRESS, XCB_KEY_RELEASE,
     XCB_LEAVE_NOTIFY, XCB_MAP_NOTIFY, XCB_MOTION_NOTIFY, XCB_NOTIFY_DETAIL_INFERIOR,
     XCB_NOTIFY_DETAIL_POINTER, XCB_NOTIFY_MODE_GRAB, XCB_NOTIFY_MODE_UNGRAB, XCB_PROPERTY_NOTIFY,
-    XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY, XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY,
-    XCB_XKB_STATE_NOTIFY,
+    XCB_RANDR_NOTIFY, XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY,
+    XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
 };
 use crate::gles;
+use crate::x11_scale::{self, Monitor};
 use crate::{InputEvent, LinuxInput};
 use choscorui_core::{
     CursorShape, Image, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit,
@@ -130,6 +133,9 @@ struct Extensions {
     xinput: Option<u8>,
     /// The major opcode and the first event of MIT-SHM.
     shm: Option<(u8, u8)>,
+    /// The first event of RandR, when the server has RandR and the
+    /// client selected its changes.
+    randr_event: Option<u8>,
     /// True when XKB sends repeated presses without releases.
     detectable_repeat: bool,
 }
@@ -157,7 +163,10 @@ pub(crate) struct Client {
     pub(crate) atoms: Atoms,
     extensions: Extensions,
     shm: Cell<bool>,
-    scale: Cell<f64>,
+    /// The scale of `Xft.dpi`, when the resource database sets it.
+    xft: Cell<Option<f64>>,
+    /// The RandR monitors, or the root window without RandR.
+    monitors: RefCell<Vec<Monitor>>,
     windows: RefCell<Vec<Rc<X11Surface>>>,
     seat: RefCell<Seat>,
     /// The cursors of the shapes, by `cursor_index`.
@@ -208,17 +217,47 @@ pub(crate) fn cursor_names(shape: &CursorShape) -> Option<(usize, [&'static str;
     })
 }
 
-/// The scale of the resource database on the root window.
-fn read_scale(connection: &Connection) -> f64 {
+/// The scale of `Xft.dpi` in the resource database on the root window.
+fn read_xft(connection: &Connection) -> Option<f64> {
     connection
         .get_property(
             connection.root(),
             XCB_ATOM_RESOURCE_MANAGER,
             XCB_ATOM_STRING,
         )
-        .map_or(1.0, |(_, bytes)| {
-            protocol::xft_scale(&String::from_utf8_lossy(&bytes))
-        })
+        .and_then(|(_, bytes)| protocol::xft_scale(&String::from_utf8_lossy(&bytes)))
+}
+
+/// The RandR monitors, or the root window with the physical size of the
+/// screen without RandR. A RandR request to a server without RandR
+/// closes the connection, so `randr` tells whether the server has it.
+fn read_monitors(connection: &Connection, randr: bool) -> Vec<Monitor> {
+    let mut monitors = if randr {
+        connection
+            .randr_monitors()
+            .map(|reply| protocol::monitors(&reply))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    if monitors.is_empty() {
+        let screen = connection.screen();
+        monitors.push(Monitor {
+            rect: Rect::new(
+                Point::new(0.0, 0.0),
+                Size::new(
+                    f64::from(screen.width_in_pixels),
+                    f64::from(screen.height_in_pixels),
+                ),
+            ),
+            millimeters: (
+                u32::from(screen.width_in_millimeters),
+                u32::from(screen.height_in_millimeters),
+            ),
+            primary: true,
+        });
+    }
+    monitors
 }
 
 impl Client {
@@ -265,7 +304,13 @@ impl Client {
             XCB_CW_EVENT_MASK,
             &[XCB_EVENT_MASK_PROPERTY_CHANGE],
         );
-        let scale = read_scale(&connection);
+        let xft = read_xft(&connection);
+        // The root window reports the changes of the monitors.
+        let randr_event = connection
+            .query_extension("RANDR")
+            .filter(|_| connection.randr_select_changes())
+            .map(|(_, first)| first);
+        let monitors = read_monitors(&connection, randr_event.is_some());
         let transfer_atoms = selection::TransferAtoms::intern(&connection);
         let selection_window = connection.generate_id();
         connection.create_window(
@@ -292,10 +337,12 @@ impl Client {
                 xkb_event,
                 xinput,
                 shm,
+                randr_event,
                 detectable_repeat,
             },
             shm: Cell::new(shm.is_some()),
-            scale: Cell::new(scale),
+            xft: Cell::new(xft),
+            monitors: RefCell::new(monitors),
             windows: RefCell::new(Vec::new()),
             seat: RefCell::new(Seat {
                 input,
@@ -429,8 +476,15 @@ impl Client {
             .cloned()
     }
 
-    pub(crate) fn scale(&self) -> f64 {
-        self.scale.get()
+    /// The scale of a new window, before it has a position.
+    pub(crate) fn initial_scale(&self) -> f64 {
+        x11_scale::initial_scale(self.xft.get(), &self.monitors.borrow())
+    }
+
+    /// The scale of a window at `rect` in root pixels, which has the scale
+    /// `current` now.
+    pub(crate) fn scale_at(&self, rect: Rect, current: f64) -> f64 {
+        x11_scale::window_scale(self.xft.get(), &self.monitors.borrow(), rect, current)
     }
 
     pub(crate) fn has_xinput(&self) -> bool {
@@ -561,12 +615,14 @@ impl Client {
     }
 
     /// The logical rectangles of the RandR monitors, or of the root
-    /// window without RandR.
+    /// window without RandR. Each one is in the scale of its monitor.
     pub(crate) fn screens(&self) -> Vec<Rect> {
-        let scale = self.scale.get();
-        self.monitor_pixels()
-            .into_iter()
-            .map(|rect| {
+        let xft = self.xft.get();
+        self.read_monitors()
+            .iter()
+            .map(|monitor| {
+                let scale = x11_scale::monitor_scale(xft, monitor);
+                let rect = monitor.rect;
                 Rect::new(
                     Point::new(rect.origin.x / scale, rect.origin.y / scale),
                     Size::new(rect.size.width / scale, rect.size.height / scale),
@@ -578,22 +634,17 @@ impl Client {
     /// The rectangles of the RandR monitors in root pixels, or of the
     /// root window without RandR.
     pub(crate) fn monitor_pixels(&self) -> Vec<Rect> {
-        let mut rects = self
-            .connection
-            .randr_monitors()
-            .map(|reply| protocol::monitors(&reply))
-            .unwrap_or_default();
-        if rects.is_empty() {
-            let screen = self.connection.screen();
-            rects.push(Rect::new(
-                Point::new(0.0, 0.0),
-                Size::new(
-                    f64::from(screen.width_in_pixels),
-                    f64::from(screen.height_in_pixels),
-                ),
-            ));
-        }
-        rects
+        self.read_monitors()
+            .iter()
+            .map(|monitor| monitor.rect)
+            .collect()
+    }
+
+    /// Reads the monitors from the server again, and keeps them.
+    fn read_monitors(&self) -> Vec<Monitor> {
+        let monitors = read_monitors(&self.connection, self.extensions.randr_event.is_some());
+        self.monitors.replace(monitors.clone());
+        monitors
     }
 
     /// Paints each window that has a pending region.
@@ -729,6 +780,14 @@ impl Client {
             }
             return;
         }
+        if let Some(first) = self.extensions.randr_event
+            && (kind == first.wrapping_add(XCB_RANDR_SCREEN_CHANGE_NOTIFY)
+                || kind == first.wrapping_add(XCB_RANDR_NOTIFY))
+        {
+            self.read_monitors();
+            self.rescale();
+            return;
+        }
         match kind {
             XCB_KEY_PRESS | XCB_KEY_RELEASE => self.key(event, kind == XCB_KEY_PRESS),
             XCB_BUTTON_PRESS | XCB_BUTTON_RELEASE => {
@@ -775,6 +834,10 @@ impl Client {
             XCB_CONFIGURE_NOTIFY => {
                 if let Some(window) = self.window(event.u32(8)) {
                     window.configured(event.u16(20), event.u16(22));
+                    // A synthetic event of the window manager has the
+                    // position on the root window.
+                    let origin = (event.u8(0) & 0x80 != 0).then(|| (event.i16(16), event.i16(18)));
+                    window.moved(self, origin);
                 }
             }
             XCB_MAP_NOTIFY => {
@@ -783,6 +846,7 @@ impl Client {
                     if window.popup {
                         self.begin_grab(&window);
                     }
+                    window.moved(self, None);
                 }
             }
             XCB_UNMAP_NOTIFY => {
@@ -799,6 +863,7 @@ impl Client {
                 if event.u32(4) == self.connection.root()
                     && event.u32(8) == XCB_ATOM_RESOURCE_MANAGER
                 {
+                    self.xft.set(read_xft(&self.connection));
                     self.rescale();
                 }
             }
@@ -840,7 +905,7 @@ impl Client {
         button: Option<bool>,
     ) -> Result<(), Error> {
         let connection = &self.connection;
-        let scale = self.scale.get();
+        let scale = self.window(window).ok_or(Error::Closed)?.shared.scale.get();
         let (x, y) = connection
             .translate(window, connection.root())
             .ok_or(Error::Closed)?;
@@ -881,14 +946,12 @@ impl Client {
         }
     }
 
+    /// Gives each window the scale of its monitor again, after a change
+    /// of `Xft.dpi` or of the monitors.
     fn rescale(&self) {
-        let scale = read_scale(&self.connection);
-        if self.scale.replace(scale) == scale {
-            return;
-        }
         let windows: Vec<Rc<X11Surface>> = self.windows.borrow().clone();
         for window in windows {
-            window.scale_changed(self, scale);
+            window.rescale(self);
         }
     }
 

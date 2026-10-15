@@ -272,3 +272,110 @@ fn x11_without_a_display_fails_with_no_display() {
         Ok(_) => panic!("{case:?}: an application without a display server"),
     }
 }
+
+/// The name of the test that runs in a child process on a private Xvfb.
+const SCALE: &str = "x11_scale_follows_the_physical_size_then_xft_dpi";
+
+#[test]
+fn x11_scale_follows_the_physical_size_then_xft_dpi() {
+    if let Some(display) = std::env::var_os("CHOSCORUI_TEST_SCALE_DISPLAY") {
+        check_scale(&display);
+        return;
+    }
+    if !enabled() || requested_backend() != Some(BackendKind::X11) {
+        return;
+    }
+    // A private Xvfb at 192 DPI without RandR: the physical size of the
+    // screen gives the scale, and `xrdb` does not change the other tests.
+    let number = (200..400)
+        .map(|offset| offset + std::process::id() % 200)
+        .find(|number| !std::path::Path::new(&format!("/tmp/.X{number}-lock")).exists())
+        .unwrap();
+    let display = format!(":{number}");
+    let mut server = std::process::Command::new("Xvfb")
+        .args([
+            display.as_str(),
+            "-screen",
+            "0",
+            "1280x800x24",
+            "-dpi",
+            "192",
+            "-extension",
+            "RANDR",
+            "-nolisten",
+            "tcp",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let socket = format!("/tmp/.X11-unix/X{number}");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !std::path::Path::new(&socket).exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([SCALE, "--exact", "--nocapture", "--test-threads=1"])
+        .env("CHOSCORUI_TEST_SCALE_DISPLAY", &display)
+        .env("DISPLAY", &display)
+        .env("CHOSCORUI_BACKEND", "x11")
+        .env_remove("WAYLAND_DISPLAY")
+        .status();
+    server.kill().unwrap();
+    server.wait().unwrap();
+    assert!(status.unwrap().success(), "the child on {display} failed");
+}
+
+/// Checks the scale of a window on the private Xvfb of `display`: 2 from
+/// 192 DPI, then 1.5 when `Xft.dpi` becomes 144.
+fn check_scale(display: &std::ffi::OsStr) {
+    let application = Application::new().unwrap();
+    assert_eq!(application.backend(), BackendKind::X11);
+    let window = application
+        .create_window(WindowOptions::new("Scale", 320.0, 200.0))
+        .unwrap();
+    window.show();
+    assert!(pump_until(&application, || window.paint_count() > 0));
+    assert_eq!(window.backing_scale_factor(), 2.0);
+    assert_eq!(window.content_size(), Size::new(320.0, 200.0));
+    // Each monitor is in its own scale.
+    assert_eq!(
+        application.screens(),
+        vec![Rect::new(Point::new(0.0, 0.0), Size::new(640.0, 400.0))]
+    );
+    window.take_events();
+    // `Xft.dpi` wins over the physical size.
+    let mut xrdb = std::process::Command::new("xrdb")
+        .arg("-merge")
+        .env("DISPLAY", display)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        use std::io::Write;
+        let mut input = xrdb.stdin.take().unwrap();
+        input.write_all(b"Xft.dpi: 144\n").unwrap();
+    }
+    assert!(xrdb.wait().unwrap().success());
+    let mut events = Vec::new();
+    let resized = |event: &WindowEvent| {
+        matches!(event, WindowEvent::Resized { size, scale }
+            if *scale == 1.5 && *size == Size::new(320.0, 200.0))
+    };
+    assert!(pump_until(&application, || {
+        events.extend(window.take_events());
+        events.iter().any(resized)
+    }));
+    // `ScaleChanged` comes first, and the window keeps its logical size.
+    let changed = events
+        .iter()
+        .position(|event| matches!(event, WindowEvent::ScaleChanged { scale } if *scale == 1.5))
+        .unwrap();
+    assert!(changed < events.iter().position(resized).unwrap());
+    assert_eq!(window.backing_scale_factor(), 1.5);
+    assert_eq!(window.content_size(), Size::new(320.0, 200.0));
+    window.close();
+    application
+        .dispatch_next_event(Duration::from_millis(10))
+        .unwrap();
+}

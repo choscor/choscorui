@@ -71,6 +71,8 @@ struct State {
     was_mapped: bool,
     /// True when the application placed the window before it showed.
     placed: bool,
+    /// The position of the window on the root window, in pixels.
+    origin: (i32, i32),
     /// The size of the window in pixels.
     pixels: (u32, u32),
     image: Option<Image>,
@@ -173,7 +175,7 @@ impl X11Surface {
         shared: Rc<WindowShared>,
         app_id: &str,
     ) -> Result<Rc<Self>, Error> {
-        shared.scale.set(client.scale());
+        shared.scale.set(client.initial_scale());
         let surface = Self::build(client, shared, false)?;
         let id = surface.id;
         surface.set_properties(client, app_id);
@@ -308,6 +310,7 @@ impl X11Surface {
                 mapped: false,
                 was_mapped: false,
                 placed: false,
+                origin: (0, 0),
                 pixels,
                 image: None,
                 busy: false,
@@ -678,9 +681,41 @@ impl X11Surface {
         }
     }
 
+    /// Handles a move. `origin` is the position on the root window, or
+    /// None to ask the server for it. The window then takes the scale of
+    /// its monitor.
+    pub(crate) fn moved(&self, client: &Client, origin: Option<(i16, i16)>) {
+        let connection = &client.connection;
+        let Some((x, y)) = origin.or_else(|| connection.translate(self.id, connection.root()))
+        else {
+            return;
+        };
+        self.state.borrow_mut().origin = (i32::from(x), i32::from(y));
+        self.rescale(client);
+    }
+
+    /// Applies the scale of the monitor of the window, when it changed.
+    pub(crate) fn rescale(&self, client: &Client) {
+        let (x, y) = self.state.borrow().origin;
+        let current = self.shared.scale.get();
+        // The size that the scale asks for, also before the server
+        // applies it.
+        let size = self.shared.size.get();
+        let rect = Rect::from_xywh(
+            f64::from(x),
+            f64::from(y),
+            size.width * current,
+            size.height * current,
+        );
+        let scale = client.scale_at(rect, current);
+        if scale != current {
+            self.scale_changed(client, scale);
+        }
+    }
+
     /// Applies a new scale: the window keeps its logical size, so its
     /// pixel size changes.
-    pub(crate) fn scale_changed(&self, client: &Client, scale: f64) {
+    fn scale_changed(&self, client: &Client, scale: f64) {
         let shared = &self.shared;
         shared.scale.set(scale);
         shared.push(WindowEvent::ScaleChanged { scale });
