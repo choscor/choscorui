@@ -1,13 +1,15 @@
-//! `LinuxTextShaper`, with the fonts of the CI image: DejaVu (Sans,
-//! Sans Mono, Serif) and Liberation (Sans, Serif, Mono, with italic
-//! faces).
+//! `LinuxTextShaper` and the Cairo text path, with the fonts of the CI
+//! image: DejaVu (Sans, Sans Mono, Serif) and Liberation (Sans, Serif,
+//! Mono, with italic faces).
 #![cfg(target_os = "linux")]
 
 use choscorui_core::{
-    FontSlant, FontWeight, Point, Support, TextDirection, TextLayout, TextLayoutCache, TextShaper,
-    TextStyle,
+    Color, DisplayList, FontSlant, FontWeight, Point, Size, Support, TextDirection, TextLayout,
+    TextLayoutCache, TextRun, TextShaper, TextStyle,
 };
-use choscorui_linux::{LinuxTextShaper, available_font_families, text_shaping_support};
+use choscorui_linux::{
+    LinuxTextShaper, available_font_families, render_offscreen, text_shaping_support,
+};
 
 static SHAPER: LinuxTextShaper = LinuxTextShaper;
 
@@ -220,6 +222,79 @@ fn invalid_input_is_an_error() {
     let empty = shape("", &TextStyle::new("DejaVu Sans", 14.0), None);
     assert_eq!(empty.lines().len(), 1);
     assert_eq!(empty.size().width, 0.0);
+}
+
+fn ink(image: &choscorui_core::Image) -> usize {
+    image
+        .pixels()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| pixel[0] < 128)
+        .count()
+}
+
+#[test]
+fn draw_text_and_draw_glyphs_place_glyphs_identically() {
+    for (family, text) in [
+        ("DejaVu Sans", "Hello, glyphs!"),
+        ("Liberation Serif", "Fallback: مرحبا"),
+    ] {
+        let run = TextRun {
+            family,
+            size: 16.0,
+            weight: FontWeight::REGULAR,
+            slant: FontSlant::Upright,
+            tracking: 0.5,
+        };
+        let style = TextStyle::new(family, 16.0).with_tracking(0.5);
+        let baseline = Point::new(6.0, 30.0);
+        let mut by_text = DisplayList::new();
+        by_text.fill_rect(
+            choscorui_core::Rect::from_xywh(0.0, 0.0, 200.0, 48.0),
+            Color::WHITE,
+        );
+        let mut by_glyphs = by_text.clone();
+        by_text
+            .draw_text_run(baseline, text, &run, Color::BLACK)
+            .unwrap();
+        let layout = shape(text, &style, None);
+        let origin = Point::new(baseline.x, baseline.y - layout.first_baseline());
+        layout.draw(&mut by_glyphs, origin, Color::BLACK).unwrap();
+        for scale in [1.0, 2.0] {
+            let size = Size::new(200.0, 48.0);
+            let a = render_offscreen(&by_text, size, scale).unwrap();
+            let b = render_offscreen(&by_glyphs, size, scale).unwrap();
+            assert!(ink(&a) > 50, "{family} drew no text");
+            assert_eq!(a.pixels(), b.pixels(), "{family} at {scale}x");
+        }
+    }
+}
+
+#[test]
+fn glyphs_land_inside_the_measured_box() {
+    let style = TextStyle::new("DejaVu Sans", 20.0);
+    let layout = shape("Box", &style, None);
+    let mut list = DisplayList::new();
+    let origin = Point::new(10.0, 10.0);
+    layout.draw(&mut list, origin, Color::BLACK).unwrap();
+    let image = render_offscreen(&list, Size::new(80.0, 48.0), 1.0).unwrap();
+    let size = layout.size();
+    let (mut left, mut right) = (u32::MAX, 0);
+    for y in 0..image.height() {
+        for x in 0..image.width() {
+            if image.pixel(x, y).unwrap()[3] > 128 {
+                left = left.min(x);
+                right = right.max(x);
+                assert!(
+                    f64::from(y) >= origin.y - 1.0 && f64::from(y) <= origin.y + size.height + 1.0
+                );
+            }
+        }
+    }
+    assert!(f64::from(left) >= origin.x - 1.0, "{left}");
+    assert!(f64::from(right) <= origin.x + size.width + 1.0, "{right}");
+    assert!(f64::from(right - left) > size.width * 0.8);
 }
 
 #[test]

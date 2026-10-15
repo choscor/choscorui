@@ -10,6 +10,8 @@
 
 mod macros;
 
+pub(crate) mod cairo;
+
 #[cfg(test)]
 mod checks;
 #[cfg(test)]
@@ -45,6 +47,7 @@ pub(crate) fn declarations() -> (
         freetype::FreeType::check_items(),
         harfbuzz::HarfBuzz::check_items(),
         fontconfig::Fontconfig::check_items(),
+        cairo::sys::Cairo::check_items(),
     ];
     let structs = vec![
         libc::PollFd::layout(),
@@ -58,6 +61,9 @@ pub(crate) fn declarations() -> (
         harfbuzz::HbGlyphPosition::layout(),
         harfbuzz::HbFontExtents::layout(),
         fontconfig::FcFontSet::layout(),
+        cairo::sys::CairoMatrix::layout(),
+        cairo::sys::CairoGlyph::layout(),
+        cairo::sys::CairoUserDataKey::layout(),
     ];
     let constants = [
         libc::constants(),
@@ -68,6 +74,7 @@ pub(crate) fn declarations() -> (
         fontconfig::constants(),
         fontconfig::FcResult::constants(),
         fontconfig::FcMatchKind::constants(),
+        cairo::sys::constants(),
     ]
     .into_iter()
     .flatten()
