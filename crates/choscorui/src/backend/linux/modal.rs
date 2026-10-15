@@ -283,7 +283,12 @@ impl Modal {
             .accessibility
             .as_ref()
             .map(|bridge| bridge.add_window(&window));
-        let mut native = NativeWindow { window, accessible };
+        let mut native = NativeWindow {
+            window,
+            accessible,
+            chrome: None,
+            waiting: Vec::new(),
+        };
         let Some(mut host) = self.host(native.content_size()) else {
             native.close();
             return Err(choscorui_linux::Error::Closed);

@@ -4,7 +4,8 @@
 //! state in memory and show nothing.
 
 use crate::AppError;
-use choscorui_compose::view::ViewHost;
+use choscorui_compose::Runtime;
+use choscorui_compose::view::{AnyView, ViewHost};
 use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel,
@@ -69,6 +70,16 @@ impl Platform {
             ),
             cursor: CursorShape::Arrow,
         })
+    }
+
+    /// Nothing shows, so the content is the whole window.
+    pub(crate) fn frame(
+        &self,
+        _native: &mut NativeWindow,
+        content: AnyView,
+        _runtime: &Runtime,
+    ) -> AnyView {
+        content
     }
 
     pub(crate) fn install_menu(&self, model: MenuBarModel) -> Result<NativeMenu, MenuError> {

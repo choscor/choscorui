@@ -354,6 +354,25 @@ On Wayland, screen coordinates are therefore relative to the window. A screen ma
 
 [`tests/atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) runs under `at-spi2-registryd` in `scripts/linux/headless-session.sh`. A test client walks a window with every `SemanticRole` and checks the roles and the names. It invokes a declared action and finds it in the queue. It also receives the events and both kinds of announcement. The test does not verify a screen reader.
 
+## Menus, popups, and decorations
+
+Linux has no global menu bar. The facade draws the menus and the title bar in each window. The policy is in the controls, and `backend/linux/chrome.rs` connects the controls to the native window.
+
+- **Menu bar.** `Application::install_main_menu(model)` returns a `MainMenu`. It keeps the model and the queue of chosen commands. Each window that opens after the installation shows a `Menubar` control at its top, above the content. A new model replaces the titles and the items in each bar.
+- `perform_action(command)` queues an enabled command and returns `Ok(true)`. A disabled command returns `Ok(false)`. An unknown command returns `MenuError::UnknownCommand`.
+- **Shortcuts.** The window gives a key press with Ctrl or Super to the menus before the views get it. `perform_key_equivalent(key, modifiers)` runs it. In the model, `command` is Ctrl. The items show the PC labels, such as `Ctrl+K`.
+- **Menu keys.** F10 moves the focus to the menu bar. Alt with the mnemonic of a menu opens that menu with its first row highlighted. The mnemonic is the first letter or digit of the title (`menu_mnemonic`). The arrow keys, Enter, and Escape then work as in the `Menubar` control.
+- A click, a shortcut, and a key choice all queue the command in the same `MainMenu`. `AppContext` runs the action after it delivers the input.
+- The open menus of the bar show inside the window, so a menu that is longer than the window is cut off.
+- **Popups.** `Window::open_popup(anchor, size)` opens an `xdg_popup` below `anchor`. The `xdg_positioner` flips the popup, then slides it, at the screen edges. The popup grabs the pointer and the keyboard with the serial of the latest key or button event. A click outside the popup sends `WindowEvent::Closing` (`popup_done`). `Application::window_count` does not count popups.
+- **Context menus.** `NativeAccess::show_context_menu(window, menu, at)` shows a `ContextMenu` in a popup at `at`. It runs a nested event loop until the popup closes, as on macOS. It returns the chosen command, and the command also waits in `menu.take_activations()`. Escape, a click outside the popup, or a press in the parent window returns `None`. During the loop, the keys of the parent window go to the menu, because a compositor can keep the keyboard focus on the parent.
+- Submenus of a context menu show inside the popup.
+- **Decorations.** When the compositor does not grant server-side decorations, `Window::has_server_decorations` is false. Then the facade puts a `TitleBar` control above the menu bar. `CHOSCORUI_DECORATIONS=client` refuses the server-side decorations, for tests.
+- A drag on the title bar starts `xdg_toplevel.move`. A double click maximizes or restores the window. A secondary click shows the compositor's window menu. The buttons minimize, maximize, and close the window.
+- A primary press in the resize band starts `xdg_toplevel.resize` from that edge. The band is `DesignTokens::spacing` wide, inside the window. The pointer shows a resize cursor over the band.
+- The facade gives the title, the maximized state, and the focus state of the window to the title bar through its `TitleBarHandle`.
+- `native_menus` is `Supported` on Wayland and X11. `context_menus` is `Supported` on Wayland. On X11, `open_popup` returns `Error::PopupUnavailable`, and `show_context_menu` returns `None`.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:
@@ -419,6 +438,8 @@ The painter draws each command in the order of the display list, as the Cairo pa
 - Native event loops
 - Windows on the screen and painting
 - Text shaping and fonts
+- Popups and context menus on X11 (override-redirect windows)
+- A drawn shadow and an outer resize band for client-side decorations
 - Accessibility
 
 - Clipboard and drag-and-drop data transfer on X11

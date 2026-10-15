@@ -1,7 +1,8 @@
 //! The AppKit backend: `choscorui-macos` behind the portable interface.
 
 use crate::{AppContext, AppError, WindowId};
-use choscorui_compose::view::ViewHost;
+use choscorui_compose::Runtime;
+use choscorui_compose::view::{AnyView, ViewHost};
 use choscorui_controls::{ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
@@ -116,6 +117,17 @@ impl Platform {
             .create_window(options.clone())
             .map_err(app_error)?;
         Ok(NativeWindow { window })
+    }
+
+    /// The system draws the title bar and the menu bar, so the content
+    /// is the whole window.
+    pub(crate) fn frame(
+        &self,
+        _native: &mut NativeWindow,
+        content: AnyView,
+        _runtime: &Runtime,
+    ) -> AnyView {
+        content
     }
 
     pub(crate) fn install_menu(&self, model: MenuBarModel) -> Result<NativeMenu, MenuError> {

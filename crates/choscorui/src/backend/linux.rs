@@ -1,22 +1,25 @@
 //! The Wayland and X11 backend: `choscorui-linux` behind the portable
 //! interface.
 
+mod chrome;
+mod context_menu;
+
 use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::Runtime;
-use choscorui_compose::view::{Env, Live, ViewHost};
+use choscorui_compose::view::{AnyView, Env, Live, ViewHost};
 use choscorui_controls::{EstimatedText, ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DesignTokens,
-    DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange,
+    DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, Point, Rect, SemanticChange,
     SemanticEntry, ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
 };
 use choscorui_linux::atspi::{AccessibleWindow, Bridge};
 use choscorui_linux::services::{NativeServices, ServiceOptions, TextClipboard};
 use choscorui_linux::{
-    Application, Error, ImeEvent, LinuxTextShaper, Modifiers, SystemClipboard, TextInputState,
-    Window, WindowEvent,
+    Application, ContextMenu, Error, ImeEvent, LinuxTextShaper, MainMenu, Modifiers,
+    SystemClipboard, TextInputState, Window, WindowEvent,
 };
-use std::cell::RefCell;
+use chrome::{Chrome, Menus};
 use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -42,6 +45,20 @@ pub trait NativeAccess {
     fn native_application(&self) -> &Application;
     /// The native window of `id`, for its paint count or geometry.
     fn native_window(&mut self, id: WindowId) -> Option<&mut Window>;
+    /// The menus of the command menus, which each window's menu bar
+    /// shows.
+    fn native_menu(&self) -> Option<&MainMenu>;
+    /// Shows `menu` in a popup at `at`, in the content coordinates of
+    /// window `id`. It runs a nested event loop until the popup closes.
+    /// Returns the chosen command, which also waits in the menu's
+    /// `take_activations`. Returns None when the user dismisses the
+    /// menu, or when the display server cannot show popups (X11).
+    fn show_context_menu(
+        &mut self,
+        id: WindowId,
+        menu: &ContextMenu,
+        at: Point,
+    ) -> Option<MenuCommandId>;
 }
 
 impl NativeAccess for AppContext {
@@ -54,6 +71,20 @@ impl NativeAccess for AppContext {
             .iter_mut()
             .find(|entry| entry.id == id)
             .map(|entry| &mut entry.native.window)
+    }
+
+    fn native_menu(&self) -> Option<&MainMenu> {
+        let commands = self.commands.as_ref()?;
+        commands.native.as_ref().map(|native| &native.menu)
+    }
+
+    fn show_context_menu(
+        &mut self,
+        id: WindowId,
+        menu: &ContextMenu,
+        at: Point,
+    ) -> Option<MenuCommandId> {
+        context_menu::show(self, id, menu, at)
     }
 }
 
@@ -99,12 +130,15 @@ fn app_error(error: Error) -> AppError {
 }
 
 /// The Wayland or X11 application, its desktop services, and its
-/// AT-SPI bridge when the accessibility bus is reachable.
+/// AT-SPI bridge when the accessibility bus is reachable, and the menus
+/// that the windows draw.
 pub(crate) struct Platform {
     application: Rc<Application>,
     services: Rc<NativeServices>,
     modal: Rc<modal::Modal>,
     accessibility: Option<Rc<Bridge>>,
+    /// The menus that the windows draw.
+    menus: Menus,
 }
 
 /// The text clipboard of the services: the selection of the display
@@ -169,6 +203,7 @@ impl Platform {
             services: Rc::new(services),
             modal,
             accessibility,
+            menus: Menus::default(),
         })
     }
 
@@ -211,14 +246,32 @@ impl Platform {
             .accessibility
             .as_ref()
             .map(|bridge| bridge.add_window(&window));
-        Ok(NativeWindow { window, accessible })
+        Ok(NativeWindow {
+            window,
+            accessible,
+            chrome: None,
+            waiting: Vec::new(),
+        })
     }
 
+    /// Puts the chrome of `native` above `content`: a title bar when the
+    /// display server draws no decorations, and the menu bar.
+    pub(crate) fn frame(
+        &self,
+        native: &mut NativeWindow,
+        content: AnyView,
+        runtime: &Runtime,
+    ) -> AnyView {
+        let (chrome, view) = Chrome::compose(&native.window, &self.menus, runtime, content);
+        native.chrome = Some(chrome);
+        view
+    }
+
+    /// Installs the menus that each window's menu bar shows.
     pub(crate) fn install_menu(&self, model: MenuBarModel) -> Result<NativeMenu, MenuError> {
-        Ok(NativeMenu {
-            model,
-            activations: RefCell::new(Vec::new()),
-        })
+        let menu = self.application.install_main_menu(model)?;
+        self.menus.install(menu.clone());
+        Ok(NativeMenu { menu })
     }
 
     /// Waits up to `timeout` for a native event and handles it. A lost
@@ -282,6 +335,9 @@ fn composition(event: ImeEvent) -> CompositionEvent {
 pub(crate) struct NativeWindow {
     window: Window,
     accessible: Option<AccessibleWindow>,
+    chrome: Option<Chrome>,
+    /// Events that arrived while a popup ran its loop.
+    waiting: Vec<WindowEvent>,
 }
 
 impl NativeWindow {
@@ -297,7 +353,9 @@ impl NativeWindow {
     /// asked to close, and its new focus state, if it changed.
     pub(crate) fn deliver(&mut self, host: &mut ViewHost) -> (bool, Option<bool>) {
         let (mut closing, mut focus) = (false, None);
-        for event in self.window.take_events() {
+        let mut events = std::mem::take(&mut self.waiting);
+        events.extend(self.window.take_events());
+        for event in events {
             match event {
                 WindowEvent::Closing => closing = true,
                 WindowEvent::Focused(focused) => {
@@ -307,6 +365,9 @@ impl NativeWindow {
                     if let Some(accessible) = &self.accessible {
                         accessible.set_active(focused);
                     }
+                    if let Some(chrome) = &mut self.chrome {
+                        chrome.set_active(focused);
+                    }
                     focus = Some(focused);
                 }
                 WindowEvent::Resized { size, .. } => host.resize(size),
@@ -315,10 +376,19 @@ impl NativeWindow {
                     modifiers,
                     details,
                 } => {
-                    host.pointer_with(event, shortcut_modifiers(modifiers), details);
+                    let framed = (self.chrome.as_mut())
+                        .is_some_and(|chrome| chrome.pointer(&self.window, host, event));
+                    if !framed {
+                        host.pointer_with(event, shortcut_modifiers(modifiers), details);
+                    }
                 }
                 WindowEvent::Key { event, modifiers } => {
-                    host.key(event, shortcut_modifiers(modifiers));
+                    let modifiers = shortcut_modifiers(modifiers);
+                    let used = (self.chrome.as_ref())
+                        .is_some_and(|chrome| chrome.key(host, event, modifiers));
+                    if !used {
+                        host.key(event, modifiers);
+                    }
                 }
                 WindowEvent::Gesture { event, modifiers } => {
                     host.gesture(event, shortcut_modifiers(modifiers));
@@ -343,6 +413,9 @@ impl NativeWindow {
                 Some(part) => host.perform_part(request.node, part, request.action),
                 None => host.perform(request.node, request.action, request.value.as_deref()),
             };
+        }
+        if let Some(chrome) = &self.chrome {
+            closing |= chrome.sync(&self.window);
         }
         let input = host.text_input();
         let active = input.is_some();
@@ -373,6 +446,10 @@ impl NativeWindow {
     /// Shows `shape` over the content. A shape that the server cannot
     /// show keeps the cursor that shows.
     pub(crate) fn set_cursor(&self, shape: CursorShape) {
+        let shape = match &self.chrome {
+            Some(chrome) => chrome.cursor(shape),
+            None => shape,
+        };
         let _ = self.window.set_cursor(shape);
     }
 
@@ -411,26 +488,22 @@ impl NativeWindow {
     }
 }
 
-/// The command menus. Linux has no global menu bar, so a chosen command
-/// waits in `activations` until the application takes it.
+/// The command menus. Linux has no global menu bar: each window draws a
+/// menu bar, and a chosen command waits in the queue of `menu` until the
+/// application takes it.
 pub(crate) struct NativeMenu {
-    model: MenuBarModel,
-    activations: RefCell<Vec<MenuCommandId>>,
+    menu: MainMenu,
 }
 
 impl NativeMenu {
     /// The commands that the user chose since the last call.
     pub(crate) fn take_activations(&self) -> Vec<MenuCommandId> {
-        std::mem::take(&mut *self.activations.borrow_mut())
+        self.menu.take_activations()
     }
 
     /// Chooses `command` as a click does: an enabled item queues its
     /// activation. Returns false for a disabled or unknown item.
     pub(crate) fn perform(&self, command: MenuCommandId) -> bool {
-        let enabled = self.model.state(command).is_ok_and(|state| state.enabled);
-        if enabled {
-            self.activations.borrow_mut().push(command);
-        }
-        enabled
+        self.menu.perform_action(command).unwrap_or(false)
     }
 }
