@@ -213,6 +213,7 @@ fn a_font_chooser_measures_its_families_once() {
         tokens: &tokens,
         styles: &styles,
         text: &counting,
+        key_convention: choscorui_core::KeyConvention::Mac,
     };
     chooser.measure(&cx);
     let first = counting.0.get();

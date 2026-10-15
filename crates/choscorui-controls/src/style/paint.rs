@@ -6,8 +6,8 @@ use super::{
 };
 use choscorui_core::grapheme_boundaries;
 use choscorui_core::{
-    Color, DesignTokens, DisplayList, FillRule, Icon, Localizer, Paint, Path, Point, Rect, Shadow,
-    Size, StrokeStyle, TextRun, TextShaper, TextStyle, TypeSpec,
+    Color, DesignTokens, DisplayList, FillRule, Icon, KeyConvention, Localizer, Paint, Path, Point,
+    Rect, Shadow, Size, StrokeStyle, TextRun, TextShaper, TextStyle, TypeSpec,
 };
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -567,6 +567,9 @@ pub struct PaintContext<'a> {
     /// The messages of the window locale, for the built-in text that a
     /// control paints.
     pub strings: &'a Localizer,
+    /// The keyboard conventions of the window, for the shortcut labels
+    /// that a control paints.
+    pub key_convention: KeyConvention,
     key: u64,
     /// The host's transition store, when the host eases state changes.
     transitions: Option<&'a Transitions>,
@@ -583,7 +586,7 @@ pub struct PaintContext<'a> {
 impl<'a> PaintContext<'a> {
     /// A context that paints into `list` inside `bounds`, left-to-right,
     /// with no visual state, at time zero, with the built-in English
-    /// messages.
+    /// messages, and with [`KeyConvention::Mac`] shortcut labels.
     pub fn new(
         list: &'a mut DisplayList,
         bounds: Rect,
@@ -601,6 +604,7 @@ impl<'a> PaintContext<'a> {
             state: VisualState::NONE,
             time: 0.0,
             strings: Localizer::builtin(),
+            key_convention: KeyConvention::Mac,
             key: tokens.fingerprint(),
             transitions: None,
             pointer: None,
@@ -637,6 +641,13 @@ impl<'a> PaintContext<'a> {
         self
     }
 
+    /// Sets the keyboard conventions of the shortcut labels.
+    #[must_use]
+    pub fn key_convention(mut self, key_convention: KeyConvention) -> Self {
+        self.key_convention = key_convention;
+        self
+    }
+
     /// Eases the styles that [`PaintContext::style`] returns through the
     /// host's transition store.
     #[must_use]
@@ -657,6 +668,7 @@ impl<'a> PaintContext<'a> {
             state: self.state,
             time: self.time,
             strings: self.strings,
+            key_convention: self.key_convention,
             key: self.key,
             transitions: self.transitions,
             pointer: self.pointer,

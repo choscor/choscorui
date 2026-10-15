@@ -1,11 +1,14 @@
-//! The editing commands and the key map that the text controls share. The
-//! key map follows macOS: Option moves and deletes by word, Command moves
-//! and deletes to the line or document edge, and Shift extends the
-//! selection.
+//! The editing commands and the key maps that the text controls share.
+//! Each [`KeyConvention`] has a key map. On `Mac`, Option moves and deletes
+//! by word, and Command moves and deletes to the line or document edge.
+//! On `Pc`, Ctrl moves and deletes by word, Home and End go to the line
+//! edge, and Ctrl with Home or End goes to the document edge. Shift
+//! extends the selection. The modifiers are the ones that
+//! [`ShortcutModifiers::logical`] gives, so `command` is Ctrl on `Pc`.
 
 use crate::ShortcutModifiers;
 use crate::custom::ControlContext;
-use choscorui_core::Key;
+use choscorui_core::{Key, KeyConvention};
 
 /// A command of the Edit menu. The control host sends it to the focused
 /// control as [`ControlEvent::Edit`](crate::ControlEvent::Edit), from the
@@ -22,9 +25,26 @@ pub enum EditCommand {
 
 impl EditCommand {
     /// The command of a Command-key chord: Command with X, C, V, or A,
-    /// Command+Z for undo, and Shift+Command+Z for redo. Other chords
-    /// give `None`.
-    pub fn from_shortcut(key: Key, modifiers: ShortcutModifiers) -> Option<Self> {
+    /// Command+Z for undo, and Shift+Command+Z for redo. On
+    /// [`KeyConvention::Pc`], Command is Ctrl, and Ctrl+Y also redoes.
+    /// Other chords give `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use choscorui_controls::{EditCommand, ShortcutModifiers};
+    /// use choscorui_core::{Key, KeyConvention};
+    ///
+    /// let command = ShortcutModifiers { command: true, ..ShortcutModifiers::default() };
+    /// let y = Key::Character('y');
+    /// assert_eq!(EditCommand::from_shortcut(y, command, KeyConvention::Pc), Some(EditCommand::Redo));
+    /// assert_eq!(EditCommand::from_shortcut(y, command, KeyConvention::Mac), None);
+    /// ```
+    pub fn from_shortcut(
+        key: Key,
+        modifiers: ShortcutModifiers,
+        convention: KeyConvention,
+    ) -> Option<Self> {
         if !modifiers.command || modifiers.control || modifiers.option {
             return None;
         }
@@ -35,6 +55,7 @@ impl EditCommand {
             (Key::Character('a'), false) => Self::SelectAll,
             (Key::Character('z'), false) => Self::Undo,
             (Key::Character('z'), true) => Self::Redo,
+            (Key::Character('y'), false) if convention == KeyConvention::Pc => Self::Redo,
             _ => return None,
         })
     }
@@ -73,12 +94,26 @@ pub(crate) enum EditingKey {
     Tab,
 }
 
-/// The editing action of `key` with `modifiers`, or `None` for a key that
-/// the text control leaves to its ancestors and to the shortcuts.
-pub(crate) fn editing_key(key: Key, modifiers: ShortcutModifiers) -> Option<EditingKey> {
+/// The editing action of `key` with `modifiers` in the key map of
+/// `convention`, or `None` for a key that the text control leaves to its
+/// ancestors and to the shortcuts.
+pub(crate) fn editing_key(
+    key: Key,
+    modifiers: ShortcutModifiers,
+    convention: KeyConvention,
+) -> Option<EditingKey> {
     if modifiers.control {
         return None;
     }
+    match convention {
+        KeyConvention::Mac => mac_editing_key(key, modifiers),
+        KeyConvention::Pc => pc_editing_key(key, modifiers),
+    }
+}
+
+/// The macOS key map: Option goes by word, and Command goes to the line
+/// or the document edge.
+fn mac_editing_key(key: Key, modifiers: ShortcutModifiers) -> Option<EditingKey> {
     let (command, option) = (modifiers.command, modifiers.option);
     let horizontal = |plain, word, line| match (command, option) {
         (true, _) => line,
@@ -122,6 +157,46 @@ pub(crate) fn editing_key(key: Key, modifiers: ShortcutModifiers) -> Option<Edit
         }
         Key::Enter if !command => return Some(EditingKey::Enter),
         Key::Tab if !command && !option => return Some(EditingKey::Tab),
+        _ => return None,
+    };
+    Some(EditingKey::Move {
+        motion,
+        extend: modifiers.shift,
+    })
+}
+
+/// The PC key map: Ctrl (`command`) goes by word, Home and End go to the
+/// line edge, and Ctrl with Home or End goes to the document edge. The
+/// text control leaves Alt chords to the shortcuts.
+fn pc_editing_key(key: Key, modifiers: ShortcutModifiers) -> Option<EditingKey> {
+    if modifiers.option {
+        return None;
+    }
+    let ctrl = modifiers.command;
+    let by_word = |plain, word| if ctrl { word } else { plain };
+    let motion = match key {
+        Key::ArrowLeft => by_word(CaretMotion::Left, CaretMotion::WordLeft),
+        Key::ArrowRight => by_word(CaretMotion::Right, CaretMotion::WordRight),
+        Key::ArrowUp if !ctrl => CaretMotion::Up,
+        Key::ArrowDown if !ctrl => CaretMotion::Down,
+        Key::Home => by_word(CaretMotion::LineStart, CaretMotion::DocumentStart),
+        Key::End => by_word(CaretMotion::LineEnd, CaretMotion::DocumentEnd),
+        Key::PageUp if !ctrl => CaretMotion::PageUp,
+        Key::PageDown if !ctrl => CaretMotion::PageDown,
+        Key::Backspace => {
+            return Some(EditingKey::Delete(by_word(
+                CaretMotion::Left,
+                CaretMotion::WordLeft,
+            )));
+        }
+        Key::Delete => {
+            return Some(EditingKey::Delete(by_word(
+                CaretMotion::Right,
+                CaretMotion::WordRight,
+            )));
+        }
+        Key::Enter if !ctrl => return Some(EditingKey::Enter),
+        Key::Tab if !ctrl => return Some(EditingKey::Tab),
         _ => return None,
     };
     Some(EditingKey::Move {

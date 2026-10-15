@@ -554,5 +554,6 @@ pub fn capabilities() -> choscorui_core::BackendCapabilities {
     } else {
         Unsupported
     };
+    capabilities.keyboard = choscorui_core::KeyConvention::Mac;
     capabilities
 }

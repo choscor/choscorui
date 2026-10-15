@@ -18,10 +18,10 @@ use crate::style::{
 };
 use crate::{OverlayScrollBar, ScrollOrientation};
 use choscorui_core::{
-    CompositionEvent, DesignTokens, Dirty, EventPhase, EventReply, KeyEvent, Measured, NodeId,
-    Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
-    SemanticState, SemanticText, Size, TextBuffer, TextInputInfo, TextLayout, TextMotion, Tree,
-    TreeError, TypeSpec,
+    CompositionEvent, DesignTokens, Dirty, EventPhase, EventReply, KeyConvention, KeyEvent,
+    Measured, NodeId, Point, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode,
+    SemanticRole, SemanticState, SemanticText, Size, TextBuffer, TextInputInfo, TextLayout,
+    TextMotion, Tree, TreeError, TypeSpec,
 };
 use std::cell::RefCell;
 use std::ops::Range;
@@ -43,9 +43,12 @@ pub enum TextEditorInput {
     UnmarkMarkedText,
     CancelMarkedText,
     /// A key with the held modifiers, through the shared editing key
-    /// map: Option moves and deletes by word, Command to the line start
-    /// or end (Left, Right, Backspace, Delete) or to the document start or
-    /// end (Up, Down), and Shift extends the selection.
+    /// map of [`TextEditor::set_key_convention`]. On `Mac`, Option moves
+    /// and deletes by word, and Command goes to the line start or end
+    /// (Left, Right, Backspace, Delete) or to the document start or end
+    /// (Up, Down). On `Pc`, Ctrl moves and deletes by word, Home and End
+    /// go to the line start or end, and Ctrl with Home or End goes to the
+    /// document start or end. Shift extends the selection.
     Key {
         event: KeyEvent,
         modifiers: ShortcutModifiers,
@@ -98,6 +101,8 @@ pub struct TextEditor {
     /// True while a hosted press is held.
     pressed: bool,
     host: HostedText,
+    /// The editing key map. A control host sets it with each event.
+    key_convention: KeyConvention,
 }
 
 /// What the editor keeps in a control host, where it lays out its own
@@ -188,7 +193,15 @@ impl TextEditor {
             tab_inserts: false,
             pressed: false,
             host: HostedText::default(),
+            key_convention: KeyConvention::Mac,
         }
+    }
+
+    /// Sets the editing key map of [`TextEditorInput::Key`]. A new editor
+    /// uses [`KeyConvention::Mac`]. In a control host, the editor takes
+    /// the conventions of the host with each event.
+    pub fn set_key_convention(&mut self, key_convention: KeyConvention) {
+        self.key_convention = key_convention;
     }
 
     pub fn value(&self) -> &str {
@@ -645,7 +658,7 @@ impl TextEditor {
                 event: KeyEvent::Down { key, .. },
                 modifiers,
             } if self.composition.is_none() => {
-                if let Some(key) = editing_key(key, modifiers) {
+                if let Some(key) = editing_key(key, modifiers, self.key_convention) {
                     keep_preferred_x = self.editing(layout, key, editable);
                 }
             }
@@ -815,6 +828,7 @@ impl TextEditor {
         to_layout: impl Fn(Point) -> Point,
     ) -> EventReply {
         let modifiers = cx.modifiers();
+        self.key_convention = cx.key_convention();
         let input = match event {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
@@ -840,7 +854,7 @@ impl TextEditor {
                 TextEditorInput::PointerUp
             }
             ControlEvent::Key(event @ KeyEvent::Down { key, .. }) if cx.is_focused() => {
-                match editing_key(*key, modifiers) {
+                match editing_key(*key, modifiers, self.key_convention) {
                     Some(EditingKey::Tab) if !self.tab_inserts => return EventReply::Continue,
                     Some(_) => TextEditorInput::Key {
                         event: *event,

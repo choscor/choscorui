@@ -19,8 +19,8 @@ use choscorui_controls::{
     ShortcutModifiers, Variant,
 };
 use choscorui_core::{
-    EventPhase, EventReply, Icon, InputModality, KeyEvent, Measured, NodeId, Point, PointerButton,
-    PointerEvent, SemanticNode, SemanticRole, SemanticState,
+    EventPhase, EventReply, Icon, InputModality, KeyEvent, Measured, NodeId, Point, PointerEvent,
+    SemanticNode, SemanticRole, SemanticState,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -328,8 +328,7 @@ impl CustomControl for MenuTrigger {
                 EventPhase::Capture,
                 ControlEvent::Pointer(PointerEvent::Down { position, button }),
             ) => {
-                let secondary = *button == PointerButton::Secondary
-                    || *button == PointerButton::Primary && cx.modifiers().control;
+                let secondary = cx.opens_context_menu(*button);
                 if secondary {
                     self.point.set(*position);
                     self.keyboard.set(false);

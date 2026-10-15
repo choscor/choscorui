@@ -1,6 +1,6 @@
 //! Reusable control behavior and simple visual recipes.
 
-use choscorui_core::{Key, NodeId, TreeError};
+use choscorui_core::{Key, KeyConvention, NodeId, TreeError};
 use std::collections::HashMap;
 
 mod checkbox;
@@ -88,7 +88,7 @@ pub use widgets::{
     ButtonGroup, ButtonGroupMember, CommandLink, DecimalSpinBox, Dial, FocusFrame,
     KeySequenceChange, KeySequenceEdit, NumberBase, NumericDisplay, OverlayScrollBar,
     OverlayScrollReply, ScrollBar, ScrollBarInput, ScrollOrientation, SizeGrip, ToolBox,
-    ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_text,
+    ToolButton, ToolButtonAction, ToolButtonMenu, shortcut_label, shortcut_text,
 };
 pub use widgets::{
     HostedButtonGroup, HostedCommandLink, HostedDial, HostedNumericDisplay, HostedToolButton,
@@ -235,6 +235,11 @@ impl std::error::Error for CommandError {}
 
 /// The modifier keys that are held with a key or a pointer event, or
 /// that a keyboard shortcut needs.
+///
+/// Controls and shortcuts use the names of the Mac keys. `command` is the
+/// key that runs shortcuts. On [`KeyConvention::Pc`], a control host gets
+/// the modifiers through [`ShortcutModifiers::logical`]: `command` is Ctrl,
+/// `option` is Alt, and `control` is the Super key.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ShortcutModifiers {
     pub shift: bool,
@@ -244,6 +249,36 @@ pub struct ShortcutModifiers {
 }
 
 impl ShortcutModifiers {
+    /// The modifiers of `self` in the names that controls and shortcuts
+    /// use, for the physical keys that a backend reports. A backend
+    /// reports Ctrl as `control` and the Super key as `command`. On
+    /// [`KeyConvention::Pc`] these two change places, so Ctrl runs a
+    /// shortcut that declares `command`, and Super never does. On
+    /// [`KeyConvention::Mac`] the modifiers stay the same.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use choscorui_controls::ShortcutModifiers;
+    /// use choscorui_core::KeyConvention;
+    ///
+    /// let ctrl = ShortcutModifiers { control: true, ..ShortcutModifiers::default() };
+    /// let command = ShortcutModifiers { command: true, ..ShortcutModifiers::default() };
+    /// assert_eq!(ctrl.logical(KeyConvention::Pc), command);
+    /// assert_eq!(ctrl.logical(KeyConvention::Mac), ctrl);
+    /// ```
+    #[must_use]
+    pub fn logical(self, convention: KeyConvention) -> Self {
+        match convention {
+            KeyConvention::Mac => self,
+            KeyConvention::Pc => Self {
+                control: self.command,
+                command: self.control,
+                ..self
+            },
+        }
+    }
+
     /// Whether Command or Control is held. A control that does not use
     /// such a chord lets the key go on to the shortcuts.
     pub fn is_chord(self) -> bool {

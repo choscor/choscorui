@@ -95,6 +95,7 @@ impl MenuPopup {
         self.width = (rows + root.padding.horizontal()).max(min_width);
         self.direction = cx.direction;
         self.menu.set_direction(cx.direction);
+        self.menu.set_key_convention(cx.key_convention);
         self.bounds = cx.popup_bounds();
         self.motion_ms = root.motion_ms;
     }
@@ -480,7 +481,8 @@ fn widest(items: &[MenuItem], cx: &MeasureContext<'_>) -> f64 {
             let end = match entry {
                 MenuItem::Action { shortcut, icon, .. } => {
                     let keys = shortcut.as_ref().map_or(0.0, |text| {
-                        item.gap + cx.text.width(text, &shortcut_style.text)
+                        let text = crate::widgets::display_shortcut(text, cx.key_convention);
+                        item.gap + cx.text.width(&text, &shortcut_style.text)
                     });
                     keys + icon.map_or(0.0, |_| item.icon_size + item.gap)
                 }

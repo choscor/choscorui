@@ -368,6 +368,7 @@ key-sequence.cleared = Cleared
 key-sequence.committed = Committed
 key-sequence.last = Last change: {change}
 key-sequence.examples = shortcut_text examples: {examples}
+key-sequence.labels = shortcut_label examples on a PC keyboard: {examples}
 key-sequence.disabled = Disabled
 key-sequence.locked = Lock screen (fixed)
 slider.readout = {name}: {value}

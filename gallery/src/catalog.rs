@@ -223,6 +223,7 @@ pub const SHOWN: &[(&str, &str)] = &[
     ("Shortcut", "key-sequence"),
     ("ShortcutModifiers", "key-sequence"),
     ("shortcut_text", "key-sequence"),
+    ("shortcut_label", "key-sequence"),
     ("RadioGroup", "radio"),
     ("HostedRadioGroup", "radio"),
     ("RadioOption", "radio"),

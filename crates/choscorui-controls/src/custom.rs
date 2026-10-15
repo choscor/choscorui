@@ -13,10 +13,10 @@ use crate::{DialogId, DialogStack, EditCommand, Modality, Shortcut, ShortcutModi
 use choscorui_core::{
     AnnouncementPriority, CivilDate, CompositionEvent, Constraints, DesignTokens, Dirty,
     DisplayList, EngineError, EventPhase, EventReply, Feedback, GestureEvent, InputModality, Key,
-    KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured, NoFeedback, NodeId,
-    Point, PointerButton, PointerDetails, PointerEvent, Rect, SemanticAction, SemanticChange,
-    SemanticError, SemanticNode, SemanticParts, SemanticTree, Services, TextInputInfo,
-    ThemeResolver, Tree, TreeError,
+    KeyConvention, KeyEvent, LayoutDirection, LayoutEngine, LeafMeasure, Localizer, Measured,
+    NoFeedback, NodeId, Point, PointerButton, PointerDetails, PointerEvent, Rect, SemanticAction,
+    SemanticChange, SemanticError, SemanticNode, SemanticParts, SemanticTree, Services,
+    TextInputInfo, ThemeResolver, Tree, TreeError,
 };
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -167,6 +167,9 @@ pub struct MeasureContext<'a> {
     pub tokens: &'a DesignTokens,
     pub styles: &'a Styles,
     pub text: &'a dyn TextMeasure,
+    /// The keyboard conventions of the window, for the width of a
+    /// shortcut label.
+    pub key_convention: KeyConvention,
 }
 
 impl MeasureContext<'_> {
@@ -194,6 +197,7 @@ pub struct ControlContext<'a> {
     phase: EventPhase,
     time: f64,
     modifiers: ShortcutModifiers,
+    key_convention: KeyConvention,
     pointer: PointerDetails,
     services: &'a Services,
     messages: &'a mut Vec<(NodeId, ControlMessage)>,
@@ -231,9 +235,24 @@ impl ControlContext<'_> {
     pub fn time(&self) -> f64 {
         self.time
     }
-    /// The modifier keys held during the event.
+    /// The modifier keys held during the event, in the names that
+    /// [`ShortcutModifiers::logical`] gives.
     pub fn modifiers(&self) -> ShortcutModifiers {
         self.modifiers
+    }
+    /// The keyboard conventions of the window, which choose the editing
+    /// keys of a text control.
+    pub fn key_convention(&self) -> KeyConvention {
+        self.key_convention
+    }
+    /// True when a press of `button` opens a context menu: the secondary
+    /// button, or the primary button with Control on
+    /// [`KeyConvention::Mac`].
+    pub fn opens_context_menu(&self, button: PointerButton) -> bool {
+        button == PointerButton::Secondary
+            || button == PointerButton::Primary
+                && self.key_convention == KeyConvention::Mac
+                && self.modifiers.control
     }
     /// How the user moves focus now: `Pointer` after a press, `Keyboard`
     /// after a key. A control that keeps an inner focus restores it only
@@ -476,6 +495,9 @@ pub struct ControlHost {
     announcements: Vec<(String, AnnouncementPriority)>,
     time: f64,
     modifiers: ShortcutModifiers,
+    /// The keyboard conventions that map the modifiers and choose the
+    /// editing keys and the shortcut labels.
+    keys: HostKeys,
     /// The details of the pointer event in dispatch.
     pointer: PointerDetails,
     /// The desktop services, for the clipboard of text controls.
@@ -518,6 +540,16 @@ impl Default for HostStrings {
             choscorui_core::Locale::root(),
             choscorui_core::Catalog::new(),
         )))
+    }
+}
+
+/// The keyboard conventions of a host: [`KeyConvention::Mac`] until the
+/// host gets others.
+struct HostKeys(KeyConvention);
+
+impl Default for HostKeys {
+    fn default() -> Self {
+        Self(KeyConvention::Mac)
     }
 }
 
@@ -635,9 +667,36 @@ impl ControlHost {
         self.time = time;
     }
 
-    /// Sets the modifier keys that controls see with later events.
+    /// Sets the modifier keys that controls see with later events. The
+    /// modifiers are the physical keys that the backend reports, and the
+    /// host maps them with [`ShortcutModifiers::logical`].
     pub fn set_modifiers(&mut self, modifiers: ShortcutModifiers) {
-        self.modifiers = modifiers;
+        self.modifiers = modifiers.logical(self.keys.0);
+    }
+
+    /// The modifier keys of the last event, after the map of
+    /// [`ControlHost::set_modifiers`].
+    pub fn modifiers(&self) -> ShortcutModifiers {
+        self.modifiers
+    }
+
+    /// Sets the keyboard conventions of the window. They map the
+    /// modifiers of later events, and choose the editing keys and the
+    /// shortcut labels. The host measures and paints every control again.
+    /// A new host uses [`KeyConvention::Mac`].
+    pub fn set_key_convention(&mut self, tree: &mut Tree, key_convention: KeyConvention) {
+        self.keys = HostKeys(key_convention);
+        for node in self.controls.keys() {
+            let _ = tree.invalidate(*node, Dirty::LAYOUT);
+            let _ = tree.invalidate(*node, Dirty::PAINT);
+            let _ = tree.invalidate(*node, Dirty::SEMANTICS);
+        }
+        self.unarranged.extend(self.controls.keys().copied());
+    }
+
+    /// The keyboard conventions of the window.
+    pub fn key_convention(&self) -> KeyConvention {
+        self.keys.0
     }
 
     /// Enables or disables a mounted control. A disabled control gets no
@@ -736,6 +795,7 @@ impl ControlHost {
             tokens,
             styles: env.styles,
             text: env.text,
+            key_convention: self.keys.0,
         };
         let measured = control.measure(&cx);
         Some(Measured {
@@ -819,6 +879,7 @@ impl ControlHost {
             tokens: &tokens,
             styles: env.styles,
             text: env.text,
+            key_convention: self.keys.0,
         };
         control.arrange(&cx, bounds);
     }
@@ -849,6 +910,7 @@ impl ControlHost {
                     phase,
                     time: self.time,
                     modifiers: self.modifiers,
+                    key_convention: self.keys.0,
                     pointer: self.pointer,
                     services: &self.services,
                     messages: &mut self.messages,
@@ -1093,7 +1155,7 @@ impl ControlHost {
             // A held key repeats an edit, such as Undo, but not a
             // shortcut. An unused Escape closes a tooltip, a hover card,
             // or a popup wherever the focus is.
-            stopped = EditCommand::from_shortcut(key, self.modifiers)
+            stopped = EditCommand::from_shortcut(key, self.modifiers, self.keys.0)
                 .is_some_and(|command| self.dispatch_edit(tree, command))
                 || (!repeat && self.dispatch_shortcut(tree, key))
                 || (key == Key::Escape && self.dismiss_overlays(tree, None).0);
@@ -1394,7 +1456,8 @@ impl ControlHost {
             .rtl(env.direction == LayoutDirection::Rtl)
             .state(state)
             .time(env.time)
-            .strings(&self.strings.0);
+            .strings(&self.strings.0)
+            .key_convention(self.keys.0);
         if let Some(point) = pointer {
             cx = cx.pointer(point, &self.cursor);
         } else {
@@ -1471,7 +1534,8 @@ impl ControlHost {
                 .rtl(rtl)
                 .state(self.visual_state(tree, node))
                 .time(env.time)
-                .strings(&self.strings.0);
+                .strings(&self.strings.0)
+                .key_convention(self.keys.0);
             // Over its open popup, the cursor comes from the popup.
             let over = self
                 .hover_pointer(tree, node)
@@ -1693,6 +1757,7 @@ impl ControlHost {
             phase: EventPhase::Target,
             time: self.time,
             modifiers: self.modifiers,
+            key_convention: self.keys.0,
             pointer: self.pointer,
             services: &self.services,
             messages: &mut self.messages,

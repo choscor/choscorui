@@ -115,8 +115,7 @@ impl CustomControl for ContextMenu {
                 if self.popup.pointer(*position, false).is_some() {
                     return EventReply::Stop;
                 }
-                let secondary = *button == PointerButton::Secondary
-                    || *button == PointerButton::Primary && cx.modifiers().control;
+                let secondary = cx.opens_context_menu(*button);
                 if secondary && bounds.contains(*position) {
                     cx.request_focus();
                     self.open(cx, *position, false);

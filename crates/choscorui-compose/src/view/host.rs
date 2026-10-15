@@ -18,11 +18,12 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     AnnouncementPriority, Axis, CompositionEvent, Constraints, DesignTokens, Dirty, DisplayList,
-    EngineError, Feedback, GestureEvent, GridPlacement, InputModality, ItemAlign, Key, KeyEvent,
-    LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length, Measured, NodeId, Point,
-    PointerButton, PointerDetails, PointerEvent, RecipeSet, Rect, SemanticAction, SemanticChange,
-    SemanticEntry, SemanticError, SemanticNode, SemanticRole, SemanticTree, Size, TextInputInfo,
-    ThemeError, ThemeOverride, ThemeResolver, Track, Tree, TreeError,
+    EngineError, Feedback, GestureEvent, GridPlacement, InputModality, ItemAlign, Key,
+    KeyConvention, KeyEvent, LayoutDirection, LayoutEngine, LayoutKind, LayoutStyle, Length,
+    Measured, NodeId, Point, PointerButton, PointerDetails, PointerEvent, RecipeSet, Rect,
+    SemanticAction, SemanticChange, SemanticEntry, SemanticError, SemanticNode, SemanticRole,
+    SemanticTree, Size, TextInputInfo, ThemeError, ThemeOverride, ThemeResolver, Track, Tree,
+    TreeError,
 };
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -1106,6 +1107,24 @@ impl ViewHost {
         self.inner.waker = Some(Rc::new(waker));
     }
 
+    /// Sets the keyboard conventions of the window: the key that runs
+    /// shortcuts, the editing keys, and the shortcut labels. A new host
+    /// uses [`KeyConvention::Mac`]. A window takes the conventions from
+    /// [`BackendCapabilities::keyboard`](choscorui_core::BackendCapabilities::keyboard).
+    pub fn set_key_convention(&mut self, key_convention: KeyConvention) {
+        self.inner
+            .controls
+            .set_key_convention(&mut self.inner.tree, key_convention);
+        self.inner.needs_layout = true;
+        self.inner.needs_paint = true;
+        self.inner.semantic_all = true;
+    }
+
+    /// The keyboard conventions of the window.
+    pub fn key_convention(&self) -> KeyConvention {
+        self.inner.controls.key_convention()
+    }
+
     /// Sends the platform signals of the controls, such as the beep when
     /// a field refuses a key, through `feedback`. Until then the host
     /// sends none.
@@ -1462,8 +1481,8 @@ impl ViewHost {
         modifiers: ShortcutModifiers,
         details: PointerDetails,
     ) {
-        self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
+        self.modifiers = self.inner.controls.modifiers();
         if let PointerEvent::Down {
             position,
             button: PointerButton::Primary,
@@ -1504,8 +1523,8 @@ impl ViewHost {
     /// Routes a trackpad gesture, such as a pinch, to the control under
     /// it and then its ancestors. Returns true when a control used it.
     pub fn gesture(&mut self, event: GestureEvent, modifiers: ShortcutModifiers) -> bool {
-        self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
+        self.modifiers = self.inner.controls.modifiers();
         let used = self
             .inner
             .controls
@@ -1517,9 +1536,14 @@ impl ViewHost {
 
     /// Routes a key event: a declared shortcut first, then the focused
     /// control, then Tab moves focus. Returns true when handled.
+    /// `modifiers` are the physical keys that the backend reports. The
+    /// host maps them for its [`KeyConvention`] with
+    /// [`ShortcutModifiers::logical`], so on `Pc` Ctrl runs a shortcut
+    /// that declares `command`.
     pub fn key(&mut self, event: KeyEvent, modifiers: ShortcutModifiers) -> bool {
-        self.modifiers = modifiers;
         self.inner.controls.set_modifiers(modifiers);
+        let modifiers = self.inner.controls.modifiers();
+        self.modifiers = modifiers;
         // A view takes its keys before the focused control in it, unless
         // the control records every key.
         if let KeyEvent::Down { key, .. } = event
@@ -1906,7 +1930,8 @@ impl ViewHost {
     }
 }
 
-/// True for the keys that cancel a dialog: Escape and Command-period.
+/// True for the keys that cancel a dialog: Escape and Command-period
+/// (Ctrl-period on `Pc`).
 fn cancels(key: Key, modifiers: ShortcutModifiers) -> bool {
     match key {
         Key::Escape => !modifiers.command && !modifiers.control && !modifiers.option,

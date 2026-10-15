@@ -713,6 +713,7 @@ pub struct BackendCapabilities {
     pub text_shaping: Support,
     pub image_codecs: Support,
     pub gpu_painting: Support,
+    pub keyboard: KeyConvention,
 }
 ```
 
@@ -737,6 +738,7 @@ releases, so construct it with [`BackendCapabilities::none`](#backendcapabilitie
 - `text_shaping`: Platform text shaping with font fallback.
 - `image_codecs`
 - `gpu_painting`: GPU-accelerated painting (as opposed to CPU rasterization).
+- `keyboard`: The keyboard conventions that controls follow.
 
 ### Methods
 
@@ -746,7 +748,8 @@ releases, so construct it with [`BackendCapabilities::none`](#backendcapabilitie
 pub fn none(backend: &'static str) -> Self
 ```
 
-A backend that supports nothing; backends enable what they provide.
+A backend that supports nothing, with the `KeyConvention::Pc`
+keyboard; backends enable what they provide.
 
 ## `CommandMenu`
 
@@ -1071,6 +1074,11 @@ pub struct ShortcutModifiers {
 The modifier keys that are held with a key or a pointer event, or
 that a keyboard shortcut needs.
 
+Controls and shortcuts use the names of the Mac keys. `command` is the
+key that runs shortcuts. On `KeyConvention::Pc`, a control host gets
+the modifiers through [`ShortcutModifiers::logical`](#shortcutmodifierslogical): `command` is Ctrl,
+`option` is Alt, and `control` is the Super key.
+
 ### Methods
 
 #### `ShortcutModifiers::is_chord`
@@ -1081,6 +1089,31 @@ pub fn is_chord(self) -> bool
 
 Whether Command or Control is held. A control that does not use
 such a chord lets the key go on to the shortcuts.
+
+#### `ShortcutModifiers::logical`
+
+```rust
+pub fn logical(self, convention: KeyConvention) -> Self
+```
+
+The modifiers of `self` in the names that controls and shortcuts
+use, for the physical keys that a backend reports. A backend
+reports Ctrl as `control` and the Super key as `command`. On
+`KeyConvention::Pc` these two change places, so Ctrl runs a
+shortcut that declares `command`, and Super never does. On
+`KeyConvention::Mac` the modifiers stay the same.
+
+##### Examples
+
+```rust
+use choscorui_controls::ShortcutModifiers;
+use choscorui_core::KeyConvention;
+
+let ctrl = ShortcutModifiers { control: true, ..ShortcutModifiers::default() };
+let command = ShortcutModifiers { command: true, ..ShortcutModifiers::default() };
+assert_eq!(ctrl.logical(KeyConvention::Pc), command);
+assert_eq!(ctrl.logical(KeyConvention::Mac), ctrl);
+```
 
 ## `StatusItemSpec`
 
@@ -1401,6 +1434,18 @@ pub fn key(&mut self, event: KeyEvent, modifiers: ShortcutModifiers) -> bool
 
 Routes a key event: a declared shortcut first, then the focused
 control, then Tab moves focus. Returns true when handled.
+`modifiers` are the physical keys that the backend reports. The
+host maps them for its `KeyConvention` with
+[`ShortcutModifiers::logical`](#shortcutmodifierslogical), so on `Pc` Ctrl runs a shortcut
+that declares `command`.
+
+#### `ViewHost::key_convention`
+
+```rust
+pub fn key_convention(&self) -> KeyConvention
+```
+
+The keyboard conventions of the window.
 
 #### `ViewHost::layout`
 
@@ -1538,6 +1583,17 @@ pub fn set_feedback(&mut self, feedback: Rc<dyn Feedback>)
 Sends the platform signals of the controls, such as the beep when
 a field refuses a key, through `feedback`. Until then the host
 sends none.
+
+#### `ViewHost::set_key_convention`
+
+```rust
+pub fn set_key_convention(&mut self, key_convention: KeyConvention)
+```
+
+Sets the keyboard conventions of the window: the key that runs
+shortcuts, the editing keys, and the shortcut labels. A new host
+uses `KeyConvention::Mac`. A window takes the conventions from
+`BackendCapabilities::keyboard`.
 
 #### `ViewHost::set_tokens`
 

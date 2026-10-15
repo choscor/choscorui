@@ -225,6 +225,45 @@ input. A `Label` takes only a click, and only with a target.
 - A link, such as a link badge, activates on Enter only. Space is for
   buttons.
 
+**Keyboard conventions.** A `ControlHost` has a `KeyConvention`, `Mac` or
+`Pc`. A new host uses `Mac`. `ControlHost::set_key_convention` and
+`ViewHost::set_key_convention` change it. The facade sets it from
+`BackendCapabilities::keyboard` when it opens a window. This document
+names the keys of `Mac`. On `Pc`, read Ctrl for Command, Alt for Option,
+and Super for Control.
+
+- The backend reports the physical modifier keys in `ShortcutModifiers`.
+  `control` is Ctrl, `option` is Alt or Option, and `command` is Command
+  or the Super key.
+- The host maps them with `ShortcutModifiers::logical`. On `Mac`, they stay
+  the same. On `Pc`, `command` and `control` change places. Controls and
+  shortcuts get the mapped modifiers.
+- Thus on `Pc`, Ctrl runs a shortcut that declares `command`. The Super
+  key never runs a `command` shortcut. A shortcut that declares `control`
+  needs the Super key.
+- Each chord in a control follows the same map. For example, Command+W
+  closes a dock panel on `Mac`, and Ctrl+W closes it on `Pc`.
+- On `Mac`, a Control-click opens a context menu. On `Pc`, only the
+  secondary button and the keys open it.
+- The text controls use the key map of the convention. [Text
+  editing](#text-editing) gives the two key maps.
+
+| Convention | Shortcut label |
+| --- | --- |
+| `Mac` | Glyphs in the order ⌃⌥⇧⌘, then the key, for example `⇧⌘S` |
+| `Pc` | Words in the order Ctrl, Super, Alt, Shift, then the key, joined by `+`, for example `Ctrl+Shift+S` or `Alt+F4` |
+
+- `shortcut_label(shortcut, convention)` gives the label.
+  `shortcut_text(shortcut)` gives the canonical text. The canonical text
+  is the `Mac` label with the canonical key names.
+- A menu row and a `CommandItem` show their shortcut text with the label
+  of the convention. On `Pc`, a canonical text such as `⌘S` shows as
+  `Ctrl+S`. Other text does not change.
+- The semantic description of the row uses the same label.
+
+[pc_keys.rs](../crates/choscorui-controls/tests/pc_keys.rs) pins this
+behavior.
+
 ```mermaid
 flowchart LR
     Input["Pointer, key, or semantic action"] --> Handle["Control handle"]
@@ -883,6 +922,8 @@ divides by 10. Each change saturates at the `i64` bounds and emits
 - A function key shows as `F1` to `F24`. The field and its semantic value
   show the Space and Menu keys with the names of the window language, from
   `choscorui.key.space` and `choscorui.key.menu`.
+- In a control host, the field and its semantic value show the labels of
+  the keyboard convention. On `Pc`, `⌘K` shows as `Ctrl+K`.
 - `text` and the `Changed` report use the canonical names, such as `Space`
   and `Menu`. `set_value` reads the canonical names and the names of each
   language in the built-in catalog.
@@ -1017,6 +1058,9 @@ one click rule. `Input`, `InputGroup`, `Textarea`, `TextEditor`, the
 editable `Combobox`, and the filter of `Command` and `DataTable` use all of
 them. The value fields use the Edit commands as this section tells.
 
+The key map follows the [keyboard
+conventions](#shared-rules) of the host. On `Mac`:
+
 | Keys | Action |
 | --- | --- |
 | ArrowLeft, ArrowRight | One grapheme |
@@ -1028,9 +1072,23 @@ them. The value fields use the Edit commands as this section tells.
 | Option+Backspace, Option+Delete | Delete to the word edge |
 | Command+Backspace, Command+Delete | Delete to the line edge |
 
-- Shift with a move key extends the selection. A key with Control goes to
-  the ancestors and the shortcuts. In one line of text, the line edge is
-  the text edge.
+On `Pc`:
+
+| Keys | Action |
+| --- | --- |
+| ArrowLeft, ArrowRight | One grapheme |
+| Ctrl+ArrowLeft, Ctrl+ArrowRight | One word |
+| Home, End | Start or end of the line |
+| Ctrl+Home, Ctrl+End | Start or end of the text |
+| Backspace, Delete | Delete one grapheme |
+| Ctrl+Backspace, Ctrl+Delete | Delete to the word edge |
+
+- Shift with a move key extends the selection. In one line of text, the
+  line edge is the text edge.
+- On `Mac`, a key with Control goes to the ancestors and the shortcuts.
+- On `Pc`, a key with Alt or Super goes to the ancestors and the
+  shortcuts. Ctrl with ArrowUp, ArrowDown, PageUp, PageDown, Enter, or Tab
+  also goes to them.
 - **Clicks.** The host sends the click count of each press. One click
   places the caret, and Shift extends the selection. Two clicks select a
   word, and three clicks select the line (`TextEditor`: the paragraph). A
@@ -1039,6 +1097,9 @@ them. The value fields use the Edit commands as this section tells.
   to the focused control as `ControlEvent::Edit`. A Command-key chord that
   no control stops gives the same command: Command with X, C, V, A, or Z,
   and Shift+Command+Z for `Redo`.
+- On `Pc`, the chords use Ctrl. Ctrl+Y and Ctrl+Shift+Z give `Redo`.
+  `EditCommand::from_shortcut(key, modifiers, convention)` gives the
+  command of a chord.
 - Copy, Cut, and Paste use the clipboard of `ControlHost::set_services`.
   When the backend has no clipboard support, they do nothing, and Cut does
   not delete.
@@ -1079,6 +1140,8 @@ this behavior.
 - **Keys (key-down).** `Key { event, modifiers }` edits through the key map
   of [Text editing](#text-editing). The line edge is the text edge. The
   arrow keys are logical, not mirrored.
+- `set_key_convention` selects the key map. A new field uses `Mac`. In a
+  control host, the field uses the convention of the host.
 - `Paste` replaces the selection with text. `SetSelection` selects from an
   anchor to a caret.
 - **Line breaks.** The field removes `\n` and `\r` from all incoming text.
@@ -1140,6 +1203,8 @@ behavior.
   and PageDown move by `page_height`.
 - Home and End go to the ends of the visual line. The other keys follow the
   key map of [Text editing](#text-editing).
+- `set_key_convention` selects the key map. A new editor uses `Mac`. In a
+  control host, the editor uses the convention of the host.
 - **Read-only.** Typing, marked text, Enter, Tab, Backspace, Delete, `Cut`,
   `Undo`, `Redo`, and semantic `SetValue` do nothing. Navigation works.
 - Undo and redo skip marked text. Typed `\r\n` becomes `\n`.
@@ -2342,7 +2407,7 @@ this behavior.
 | Field | `DropdownMenu::semantic_parts(level, commands, rows, parent, parts)`, one part per item |
 | --- | --- |
 | Role | `MenuItem` (AXMenuItem); `StaticText` (AXStaticText) for a heading, with no state or actions |
-| Name / value | label / -; the shortcut text is the description |
+| Name / value | label / -; the shortcut label is the description |
 | State | disabled, checked for a checkable action, selected when highlighted, expanded for an open submenu |
 | Actions | `Activate` while enabled |
 

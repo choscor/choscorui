@@ -409,7 +409,7 @@ fn profile() -> impl View {
 
 A menu shows `MenuChoice` rows. `MenuChoice::action(label, action)` runs `action` and closes the menu. `MenuChoice::checkbox(label, checked)` shows a check mark while the `Binding<bool>` is true, and a choice flips it. `MenuChoice::radio(label, selection, value)` shows a dot while `selection` is `value`, and a choice sets it. The radio rows of one binding make a group. A check row closes the menu as an action does. `MenuChoice::submenu` and `MenuChoice::separator` make the other rows. `.shortcut`, `.destructive`, and `.disabled` change one row. Labels take literal text or a catalog string, and follow the locale.
 
-- `.context_menu(items)` opens a menu at the pointer on a secondary click or a Control-click on the view. When focus is in the view, Shift-F10 or the Menu key opens it at the center of the focused view. A focused view that uses the key keeps it. The `ShowMenu` action of assistive technology opens it at the center of the view. A menu that the keyboard or `ShowMenu` opens highlights the first row. Of nested context menus, the innermost one opens.
+- `.context_menu(items)` opens a menu at the pointer on a secondary click, or on a Control-click with `KeyConvention::Mac`. When focus is in the view, Shift-F10 or the Menu key opens it at the center of the focused view. A focused view that uses the key keeps it. The `ShowMenu` action of assistive technology opens it at the center of the view. A menu that the keyboard or `ShowMenu` opens highlights the first row. Of nested context menus, the innermost one opens.
 - `.dropdown_menu(presented, items)` shows a menu below the view while `presented` is true. A chosen row or Escape sets `presented` to false.
 
 Focus moves into an open menu. The menu keys, hover, and type-ahead of [DropdownMenu](controls.md#dropdownmenu) apply. Escape or a press outside closes the menu, and focus returns to where it was.
@@ -482,12 +482,13 @@ Tab and Shift-Tab move focus in the order of the tree. `.disabled(true)` disable
 
 - Each row runs its own action when the user chooses it. You do not give command ids. The toolkit makes an id for each row.
 - `MenuChoice::keyboard_shortcut(key, modifiers)` chooses the row from any window. A Command-key chord that no menu item takes goes to the focused view.
+- Declare `command` for the shortcut key of the platform. The window uses the keyboard conventions of `capabilities().keyboard`. On `KeyConvention::Pc`, Ctrl runs a `command` shortcut, and the Super key never does.
 - Labels, check marks, and disabled states can read state. When that state changes, the toolkit makes the menu bar again. Use this for check marks and for a new language.
 - A panic in an action stops at the menu boundary. The toolkit counts it in `AppContext::menu_panic_count`, and the row stays usable.
 
 An action does not get the `AppContext`. To open or close a window or to quit, put a request in shared state, and act on it in `App::on_tick`.
 
-`.keyboard_shortcut(key, modifiers, action)` runs an action while focus is in the view, or anywhere when no closer view declares the same keys. `.on_submit(action)` runs when a control commits its input, for example Return in a text input.
+`.keyboard_shortcut(key, modifiers, action)` runs an action while focus is in the view, or anywhere when no closer view declares the same keys. `shortcut_label(shortcut, capabilities().keyboard)` gives the label of a shortcut for a tooltip, such as `⌘S` or `Ctrl+S`. `.on_submit(action)` runs when a control commits its input, for example Return in a text input.
 
 `.on_key_press(key, action)` runs an action for a key with no modifier keys while focus is in the view. The view takes the key before the focused control. For example, Escape can clear a search field, and ArrowDown can move to the results. `.on_press(action)` gets the position of each primary press in the view, before the control under the press handles it.
 
