@@ -15,6 +15,7 @@ mod checks;
 #[cfg(test)]
 mod ctype;
 mod ctypes;
+pub(crate) mod dbus;
 pub(crate) mod dl;
 pub(crate) mod libc;
 pub(crate) mod wayland;
@@ -34,11 +35,13 @@ pub(crate) fn declarations() -> (
     Vec<checks::StructItem>,
     Vec<checks::ConstItem>,
 ) {
+    use dbus::sys as db;
     use wayland::sys as wl;
     let libraries = vec![
         dl::check_items(),
         libc::check_items(),
         wl::WaylandClient::check_items(),
+        db::DBusLib::check_items(),
     ];
     let structs = vec![
         libc::PollFd::layout(),
@@ -48,10 +51,20 @@ pub(crate) fn declarations() -> (
         wl::WlInterface::layout(),
         wl::WlArray::layout(),
         wl::WlArgument::layout(),
+        db::DBusMessageIter::layout(),
+        db::DBusObjectPathVTable::layout(),
+        db::DBusError::layout(),
     ];
-    let constants = [libc::constants(), wl::constants()]
-        .into_iter()
-        .flatten()
-        .collect();
+    let constants = [
+        libc::constants(),
+        wl::constants(),
+        db::constants(),
+        db::DBusBusType::constants(),
+        db::DBusHandlerResult::constants(),
+        db::DBusDispatchStatus::constants(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     (libraries, structs, constants)
 }
