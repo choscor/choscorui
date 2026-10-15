@@ -162,6 +162,15 @@ its text with `Condition::message`.
 | `choscorui.combobox.no_results` | | No results (the empty list of a combobox) |
 | `choscorui.list.no_results` | | No results (an item view with no matching row) |
 | `choscorui.date_picker.count` | `count` (plural) | {count} dates (the trigger of a date picker with more than one date) |
+| `choscorui.titlebar.minimize`, `.maximize`, `.restore`, `.close` | | Minimize, Maximize, Restore, and Close (the window buttons of a title bar) |
+| `choscorui.file_dialog.title.open`, `.open_many`, `.directory`, `.save` | | Open File, Open Files, Select Folder, and Save File (the title of a file dialog of each kind) |
+| `choscorui.file_dialog.open`, `.select`, `.save` | | Open, Select, and Save (the accept button of a file dialog) |
+| `choscorui.file_dialog.location`, `.parent`, `.files`, `.name`, `.filter`, `.hidden` | | Location, Parent folder, Files, Name, File type, and Show hidden files (the parts of a file dialog) |
+| `choscorui.file_dialog.all_files` | | All files (the filter without allowed types) |
+| `choscorui.file_dialog.folder` | | Folder (the description of a directory row) |
+| `choscorui.file_dialog.empty`, `.loading`, `.failed` | | This folder is empty, Loading…, and This folder cannot be read (the status of an empty list) |
+| `choscorui.file_dialog.replace.title` | `name` | “{name}” already exists (the title of the overwrite alert) |
+| `choscorui.file_dialog.replace`, `.replace.message` | | Replace, and Replacing it overwrites its contents (the overwrite alert) |
 | `choscorui.condition.app_bundle` | | Needs an app bundle with a bundle identifier |
 
 ## Plural forms
