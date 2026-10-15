@@ -21,6 +21,9 @@ pub enum Support {
 pub enum Condition {
     /// The binary runs from an app bundle with a bundle identifier.
     AppBundle,
+    /// A status notifier host runs: a desktop service that shows status
+    /// items, such as an `org.kde.StatusNotifierWatcher` on Linux.
+    StatusNotifierHost,
 }
 
 impl Condition {
@@ -28,6 +31,7 @@ impl Condition {
     pub fn message_id(self) -> &'static str {
         match self {
             Self::AppBundle => "choscorui.condition.app_bundle",
+            Self::StatusNotifierHost => "choscorui.condition.status_notifier_host",
         }
     }
 

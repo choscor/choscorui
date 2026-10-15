@@ -31,6 +31,10 @@ impl ServiceBackend for Guarded {
     fn post_notification(&self, _: &SystemNotification) -> Result<(), ServiceError> {
         panic!("the capability check must stop the call");
     }
+
+    fn set_status_item(&self, _: Option<&StatusItemSpec>) -> Result<(), ServiceError> {
+        panic!("the capability check must stop the call");
+    }
 }
 
 fn unsupported<T>(service: Service) -> Result<T, ServiceError> {
@@ -96,6 +100,32 @@ fn a_conditional_service_names_its_condition() {
     assert_eq!(
         error.to_string(),
         "Needs an app bundle with a bundle identifier for notifications"
+    );
+}
+
+#[test]
+fn a_status_item_without_a_host_names_the_status_notifier_host() {
+    let mut capabilities = BackendCapabilities::none("test");
+    capabilities.status_items = Support::Conditional(Condition::StatusNotifierHost);
+    let services = Services::new(Rc::new(Guarded(capabilities)));
+    let error = services
+        .set_status_item(Some(StatusItemSpec::new("App")))
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ServiceError::Unavailable {
+            service: Service::StatusItem,
+            condition: Condition::StatusNotifierHost,
+        }
+    );
+    assert_eq!(services.status_item(), None);
+    assert_eq!(
+        Condition::StatusNotifierHost.message_id(),
+        "choscorui.condition.status_notifier_host"
+    );
+    assert_eq!(
+        error.to_string(),
+        "Needs a status notifier host for the status item"
     );
 }
 

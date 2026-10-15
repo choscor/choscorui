@@ -163,6 +163,7 @@ its text with `Condition::message`.
 | `choscorui.list.no_results` | | No results (an item view with no matching row) |
 | `choscorui.date_picker.count` | `count` (plural) | {count} dates (the trigger of a date picker with more than one date) |
 | `choscorui.condition.app_bundle` | | Needs an app bundle with a bundle identifier |
+| `choscorui.condition.status_notifier_host` | | Needs a status notifier host |
 
 ## Plural forms
 
