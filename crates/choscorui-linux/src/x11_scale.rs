@@ -1,11 +1,9 @@
 //! The scale policy of X11 windows, as plain data.
 //!
-//! X11 has no standard scale property. When the resource database has
-//! `Xft.dpi`, that value is the scale of every monitor: the settings
-//! daemons of the desktops write the scale that the user selects there,
-//! and GTK and Qt read it first. Without `Xft.dpi`, a monitor has the
-//! scale of its physical DPI, and a window has the scale of the monitor
-//! that holds the largest part of it.
+//! X11 has no standard scale property. A monitor has the scale of its
+//! physical RandR DPI. A monitor without a usable physical size has the
+//! scale of `Xft.dpi` from the resource database, else 1. A window has the
+//! scale of the monitor that holds the largest part of it.
 
 use choscorui_core::{Rect, Size};
 
@@ -46,10 +44,10 @@ pub(crate) fn physical_scale(monitor: &Monitor) -> Option<f64> {
     Some(((dpi / BASE_DPI / STEP).round() * STEP).max(1.0))
 }
 
-/// The scale of `monitor`: `xft`, the scale of `Xft.dpi`, when it is set,
-/// else the physical scale, else 1.
+/// The scale of `monitor`: its physical scale, else `xft`, the scale of
+/// `Xft.dpi`, else 1.
 pub(crate) fn monitor_scale(xft: Option<f64>, monitor: &Monitor) -> f64 {
-    xft.or_else(|| physical_scale(monitor)).unwrap_or(1.0)
+    physical_scale(monitor).or(xft).unwrap_or(1.0)
 }
 
 /// The monitor that holds the largest part of `window`, in root pixels.
@@ -156,14 +154,25 @@ mod tests {
     }
 
     #[test]
-    fn xft_dpi_wins_over_the_physical_size() {
+    fn the_physical_size_wins_over_xft_dpi() {
         let high = monitor(0.0, 2560.0, (339, 212));
-        assert_eq!(monitor_scale(Some(1.5), &high), 1.5);
+        assert_eq!(monitor_scale(Some(1.5), &high), 2.0);
         assert_eq!(monitor_scale(None, &high), 2.0);
         let monitors = [high, monitor(2560.0, 1280.0, (339, 212))];
         let window = Rect::from_xywh(3000.0, 0.0, 400.0, 300.0);
-        assert_eq!(window_scale(Some(1.5), &monitors, window, 2.0), 1.5);
+        assert_eq!(window_scale(Some(1.5), &monitors, window, 2.0), 1.0);
         assert_eq!(window_scale(None, &monitors, window, 2.0), 1.0);
+    }
+
+    #[test]
+    fn xft_dpi_applies_without_a_usable_physical_size() {
+        assert_eq!(monitor_scale(Some(1.5), &monitor(0.0, 1920.0, (0, 0))), 1.5);
+        // A projector that gives its aspect ratio as 16 by 9 mm.
+        let projector = monitor(0.0, 1920.0, (16, 9));
+        assert_eq!(monitor_scale(Some(1.25), &projector), 1.25);
+        let monitors = [projector, monitor(1920.0, 2560.0, (339, 212))];
+        let window = Rect::from_xywh(100.0, 0.0, 400.0, 300.0);
+        assert_eq!(window_scale(Some(1.25), &monitors, window, 1.0), 1.25);
     }
 
     #[test]
@@ -200,7 +209,7 @@ mod tests {
         high.primary = true;
         let monitors = [monitor(0.0, 1280.0, (339, 212)), high];
         assert_eq!(initial_scale(None, &monitors), 2.0);
-        assert_eq!(initial_scale(Some(1.25), &monitors), 1.25);
+        assert_eq!(initial_scale(Some(1.25), &monitors), 2.0);
         assert_eq!(initial_scale(None, &[]), 1.0);
         assert_eq!(initial_scale(Some(1.5), &[]), 1.5);
     }

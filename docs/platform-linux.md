@@ -297,11 +297,11 @@ On Linux, `Application::new` connects to the X server of `DISPLAY` when the sele
 - **Events.** `WM_DELETE_WINDOW` gives `Closing`. `ConfigureNotify` gives `Resized`, and the first `MapNotify` gives `Resized` and activates the window. Focus events give `Focused`, and `VisibilityNotify` gives `Occluded`.
 - **Activation.** A window that maps sends `_NET_ACTIVE_WINDOW` to the window manager. When no window manager runs, as on Xvfb, the window takes the input focus itself.
 - **Scale.** X11 has no standard scale property. The scale of a window is the first of these values that applies:
-  - `Xft.dpi` over 96, from `RESOURCE_MANAGER` on the root window. This value applies to all monitors.
   - The physical scale of the RandR monitor that holds the largest part of the window. When no monitor holds a part of it, the primary monitor applies.
+  - `Xft.dpi` over 96, from `RESOURCE_MANAGER` on the root window, when that monitor has no physical scale.
   - 1.
 - **Physical scale.** The DPI of a monitor is its width in pixels over its RandR width in inches. The scale is the DPI over 96, rounded to the nearest multiple of 0.25, and at least 1. A monitor without a physical size, or with more than 480 DPI, has no physical scale. Without RandR, the root window with the physical size of the screen is the only monitor.
-- **Scale order.** `Xft.dpi` comes before the physical scale. The settings daemons of the desktops write the scale that the user selects to `Xft.dpi`. A physical size is only an approximate value, and some monitors give a wrong size.
+- **Scale order.** The physical scale comes before `Xft.dpi`, as the [specification](specs/2026-10-15-linux-backend.md) gives. Thus, monitors with different DPI have different scales. A monitor with a physical size gives a scale that the user cannot change with `Xft.dpi`.
 - **Scale changes.** A new window has the scale of the primary monitor. When the window maps or moves, it gets the scale of its monitor. A change of `Xft.dpi` or of the RandR monitors also applies the rules again. A new scale gives `ScaleChanged` and then `Resized`, and the window keeps its logical size.
 - **Stable scale.** A new scale changes the pixel size of the window, and the window can then have a different monitor. Thus, the window gets the new scale only when the monitor of the resized window has that scale.
 - **Keyboard.** xkbcommon-x11 reads the keymap and the state of the core keyboard. XKB state events update the modifiers. With detectable auto-repeat, a held key arrives as repeated presses, and the keyboard does not repeat keys itself.
@@ -804,7 +804,7 @@ The session has these parts:
 
 | Test | What it checks |
 | --- | --- |
-| [`window_smoke.rs`](../crates/choscorui-linux/tests/window_smoke.rs) | Windows open, paint, and close. The painter follows `CHOSCORUI_PAINTER`. The X11 geometry round-trips. On a private Xvfb, the X11 scale follows the physical size, and then `Xft.dpi`. |
+| [`window_smoke.rs`](../crates/choscorui-linux/tests/window_smoke.rs) | Windows open, paint, and close. The painter follows `CHOSCORUI_PAINTER`. The X11 geometry round-trips. On private Xvfb servers, the X11 scale follows a physical size of 192 DPI over `Xft.dpi`. At 600 DPI, it follows `Xft.dpi`. |
 | [`clipboard_smoke.rs`](../crates/choscorui-linux/tests/clipboard_smoke.rs) | The clipboard with a second process, INCR on X11, and drags between two windows |
 | [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. On X11 with `XMODIFIERS=@im=none`, the local input method of Xlib opens and closes, and keys type through xkbcommon. The XIM server test runs only by hand, with a real XIM server. |
 | [`lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) | Window churn, timers, posted work, and the footprint |

@@ -279,14 +279,24 @@ const SCALE: &str = "x11_scale_follows_the_physical_size_then_xft_dpi";
 #[test]
 fn x11_scale_follows_the_physical_size_then_xft_dpi() {
     if let Some(display) = std::env::var_os("CHOSCORUI_TEST_SCALE_DISPLAY") {
-        check_scale(&display);
+        let dpi = std::env::var("CHOSCORUI_TEST_SCALE_DPI").unwrap();
+        check_scale(&display, dpi.parse().unwrap());
         return;
     }
     if !enabled() || requested_backend() != Some(BackendKind::X11) {
         return;
     }
-    // A private Xvfb at 192 DPI without RandR: the physical size of the
-    // screen gives the scale, and `xrdb` does not change the other tests.
+    // 192 DPI gives a physical scale. Above 480 DPI, the physical size is
+    // not usable, so `Xft.dpi` applies.
+    for dpi in ["192", "600"] {
+        scale_on_private_xvfb(dpi);
+    }
+}
+
+/// Runs the scale check in a child process on a private Xvfb at `dpi`
+/// without RandR: the physical size of the screen is the only monitor,
+/// and `xrdb` does not change the other tests.
+fn scale_on_private_xvfb(dpi: &str) {
     let number = (200..400)
         .map(|offset| offset + std::process::id() % 200)
         .find(|number| !std::path::Path::new(&format!("/tmp/.X{number}-lock")).exists())
@@ -299,7 +309,7 @@ fn x11_scale_follows_the_physical_size_then_xft_dpi() {
             "0",
             "1280x800x24",
             "-dpi",
-            "192",
+            dpi,
             "-extension",
             "RANDR",
             "-noreset",
@@ -318,18 +328,29 @@ fn x11_scale_follows_the_physical_size_then_xft_dpi() {
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([SCALE, "--exact", "--nocapture", "--test-threads=1"])
         .env("CHOSCORUI_TEST_SCALE_DISPLAY", &display)
+        .env("CHOSCORUI_TEST_SCALE_DPI", dpi)
         .env("DISPLAY", &display)
         .env("CHOSCORUI_BACKEND", "x11")
         .env_remove("WAYLAND_DISPLAY")
         .status();
     server.kill().unwrap();
     server.wait().unwrap();
-    assert!(status.unwrap().success(), "the child on {display} failed");
+    assert!(
+        status.unwrap().success(),
+        "the child on {display} at {dpi} DPI failed"
+    );
 }
 
-/// Checks the scale of a window on the private Xvfb of `display`: 2 from
-/// 192 DPI, then 1.5 when `Xft.dpi` becomes 144.
-fn check_scale(display: &std::ffi::OsStr) {
+/// Checks the scale of a window on the private Xvfb of `display` at
+/// `dpi`. At 192 DPI, `Xft.dpi` is 144 before the application starts, and
+/// the physical scale 2 wins. At 600 DPI, the physical size is not
+/// usable: the scale is 1, and then 1.5 when `Xft.dpi` becomes 144.
+fn check_scale(display: &std::ffi::OsStr, dpi: u32) {
+    let physical = dpi == 192;
+    if physical {
+        merge_xft_dpi(display);
+    }
+    let scale = if physical { 2.0 } else { 1.0 };
     let application = Application::new().unwrap();
     assert_eq!(application.backend(), BackendKind::X11);
     let window = application
@@ -337,27 +358,25 @@ fn check_scale(display: &std::ffi::OsStr) {
         .unwrap();
     window.show();
     assert!(pump_until(&application, || window.paint_count() > 0));
-    assert_eq!(window.backing_scale_factor(), 2.0);
+    assert_eq!(window.backing_scale_factor(), scale);
     assert_eq!(window.content_size(), Size::new(320.0, 200.0));
     // Each monitor is in its own scale.
     assert_eq!(
         application.screens(),
-        vec![Rect::new(Point::new(0.0, 0.0), Size::new(640.0, 400.0))]
+        vec![Rect::new(
+            Point::new(0.0, 0.0),
+            Size::new(1280.0 / scale, 800.0 / scale)
+        )]
     );
-    window.take_events();
-    // `Xft.dpi` wins over the physical size.
-    let mut xrdb = std::process::Command::new("xrdb")
-        .arg("-merge")
-        .env("DISPLAY", display)
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    {
-        use std::io::Write;
-        let mut input = xrdb.stdin.take().unwrap();
-        input.write_all(b"Xft.dpi: 144\n").unwrap();
+    if physical {
+        window.close();
+        application
+            .dispatch_next_event(Duration::from_millis(10))
+            .unwrap();
+        return;
     }
-    assert!(xrdb.wait().unwrap().success());
+    window.take_events();
+    merge_xft_dpi(display);
     let mut events = Vec::new();
     let resized = |event: &WindowEvent| {
         matches!(event, WindowEvent::Resized { size, scale }
@@ -379,4 +398,20 @@ fn check_scale(display: &std::ffi::OsStr) {
     application
         .dispatch_next_event(Duration::from_millis(10))
         .unwrap();
+}
+
+/// Sets `Xft.dpi` to 144 in the resource database of `display`.
+fn merge_xft_dpi(display: &std::ffi::OsStr) {
+    let mut xrdb = std::process::Command::new("xrdb")
+        .arg("-merge")
+        .env("DISPLAY", display)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        use std::io::Write;
+        let mut input = xrdb.stdin.take().unwrap();
+        input.write_all(b"Xft.dpi: 144\n").unwrap();
+    }
+    assert!(xrdb.wait().unwrap().success());
 }
