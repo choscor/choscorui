@@ -1,7 +1,7 @@
 use choscorui_linux::{
     BackendKind, Capability, Clipboard, ClipboardError, FrameError, FrameScheduler, InputEvent,
-    InputState, LinuxCapabilities, LinuxInput, WaylandConnection, WaylandError, WaylandGlobal,
-    WaylandSurface, X11Error, X11Window, select_backend,
+    InputState, LinuxCapabilities, LinuxInput, PresentFrames, WaylandConnection, WaylandError,
+    WaylandGlobal, WaylandSurface, X11Error, X11Window, select_backend,
 };
 
 #[test]
@@ -96,6 +96,44 @@ fn one_frame_callback_is_outstanding_and_stale_callbacks_are_rejected() {
 }
 
 #[test]
+fn an_x11_paint_waits_for_the_present_completion_of_the_previous_frame() {
+    let mut frames = PresentFrames::new();
+    let first = frames.request().unwrap();
+    assert_eq!(first.target_msc, 0, "the first completion gives the MSC");
+    assert!(frames.is_pending());
+    assert!(matches!(
+        frames.request(),
+        Err(FrameError::AlreadyPending(_))
+    ));
+    let stale = first.serial.wrapping_add(1);
+    assert_eq!(
+        frames.complete(stale, 100),
+        Err(FrameError::UnknownSerial(stale))
+    );
+    assert!(frames.is_pending(), "a stale serial does not end the frame");
+    frames.complete(first.serial, 100).unwrap();
+    assert!(!frames.is_pending());
+
+    let second = frames.request().unwrap();
+    assert_ne!(second.serial, first.serial);
+    assert_eq!(second.target_msc, 101, "the next frame waits a blank");
+    assert_eq!(
+        frames.complete(first.serial, 101),
+        Err(FrameError::UnknownSerial(first.serial))
+    );
+    frames.complete(second.serial, 101).unwrap();
+
+    let third = frames.request().unwrap();
+    frames.cancel();
+    assert!(!frames.is_pending(), "a cancel drops the frame");
+    assert_eq!(
+        frames.complete(third.serial, 102),
+        Err(FrameError::UnknownSerial(third.serial))
+    );
+    assert_eq!(frames.request().unwrap().target_msc, 102);
+}
+
+#[test]
 fn input_only_accepts_events_from_advertised_devices() {
     let mut input = LinuxInput::new();
     assert_eq!(
@@ -145,8 +183,13 @@ fn capabilities_are_backend_specific_and_queryable() {
     assert_eq!(wayland.frame_callbacks, Capability::Available);
     assert_eq!(
         x11.frame_callbacks,
-        Capability::Unavailable("X11 uses expose/presentation events")
+        Capability::ProtocolDependent("Present")
     );
+    assert_eq!(
+        wayland.touch,
+        Capability::ProtocolDependent("wl_touch seat capability")
+    );
+    assert_eq!(x11.touch, Capability::ProtocolDependent("XInput 2.2"));
     assert_eq!(x11.ime, Capability::ProtocolDependent("XIM"));
 }
 

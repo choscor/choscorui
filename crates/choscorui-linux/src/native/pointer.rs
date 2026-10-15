@@ -1,7 +1,7 @@
-//! Click counting, scroll conversion, and pinch conversion, for both
-//! display servers.
+//! Click counting, scroll conversion, pinch conversion, and the details
+//! of touch events, for both display servers.
 
-use choscorui_core::{Point, PointerButton};
+use choscorui_core::{Point, PointerButton, PointerDetails, PointerEvent, PointerKind};
 use std::time::{Duration, Instant};
 
 /// The longest time between the presses of one multi-click.
@@ -80,6 +80,25 @@ impl PinchScale {
     }
 }
 
+/// The details of a pointer event of the primary touch point: the touch
+/// kind, and the click count of a press or a release, as for the mouse.
+pub(crate) fn touch_details(
+    clicks: &mut ClickCounter,
+    now: Instant,
+    event: PointerEvent,
+) -> PointerDetails {
+    let click_count = match event {
+        PointerEvent::Down { position, button } => clicks.press(now, position, button),
+        PointerEvent::Up { .. } => clicks.release(),
+        PointerEvent::Move { .. } | PointerEvent::Wheel { .. } => 1,
+    };
+    PointerDetails {
+        kind: PointerKind::Touch,
+        click_count,
+        ..PointerDetails::default()
+    }
+}
+
 /// The core button of a Linux input button code (`BTN_*`).
 pub(crate) fn button(code: u32) -> PointerButton {
     match code {
@@ -139,6 +158,29 @@ mod tests {
         assert!((total - 1.7).abs() < 1e-12);
         pinch.begin();
         assert_eq!(pinch.update(0.5), Some(0.5), "a new pinch starts at 1");
+    }
+
+    #[test]
+    fn touch_taps_count_clicks_as_the_mouse_does() {
+        let mut clicks = ClickCounter::default();
+        let start = Instant::now();
+        let position = Point::new(10.0, 10.0);
+        let down = PointerEvent::Down {
+            position,
+            button: PointerButton::Primary,
+        };
+        let up = PointerEvent::Up {
+            position,
+            button: PointerButton::Primary,
+        };
+        let first = touch_details(&mut clicks, start, down);
+        assert_eq!((first.kind, first.click_count), (PointerKind::Touch, 1));
+        assert_eq!(touch_details(&mut clicks, start, up).click_count, 1);
+        let soon = start + Duration::from_millis(150);
+        assert_eq!(touch_details(&mut clicks, soon, down).click_count, 2);
+        assert_eq!(touch_details(&mut clicks, soon, up).click_count, 2);
+        let moved = touch_details(&mut clicks, soon, PointerEvent::Move { position });
+        assert_eq!((moved.kind, moved.click_count), (PointerKind::Touch, 1));
     }
 
     #[test]

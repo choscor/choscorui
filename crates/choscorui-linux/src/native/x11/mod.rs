@@ -13,6 +13,7 @@ mod dnd;
 pub(crate) mod ime;
 mod protocol;
 mod selection;
+mod touch;
 mod window;
 
 pub(crate) use selection::Contents;
@@ -32,13 +33,15 @@ use crate::ffi::x11::{
     XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, XCB_EXPOSE,
     XCB_FOCUS_IN, XCB_FOCUS_OUT, XCB_GE_GENERIC, XCB_INPUT_BUTTON_PRESS, XCB_INPUT_BUTTON_RELEASE,
     XCB_INPUT_DEVICE_CHANGED, XCB_INPUT_ENTER, XCB_INPUT_LEAVE, XCB_INPUT_MOTION,
-    XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED, XCB_KEY_PRESS, XCB_KEY_RELEASE,
-    XCB_LEAVE_NOTIFY, XCB_MAP_NOTIFY, XCB_MOTION_NOTIFY, XCB_NOTIFY_DETAIL_INFERIOR,
-    XCB_NOTIFY_DETAIL_POINTER, XCB_NOTIFY_MODE_GRAB, XCB_NOTIFY_MODE_UNGRAB, XCB_PROPERTY_NOTIFY,
-    XCB_RANDR_NOTIFY, XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY,
-    XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
+    XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED, XCB_INPUT_TOUCH_BEGIN, XCB_INPUT_TOUCH_END,
+    XCB_INPUT_TOUCH_UPDATE, XCB_KEY_PRESS, XCB_KEY_RELEASE, XCB_LEAVE_NOTIFY, XCB_MAP_NOTIFY,
+    XCB_MOTION_NOTIFY, XCB_NOTIFY_DETAIL_INFERIOR, XCB_NOTIFY_DETAIL_POINTER, XCB_NOTIFY_MODE_GRAB,
+    XCB_NOTIFY_MODE_UNGRAB, XCB_PRESENT_COMPLETE_KIND_NOTIFY_MSC, XCB_PRESENT_COMPLETE_NOTIFY,
+    XCB_PROPERTY_NOTIFY, XCB_RANDR_NOTIFY, XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_SHM_COMPLETION,
+    XCB_UNMAP_NOTIFY, XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
 };
 use crate::gles;
+use crate::touch::TouchPointer;
 use crate::x11_scale::{self, Monitor};
 use crate::{InputEvent, LinuxInput};
 use choscorui_core::{
@@ -133,6 +136,9 @@ struct Extensions {
     xinput: Option<u8>,
     /// The major opcode and the first event of MIT-SHM.
     shm: Option<(u8, u8)>,
+    /// The major opcode of Present, when the server has it and
+    /// libxcb-present loads.
+    present: Option<u8>,
     /// The first event of RandR, when the server has RandR and the
     /// client selected its changes.
     randr_event: Option<u8>,
@@ -153,6 +159,8 @@ struct Seat {
     device: u16,
     clicks: ClickCounter,
     scrolling: Scrolling,
+    /// The primary touch point, which acts as the pointer.
+    touch: TouchPointer,
     /// True while the left button is down, which a drag needs.
     left_down: bool,
 }
@@ -163,6 +171,8 @@ pub(crate) struct Client {
     pub(crate) atoms: Atoms,
     extensions: Extensions,
     shm: Cell<bool>,
+    /// False after a Present request failed.
+    present: Cell<bool>,
     /// The scale of `Xft.dpi`, when the resource database sets it.
     xft: Cell<Option<f64>>,
     /// The RandR monitors, or the root window without RandR.
@@ -321,8 +331,13 @@ impl Client {
             XCB_CW_EVENT_MASK,
             &[XCB_EVENT_MASK_PROPERTY_CHANGE],
         );
+        let present = connection
+            .query_extension("Present")
+            .filter(|_| connection.present_available())
+            .map(|(opcode, _)| opcode);
         let mut input = LinuxInput::new();
-        input.update_seat(true, true, false);
+        // XInput 2.2 sends the touch events.
+        input.update_seat(true, true, xinput.is_some());
         connection.flush();
         // Shaders compile now, so a driver failure shows before a window
         // opens. Without the GLES painter, windows use Cairo.
@@ -338,10 +353,12 @@ impl Client {
                 xkb_event,
                 xinput,
                 shm,
+                present,
                 randr_event,
                 detectable_repeat,
             },
             shm: Cell::new(shm.is_some()),
+            present: Cell::new(present.is_some()),
             xft: Cell::new(xft),
             monitors: RefCell::new(monitors),
             windows: RefCell::new(Vec::new()),
@@ -355,6 +372,7 @@ impl Client {
                 device: VIRTUAL_CORE_POINTER,
                 clicks: ClickCounter::default(),
                 scrolling,
+                touch: TouchPointer::default(),
                 left_down: false,
             }),
             cursors: RefCell::new(HashMap::new()),
@@ -494,6 +512,11 @@ impl Client {
 
     pub(crate) fn shm_enabled(&self) -> bool {
         self.shm.get()
+    }
+
+    /// True when Present paces the Cairo paints.
+    pub(crate) fn present_enabled(&self) -> bool {
+        self.present.get()
     }
 
     pub(crate) fn root_position(&self) -> (i32, i32) {
@@ -880,6 +903,9 @@ impl Client {
             XCB_GE_GENERIC if self.extensions.xinput == Some(event.u8(1)) => {
                 self.xinput_event(event);
             }
+            XCB_GE_GENERIC if self.extensions.present == Some(event.u8(1)) => {
+                self.present_event(event);
+            }
             _ => {}
         }
     }
@@ -948,11 +974,29 @@ impl Client {
         Ok(())
     }
 
+    /// Handles a Present event: the completion of the frame of a window.
+    fn present_event(&self, event: &Bytes) {
+        if event.u16(8) != XCB_PRESENT_COMPLETE_NOTIFY
+            || event.u8(10) != XCB_PRESENT_COMPLETE_KIND_NOTIFY_MSC
+        {
+            return;
+        }
+        if let Some(window) = self.window(event.u32(16)) {
+            window.frame_completed(event.u32(20), event.u64(32));
+        }
+    }
+
     /// Handles an error of a request. A failed MIT-SHM request turns
-    /// shared images off; the other errors concern windows that are
-    /// already gone.
+    /// shared images off, and a failed Present request turns the frame
+    /// pacing off. The other errors concern windows that are already
+    /// gone.
     fn error(&self, event: &Bytes) {
         let major = event.u8(10);
+        if self.extensions.present == Some(major) && self.present.replace(false) {
+            for window in self.windows.borrow().iter() {
+                window.cancel_frame();
+            }
+        }
         if self
             .extensions
             .shm
@@ -1048,8 +1092,9 @@ impl Client {
                 seat.keyboard_focus = None;
                 seat.keyboard.release_all();
                 // The releases of the held keys go to the next focus.
-                seat.input.update_seat(false, true, false);
-                seat.input.update_seat(true, true, false);
+                let touch = self.extensions.xinput.is_some();
+                seat.input.update_seat(false, true, touch);
+                seat.input.update_seat(true, true, touch);
             }
         }
         if window.shared.focused.replace(focused) != focused {
@@ -1253,6 +1298,9 @@ impl Client {
                 self.enter(window, pixels);
             }
             XCB_INPUT_LEAVE => self.leave(window),
+            XCB_INPUT_TOUCH_BEGIN | XCB_INPUT_TOUCH_UPDATE | XCB_INPUT_TOUCH_END => {
+                self.touch_event(event);
+            }
             XCB_INPUT_DEVICE_CHANGED => self.refresh_scrolling(),
             _ => {}
         }

@@ -8,10 +8,15 @@
 //! completion event. The image is a Z pixmap of the root depth: 32 bits
 //! per pixel in BGRX order, which is the layout of the paint buffer on
 //! little-endian machines.
+//!
+//! When the server has Present, `PresentFrames` paces the Cairo paints:
+//! after a paint, a `NotifyMSC` request asks for a completion event at the
+//! next vertical blank, and the next paint waits for it. The GLES paints
+//! are not paced: EGL swaps on a connection of its own, so a completion
+//! on the connection of the client does not follow the swap.
 
 use super::Client;
 use super::protocol::{self, MOVERESIZE_MOVE};
-use crate::X11Window;
 use crate::ffi::libc::SysvSegment;
 use crate::ffi::x11::{
     Connection, XCB_ATOM_ATOM, XCB_ATOM_CARDINAL, XCB_ATOM_STRING, XCB_ATOM_WINDOW,
@@ -26,11 +31,14 @@ use crate::ffi::x11::{
     XCB_GRAVITY_NORTH_WEST, XCB_INPUT_DEVICE_ALL_MASTER, XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS,
     XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE, XCB_INPUT_XI_EVENT_MASK_DEVICE_CHANGED,
     XCB_INPUT_XI_EVENT_MASK_ENTER, XCB_INPUT_XI_EVENT_MASK_LEAVE, XCB_INPUT_XI_EVENT_MASK_MOTION,
+    XCB_INPUT_XI_EVENT_MASK_TOUCH_BEGIN, XCB_INPUT_XI_EVENT_MASK_TOUCH_END,
+    XCB_INPUT_XI_EVENT_MASK_TOUCH_UPDATE,
 };
 use crate::gles::{self, GlesError, GlesWindow};
 use crate::native::paint::{self, Pixels};
 use crate::native::types::{Error, Painter, ResizeEdge, WindowEvent};
 use crate::native::window::{Surface, WindowShared};
+use crate::{PresentFrames, X11Window};
 use choscorui_core::{CursorShape, Point, Rect, Size, WindowGeometry};
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -78,6 +86,10 @@ struct State {
     image: Option<Image>,
     /// True while the server reads the shared image.
     busy: bool,
+    /// The frame that paces the Cairo paints, with Present.
+    frames: PresentFrames,
+    /// The event id of the Present selection, after the first frame.
+    present_event: Option<u32>,
     occluded: bool,
     destroyed: bool,
 }
@@ -294,7 +306,10 @@ impl X11Surface {
                     | XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE
                     | XCB_INPUT_XI_EVENT_MASK_ENTER
                     | XCB_INPUT_XI_EVENT_MASK_LEAVE
-                    | XCB_INPUT_XI_EVENT_MASK_DEVICE_CHANGED,
+                    | XCB_INPUT_XI_EVENT_MASK_DEVICE_CHANGED
+                    | XCB_INPUT_XI_EVENT_MASK_TOUCH_BEGIN
+                    | XCB_INPUT_XI_EVENT_MASK_TOUCH_UPDATE
+                    | XCB_INPUT_XI_EVENT_MASK_TOUCH_END,
             );
         }
         let gc = connection.generate_id();
@@ -314,6 +329,8 @@ impl X11Surface {
                 pixels,
                 image: None,
                 busy: false,
+                frames: PresentFrames::new(),
+                present_event: None,
                 occluded: false,
                 destroyed: false,
             }),
@@ -413,7 +430,8 @@ impl X11Surface {
     }
 
     /// Paints the pending region and shows it, unless the window is
-    /// unmapped or its shared image is busy.
+    /// unmapped, or a Cairo paint waits for its shared image or for the
+    /// completion of the previous frame.
     pub(crate) fn paint_if_ready(&self, client: &Client) {
         if self.shared.closed.get() {
             return;
@@ -429,7 +447,8 @@ impl X11Surface {
         }
         {
             let state = self.state.borrow();
-            if state.destroyed || !state.mapped || (device.is_none() && state.busy) {
+            let waits = state.busy || state.frames.is_pending();
+            if state.destroyed || !state.mapped || (device.is_none() && waits) {
                 return;
             }
         }
@@ -495,8 +514,8 @@ impl X11Surface {
     fn paint_cairo(&self, client: &Client, region: Rect) {
         let start = Instant::now();
         let scale = self.shared.scale.get();
-        let mut state = self.state.borrow_mut();
-        let state = &mut *state;
+        let mut guard = self.state.borrow_mut();
+        let state = &mut *guard;
         let (width, height) = state.pixels;
         let bounds = self.shared.bounds();
         let shm = client.shm_enabled();
@@ -553,8 +572,42 @@ impl X11Surface {
                 );
             }
         }
+        drop(guard);
+        self.request_frame(client);
         self.shared.visible.set(true);
         self.shared.painted(start);
+    }
+
+    /// Asks for the completion that the next Cairo paint waits for: a
+    /// Present `NotifyMSC` at the next vertical blank. The server handles
+    /// the requests in order, so the completion comes after it copied the
+    /// paint to the window.
+    fn request_frame(&self, client: &Client) {
+        if !client.present_enabled() {
+            return;
+        }
+        let connection = &client.connection;
+        let mut state = self.state.borrow_mut();
+        let Ok(request) = state.frames.request() else {
+            return;
+        };
+        if state.present_event.is_none() {
+            let event = connection.generate_id();
+            connection.present_select_complete(event, self.id);
+            state.present_event = Some(event);
+        }
+        connection.present_notify_msc(self.id, request.serial, request.target_msc);
+    }
+
+    /// Handles the `PresentCompleteNotify` of a frame. The completion of
+    /// another frame, such as one that EGL presents, has no effect.
+    pub(crate) fn frame_completed(&self, serial: u32, msc: u64) {
+        let _ = self.state.borrow_mut().frames.complete(serial, msc);
+    }
+
+    /// Drops the outstanding frame after Present failed.
+    pub(crate) fn cancel_frame(&self) {
+        self.state.borrow_mut().frames.cancel();
     }
 
     /// A new image: shared when MIT-SHM works and a segment is available.
