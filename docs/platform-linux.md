@@ -352,7 +352,7 @@ On Wayland, screen coordinates are therefore relative to the window. A screen ma
 
 ### Tests
 
-[`tests/atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) runs under `at-spi2-registryd` in `scripts/linux/headless-session.sh`. A test client walks a window with every `SemanticRole` and checks the roles and the names. It invokes a declared action and finds it in the queue. It also receives the events and both kinds of announcement. The test does not verify a screen reader.
+[`tests/atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) runs under `at-spi2-registryd` in `scripts/linux/headless-session.sh`. A test client walks a window with every `SemanticRole` and checks the roles and the names. It invokes a declared action and finds it in the queue. It also receives the events and both kinds of announcement. [`gallery/tests/atspi_smoke.rs`](../gallery/tests/atspi_smoke.rs) starts the gallery, walks its pages, finds each role that the gallery shows, and sees the effect of the actions that it invokes. The tests do not verify a screen reader.
 
 ## Menus, popups, and decorations
 

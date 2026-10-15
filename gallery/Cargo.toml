@@ -9,3 +9,7 @@ description = "Every choscorui control in one window, built on the safe facade a
 
 [dependencies]
 choscorui = { path = "../crates/choscorui" }
+
+# The AT-SPI smoke test reads the gallery with the D-Bus binding.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+choscorui-linux = { path = "../crates/choscorui-linux" }
