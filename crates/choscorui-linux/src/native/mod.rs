@@ -23,6 +23,7 @@ pub use types::{
     Error, ImeEvent, Modifiers, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent,
 };
 pub use window::Window;
+pub(crate) use window::{Surface, WindowShared};
 
 use crate::ffi::libc::Watch;
 use crate::{BackendKind, BackendSelectionError, select_backend};
@@ -33,7 +34,6 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use window::WindowShared;
 
 /// The display server that `CHOSCORUI_BACKEND` requests, if any.
 fn requested_backend() -> Option<BackendKind> {
@@ -172,8 +172,9 @@ pub struct Application {
     windows: RefCell<Vec<std::rc::Weak<WindowShared>>>,
     app_id: RefCell<String>,
     stopped: Cell<bool>,
-    /// The session bus of the desktop services, which the loop serves too.
-    bus: RefCell<Option<crate::dbus::Connection>>,
+    /// The D-Bus connections that the loop serves too: the session bus of
+    /// the desktop services and the accessibility bus.
+    buses: RefCell<Vec<crate::dbus::Connection>>,
     _ui_thread: PhantomData<Rc<()>>,
 }
 
@@ -191,7 +192,7 @@ impl Application {
             windows: RefCell::new(Vec::new()),
             app_id: RefCell::new(String::new()),
             stopped: Cell::new(false),
-            bus: RefCell::new(None),
+            buses: RefCell::new(Vec::new()),
             _ui_thread: PhantomData,
         })
     }
@@ -305,9 +306,10 @@ impl Application {
     }
 
     /// Makes the event loop serve `connection` too: it waits on the
-    /// descriptors of the connection and dispatches its messages.
+    /// descriptors of the connection and dispatches its messages. The
+    /// loop serves each attached connection until it is lost.
     pub fn attach_bus(&self, connection: crate::dbus::Connection) {
-        *self.bus.borrow_mut() = Some(connection);
+        self.buses.borrow_mut().push(connection);
     }
 
     /// Paints the windows that are ready, waits up to `timeout` for an
@@ -320,9 +322,13 @@ impl Application {
             Some(deadline) => timeout.min(deadline.saturating_duration_since(now)),
             None => timeout,
         };
-        let bus = self.bus.borrow().clone();
-        let bus_watches = bus.as_ref().map(|bus| bus.watches()).unwrap_or_default();
-        if let Some(own) = bus.as_ref().and_then(crate::dbus::Connection::next_timeout) {
+        let buses = self.buses.borrow().clone();
+        let bus_watches: Vec<Vec<crate::dbus::WatchFd>> =
+            buses.iter().map(crate::dbus::Connection::watches).collect();
+        for own in buses
+            .iter()
+            .filter_map(crate::dbus::Connection::next_timeout)
+        {
             timeout = timeout.min(own);
         }
         let mut extra = vec![
@@ -337,7 +343,7 @@ impl Application {
                 write: false,
             },
         ];
-        extra.extend(bus_watches.iter().map(|watch| Watch {
+        extra.extend(bus_watches.iter().flatten().map(|watch| Watch {
             fd: std::os::fd::AsFd::as_fd(watch),
             read: watch.read(),
             write: watch.write(),
@@ -348,8 +354,10 @@ impl Application {
         };
         drop(extra);
         let mut handled = ready.iter().any(|ready| ready.read);
-        if let Some(bus) = &bus {
-            for (watch, ready) in bus_watches.iter().zip(ready.iter().skip(2)) {
+        let mut seen = ready.iter().skip(2);
+        let mut lost = Vec::new();
+        for (index, (bus, watches)) in buses.iter().zip(&bus_watches).enumerate() {
+            for (watch, ready) in watches.iter().zip(seen.by_ref()) {
                 bus.handle(
                     watch,
                     crate::dbus::Readiness {
@@ -359,10 +367,18 @@ impl Application {
                     },
                 );
             }
-            // A lost session bus ends the services, not the application.
+            // A lost bus ends its services, not the application.
             if bus.dispatch().is_err() {
-                self.bus.borrow_mut().take();
+                lost.push(index);
             }
+        }
+        if !lost.is_empty() {
+            let mut index = 0;
+            self.buses.borrow_mut().retain(|_| {
+                let keep = !lost.contains(&index);
+                index += 1;
+                keep
+            });
         }
         handled |= self.posted.run();
         if self

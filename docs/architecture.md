@@ -126,7 +126,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-linux
 
-`choscorui-linux` is the Linux backend. It is in development; [platform-linux.md](platform-linux.md) lists what works. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. These compile on every host. On Linux, it also has the native backend: `Application`, `Window`, and `Poster` on Wayland, and the image codecs. It loads each system library at run time with `dlopen`. All of its `unsafe` code is in `src/ffi/`.
+`choscorui-linux` is the Linux backend. It is in development; [platform-linux.md](platform-linux.md) lists what works. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. These compile on every host. On Linux, it also has the native backend: `Application`, `Window`, and `Poster` on Wayland, the image codecs, and the AT-SPI accessibility bridge. It loads each system library at run time with `dlopen`. All of its `unsafe` code is in `src/ffi/`.
 
 Dependencies: `choscorui-core` only.
 
@@ -206,6 +206,8 @@ The application owns the main loop. Each turn of the loop moves one native event
 The Metal painter is the default. A window uses Core Graphics when the Mac has no Metal device or the shaders do not load. `CHOSCORUI_PAINTER=core-graphics` also selects Core Graphics. A command buffer that fails moves the window to Core Graphics for the rest of its life. `Window::painter` tells which painter a window uses.
 
 In each frame, the application also updates its `SemanticTree` and sends the snapshot and the changes to `Window::set_accessibility`. The backend reconciles them into `NSAccessibilityElement` objects and posts the notifications. The application reads actions from assistive technology with `Window::take_accessibility_actions`.
+
+On Linux, the facade sends the snapshot to `AccessibleWindow::publish` of the AT-SPI bridge, and it reads the actions with `AccessibleWindow::take_actions`. [platform-linux.md](platform-linux.md#accessibility) describes the bridge.
 
 ```mermaid
 flowchart TD

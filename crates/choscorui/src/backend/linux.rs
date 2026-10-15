@@ -9,6 +9,7 @@ use choscorui_core::{
     Feedback, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry,
     ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
 };
+use choscorui_linux::atspi::{AccessibleWindow, Bridge};
 use choscorui_linux::services::{NativeServices, ServiceOptions, TextClipboard};
 use choscorui_linux::{
     Application, Error, ImeEvent, LinuxTextShaper, Modifiers, SystemClipboard, TextInputState,
@@ -67,6 +68,11 @@ pub(crate) fn capabilities() -> BackendCapabilities {
     capabilities.open_urls = services.open_urls;
     capabilities.system_appearance = services.system_appearance;
     capabilities.native_dialogs = services.native_dialogs;
+    // The accessibility bus can start or stop at any time, so each call
+    // asks again.
+    if capabilities.multiple_windows.is_supported() {
+        capabilities.accessibility = choscorui_linux::atspi::accessibility_support();
+    }
     capabilities
 }
 
@@ -86,10 +92,12 @@ fn app_error(error: Error) -> AppError {
     }
 }
 
-/// The Wayland or X11 application and its desktop services.
+/// The Wayland or X11 application, its desktop services, and its
+/// AT-SPI bridge when the accessibility bus is reachable.
 pub(crate) struct Platform {
     application: Rc<Application>,
     services: Rc<NativeServices>,
+    accessibility: Option<Rc<Bridge>>,
 }
 
 /// The text clipboard of the services: the selection of the display
@@ -136,9 +144,16 @@ impl Platform {
         if let Some(bus) = services.connection() {
             application.attach_bus(bus.clone());
         }
+        // Without the accessibility bus, the application runs without
+        // the bridge.
+        let accessibility = Bridge::connect(id.unwrap_or("ChoscorUI application")).ok();
+        if let Some(bridge) = &accessibility {
+            application.attach_bus(bridge.connection().clone());
+        }
         Ok(Self {
             application: Rc::new(application),
             services: Rc::new(services),
+            accessibility,
         })
     }
 
@@ -167,7 +182,11 @@ impl Platform {
             .application
             .create_window(options.clone())
             .map_err(app_error)?;
-        Ok(NativeWindow { window })
+        let accessible = self
+            .accessibility
+            .as_ref()
+            .map(|bridge| bridge.add_window(&window));
+        Ok(NativeWindow { window, accessible })
     }
 
     pub(crate) fn install_menu(&self, model: MenuBarModel) -> Result<NativeMenu, MenuError> {
@@ -231,9 +250,10 @@ fn composition(event: ImeEvent) -> CompositionEvent {
     }
 }
 
-/// A Wayland or X11 window.
+/// A Wayland or X11 window and its accessible side.
 pub(crate) struct NativeWindow {
     window: Window,
+    accessible: Option<AccessibleWindow>,
 }
 
 impl NativeWindow {
@@ -255,6 +275,9 @@ impl NativeWindow {
                 WindowEvent::Focused(focused) => {
                     if !focused {
                         host.cancel_interaction();
+                    }
+                    if let Some(accessible) = &self.accessible {
+                        accessible.set_active(focused);
                     }
                     focus = Some(focused);
                 }
@@ -281,6 +304,17 @@ impl NativeWindow {
                 WindowEvent::Occluded(occluded) => host.set_window_visible(!occluded),
                 _ => {}
             }
+        }
+        let requests = self
+            .accessible
+            .as_ref()
+            .map(AccessibleWindow::take_actions)
+            .unwrap_or_default();
+        for request in requests {
+            match request.part {
+                Some(part) => host.perform_part(request.node, part, request.action),
+                None => host.perform(request.node, request.action, request.value.as_deref()),
+            };
         }
         let input = host.text_input();
         let active = input.is_some();
@@ -314,15 +348,24 @@ impl NativeWindow {
         let _ = self.window.set_cursor(shape);
     }
 
-    /// Without the accessibility bridge, nothing speaks.
-    pub(crate) fn announce(&self, _text: &str, _priority: AnnouncementPriority) {}
+    /// Asks the screen reader to speak `text` through AT-SPI. Without
+    /// the accessibility bus, nothing speaks.
+    pub(crate) fn announce(&self, text: &str, priority: AnnouncementPriority) {
+        if let Some(accessible) = &self.accessible {
+            accessible.announce(text, priority);
+        }
+    }
 
-    /// Without the accessibility bridge, the tree is not published.
+    /// Publishes the semantic tree on the accessibility bus. The bridge
+    /// finds the changes itself, so it does not read `_changes`.
     pub(crate) fn publish(
         &self,
-        _snapshot: &[SemanticEntry],
+        snapshot: &[SemanticEntry],
         _changes: &[SemanticChange],
     ) -> Result<(), String> {
+        if let Some(accessible) = &self.accessible {
+            accessible.publish(snapshot);
+        }
         Ok(())
     }
 
@@ -335,6 +378,7 @@ impl NativeWindow {
     }
 
     pub(crate) fn close(&mut self) {
+        self.accessible = None;
         self.window.close();
     }
 }

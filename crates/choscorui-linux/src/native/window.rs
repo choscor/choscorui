@@ -44,6 +44,11 @@ pub(crate) trait Surface {
     fn minimize(&self);
     /// True when the display server draws the title bar and the frame.
     fn server_decorations(&self) -> bool;
+    /// The screen position of the content in logical points, when the
+    /// display server tells it. Wayland does not.
+    fn content_origin(&self) -> Option<Point> {
+        None
+    }
     /// Starts a drag of `payload` from the press that is in progress.
     fn begin_drag(
         &self,

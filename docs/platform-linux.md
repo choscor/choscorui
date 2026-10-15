@@ -7,7 +7,7 @@ The `choscorui-linux` crate has platform-neutral state machines for the Wayland 
 - `Application`, `Window`, and `Poster` on Wayland: windows, keyboard and pointer input, scale, and timers.
 - Image decoding and encoding with the system codec libraries.
 
-`choscorui::capabilities()` reports `backend: "wayland"` and `multiple_windows: Supported` when a compositor accepts the connection. Without a display server, it returns `BackendCapabilities::none("headless")`. The `keyboard` field is always `KeyConvention::Pc`. [Painters](#painters) gives the `gpu_painting` rule. The other capabilities are `Unsupported` until their milestone lands.
+`choscorui::capabilities()` reports `backend: "wayland"` and `multiple_windows: Supported` when a compositor accepts the connection. Without a display server, it returns `BackendCapabilities::none("headless")`. The `keyboard` field is always `KeyConvention::Pc`. [Painters](#painters) gives the `gpu_painting` rule, and [Accessibility](#accessibility) gives the `accessibility` rule. The other capabilities are `Unsupported` until their milestone lands.
 
 The state machines compile and run on every host. [`tests/protocol_contracts.rs`](../crates/choscorui-linux/tests/protocol_contracts.rs) pins each rule in this document.
 
@@ -165,6 +165,129 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 The facade `Feedback` of the application calls `beep()`.
 
+## Accessibility
+
+The `atspi` module puts the semantic tree of each window on the AT-SPI2 accessibility bus. It uses the D-Bus binding of the crate. It uses no ATK and no GLib.
+
+### Registration
+
+`Bridge::connect(app_name)` does these steps:
+
+1. It reads `AT_SPI_BUS_ADDRESS`, or calls `org.a11y.Bus.GetAddress` on the session bus.
+2. It opens a private connection to that address.
+3. It exports every accessible object under `/org/a11y/atspi` with one fallback handler.
+4. It calls `org.a11y.atspi.Socket.Embed` on the registry with the root object `/org/a11y/atspi/accessible/root`.
+
+The event loop serves the connection after `Application::attach_bus`. The loop serves the session bus and the accessibility bus together, and it drops a connection that it loses. The facade connects the bridge in `App::start`. Without the accessibility bus, the application runs without the bridge.
+
+`capabilities().accessibility` is `Supported` when the accessibility bus accepts a connection now, and `Unsupported` otherwise. Each call asks the bus again, because the bus can start or stop at any time.
+
+### Objects
+
+The root object is the application. It has the `Accessible` and `Application` interfaces, and its children are the windows. A window is a `frame` with the window title as its name. The nodes of the semantic snapshot are under the window.
+
+- A node keeps one object path while it stays in the snapshot. A removed node loses its path, and a call to that path returns `org.freedesktop.DBus.Error.UnknownObject`.
+- A path is never given to another node.
+- `org.a11y.atspi.Cache.GetItems` returns an empty list, so clients read each object directly.
+
+Each node has `Accessible` and `Component`. A node also has these interfaces when its semantics need them:
+
+| Interface | When the node has it |
+| --- | --- |
+| `Action` | It declares `Activate`, `Increment`, `Decrement`, `Expand`, `Collapse`, `ShowMenu`, or `Dismiss` |
+| `Text` | It has `SemanticText`, or its role is `StaticText` |
+| `EditableText` | It has `SemanticText`, declares `SetValue`, and is not read-only |
+| `Value` | It has a `SemanticRange` |
+| `Selection` | Its role is `List`, `Tree`, `Table`, `TabList`, `Menu`, or `MenuBar` |
+| `Table` | Its role is `Table` |
+
+The `Action` names are `click`, `increment`, `decrement`, `expand`, `collapse`, `show-menu`, and `dismiss`. `Text` counts offsets in characters, and the semantic tree counts UTF-16 code units. The bridge converts between them.
+
+### Role mapping
+
+| `SemanticRole` | AT-SPI role | `xml-roles` attribute |
+| --- | --- | --- |
+| `Application` | `application` | |
+| `Window` | `window` | |
+| `Group` | `panel` | |
+| `Button` | `push button` | |
+| `Checkbox` | `check box` | |
+| `RadioButton` | `radio button` | |
+| `RadioGroup` | `panel` | `radiogroup` |
+| `TextField` | `entry`, or `text` when it is multi-line | |
+| `PasswordField` | `password text` | |
+| `SearchField` | `entry` | `searchbox` |
+| `StaticText` | `label` | |
+| `List` | `list` | |
+| `ListItem` | `list item` | |
+| `ScrollArea` | `scroll pane` | |
+| `Slider` | `slider` | |
+| `SpinButton` | `spin button` | |
+| `ProgressIndicator` | `progress bar` | |
+| `Tab` | `page tab` | |
+| `TabList` | `page tab list` | |
+| `TabPanel` | `panel` | `tabpanel` |
+| `Table` | `table` | |
+| `Row` | `table row` | |
+| `Cell` | `table cell` | |
+| `ColumnHeader` | `column header` | |
+| `Tree` | `tree` | |
+| `TreeItem` | `tree item` | |
+| `Menu` | `menu` | |
+| `MenuItem` | `menu item` | |
+| `ComboBox` | `combo box` | |
+| `PopUpButton` | `combo box` | `button` |
+| `Tooltip` | `tool tip` | |
+| `Dialog` | `dialog` | |
+| `Toolbar` | `tool bar` | |
+| `StatusBar` | `status bar` | |
+| `Image` | `image` | |
+| `Link` | `link` | |
+| `ScrollBar` | `scroll bar` | |
+| `MenuBar` | `menu bar` | |
+| `MenuBarItem` | `menu` | `menuitem` |
+| `Switch` | `toggle button` | `switch` |
+
+AT-SPI 2.44 has no `switch` role, so a `Switch` is a `toggle button` with the `checked` and `pressed` states when it is on. A realized item of a collection has the `posinset` and `setsize` attributes.
+
+### States and events
+
+The states come from `SemanticState`, the focus, and the declared actions. For example, `checked: Some(true)` gives `checkable` and `checked`, and `expanded: Some(false)` gives `expandable` and `collapsed`.
+
+`AccessibleWindow::publish(snapshot)` compares the snapshot with the previous one. It sends these events from `org.a11y.atspi.Event.Object`:
+
+- `ChildrenChanged` with `add` or `remove`, for each node that a live parent gains or loses.
+- `StateChanged` for each state that changed, such as `focused`, `checked`, `expanded`, `selected`, or `enabled`.
+- `PropertyChange` for `accessible-name`, `accessible-description`, `accessible-role`, and `accessible-value`.
+- `TextChanged` with `delete` and `insert`, `TextCaretMoved`, and `TextSelectionChanged` for a node with text.
+
+A new focus also sends `org.a11y.atspi.Event.Focus`. A change of the active window sends `Activate` or `Deactivate` from `org.a11y.atspi.Event.Window`.
+
+### Announcements
+
+`AccessibleWindow::announce(text, priority)` sends the `Announcement` event of `org.a11y.atspi.Event.Object`. The text is in the event data, and the politeness is in the first detail: 1 for polite, 2 for assertive.
+
+- When a listener of the registry asked for `object:announcement`, the event comes from the window. AT-SPI 2.46 and later screen readers ask for it.
+- Otherwise, the event comes from the focused node, which older screen readers follow. Without a focused node, it comes from the window.
+
+### Actions
+
+A call such as `Action.DoAction`, `Component.GrabFocus`, a write of `Value.CurrentValue`, or `EditableText.SetTextContents` queues an `AccessibilityActionRequest`. A request queues only when the node declares the action. `AccessibleWindow::take_actions` returns the queue. The facade gives each request to `ViewHost::perform` or `ViewHost::perform_part`, the same path as on macOS.
+
+### Coordinates
+
+`Component` and `Text` give extents in logical points.
+
+- `COORD_TYPE_WINDOW` gives coordinates relative to the content of the window.
+- `COORD_TYPE_SCREEN` adds the screen position of the content. X11 gives this position. Wayland does not, so the bridge adds 0,0 there.
+- `COORD_TYPE_PARENT` gives coordinates relative to the parent node.
+
+On Wayland, screen coordinates are therefore relative to the window. A screen magnifier that follows the focus by screen coordinates cannot find the window on Wayland.
+
+### Tests
+
+[`tests/atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) runs under `at-spi2-registryd` in `scripts/linux/headless-session.sh`. A test client walks a window with every `SemanticRole` and checks the roles and the names. It invokes a declared action and finds it in the queue. It also receives the events and both kinds of announcement. The test does not verify a screen reader.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:
@@ -232,6 +355,5 @@ The painter draws each command in the order of the display list, as the Cairo pa
 - Text shaping and fonts
 - Clipboard and drag-and-drop data transfer on X11
 - Input method composition on X11
-- Accessibility
 - Desktop portals
 - The `choscorui::platform` module and capability values for Linux
