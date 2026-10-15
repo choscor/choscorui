@@ -53,7 +53,7 @@ pub(crate) struct PaintState {
     /// The region of the most recent display-list change.
     pub(crate) last_damage: Option<Rect>,
     pub(crate) painter: Painter,
-    pub(crate) paint_count: u64,
+    pub(crate) paint_count: usize,
     pub(crate) first_paint: Option<PaintTiming>,
     pub(crate) last_paint: Option<PaintTiming>,
 }
@@ -173,7 +173,7 @@ impl Window {
     }
 
     /// The number of finished paints.
-    pub fn paint_count(&self) -> u64 {
+    pub fn paint_count(&self) -> usize {
         self.shared.paint.borrow().paint_count
     }
 

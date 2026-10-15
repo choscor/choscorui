@@ -8,8 +8,8 @@
 //!
 //! This is the one gallery module that reads native state: the paint
 //! count of a window and the windows that the platform still tracks. It
-//! reads them through `choscorui::platform` on macOS; other targets
-//! never start the gallery, so they get stand-ins.
+//! reads them through `choscorui::platform` on macOS and Linux; other
+//! targets never start the gallery, so they get stand-ins.
 
 use crate::catalog::PAGES;
 use crate::settings::{self, Saved};
@@ -43,7 +43,7 @@ fn settle(cx: &mut AppContext) {
 }
 
 /// The native state that the checks read.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod native {
     use choscorui::platform::NativeAccess;
     use choscorui::{AppContext, WindowId};
@@ -64,23 +64,25 @@ mod native {
             .map(|paint| paint.finished)
     }
 
-    /// The windows that AppKit still tracks.
+    /// The windows that the platform still tracks.
     pub fn window_count(cx: &AppContext) -> usize {
         cx.native_application().window_count()
     }
 
-    /// Handles native events until AppKit releases every window or
-    /// `deadline` passes.
+    /// Handles native events until the platform releases every window
+    /// or `deadline` passes.
     pub fn release(cx: &AppContext, deadline: Instant) {
         while window_count(cx) > 0 && Instant::now() < deadline {
-            cx.native_application()
+            // A lost display connection ends the wait at the deadline.
+            let _ = cx
+                .native_application()
                 .dispatch_next_event(Duration::from_millis(20));
         }
     }
 }
 
 /// Stand-ins: a target without a backend never starts the gallery.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 mod native {
     use choscorui::{AppContext, WindowId};
     use std::time::Instant;

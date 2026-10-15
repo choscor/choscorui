@@ -5,12 +5,16 @@
 - Rust change: run the CI `check` job commands from
   [CONTRIBUTING.md](CONTRIBUTING.md#before-submitting-a-maintainer-change).
   Backend or UI change: also run the CI `native` job commands.
+- Linux backend, facade, or controls change: also run the `linux-check` and
+  `linux-native` jobs (`scripts/linux/run-in-container.sh check|native`,
+  see [CONTRIBUTING.md](CONTRIBUTING.md#linux-checks)).
 - Markdown change: run `scripts/check-docs.sh`.
 - Fix findings; do not add suppressions. An unavoidable `#[allow]`/`#[expect]`
   names one lint at the narrowest scope, with the reason beside it.
 - Report exact commands and outcomes, and name relevant checks not run and why.
-- Automation never verifies real input methods, VoiceOver, a notarized clean
-  install, Intel hardware, or budgets off the reference machine. Do not claim it.
+- Automation never verifies real input methods, VoiceOver, Orca, a notarized
+  clean install, Intel hardware, real Linux GPU drivers, GNOME or KDE,
+  HiDPI monitors, or budgets off the reference machine. Do not claim it.
 
 ## Architecture
 

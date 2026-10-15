@@ -1,5 +1,6 @@
-# Continuous integration for the supported platform: macOS 15 on Apple
-# silicon and on Intel.
+# Continuous integration: macOS 15 on Apple silicon and on Intel, and
+# Linux (Ubuntu 22.04 image, x86_64 and aarch64) in the container of
+# scripts/linux/Dockerfile.
 name: ci
 
 on:
@@ -46,6 +47,9 @@ jobs:
         run: |
           cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
           cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
+      # dlopen needs no Linux libraries to type-check the Linux backend.
+      - name: Linux backend type-checks
+        run: cargo check -p choscorui-linux --all-targets --locked --target x86_64-unknown-linux-gnu
       # The published crates package and build from their own sources.
       - name: Crate packages
         if: matrix.os == 'macos-15'
@@ -81,3 +85,30 @@ jobs:
         run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
       - name: Gallery autopilot
         run: CHOSCORUI_GALLERY_SETTINGS="$RUNNER_TEMP/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
+
+  linux-check:
+    name: Linux build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04: x86_64. ubuntu-24.04-arm: aarch64. Both run the
+        # Ubuntu 22.04 image, the oldest supported system.
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Docs, format, lint, MSRV, and tests (binding check included)
+        run: scripts/linux/run-in-container.sh check
+
+  linux-native:
+    name: native Linux app (${{ matrix.os }})
+    needs: linux-check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Smoke tests, gallery, and autopilot on Wayland and X11
+        run: scripts/linux/run-in-container.sh native

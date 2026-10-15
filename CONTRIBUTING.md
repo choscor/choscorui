@@ -28,7 +28,7 @@ Install these tools:
 - the nightly toolchain that `tools/api-docs/nightly.txt` names, for the [API reference](#api-reference). Install it with `rustup toolchain install <nightly> --profile minimal --target aarch64-apple-darwin`.
 - the Windows and Linux targets for the portable app check: `rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-gnu`
 
-Run the fast checks from the CI `check` job. CI supports only macOS, so it leaves out the Windows and Linux backend crates:
+Run the fast checks from the CI `check` job. The macOS jobs leave out the Windows and Linux backend crates. The [Linux jobs](#linux-checks) check the Linux backend:
 
 ```sh
 scripts/check-docs.sh
@@ -39,10 +39,11 @@ cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-li
 cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
 cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
 cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
+cargo check -p choscorui-linux --all-targets --locked --target x86_64-unknown-linux-gnu
 cargo publish --workspace --dry-run --locked
 ```
 
-The two `--target` commands check that the facade and the gallery build on a target without a backend. They only compile, so they need no other SDK. The dry run checks that the published crates package and build from their own files.
+The `--target` commands check that the facade and the gallery build on a target without a backend. They only compile, so they need no other SDK. The dry run checks that the published crates package and build from their own files.
 
 For backend or UI changes, also run the native checks from the CI `native` job.
 
@@ -61,6 +62,38 @@ CHOSCORUI_RUN_MACOS_SMOKE=1 CHOSCORUI_RUN_MACOS_CLIPBOARD=1 cargo test -p chosco
 CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
 CHOSCORUI_GALLERY_SETTINGS=/tmp/gallery.txt CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
 ```
+
+### Linux checks
+
+For changes to `choscorui-linux`, to the facade, or to the controls, also run the CI `linux-check` and `linux-native` jobs. They run in the image of [scripts/linux/Dockerfile](scripts/linux/Dockerfile), which is Ubuntu 22.04 with the Rust toolchains and the system packages.
+
+On a Mac, use Docker Desktop. On Apple silicon, the container is aarch64 Linux.
+
+1. Start Docker Desktop.
+2. Run the fast checks: `scripts/linux/run-in-container.sh check`.
+3. Run the native checks: `scripts/linux/run-in-container.sh native`.
+
+The native checks run each test alone in [scripts/linux/headless-session.sh](scripts/linux/headless-session.sh). That script starts a D-Bus session bus, the AT-SPI registry, a headless sway compositor, and Xvfb. The checks run on Wayland and on X11.
+
+To run one command in a headless session, use `scripts/linux/run-in-container.sh -- COMMAND`. For example:
+
+```sh
+scripts/linux/run-in-container.sh -- env CHOSCORUI_RUN_LINUX_SMOKE=1 CHOSCORUI_BACKEND=x11 cargo test -p choscorui-linux --test window_smoke
+```
+
+On a Linux machine, run [scripts/linux/jobs.sh](scripts/linux/jobs.sh) `check` and `native` from the repository root. The binding check compiles C code against the system headers, so it needs these Debian or Ubuntu packages:
+
+- `build-essential` and `pkg-config`
+- `libwayland-dev`, `libxkbcommon-dev`, and `libxkbcommon-x11-dev`
+- `libxcb1-dev`, `libxcb-xkb-dev`, `libxcb-xinput-dev`, `libxcb-shm0-dev`, `libxcb-randr0-dev`, `libxcb-render0-dev`, `libxcb-present-dev`, and `libxcb-cursor-dev`
+- `libx11-dev` and `libx11-xcb-dev`
+- `libegl-dev` and `libgles-dev`
+- `libcairo2-dev`, `libfreetype-dev`, `libharfbuzz-dev`, and `libfontconfig-dev`
+- `libdbus-1-dev`
+- `libpng-dev`, `libturbojpeg0-dev`, `libgif-dev`, `libtiff-dev`, `libwebp-dev`, `libheif-dev`, and `libcanberra-dev`
+- `wayland-protocols` 1.38 or later, and the `wayland.xml` of Wayland 1.23 or later
+
+The native checks also need `sway`, `xvfb`, `dbus`, `at-spi2-core`, and Mesa. A missing package makes the binding check fail with the package name.
 
 For changes to paint, layout, text, the display list, or the run loop, also run the benchmark check in [docs/performance.md](docs/performance.md).
 
@@ -194,10 +227,13 @@ Use these rules:
 
 ## Scope of desktop evidence
 
-The unit tests and the smoke and autopilot runs check behavior on real AppKit windows. They do not verify these items:
+The unit tests and the smoke and autopilot runs check behavior on real AppKit windows, and on headless sway and Xvfb. They do not verify these items:
 
-- text input with real input methods
-- VoiceOver
+- text input with real input methods (IBus, Fcitx, and the macOS input methods)
+- VoiceOver and Orca
+- real GPU drivers on Linux
+- GNOME (mutter) and KDE (KWin) behavior, including client-side decorations under mutter
+- HiDPI and fractional scaling on real monitors
 - a notarized installation on a clean machine
 - Intel hardware
 - budgets on hardware other than the reference machine
