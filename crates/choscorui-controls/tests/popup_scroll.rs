@@ -8,7 +8,7 @@ mod hosted;
 
 use choscorui_controls::{
     CalendarMode, CommandId, ContextMenu, ControlMessage, DatePicker, DropdownMenu, MenuItem,
-    NavigationLink, NavigationMenu,
+    Menubar, NavigationLink, NavigationMenu,
 };
 use choscorui_core::{
     CivilDate, DisplayCommand, DisplayList, Key, Locale, Point, PointerButton, PointerEvent, Rect,
@@ -114,6 +114,44 @@ fn a_long_context_menu_fits_the_window_and_its_rows_scroll() {
     assert!(!shows(&mut h, "Item 0", frame));
     wheel(&mut h, frame.center(), -10_000.0);
     assert!(shows(&mut h, "Item 0", frame));
+}
+
+#[test]
+fn a_long_menu_of_the_menu_bar_fits_the_window_and_its_rows_scroll() {
+    let mut h = Harness::new(Menubar::new(
+        "Menu bar",
+        vec![("File".to_owned(), long_menu())],
+    ));
+    short_window(&mut h, 300.0, rect(0.0, 0.0, 800.0, 32.0));
+    let title = Point::new(20.0, 16.0);
+    for event in [
+        PointerEvent::Down {
+            position: title,
+            button: PointerButton::Primary,
+        },
+        PointerEvent::Up {
+            position: title,
+            button: PointerButton::Primary,
+        },
+    ] {
+        h.host.dispatch_pointer(&mut h.tree, event);
+    }
+    let frame = overlay(&h);
+    assert!(frame.origin.y >= 8.0 && frame.max_y() <= 292.0, "{frame:?}");
+    assert!(shows(&mut h, "Item 0", frame));
+    assert!(!shows(&mut h, "Item 29", frame));
+
+    // End highlights the last row, and the rows scroll to show it.
+    h.key(Key::End);
+    assert!(shows(&mut h, "More", frame));
+    assert!(!shows(&mut h, "Item 0", frame));
+    h.key(Key::Home);
+    assert!(shows(&mut h, "Item 0", frame));
+
+    // The wheel scrolls the rows.
+    wheel(&mut h, frame.center(), 10_000.0);
+    assert!(shows(&mut h, "More", frame));
+    assert!(!shows(&mut h, "Item 0", frame));
 }
 
 #[test]

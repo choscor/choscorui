@@ -299,7 +299,7 @@ Linux has no global menu bar. The facade draws the menus and the title bar in ea
 - **Shortcuts.** The window gives a key press with Ctrl or Super to the menus before the views get it. `perform_key_equivalent(key, modifiers)` runs it. In the model, `command` is Ctrl. The items show the PC labels, such as `Ctrl+K`.
 - **Menu keys.** F10 moves the focus to the menu bar. Alt with the mnemonic of a menu opens that menu with its first row highlighted. The mnemonic is the first letter or digit of the title (`menu_mnemonic`). The arrow keys, Enter, and Escape then work as in the `Menubar` control.
 - A click, a shortcut, and a key choice all queue the command in the same `MainMenu`. `AppContext` runs the action after it delivers the input.
-- The open menus of the bar show inside the window, so a menu that is longer than the window is cut off.
+- The open menus of the bar show inside the window. A menu that is longer than the window gets the height of the window, and its rows scroll with the wheel and the keys.
 
 ### Popups and context menus
 
@@ -750,7 +750,6 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 ## Limitations
 
 - **Wayland position.** A Wayland client cannot read or set its window position. `geometry` has a zero origin, and AT-SPI screen coordinates are relative to the window.
-- **Long menus.** A menu of the menu bar shows inside the window, so a menu that is longer than the window is cut off.
 - **Gestures.** X11 has no portable gesture protocol, so X11 windows send no `Gesture` events. Wayland windows send only pinches. The tests do not use a real touchpad.
 - **Occlusion.** Wayland windows send no `Occluded` events.
 - **Timing budgets.** No Linux reference machine is named, so the Linux bench has no timing budgets. [performance.md](performance.md#linux-budgets) gives the details.
