@@ -165,6 +165,15 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 `input_methods` is `Supported` when the compositor has `zwp_text_input_manager_v3`.
 
+On X11, XIM connects the window to the input method, on-the-spot:
+
+1. The client opens the input method of `XMODIFIERS` on a second Xlib connection. It uses the input method only when it takes preedit callbacks. The local input method of Xlib does not, so without `XMODIFIERS` there is no input method. Keys then type their text through xkbcommon and compose.
+2. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
+3. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
+4. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
+
+XIM has no surrounding text, so the X11 backend does not send `text`. `input_methods` is `Supported` on X11 when such an input method opens.
+
 ## Alert sound
 
 `Application::beep()` plays the alert sound of the controls. It uses the first source that works:
@@ -203,7 +212,6 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 - Native event loops
 - Windows on the screen and painting
 - Text shaping and fonts
-- Input method composition on X11
 - Accessibility
 - Desktop portals
 - The `choscorui::platform` module and capability values for Linux

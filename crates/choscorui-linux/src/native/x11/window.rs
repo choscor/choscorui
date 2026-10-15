@@ -753,8 +753,9 @@ impl Surface for X11Surface {
     }
 
     fn text_input_changed(&self) {
-        // The X11 backend has no input method connection yet; keys type
-        // their text through xkbcommon and compose.
+        if let Some(client) = self.client() {
+            client.text_input_changed(self);
+        }
     }
 
     fn close(&self) {

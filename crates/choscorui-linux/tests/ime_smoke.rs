@@ -1,7 +1,9 @@
 //! Input methods on a real display server. The virtual input of
 //! `scripts/linux/headless-session.sh` is the input method of the sway
 //! seat. The tests run only with `CHOSCORUI_RUN_LINUX_SMOKE=1`, one at a
-//! time (`--test-threads=1`), and only on Wayland: X11 uses XIM.
+//! time (`--test-threads=1`). The text-input tests run only on Wayland.
+//! On X11, the XIM test needs an XIM server, which the CI image does not
+//! have.
 #![cfg(target_os = "linux")]
 
 use choscorui_core::{Point, Rect, Size, WindowOptions};
@@ -151,4 +153,75 @@ fn an_input_method_marks_commits_and_deletes_text() {
         "{:?}",
         log()
     );
+}
+
+/// True when an XIM server runs for an X11 smoke run: `XMODIFIERS`
+/// names it. The CI image has none, so this test runs only by hand, with
+/// `xdotool` to type the keys.
+fn xim_enabled() -> bool {
+    std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_ok_and(|value| value == "1")
+        && std::env::var("CHOSCORUI_BACKEND").is_ok_and(|backend| backend == "x11")
+        && std::env::var("XMODIFIERS").is_ok_and(|modifiers| !modifiers.is_empty())
+}
+
+/// Types `key` with `xdotool` into the window that has the focus.
+fn type_key(key: &str) {
+    let status = std::process::Command::new("xdotool")
+        .args(["key", key])
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+/// With an XIM server whose engine composes `a` (such as ibus-libpinyin),
+/// a key gives marked text, and Return commits text.
+#[test]
+fn an_xim_server_marks_and_commits_text() {
+    if !xim_enabled() {
+        return;
+    }
+    assert_eq!(
+        choscorui_linux::capabilities().input_methods,
+        choscorui_core::Support::Supported
+    );
+    let application = Application::new().unwrap();
+    let window = application
+        .create_window(WindowOptions::new("XIM", 240.0, 120.0))
+        .unwrap();
+    window.show();
+    assert!(
+        pump_until(&application, || window
+            .take_events()
+            .contains(&WindowEvent::Focused(true))
+            .then_some(()))
+        .is_some()
+    );
+    window.set_text_input_state(state(true, "", 0));
+    let settle = Instant::now() + Duration::from_millis(300);
+    pump_until(&application, || (Instant::now() >= settle).then_some(()));
+    let mut seen = Vec::new();
+    type_key("a");
+    let ImeEvent::SetMarkedText { text, .. } = next_ime(&application, &window, &mut seen) else {
+        panic!("no marked text: {seen:?}");
+    };
+    assert!(!text.is_empty());
+    type_key("Return");
+    let committed = pump_until(&application, || {
+        seen.extend(
+            window
+                .take_events()
+                .into_iter()
+                .filter_map(|event| match event {
+                    WindowEvent::Ime(event) => Some(event),
+                    _ => None,
+                }),
+        );
+        seen.iter().find_map(|event| match event {
+            ImeEvent::CommitText { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+    });
+    // What Return commits depends on the engine: the marked text, or the
+    // keys that made it.
+    assert!(committed.is_some_and(|text| !text.is_empty()), "{seen:?}");
 }

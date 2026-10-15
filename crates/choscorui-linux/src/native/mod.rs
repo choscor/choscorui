@@ -112,7 +112,7 @@ impl Display {
     fn has_input_methods(&self) -> bool {
         match self {
             Self::Wayland(client) => client.has_text_input(),
-            Self::X11(_) => false,
+            Self::X11(client) => client.has_input_method(),
         }
     }
 

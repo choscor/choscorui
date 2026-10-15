@@ -8,6 +8,7 @@
 //! `Xft.dpi` over 96, from the resource database on the root window.
 
 mod dnd;
+mod ime;
 mod protocol;
 mod selection;
 mod window;
@@ -166,6 +167,8 @@ pub(crate) struct Client {
     deferred: RefCell<VecDeque<Bytes>>,
     /// The server time of the latest input or property event.
     time: Cell<u32>,
+    /// The XIM input method, when one takes preedit callbacks.
+    ime: RefCell<Option<ime::Ime>>,
 }
 
 /// The X pointer of the virtual core pointer, before any XInput event.
@@ -295,6 +298,7 @@ impl Client {
             atom_names: RefCell::new(HashMap::new()),
             deferred: RefCell::new(VecDeque::new()),
             time: Cell::new(0),
+            ime: RefCell::new(ime::Ime::open()),
         }))
     }
 
@@ -313,6 +317,7 @@ impl Client {
     }
 
     pub(crate) fn forget_window(&self, id: u32) {
+        self.ime_forget(id);
         self.windows.borrow_mut().retain(|window| window.id != id);
         let mut seat = self.seat.borrow_mut();
         let gone = |focus: &Option<Weak<X11Surface>>| {
@@ -520,6 +525,9 @@ impl Client {
     ) -> Result<Vec<Ready>, Error> {
         self.check()?;
         self.handle_all();
+        // The filter of a key can read input method events into the Xlib
+        // queue, where the descriptor no longer shows them.
+        self.ime_dispatch();
         self.paint();
         self.connection.flush();
         let mut queued = false;
@@ -534,7 +542,8 @@ impl Client {
             (false, Some(left)) => Some(timeout.map_or(left, |timeout| timeout.min(left))),
             (false, None) => timeout,
         };
-        let mut watches = Vec::with_capacity(extra.len() + 1);
+        let method = self.input_method();
+        let mut watches = Vec::with_capacity(extra.len() + 2);
         watches.push(Watch {
             fd: self.connection.fd(),
             read: true,
@@ -545,13 +554,22 @@ impl Client {
             read: watch.read,
             write: watch.write,
         }));
+        if let Some(method) = &method {
+            watches.push(Watch {
+                fd: method.fd(),
+                read: true,
+                write: false,
+            });
+        }
         let ready =
             libc::wait(&watches, timeout).map_err(|error| Error::Connection(error.to_string()))?;
         drop(watches);
+        drop(method);
+        self.ime_dispatch();
         self.handle_all();
         self.expire_drag();
         self.check()?;
-        Ok(ready[1..].to_vec())
+        Ok(ready[1..=extra.len()].to_vec())
     }
 
     /// Handles the events that arrived, and those that a nested wait kept.
@@ -788,7 +806,21 @@ impl Client {
     }
 
     fn key(&self, event: &Bytes, pressed: bool) {
-        let code = u32::from(event.u8(1));
+        let window = self
+            .seat
+            .borrow()
+            .keyboard_focus
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map_or(event.u32(12), |window| window.id);
+        if self.ime_filter(window, event, pressed) {
+            return;
+        }
+        self.key_code(u32::from(event.u8(1)), pressed, window);
+    }
+
+    /// Handles a key of `id`, or of the window with the keyboard focus.
+    fn key_code(&self, code: u32, pressed: bool, id: u32) {
         let mut seat = self.seat.borrow_mut();
         let repeat = pressed
             && self.extensions.detectable_repeat
@@ -809,7 +841,7 @@ impl Client {
             .keyboard_focus
             .as_ref()
             .and_then(Weak::upgrade)
-            .or_else(|| self.window(event.u32(12)));
+            .or_else(|| self.window(id));
         drop(seat);
         if let Some(window) = window {
             for event in events {
@@ -837,6 +869,7 @@ impl Client {
         if window.shared.focused.replace(focused) != focused {
             window.shared.push(WindowEvent::Focused(focused));
         }
+        self.ime_focus(id, focused);
     }
 
     fn set_root(&self, x: i32, y: i32) {

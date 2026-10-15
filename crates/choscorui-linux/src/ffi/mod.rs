@@ -28,6 +28,7 @@ pub(crate) mod libc;
 pub(crate) mod wayland;
 pub(crate) mod x11;
 pub(crate) mod xkb;
+pub(crate) mod xlib;
 
 pub use dl::LoadError;
 
@@ -60,6 +61,7 @@ pub(crate) fn declarations() -> (
     ];
     libraries.extend(codecs::check_items());
     libraries.extend(x11::check_items());
+    libraries.push(xlib::Xlib::check_items());
     let mut structs = vec![
         libc::PollFd::layout(),
         libc::Timespec::layout(),
@@ -78,6 +80,7 @@ pub(crate) fn declarations() -> (
     ];
     structs.extend(codecs::layouts());
     structs.extend(x11::layouts());
+    structs.extend(xlib::layouts());
     structs.extend([
         db::DBusMessageIter::layout(),
         db::DBusObjectPathVTable::layout(),
@@ -96,6 +99,7 @@ pub(crate) fn declarations() -> (
         fontconfig::FcMatchKind::constants(),
         cairo::sys::constants(),
         x11::all_constants(),
+        xlib::constants(),
         db::constants(),
         db::DBusBusType::constants(),
         db::DBusHandlerResult::constants(),
