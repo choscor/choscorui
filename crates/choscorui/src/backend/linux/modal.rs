@@ -18,6 +18,7 @@ use choscorui_core::{
     AlertResponse, AlertSpec, ColorRole, DesignTokens, DialogError, FileDialogRequest,
     ServiceError, Size, WindowOptions,
 };
+use choscorui_linux::atspi::Bridge;
 use choscorui_linux::services::{FileChooserRequest, FileDialogResponse};
 use choscorui_linux::{Application, Window};
 use std::cell::{Cell, RefCell};
@@ -98,6 +99,8 @@ struct Views {
 /// The modal windows of the application.
 pub(crate) struct Modal {
     application: Rc<Application>,
+    /// The accessibility bridge, which also shows the modal windows.
+    accessibility: Option<Rc<Bridge>>,
     text: Rc<dyn TextMeasure>,
     /// The runtime, environment, and tokens of the application, once it
     /// starts.
@@ -106,9 +109,14 @@ pub(crate) struct Modal {
 }
 
 impl Modal {
-    pub(crate) fn new(application: Rc<Application>, text: Rc<dyn TextMeasure>) -> Self {
+    pub(crate) fn new(
+        application: Rc<Application>,
+        accessibility: Option<Rc<Bridge>>,
+        text: Rc<dyn TextMeasure>,
+    ) -> Self {
         Self {
             application,
+            accessibility,
             text,
             views: RefCell::new(None),
             driver: RefCell::new(None),
@@ -271,7 +279,11 @@ impl Modal {
         if let Some(parent) = parent {
             window.set_modal_parent(parent);
         }
-        let mut native = NativeWindow { window };
+        let accessible = self
+            .accessibility
+            .as_ref()
+            .map(|bridge| bridge.add_window(&window));
+        let mut native = NativeWindow { window, accessible };
         let Some(mut host) = self.host(native.content_size()) else {
             native.close();
             return Err(choscorui_linux::Error::Closed);

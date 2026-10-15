@@ -30,6 +30,7 @@ smoke() {
     $session cargo test -p choscorui-linux --test clipboard_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test modal_smoke --locked -- --test-threads=1
+    $session cargo test -p choscorui-linux --test atspi_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test app_smoke --locked
     $session cargo test -p choscorui --test dialog_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test errors_and_capabilities --locked

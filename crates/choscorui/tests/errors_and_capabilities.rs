@@ -117,6 +117,8 @@ fn capabilities_describe_the_running_backend() {
         assert_eq!(capabilities.backend, expected);
         assert!(capabilities.multiple_windows.is_supported());
         assert_eq!(capabilities.keyboard, choscorui::KeyConvention::Pc);
+        // The session runs the AT-SPI registry and its bus.
+        assert!(capabilities.accessibility.is_supported());
     } else {
         assert_eq!(
             capabilities,

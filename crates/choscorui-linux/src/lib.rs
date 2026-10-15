@@ -56,6 +56,8 @@ pub use paint::{CairoError, render_offscreen};
 pub use text::{LinuxTextShaper, available_font_families, set_desktop_font, text_shaping_support};
 
 #[cfg(target_os = "linux")]
+pub mod atspi;
+#[cfg(target_os = "linux")]
 pub mod dbus;
 #[cfg(target_os = "linux")]
 pub mod services;

@@ -321,3 +321,13 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Callbacks.** EGL and OpenGL ES call no function of the crate, so this boundary has no callback.
 - **Failures.** A failed EGL call returns an `EglFailure` with the `eglGetError` code. A failed swap or a lost context switches the window to Cairo.
 - **Tests.** `gles_parity_smoke.rs` compares GLES renders with the software renderer and with Cairo. `window_smoke.rs` checks the painter of each `CHOSCORUI_PAINTER` value.
+
+## Linux accessibility
+
+The AT-SPI bridge in `src/atspi/` of `choscorui-linux` has no `unsafe` code. It uses the safe `Connection` of the D-Bus binding in `src/ffi/dbus/`.
+
+- **Callbacks.** libdbus queues each method call for an exported path. `Connection::dispatch` then runs the Rust method handler outside the C callback.
+- **Boundary.** The AT-SPI method handler catches a panic with `catch_unwind` and logs it. It then returns `org.freedesktop.DBus.Error.Failed`, and the event loop continues.
+- **Ownership.** The handler holds the model of the windows, not the connection. Thus, the connection and the handler make no reference cycle.
+- **Threads.** The event loop of the UI thread serves the connection. The handler and `publish` run on that thread, and they never run at the same time.
+- **Tests.** `tests/atspi_smoke.rs` calls the objects from a second connection under `at-spi2-registryd`.

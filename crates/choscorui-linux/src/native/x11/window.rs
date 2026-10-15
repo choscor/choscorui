@@ -852,6 +852,14 @@ impl Surface for X11Surface {
         true
     }
 
+    fn content_origin(&self) -> Option<Point> {
+        let client = self.client()?;
+        let connection = &client.connection;
+        let (x, y) = connection.translate(self.id, connection.root())?;
+        let scale = self.shared.scale.get();
+        Some(Point::new(f64::from(x) / scale, f64::from(y) / scale))
+    }
+
     fn set_modal_parent(&self, parent: &Rc<WindowShared>) {
         let Some(client) = self.client() else {
             return;

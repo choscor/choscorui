@@ -47,6 +47,11 @@ pub(crate) trait Surface {
     /// Makes the window a modal dialog of `parent`: transient for it, and
     /// modal where the display server supports it.
     fn set_modal_parent(&self, parent: &Rc<WindowShared>);
+    /// The screen position of the content in logical points, when the
+    /// display server tells it. Wayland does not.
+    fn content_origin(&self) -> Option<Point> {
+        None
+    }
     /// Starts a drag of `payload` from the press that is in progress.
     fn begin_drag(
         &self,
