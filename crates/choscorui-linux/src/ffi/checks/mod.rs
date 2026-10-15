@@ -27,6 +27,9 @@ pub(crate) struct FunctionItem {
     pub(crate) ret: String,
     pub(crate) args: Vec<String>,
     pub(crate) variadic: bool,
+    /// The header's function pointer typedef, for a function that a
+    /// lookup call returns instead of a symbol.
+    pub(crate) typedef: Option<&'static str>,
 }
 
 /// The layout of one declared struct or union: its C name, its size, and
@@ -78,11 +81,19 @@ fn check_lines(
     for library in libraries {
         for function in &library.functions {
             lines.push(Line {
-                text: format!(
-                    "__attribute__((unused)) static {} = {};",
-                    function_pointer(function),
-                    function.name
-                ),
+                text: match function.typedef {
+                    // A null pointer of the typedef converts to the declared
+                    // type only when the two types match.
+                    Some(typedef) => format!(
+                        "__attribute__((unused)) static {} = ({typedef})0;",
+                        function_pointer(function)
+                    ),
+                    None => format!(
+                        "__attribute__((unused)) static {} = {};",
+                        function_pointer(function),
+                        function.name
+                    ),
+                },
                 item: format!("{} in {}", function.name, library.library.name),
             });
         }

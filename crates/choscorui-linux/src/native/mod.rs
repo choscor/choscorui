@@ -151,6 +151,17 @@ impl Display {
             Self::X11(_) => Vec::new(),
         }
     }
+
+    /// The painter of new windows: GLES when its device opened and no
+    /// GPU failure happened, else Cairo.
+    fn painter(&self) -> Painter {
+        let gles = match self {
+            Self::Wayland(client) => client.gles().is_some(),
+            // The X11 windows paint with Cairo.
+            Self::X11(_) => false,
+        };
+        if gles { Painter::Gles } else { Painter::Cairo }
+    }
 }
 
 /// The UI-thread application. It is neither `Send` nor `Sync`.
@@ -196,12 +207,6 @@ impl Application {
         *self.app_id.borrow_mut() = id.to_owned();
     }
 
-    /// The painter of new windows: Cairo when `CHOSCORUI_PAINTER=cairo`
-    /// is set or the GPU painter is not available.
-    fn painter() -> Painter {
-        Painter::Cairo
-    }
-
     /// Creates a hidden window.
     pub fn create_window(&self, options: WindowOptions) -> Result<Window, Error> {
         let (width, height) = (options.width(), options.height());
@@ -215,7 +220,7 @@ impl Application {
             options.title(),
             Size::new(width, height),
             options.minimum(),
-            Self::painter(),
+            self.display.painter(),
         );
         let surface: Rc<dyn window::Surface> = match &self.display {
             Display::Wayland(client) => {
@@ -426,7 +431,12 @@ impl Drop for Application {
 /// a window.
 pub fn capabilities() -> BackendCapabilities {
     static PROBED: OnceLock<BackendCapabilities> = OnceLock::new();
-    *PROBED.get_or_init(probe)
+    let mut capabilities = *PROBED.get_or_init(probe);
+    // A GPU failure after the probe switches every window to Cairo.
+    if crate::gles::failed() {
+        capabilities.gpu_painting = Support::Unsupported;
+    }
+    capabilities
 }
 
 fn probe() -> BackendCapabilities {
@@ -451,5 +461,11 @@ fn probe() -> BackendCapabilities {
         capabilities.clipboard = Support::Supported;
         capabilities.drag_and_drop = Support::Supported;
     }
+    // The display opened the GLES painter and compiled its shaders,
+    // unless `CHOSCORUI_PAINTER=cairo` is set.
+    capabilities.gpu_painting = match display.painter() {
+        Painter::Gles => Support::Supported,
+        Painter::Cairo => Support::Unsupported,
+    };
     capabilities
 }

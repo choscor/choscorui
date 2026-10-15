@@ -7,7 +7,7 @@ The `choscorui-linux` crate has platform-neutral state machines for the Wayland 
 - `Application`, `Window`, and `Poster` on Wayland: windows, keyboard and pointer input, scale, and timers.
 - Image decoding and encoding with the system codec libraries.
 
-`choscorui::capabilities()` reports `backend: "wayland"` and `multiple_windows: Supported` when a compositor accepts the connection. Without a display server, it returns `BackendCapabilities::none("headless")`. The `keyboard` field is always `KeyConvention::Pc`. The other capabilities are `Unsupported` until their milestone lands.
+`choscorui::capabilities()` reports `backend: "wayland"` and `multiple_windows: Supported` when a compositor accepts the connection. Without a display server, it returns `BackendCapabilities::none("headless")`. The `keyboard` field is always `KeyConvention::Pc`. [Painters](#painters) gives the `gpu_painting` rule. The other capabilities are `Unsupported` until their milestone lands.
 
 The state machines compile and run on every host. [`tests/protocol_contracts.rs`](../crates/choscorui-linux/tests/protocol_contracts.rs) pins each rule in this document.
 
@@ -186,6 +186,43 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 - The decoders do not convert embedded ICC profiles. libpng converts the PNG gamma to sRGB.
 - `encode_png(image)` writes an sRGB PNG file with libpng.
 - `image_codecs_support()` is `Supported` when libpng and libturbojpeg load.
+
+## Painters
+
+A window paints with one of two painters, and `Window::painter()` tells which:
+
+- `Painter::Gles` paints with OpenGL ES 3.0 through EGL on a `wl_egl_window`.
+- `Painter::Cairo` paints with Cairo into double-buffered `wl_shm` buffers.
+
+### Fallback
+
+- New windows use GLES. They use Cairo when `CHOSCORUI_PAINTER=cairo` is set, or when libEGL, libGLESv2, or libwayland-egl does not load.
+- New windows also use Cairo when no EGL config has RGBA8 and OpenGL ES 3.0, or when the shaders do not compile.
+- The shaders compile when the application connects, before a window opens. A compile or link failure is a `GlesError`, not a panic.
+- A GPU failure during a paint switches that window to Cairo for the rest of its life. The window then repaints all of its content.
+- A lost context, a failed swap, and an OpenGL ES error during a paint are GPU failures. The other GLES windows switch to Cairo at their next paint.
+- `capabilities().gpu_painting` is `Supported` when the GLES painter started and no GPU failure occurred. Else it is `Unsupported`.
+- `Window::capture()` renders the display list with Cairo for both painters. `render_offscreen` is the Cairo export.
+- `render_offscreen_gles` renders with GLES on the Mesa surfaceless EGL platform. The parity test uses it.
+
+### GLES frames
+
+- The swap interval is 0. The `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo.
+- The window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
+- With `EGL_EXT_buffer_age`, a paint repaints the damage of each frame since the back buffer was on the screen. Without it, a paint repaints the whole window.
+- With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the compositor.
+
+### GLES drawing
+
+The painter draws each command in the order of the display list, as the Cairo painter does. One shader program multiplies a paint, a coverage, and a clip.
+
+- A rectangle under an axis-aligned transform gets exact area coverage in the shader.
+- Cairo rasterizes the coverage of other fills and strokes into a mask in device pixels. The painter keeps the masks that repeat from frame to frame.
+- Glyphs come from one atlas texture. Cairo rasterizes each glyph with the faces of the Cairo painter, at the quarter-pixel phase of its position.
+- Thus, both painters cover the same pixels, and they put glyphs at the same positions.
+- A clip on whole pixels is a scissor rectangle. Another clip renders its coverage, times the outer clip, into a coverage texture.
+- An opacity group draws into a layer texture. The pop of the group composites the layer with the opacity.
+- Backdrop blur reads the base target back, blurs it with `blur_pixels`, and draws it in the rounded rectangle.
 
 ## Not implemented
 

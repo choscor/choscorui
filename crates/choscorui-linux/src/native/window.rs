@@ -304,6 +304,18 @@ impl Window {
         self.surface.request_paint();
     }
 
+    /// Renders the display list of the window with Cairo, at its content
+    /// size and backing scale, as straight-alpha RGBA8. Both painters use
+    /// it, so a capture never reads GPU memory.
+    pub fn capture(&self) -> Result<Image, Error> {
+        if self.shared.closed.get() {
+            return Err(Error::Closed);
+        }
+        let list = Rc::clone(&self.shared.paint.borrow().list);
+        crate::render_offscreen(&list, self.shared.size.get(), self.shared.scale.get())
+            .map_err(Error::Capture)
+    }
+
     /// The logical region of the most recent display-list change.
     pub fn last_damage(&self) -> Option<Rect> {
         self.shared.paint.borrow().last_damage

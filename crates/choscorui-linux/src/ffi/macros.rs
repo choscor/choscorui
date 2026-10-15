@@ -9,6 +9,8 @@
 //! - `ffi_enum!` declares a C enum type as a transparent integer, with its
 //!   constants.
 //! - `c_consts!` declares the values of C macros and enum constants.
+//! - `lookup_functions!` declares extension functions that a library
+//!   returns from a lookup call, with the header typedef of each.
 //! - `callback!` declares a C callback that catches a panic of its body.
 //!
 //! Each macro emits the real declaration and, in tests, a descriptor from
@@ -168,6 +170,7 @@ macro_rules! libraries {
                         ret: <$crate::ffi::macros::libraries!(@ret $($ret)?) as CType>::spelling(),
                         args: vec![$(<$ty as CType>::spelling()),*],
                         variadic: false,
+                        typedef: None,
                     });
                 )*
                 $($(
@@ -176,6 +179,7 @@ macro_rules! libraries {
                         ret: <$crate::ffi::macros::libraries!(@ret $($oret)?) as CType>::spelling(),
                         args: vec![$(<$oty as CType>::spelling()),*],
                         variadic: false,
+                        typedef: None,
                     });
                 )*)?
                 $($(
@@ -184,6 +188,7 @@ macro_rules! libraries {
                         ret: <$crate::ffi::macros::libraries!(@ret $($vret)?) as CType>::spelling(),
                         args: vec![$(<$vty as CType>::spelling()),*],
                         variadic: true,
+                        typedef: None,
                     });
                 )*)?
                 $crate::ffi::checks::LibraryItems {
@@ -232,6 +237,7 @@ macro_rules! libc_functions {
                         ret: <$crate::ffi::macros::libc_functions!(@ret $($ret)?) as CType>::spelling(),
                         args: vec![$(<$ty as CType>::spelling()),*],
                         variadic: false,
+                        typedef: None,
                     },
                 )*],
             }
@@ -422,7 +428,94 @@ macro_rules! c_consts {
     (@name $name:ident $cname:literal) => { $cname };
 }
 
-/// Declares a C callback. The body runs inside `catch_unwind`; a panic
+/// Declares extension functions that a library returns from a lookup
+/// call, such as `eglGetProcAddress`, instead of exporting them. Each
+/// function names the typedef of its header. The binding check converts
+/// a typedef pointer to the declared type, so a declaration cannot drift.
+///
+/// ```text
+/// lookup_functions! {
+///     /// What the extensions are for.
+///     pub(crate) struct EglExtensions in Egl {
+///         fn eglSwapBuffersWithDamageKHR(dpy: *mut c_void) -> u32
+///             = "PFNEGLSWAPBUFFERSWITHDAMAGEKHRPROC";
+///     }
+/// }
+/// ```
+///
+/// `load` asks `lookup` for each name. A null address is `None`.
+macro_rules! lookup_functions {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $table:ident in $library:ident {$(
+            $(#[$fmeta:meta])*
+            fn $name:ident($($arg:ident : $ty:ty),* $(,)?) $(-> $ret:ty)? = $typedef:literal;
+        )*}
+    ) => {
+        $(#[$meta])*
+        #[allow(non_snake_case, reason = "the fields keep the C symbol names")]
+        #[derive(Clone, Copy)]
+        $vis struct $table {
+            $(
+                $(#[$fmeta])*
+                pub(crate) $name: Option<unsafe extern "C" fn($($ty),*) $(-> $ret)?>,
+            )*
+        }
+
+        impl $table {
+            /// Looks up each function. `lookup` returns the address of a
+            /// NUL-terminated name, or null when the function is missing.
+            ///
+            /// # Safety
+            ///
+            /// A non-null address that `lookup` returns for a name is the
+            /// C function of that name.
+            pub(crate) unsafe fn load(lookup: impl Fn(&'static str) -> *mut $crate::ffi::ctypes::c_void) -> Self {
+                Self {
+                    $(
+                        $name: {
+                            let symbol = lookup(concat!(stringify!($name), "\0"));
+                            if symbol.is_null() {
+                                None
+                            } else {
+                                // SAFETY: the caller guarantees the function
+                                // of the name, and the binding check compares
+                                // the declared signature with its typedef.
+                                Some(unsafe {
+                                    $crate::ffi::dl::function::<
+                                        unsafe extern "C" fn($($ty),*) $(-> $ret)?,
+                                    >(symbol)
+                                })
+                            }
+                        },
+                    )*
+                }
+            }
+
+            /// The descriptor of each function, for the binding check.
+            #[cfg(test)]
+            pub(crate) fn check_items() -> $crate::ffi::checks::LibraryItems {
+                use $crate::ffi::ctype::CType;
+                $crate::ffi::checks::LibraryItems {
+                    library: $library::LIBRARY,
+                    functions: vec![$(
+                        $crate::ffi::checks::FunctionItem {
+                            name: stringify!($name),
+                            ret: <$crate::ffi::macros::lookup_functions!(@ret $($ret)?) as CType>::spelling(),
+                            args: vec![$(<$ty as CType>::spelling()),*],
+                            variadic: false,
+                            typedef: Some($typedef),
+                        },
+                    )*],
+                }
+            }
+        }
+    };
+    (@ret) => { () };
+    (@ret $ret:ty) => { $ret };
+}
+
+/// Declares a C callback.The body runs inside `catch_unwind`; a panic
 /// writes the boundary name to standard error, and the callback returns
 /// the fallback. A panic never unwinds into C.
 ///
@@ -459,5 +552,6 @@ macro_rules! callback {
 }
 
 pub(crate) use {
-    c_consts, callback, ffi_enum, ffi_struct, ffi_union, libc_functions, libraries, opaque_types,
+    c_consts, callback, ffi_enum, ffi_struct, ffi_union, libc_functions, libraries,
+    lookup_functions, opaque_types,
 };

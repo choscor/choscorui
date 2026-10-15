@@ -8,8 +8,9 @@
 use super::shm::Buffers;
 use super::{Client, Role};
 use crate::ffi::wayland::{Arg, ObjectId, Proxy};
+use crate::gles::{self, GlesError, GlesWindow};
 use crate::native::paint::{self, Pixels};
-use crate::native::types::{Error, ResizeEdge, WindowEvent};
+use crate::native::types::{Error, Painter, ResizeEdge, WindowEvent};
 use crate::native::window::{Surface, WindowShared};
 use crate::{FrameScheduler, FrameToken, WaylandSurface};
 use choscorui_core::{CursorShape, Point, Rect, Size, WindowGeometry};
@@ -87,7 +88,9 @@ pub(crate) struct WaylandWindow {
     me: Weak<WaylandWindow>,
     client: Weak<Client>,
     pub(crate) shared: Rc<WindowShared>,
-    pub(crate) surface: Proxy,
+    /// The EGL surface while the window paints with GLES.
+    gles: RefCell<Option<GlesWindow>>,
+    pub(crate) surface: Rc<Proxy>,
     xdg_surface: RefCell<Option<Proxy>>,
     pub(crate) toplevel: RefCell<Option<Proxy>>,
     decoration: RefCell<Option<Proxy>>,
@@ -193,7 +196,8 @@ impl WaylandWindow {
             me: me.clone(),
             client: Rc::downgrade(client),
             shared,
-            surface,
+            gles: RefCell::new(None),
+            surface: Rc::new(surface),
             xdg_surface: RefCell::new(Some(xdg_surface)),
             toplevel: RefCell::new(Some(toplevel)),
             decoration: RefCell::new(decoration),
@@ -407,9 +411,19 @@ impl WaylandWindow {
         if self.shared.closed.get() {
             return false;
         }
+        // A GPU failure in another window switches this one at its next
+        // paint.
+        let device = match self.shared.paint.borrow().painter {
+            Painter::Gles => client.gles(),
+            Painter::Cairo => None,
+        };
+        if device.is_none() && self.shared.paint.borrow().painter == Painter::Gles {
+            self.use_cairo();
+        }
         {
             let inner = self.inner.borrow();
-            if !inner.mapped || inner.frames.is_pending() || !inner.buffers.has_free() {
+            let buffer_free = device.is_some() || inner.buffers.has_free();
+            if !inner.mapped || inner.frames.is_pending() || !buffer_free {
                 return false;
             }
         }
@@ -423,7 +437,10 @@ impl WaylandWindow {
             return self.commit_without_paint();
         };
         self.wants_paint.set(false);
-        self.paint(client, region)
+        match device {
+            Some(device) => self.paint_gles(client, &device, region),
+            None => self.paint(client, region),
+        }
     }
 
     fn commit_without_paint(&self) -> bool {
@@ -436,12 +453,135 @@ impl WaylandWindow {
         true
     }
 
+    /// The buffer size in pixels: the logical size times the scale.
+    fn pixel_size(&self) -> (u32, u32) {
+        let (scale, size) = (self.scale(), self.shared.size.get());
+        (
+            (size.width * scale).round().max(1.0) as u32,
+            (size.height * scale).round().max(1.0) as u32,
+        )
+    }
+
+    /// Switches the window to Cairo for the rest of its life, and asks
+    /// for a full repaint.
+    fn use_cairo(&self) {
+        self.gles.borrow_mut().take();
+        self.shared.paint.borrow_mut().painter = Painter::Cairo;
+        // A frame callback of a failed swap never fires.
+        let mut inner = self.inner.borrow_mut();
+        if let Some((_, token)) = inner.frame.take() {
+            let _ = inner.frames.presented(token);
+        }
+        drop(inner);
+        self.shared.invalidate();
+        self.wants_paint.set(true);
+    }
+
+    /// Paints with GLES. EGL attaches the buffer, damages it, and commits
+    /// the surface in the swap.
+    fn paint_gles(&self, client: &Client, device: &gles::Device, region: Rect) -> bool {
+        let start = Instant::now();
+        let (width, height) = self.pixel_size();
+        if self.inner.borrow_mut().protocol.commit_buffer().is_err() {
+            // Put the region back for the next configure.
+            self.shared.paint.borrow_mut().pending = Some(region);
+            return false;
+        }
+        let bounds = self.shared.bounds();
+        let region = region.intersection(bounds).unwrap_or(bounds);
+        let list = Rc::clone(&self.shared.paint.borrow().list);
+        let mut slot = self.gles.borrow_mut();
+        if slot.is_none() {
+            match device.window(&self.surface, width, height) {
+                Ok(window) => *slot = Some(window),
+                Err(error) => {
+                    drop(slot);
+                    gles::mark_failed(&error);
+                    self.use_cairo();
+                    return false;
+                }
+            }
+        }
+        let Some(window) = slot.as_mut() else {
+            return false;
+        };
+        let size = self.shared.size.get();
+        let result =
+            device.paint_window(window, &list, self.scale(), (width, height), region, || {
+                self.frame_requests(client, &mut self.inner.borrow_mut(), size)
+            });
+        drop(slot);
+        match result {
+            Ok(()) => {}
+            Err(GlesError::TextUnavailable) => {
+                eprintln!("choscorui: painting failed: {}", GlesError::TextUnavailable);
+            }
+            Err(_) => {
+                self.use_cairo();
+                return false;
+            }
+        }
+        self.shared.visible.set(true);
+        self.shared.painted(start);
+        true
+    }
+
+    /// Sends the size, the scale, and the frame callback of a frame. The
+    /// commit that follows applies them.
+    fn frame_requests(&self, client: &Client, inner: &mut Inner, size: Size) {
+        match &*self.viewport.borrow() {
+            Some(viewport) => {
+                let _ = viewport.request(
+                    VIEWPORT_SET_DESTINATION,
+                    &[
+                        Arg::Int(size.width.round() as i32),
+                        Arg::Int(size.height.round() as i32),
+                    ],
+                );
+            }
+            None => {
+                let scale = inner.integer.max(1);
+                if scale != inner.buffer_scale {
+                    inner.buffer_scale = scale;
+                    let _ = self
+                        .surface
+                        .request(SURFACE_SET_BUFFER_SCALE, &[Arg::Int(scale)]);
+                }
+            }
+        }
+        if let Some(xdg_surface) = &*self.xdg_surface.borrow() {
+            let _ = xdg_surface.request(
+                XDG_SURFACE_SET_WINDOW_GEOMETRY,
+                &[
+                    Arg::Int(0),
+                    Arg::Int(0),
+                    Arg::Int(size.width.round() as i32),
+                    Arg::Int(size.height.round() as i32),
+                ],
+            );
+        }
+        if let Ok(token) = inner.frames.request() {
+            match self.surface.request(SURFACE_FRAME, &[Arg::NewId]) {
+                Ok(Some(callback)) => {
+                    client
+                        .routes
+                        .borrow_mut()
+                        .insert(callback.id(), Role::Frame(self.me.clone()));
+                    inner.frame = Some((callback, token));
+                }
+                _ => {
+                    let _ = inner.frames.presented(token);
+                }
+            }
+        }
+    }
+
+    /// Paints with Cairo into a shared-memory buffer.
     fn paint(&self, client: &Client, region: Rect) -> bool {
         let start = Instant::now();
         let scale = self.scale();
         let size = self.shared.size.get();
-        let width = (size.width * scale).round().max(1.0) as u32;
-        let height = (size.height * scale).round().max(1.0) as u32;
+        let (width, height) = self.pixel_size();
         let globals = client.globals.borrow();
         let Some(shm) = globals.shm.as_ref() else {
             return false;
@@ -494,51 +634,7 @@ impl WaylandWindow {
                 Arg::Int(bottom - y),
             ],
         );
-        match &*self.viewport.borrow() {
-            Some(viewport) => {
-                let _ = viewport.request(
-                    VIEWPORT_SET_DESTINATION,
-                    &[
-                        Arg::Int(size.width.round() as i32),
-                        Arg::Int(size.height.round() as i32),
-                    ],
-                );
-            }
-            None => {
-                let scale = inner.integer.max(1);
-                if scale != inner.buffer_scale {
-                    inner.buffer_scale = scale;
-                    let _ = self
-                        .surface
-                        .request(SURFACE_SET_BUFFER_SCALE, &[Arg::Int(scale)]);
-                }
-            }
-        }
-        if let Some(xdg_surface) = &*self.xdg_surface.borrow() {
-            let _ = xdg_surface.request(
-                XDG_SURFACE_SET_WINDOW_GEOMETRY,
-                &[
-                    Arg::Int(0),
-                    Arg::Int(0),
-                    Arg::Int(size.width.round() as i32),
-                    Arg::Int(size.height.round() as i32),
-                ],
-            );
-        }
-        if let Ok(token) = inner.frames.request() {
-            match self.surface.request(SURFACE_FRAME, &[Arg::NewId]) {
-                Ok(Some(callback)) => {
-                    client
-                        .routes
-                        .borrow_mut()
-                        .insert(callback.id(), Role::Frame(self.me.clone()));
-                    inner.frame = Some((callback, token));
-                }
-                _ => {
-                    let _ = inner.frames.presented(token);
-                }
-            }
-        }
+        self.frame_requests(client, inner, size);
         drop(globals);
         let _ = self.surface.request(SURFACE_COMMIT, &[]);
         self.shared.visible.set(true);
@@ -558,6 +654,8 @@ impl WaylandWindow {
         if let Some(client) = self.client.upgrade() {
             client.forget_window(self.surface.id());
         }
+        // EGL lets go of the surface before it is destroyed.
+        self.gles.borrow_mut().take();
         self.inner.borrow_mut().frame = None;
         self.viewport.borrow_mut().take();
         self.fractional.borrow_mut().take();

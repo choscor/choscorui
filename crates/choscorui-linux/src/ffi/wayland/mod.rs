@@ -249,7 +249,23 @@ impl Drop for ReadGuard<'_> {
     }
 }
 
+/// A reference that keeps the display connection open, for EGL. EGL
+/// uses the `wl_display` until it terminates, so its display holds one.
+pub(crate) struct DisplayRef(Rc<Display>);
+
+impl DisplayRef {
+    /// The `wl_display` pointer. It stays valid while `self` lives.
+    pub(in crate::ffi) fn raw(&self) -> *mut WlDisplay {
+        self.0.raw
+    }
+}
+
 impl Connection {
+    /// A reference that keeps the connection open.
+    pub(crate) fn display_ref(&self) -> DisplayRef {
+        DisplayRef(Rc::clone(&self.display))
+    }
+
     /// Connects to the compositor of `WAYLAND_DISPLAY`, or of `name`.
     pub(crate) fn connect(name: Option<&str>) -> Result<Self, WaylandError> {
         let lib = WaylandClient::get().map_err(WaylandError::Library)?;
@@ -457,6 +473,11 @@ struct Keep {
 }
 
 impl Proxy {
+    /// The `wl_proxy` pointer. It stays valid while `self` lives.
+    pub(in crate::ffi) fn raw(&self) -> *mut WlProxy {
+        self.raw
+    }
+
     pub(crate) fn id(&self) -> ObjectId {
         self.id
     }

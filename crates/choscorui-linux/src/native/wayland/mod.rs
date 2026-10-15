@@ -19,6 +19,7 @@ use super::types::{Error, Modifiers, WindowEvent};
 use crate::ffi::libc::{self, Ready, Watch};
 use crate::ffi::wayland::sys::Interface;
 use crate::ffi::wayland::{self as wl, Arg, Connection, Event, ObjectId, Proxy};
+use crate::gles;
 use crate::{InputEvent, LinuxInput, WaylandConnection, WaylandGlobal};
 use choscorui_core::{CursorShape, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit};
 use shm::Buffers;
@@ -150,6 +151,8 @@ pub(crate) struct Client {
     data: RefCell<data::DataState>,
     /// The text input of the seat, for input methods.
     text_input: RefCell<Option<text_input::TextInput>>,
+    /// The GLES painter, or `None` when windows paint with Cairo.
+    gles: RefCell<Option<Rc<gles::Device>>>,
 }
 
 // Event opcodes.
@@ -294,6 +297,7 @@ impl Client {
             lost: Cell::new(false),
             data: RefCell::new(data::DataState::default()),
             text_input: RefCell::new(None),
+            gles: RefCell::new(None),
         });
         client
             .routes
@@ -307,6 +311,11 @@ impl Client {
             client.handle_events();
         }
         client.check_requirements()?;
+        if !gles::cairo_requested() {
+            // Shaders compile now, so a driver failure shows before a
+            // window opens. Without the GLES painter, windows use Cairo.
+            *client.gles.borrow_mut() = gles::Device::wayland(&client.connection).ok();
+        }
         Ok(client)
     }
 
@@ -430,6 +439,15 @@ impl Client {
         if matches!(interface, "wl_seat" | "zwp_text_input_manager_v3") {
             self.ensure_text_input();
         }
+    }
+
+    /// The GLES painter, unless it is not available or a GPU failure
+    /// switched the process to Cairo.
+    pub(crate) fn gles(&self) -> Option<Rc<gles::Device>> {
+        if gles::failed() {
+            return None;
+        }
+        self.gles.borrow().clone()
     }
 
     /// Creates a window. It maps on `show`.
@@ -723,7 +741,7 @@ impl Client {
         let rung = bell
             .request(
                 BELL_RING,
-                &[Arg::Object(focused.as_ref().map(|window| &window.surface))],
+                &[Arg::Object(focused.as_ref().map(|window| &*window.surface))],
             )
             .is_ok();
         drop((seat, globals));

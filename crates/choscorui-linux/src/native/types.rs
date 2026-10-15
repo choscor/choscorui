@@ -40,6 +40,8 @@ pub enum Error {
     InvalidClipboardText,
     /// The display server has no clipboard, or it refused the write.
     ClipboardWriteFailed,
+    /// The Cairo painter could not render a capture.
+    Capture(crate::CairoError),
 }
 
 impl fmt::Display for Error {
@@ -65,6 +67,7 @@ impl fmt::Display for Error {
             Self::ClipboardWriteFailed => {
                 f.write_str("the display server refused the clipboard write")
             }
+            Self::Capture(error) => write!(f, "the capture failed: {error}"),
         }
     }
 }

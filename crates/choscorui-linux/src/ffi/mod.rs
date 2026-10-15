@@ -21,8 +21,10 @@ mod ctype;
 mod ctypes;
 pub(crate) mod dbus;
 pub(crate) mod dl;
+pub(crate) mod egl;
 pub(crate) mod fontconfig;
 pub(crate) mod freetype;
+pub(crate) mod gles;
 pub(crate) mod harfbuzz;
 pub(crate) mod libc;
 pub(crate) mod wayland;
@@ -57,6 +59,10 @@ pub(crate) fn declarations() -> (
         cairo::sys::Cairo::check_items(),
         canberra::Canberra::check_items(),
         db::DBusLib::check_items(),
+        egl::Egl::check_items(),
+        egl::EglExtensions::check_items(),
+        egl::WaylandEgl::check_items(),
+        gles::GlesV2::check_items(),
     ];
     libraries.extend(codecs::check_items());
     libraries.extend(x11::check_items());
@@ -100,6 +106,8 @@ pub(crate) fn declarations() -> (
         db::DBusBusType::constants(),
         db::DBusHandlerResult::constants(),
         db::DBusDispatchStatus::constants(),
+        egl::constants(),
+        gles::constants(),
     ]
     .into_iter()
     .flatten()
