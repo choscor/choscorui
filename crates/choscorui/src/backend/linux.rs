@@ -3,17 +3,19 @@
 
 use crate::{AppContext, AppError, WindowId};
 use choscorui_compose::view::ViewHost;
-use choscorui_controls::{EstimatedText, ShortcutModifiers, TextMeasure};
+use choscorui_controls::{EstimatedText, ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
     Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback, Rect, SemanticChange,
     SemanticEntry, Services, Size, Support, WindowGeometry, WindowOptions,
 };
 use choscorui_linux::{
-    Application, Error, ImeEvent, Modifiers, TextInputState, Window, WindowEvent,
+    Application, Error, ImeEvent, LinuxTextShaper, Modifiers, TextInputState, Window, WindowEvent,
 };
 use std::rc::Rc;
 use std::time::Duration;
+
+static SHAPER: LinuxTextShaper = LinuxTextShaper;
 
 /// The backend for Linux: `choscorui-linux` in full, and native access
 /// to the windows of an [`AppContext`]. Code that uses it is not
@@ -80,9 +82,14 @@ impl Platform {
         Ok(Self { application })
     }
 
-    /// The text measurer of the windows.
+    /// The text measurer of the windows: HarfBuzz shaping, or estimated
+    /// metrics when FreeType, HarfBuzz, or fontconfig does not load.
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
-        Rc::new(EstimatedText)
+        if choscorui_linux::text_shaping_support().is_supported() {
+            Rc::new(ShapedText::new(&SHAPER))
+        } else {
+            Rc::new(EstimatedText)
+        }
     }
 
     /// The alert sound of the controls.

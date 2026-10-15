@@ -10,6 +10,8 @@
 
 mod macros;
 
+pub(crate) mod cairo;
+
 #[cfg(test)]
 mod checks;
 pub(crate) mod codecs;
@@ -17,6 +19,9 @@ pub(crate) mod codecs;
 mod ctype;
 mod ctypes;
 pub(crate) mod dl;
+pub(crate) mod fontconfig;
+pub(crate) mod freetype;
+pub(crate) mod harfbuzz;
 pub(crate) mod libc;
 pub(crate) mod wayland;
 pub(crate) mod xkb;
@@ -42,6 +47,10 @@ pub(crate) fn declarations() -> (
         libc::check_items(),
         wl::WaylandClient::check_items(),
         xkb::XkbCommon::check_items(),
+        freetype::FreeType::check_items(),
+        harfbuzz::HarfBuzz::check_items(),
+        fontconfig::Fontconfig::check_items(),
+        cairo::sys::Cairo::check_items(),
     ];
     libraries.extend(codecs::check_items());
     let mut structs = vec![
@@ -52,6 +61,13 @@ pub(crate) fn declarations() -> (
         wl::WlInterface::layout(),
         wl::WlArray::layout(),
         wl::WlArgument::layout(),
+        harfbuzz::HbGlyphInfo::layout(),
+        harfbuzz::HbGlyphPosition::layout(),
+        harfbuzz::HbFontExtents::layout(),
+        fontconfig::FcFontSet::layout(),
+        cairo::sys::CairoMatrix::layout(),
+        cairo::sys::CairoGlyph::layout(),
+        cairo::sys::CairoUserDataKey::layout(),
     ];
     structs.extend(codecs::layouts());
     let constants = [
@@ -59,6 +75,13 @@ pub(crate) fn declarations() -> (
         wl::constants(),
         codecs::constants(),
         xkb::constants(),
+        freetype::constants(),
+        harfbuzz::HbDirection::constants(),
+        harfbuzz::HbClusterLevel::constants(),
+        fontconfig::constants(),
+        fontconfig::FcResult::constants(),
+        fontconfig::FcMatchKind::constants(),
+        cairo::sys::constants(),
     ]
     .into_iter()
     .flatten()

@@ -310,6 +310,8 @@ fn probe() -> BackendCapabilities {
         BackendKind::X11 => "x11",
     });
     capabilities.multiple_windows = Support::Supported;
+    capabilities.text_shaping = crate::text_shaping_support();
+    capabilities.image_codecs = crate::image_codecs_support();
     capabilities.keyboard = KeyConvention::Pc;
     capabilities
 }

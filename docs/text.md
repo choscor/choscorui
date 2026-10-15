@@ -33,6 +33,31 @@ owned glyph runs. `CoreTextShaper` has no state, so use it with a
 tokens (see [theming.md](theming.md)). `available_font_families` lists the
 installed font families on macOS.
 
+### Linux
+
+`LinuxTextShaper` in `choscorui-linux` is the Linux implementation. It has
+no state, so a `static` can hold it. HarfBuzz shapes the text on FreeType
+faces, and fontconfig chooses the faces:
+
+- **Families:** fontconfig matches the family, weight, slant, and locale.
+  `system-ui` is the desktop font that the backend gives to
+  `set_desktop_font`, else `sans-serif`. `ui-monospace` is `monospace`.
+- **Fallback:** each grapheme cluster uses the first face that has all its
+  characters. The order is the primary face, the `fallback` families, and
+  then the fontconfig sort list.
+- **Lines:** a line breaks after whitespace, after a hyphen, and around
+  ideographs. A word that does not fit breaks between graphemes.
+- **Direction:** the shaper uses a reduced bidirectional algorithm. It
+  does not apply explicit embeddings or isolates.
+- **Rendering:** the Cairo painter draws each glyph run with the font file
+  that shaped it. It uses grayscale anti-aliasing and the fontconfig
+  hinting, and it does not move glyphs from their shaped positions.
+
+`text_shaping_support` is `Supported` when FreeType, HarfBuzz, and
+fontconfig load. `available_font_families` lists the fontconfig families.
+The tests in [text_shaping.rs](../crates/choscorui-linux/tests/text_shaping.rs)
+pin this behavior.
+
 ## Text layout
 
 A `TextLayout` holds shaped, positioned text: glyph runs, lines, caret stops,
