@@ -4,7 +4,8 @@
 //! queue until the application takes it.
 
 use choscorui_core::{
-    MenuBarModel, MenuCommandId, MenuError, MenuItemState, MenuShortcut, MenuSpec,
+    MenuBarModel, MenuCommandId, MenuError, MenuItemState, MenuShortcut, MenuShortcutModifiers,
+    MenuSpec,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -66,15 +67,34 @@ impl MainMenu {
         self.menus.borrow_mut().perform(command)
     }
 
-    /// Runs the command whose shortcut is `shortcut`, as a key press
-    /// does. `shortcut` uses the menu terms: `command` is Ctrl. Returns
-    /// true when an enabled command ran.
-    pub fn perform_key_equivalent(&self, shortcut: &MenuShortcut) -> bool {
-        let mut menus = self.menus.borrow_mut();
-        let Some(command) = menus.model.command_for_shortcut(shortcut) else {
-            return false;
+    /// Runs the command whose shortcut is `key` with `modifiers`, as a
+    /// key press does, and returns whether an enabled item took it. The
+    /// item's command then waits in [`MainMenu::take_activations`]. The
+    /// modifiers use the menu terms: `command` is Ctrl. Fails for a key
+    /// with a NUL character.
+    pub fn perform_key_equivalent(
+        &self,
+        key: &str,
+        modifiers: MenuShortcutModifiers,
+    ) -> Result<bool, MenuError> {
+        if key.contains('\0') {
+            return Err(MenuError::InvalidText);
+        }
+        let shortcut = MenuShortcut {
+            key: key.to_owned(),
+            modifiers,
         };
-        menus.perform(command).unwrap_or(false)
+        let mut menus = self.menus.borrow_mut();
+        match menus.model.command_for_shortcut(&shortcut) {
+            Some(command) => menus.perform(command),
+            None => Ok(false),
+        }
+    }
+
+    /// The panics that native menu callbacks caught. The menus run no
+    /// native callbacks on Linux, so the count stays zero.
+    pub fn callback_panic_count(&self) -> usize {
+        0
     }
 }
 
@@ -127,7 +147,7 @@ impl ContextMenu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use choscorui_core::{MenuEntry, MenuShortcutModifiers};
+    use choscorui_core::MenuEntry;
 
     fn spec() -> MenuSpec {
         MenuSpec::new(
@@ -153,13 +173,16 @@ mod tests {
         let menu = MainMenu::new(MenuBarModel::new(vec![spec()]).unwrap());
         let command = MenuCommandId(41);
         assert_eq!(menu.perform_action(command), Ok(true));
-        assert!(menu.perform_key_equivalent(&MenuShortcut {
-            key: "O".into(),
-            modifiers: MenuShortcutModifiers {
-                command: true,
-                ..MenuShortcutModifiers::default()
-            },
-        }));
+        let ctrl = MenuShortcutModifiers {
+            command: true,
+            ..MenuShortcutModifiers::default()
+        };
+        assert_eq!(menu.perform_key_equivalent("O", ctrl), Ok(true));
+        assert_eq!(menu.perform_key_equivalent("p", ctrl), Ok(false));
+        assert_eq!(
+            menu.perform_key_equivalent("\0", ctrl),
+            Err(MenuError::InvalidText)
+        );
         assert_eq!(menu.take_activations(), vec![command, command]);
         assert!(menu.take_activations().is_empty());
         menu.set_state(

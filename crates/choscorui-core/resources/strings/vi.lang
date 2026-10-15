@@ -90,6 +90,7 @@ choscorui.titlebar.close = Đóng
 choscorui.titlebar.maximize = Phóng to
 choscorui.titlebar.restore = Khôi phục
 choscorui.titlebar.minimize = Thu nhỏ
+choscorui.menubar.name = Thanh menu
 choscorui.file_dialog.open = Mở
 choscorui.file_dialog.save = Lưu
 choscorui.file_dialog.select = Chọn

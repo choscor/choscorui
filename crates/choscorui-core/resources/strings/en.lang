@@ -92,6 +92,7 @@ choscorui.titlebar.close = Close
 choscorui.titlebar.maximize = Maximize
 choscorui.titlebar.restore = Restore
 choscorui.titlebar.minimize = Minimize
+choscorui.menubar.name = Menu bar
 choscorui.file_dialog.open = Open
 choscorui.file_dialog.save = Save
 choscorui.file_dialog.select = Select

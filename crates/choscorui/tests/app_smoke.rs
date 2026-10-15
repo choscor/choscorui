@@ -20,7 +20,6 @@ fn main() {
     ));
     let _ = std::fs::remove_file(&settings);
     smoke::counter(&settings);
-    #[cfg(target_os = "macos")]
     smoke::commands(&settings);
     smoke::restore(&settings);
     smoke::recovery_and_services(&settings);
@@ -34,8 +33,7 @@ mod smoke {
     #[cfg(target_os = "macos")]
     use choscorui::core::Service;
     use choscorui::core::{Point, Rect, SemanticAction, Size, WindowGeometry};
-    #[cfg(target_os = "macos")]
-    use choscorui::platform::MenuShortcutModifiers;
+    use choscorui::core::MenuShortcutModifiers;
     use choscorui::platform::NativeAccess;
     use choscorui::prelude::*;
     use std::cell::RefCell;
@@ -83,8 +81,8 @@ mod smoke {
 
     /// A declared command menu installs; choosing an item runs its
     /// closure; live labels and check marks update the menu; a shortcut
-    /// runs its item; a panicking action is counted and stays usable.
-    #[cfg(target_os = "macos")]
+    /// runs its item; a panicking action is counted and stays usable. On
+    /// Linux the window draws the menu bar.
     pub fn commands(settings: &Path) {
         let app = App::new().settings_path(settings);
         let runtime = app.runtime().clone();
@@ -128,6 +126,13 @@ mod smoke {
         let model = running.menu_bar().expect("the command menu installs");
         assert_eq!(model.menus()[0].title, "Smoke");
         let item = model.find("Count 0").expect("the live label shows");
+        #[cfg(target_os = "linux")]
+        {
+            let window = running.windows()[0];
+            let host = running.host(window).unwrap();
+            assert!(host.find("Menu bar").is_some(), "the window draws the bar");
+            assert!(host.find("Smoke").is_some(), "the bar shows the menu");
+        }
 
         assert!(running.choose(item), "the item is enabled");
         assert_eq!(count.get(), 1, "choosing the item runs its closure");
