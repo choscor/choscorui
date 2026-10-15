@@ -18,6 +18,7 @@ pub(crate) mod codecs;
 #[cfg(test)]
 mod ctype;
 mod ctypes;
+pub(crate) mod dbus;
 pub(crate) mod dl;
 pub(crate) mod fontconfig;
 pub(crate) mod freetype;
@@ -42,6 +43,7 @@ pub(crate) fn declarations() -> (
     Vec<checks::StructItem>,
     Vec<checks::ConstItem>,
 ) {
+    use dbus::sys as db;
     use wayland::sys as wl;
     let mut libraries = vec![
         dl::check_items(),
@@ -52,6 +54,7 @@ pub(crate) fn declarations() -> (
         harfbuzz::HarfBuzz::check_items(),
         fontconfig::Fontconfig::check_items(),
         cairo::sys::Cairo::check_items(),
+        db::DBusLib::check_items(),
     ];
     libraries.extend(codecs::check_items());
     libraries.extend(x11::check_items());
@@ -73,6 +76,11 @@ pub(crate) fn declarations() -> (
     ];
     structs.extend(codecs::layouts());
     structs.extend(x11::layouts());
+    structs.extend([
+        db::DBusMessageIter::layout(),
+        db::DBusObjectPathVTable::layout(),
+        db::DBusError::layout(),
+    ]);
     let constants = [
         libc::constants(),
         wl::constants(),
@@ -86,6 +94,10 @@ pub(crate) fn declarations() -> (
         fontconfig::FcMatchKind::constants(),
         cairo::sys::constants(),
         x11::all_constants(),
+        db::constants(),
+        db::DBusBusType::constants(),
+        db::DBusHandlerResult::constants(),
+        db::DBusDispatchStatus::constants(),
     ]
     .into_iter()
     .flatten()
