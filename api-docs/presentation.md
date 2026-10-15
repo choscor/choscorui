@@ -215,6 +215,69 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, items: impl Items<MenuItem>) 
 
 A menu named `name` that shows `items`.
 
+## `FileDialog`
+
+type alias in `choscorui::prelude::FileDialog`
+
+```rust
+pub type FileDialog = Configured<FileDialog>;
+```
+
+A file dialog that the toolkit draws, for `request`, that starts in
+`directory`. It fills its bounds, for example the content of a dialog
+window. The texts come from the locale of the environment. Accept and
+Cancel write the outcome to `outcome`.
+
+#### Examples
+
+```rust
+struct Open;
+
+impl View for Open {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let outcome = cx.state(None);
+        let request = FileDialogRequest {
+            kind: FileDialogKind::Open,
+            title: None,
+            allowed_types: vec!["txt".into()],
+            suggested_name: None,
+        };
+        FileDialog::new(request, std::env::temp_dir(), outcome.binding())
+    }
+}
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `FileDialog::new`
+
+```rust
+pub fn new(request: FileDialogRequest, directory: impl Into<PathBuf>, outcome: Binding<Option<FileDialogOutcome>>) -> Self
+```
+
+A dialog for `request` in `directory` that writes its outcome to `outcome`.
+
+## `FileDialogOutcome`
+
+enum in `choscorui::controls::FileDialogOutcome`
+
+```rust
+pub enum FileDialogOutcome {
+    Selected(Vec<PathBuf>),
+    Cancelled,
+}
+```
+
+What a file dialog gives back to its host.
+
+### Variants
+
+- `Selected(Vec<PathBuf>)`: The chosen paths: one or more files, one directory, or the path to
+  save to.
+- `Cancelled`
+
 ## `FontDialog`
 
 struct in `choscorui::prelude::FontDialog`

@@ -179,6 +179,8 @@ presentation choscorui::prelude::AlertDialog
 presentation choscorui::prelude::Toaster
 presentation choscorui::prelude::FontDialog
 presentation choscorui::prelude::InputDialog
+presentation choscorui::prelude::FileDialog
+presentation choscorui::controls::FileDialogOutcome
 presentation choscorui::prelude::Popover
 presentation choscorui::prelude::ContextMenu
 presentation choscorui::prelude::DropdownMenu

@@ -259,6 +259,8 @@ primitives:
 - `place_popup` changes the horizontal side of the anchor.
 - `Toolbar::layout`, `StatusBar::layout`, and `order_dialog_buttons` mirror
   the order of their items.
+- `TitleBar::button_rects` puts the window buttons at the left, and a
+  `FileDialog` mirrors its layout.
 
 The text is bidirectional. Core Text shapes and orders mixed Hebrew and Latin
 runs. Hit testing and carets in `TextLayout` follow the visual order. A

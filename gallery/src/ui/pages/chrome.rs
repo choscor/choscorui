@@ -1,13 +1,18 @@
 //! Window chrome that the toolkit draws when the desktop does not: the
-//! title bar of a window with client-side decorations.
+//! title bar of a window with client-side decorations, and the file
+//! dialog for a desktop without a file chooser service.
 
 use crate::ui::page::{Build, PageCx, column, row, section};
 use choscorui::compose::t;
 use choscorui::compose::view::{
-    AnyView, Cx, Env, Frame, State, Text, TitleBar, Toggle, View, ViewExt,
+    AnyView, Button, Cx, Dynamic, Env, FileDialog, Frame, State, Text, TitleBar, Toggle, View,
+    ViewExt,
 };
-use choscorui::controls::{TitleBarButton, TitleBarHandle, TitleBarRequest};
-use choscorui::core::{ColorRole, TextPreset};
+use choscorui::controls::{
+    ButtonVariant, FileDialogOutcome, TitleBarButton, TitleBarHandle, TitleBarRequest,
+};
+use choscorui::core::{ColorRole, FileDialogKind, FileDialogRequest, TextPreset};
+use std::path::PathBuf;
 
 /// The catalog key that names `request`.
 fn request_key(request: TitleBarRequest) -> &'static str {
@@ -93,10 +98,81 @@ pub fn title_bar(_: &PageCx) -> AnyView {
     TitleBarPage.into_any()
 }
 
+/// The kinds of the file dialog, with the catalog keys of their buttons.
+const KINDS: [(&str, FileDialogKind); 4] = [
+    ("file-dialog.open", FileDialogKind::Open),
+    ("file-dialog.open_many", FileDialogKind::OpenMany),
+    ("file-dialog.directory", FileDialogKind::Directory),
+    ("file-dialog.save", FileDialogKind::Save),
+];
+
+/// The readout of `outcome`.
+fn outcome_text(env: &Env, outcome: Option<FileDialogOutcome>) -> String {
+    match outcome {
+        None => env.text("file-dialog.none", &[]),
+        Some(FileDialogOutcome::Cancelled) => env.text("file-dialog.cancelled", &[]),
+        Some(FileDialogOutcome::Selected(paths)) => {
+            let paths: Vec<String> = paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            env.text("file-dialog.chose", &[("paths", &paths.join(", "))])
+        }
+    }
+}
+
+/// The file dialog of each kind over the working directory, with the
+/// outcome of the last accept or cancel.
+struct FileDialogPage;
+
+impl View for FileDialogPage {
+    fn body(&self, cx: &mut Cx) -> impl View {
+        let kind = cx.state(0usize);
+        let outcome = cx.state(None::<FileDialogOutcome>);
+        let env = cx.env().clone();
+        let directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let buttons = KINDS.map(|(key, _)| {
+            let index = KINDS.iter().position(|(each, _)| *each == key).unwrap_or(0);
+            Button::new(t!(key), move || {
+                kind.set(index);
+                outcome.set(None);
+            })
+            .variant(ButtonVariant::Outline)
+        });
+        let [open, many, folder, save] = buttons;
+        let suggested = env.text("file-dialog.suggested", &[]);
+        let dialog = Dynamic::new(move || {
+            let (_, kind) = KINDS[kind.get()];
+            let request = FileDialogRequest {
+                kind,
+                title: None,
+                allowed_types: Vec::new(),
+                suggested_name: (kind == FileDialogKind::Save).then(|| suggested.clone()),
+            };
+            FileDialog::new(request, directory.clone(), outcome.binding())
+                .frame(Frame::size(560.0, 420.0))
+                .background(ColorRole::Card)
+                .border(ColorRole::Border, 1.0)
+        });
+        column((
+            row((open, many, folder, save)),
+            dialog,
+            Text::new(move || outcome_text(&env, outcome.get()))
+                .text_style(TextPreset::Small)
+                .foreground(ColorRole::MutedForeground),
+        ))
+    }
+}
+
+pub fn file_dialog(_: &PageCx) -> AnyView {
+    FileDialogPage.into_any()
+}
+
 /// The view of page `id`, when this module has it.
 pub fn page(id: &str) -> Option<Build> {
     Some(match id {
         "title-bar" => title_bar,
+        "file-dialog" => file_dialog,
         _ => return None,
     })
 }
@@ -136,5 +212,15 @@ mod tests {
         press(&mut page, "Restore");
         press(&mut page, "Minimize");
         assert!(page.host.find("Request: Minimize").is_some());
+    }
+
+    #[test]
+    fn the_file_dialog_reports_a_cancel() {
+        let mut page = Harness::new("file-dialog");
+        assert!(page.host.find("No choice yet").is_some());
+        press(&mut page, "Cancel");
+        assert!(page.host.find("Cancelled").is_some());
+        page.act("Save file", SemanticAction::Activate);
+        assert!(page.host.find("Save File").is_some());
     }
 }

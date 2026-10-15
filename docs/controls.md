@@ -77,6 +77,7 @@ to a control. [`Field`](#field-and-fieldtext) and the compose
 | Popups and dialogs | [`InputDialog`](#alertdialog-and-inputdialog) | One validated value. |
 | Popups and dialogs | [`ColorPicker`](#colorpicker-and-fontdialog) | Color model with HSV, hex, and alpha. |
 | Popups and dialogs | [`FontDialog`](#colorpicker-and-fontdialog) | Font family, size, weight, and slant. |
+| Popups and dialogs | [`FileDialog`](#filedialog) | Drawn file chooser for a desktop without a file chooser service. |
 | Window chrome | [`Toolbar`](#toolbar) | Toolbar with roving focus and overflow. |
 | Window chrome | [`StatusBar`](#statusbar) | Status text, timed messages, and sections. |
 | Window chrome | [`DockLayout`](#docklayout) | Dockable panels around a central area. |
@@ -192,6 +193,7 @@ changes as `ControlMessage` values:
 | `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
 | `TitleBar` | `Activated` after each request that it queues | - |
+| `FileDialog` | `Activated` on accept, `Dismissed` on cancel | `Text` as the name of a save dialog |
 | `ColorPicker` | `Changed(Text)` with the hex value, then `Changed(Channels)` with the hue, saturation, value, and alpha; `Activated` on Enter | `Text` with a hex value |
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu, `ItemActivated(index)` for an overflowed embedded control | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
@@ -2667,6 +2669,118 @@ user. It also runs when the hex text stays the same, for example for a new
 hue of a gray.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
+
+### FileDialog
+
+`FileDialog` is the file chooser that the toolkit draws. A backend shows
+it in a dialog window on a desktop without a file chooser service. It
+lists one directory of a core `FileSystemModel`.
+
+- **Kinds.** `FileDialog::new(kind, directory, strings)` takes a
+  `FileDialogKind`. `Open` returns one file and `OpenMany` returns one or
+  more files.
+- `Directory` lists only directories and returns one directory. `Save`
+  returns the path of the typed name in the shown directory.
+- `from_request` takes the kind, the title, the allowed types, and the
+  suggested name of a `FileDialogRequest`.
+- `with_title` and `with_prompt` replace the built-in title and the label
+  of the accept button.
+- **Listing.** The list shows directories first, then files, each group
+  by name. A listing thread reads the directory, so a large directory
+  does not block input.
+- While the listing loads, the deadline of the dialog is due every 50 ms.
+  Each timer merges a finished listing. `with_waker` gives the model a
+  waker for the event loop.
+- `wait` blocks until the listing is ready, so that the first frame shows
+  the files. `poll` merges a finished listing without the host.
+- **Filters.** `with_allowed_types` takes extensions without the dot. The
+  first filter shows all the allowed types, and one filter follows for
+  each type.
+- Without types, one filter shows every file. Directories always show.
+  The checkbox shows or hides the hidden files.
+- **Focus order.** Tab moves through the location field, the list, the
+  name field of a save dialog, and the filter. Then it moves to the
+  checkbox, Cancel, and the accept button.
+- Shift+Tab moves back. Tab after the last stop lets the focus leave the
+  dialog.
+- **List keys.** ArrowUp, ArrowDown, Home, End, PageUp, and PageDown move
+  the current row. Typed characters go to the first row whose name starts
+  with them.
+- In an `OpenMany` dialog, Shift extends the selection from the anchor.
+  Space adds or removes the current row, and Command+A or Control+A
+  selects all the files.
+- Enter on a directory row opens it. Enter on a file row accepts it. A
+  double click does the same.
+- Backspace in the list goes to the parent directory. Alt+Up does the
+  same from any stop.
+- **Other keys.** Escape cancels. Enter in the location field opens the
+  typed directory. A relative path starts at the shown directory.
+- In an open dialog, Enter on the path of a file in the location field
+  accepts that file. Enter in the name field runs the accept button.
+- On the filter, ArrowUp and ArrowDown change the filter. Space on the
+  filter, the checkbox, or a button runs it on the key release.
+- **Accept.** An open dialog accepts the selected files. With no selected
+  file, it opens the current directory row.
+- A directory dialog accepts the selected directory, or the shown
+  directory when nothing is selected.
+- A save dialog opens a directory of the typed name. When a file of that
+  name exists, an alert asks before the dialog replaces it.
+- In the alert, Cancel has the focus first, and Enter never runs Replace.
+  Escape closes the alert, and the dialog stays open.
+- A file row of a save dialog copies its name into the name field.
+- **Outcome.** The dialog writes `FileDialogOutcome::Selected(paths)` or
+  `FileDialogOutcome::Cancelled` to its `FileDialogResult`. `result`
+  gives a handle that shares the value.
+- An accept also reports `Activated`, and a cancel reports `Dismissed`.
+- **Look.** The parts take the recipes of the controls that they look
+  like. Only the rows in view paint.
+- Right-to-left layouts mirror the layout. The directory rows show a
+  chevron that points in the reading direction.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Title | `Dialog` `Title` | the dialog title |
+| Parent button | `Button` `Root` | ghost icon-sm button with an up arrow |
+| Location and name fields | `Input` `Root` | the input box |
+| List frame | `Table` `Group`, `ListView` `Root` | 1 pt `border`, radius md; the list focus ring |
+| Row | `ListView` `Item` | the list view row; selected, highlighted while current, hovered |
+| Size and chevron | `ListView` `Indicator` | `muted-foreground` |
+| Status line | `Dialog` `Description` | sm `muted-foreground` text while the list is empty |
+| Filter | `NativeSelect` `Root`, `Icon` | the native select |
+| Hidden-files checkbox | `Checkbox` `Root`, `Label` | the checkbox |
+| Cancel and accept | `Button` `Root` | outline and default buttons; accept is disabled while it cannot run |
+| Overwrite alert | `AlertDialog` | the alert dialog panel over its scrim |
+
+| Field | `FileDialog::semantics` |
+| --- | --- |
+| Role | `Dialog` (AXGroup) |
+| Name / value | title / - |
+| State | busy while the listing loads |
+| Actions | `Dismiss`, `Focus` |
+
+The dialog publishes parts in focus order. The parts are the parent
+`Button`, the location `TextField`, the `List`, and the name `TextField`
+of a save dialog.
+
+- The `PopUpButton` filter has the filter text as its value. The
+  `Checkbox` shows the hidden-files state. The `Button` parts are Cancel
+  and accept.
+- The list is a collection with the count of all the rows. Each row in
+  view is a `ListItem` part with its absolute index.
+- A row part is selected when the row is selected. Its description is
+  "Folder" or the file size.
+- The part of the focused stop is the focused part. In the list, the
+  current row is the focused part.
+- The open overwrite alert is a modal `Dialog` part with a `Button` part
+  for each button.
+
+**As a view.** `FileDialog::new(request, directory, outcome)` of
+`choscorui-compose` mounts the dialog with the texts of the environment
+locale. Accept and cancel write the outcome to a
+`Binding<Option<FileDialogOutcome>>`.
+
+[file_dialog.rs](../crates/choscorui-controls/tests/file_dialog.rs) pins
+this behavior.
 
 ### Toolbar
 

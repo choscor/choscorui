@@ -193,6 +193,8 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`ContextMenu`](presentation.md#contextmenu) type alias: An area that opens `items` at the pointer on a secondary click.
 - [`Dialog`](presentation.md#dialog) type alias: A trigger button with a modal panel; `open` edits whether it shows.
 - [`DropdownMenu`](presentation.md#dropdownmenu) type alias: A button named `name` that opens a menu of `items`.
+- [`FileDialog`](presentation.md#filedialog) type alias: A file dialog that the toolkit draws, for `request`, that starts in `directory`.
+- [`FileDialogOutcome`](presentation.md#filedialogoutcome) enum: What a file dialog gives back to its host.
 - [`FontDialog`](presentation.md#fontdialog) struct: A font dialog that edits `style`: a family combobox, a size field, bold and italic toggles, and a preview of `sample` in the chosen style.
 - [`InputDialog`](presentation.md#inputdialog) struct: A modal dialog for one validated value.
 - [`MenuChoice`](presentation.md#menuchoice) struct: One row of a menu that a view presents: an action, a checkbox or radio row, a submenu, or a separator.

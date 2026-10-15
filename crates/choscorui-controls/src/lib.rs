@@ -130,6 +130,8 @@ mod data;
 mod editing;
 pub use editing::EditCommand;
 pub(crate) mod feedback;
+mod file_dialog;
+pub use file_dialog::{FileDialog, FileDialogOutcome, FileDialogResult};
 mod form;
 mod hosted;
 pub use hosted::Reveal;

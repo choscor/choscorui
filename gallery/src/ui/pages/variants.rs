@@ -292,6 +292,10 @@ fn expectations() -> Vec<Expect> {
             states: &[S::CHECKED, S::FOCUSED],
             ..expect("title-bar", K::TitleBar)
         },
+        Expect {
+            slot: Some(Slot::Title),
+            ..expect("file-dialog", K::Dialog)
+        },
     ]
 }
 

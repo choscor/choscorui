@@ -12,12 +12,12 @@ use choscorui_compose::view::{
     Button, ButtonGroup, Calendar, Canvas, Card, Carousel, Chart, Checkbox, Collapsible,
     ColorPicker, ColumnBrowser, Combobox, Command, CommandLink, ContextMenu, DataTable, DatePicker,
     DateTimeEdit, DecimalSpinBox, Dial, Dialog, Divider, Dock, DropdownMenu, Empty, EmptyState,
-    FieldText, FontChooser, GroupBox, HeaderView, Input, InputGroup, InputOtp, ItemGroup, Kbd,
-    KeySequenceEdit, Label, List, Marker, Menubar, Message, MessageScroller, NavigationMenu,
-    NumericDisplay, Pagination, Popover, Progress, Questionnaire, RadioGroup, RangeSlider,
-    Resizable, ScrollBar, ScrollView, Select, Sidebar, SizeGrip, Skeleton, Slider, SpinBox,
-    Spinner, StackedContainer, StatusBar, Switch, Tabs, TextEditor, TextField, Textarea, TitleBar,
-    Toaster, Toggle, ToggleGroup, ToolBox, ToolButton, Toolbar,
+    FieldText, FileDialog, FontChooser, GroupBox, HeaderView, Input, InputGroup, InputOtp,
+    ItemGroup, Kbd, KeySequenceEdit, Label, List, Marker, Menubar, Message, MessageScroller,
+    NavigationMenu, NumericDisplay, Pagination, Popover, Progress, Questionnaire, RadioGroup,
+    RangeSlider, Resizable, ScrollBar, ScrollView, Select, Sidebar, SizeGrip, Skeleton, Slider,
+    SpinBox, Spinner, StackedContainer, StatusBar, Switch, Tabs, TextEditor, TextField, Textarea,
+    TitleBar, Toaster, Toggle, ToggleGroup, ToolBox, ToolButton, Toolbar,
 };
 use std::any::type_name;
 use std::collections::BTreeSet;
@@ -60,6 +60,7 @@ const VIEWS: &[(&str, ViewName)] = &[
     ("dial", type_name::<Dial>),
     ("dialog", type_name::<Dialog>),
     ("dock", type_name::<Dock>),
+    ("file-dialog", type_name::<FileDialog>),
     ("drawer", type_name::<Dialog>),
     ("dropdown-menu", type_name::<DropdownMenu>),
     ("empty", type_name::<EmptyState>),

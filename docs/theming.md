@@ -404,6 +404,8 @@ tokens and recipes change it:
 - The `TitleBar` recipe styles a drawn title bar and its window frame.
   The recipe has no reference counterpart, so it takes the `background`,
   `border`, and muted roles.
+- A drawn file dialog (`FileDialog`) takes the recipes of the input,
+  list, select, checkbox, and button controls.
 
 [controls.md](controls.md#titlebar-and-windowframe) gives the slot values.
 

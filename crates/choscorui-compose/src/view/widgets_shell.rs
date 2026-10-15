@@ -1,5 +1,5 @@
 //! View constructors for window parts: toolbars, status bars, docks,
-//! size grips, and title bars. Like the views in `widgets`, each takes its content, a
+//! size grips, title bars, and file dialogs. Like the views in `widgets`, each takes its content, a
 //! `Binding` where the control edits a value, and an action where it
 //! fires one.
 
@@ -11,10 +11,11 @@ use super::text::TextContent;
 use super::widgets::{Items, label, text};
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ControlKind, ControlMessage, ControlValue, DockLayout, StatusSection, TitleBarHandle,
-    ToolbarArea, ToolbarItem,
+    ControlKind, ControlMessage, ControlValue, DockLayout, FileDialogOutcome, StatusSection,
+    TitleBarHandle, ToolbarArea, ToolbarItem,
 };
-use choscorui_core::Size;
+use choscorui_core::{FileDialogRequest, Size};
+use std::path::PathBuf;
 
 /// A row of command buttons on the `area` edge of a window, with one tab
 /// stop and arrow keys between its items. Items that do not fit move to
@@ -190,6 +191,59 @@ impl Configured<controls::TitleBar> {
         let title = label(title);
         Configured::custom(ControlKind::TitleBar, move |env| {
             controls::TitleBar::new(text(&title, env), handle.clone())
+        })
+    }
+}
+
+/// A file dialog that the toolkit draws, for `request`, that starts in
+/// `directory`. It fills its bounds, for example the content of a dialog
+/// window. The texts come from the locale of the environment. Accept and
+/// Cancel write the outcome to `outcome`.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_core::{FileDialogKind, FileDialogRequest};
+/// struct Open;
+///
+/// impl View for Open {
+///     fn body(&self, cx: &mut Cx) -> impl View {
+///         let outcome = cx.state(None);
+///         let request = FileDialogRequest {
+///             kind: FileDialogKind::Open,
+///             title: None,
+///             allowed_types: vec!["txt".into()],
+///             suggested_name: None,
+///         };
+///         FileDialog::new(request, std::env::temp_dir(), outcome.binding())
+///     }
+/// }
+/// ```
+pub type FileDialog = Configured<controls::FileDialog>;
+
+impl Configured<controls::FileDialog> {
+    /// A dialog for `request` in `directory` that writes its outcome to `outcome`.
+    pub fn new(
+        request: FileDialogRequest,
+        directory: impl Into<PathBuf>,
+        outcome: Binding<Option<FileDialogOutcome>>,
+    ) -> Self {
+        let directory = directory.into();
+        let dialog = ControlRef::new();
+        let read = dialog.clone();
+        Configured::custom(ControlKind::Dialog, move |env| {
+            controls::FileDialog::from_request(&request, directory.clone(), &env.localizer())
+        })
+        .control_ref(&dialog)
+        .on_message(move |message| {
+            if matches!(
+                message,
+                ControlMessage::Activated | ControlMessage::Dismissed
+            ) && let Some(result) = read.with(|dialog| dialog.result().take()).flatten()
+            {
+                outcome.set(Some(result));
+            }
         })
     }
 }

@@ -97,6 +97,12 @@ canvas (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 switch
 toggle
 toggle-group
@@ -174,11 +180,13 @@ header-view
 column-browser
 toolbar
 dock
-color-picker
-decimal-spin-box
-scroll-bar
-key-sequence-edit
 # backward
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
@@ -270,6 +278,12 @@ select
 toggle-group
 toggle
 switch
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
@@ -341,16 +355,6 @@ breadcrumb
 breadcrumb (inside)
 command
 dialog
-hover-card
-popover
-menubar
-context-menu
-range-slider
-range-slider (inside)
-date-picker
-input-otp
-textarea
-input-group
 # every hosted control Rtl
 # forward
 switch
@@ -444,6 +448,12 @@ canvas (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 switch
 toggle
 toggle-group
@@ -521,11 +531,13 @@ header-view
 column-browser
 toolbar
 dock
-color-picker
-decimal-spin-box
-scroll-bar
-key-sequence-edit
 # backward
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
@@ -617,6 +629,12 @@ select
 toggle-group
 toggle
 switch
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
 title-bar
 title-bar (inside)
 title-bar (inside)
@@ -688,13 +706,3 @@ breadcrumb
 breadcrumb (inside)
 command
 dialog
-hover-card
-popover
-menubar
-context-menu
-range-slider
-range-slider (inside)
-date-picker
-input-otp
-textarea
-input-group
