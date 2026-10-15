@@ -10,7 +10,7 @@
 //! monitor, as `x11_scale` decides.
 
 mod dnd;
-mod ime;
+pub(crate) mod ime;
 mod protocol;
 mod selection;
 mod window;
@@ -186,7 +186,8 @@ pub(crate) struct Client {
     deferred: RefCell<VecDeque<Bytes>>,
     /// The server time of the latest input or property event.
     time: Cell<u32>,
-    /// The XIM input method, when one takes preedit callbacks.
+    /// The XIM connection and its input method. None without libX11, or
+    /// when the input method takes no preedit callbacks.
     ime: RefCell<Option<ime::Ime>>,
     /// The GLES painter, unless it is not available or
     /// `CHOSCORUI_PAINTER=cairo` asks for Cairo.
@@ -686,7 +687,7 @@ impl Client {
             (false, Some(left)) => Some(timeout.map_or(left, |timeout| timeout.min(left))),
             (false, None) => timeout,
         };
-        let method = self.input_method();
+        let xim = self.xim_display();
         let mut watches = Vec::with_capacity(extra.len() + 2);
         watches.push(Watch {
             fd: self.connection.fd(),
@@ -698,9 +699,9 @@ impl Client {
             read: watch.read,
             write: watch.write,
         }));
-        if let Some(method) = &method {
+        if let Some(xim) = &xim {
             watches.push(Watch {
-                fd: method.fd(),
+                fd: xim.fd(),
                 read: true,
                 write: false,
             });
@@ -708,7 +709,7 @@ impl Client {
         let ready =
             libc::wait(&watches, timeout).map_err(|error| Error::Connection(error.to_string()))?;
         drop(watches);
-        drop(method);
+        drop(xim);
         self.ime_dispatch();
         self.handle_all();
         self.expire_drag();

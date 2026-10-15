@@ -425,12 +425,17 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 On X11, XIM connects the window to the input method, on-the-spot:
 
-1. The client opens the input method of `XMODIFIERS` on a second Xlib connection. It uses the input method only when it takes preedit callbacks. The local input method of Xlib does not, so without `XMODIFIERS` there is no input method. Keys then type their text through xkbcommon and compose.
-2. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
-3. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
-4. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
+1. The client opens a second Xlib connection. It registers an instantiate callback for the input method of `XMODIFIERS`.
+2. When the callback runs, the client opens the input method. It uses the input method only when it takes preedit callbacks.
+3. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
+4. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
+5. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
 
 XIM has no surrounding text, so the X11 backend does not send `text`. `input_methods` is `Supported` on X11 when such an input method opens.
+
+- **Server restarts.** When the XIM server stops, Xlib calls the destroy callback of the input method. Marked text then gives `Unmark`, and the input contexts close. The client registers the instantiate callback again. When a server starts, the input method opens again, and each window with an active text input gets a new context. Thus a server that starts after the application also works.
+- **Local input method.** Xlib uses its local input method for `@im=none`, and for an empty `XMODIFIERS` when the locale has a compose file. It has only the `XIMPreeditNothing` and `XIMPreeditNone` styles, without preedit callbacks. Thus the client closes it and the second connection. Keys then type their text through xkbcommon and compose, and `input_methods` is `Unsupported`.
+- **Connections.** The [specification](specs/2026-10-15-linux-backend.md) names libX11-xcb, so that XIM and xcb share one connection. The backend does not load libX11-xcb, because a shared connection does not work. With `XCBOwnsEventQueue`, Xlib reads no events, so the XIM transport spins in `XIfEvent` while it waits for a reply. With the event queue of Xlib, the event loop must read `XEvent` structures, not the wire events of xcb. Thus XIM keeps its own connection, and Xlib owns its event queue.
 
 ## Desktop integration
 
