@@ -31,8 +31,11 @@ smoke() {
     $session cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test lifetime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test modal_smoke --locked -- --test-threads=1
+    $session cargo test -p choscorui-linux --test menu_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test atspi_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test app_smoke --locked
+    $session cargo test -p choscorui --test chrome_smoke --locked
+    $session env CHOSCORUI_DECORATIONS=client cargo test -p choscorui --test chrome_smoke --locked
     $session cargo test -p choscorui --test dialog_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test errors_and_capabilities --locked
     $session env CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
