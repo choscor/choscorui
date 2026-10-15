@@ -180,6 +180,7 @@ const POINTER_FRAME: u16 = 5;
 const POINTER_AXIS_DISCRETE: u16 = 8;
 const POINTER_AXIS_VALUE120: u16 = 9;
 const POINTER_SET_CURSOR: u16 = 0;
+const BELL_RING: u16 = 1;
 const KEYBOARD_KEYMAP: u16 = 0;
 const KEYBOARD_ENTER: u16 = 1;
 const KEYBOARD_LEAVE: u16 = 2;
@@ -708,6 +709,26 @@ impl Client {
             }
         }
         connection_error(error)
+    }
+
+    /// Rings the bell of the compositor for the focused window. Returns
+    /// false when the compositor has no bell.
+    pub(crate) fn ring_bell(&self) -> bool {
+        let globals = self.globals.borrow();
+        let Some(bell) = &globals.system_bell else {
+            return false;
+        };
+        let seat = self.seat.borrow();
+        let focused = seat.keyboard_focus.as_ref().and_then(Weak::upgrade);
+        let rung = bell
+            .request(
+                BELL_RING,
+                &[Arg::Object(focused.as_ref().map(|window| &window.surface))],
+            )
+            .is_ok();
+        drop((seat, globals));
+        self.flush();
+        rung
     }
 
     pub(crate) fn flush(&self) {

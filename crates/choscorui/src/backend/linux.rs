@@ -6,8 +6,8 @@ use choscorui_compose::view::ViewHost;
 use choscorui_controls::{EstimatedText, ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
-    Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback, Rect, SemanticChange,
-    SemanticEntry, ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
+    Feedback, MenuBarModel, MenuCommandId, MenuError, Rect, SemanticChange, SemanticEntry,
+    ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
 };
 use choscorui_linux::services::{NativeServices, ServiceOptions, TextClipboard};
 use choscorui_linux::{
@@ -15,7 +15,7 @@ use choscorui_linux::{
     Window, WindowEvent,
 };
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -88,7 +88,7 @@ fn app_error(error: Error) -> AppError {
 
 /// The Wayland or X11 application and its desktop services.
 pub(crate) struct Platform {
-    application: Application,
+    application: Rc<Application>,
     services: Rc<NativeServices>,
 }
 
@@ -111,6 +111,17 @@ impl TextClipboard for Selection {
     }
 }
 
+/// The alert sound of the application.
+struct Bell(Weak<Application>);
+
+impl Feedback for Bell {
+    fn beep(&self) {
+        if let Some(application) = self.0.upgrade() {
+            application.beep();
+        }
+    }
+}
+
 impl Platform {
     pub(crate) fn new(id: Option<&str>) -> Result<Self, AppError> {
         let application = Application::new().map_err(app_error)?;
@@ -126,7 +137,7 @@ impl Platform {
             application.attach_bus(bus.clone());
         }
         Ok(Self {
-            application,
+            application: Rc::new(application),
             services: Rc::new(services),
         })
     }
@@ -143,7 +154,7 @@ impl Platform {
 
     /// The alert sound of the controls.
     pub(crate) fn feedback(&self) -> Rc<dyn Feedback> {
-        Rc::new(NoFeedback)
+        Rc::new(Bell(Rc::downgrade(&self.application)))
     }
 
     /// The desktop services.

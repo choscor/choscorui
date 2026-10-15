@@ -155,6 +155,16 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 `input_methods` is `Supported` when the compositor has `zwp_text_input_manager_v3`.
 
+## Alert sound
+
+`Application::beep()` plays the alert sound of the controls. It uses the first source that works:
+
+1. On Wayland, `xdg_system_bell_v1` rings the bell for the focused window.
+2. The libcanberra event sound `bell` plays from the sound theme.
+3. Else, the application makes no sound.
+
+The facade `Feedback` of the application calls `beep()`.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:

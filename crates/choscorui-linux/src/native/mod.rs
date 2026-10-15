@@ -276,6 +276,18 @@ impl Application {
         self.timers.panics()
     }
 
+    /// Plays the alert sound: the bell of the display server, else the
+    /// event sound `bell` of libcanberra, else nothing.
+    pub fn beep(&self) {
+        let rung = match &self.display {
+            Display::Wayland(client) => client.ring_bell(),
+            Display::X11(_) => false,
+        };
+        if !rung {
+            crate::ffi::canberra::play_bell();
+        }
+    }
+
     /// The handle of the focused window for the parent of portal dialogs,
     /// such as `wayland:HANDLE` or `x11:XID`.
     pub fn focused_window_handle(&self) -> Option<String> {
