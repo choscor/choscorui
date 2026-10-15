@@ -1,0 +1,55 @@
+# Release budgets for Linux, checked by
+# `choscorui-bench --check bench/budgets-linux.txt`. The linux-native CI job
+# runs the full bench on Wayland and on X11 in a headless session and
+# enforces this file.
+#
+# This file holds only keys that do not depend on the speed of the machine:
+# leaks, missed frames, idle work, correctness counters, and binary sizes.
+# Timing keys (`*_ms`) are not in this file. A Linux timing budget needs
+# measurements on a named Linux reference machine, which docs/performance.md
+# records. No Linux reference machine is named yet, so the bench reports the
+# timings without a budget. The CI container is not a reference machine.
+
+# Startup: each launch reports its first frame.
+startup.gallery.failures <= 0
+startup.stress.failures <= 0
+
+# Idle: no repeated drawing, negligible CPU and wakeups. The wakeups are
+# the voluntary and involuntary context switches of all threads.
+idle.paints <= 0
+idle.cpu_percent <= 1
+idle.wakeups_per_sec <= 20
+
+# Every step reports its new size and presents a frame within one second.
+resize.missed_configure <= 0
+resize.missed_present <= 0
+scroll.missed_present <= 0
+document.missed_present <= 0
+theme.missed_present <= 0
+views.missed_present <= 0
+windows.missed_present <= 0
+
+# The work of a step does not grow with the model.
+scroll.peak_realized_rows <= 40
+document.caret_mismatches <= 0
+views.dirty_nodes <= 4
+views.dirty_growth <= 0
+views.errors <= 0
+semantics.command_entries <= 40
+semantics.list_entries <= 60
+semantics.canvas_entries <= 1000
+semantics.command_moved >= 60
+semantics.list_moved >= 60
+semantics.canvas_moved >= 60
+semantics.command_errors <= 0
+semantics.list_errors <= 0
+semantics.canvas_errors <= 0
+
+# Open, resize, and close 20 windows twice: no native window stays.
+windows.leaked_native_windows <= 0
+
+# Release executable size of the gallery, as the release profile builds it
+# in the image of scripts/linux/Dockerfile. One limit covers both CI
+# architectures. Measured: 5.349 MiB on x86_64 and 4.524 MiB on aarch64.
+# The limit is the x86_64 size plus 2 %, rounded up.
+size.choscorui-gallery_mib <= 5.46

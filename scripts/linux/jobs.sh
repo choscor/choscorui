@@ -4,7 +4,7 @@
 # of CONTRIBUTING.md, run them directly from the repository root.
 #
 #   scripts/linux/jobs.sh check    # docs, format, lint, MSRV, and tests
-#   scripts/linux/jobs.sh native   # smoke tests, gallery, and autopilot
+#   scripts/linux/jobs.sh native   # smoke tests, gallery, autopilot, and bench
 set -eu
 
 cd "$(dirname "$0")/../.."
@@ -29,6 +29,7 @@ smoke() {
     $session cargo test -p choscorui-linux --lib --locked wayland_session_
     $session cargo test -p choscorui-linux --test clipboard_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
+    $session cargo test -p choscorui-linux --test lifetime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test modal_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test atspi_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test app_smoke --locked
@@ -55,6 +56,14 @@ native() {
         CHOSCORUI_BACKEND=$backend $session env \
             CHOSCORUI_GALLERY_SETTINGS="$(mktemp -d)/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 \
             cargo run -p choscorui-gallery --locked
+    done
+    # The bench checks the budgets that do not depend on the machine:
+    # leaks, missed frames, idle work, and the release binary sizes.
+    cargo build --release -p choscorui-gallery -p choscorui-bench --locked
+    for backend in wayland x11; do
+        echo "== bench: CHOSCORUI_BACKEND=$backend"
+        CHOSCORUI_BACKEND=$backend $session \
+            target/release/choscorui-bench --check bench/budgets-linux.txt
     done
 }
 

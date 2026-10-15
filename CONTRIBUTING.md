@@ -75,6 +75,8 @@ On a Mac, use Docker Desktop. On Apple silicon, the container is aarch64 Linux.
 
 The native checks run each test alone in [scripts/linux/headless-session.sh](scripts/linux/headless-session.sh). That script starts a D-Bus session bus, the AT-SPI registry, a headless sway compositor, and Xvfb. It also builds and starts a virtual keyboard and pointer for sway, from [scripts/linux/virtual-input](scripts/linux/virtual-input/virtual-input.c). A test writes commands to the FIFO in `CHOSCORUI_VIRTUAL_INPUT` to press keys and buttons. The checks run on Wayland and on X11, with the GLES painter and with the Cairo painter.
 
+The native job also builds the release gallery and `choscorui-bench`. It runs the bench on Wayland and on X11 with `--check bench/budgets-linux.txt`. That file holds only the budgets that do not depend on the machine, such as leaked windows, missed frames, idle work, and binary sizes. [docs/performance.md](docs/performance.md#linux-budgets) describes them.
+
 To run one command in a headless session, use `scripts/linux/run-in-container.sh -- COMMAND`. For example:
 
 ```sh
