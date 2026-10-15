@@ -1043,6 +1043,7 @@ impl TextField {
             None => self.caret(),
         };
         Some(TextInputInfo {
+            text: self.value().to_owned(),
             selected_utf16: self
                 .semantics_for(false, Localizer::builtin())
                 .selection_utf16,

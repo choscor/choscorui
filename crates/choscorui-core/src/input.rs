@@ -126,11 +126,14 @@ pub enum CompositionEvent {
     Unmark,
 }
 
-/// What an input method reads from the focused text control: the
-/// selection and the marked text in UTF-16 code units, and the caret
-/// rectangle in window coordinates, where the candidate window opens.
+/// What an input method reads from the focused text control: its text,
+/// the selection and the marked text in UTF-16 code units of that text,
+/// and the caret rectangle in window coordinates, where the candidate
+/// window opens.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextInputInfo {
+    /// The committed text of the control, without the marked text.
+    pub text: String,
     pub selected_utf16: Range<usize>,
     pub marked_utf16: Option<Range<usize>>,
     pub caret: Rect,

@@ -903,6 +903,7 @@ impl TextEditor {
             return None;
         }
         Some(TextInputInfo {
+            text: self.value().to_owned(),
             selected_utf16: self.selection_utf16(),
             marked_utf16: self.marked_range_utf16(),
             caret: to_window(self.caret_rect(layout)?),

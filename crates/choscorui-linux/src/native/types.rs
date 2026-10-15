@@ -102,6 +102,9 @@ pub enum ImeEvent {
 /// reads.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextInputState {
+    /// The committed text of the focused control. The ranges count UTF-16
+    /// code units of it.
+    pub text: String,
     pub selected_utf16: Range<usize>,
     pub marked_utf16: Option<Range<usize>>,
     /// The caret rectangle in logical window coordinates.

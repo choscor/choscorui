@@ -7,13 +7,16 @@ use choscorui_controls::{EstimatedText, ShapedText, ShortcutModifiers, TextMeasu
 use choscorui_core::{
     AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
     Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback, Rect, SemanticChange,
-    SemanticEntry, Services, Size, Support, WindowGeometry, WindowOptions,
+    SemanticEntry, ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
 };
+use choscorui_linux::services::{NativeServices, ServiceOptions, TextClipboard};
 use choscorui_linux::{
-    Application, Error, ImeEvent, LinuxTextShaper, Modifiers, TextInputState, Window, WindowEvent,
+    Application, Error, ImeEvent, LinuxTextShaper, Modifiers, SystemClipboard, TextInputState,
+    Window, WindowEvent,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 static SHAPER: LinuxTextShaper = LinuxTextShaper;
@@ -48,9 +51,23 @@ impl NativeAccess for AppContext {
     }
 }
 
-/// What the backend provides on the running system.
+/// What the backend provides on the running system: the display server
+/// features, and the desktop services on the session bus.
 pub(crate) fn capabilities() -> BackendCapabilities {
-    choscorui_linux::capabilities()
+    // The services are probed once, on a connection of their own.
+    static SERVICES: OnceLock<BackendCapabilities> = OnceLock::new();
+    let mut capabilities = choscorui_linux::capabilities();
+    let services = *SERVICES.get_or_init(|| {
+        let probe = NativeServices::new(ServiceOptions::new(""));
+        probe.set_base_capabilities(BackendCapabilities::none("linux"));
+        choscorui_core::ServiceBackend::capabilities(&probe)
+    });
+    capabilities.notifications = services.notifications;
+    capabilities.status_items = services.status_items;
+    capabilities.open_urls = services.open_urls;
+    capabilities.system_appearance = services.system_appearance;
+    capabilities.native_dialogs = services.native_dialogs;
+    capabilities
 }
 
 /// The `multiple_windows` capability of [`capabilities`].
@@ -69,9 +86,29 @@ fn app_error(error: Error) -> AppError {
     }
 }
 
-/// The Wayland or X11 application.
+/// The Wayland or X11 application and its desktop services.
 pub(crate) struct Platform {
     application: Application,
+    services: Rc<NativeServices>,
+}
+
+/// The text clipboard of the services: the selection of the display
+/// server.
+struct Selection(SystemClipboard);
+
+impl TextClipboard for Selection {
+    fn text(&self) -> Result<Option<String>, ServiceError> {
+        self.0
+            .read_text()
+            .map_err(|_| ServiceError::Failed(choscorui_core::Service::Clipboard))
+    }
+
+    fn set_text(&self, text: &str) -> Result<(), ServiceError> {
+        self.0.write_text(text).map_err(|error| match error {
+            Error::InvalidClipboardText => ServiceError::InvalidText,
+            _ => ServiceError::Failed(choscorui_core::Service::Clipboard),
+        })
+    }
 }
 
 impl Platform {
@@ -80,7 +117,18 @@ impl Platform {
         if let Some(id) = id {
             application.set_app_id(id);
         }
-        Ok(Self { application })
+        let services = NativeServices::new(ServiceOptions::new(id.unwrap_or_default()));
+        services.set_base_capabilities(capabilities());
+        if capabilities().clipboard.is_supported() {
+            services.set_clipboard(Some(Box::new(Selection(application.clipboard()))));
+        }
+        if let Some(bus) = services.connection() {
+            application.attach_bus(bus.clone());
+        }
+        Ok(Self {
+            application,
+            services: Rc::new(services),
+        })
     }
 
     /// The text measurer of the windows: HarfBuzz shaping, or estimated
@@ -100,7 +148,7 @@ impl Platform {
 
     /// The desktop services.
     pub(crate) fn services(&self) -> Services {
-        Services::none()
+        Services::new(self.services.clone())
     }
 
     pub(crate) fn open_window(&self, options: &WindowOptions) -> Result<NativeWindow, AppError> {
@@ -221,6 +269,7 @@ impl NativeWindow {
         }
         let input = host.text_input().unwrap_or_default();
         self.window.set_text_input_state(TextInputState {
+            text: input.text,
             selected_utf16: input.selected_utf16,
             marked_utf16: input.marked_utf16,
             caret: input.caret,

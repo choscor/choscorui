@@ -153,6 +153,8 @@ pub struct Application {
     windows: RefCell<Vec<std::rc::Weak<WindowShared>>>,
     app_id: RefCell<String>,
     stopped: Cell<bool>,
+    /// The session bus of the desktop services, which the loop serves too.
+    bus: RefCell<Option<crate::dbus::Connection>>,
     _ui_thread: PhantomData<Rc<()>>,
 }
 
@@ -170,6 +172,7 @@ impl Application {
             windows: RefCell::new(Vec::new()),
             app_id: RefCell::new(String::new()),
             stopped: Cell::new(false),
+            bus: RefCell::new(None),
             _ui_thread: PhantomData,
         })
     }
@@ -265,17 +268,28 @@ impl Application {
         self.timers.panics()
     }
 
+    /// Makes the event loop serve `connection` too: it waits on the
+    /// descriptors of the connection and dispatches its messages.
+    pub fn attach_bus(&self, connection: crate::dbus::Connection) {
+        *self.bus.borrow_mut() = Some(connection);
+    }
+
     /// Paints the windows that are ready, waits up to `timeout` for an
     /// event, and handles what arrived. Returns true when something was
     /// handled. Fails when the display connection is lost; the windows
     /// then have a `Closing` event.
     pub fn dispatch_next_event(&self, timeout: Duration) -> Result<bool, Error> {
         let now = Instant::now();
-        let timeout = match self.timers.next_deadline() {
+        let mut timeout = match self.timers.next_deadline() {
             Some(deadline) => timeout.min(deadline.saturating_duration_since(now)),
             None => timeout,
         };
-        let extra = [
+        let bus = self.bus.borrow().clone();
+        let bus_watches = bus.as_ref().map(|bus| bus.watches()).unwrap_or_default();
+        if let Some(own) = bus.as_ref().and_then(crate::dbus::Connection::next_timeout) {
+            timeout = timeout.min(own);
+        }
+        let mut extra = vec![
             Watch {
                 fd: std::os::fd::AsFd::as_fd(self.posted.wake()),
                 read: true,
@@ -287,11 +301,33 @@ impl Application {
                 write: false,
             },
         ];
+        extra.extend(bus_watches.iter().map(|watch| Watch {
+            fd: std::os::fd::AsFd::as_fd(watch),
+            read: watch.read(),
+            write: watch.write(),
+        }));
         let ready = match &self.display {
             Display::Wayland(client) => client.wait(&extra, Some(timeout))?,
             Display::X11(client) => client.wait(&extra, Some(timeout))?,
         };
+        drop(extra);
         let mut handled = ready.iter().any(|ready| ready.read);
+        if let Some(bus) = &bus {
+            for (watch, ready) in bus_watches.iter().zip(ready.iter().skip(2)) {
+                bus.handle(
+                    watch,
+                    crate::dbus::Readiness {
+                        read: ready.read,
+                        write: ready.write,
+                        hangup: ready.hangup,
+                    },
+                );
+            }
+            // A lost session bus ends the services, not the application.
+            if bus.dispatch().is_err() {
+                self.bus.borrow_mut().take();
+            }
+        }
         handled |= self.posted.run();
         if self
             .timers

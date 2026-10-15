@@ -798,7 +798,7 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     };
     check(
         "desktop capabilities are reported and the status item toggles",
-        capabilities.backend == "macos" && status,
+        matches!(capabilities.backend, "macos" | "wayland" | "x11") && status,
     );
 
     println!(
