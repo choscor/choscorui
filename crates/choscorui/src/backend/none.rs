@@ -86,8 +86,9 @@ impl Platform {
         Ok(NativeMenu { model })
     }
 
-    pub(crate) fn wait(&self, timeout: Duration) {
+    pub(crate) fn wait(&self, timeout: Duration) -> Result<(), AppError> {
         std::thread::sleep(timeout);
+        Ok(())
     }
 
     pub(crate) fn activate(&self) {}

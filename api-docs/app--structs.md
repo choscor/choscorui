@@ -213,7 +213,9 @@ pub fn run(self) -> Result<(), AppError>
 ```
 
 Runs the application until the user quits or closes the last
-window, then saves the settings.
+window, then saves the settings. Returns
+`AppError::Disconnected` when the connection to the display
+server is lost.
 
 ##### Examples
 
@@ -458,6 +460,28 @@ let app = App::new().on_tick(|cx| {
 });
 ```
 
+#### `AppContext::error`
+
+```rust
+pub fn error(&self) -> Option<&AppError>
+```
+
+The error that stopped the event loop: `AppError::Disconnected`
+after the connection to the display server is lost. `None` while
+the application runs, and after a quit.
+
+##### Examples
+
+```rust
+let mut cx = App::new()
+    .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    .start()?;
+while cx.pump() {}
+if let Some(error) = cx.error() {
+    eprintln!("stopped: {error}");
+}
+```
+
 #### `AppContext::host`
 
 ```rust
@@ -542,7 +566,8 @@ pub fn pump(&mut self) -> bool
 Waits for native events up to the next due frame or timer, handles
 them and the desktop events of the services, and draws what
 changed. Returns false when the application
-should stop; the settings are then saved.
+should stop; the settings are then saved. After a lost display
+connection, it returns false, and [`AppContext::error`](#appcontexterror) tells why.
 
 ##### Examples
 

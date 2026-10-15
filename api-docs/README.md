@@ -23,7 +23,7 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`AnyView`](app--structs.md#anyview) struct: A view of any type.
 - [`App`](app--structs.md#app) struct: A view-based application.
 - [`AppContext`](app--structs.md#appcontext) struct: A running application.
-- [`AppError`](app--enums.md#apperror) enum: What can stop an application from starting.
+- [`AppError`](app--enums.md#apperror) enum: What can stop an application from starting or running.
 - [`BackendCapabilities`](app--structs.md#backendcapabilities) struct: What the running backend can do.
 - [`CommandMenu`](app--structs.md#commandmenu) struct: One menu of the menu bar, with `MenuChoice` rows: actions, check and radio rows, submenus, and separators.
 - [`DesktopEvent`](app--enums.md#desktopevent) enum: An event that the desktop sends after the call that caused it, or without a call.

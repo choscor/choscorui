@@ -137,8 +137,9 @@ impl Platform {
     }
 
     /// Waits up to `timeout` for a native event and handles it.
-    pub(crate) fn wait(&self, timeout: Duration) {
+    pub(crate) fn wait(&self, timeout: Duration) -> Result<(), AppError> {
         self.application.dispatch_next_event(timeout);
+        Ok(())
     }
 
     /// Brings the application to the front.

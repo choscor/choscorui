@@ -81,6 +81,8 @@ pub struct AppContext {
     on_tick: Option<Hook>,
     on_error: ErrorHandler,
     quit: bool,
+    /// The error that stopped the event loop.
+    pub(crate) failure: Option<AppError>,
     started: Instant,
 }
 
@@ -119,6 +121,7 @@ impl AppContext {
             on_tick,
             on_error,
             quit: false,
+            failure: None,
             started: Instant::now(),
         }
     }
@@ -528,7 +531,8 @@ impl AppContext {
     /// Waits for native events up to the next due frame or timer, handles
     /// them and the desktop events of the services, and draws what
     /// changed. Returns false when the application
-    /// should stop; the settings are then saved.
+    /// should stop; the settings are then saved. After a lost display
+    /// connection, it returns false, and [`AppContext::error`] tells why.
     ///
     /// # Examples
     ///
@@ -542,7 +546,9 @@ impl AppContext {
     /// ```
     pub fn pump(&mut self) -> bool {
         let wait = self.wait();
-        self.platform.wait(wait);
+        if let Err(error) = self.platform.wait(wait) {
+            self.failure = Some(error);
+        }
         self.run_commands();
         for id in self.windows() {
             self.deliver(id);
@@ -568,13 +574,34 @@ impl AppContext {
         for id in self.windows() {
             self.draw(id);
         }
-        let running = !self.quit && !self.windows.is_empty();
+        let running = !self.quit && !self.windows.is_empty() && self.failure.is_none();
         if running {
             self.write_settings();
         } else {
             self.save();
         }
         running
+    }
+
+    /// The error that stopped the event loop: [`AppError::Disconnected`]
+    /// after the connection to the display server is lost. `None` while
+    /// the application runs, and after a quit.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use choscorui::prelude::*;
+    /// let mut cx = App::new()
+    ///     .window(WindowOptions::new("Hello", 320.0, 200.0), || Text::new("Hello"))
+    ///     .start()?;
+    /// while cx.pump() {}
+    /// if let Some(error) = cx.error() {
+    ///     eprintln!("stopped: {error}");
+    /// }
+    /// # Ok::<(), AppError>(())
+    /// ```
+    pub fn error(&self) -> Option<&AppError> {
+        self.failure.as_ref()
     }
 
     /// How long to wait for the next native event.

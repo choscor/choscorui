@@ -38,7 +38,7 @@ Query capabilities, not the OS version or `cfg!(target_os)`. For example, on mac
 
 [platform-macos.md](platform-macos.md) lists the values on macOS, and [platform-linux.md](platform-linux.md#capabilities) lists them on Linux.
 
-On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. The message is "no backend exists for this operating system". A service of `Services` returns `ServiceError::Unsupported` when the backend does not have it, and `ServiceError::Unavailable` with the condition when the capability is `Conditional`.
+On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. The message is "no backend exists for this operating system". When the connection to the display server is lost, `App::run` returns `AppError::Disconnected`. A service of `Services` returns `ServiceError::Unsupported` when the backend does not have it, and `ServiceError::Unavailable` with the condition when the capability is `Conditional`.
 
 ## Error reporting
 

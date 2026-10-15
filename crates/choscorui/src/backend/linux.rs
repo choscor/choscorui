@@ -20,6 +20,7 @@ use choscorui_linux::{
     SystemClipboard, TextInputState, Window, WindowEvent,
 };
 use chrome::{Chrome, Menus};
+use std::cell::Cell;
 use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -142,6 +143,8 @@ pub(crate) struct Platform {
     accessibility: Option<Rc<Bridge>>,
     /// The menus that the windows draw.
     menus: Menus,
+    /// True after the display connection is lost.
+    lost: Cell<bool>,
 }
 
 /// The text clipboard of the services: the selection of the display
@@ -210,6 +213,7 @@ impl Platform {
             modal,
             accessibility,
             menus: Menus::default(),
+            lost: Cell::new(false),
         })
     }
 
@@ -281,11 +285,16 @@ impl Platform {
     }
 
     /// Waits up to `timeout` for a native event and handles it. A lost
-    /// display connection gives each window a close request.
-    pub(crate) fn wait(&self, timeout: Duration) {
+    /// display connection gives each window a close request, and this
+    /// call and each later call return [`AppError::Disconnected`].
+    pub(crate) fn wait(&self, timeout: Duration) -> Result<(), AppError> {
+        if self.lost.get() {
+            return Err(AppError::Disconnected);
+        }
         if let Err(error) = self.application.dispatch_next_event(timeout) {
             eprintln!("choscorui: {error}");
-            std::thread::sleep(timeout);
+            self.lost.set(true);
+            return Err(AppError::Disconnected);
         }
         self.services.set_active(self.application.is_active());
         self.services.update_desktop_font();
@@ -295,6 +304,7 @@ impl Platform {
         if let Some(handle) = self.application.focused_window_handle() {
             self.services.set_parent_window(handle);
         }
+        Ok(())
     }
 
     /// The compositor or window manager decides about focus; new windows

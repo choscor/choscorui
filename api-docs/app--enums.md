@@ -15,10 +15,11 @@ pub enum AppError {
     InvalidWindowOptions,
     Unavailable,
     Menu(MenuError),
+    Disconnected,
 }
 ```
 
-What can stop an application from starting.
+What can stop an application from starting or running.
 
 ### Variants
 
@@ -27,6 +28,8 @@ What can stop an application from starting.
 - `InvalidWindowOptions`: The window options have an invalid size or title.
 - `Unavailable`: The native platform could not start or open a window.
 - `Menu(MenuError)`: The menu bar model is not valid or could not be installed.
+- `Disconnected`: The connection to the display server is lost, for example when
+  the compositor or the X server stops.
 
 ## `DesktopEvent`
 

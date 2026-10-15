@@ -49,3 +49,8 @@ harness = false
 name = "gles_parity_smoke"
 path = "tests/gles_parity_smoke.rs"
 harness = false
+
+[[test]]
+name = "display_lost_smoke"
+path = "tests/display_lost_smoke.rs"
+harness = false

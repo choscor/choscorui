@@ -77,7 +77,9 @@ pub(super) fn show(
     popup.show();
     present(&mut host, &popup, context.elapsed().as_secs_f64());
     while chosen.get().is_none() && !dismissed.get() && !popup.is_closed() {
-        context.platform.wait(FRAME_WAIT);
+        if context.platform.wait(FRAME_WAIT).is_err() {
+            break;
+        }
         let Some(index) = context.index(id) else {
             break;
         };

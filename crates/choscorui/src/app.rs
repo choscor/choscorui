@@ -11,7 +11,7 @@ use choscorui_core::{DesignTokens, Locale, MenuError, SettingsSchema, Support, W
 use std::path::PathBuf;
 use std::rc::Rc;
 
-/// What can stop an application from starting.
+/// What can stop an application from starting or running.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum AppError {
@@ -25,6 +25,9 @@ pub enum AppError {
     Unavailable,
     /// The menu bar model is not valid or could not be installed.
     Menu(MenuError),
+    /// The connection to the display server is lost, for example when
+    /// the compositor or the X server stops.
+    Disconnected,
 }
 
 impl std::fmt::Display for AppError {
@@ -37,6 +40,7 @@ impl std::fmt::Display for AppError {
             }
             Self::Unavailable => f.write_str("the native platform is unavailable"),
             Self::Menu(error) => write!(f, "menu error: {error}"),
+            Self::Disconnected => f.write_str("the connection to the display server is lost"),
         }
     }
 }
@@ -484,7 +488,9 @@ impl App {
     }
 
     /// Runs the application until the user quits or closes the last
-    /// window, then saves the settings.
+    /// window, then saves the settings. Returns
+    /// [`AppError::Disconnected`] when the connection to the display
+    /// server is lost.
     ///
     /// # Examples
     ///
@@ -499,7 +505,10 @@ impl App {
     pub fn run(self) -> Result<(), AppError> {
         let mut context = self.start()?;
         while context.pump() {}
-        Ok(())
+        match context.failure.take() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 }
 

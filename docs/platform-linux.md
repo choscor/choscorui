@@ -87,7 +87,7 @@ One `poll` call waits on these descriptors:
 
 `Application::attach_bus(connection)` adds a D-Bus connection to the loop. The facade attaches the session bus of the desktop services and the accessibility bus. A lost bus ends its services, but the application continues.
 
-When the display connection is lost, `dispatch_next_event` returns `Error::Connection`, and each window gets `WindowEvent::Closing`.
+When the display connection is lost, `dispatch_next_event` returns `Error::Connection`, and each window gets `WindowEvent::Closing`. The facade then closes the windows, saves the settings, and stops the loop. `App::run` returns `AppError::Disconnected`, and `AppContext::error` gives the same error after `pump` returns false.
 
 The diagram shows the path of events, posted tasks, and timers in one turn of the loop.
 
@@ -778,6 +778,7 @@ The session has these parts:
 | [`gallery_atspi_smoke.rs`](../crates/choscorui-linux/tests/gallery_atspi_smoke.rs) | The roles and names of the gallery pages, and the effect of the actions that a client invokes |
 | [`app_smoke.rs`](../crates/choscorui/tests/app_smoke.rs) and [`errors_and_capabilities.rs`](../crates/choscorui/tests/errors_and_capabilities.rs) | The facade on Linux and the capability values |
 | [`gles_parity_smoke.rs`](../crates/choscorui/tests/gles_parity_smoke.rs) | GLES renders against the software renderer, and text against Cairo |
+| [`display_lost_smoke.rs`](../crates/choscorui/tests/display_lost_smoke.rs) | On a private sway or Xvfb that the test stops, `App::run` returns `AppError::Disconnected` |
 
 The `native` job also opens the gallery, runs the gallery autopilot on each display server, and runs the bench. Without a display server, it checks that the application reports `Unsupported`.
 
