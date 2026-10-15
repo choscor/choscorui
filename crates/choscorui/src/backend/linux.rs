@@ -52,7 +52,7 @@ pub trait NativeAccess {
     /// window `id`. It runs a nested event loop until the popup closes.
     /// Returns the chosen command, which also waits in the menu's
     /// `take_activations`. Returns None when the user dismisses the
-    /// menu, or when the display server cannot show popups (X11).
+    /// menu, or when the popup does not open.
     fn show_context_menu(
         &mut self,
         id: WindowId,

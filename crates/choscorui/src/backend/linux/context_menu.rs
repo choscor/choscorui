@@ -1,5 +1,6 @@
 //! A context menu in a popup: the menu control in its own view host,
-//! shown in an `xdg_popup` next to a point of a window.
+//! shown in a popup next to a point of a window: an `xdg_popup` on
+//! Wayland, or an override-redirect window on X11.
 
 use super::chrome::{command_states, menu_items};
 use super::{NativeWindow, shortcut_modifiers};
@@ -19,7 +20,7 @@ const MEASURE_AREA: Size = Size::new(4096.0, 4096.0);
 /// Shows `menu` at `at` in window `id`, and runs a nested loop until the
 /// popup closes. Returns the chosen command, which also waits in the
 /// menu's queue. Returns None when the user dismisses the menu or the
-/// display server cannot show a popup.
+/// popup does not open.
 pub(super) fn show(
     context: &mut AppContext,
     id: WindowId,

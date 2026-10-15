@@ -18,12 +18,12 @@ use crate::ffi::x11::{
     XCB_ATOM_WM_CLASS, XCB_ATOM_WM_NAME, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
     XCB_ATOM_WM_TRANSIENT_FOR, XCB_CONFIG_WINDOW_HEIGHT, XCB_CONFIG_WINDOW_WIDTH,
     XCB_CONFIG_WINDOW_X, XCB_CONFIG_WINDOW_Y, XCB_CW_BACK_PIXEL, XCB_CW_BIT_GRAVITY, XCB_CW_CURSOR,
-    XCB_CW_EVENT_MASK, XCB_EVENT_MASK_BUTTON_PRESS, XCB_EVENT_MASK_BUTTON_RELEASE,
-    XCB_EVENT_MASK_ENTER_WINDOW, XCB_EVENT_MASK_EXPOSURE, XCB_EVENT_MASK_FOCUS_CHANGE,
-    XCB_EVENT_MASK_KEY_PRESS, XCB_EVENT_MASK_KEY_RELEASE, XCB_EVENT_MASK_LEAVE_WINDOW,
-    XCB_EVENT_MASK_POINTER_MOTION, XCB_EVENT_MASK_PROPERTY_CHANGE, XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-    XCB_EVENT_MASK_VISIBILITY_CHANGE, XCB_GC_GRAPHICS_EXPOSURES, XCB_GRAVITY_NORTH_WEST,
-    XCB_INPUT_DEVICE_ALL_MASTER, XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS,
+    XCB_CW_EVENT_MASK, XCB_CW_OVERRIDE_REDIRECT, XCB_EVENT_MASK_BUTTON_PRESS,
+    XCB_EVENT_MASK_BUTTON_RELEASE, XCB_EVENT_MASK_ENTER_WINDOW, XCB_EVENT_MASK_EXPOSURE,
+    XCB_EVENT_MASK_FOCUS_CHANGE, XCB_EVENT_MASK_KEY_PRESS, XCB_EVENT_MASK_KEY_RELEASE,
+    XCB_EVENT_MASK_LEAVE_WINDOW, XCB_EVENT_MASK_POINTER_MOTION, XCB_EVENT_MASK_PROPERTY_CHANGE,
+    XCB_EVENT_MASK_STRUCTURE_NOTIFY, XCB_EVENT_MASK_VISIBILITY_CHANGE, XCB_GC_GRAPHICS_EXPOSURES,
+    XCB_GRAVITY_NORTH_WEST, XCB_INPUT_DEVICE_ALL_MASTER, XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS,
     XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE, XCB_INPUT_XI_EVENT_MASK_DEVICE_CHANGED,
     XCB_INPUT_XI_EVENT_MASK_ENTER, XCB_INPUT_XI_EVENT_MASK_LEAVE, XCB_INPUT_XI_EVENT_MASK_MOTION,
 };
@@ -89,6 +89,8 @@ pub(crate) struct X11Surface {
     state: RefCell<State>,
     /// The EGL surface of the GLES painter, from the first GLES paint.
     gles: RefCell<Option<GlesWindow>>,
+    /// True for an override-redirect popup.
+    pub(crate) popup: bool,
 }
 
 /// The pixel size of a logical size, within the 16 bits of X.
@@ -171,10 +173,74 @@ impl X11Surface {
         shared: Rc<WindowShared>,
         app_id: &str,
     ) -> Result<Rc<Self>, Error> {
+        shared.scale.set(client.scale());
+        let surface = Self::build(client, shared, false)?;
+        let id = surface.id;
+        surface.set_properties(client, app_id);
+        client.make_aware(id);
+        *surface.shared.parent_handle.borrow_mut() = Some(format!("x11:{id:x}"));
+        Ok(surface)
+    }
+
+    /// Creates a popup of `parent` next to `anchor`, in the logical
+    /// coordinates of `parent`: an override-redirect window that the
+    /// window manager does not frame. It shows on `show`, and it grabs
+    /// the pointer and the keyboard when it maps.
+    pub(crate) fn new_popup(
+        client: &Rc<Client>,
+        shared: Rc<WindowShared>,
+        parent: &X11Surface,
+        anchor: Rect,
+    ) -> Result<Rc<Self>, Error> {
         let connection = &client.connection;
-        let scale = client.scale();
+        let scale = parent.shared.scale.get();
         shared.scale.set(scale);
-        let pixels = pixel_size(shared.size.get(), scale);
+        let (x, y) = connection
+            .translate(parent.id, connection.root())
+            .ok_or(Error::Closed)?;
+        let anchor = Rect::new(
+            Point::new(
+                f64::from(x) + (anchor.origin.x * scale).round(),
+                f64::from(y) + (anchor.origin.y * scale).round(),
+            ),
+            Size::new(
+                (anchor.size.width * scale).round().max(1.0),
+                (anchor.size.height * scale).round().max(1.0),
+            ),
+        );
+        let (width, height) = pixel_size(shared.size.get(), scale);
+        let size = Size::new(f64::from(width), f64::from(height));
+        let origin = protocol::place_popup(anchor, size, &client.monitor_pixels());
+        let surface = Self::build(client, shared, true)?;
+        let id = surface.id;
+        connection.configure_window(
+            id,
+            XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
+            &[
+                (origin.x as i32).cast_unsigned(),
+                (origin.y as i32).cast_unsigned(),
+            ],
+        );
+        let atoms = &client.atoms;
+        connection.set_property32(
+            id,
+            atoms.net_wm_window_type,
+            XCB_ATOM_ATOM,
+            &[atoms.net_wm_window_type_popup_menu],
+        );
+        connection.set_property32(id, XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW, &[parent.id]);
+        Ok(surface)
+    }
+
+    /// Creates the native window and its graphics context, and selects
+    /// its events. A popup has override-redirect set.
+    fn build(
+        client: &Rc<Client>,
+        shared: Rc<WindowShared>,
+        popup: bool,
+    ) -> Result<Rc<Self>, Error> {
+        let connection = &client.connection;
+        let pixels = pixel_size(shared.size.get(), shared.scale.get());
         let mut machine = X11Window::new();
         machine
             .connect()
@@ -196,13 +262,27 @@ impl X11Surface {
                 | XCB_EVENT_MASK_LEAVE_WINDOW;
         }
         let screen = connection.screen();
-        connection.create_window(
-            id,
-            screen.root,
-            (u16_of(pixels.0), u16_of(pixels.1)),
-            XCB_CW_BACK_PIXEL | XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK,
-            &[screen.white_pixel, XCB_GRAVITY_NORTH_WEST, events],
-        );
+        let size = (u16_of(pixels.0), u16_of(pixels.1));
+        if popup {
+            connection.create_window(
+                id,
+                screen.root,
+                size,
+                XCB_CW_BACK_PIXEL
+                    | XCB_CW_BIT_GRAVITY
+                    | XCB_CW_OVERRIDE_REDIRECT
+                    | XCB_CW_EVENT_MASK,
+                &[screen.white_pixel, XCB_GRAVITY_NORTH_WEST, 1, events],
+            );
+        } else {
+            connection.create_window(
+                id,
+                screen.root,
+                size,
+                XCB_CW_BACK_PIXEL | XCB_CW_BIT_GRAVITY | XCB_CW_EVENT_MASK,
+                &[screen.white_pixel, XCB_GRAVITY_NORTH_WEST, events],
+            );
+        }
         if client.has_xinput() {
             connection.xi_select_events(
                 id,
@@ -235,10 +315,8 @@ impl X11Surface {
                 destroyed: false,
             }),
             gles: RefCell::new(None),
+            popup,
         });
-        surface.set_properties(client, app_id);
-        client.make_aware(id);
-        *surface.shared.parent_handle.borrow_mut() = Some(format!("x11:{id:x}"));
         if let Some(cursor) = client.cursor(&CursorShape::Arrow) {
             connection.change_window_attributes(id, XCB_CW_CURSOR, &[cursor]);
         }
@@ -557,7 +635,8 @@ impl X11Surface {
     }
 
     /// Handles `MapNotify`. The first one reports the size and activates
-    /// the window.
+    /// the window. A popup does not take the focus: the client grabs the
+    /// input for it instead.
     pub(crate) fn mapped(&self, client: &Client) {
         let first = {
             let mut state = self.state.borrow_mut();
@@ -569,9 +648,17 @@ impl X11Surface {
                 size: self.shared.size.get(),
                 scale: self.shared.scale.get(),
             });
-            client.activate(self.id);
+            if !self.popup {
+                client.activate(self.id);
+            }
         }
         self.shared.invalidate();
+    }
+
+    /// True when the pixel position `(x, y)` of the window is inside it.
+    pub(crate) fn contains_pixel(&self, (x, y): (f64, f64)) -> bool {
+        let (width, height) = self.state.borrow().pixels;
+        (0.0..f64::from(width)).contains(&x) && (0.0..f64::from(height)).contains(&y)
     }
 
     /// Handles `UnmapNotify`, as when the window is minimized.
@@ -964,6 +1051,12 @@ impl Surface for X11Surface {
     ) -> Result<(), Error> {
         let client = self.client().ok_or(Error::Closed)?;
         client.begin_drag(self, payload, allowed)
+    }
+
+    fn open_popup(&self, shared: Rc<WindowShared>, anchor: Rect) -> Result<Rc<dyn Surface>, Error> {
+        let client = self.client().ok_or(Error::Closed)?;
+        let popup = client.create_popup(shared, self, anchor)?;
+        Ok(popup)
     }
 
     fn simulate_pointer(&self, position: Point, button: Option<bool>) -> Result<(), Error> {

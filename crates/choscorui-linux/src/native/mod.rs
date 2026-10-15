@@ -120,11 +120,6 @@ impl Display {
         }
     }
 
-    /// True when windows can open popups: `xdg_popup` on Wayland.
-    fn has_popups(&self) -> bool {
-        matches!(self, Self::Wayland(_))
-    }
-
     fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
         match self {
             Self::Wayland(client) => client.set_selection(payload),
@@ -568,11 +563,11 @@ fn probe() -> BackendCapabilities {
     if display.has_input_methods() {
         capabilities.input_methods = Support::Supported;
     }
-    // The application draws the menu bar in the window.
+    // The application draws the menu bar in the window, and the context
+    // menus in popups: `xdg_popup` on Wayland, and override-redirect
+    // windows on X11.
     capabilities.native_menus = Support::Supported;
-    if display.has_popups() {
-        capabilities.context_menus = Support::Supported;
-    }
+    capabilities.context_menus = Support::Supported;
     if display.has_data_transfer() {
         capabilities.clipboard = Support::Supported;
         capabilities.drag_and_drop = Support::Supported;

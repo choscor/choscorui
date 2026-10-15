@@ -55,6 +55,8 @@ opaque_types! {
     pub(crate) XcbGetAtomNameReply = "xcb_get_atom_name_reply_t";
     /// `xcb_grab_pointer_reply_t`.
     pub(crate) XcbGrabPointerReply = "xcb_grab_pointer_reply_t";
+    /// `xcb_grab_keyboard_reply_t`.
+    pub(crate) XcbGrabKeyboardReply = "xcb_grab_keyboard_reply_t";
 }
 
 ffi_struct! {
@@ -174,6 +176,11 @@ ffi_struct! {
 
     /// `xcb_grab_pointer_cookie_t`.
     pub(crate) struct XcbGrabPointerCookie = "xcb_grab_pointer_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_grab_keyboard_cookie_t`.
+    pub(crate) struct XcbGrabKeyboardCookie = "xcb_grab_keyboard_cookie_t" {
         pub(crate) sequence: CUint,
     }
 }
@@ -414,6 +421,20 @@ libraries! {
                 cookie: XcbGrabPointerCookie,
                 e: ErrorOut,
             ) -> *mut XcbGrabPointerReply;
+            fn xcb_grab_keyboard(
+                c: *mut XcbConnection,
+                owner_events: u8,
+                grab_window: u32,
+                time: u32,
+                pointer_mode: u8,
+                keyboard_mode: u8,
+            ) -> XcbGrabKeyboardCookie;
+            fn xcb_grab_keyboard_reply(
+                c: *mut XcbConnection,
+                cookie: XcbGrabKeyboardCookie,
+                e: ErrorOut,
+            ) -> *mut XcbGrabKeyboardReply;
+            fn xcb_ungrab_keyboard(c: *mut XcbConnection, time: u32) -> XcbVoidCookie;
         }
     }
 
@@ -676,6 +697,7 @@ c_consts! {
     pub(crate) const XCB_WINDOW_CLASS_INPUT_OUTPUT: u16 = 1;
     pub(crate) const XCB_CW_BACK_PIXEL: u32 = 2;
     pub(crate) const XCB_CW_BIT_GRAVITY: u32 = 16;
+    pub(crate) const XCB_CW_OVERRIDE_REDIRECT: u32 = 512;
     pub(crate) const XCB_CW_EVENT_MASK: u32 = 2048;
     pub(crate) const XCB_CW_CURSOR: u32 = 16384;
     pub(crate) const XCB_GRAVITY_NORTH_WEST: u32 = 1;
@@ -712,6 +734,8 @@ c_consts! {
     pub(crate) const XCB_GE_GENERIC: u8 = 35;
     pub(crate) const XCB_NOTIFY_DETAIL_INFERIOR: u8 = 2;
     pub(crate) const XCB_NOTIFY_DETAIL_POINTER: u8 = 5;
+    pub(crate) const XCB_NOTIFY_MODE_GRAB: u8 = 1;
+    pub(crate) const XCB_NOTIFY_MODE_UNGRAB: u8 = 2;
     pub(crate) const XCB_VISIBILITY_FULLY_OBSCURED: u8 = 2;
     pub(crate) const XCB_PROP_MODE_REPLACE: u8 = 0;
     pub(crate) const XCB_ATOM_ATOM: u32 = 4;
@@ -826,6 +850,7 @@ pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
         XcbGetSelectionOwnerCookie::layout(),
         XcbGetAtomNameCookie::layout(),
         XcbGrabPointerCookie::layout(),
+        XcbGrabKeyboardCookie::layout(),
     ]
 }
 
@@ -1450,6 +1475,32 @@ impl Connection {
     pub(crate) fn set_input_focus(&self, window: u32) {
         // SAFETY: the request has no pointers.
         unsafe { (self.xcb.xcb_set_input_focus)(self.raw, XCB_INPUT_FOCUS_PARENT, window, 0) };
+    }
+
+    /// Grabs the keyboard for `window`. Returns true when the grab
+    /// succeeded.
+    pub(crate) fn grab_keyboard(&self, window: u32, time: u32) -> bool {
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe {
+            (self.xcb.xcb_grab_keyboard)(
+                self.raw,
+                0,
+                window,
+                time,
+                XCB_GRAB_MODE_ASYNC,
+                XCB_GRAB_MODE_ASYNC,
+            )
+        };
+        // SAFETY: the cookie is of this connection.
+        let reply =
+            unsafe { (self.xcb.xcb_grab_keyboard_reply)(self.raw, cookie, std::ptr::null_mut()) };
+        take_reply(reply).is_some_and(|reply| reply.u8(1) == XCB_GRAB_STATUS_SUCCESS)
+    }
+
+    /// Releases the keyboard grab of the client.
+    pub(crate) fn ungrab_keyboard(&self) {
+        // SAFETY: the request has no pointers; 0 is `CurrentTime`.
+        unsafe { (self.xcb.xcb_ungrab_keyboard)(self.raw, 0) };
     }
 
     /// Releases the pointer grab of the client, so the window manager

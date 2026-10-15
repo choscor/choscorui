@@ -294,10 +294,12 @@ Linux has no global menu bar. The facade draws the menus and the title bar in ea
 
 ### Popups and context menus
 
-- **Popups.** `Window::open_popup(anchor, size)` opens an `xdg_popup` below `anchor`. The `xdg_positioner` flips the popup, then slides it, at the screen edges. The popup grabs the pointer and the keyboard with the serial of the latest key or button event. A click outside the popup sends `WindowEvent::Closing` (`popup_done`). `Application::window_count` does not count popups.
+- **Popups.** `Window::open_popup(anchor, size)` opens a popup below the bottom-left corner of `anchor`. At the screen edges, the popup flips, then slides. A click outside the popup sends `WindowEvent::Closing`. `Application::window_count` does not count popups.
+- **Wayland popups.** The popup is an `xdg_popup`, and the `xdg_positioner` flips and slides it. The popup grabs the pointer and the keyboard with the serial of the latest key or button event. `popup_done` gives `Closing`.
+- **X11 popups.** The popup is an override-redirect window with `_NET_WM_WINDOW_TYPE_POPUP_MENU` and `WM_TRANSIENT_FOR`. The backend flips and slides it in the RandR monitor that holds the anchor. When the popup maps, it grabs the pointer and the keyboard. A press outside the popup ends the grabs and gives `Closing`, and the parent window does not get the press.
 - **Context menus.** `NativeAccess::show_context_menu(window, menu, at)` shows a `ContextMenu` in a popup at `at`. It runs a nested event loop until the popup closes, as on macOS. It returns the chosen command, and the command also waits in `menu.take_activations()`. Escape, a click outside the popup, or a press in the parent window returns `None`. During the loop, the keys of the parent window go to the menu, because a compositor can keep the keyboard focus on the parent.
 - Submenus of a context menu show inside the popup.
-- `native_menus` is `Supported` on Wayland and X11. `context_menus` is `Supported` on Wayland. On X11, `open_popup` returns `Error::PopupUnavailable`, and `show_context_menu` returns `None`.
+- `native_menus` and `context_menus` are `Supported` on Wayland and X11.
 
 ### Decorations
 
@@ -527,7 +529,7 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 | `backend` | `"wayland"` | `"x11"` | `"headless"` |
 | `multiple_windows` | `Supported` | `Supported` | `Unsupported` |
 | `native_menus` | `Supported` | `Supported` | `Unsupported` |
-| `context_menus` | `Supported` | `Unsupported` | `Unsupported` |
+| `context_menus` | `Supported` | `Supported` | `Unsupported` |
 | `native_dialogs` | `Supported` | `Supported` | `Unsupported` |
 | `clipboard`, `drag_and_drop` | `Supported` with `wl_data_device_manager` | `Supported` | `Unsupported` |
 | `input_methods` | `Supported` with `zwp_text_input_manager_v3` | `Supported` when an XIM input method opens | `Unsupported` |
@@ -733,7 +735,6 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 ## Limitations
 
 - **Wayland position.** A Wayland client cannot read or set its window position. `geometry` has a zero origin, and AT-SPI screen coordinates are relative to the window.
-- **X11 popups.** X11 has no popups, so `context_menus` is `Unsupported` there. `open_popup` returns `Error::PopupUnavailable`, and `show_context_menu` returns `None`.
 - **Drawn decorations.** The drawn title bar has no shadow and no resize band outside the window.
 - **Long menus.** A menu of the menu bar shows inside the window, so a menu that is longer than the window is cut off.
 - **Gestures and occlusion.** The backend sends no `Gesture` events. Wayland windows send no `Occluded` events.
@@ -749,6 +750,7 @@ The session has these parts:
 - a private D-Bus session bus and the AT-SPI registry
 - headless sway with one 1280x800 output, and Xvfb on `:99` with RandR
 - a virtual keyboard and pointer for sway, which a test drives through the FIFO in `CHOSCORUI_VIRTUAL_INPUT`
+- XTEST on Xvfb, which a test drives through `Window::simulate_pointer`
 
 | Test | What it checks |
 | --- | --- |
@@ -757,6 +759,8 @@ The session has these parts:
 | [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. The XIM test needs an XIM server in `XMODIFIERS`. |
 | [`lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) | Window churn, timers, posted work, and the footprint |
 | [`modal_smoke.rs`](../crates/choscorui-linux/tests/modal_smoke.rs) and [`dialog_smoke.rs`](../crates/choscorui/tests/dialog_smoke.rs) | Modal windows, drawn alerts, and drawn file dialogs |
+| [`menu_smoke.rs`](../crates/choscorui-linux/tests/menu_smoke.rs) | The menu queue, and popups that open, flip, and close at a click outside |
+| [`chrome_smoke.rs`](../crates/choscorui/tests/chrome_smoke.rs) | The drawn menu bar and title bar on Wayland, and context menus on both display servers |
 | [`atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) | Roles, names, actions, events, and announcements on the accessibility bus |
 | [`app_smoke.rs`](../crates/choscorui/tests/app_smoke.rs) and [`errors_and_capabilities.rs`](../crates/choscorui/tests/errors_and_capabilities.rs) | The facade on Linux and the capability values |
 | [`gles_parity_smoke.rs`](../crates/choscorui/tests/gles_parity_smoke.rs) | GLES renders against the software renderer, and text against Cairo |

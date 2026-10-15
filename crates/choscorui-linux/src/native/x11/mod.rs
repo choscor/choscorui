@@ -24,14 +24,17 @@ use crate::ffi::libc::{self, Ready, Watch};
 use crate::ffi::x11::{
     Bytes, ConnectError, Connection, XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, XCB_ATOM_WINDOW,
     XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE, XCB_CLIENT_MESSAGE, XCB_CONFIGURE_NOTIFY,
-    XCB_CW_EVENT_MASK, XCB_ENTER_NOTIFY, XCB_EVENT_MASK_PROPERTY_CHANGE,
+    XCB_CW_EVENT_MASK, XCB_ENTER_NOTIFY, XCB_EVENT_MASK_BUTTON_PRESS,
+    XCB_EVENT_MASK_BUTTON_RELEASE, XCB_EVENT_MASK_ENTER_WINDOW, XCB_EVENT_MASK_LEAVE_WINDOW,
+    XCB_EVENT_MASK_POINTER_MOTION, XCB_EVENT_MASK_PROPERTY_CHANGE,
     XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY, XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, XCB_EXPOSE,
     XCB_FOCUS_IN, XCB_FOCUS_OUT, XCB_GE_GENERIC, XCB_INPUT_BUTTON_PRESS, XCB_INPUT_BUTTON_RELEASE,
     XCB_INPUT_DEVICE_CHANGED, XCB_INPUT_ENTER, XCB_INPUT_LEAVE, XCB_INPUT_MOTION,
     XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED, XCB_KEY_PRESS, XCB_KEY_RELEASE,
     XCB_LEAVE_NOTIFY, XCB_MAP_NOTIFY, XCB_MOTION_NOTIFY, XCB_NOTIFY_DETAIL_INFERIOR,
-    XCB_NOTIFY_DETAIL_POINTER, XCB_PROPERTY_NOTIFY, XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY,
-    XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
+    XCB_NOTIFY_DETAIL_POINTER, XCB_NOTIFY_MODE_GRAB, XCB_NOTIFY_MODE_UNGRAB, XCB_PROPERTY_NOTIFY,
+    XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY, XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY,
+    XCB_XKB_STATE_NOTIFY,
 };
 use crate::gles;
 use crate::{InputEvent, LinuxInput};
@@ -55,6 +58,7 @@ pub(crate) struct Atoms {
     pub(crate) net_wm_pid: u32,
     pub(crate) net_wm_window_type: u32,
     pub(crate) net_wm_window_type_normal: u32,
+    pub(crate) net_wm_window_type_popup_menu: u32,
     pub(crate) net_wm_state: u32,
     pub(crate) net_wm_state_maximized_vert: u32,
     pub(crate) net_wm_state_maximized_horz: u32,
@@ -89,6 +93,7 @@ impl Atoms {
             "_NET_SUPPORTING_WM_CHECK",
             "_GTK_SHOW_WINDOW_MENU",
             "_NET_WM_STATE_MODAL",
+            "_NET_WM_WINDOW_TYPE_POPUP_MENU",
         ];
         let atoms = connection.intern_atoms(&names);
         let atom = |index: usize| atoms.get(index).copied().unwrap_or(0);
@@ -112,6 +117,7 @@ impl Atoms {
             net_supporting_wm_check: atom(16),
             gtk_show_window_menu: atom(17),
             net_wm_state_modal: atom(18),
+            net_wm_window_type_popup_menu: atom(19),
         }
     }
 }
@@ -176,6 +182,8 @@ pub(crate) struct Client {
     /// The GLES painter, unless it is not available or
     /// `CHOSCORUI_PAINTER=cairo` asks for Cairo.
     gles: Option<Rc<gles::Device>>,
+    /// The popup that grabs the pointer and the keyboard.
+    grab: RefCell<Option<Weak<X11Surface>>>,
 }
 
 /// The X pointer of the virtual core pointer, before any XInput event.
@@ -314,6 +322,7 @@ impl Client {
             time: Cell::new(0),
             ime: RefCell::new(ime::Ime::open()),
             gles,
+            grab: RefCell::new(None),
         }))
     }
 
@@ -336,11 +345,65 @@ impl Client {
         Ok(surface)
     }
 
+    /// Creates a popup of `parent` next to `anchor`. It grabs the input
+    /// when it maps.
+    pub(crate) fn create_popup(
+        self: &Rc<Self>,
+        shared: Rc<WindowShared>,
+        parent: &X11Surface,
+        anchor: Rect,
+    ) -> Result<Rc<X11Surface>, Error> {
+        let popup = X11Surface::new_popup(self, shared, parent, anchor)?;
+        self.windows.borrow_mut().push(Rc::clone(&popup));
+        Ok(popup)
+    }
+
+    /// The number of open windows, without the popups.
     pub(crate) fn window_count(&self) -> usize {
-        self.windows.borrow().len()
+        self.windows
+            .borrow()
+            .iter()
+            .filter(|window| !window.popup)
+            .count()
+    }
+
+    /// The popup that holds the grab, if any.
+    fn grab_popup(&self) -> Option<Rc<X11Surface>> {
+        self.grab.borrow().as_ref().and_then(Weak::upgrade)
+    }
+
+    /// Grabs the pointer and the keyboard for `popup`, which just
+    /// mapped. With the grab, the server sends every pointer event to the
+    /// popup as a core event, and every key.
+    fn begin_grab(&self, popup: &Rc<X11Surface>) {
+        let mask = u16::try_from(
+            XCB_EVENT_MASK_BUTTON_PRESS
+                | XCB_EVENT_MASK_BUTTON_RELEASE
+                | XCB_EVENT_MASK_POINTER_MOTION
+                | XCB_EVENT_MASK_ENTER_WINDOW
+                | XCB_EVENT_MASK_LEAVE_WINDOW,
+        )
+        .unwrap_or_default();
+        let pointer = self.connection.grab_pointer(popup.id, mask, 0);
+        let keyboard = self.connection.grab_keyboard(popup.id, 0);
+        if pointer || keyboard {
+            *self.grab.borrow_mut() = Some(Rc::downgrade(popup));
+        }
+    }
+
+    /// Ends the grab of a popup.
+    fn end_grab(&self) {
+        if self.grab.borrow_mut().take().is_some() {
+            self.connection.ungrab_pointer();
+            self.connection.ungrab_keyboard();
+            self.connection.flush();
+        }
     }
 
     pub(crate) fn forget_window(&self, id: u32) {
+        if self.grab_popup().is_none_or(|popup| popup.id == id) {
+            self.end_grab();
+        }
         self.ime_forget(id);
         self.windows.borrow_mut().retain(|window| window.id != id);
         let mut seat = self.seat.borrow_mut();
@@ -501,6 +564,20 @@ impl Client {
     /// window without RandR.
     pub(crate) fn screens(&self) -> Vec<Rect> {
         let scale = self.scale.get();
+        self.monitor_pixels()
+            .into_iter()
+            .map(|rect| {
+                Rect::new(
+                    Point::new(rect.origin.x / scale, rect.origin.y / scale),
+                    Size::new(rect.size.width / scale, rect.size.height / scale),
+                )
+            })
+            .collect()
+    }
+
+    /// The rectangles of the RandR monitors in root pixels, or of the
+    /// root window without RandR.
+    pub(crate) fn monitor_pixels(&self) -> Vec<Rect> {
         let mut rects = self
             .connection
             .randr_monitors()
@@ -517,14 +594,6 @@ impl Client {
             ));
         }
         rects
-            .into_iter()
-            .map(|rect| {
-                Rect::new(
-                    Point::new(rect.origin.x / scale, rect.origin.y / scale),
-                    Size::new(rect.size.width / scale, rect.size.height / scale),
-                )
-            })
-            .collect()
     }
 
     /// Paints each window that has a pending region.
@@ -687,7 +756,14 @@ impl Client {
             XCB_LEAVE_NOTIFY => self.leave(event.u32(12)),
             XCB_FOCUS_IN | XCB_FOCUS_OUT => {
                 let detail = event.u8(1);
-                if detail != XCB_NOTIFY_DETAIL_INFERIOR && detail != XCB_NOTIFY_DETAIL_POINTER {
+                // The keyboard grab of a popup moves the focus, but the
+                // parent stays the focused window, as on Wayland.
+                let mode = event.u8(8);
+                if detail != XCB_NOTIFY_DETAIL_INFERIOR
+                    && detail != XCB_NOTIFY_DETAIL_POINTER
+                    && mode != XCB_NOTIFY_MODE_GRAB
+                    && mode != XCB_NOTIFY_MODE_UNGRAB
+                {
                     self.focus(event.u32(4), kind == XCB_FOCUS_IN);
                 }
             }
@@ -704,6 +780,9 @@ impl Client {
             XCB_MAP_NOTIFY => {
                 if let Some(window) = self.window(event.u32(8)) {
                     window.mapped(self);
+                    if window.popup {
+                        self.begin_grab(&window);
+                    }
                 }
             }
             XCB_UNMAP_NOTIFY => {
@@ -830,13 +909,7 @@ impl Client {
     }
 
     fn key(&self, event: &Bytes, pressed: bool) {
-        let window = self
-            .seat
-            .borrow()
-            .keyboard_focus
-            .as_ref()
-            .and_then(Weak::upgrade)
-            .map_or(event.u32(12), |window| window.id);
+        let window = self.key_target().map_or(event.u32(12), |window| window.id);
         if self.ime_filter(window, event, pressed) {
             return;
         }
@@ -861,17 +934,24 @@ impl Client {
         } else {
             seat.keyboard.key_event(code, pressed, Instant::now())
         };
-        let window = seat
-            .keyboard_focus
-            .as_ref()
-            .and_then(Weak::upgrade)
-            .or_else(|| self.window(id));
         drop(seat);
-        if let Some(window) = window {
+        if let Some(window) = self.key_target().or_else(|| self.window(id)) {
             for event in events {
                 window.shared.push(event);
             }
         }
+    }
+
+    /// The window of the keys: the popup that grabs the keyboard, else
+    /// the window with the keyboard focus.
+    fn key_target(&self) -> Option<Rc<X11Surface>> {
+        self.grab_popup().or_else(|| {
+            self.seat
+                .borrow()
+                .keyboard_focus
+                .as_ref()
+                .and_then(Weak::upgrade)
+        })
     }
 
     fn focus(&self, id: u32, focused: bool) {
@@ -978,6 +1058,19 @@ impl Client {
             if !pressed && self.drag_release() {
                 return;
             }
+        }
+        // With the grab, every button event comes to the popup. A press
+        // outside it ends the grab and closes it, as `popup_done` does on
+        // Wayland.
+        if let Some(popup) = self.grab_popup()
+            && popup.id == id
+            && !popup.contains_pixel(pixels)
+        {
+            if pressed {
+                self.end_grab();
+                popup.shared.push(WindowEvent::Closing);
+            }
+            return;
         }
         let Some((window, position)) = self.pointer_target(id, pixels) else {
             return;

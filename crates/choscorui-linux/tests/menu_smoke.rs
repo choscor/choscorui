@@ -7,9 +7,9 @@
 
 use choscorui_core::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuItemState, MenuShortcut, MenuShortcutModifiers,
-    MenuSpec, Point, Rect, Size, WindowOptions,
+    MenuSpec, Point, PointerEvent, Rect, Size, WindowOptions,
 };
-use choscorui_linux::{Application, Error, WindowEvent, capabilities};
+use choscorui_linux::{Application, BackendKind, Error, Window, WindowEvent, capabilities};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -86,12 +86,9 @@ fn a_popup_opens_and_a_click_outside_closes_it() {
     window.show();
     wait_until(&application, || window.is_visible());
     let anchor = Rect::new(Point::new(20.0, 30.0), Size::new(1.0, 1.0));
-    if !capabilities().context_menus.is_supported() {
-        // X11 has no popups yet.
-        assert!(matches!(
-            window.open_popup(anchor, Size::new(120.0, 80.0)),
-            Err(Error::PopupUnavailable)
-        ));
+    assert!(capabilities().context_menus.is_supported());
+    if application.backend() == BackendKind::X11 {
+        x11_popup(&application, &window, anchor);
         return;
     }
     place(&application, "Popup parent", 100, 100);
@@ -130,6 +127,95 @@ fn a_popup_opens_and_a_click_outside_closes_it() {
     popup.close();
     window.close();
     pump(&application, Duration::from_millis(100));
+}
+
+/// The popup case on X11, with XTEST for the pointer. Xvfb runs no
+/// window manager, and its screen is 1280x800 points.
+fn x11_popup(application: &Application, window: &Window, anchor: Rect) {
+    let parent = window.geometry().frame.origin;
+    let popup = window
+        .open_popup(anchor, Size::new(120.0, 80.0))
+        .expect("the popup opens");
+    popup.show();
+    wait_until(application, || popup.is_visible());
+    assert_eq!(
+        application.window_count(),
+        1,
+        "a popup is not a window of its own"
+    );
+    assert_eq!(popup.content_size(), Size::new(120.0, 80.0));
+    // The popup opens below the bottom-left corner of the anchor.
+    assert_eq!(
+        popup.geometry().frame.origin,
+        Point::new(parent.x + 20.0, parent.y + 31.0)
+    );
+    assert!(matches!(
+        window.open_popup(anchor, Size::new(0.0, 10.0)),
+        Err(Error::InvalidSize)
+    ));
+    // The grab sends a press inside the popup to the popup.
+    popup.take_events();
+    popup
+        .simulate_pointer(Point::new(30.0, 20.0), Some(true))
+        .unwrap();
+    popup
+        .simulate_pointer(Point::new(30.0, 20.0), Some(false))
+        .unwrap();
+    let mut events = Vec::new();
+    wait_until(application, || {
+        events.extend(popup.take_events());
+        events.iter().any(|event| {
+            matches!(
+                event,
+                WindowEvent::Pointer {
+                    event: PointerEvent::Up { position, .. },
+                    ..
+                } if *position == Point::new(30.0, 20.0)
+            )
+        })
+    });
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, WindowEvent::Closing))
+    );
+    // A click outside the popup ends its grab: the popup gets Closing,
+    // and the parent gets no press.
+    window.take_events();
+    window
+        .simulate_pointer(Point::new(1000.0, 700.0), Some(true))
+        .unwrap();
+    window
+        .simulate_pointer(Point::new(1000.0, 700.0), Some(false))
+        .unwrap();
+    let mut events = Vec::new();
+    wait_until(application, || {
+        events.extend(popup.take_events());
+        events
+            .iter()
+            .any(|event| matches!(event, WindowEvent::Closing))
+    });
+    assert!(!window.take_events().iter().any(|event| matches!(
+        event,
+        WindowEvent::Pointer {
+            event: PointerEvent::Down { .. },
+            ..
+        }
+    )));
+    popup.close();
+    // Near the bottom edge of the screen, the popup flips above the
+    // anchor.
+    let low = Rect::new(Point::new(20.0, 780.0 - parent.y), Size::new(1.0, 1.0));
+    let flipped = window.open_popup(low, Size::new(120.0, 80.0)).unwrap();
+    flipped.show();
+    wait_until(application, || flipped.is_visible());
+    assert_eq!(
+        flipped.geometry().frame.origin,
+        Point::new(parent.x + 20.0, 700.0)
+    );
+    flipped.close();
+    window.close();
+    pump(application, Duration::from_millis(100));
 }
 
 /// Dispatches events until `done` is true, for up to five seconds.
