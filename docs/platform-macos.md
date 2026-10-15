@@ -132,6 +132,7 @@ The file and alert dialogs are AppKit panels. Their appearance, accessibility, a
 - `Application::show_file_dialog` runs the panel as an application-modal dialog. It returns `FileDialogResponse::Selected(paths)` or `FileDialogResponse::Cancelled`. A cancel is not an error.
 - `AlertSpec::new(message, buttons)` returns `DialogError::EmptyMessage` for an empty message and `DialogError::NoButtons` for no buttons.
 - `Application::show_alert` returns `AlertResponse::Button(index)` for the chosen button.
+- `AlertSpec`, `AlertButton`, `AlertStyle`, `AlertResponse`, and `DialogError` are in `choscorui-core`. The Linux backend uses the same contract for its drawn alert.
 
 Use the native file panels in sandboxed applications. The panel gives the application access to the file that the user selects.
 

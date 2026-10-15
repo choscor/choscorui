@@ -63,6 +63,7 @@ pub(crate) struct Atoms {
     pub(crate) net_active_window: u32,
     pub(crate) net_supporting_wm_check: u32,
     pub(crate) gtk_show_window_menu: u32,
+    pub(crate) net_wm_state_modal: u32,
 }
 
 impl Atoms {
@@ -86,6 +87,7 @@ impl Atoms {
             "_NET_ACTIVE_WINDOW",
             "_NET_SUPPORTING_WM_CHECK",
             "_GTK_SHOW_WINDOW_MENU",
+            "_NET_WM_STATE_MODAL",
         ];
         let atoms = connection.intern_atoms(&names);
         let atom = |index: usize| atoms.get(index).copied().unwrap_or(0);
@@ -108,6 +110,7 @@ impl Atoms {
             net_active_window: atom(15),
             net_supporting_wm_check: atom(16),
             gtk_show_window_menu: atom(17),
+            net_wm_state_modal: atom(18),
         }
     }
 }

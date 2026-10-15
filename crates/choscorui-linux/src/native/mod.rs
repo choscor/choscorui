@@ -337,6 +337,36 @@ impl Application {
             .and_then(|window| window.parent_handle.borrow().clone())
     }
 
+    /// Makes `window` the modal window of the application until the
+    /// session drops. The other windows drop their input events but
+    /// still paint. Unless `Window::set_modal_parent` gave it a parent,
+    /// `window` becomes the modal dialog of the focused window, or else
+    /// of the newest visible window.
+    pub fn begin_modal(&self, window: &Window) -> ModalSession {
+        let others: Vec<Rc<WindowShared>> = self
+            .windows
+            .borrow()
+            .iter()
+            .filter_map(std::rc::Weak::upgrade)
+            .filter(|other| !Rc::ptr_eq(other, &window.shared) && !other.closed.get())
+            .collect();
+        if !window.shared.has_parent.get() {
+            let parent = others
+                .iter()
+                .find(|other| other.focused.get())
+                .or_else(|| others.iter().rev().find(|other| other.visible.get()));
+            if let Some(parent) = parent {
+                window.surface.set_modal_parent(parent);
+                window.shared.has_parent.set(true);
+            }
+        }
+        let blocked = others
+            .iter()
+            .map(|other| (Rc::downgrade(other), other.blocked.replace(true)))
+            .collect();
+        ModalSession { blocked }
+    }
+
     /// Makes the event loop serve `connection` too: it waits on the
     /// descriptors of the connection and dispatches its messages.
     pub fn attach_bus(&self, connection: crate::dbus::Connection) {
@@ -449,6 +479,23 @@ impl Application {
         match &self.display {
             Display::Wayland(client) => client.screens(),
             Display::X11(client) => client.screens(),
+        }
+    }
+}
+
+/// A modal window of the application, from `Application::begin_modal`.
+/// The drop gives the other windows their input again.
+#[must_use = "the other windows take input again when the session drops"]
+pub struct ModalSession {
+    blocked: Vec<(std::rc::Weak<WindowShared>, bool)>,
+}
+
+impl Drop for ModalSession {
+    fn drop(&mut self) {
+        for (window, was_blocked) in &self.blocked {
+            if let Some(window) = window.upgrade() {
+                window.blocked.set(*was_blocked);
+            }
         }
     }
 }

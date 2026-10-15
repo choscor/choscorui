@@ -49,6 +49,8 @@ pub use semantics::{
     SemanticError, SemanticNode, SemanticRange, SemanticRelation, SemanticRole, SemanticState,
     SemanticText, SemanticTree,
 };
+mod alert;
+pub use alert::{AlertButton, AlertResponse, AlertSpec, AlertStyle, DialogError};
 mod capabilities;
 pub use capabilities::{BackendCapabilities, Condition, KeyConvention, Support};
 mod app_model;

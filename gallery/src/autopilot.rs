@@ -461,6 +461,76 @@ fn restores(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext, saved: &Saved) 
     canvas_ok && dock_ok
 }
 
+/// Chooses a file in the drawn file dialog of the services, which opens
+/// on a Linux desktop without a file chooser portal. The dialog runs a
+/// nested loop, so a modal driver types into it: the directory in the
+/// location field, then the file name in the list. Returns `None` where
+/// the step does not run: outside Linux, and outside the headless
+/// session, where a portal can show its own dialog.
+#[cfg(target_os = "linux")]
+fn drawn_file_dialog(cx: &mut AppContext) -> Option<bool> {
+    use choscorui::controls::EditCommand;
+    use choscorui::core::{FileDialogKind, FileDialogRequest, SemanticRole};
+    use choscorui::platform::{DrawnDialogs, ModalTurn};
+    std::env::var_os("CHOSCORUI_VIRTUAL_INPUT")?;
+    let directory =
+        std::env::temp_dir().join(format!("choscorui-gallery-dialog-{}", std::process::id()));
+    let made = std::fs::create_dir_all(&directory).is_ok()
+        && ["chosen.txt", "other.txt"]
+            .iter()
+            .all(|name| std::fs::write(directory.join(name), name).is_ok());
+    if !made {
+        return Some(false);
+    }
+    let typed = directory.display().to_string();
+    let mut step = 0;
+    cx.set_modal_driver(Some(Box::new(move |turn: ModalTurn<'_>| {
+        let host = turn.host;
+        let entries = host.semantics().0;
+        match step {
+            0 => {
+                let dialog = entries.iter().find(|entry| {
+                    entry.part.is_none() && host.control_kind(entry.id) == Some(ControlKind::Dialog)
+                });
+                if let Some(dialog) = dialog {
+                    host.focus(Some(dialog.id));
+                    host.edit(EditCommand::SelectAll);
+                    host.text(&typed);
+                    press(host, Key::Enter, ShortcutModifiers::default());
+                    step = 1;
+                }
+            }
+            1 if entries.iter().any(|entry| {
+                entry.part.is_some()
+                    && entry.node.role == SemanticRole::ListItem
+                    && entry.node.name == "chosen.txt"
+            }) =>
+            {
+                press(host, Key::Tab, ShortcutModifiers::default());
+                host.text("chosen");
+                press(host, Key::Enter, ShortcutModifiers::default());
+                step = 2;
+            }
+            _ => {}
+        }
+    })));
+    let chosen = cx
+        .services()
+        .choose_files(&FileDialogRequest::new(FileDialogKind::Open));
+    cx.set_modal_driver(None);
+    let _ = std::fs::remove_dir_all(&directory);
+    if let Err(error) = &chosen {
+        println!("     file dialog failed: {error}");
+    }
+    Some(chosen == Ok(vec![directory.join("chosen.txt")]))
+}
+
+/// The drawn file dialog runs only on Linux.
+#[cfg(not(target_os = "linux"))]
+fn drawn_file_dialog(_: &mut AppContext) -> Option<bool> {
+    None
+}
+
 pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
     let mut failures = 0;
     let mut check = |name: &str, ok: bool| {
@@ -760,6 +830,13 @@ pub fn run(gallery: &std::rc::Rc<Gallery>, cx: &mut AppContext) -> usize {
         rebuilt.is_some_and(|ok| ok),
     );
     check("a version 1 settings file migrates", migrates());
+    match drawn_file_dialog(cx) {
+        Some(ok) => check(
+            "without a portal, the drawn file dialog opens and returns the chosen file",
+            ok,
+        ),
+        None => println!("     the drawn file dialog step runs in the Linux headless session"),
+    }
     let errors = gallery.errors.borrow().clone();
     for error in &errors {
         println!("     view error: {error}");

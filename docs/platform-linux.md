@@ -202,6 +202,35 @@ The facade queues these `DesktopEvent`s on the Linux services:
 
 The facade `Feedback` of the application calls `beep()`.
 
+## Dialogs
+
+Linux has no alert service, and a file chooser needs a portal. The toolkit draws these dialogs in modal windows of their own.
+
+`Application::begin_modal(window)` makes `window` the modal window of the application until the `ModalSession` drops:
+
+- The window becomes a dialog of its parent. Give the parent with `Window::set_modal_parent`. Without one, the parent is the focused window, or else the newest visible window.
+- On Wayland, the window calls `xdg_toplevel.set_parent`. With `xdg_wm_dialog_v1`, it also gets an `xdg_dialog_v1` and calls `set_modal`.
+- On X11, the window gets `WM_TRANSIENT_FOR` and the `_NET_WM_STATE_MODAL` state.
+- The other windows drop their pointer, key, text, input method, and drag events. They keep their last frame. A close request waits in their queue.
+
+**Alerts.** `choscorui::platform::DrawnDialogs::show_alert(spec)` shows an `AlertSpec` over the active window of an `AppContext`. The contract and the validation of `AlertSpec` are the same as on macOS.
+
+- The window shows `AlertDialog::window`, at the size that the alert measures. The message is the title, and the detail is the text under it.
+- The first button is the default button: Enter runs it. Escape runs a button titled Cancel, in English or in the locale of the application.
+- A button gives `AlertResponse::Button(index)`. Escape without a Cancel button, or a close of the window, gives `AlertResponse::Cancelled`.
+- `AlertStyle` does not change the drawn alert.
+- `DialogError::Unavailable` tells that the display server could not open the window.
+
+**File dialogs.** `Services::choose_files` uses the `org.freedesktop.portal.FileChooser` portal. Without a portal, or without a backend for its file chooser, the services open the drawn `FileDialog` control.
+
+- The drawn dialog starts in the folder of the request, or else in `HOME`. It shows the title, the accept label, the extensions, and the suggested name of the request.
+- Accept gives the chosen paths. Cancel, Escape, or a close of the window gives `FileDialogResponse::Cancelled`.
+- `native_dialogs` is always `Supported`.
+
+Each modal window runs a nested event loop until it has a result. `DrawnDialogs::set_modal_driver` gives a test harness each turn of that loop: the view host, the native window, and its focus.
+
+[`modal_smoke.rs`](../crates/choscorui-linux/tests/modal_smoke.rs) and [`dialog_smoke.rs`](../crates/choscorui/tests/dialog_smoke.rs) check this behavior on headless sway.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:

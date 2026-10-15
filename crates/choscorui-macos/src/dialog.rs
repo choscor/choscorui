@@ -14,139 +14,8 @@ use crate::ffi::foundation::{
 };
 use crate::ffi::retained::{Retained, alloc_init};
 use crate::ffi::{self, Obj};
+pub use choscorui_core::{AlertButton, AlertResponse, AlertSpec, AlertStyle, DialogError};
 use std::path::{Path, PathBuf};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DialogError {
-    EmptyMessage,
-    NoButtons,
-    InvalidText,
-    InvalidExtension,
-    WrongThread,
-    AppKitUnavailable,
-    InvalidResult,
-}
-
-impl std::fmt::Display for DialogError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmptyMessage => f.write_str("the alert message is empty"),
-            Self::NoButtons => f.write_str("the alert has no buttons"),
-            Self::InvalidText => f.write_str("text contains an interior NUL character"),
-            Self::InvalidExtension => {
-                f.write_str("a file extension is empty or contains a dot or slash")
-            }
-            Self::WrongThread => f.write_str("dialogs must run on the main thread"),
-            Self::AppKitUnavailable => f.write_str("AppKit is unavailable"),
-            Self::InvalidResult => f.write_str("AppKit returned an unexpected dialog result"),
-        }
-    }
-}
-
-impl std::error::Error for DialogError {}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AlertButton {
-    title: String,
-}
-
-impl AlertButton {
-    pub fn new(title: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-        }
-    }
-
-    pub fn title(&self) -> &str {
-        &self.title
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum AlertStyle {
-    Warning,
-    #[default]
-    Informational,
-    Critical,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AlertSpec {
-    message: String,
-    detail: Option<String>,
-    buttons: Vec<AlertButton>,
-    style: AlertStyle,
-}
-
-impl AlertSpec {
-    pub fn new(
-        message: impl Into<String>,
-        buttons: impl IntoIterator<Item = AlertButton>,
-    ) -> Result<Self, DialogError> {
-        let message = message.into();
-        if message.is_empty() {
-            return Err(DialogError::EmptyMessage);
-        }
-        validate_text(&message)?;
-        let buttons: Vec<_> = buttons.into_iter().collect();
-        if buttons.is_empty() {
-            return Err(DialogError::NoButtons);
-        }
-        for button in &buttons {
-            if button.title.is_empty() {
-                return Err(DialogError::InvalidText);
-            }
-            validate_text(&button.title)?;
-        }
-        Ok(Self {
-            message,
-            detail: None,
-            buttons,
-            style: AlertStyle::default(),
-        })
-    }
-
-    pub fn with_detail(mut self, detail: impl Into<String>) -> Result<Self, DialogError> {
-        let detail = detail.into();
-        validate_text(&detail)?;
-        self.detail = Some(detail);
-        Ok(self)
-    }
-
-    pub fn with_style(mut self, style: AlertStyle) -> Self {
-        self.style = style;
-        self
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-    pub fn detail(&self) -> Option<&str> {
-        self.detail.as_deref()
-    }
-    pub fn buttons(&self) -> &[AlertButton] {
-        &self.buttons
-    }
-    pub fn style(&self) -> AlertStyle {
-        self.style
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AlertResponse {
-    Button(usize),
-    Cancelled,
-}
-
-impl AlertResponse {
-    pub fn from_native_code(code: isize, button_count: usize) -> Option<Self> {
-        if code < ALERT_FIRST_BUTTON_RETURN {
-            return Some(Self::Cancelled);
-        }
-        let index = usize::try_from(code - ALERT_FIRST_BUTTON_RETURN).ok()?;
-        (index < button_count).then_some(Self::Button(index))
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FileDialogMode {
@@ -299,21 +168,24 @@ fn show_alert(spec: &AlertSpec) -> Result<AlertResponse, DialogError> {
     ensure_main_thread()?;
     let _pool = Pool::new().map_err(map_error)?;
     let alert = alloc_init::<NSAlert>().map_err(map_error)?;
-    SET_MESSAGE_TEXT.send(&alert, (&*ns_string(&spec.message)?,));
-    if let Some(detail) = &spec.detail {
+    SET_MESSAGE_TEXT.send(&alert, (&*ns_string(spec.message())?,));
+    if let Some(detail) = spec.detail() {
         SET_INFORMATIVE_TEXT.send(&alert, (&*ns_string(detail)?,));
     }
-    let style = match spec.style {
+    let style = match spec.style() {
         AlertStyle::Warning => ALERT_STYLE_WARNING,
         AlertStyle::Informational => ALERT_STYLE_INFORMATIONAL,
         AlertStyle::Critical => ALERT_STYLE_CRITICAL,
     };
     SET_ALERT_STYLE.send(&alert, (style,));
-    for button in &spec.buttons {
-        ADD_BUTTON_WITH_TITLE.send(&alert, (&*ns_string(&button.title)?,));
+    for button in spec.buttons() {
+        ADD_BUTTON_WITH_TITLE.send(&alert, (&*ns_string(button.title())?,));
     }
-    let response = ALERT_RUN_MODAL.send(&alert, ());
-    AlertResponse::from_native_code(response, spec.buttons.len()).ok_or(DialogError::InvalidResult)
+    // The SDK constant keeps the core mapping honest.
+    let response = ALERT_RUN_MODAL.send(&alert, ()) - ALERT_FIRST_BUTTON_RETURN
+        + AlertResponse::FIRST_BUTTON_CODE;
+    AlertResponse::from_native_code(response, spec.buttons().len())
+        .ok_or(DialogError::InvalidResult)
 }
 
 pub(crate) fn show_file_dialog(spec: &FileDialogSpec) -> Result<FileDialogResponse, DialogError> {

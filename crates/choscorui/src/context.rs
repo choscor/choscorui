@@ -94,6 +94,7 @@ impl AppContext {
         on_tick: Option<Hook>,
         on_error: ErrorHandler,
     ) -> Self {
+        platform.attach(&runtime, &env, &tokens);
         let retheme = Rc::new(Cell::new(false));
         let watched = tokens.clone();
         let flag = retheme.clone();

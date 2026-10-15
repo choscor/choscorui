@@ -2642,7 +2642,8 @@ alert.
 
 **In an alert window.** `AlertDialog::window` makes a `HostedAlertDialog`
 that is the whole content of its own modal window. A backend uses it on a
-desktop without an alert service.
+desktop without an alert service. The Linux backend shows `show_alert`
+this way.
 
 - The alert is open from the start. It measures the size of its panel.
   The panel fills the node, with no scrim.

@@ -87,6 +87,15 @@ impl Platform {
     }
 
     /// The text measurer of the windows.
+    /// The application state that drawn dialogs use. AppKit shows its own dialogs, so it keeps nothing.
+    pub(crate) fn attach(
+        &self,
+        _runtime: &choscorui_compose::Runtime,
+        _env: &choscorui_compose::view::Env,
+        _tokens: &choscorui_compose::view::Live<choscorui_core::DesignTokens>,
+    ) {
+    }
+
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
         Rc::new(ShapedText::new(&SHAPER))
     }
