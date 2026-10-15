@@ -55,6 +55,8 @@ fi
 cat >"$runtime/sway.conf" <<'CONF'
 output HEADLESS-1 resolution 1280x800 position 0 0
 default_border none
+# Windows float, so each window keeps the size that it asks for.
+for_window [app_id=".*"] floating enable
 CONF
 WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
     WAYLAND_DISPLAY= DISPLAY= \
