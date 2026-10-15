@@ -54,7 +54,7 @@ pub use capabilities::{BackendCapabilities, Condition, KeyConvention, Support};
 mod app_model;
 pub use app_model::{
     MenuBarModel, MenuCommandId, MenuEntry, MenuError, MenuItemState, MenuShortcut,
-    MenuShortcutModifiers, MenuSpec, WindowOptions,
+    MenuShortcutModifiers, MenuSpec, WindowOptions, menu_mnemonic,
 };
 mod services;
 pub use services::{

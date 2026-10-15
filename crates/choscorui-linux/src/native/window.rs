@@ -44,6 +44,15 @@ pub(crate) trait Surface {
     fn minimize(&self);
     /// True when the display server draws the title bar and the frame.
     fn server_decorations(&self) -> bool;
+    /// Opens a popup with `shared` next to `anchor`, in this window's
+    /// logical coordinates. A display server without popups refuses.
+    fn open_popup(
+        &self,
+        _shared: Rc<WindowShared>,
+        _anchor: Rect,
+    ) -> Result<Rc<dyn Surface>, Error> {
+        Err(Error::PopupUnavailable)
+    }
     /// Starts a drag of `payload` from the press that is in progress.
     fn begin_drag(
         &self,
@@ -379,6 +388,28 @@ impl Window {
     /// Minimizes the window.
     pub fn minimize(&self) {
         self.surface.minimize();
+    }
+
+    /// Opens a popup of `size` below `anchor`, in this window's logical
+    /// coordinates. The compositor flips or slides it to keep it on the
+    /// screen. The popup takes the pointer and the keyboard. It gets
+    /// [`WindowEvent::Closing`] when the user clicks outside it; then
+    /// close it. On X11 it returns [`Error::PopupUnavailable`].
+    pub fn open_popup(&self, anchor: Rect, size: Size) -> Result<Window, Error> {
+        if !(size.width.is_finite() && size.height.is_finite())
+            || size.width <= 0.0
+            || size.height <= 0.0
+        {
+            return Err(Error::InvalidSize);
+        }
+        if self.shared.closed.get() {
+            return Err(Error::Closed);
+        }
+        let painter = self.shared.paint.borrow().painter;
+        let shared = WindowShared::new("", size, Size::new(0.0, 0.0), painter);
+        shared.scale.set(self.shared.scale.get());
+        let surface = self.surface.open_popup(Rc::clone(&shared), anchor)?;
+        Ok(Window { shared, surface })
     }
 
     /// Makes the content a drop target for `formats`. An empty list or no

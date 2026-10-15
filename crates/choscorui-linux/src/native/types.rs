@@ -40,6 +40,8 @@ pub enum Error {
     InvalidClipboardText,
     /// The display server has no clipboard, or it refused the write.
     ClipboardWriteFailed,
+    /// The display server cannot show a popup next to this window.
+    PopupUnavailable,
 }
 
 impl fmt::Display for Error {
@@ -64,6 +66,9 @@ impl fmt::Display for Error {
             }
             Self::ClipboardWriteFailed => {
                 f.write_str("the display server refused the clipboard write")
+            }
+            Self::PopupUnavailable => {
+                f.write_str("the display server cannot show a popup next to this window")
             }
         }
     }

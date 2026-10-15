@@ -358,6 +358,22 @@ fn menubar_titles_rove_and_open_their_menus() {
     );
 }
 
+#[test]
+fn menubar_mnemonics_open_their_menus() {
+    let mut h = Harness::new(bar());
+    h.focus();
+    h.key(Key::Character('v'));
+    assert_eq!(h.focused_part(), "Reload");
+    h.key(Key::Escape);
+    h.key(Key::Character('E'));
+    assert_eq!(h.focused_part(), "Undo");
+    h.key(Key::Escape);
+    let _ = h.messages();
+    h.key(Key::Character('q'));
+    assert_eq!(h.semantics().state.expanded, Some(false));
+    assert!(h.messages().is_empty(), "an unknown letter does nothing");
+}
+
 /// The title of the open menu.
 fn open_title(h: &Harness) -> String {
     let parts = h.parts();

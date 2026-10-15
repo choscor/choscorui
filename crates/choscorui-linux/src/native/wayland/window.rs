@@ -1,4 +1,4 @@
-//! An `xdg_toplevel` window.
+//! An `xdg_toplevel` window, or an `xdg_popup` over one.
 //!
 //! `WaylandSurface` (the crate's configure state machine) decides when a
 //! buffer may be committed: after the initial commit, and only for the
@@ -26,6 +26,7 @@ const SURFACE_DAMAGE_BUFFER: u16 = 9;
 // xdg_surface requests.
 const XDG_SURFACE_DESTROY: u16 = 0;
 const XDG_SURFACE_GET_TOPLEVEL: u16 = 1;
+const XDG_SURFACE_GET_POPUP: u16 = 2;
 const XDG_SURFACE_SET_WINDOW_GEOMETRY: u16 = 3;
 const XDG_SURFACE_ACK_CONFIGURE: u16 = 4;
 // xdg_toplevel requests.
@@ -41,6 +42,22 @@ const TOPLEVEL_UNSET_MAXIMIZED: u16 = 10;
 const TOPLEVEL_SET_FULLSCREEN: u16 = 11;
 const TOPLEVEL_UNSET_FULLSCREEN: u16 = 12;
 const TOPLEVEL_SET_MINIMIZED: u16 = 13;
+// xdg_wm_base and xdg_positioner requests.
+const WM_BASE_CREATE_POSITIONER: u16 = 1;
+const POSITIONER_DESTROY: u16 = 0;
+const POSITIONER_SET_SIZE: u16 = 1;
+const POSITIONER_SET_ANCHOR_RECT: u16 = 2;
+const POSITIONER_SET_ANCHOR: u16 = 3;
+const POSITIONER_SET_GRAVITY: u16 = 4;
+const POSITIONER_SET_CONSTRAINT_ADJUSTMENT: u16 = 5;
+// xdg_positioner values: the bottom-left corner of the anchor, growing
+// down and to the right. At a screen edge it flips, then slides.
+const ANCHOR_BOTTOM_LEFT: u32 = 6;
+const GRAVITY_BOTTOM_RIGHT: u32 = 8;
+const ADJUST_SLIDE_FLIP: u32 = 1 | 2 | 4 | 8;
+// xdg_popup requests.
+const POPUP_DESTROY: u16 = 0;
+const POPUP_GRAB: u16 = 1;
 // xdg_toplevel states.
 const STATE_MAXIMIZED: u32 = 1;
 const STATE_FULLSCREEN: u32 = 2;
@@ -90,6 +107,8 @@ pub(crate) struct WaylandWindow {
     pub(crate) surface: Proxy,
     xdg_surface: RefCell<Option<Proxy>>,
     pub(crate) toplevel: RefCell<Option<Proxy>>,
+    /// The `xdg_popup` of a popup window.
+    popup: RefCell<Option<Proxy>>,
     decoration: RefCell<Option<Proxy>>,
     fractional: RefCell<Option<Proxy>>,
     viewport: RefCell<Option<Proxy>>,
@@ -193,6 +212,7 @@ impl WaylandWindow {
             surface,
             xdg_surface: RefCell::new(Some(xdg_surface)),
             toplevel: RefCell::new(Some(toplevel)),
+            popup: RefCell::new(None),
             decoration: RefCell::new(decoration),
             fractional: RefCell::new(fractional),
             viewport: RefCell::new(viewport),
@@ -229,6 +249,151 @@ impl WaylandWindow {
             routes.insert(proxy.id(), Role::FractionalScale(weak));
         }
         Ok(window)
+    }
+
+    /// A popup of `parent` next to `anchor`, in the parent's logical
+    /// coordinates. It takes the pointer and the keyboard when `serial`
+    /// names a recent press or key.
+    pub(crate) fn new_popup(
+        client: &Rc<Client>,
+        shared: Rc<WindowShared>,
+        parent: &WaylandWindow,
+        anchor: Rect,
+        serial: Option<u32>,
+    ) -> Result<Rc<Self>, Error> {
+        let globals = client.globals.borrow();
+        let protocol = client
+            .connection_state
+            .borrow()
+            .create_toplevel()
+            .map_err(|error| Error::Connection(format!("{error:?}")))?;
+        let compositor = globals
+            .compositor
+            .as_ref()
+            .ok_or(Error::MissingProtocol("wl_compositor"))?;
+        let wm_base = globals
+            .wm_base
+            .as_ref()
+            .ok_or(Error::MissingProtocol("xdg_wm_base"))?;
+        let parent_xdg = parent.xdg_surface.borrow();
+        let parent_xdg = parent_xdg.as_ref().ok_or(Error::Closed)?;
+        let surface = compositor
+            .request(0, &[Arg::NewId])
+            .map_err(protocol_error)?
+            .ok_or(Error::MissingProtocol("wl_surface"))?;
+        let xdg_surface = wm_base
+            .request(2, &[Arg::NewId, Arg::Object(Some(&surface))])
+            .map_err(protocol_error)?
+            .ok_or(Error::MissingProtocol("xdg_surface"))?;
+        let positioner = wm_base
+            .request(WM_BASE_CREATE_POSITIONER, &[Arg::NewId])
+            .map_err(protocol_error)?
+            .ok_or(Error::MissingProtocol("xdg_positioner"))?;
+        let size = shared.size.get();
+        let requests = [
+            (
+                POSITIONER_SET_SIZE,
+                vec![
+                    Arg::Int((size.width.round() as i32).max(1)),
+                    Arg::Int((size.height.round() as i32).max(1)),
+                ],
+            ),
+            (
+                POSITIONER_SET_ANCHOR_RECT,
+                vec![
+                    Arg::Int(anchor.origin.x.round() as i32),
+                    Arg::Int(anchor.origin.y.round() as i32),
+                    Arg::Int((anchor.size.width.round() as i32).max(1)),
+                    Arg::Int((anchor.size.height.round() as i32).max(1)),
+                ],
+            ),
+            (POSITIONER_SET_ANCHOR, vec![Arg::Uint(ANCHOR_BOTTOM_LEFT)]),
+            (
+                POSITIONER_SET_GRAVITY,
+                vec![Arg::Uint(GRAVITY_BOTTOM_RIGHT)],
+            ),
+            (
+                POSITIONER_SET_CONSTRAINT_ADJUSTMENT,
+                vec![Arg::Uint(ADJUST_SLIDE_FLIP)],
+            ),
+        ];
+        for (opcode, args) in &requests {
+            positioner.request(*opcode, args).map_err(protocol_error)?;
+        }
+        let popup = xdg_surface
+            .request(
+                XDG_SURFACE_GET_POPUP,
+                &[
+                    Arg::NewId,
+                    Arg::Object(Some(parent_xdg)),
+                    Arg::Object(Some(&positioner)),
+                ],
+            )
+            .map_err(protocol_error)?
+            .ok_or(Error::MissingProtocol("xdg_popup"))?;
+        positioner
+            .destroy(POSITIONER_DESTROY, &[])
+            .map_err(protocol_error)?;
+        // The grab goes before the first commit.
+        if let (Some(serial), Some(seat)) = (serial, &globals.seat) {
+            popup
+                .request(POPUP_GRAB, &[Arg::Object(Some(seat)), Arg::Uint(serial)])
+                .map_err(protocol_error)?;
+        }
+        drop(globals);
+        let integer = parent.inner.borrow().integer;
+        let window = Rc::new_cyclic(|me| Self {
+            me: me.clone(),
+            client: Rc::downgrade(client),
+            shared,
+            surface,
+            xdg_surface: RefCell::new(Some(xdg_surface)),
+            toplevel: RefCell::new(None),
+            popup: RefCell::new(Some(popup)),
+            decoration: RefCell::new(None),
+            fractional: RefCell::new(None),
+            viewport: RefCell::new(None),
+            inner: RefCell::new(Inner {
+                protocol,
+                frames: FrameScheduler::new(),
+                frame: None,
+                buffers: Buffers::default(),
+                pending: PendingConfigure::default(),
+                maximized: false,
+                full_screen: false,
+                server_side: true,
+                fractional: None,
+                integer,
+                outputs: Vec::new(),
+                buffer_scale: 1,
+                mapped: false,
+            }),
+            wants_paint: Cell::new(true),
+        });
+        let mut routes = client.routes.borrow_mut();
+        let weak = Rc::downgrade(&window);
+        routes.insert(window.surface.id(), Role::Surface(weak.clone()));
+        if let Some(proxy) = &*window.xdg_surface.borrow() {
+            routes.insert(proxy.id(), Role::XdgSurface(weak.clone()));
+        }
+        if let Some(proxy) = &*window.popup.borrow() {
+            routes.insert(proxy.id(), Role::Popup(weak));
+        }
+        Ok(window)
+    }
+
+    /// True for a popup window.
+    pub(crate) fn is_popup(&self) -> bool {
+        self.popup.borrow().is_some()
+    }
+
+    /// Handles `xdg_popup.configure`: the size that the compositor gives.
+    pub(crate) fn popup_configure(&self, width: i32, height: i32) {
+        self.inner.borrow_mut().pending = PendingConfigure {
+            width,
+            height,
+            ..PendingConfigure::default()
+        };
     }
 
     /// The scale of the buffers.
@@ -563,6 +728,9 @@ impl WaylandWindow {
         if let Some(toplevel) = self.toplevel.borrow_mut().take() {
             let _ = toplevel.destroy(TOPLEVEL_DESTROY, &[]);
         }
+        if let Some(popup) = self.popup.borrow_mut().take() {
+            let _ = popup.destroy(POPUP_DESTROY, &[]);
+        }
         if let Some(xdg_surface) = self.xdg_surface.borrow_mut().take() {
             let _ = xdg_surface.destroy(XDG_SURFACE_DESTROY, &[]);
         }
@@ -587,7 +755,9 @@ impl Surface for WaylandWindow {
         if inner.protocol.commit_initial().is_ok() {
             drop(inner);
             let _ = self.surface.request(SURFACE_COMMIT, &[]);
-            if let Some(client) = self.client.upgrade() {
+            if let Some(client) = self.client.upgrade()
+                && !self.is_popup()
+            {
                 client.activate_window(self);
             }
         }
@@ -743,6 +913,12 @@ impl Surface for WaylandWindow {
 
     fn server_decorations(&self) -> bool {
         self.inner.borrow().server_side
+    }
+
+    fn open_popup(&self, shared: Rc<WindowShared>, anchor: Rect) -> Result<Rc<dyn Surface>, Error> {
+        let client = self.client.upgrade().ok_or(Error::Closed)?;
+        let popup = client.create_popup(shared, self, anchor)?;
+        Ok(popup)
     }
 
     fn begin_drag(

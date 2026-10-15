@@ -9,6 +9,7 @@
 mod clipboard;
 mod event_loop;
 mod keyboard;
+mod menu;
 mod paint;
 mod pointer;
 mod transfer;
@@ -19,6 +20,7 @@ mod x11;
 
 pub use clipboard::SystemClipboard;
 pub use event_loop::{PostError, Poster, Timer};
+pub use menu::{ContextMenu, MainMenu};
 pub use types::{
     Error, ImeEvent, Modifiers, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent,
 };
@@ -26,7 +28,9 @@ pub use window::Window;
 
 use crate::ffi::libc::Watch;
 use crate::{BackendKind, BackendSelectionError, select_backend};
-use choscorui_core::{BackendCapabilities, KeyConvention, Rect, Size, Support, WindowOptions};
+use choscorui_core::{
+    BackendCapabilities, KeyConvention, MenuBarModel, MenuError, Rect, Size, Support, WindowOptions,
+};
 use event_loop::{Posted, Timers};
 use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
@@ -106,6 +110,11 @@ impl Display {
             Self::Wayland(client) => client.has_data_device(),
             Self::X11(_) => false,
         }
+    }
+
+    /// True when windows can open popups: `xdg_popup` on Wayland.
+    fn has_popups(&self) -> bool {
+        matches!(self, Self::Wayland(_))
     }
 
     fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
@@ -220,7 +229,14 @@ impl Application {
         Ok(Window { shared, surface })
     }
 
-    /// The number of open native windows.
+    /// Installs the menus of the menu bar. Linux has no global menu bar:
+    /// the application draws `MainMenu` in its windows, and a chosen
+    /// command waits in its queue.
+    pub fn install_main_menu(&self, model: MenuBarModel) -> Result<MainMenu, MenuError> {
+        Ok(MainMenu::new(model))
+    }
+
+    /// The number of open native windows, without the popups.
     pub fn window_count(&self) -> usize {
         match &self.display {
             Display::Wayland(client) => client.window_count(),
@@ -377,6 +393,11 @@ fn probe() -> BackendCapabilities {
     capabilities.text_shaping = crate::text_shaping_support();
     capabilities.image_codecs = crate::image_codecs_support();
     capabilities.keyboard = KeyConvention::Pc;
+    // The application draws the menu bar in the window.
+    capabilities.native_menus = Support::Supported;
+    if display.has_popups() {
+        capabilities.context_menus = Support::Supported;
+    }
     if display.has_data_transfer() {
         capabilities.clipboard = Support::Supported;
         capabilities.drag_and_drop = Support::Supported;

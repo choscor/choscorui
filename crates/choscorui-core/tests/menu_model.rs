@@ -119,3 +119,44 @@ fn submenus_hold_commands_that_the_model_finds_and_updates() {
         Err(MenuError::InvalidText)
     );
 }
+
+#[test]
+fn shortcuts_and_mnemonics_find_commands_and_menus() {
+    let shortcut = |key: &str, shift| MenuShortcut {
+        key: key.into(),
+        modifiers: MenuShortcutModifiers {
+            command: true,
+            shift,
+            ..MenuShortcutModifiers::default()
+        },
+    };
+    let command = |id, key: &str, shift| {
+        MenuEntry::command(
+            MenuCommandId(id),
+            MenuItemState {
+                shortcut: Some(shortcut(key, shift)),
+                ..MenuItemState::new(format!("Item {id}"))
+            },
+        )
+    };
+    let model = MenuBarModel::new(vec![
+        MenuSpec::new("File", vec![command(1, "s", false)]),
+        MenuSpec::new(
+            "…Edit",
+            vec![MenuEntry::submenu("Find", vec![command(2, "S", true)])],
+        ),
+    ])
+    .unwrap();
+    assert_eq!(
+        model.command_for_shortcut(&shortcut("S", false)),
+        Some(MenuCommandId(1))
+    );
+    assert_eq!(
+        model.command_for_shortcut(&shortcut("s", true)),
+        Some(MenuCommandId(2))
+    );
+    assert_eq!(model.command_for_shortcut(&shortcut("x", false)), None);
+    assert_eq!(model.menu_for_mnemonic('F'), Some(0));
+    assert_eq!(model.menu_for_mnemonic('e'), Some(1));
+    assert_eq!(model.menu_for_mnemonic('q'), None);
+}
