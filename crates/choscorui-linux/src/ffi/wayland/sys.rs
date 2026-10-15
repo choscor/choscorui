@@ -171,27 +171,39 @@ macro_rules! wl_interfaces {
                 name: concat!($wire, "\0").as_ptr().cast(),
                 version: $version,
                 method_count: <[&str]>::len(&[$($rname),*]) as i32,
-                methods: &[$(
-                    $crate::ffi::wayland::sys::Message($crate::ffi::wayland::sys::WlMessage {
-                        name: concat!($rname, "\0").as_ptr().cast(),
-                        signature: concat!($rsig, "\0").as_ptr().cast(),
-                        types: &[$($crate::ffi::wayland::sys::wl_interfaces!(@type $rty)),*]
-                            as *const [$crate::ffi::wayland::sys::TypeRef]
-                            as *const *const $crate::ffi::wayland::sys::WlInterface,
-                    }),
-                )*] as *const [$crate::ffi::wayland::sys::Message]
-                    as *const $crate::ffi::wayland::sys::WlMessage,
+                methods: {
+                    // Named statics: a temporary array behind a raw pointer
+                    // does not live long enough on older compilers.
+                    static MESSAGES: [$crate::ffi::wayland::sys::Message; <[&str]>::len(&[$($rname),*])] = [$(
+                        $crate::ffi::wayland::sys::Message($crate::ffi::wayland::sys::WlMessage {
+                            name: concat!($rname, "\0").as_ptr().cast(),
+                            signature: concat!($rsig, "\0").as_ptr().cast(),
+                            types: {
+                                static TYPES: [$crate::ffi::wayland::sys::TypeRef; <[&str]>::len(&[$(stringify!($rty)),*])] =
+                                    [$($crate::ffi::wayland::sys::wl_interfaces!(@type $rty)),*];
+                                (&raw const TYPES).cast::<*const $crate::ffi::wayland::sys::WlInterface>()
+                            },
+                        }),
+                    )*];
+                    (&raw const MESSAGES).cast::<$crate::ffi::wayland::sys::WlMessage>()
+                },
                 event_count: <[&str]>::len(&[$($ename),*]) as i32,
-                events: &[$(
-                    $crate::ffi::wayland::sys::Message($crate::ffi::wayland::sys::WlMessage {
-                        name: concat!($ename, "\0").as_ptr().cast(),
-                        signature: concat!($esig, "\0").as_ptr().cast(),
-                        types: &[$($crate::ffi::wayland::sys::wl_interfaces!(@type $ety)),*]
-                            as *const [$crate::ffi::wayland::sys::TypeRef]
-                            as *const *const $crate::ffi::wayland::sys::WlInterface,
-                    }),
-                )*] as *const [$crate::ffi::wayland::sys::Message]
-                    as *const $crate::ffi::wayland::sys::WlMessage,
+                events: {
+                    // Named statics: a temporary array behind a raw pointer
+                    // does not live long enough on older compilers.
+                    static MESSAGES: [$crate::ffi::wayland::sys::Message; <[&str]>::len(&[$($ename),*])] = [$(
+                        $crate::ffi::wayland::sys::Message($crate::ffi::wayland::sys::WlMessage {
+                            name: concat!($ename, "\0").as_ptr().cast(),
+                            signature: concat!($esig, "\0").as_ptr().cast(),
+                            types: {
+                                static TYPES: [$crate::ffi::wayland::sys::TypeRef; <[&str]>::len(&[$(stringify!($ety)),*])] =
+                                    [$($crate::ffi::wayland::sys::wl_interfaces!(@type $ety)),*];
+                                (&raw const TYPES).cast::<*const $crate::ffi::wayland::sys::WlInterface>()
+                            },
+                        }),
+                    )*];
+                    (&raw const MESSAGES).cast::<$crate::ffi::wayland::sys::WlMessage>()
+                },
             },
             destructors: &[$($crate::ffi::wayland::sys::wl_interfaces!(@destructor $($rdtor)?)),*],
             name: $wire,
