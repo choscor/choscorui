@@ -169,7 +169,7 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 `Application::beep()` plays the alert sound of the controls. It uses the first source that works:
 
-1. On Wayland, `xdg_system_bell_v1` rings the bell for the focused window.
+1. On Wayland, `xdg_system_bell_v1` rings the bell for the focused window. On X11, the XKB bell of the core keyboard rings for the focused window.
 2. The libcanberra event sound `bell` plays from the sound theme.
 3. Else, the application makes no sound.
 

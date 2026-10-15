@@ -293,7 +293,7 @@ impl Application {
     pub fn beep(&self) {
         let rung = match &self.display {
             Display::Wayland(client) => client.ring_bell(),
-            Display::X11(_) => false,
+            Display::X11(client) => client.ring_bell(),
         };
         if !rung {
             crate::ffi::canberra::play_bell();

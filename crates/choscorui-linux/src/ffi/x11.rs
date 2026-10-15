@@ -470,6 +470,19 @@ libraries! {
                 cookie: XcbXkbPerClientFlagsCookie,
                 e: ErrorOut,
             ) -> *mut XcbXkbPerClientFlagsReply;
+            fn xcb_xkb_bell(
+                c: *mut XcbConnection,
+                device_spec: u16,
+                bell_class: u16,
+                bell_id: u16,
+                percent: i8,
+                force_sound: u8,
+                event_only: u8,
+                pitch: i16,
+                duration: i16,
+                name: u32,
+                window: u32,
+            ) -> XcbVoidCookie;
         }
     }
 
@@ -718,6 +731,8 @@ c_consts! {
     pub(crate) const XCB_INPUT_FOCUS_PARENT: u8 = 2;
     pub(crate) const XCB_GC_GRAPHICS_EXPOSURES: u32 = 65536;
     pub(crate) const XCB_XKB_ID_USE_CORE_KBD: u16 = 256;
+    pub(crate) const XCB_XKB_BELL_CLASS_DFLT_XI_CLASS: u16 = 768;
+    pub(crate) const XCB_XKB_ID_DFLT_XI_ID: u16 = 1024;
     pub(crate) const XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY: u16 = 1;
     pub(crate) const XCB_XKB_EVENT_TYPE_MAP_NOTIFY: u16 = 2;
     pub(crate) const XCB_XKB_EVENT_TYPE_STATE_NOTIFY: u16 = 4;
@@ -1509,6 +1524,31 @@ impl Connection {
                 parts,
                 parts,
                 std::ptr::null(),
+            )
+        };
+        true
+    }
+
+    /// Rings the bell of the core keyboard at its default volume, for
+    /// `window` or for no window (0). Returns false without libxcb-xkb.
+    pub(crate) fn xkb_bell(&self, window: u32) -> bool {
+        let Ok(xkb) = XcbXkb::get() else {
+            return false;
+        };
+        // SAFETY: the request has no pointers.
+        unsafe {
+            (xkb.xcb_xkb_bell)(
+                self.raw,
+                XCB_XKB_ID_USE_CORE_KBD,
+                XCB_XKB_BELL_CLASS_DFLT_XI_CLASS,
+                XCB_XKB_ID_DFLT_XI_ID,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                window,
             )
         };
         true

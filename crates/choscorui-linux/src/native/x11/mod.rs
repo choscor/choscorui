@@ -357,6 +357,24 @@ impl Client {
         self.seat.borrow().device
     }
 
+    /// Rings the XKB bell of the core keyboard for the focused window.
+    /// Returns false when the server has no XKB.
+    pub(crate) fn ring_bell(&self) -> bool {
+        if self.extensions.xkb_event.is_none() {
+            return false;
+        }
+        let window = self
+            .seat
+            .borrow()
+            .keyboard_focus
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map_or(0, |window| window.id);
+        let rung = self.connection.xkb_bell(window);
+        self.connection.flush();
+        rung
+    }
+
     /// Sends a client message to the window manager.
     pub(crate) fn send_to_root(&self, message: &[u8; 32]) {
         self.connection.send_event(

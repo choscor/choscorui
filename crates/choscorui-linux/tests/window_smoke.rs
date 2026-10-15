@@ -76,6 +76,11 @@ fn a_window_shows_paints_retitles_and_closes() {
     window.set_title("Renamed").unwrap();
     assert_eq!(window.title(), "Renamed");
     assert!(window.set_title("bad\0title").is_err());
+    // The bell request must not break the connection.
+    application.beep();
+    application
+        .dispatch_next_event(Duration::from_millis(10))
+        .unwrap();
     assert_eq!(application.window_count(), 1);
     window.close();
     assert_eq!(application.window_count(), 0);
