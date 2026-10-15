@@ -53,14 +53,8 @@ pub(crate) trait Surface {
         None
     }
     /// Opens a popup with `shared` next to `anchor`, in this window's
-    /// logical coordinates. A display server without popups refuses.
-    fn open_popup(
-        &self,
-        _shared: Rc<WindowShared>,
-        _anchor: Rect,
-    ) -> Result<Rc<dyn Surface>, Error> {
-        Err(Error::PopupUnavailable)
-    }
+    /// logical coordinates.
+    fn open_popup(&self, shared: Rc<WindowShared>, anchor: Rect) -> Result<Rc<dyn Surface>, Error>;
     /// Starts a drag of `payload` from the press that is in progress.
     fn begin_drag(
         &self,
@@ -449,10 +443,11 @@ impl Window {
     }
 
     /// Opens a popup of `size` below `anchor`, in this window's logical
-    /// coordinates. The compositor flips or slides it to keep it on the
-    /// screen. The popup takes the pointer and the keyboard. It gets
-    /// [`WindowEvent::Closing`] when the user clicks outside it; then
-    /// close it. On X11 it returns [`Error::PopupUnavailable`].
+    /// coordinates. It flips or slides to stay on the screen: the
+    /// compositor moves an `xdg_popup` on Wayland, and the backend places
+    /// an override-redirect window on X11. The popup takes the pointer
+    /// and the keyboard. It gets [`WindowEvent::Closing`] when the user
+    /// clicks outside it; then close it.
     pub fn open_popup(&self, anchor: Rect, size: Size) -> Result<Window, Error> {
         if !(size.width.is_finite() && size.height.is_finite())
             || size.width <= 0.0

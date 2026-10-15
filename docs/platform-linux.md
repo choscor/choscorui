@@ -21,11 +21,11 @@ The release gallery links only `libc`, `libm`, and `libgcc_s` (`ldd target/relea
 | libxkbcommon | `libxkbcommon.so.0` | Keymaps, key state, and compose sequences | No windows on either display server |
 | libcairo | `libcairo.so.2` | The Cairo painter, captures, and the masks and glyphs of the GLES painter | Windows open, but each paint fails and leaves the region clear |
 | libfreetype, libharfbuzz, libfontconfig | `libfreetype.so.6`, `libharfbuzz.so.0`, `libfontconfig.so.1` | [Text](#text) | `text_shaping` is `Unsupported`, and the controls use estimated text metrics |
-| libEGL, libGLESv2, libwayland-egl | `libEGL.so.1`, `libGLESv2.so.2`, `libwayland-egl.so.1` | The [GLES painter](#painters) | Windows paint with Cairo |
+| libEGL, libGLESv2, libwayland-egl | `libEGL.so.1`, `libGLESv2.so.2`, `libwayland-egl.so.1` | The [GLES painter](#painters). X11 does not use libwayland-egl. | Windows paint with Cairo |
 | libwayland-cursor | `libwayland-cursor.so.0` | Xcursor themes on Wayland | Without `wp_cursor_shape_v1`, only custom cursor images show |
 | libxkbcommon-x11 | `libxkbcommon-x11.so.0` | The X11 keymap from XKB | The X11 keyboard has no keymap |
 | libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-randr, libxcb-render, libxcb-cursor | `.so.1` for xcb-xkb, `.so.0` for the others | The [X11 extensions](#x11-extensions) | The client uses the fallback of each extension |
-| libX11 | `libX11.so.6` | XIM input methods | No input method on X11 |
+| libX11 | `libX11.so.6` | XIM input methods, and the EGL display on X11 without `EGL_EXT_platform_xcb` | No input method on X11 |
 | libxcb-xtest | `libxcb-xtest.so.0` | `Window::simulate_pointer`, for tests | The call returns `Error::Library` |
 | libdbus-1 | `libdbus-1.so.3` | [Desktop services](#desktop-integration) and [accessibility](#accessibility) | No D-Bus services and no AT-SPI bridge |
 | libcanberra | `libcanberra.so.0` | The [alert sound](#alert-sound) when the display server has no bell | No sound |
@@ -163,13 +163,14 @@ Positive deltas scroll down and to the right, as on macOS.
 
 `set_display_list` with an identical display list schedules no paint. A changed list paints only the region whose drawing changed. `Window::painter()` returns the painter of the window:
 
-- `Painter::Gles` paints with OpenGL ES 3.0 through EGL on a `wl_egl_window`.
+- `Painter::Gles` paints with OpenGL ES 3.0 through EGL, on a `wl_egl_window` or on the X11 window.
 - `Painter::Cairo` paints with Cairo on the CPU. On Wayland, it paints into double-buffered `wl_shm` buffers. On X11, see [X11 painting](#x11-painting).
 
 #### Fallback
 
-- New Wayland windows use GLES. They use Cairo when `CHOSCORUI_PAINTER=cairo` is set, or when libEGL, libGLESv2, or libwayland-egl does not load.
-- New windows also use Cairo when no EGL config has RGBA8 and OpenGL ES 3.0, or when the shaders do not compile.
+- New windows use GLES. They use Cairo when `CHOSCORUI_PAINTER=cairo` is set, or when libEGL or libGLESv2 does not load. On Wayland, they also use Cairo when libwayland-egl does not load.
+- On X11, the EGL display uses `EGL_EXT_platform_xcb` when EGL has it, else `EGL_KHR_platform_x11` with libX11. Without both, new windows use Cairo.
+- New windows also use Cairo when no EGL config has RGBA8 and OpenGL ES 3.0, or when the shaders do not compile. On X11, the config must have the visual of the root window instead of RGBA8.
 - The shaders compile when the application connects, before a window opens. A compile or link failure is a `GlesError`, not a panic.
 - A GPU failure during a paint switches that window to Cairo for the rest of its life. The window then repaints all of its content.
 - A lost context, a failed swap, and an OpenGL ES error during a paint are GPU failures. The other GLES windows switch to Cairo at their next paint.
@@ -179,10 +180,10 @@ Positive deltas scroll down and to the right, as on macOS.
 
 #### GLES frames
 
-- The swap interval is 0. The `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo.
-- The window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
+- The swap interval is 0. On Wayland, the `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo. On X11, a window paints when its content changes or an `Expose` event arrives.
+- On Wayland, the window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
 - With `EGL_EXT_buffer_age`, a paint repaints the damage of each frame since the back buffer was on the screen. Without it, a paint repaints the whole window.
-- With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the compositor.
+- With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the display server.
 
 #### GLES drawing
 
@@ -198,7 +199,7 @@ The painter draws each command in the order of the display list, as the Cairo pa
 
 #### X11 painting
 
-X11 windows paint with Cairo, so `gpu_painting` is `Unsupported` on X11. The window paints into a client-side image and sends only the pending region. It uses MIT-SHM when the server shares memory with the client. A shared image stays busy until its completion event. Otherwise `PutImage` sends the pixels in parts that fit the maximum request length.
+With the GLES painter, an X11 window paints through EGL on a connection of its own. The EGL requests and errors then stay out of the event loop. With Cairo, the window paints into a client-side image and sends only the pending region. It uses MIT-SHM when the server shares memory with the client. A shared image stays busy until its completion event. Otherwise `PutImage` sends the pixels in parts that fit the maximum request length.
 
 ### Other window operations
 
@@ -295,10 +296,12 @@ Linux has no global menu bar. The facade draws the menus and the title bar in ea
 
 ### Popups and context menus
 
-- **Popups.** `Window::open_popup(anchor, size)` opens an `xdg_popup` below `anchor`. The `xdg_positioner` flips the popup, then slides it, at the screen edges. The popup grabs the pointer and the keyboard with the serial of the latest key or button event. A click outside the popup sends `WindowEvent::Closing` (`popup_done`). `Application::window_count` does not count popups.
+- **Popups.** `Window::open_popup(anchor, size)` opens a popup below the bottom-left corner of `anchor`. At the screen edges, the popup flips, then slides. A click outside the popup sends `WindowEvent::Closing`. `Application::window_count` does not count popups.
+- **Wayland popups.** The popup is an `xdg_popup`, and the `xdg_positioner` flips and slides it. The popup grabs the pointer and the keyboard with the serial of the latest key or button event. `popup_done` gives `Closing`.
+- **X11 popups.** The popup is an override-redirect window with `_NET_WM_WINDOW_TYPE_POPUP_MENU` and `WM_TRANSIENT_FOR`. The backend flips and slides it in the RandR monitor that holds the anchor. When the popup maps, it grabs the pointer and the keyboard. A press outside the popup ends the grabs and gives `Closing`, and the parent window does not get the press.
 - **Context menus.** `NativeAccess::show_context_menu(window, menu, at)` shows a `ContextMenu` in a popup at `at`. It runs a nested event loop until the popup closes, as on macOS. It returns the chosen command, and the command also waits in `menu.take_activations()`. Escape, a click outside the popup, or a press in the parent window returns `None`. During the loop, the keys of the parent window go to the menu, because a compositor can keep the keyboard focus on the parent.
 - Submenus of a context menu show inside the popup.
-- `native_menus` is `Supported` on Wayland and X11. `context_menus` is `Supported` on Wayland. On X11, `open_popup` returns `Error::PopupUnavailable`, and `show_context_menu` returns `None`.
+- `native_menus` and `context_menus` are `Supported` on Wayland and X11.
 
 ### Decorations
 
@@ -531,7 +534,7 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 | `backend` | `"wayland"` | `"x11"` | `"headless"` |
 | `multiple_windows` | `Supported` | `Supported` | `Unsupported` |
 | `native_menus` | `Supported` | `Supported` | `Unsupported` |
-| `context_menus` | `Supported` | `Unsupported` | `Unsupported` |
+| `context_menus` | `Supported` | `Supported` | `Unsupported` |
 | `native_dialogs` | `Supported` | `Supported` | `Unsupported` |
 | `clipboard`, `drag_and_drop` | `Supported` with `wl_data_device_manager` | `Supported` | `Unsupported` |
 | `input_methods` | `Supported` with `zwp_text_input_manager_v3` | `Supported` when an XIM input method opens | `Unsupported` |
@@ -542,7 +545,7 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 | `system_appearance` | `Supported` when the settings portal answers | Same as Wayland | `Unsupported` |
 | `text_shaping` | `Supported` when FreeType, HarfBuzz, and fontconfig load | Same as Wayland | `Unsupported` |
 | `image_codecs` | `Supported` when libpng and libturbojpeg load | Same as Wayland | `Unsupported` |
-| `gpu_painting` | `Supported` when the GLES painter started and no GPU failure occurred | `Unsupported` | `Unsupported` |
+| `gpu_painting` | `Supported` when the GLES painter started and no GPU failure occurred | Same as Wayland | `Unsupported` |
 | `keyboard` | `KeyConvention::Pc` | `KeyConvention::Pc` | `KeyConvention::Pc` |
 
 - **Headless** is `BackendCapabilities::none("headless")`. It applies without a display server, when the server refuses the connection, or when a required library does not load. `App::start` then returns `AppError::Unsupported`.
@@ -737,8 +740,6 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 ## Limitations
 
 - **Wayland position.** A Wayland client cannot read or set its window position. `geometry` has a zero origin, and AT-SPI screen coordinates are relative to the window.
-- **X11 popups.** X11 has no popups, so `context_menus` is `Unsupported` there. `open_popup` returns `Error::PopupUnavailable`, and `show_context_menu` returns `None`.
-- **X11 painting.** X11 windows paint with Cairo only, so `gpu_painting` is `Unsupported` there.
 - **Drawn decorations.** The drawn title bar has no shadow and no resize band outside the window.
 - **Long menus.** A menu of the menu bar shows inside the window, so a menu that is longer than the window is cut off.
 - **Gestures.** X11 has no portable gesture protocol, so X11 windows send no `Gesture` events. Wayland windows send only pinches. The tests do not use a real touchpad.
@@ -754,6 +755,7 @@ The session has these parts:
 - a private D-Bus session bus and the AT-SPI registry
 - headless sway with one 1280x800 output, and Xvfb on `:99` with RandR
 - a virtual keyboard and pointer for sway, which a test drives through the FIFO in `CHOSCORUI_VIRTUAL_INPUT`
+- XTEST on Xvfb, which a test drives through `Window::simulate_pointer`
 
 | Test | What it checks |
 | --- | --- |
@@ -762,6 +764,8 @@ The session has these parts:
 | [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. The XIM test needs an XIM server in `XMODIFIERS`. |
 | [`lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) | Window churn, timers, posted work, and the footprint |
 | [`modal_smoke.rs`](../crates/choscorui-linux/tests/modal_smoke.rs) and [`dialog_smoke.rs`](../crates/choscorui/tests/dialog_smoke.rs) | Modal windows, drawn alerts, and drawn file dialogs |
+| [`menu_smoke.rs`](../crates/choscorui-linux/tests/menu_smoke.rs) | The menu queue, and popups that open, flip, and close at a click outside |
+| [`chrome_smoke.rs`](../crates/choscorui/tests/chrome_smoke.rs) | The drawn menu bar and title bar on Wayland, and context menus on both display servers |
 | [`atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) | Roles, names, actions, events, and announcements on the accessibility bus |
 | [`app_smoke.rs`](../crates/choscorui/tests/app_smoke.rs) and [`errors_and_capabilities.rs`](../crates/choscorui/tests/errors_and_capabilities.rs) | The facade on Linux and the capability values |
 | [`gles_parity_smoke.rs`](../crates/choscorui/tests/gles_parity_smoke.rs) | GLES renders against the software renderer, and text against Cairo |

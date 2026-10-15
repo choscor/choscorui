@@ -57,6 +57,55 @@ pub(crate) fn monitors(reply: &Bytes) -> Vec<Rect> {
     rects
 }
 
+/// The origin of a popup of `size` next to `anchor`, kept on the
+/// monitor of `monitors` that holds the center of `anchor`, or else on
+/// the first one. All values are root pixels.
+///
+/// As the Wayland positioner of the backend asks: the popup opens below
+/// the bottom-left corner of `anchor`. When it does not fit, it flips
+/// above `anchor` or to the left of its right edge, if the flipped
+/// popup fits. Then it slides onto the monitor.
+pub(crate) fn place_popup(anchor: Rect, size: Size, monitors: &[Rect]) -> Point {
+    let center = anchor.center();
+    let monitor = monitors
+        .iter()
+        .find(|monitor| {
+            (monitor.min_x()..monitor.max_x()).contains(&center.x)
+                && (monitor.min_y()..monitor.max_y()).contains(&center.y)
+        })
+        .or_else(|| monitors.first())
+        .copied();
+    let x = anchor.min_x();
+    let y = anchor.max_y();
+    let Some(monitor) = monitor else {
+        return Point::new(x, y);
+    };
+    let axis = |start: f64, flipped: f64, length: f64, (low, high): (f64, f64)| {
+        let start = if start + length > high && flipped >= low {
+            flipped
+        } else {
+            start
+        };
+        // The slide keeps the start on the monitor when the popup is
+        // longer than it.
+        start.min(high - length).max(low)
+    };
+    Point::new(
+        axis(
+            x,
+            anchor.max_x() - size.width,
+            size.width,
+            (monitor.min_x(), monitor.max_x()),
+        ),
+        axis(
+            y,
+            anchor.min_y() - size.height,
+            size.height,
+            (monitor.min_y(), monitor.max_y()),
+        ),
+    )
+}
+
 /// The id of the ARGB32 picture format of a `RenderQueryPictFormats`
 /// reply: 32 bits, alpha at bit 24, red at 16, green at 8, blue at 0.
 pub(crate) fn argb32_format(reply: &Bytes) -> Option<u32> {
@@ -282,6 +331,48 @@ mod tests {
                 Rect::new(Point::new(0.0, 0.0), Size::new(1280.0, 800.0)),
                 Rect::new(Point::new(1280.0, 0.0), Size::new(640.0, 480.0)),
             ]
+        );
+    }
+
+    #[test]
+    fn popups_open_below_the_anchor_then_flip_and_slide() {
+        let screens = [
+            Rect::from_xywh(0.0, 0.0, 1280.0, 800.0),
+            Rect::from_xywh(1280.0, 0.0, 640.0, 480.0),
+        ];
+        let size = Size::new(200.0, 300.0);
+        let anchor = |x, y| Rect::from_xywh(x, y, 1.0, 1.0);
+        // Room below and to the right.
+        assert_eq!(
+            place_popup(anchor(100.0, 50.0), size, &screens),
+            Point::new(100.0, 51.0)
+        );
+        // At the bottom edge, the popup flips above the anchor.
+        assert_eq!(
+            place_popup(anchor(100.0, 700.0), size, &screens),
+            Point::new(100.0, 400.0)
+        );
+        // At the right edge of the first monitor, it flips to the left.
+        assert_eq!(
+            place_popup(anchor(1200.0, 50.0), size, &screens),
+            Point::new(1001.0, 51.0)
+        );
+        // The second monitor is shorter: neither side fits, so the popup
+        // slides up onto it.
+        assert_eq!(
+            place_popup(anchor(1300.0, 250.0), size, &screens),
+            Point::new(1300.0, 180.0)
+        );
+        // A popup wider than the anchor's side flips only when the flip
+        // fits; else it slides.
+        assert_eq!(
+            place_popup(anchor(50.0, 50.0), Size::new(1300.0, 10.0), &screens),
+            Point::new(0.0, 51.0)
+        );
+        // Without monitors, the popup stays below the anchor.
+        assert_eq!(
+            place_popup(anchor(5.0, 6.0), size, &[]),
+            Point::new(5.0, 7.0)
         );
     }
 

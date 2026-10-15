@@ -143,21 +143,20 @@ fn linux_session(capabilities: &choscorui::BackendCapabilities) {
     ] {
         assert_eq!(support, Support::Supported, "{name}");
     }
-    // sway has text-input-v3 and xdg_popup. On X11, an input method
-    // opens only through XMODIFIERS, and popups are Wayland only.
+    // Context menus show in `xdg_popup` on Wayland, and in
+    // override-redirect windows on X11.
+    assert_eq!(capabilities.context_menus, Support::Supported);
+    // sway has text-input-v3. On X11, an input method opens only
+    // through XMODIFIERS.
     if wayland {
         assert_eq!(capabilities.input_methods, Support::Supported);
-        assert_eq!(capabilities.context_menus, Support::Supported);
-    } else {
-        if std::env::var_os("XMODIFIERS").is_none() {
-            assert_eq!(capabilities.input_methods, Support::Unsupported);
-        }
-        assert_eq!(capabilities.context_menus, Support::Unsupported);
+    } else if std::env::var_os("XMODIFIERS").is_none() {
+        assert_eq!(capabilities.input_methods, Support::Unsupported);
     }
-    // Mesa paints with GLES on Wayland, unless the environment selects
-    // Cairo. X11 windows paint with Cairo.
+    // Mesa paints with GLES on Wayland and on Xvfb, unless the
+    // environment selects Cairo.
     let cairo = std::env::var("CHOSCORUI_PAINTER").is_ok_and(|painter| painter == "cairo");
-    let gpu = if wayland && !cairo {
+    let gpu = if !cairo {
         Support::Supported
     } else {
         Support::Unsupported

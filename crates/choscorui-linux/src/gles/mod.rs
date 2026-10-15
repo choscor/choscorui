@@ -2,7 +2,8 @@
 //!
 //! - `Device` is one EGL display and context, with the compiled program.
 //!   The window system makes one when it starts, so a shader failure
-//!   shows before a window opens.
+//!   shows before a window opens. On X11 the device has a connection of
+//!   its own to the server.
 //! - `GlesWindow` is the EGL surface of one window. It repaints only the
 //!   damage when `EGL_EXT_buffer_age` gives the age of the back buffer,
 //!   and passes the damage to `eglSwapBuffersWithDamageKHR` when present.
@@ -134,18 +135,36 @@ impl Device {
         Self::new(display, true).map(Rc::new)
     }
 
+    /// Opens the GLES painter on a connection of its own to the X server
+    /// of `DISPLAY`, for windows of `visual`, and compiles its shaders.
+    pub(crate) fn x11(visual: u32) -> Result<Rc<Self>, GlesError> {
+        let display = EglDisplay::x11()?;
+        Self::check_surfaceless(&display)?;
+        let context = display.x11_context(visual)?;
+        Self::with_context(context).map(Rc::new)
+    }
+
     /// Opens the GLES painter without a window system.
     fn surfaceless() -> Result<Self, GlesError> {
         Self::new(EglDisplay::surfaceless()?, false)
     }
 
     fn new(display: EglDisplay, window: bool) -> Result<Self, GlesError> {
-        if !display.has_extension("EGL_KHR_surfaceless_context") {
-            return Err(GlesError::Context(
+        Self::check_surfaceless(&display)?;
+        Self::with_context(display.context(window)?)
+    }
+
+    fn check_surfaceless(display: &EglDisplay) -> Result<(), GlesError> {
+        if display.has_extension("EGL_KHR_surfaceless_context") {
+            Ok(())
+        } else {
+            Err(GlesError::Context(
                 "EGL_KHR_surfaceless_context is missing".to_owned(),
-            ));
+            ))
         }
-        let context = display.context(window)?;
+    }
+
+    fn with_context(context: EglContext) -> Result<Self, GlesError> {
         // The shaders compile before any surface exists.
         context.make_current(None)?;
         let gl = Gl::get().map_err(GlesError::Library)?;
@@ -164,9 +183,31 @@ impl Device {
         height: u32,
     ) -> Result<GlesWindow, GlesError> {
         let surface = EglSurface::wayland(&self.context, surface, width, height)?;
+        self.window_of(surface, width, height)
+    }
+
+    /// Opens the EGL surface of the X11 window `window` of `width` ×
+    /// `height` pixels. The device came from `Device::x11`.
+    pub(crate) fn x11_window(
+        &self,
+        window: u32,
+        width: u32,
+        height: u32,
+    ) -> Result<GlesWindow, GlesError> {
+        let surface = EglSurface::x11(&self.context, window)?;
+        self.window_of(surface, width, height)
+    }
+
+    fn window_of(
+        &self,
+        surface: EglSurface,
+        width: u32,
+        height: u32,
+    ) -> Result<GlesWindow, GlesError> {
         self.context.make_current(Some(&surface))?;
-        // The frame callback of the window paces the paints, so a swap
-        // must not wait for the compositor.
+        // The frame callback of a Wayland window paces the paints, and an
+        // X11 window paints when its content changes, so a swap must not
+        // wait for the display server.
         self.context.set_swap_interval(0);
         Ok(GlesWindow {
             surface,
@@ -177,8 +218,8 @@ impl Device {
 
     /// Paints `list` into `window` at `scale`, and shows it. `region` is
     /// the logical region that changed. `commit` runs just before the
-    /// swap, which commits the `wl_surface`. A failure marks the GLES
-    /// painter as failed in this process.
+    /// swap, which commits the `wl_surface` on Wayland. A failure marks
+    /// the GLES painter as failed in this process.
     pub(crate) fn paint_window(
         &self,
         window: &mut GlesWindow,

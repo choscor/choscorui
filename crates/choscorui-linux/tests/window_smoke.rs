@@ -37,21 +37,16 @@ fn pump_until(application: &Application, mut done: impl FnMut() -> bool) -> bool
 }
 
 /// Checks the painter of a new window against `CHOSCORUI_PAINTER` and
-/// `gpu_painting`. On Wayland, Mesa's llvmpipe gives the GLES painter.
-fn check_painter(application: &Application, painter: Painter) {
+/// `gpu_painting`. On Wayland and on Xvfb, Mesa's llvmpipe gives the
+/// GLES painter.
+fn check_painter(painter: Painter) {
     let gpu = capabilities().gpu_painting;
     if std::env::var("CHOSCORUI_PAINTER").is_ok_and(|value| value == "cairo") {
         assert_eq!(painter, Painter::Cairo);
         assert_eq!(gpu, Support::Unsupported);
-    } else if application.backend() == BackendKind::Wayland {
+    } else {
         assert_eq!(painter, Painter::Gles);
         assert_eq!(gpu, Support::Supported);
-    } else {
-        let expected = match gpu {
-            Support::Supported => Painter::Gles,
-            _ => Painter::Cairo,
-        };
-        assert_eq!(painter, expected);
     }
 }
 
@@ -67,7 +62,7 @@ fn a_window_shows_paints_retitles_and_closes() {
     let window = application
         .create_window(WindowOptions::new("Smoke", 320.0, 200.0))
         .unwrap();
-    check_painter(&application, window.painter());
+    check_painter(window.painter());
     window.show();
     let mut list = DisplayList::new();
     list.fill_rect(
@@ -123,7 +118,7 @@ fn a_window_repaints_each_change() {
     let window = application
         .create_window(WindowOptions::new("Repaint", 200.0, 120.0))
         .unwrap();
-    check_painter(&application, window.painter());
+    check_painter(window.painter());
     window.show();
     for step in 0..6u8 {
         let mut list = DisplayList::new();
@@ -143,7 +138,7 @@ fn a_window_repaints_each_change() {
         assert!(pump_until(&application, || window.paint_count() > before));
     }
     // No GPU failure switched the window.
-    check_painter(&application, window.painter());
+    check_painter(window.painter());
     window.close();
 }
 
