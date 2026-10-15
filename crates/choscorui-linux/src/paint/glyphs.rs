@@ -10,6 +10,7 @@ use choscorui_core::{Color, GlyphRun, Point, TextRun, TextShaper, TextStyle};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 const FACE_CACHE_LIMIT: usize = 64;
 
@@ -96,8 +97,36 @@ pub(super) fn draw_run(cx: &Context<'_>, origin: Point, run: &GlyphRun, color: C
     true
 }
 
+/// Shapes one line of text in the font of `run`, with its first
+/// baseline at `baseline`, as `TextLayout::draw` would place it. Gives
+/// the baseline origin of each glyph run, or `None` when shaping fails.
+pub(crate) fn text_runs(
+    baseline: Point,
+    text: &str,
+    run: &TextRun<'_>,
+) -> Option<Vec<(Point, Arc<GlyphRun>)>> {
+    let style = TextStyle::new(run.family, run.size)
+        .with_weight(run.weight)
+        .with_slant(run.slant)
+        .with_tracking(run.tracking);
+    let layout = LinuxTextShaper.shape(text, &style, None).ok()?;
+    let top = baseline.y - layout.first_baseline();
+    Some(
+        layout
+            .lines()
+            .iter()
+            .flat_map(|line| {
+                let origin = Point::new(baseline.x + line.offset_x, top + line.baseline);
+                line.runs
+                    .iter()
+                    .map(move |glyph_run| (origin, glyph_run.clone()))
+            })
+            .collect(),
+    )
+}
+
 /// Shapes one line of text in the font of `run` and draws it with its
-/// first baseline at `baseline`, as `TextLayout::draw` would place it.
+/// first baseline at `baseline`.
 pub(super) fn draw_text(
     cx: &Context<'_>,
     baseline: Point,
@@ -105,20 +134,12 @@ pub(super) fn draw_text(
     run: &TextRun<'_>,
     color: Color,
 ) -> bool {
-    let style = TextStyle::new(run.family, run.size)
-        .with_weight(run.weight)
-        .with_slant(run.slant)
-        .with_tracking(run.tracking);
-    let Ok(layout) = LinuxTextShaper.shape(text, &style, None) else {
+    let Some(runs) = text_runs(baseline, text, run) else {
         return false;
     };
-    let top = baseline.y - layout.first_baseline();
     let mut drawn = true;
-    for line in layout.lines() {
-        let origin = Point::new(baseline.x + line.offset_x, top + line.baseline);
-        for glyph_run in &line.runs {
-            drawn &= draw_run(cx, origin, glyph_run, color);
-        }
+    for (origin, glyph_run) in &runs {
+        drawn &= draw_run(cx, *origin, glyph_run, color);
     }
     drawn
 }

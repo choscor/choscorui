@@ -9,9 +9,12 @@
 //!   on the same font files, so both text commands place glyphs alike.
 //! - Shadows and backdrop blur use the core mask and blur, as the other
 //!   painters do.
+//! - `mask` rasterizes coverage for the GLES painter with the same Cairo
+//!   calls.
 
 mod effects;
-mod glyphs;
+pub(crate) mod glyphs;
+pub(crate) mod mask;
 
 use crate::ffi::cairo::{CairoFailure, Context, Format, Pattern, Surface};
 use choscorui_core::{

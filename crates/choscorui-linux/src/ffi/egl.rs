@@ -219,7 +219,8 @@ struct DisplayInner {
     lib: &'static Egl,
     raw: Handle,
     extensions: String,
-    swap_with_damage: Option<unsafe extern "C" fn(Handle, Handle, *const EglInt, EglInt) -> EglBoolean>,
+    swap_with_damage:
+        Option<unsafe extern "C" fn(Handle, Handle, *const EglInt, EglInt) -> EglBoolean>,
     /// The Wayland connection, which must outlive the display.
     _native: Option<DisplayRef>,
 }
@@ -390,8 +391,7 @@ impl EglDisplay {
         ];
         // SAFETY: `config` came from this display; the list ends with
         // EGL_NONE.
-        let raw =
-            unsafe { (lib.eglCreateContext)(display.raw, config, NONE, attributes.as_ptr()) };
+        let raw = unsafe { (lib.eglCreateContext)(display.raw, config, NONE, attributes.as_ptr()) };
         if raw.is_null() {
             return Err(EglFailure::Context(display.error()));
         }
@@ -522,7 +522,13 @@ impl EglSurface {
     pub(crate) fn resize(&self, width: u32, height: u32) {
         // SAFETY: the window is live.
         unsafe {
-            (self.window.lib.wl_egl_window_resize)(self.window.raw, size(width), size(height), 0, 0);
+            (self.window.lib.wl_egl_window_resize)(
+                self.window.raw,
+                size(width),
+                size(height),
+                0,
+                0,
+            );
         }
     }
 

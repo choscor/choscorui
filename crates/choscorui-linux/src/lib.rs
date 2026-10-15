@@ -41,7 +41,11 @@ mod native;
 #[cfg(target_os = "linux")]
 pub use native::*;
 
-// The text system and the Cairo painter use the safe wrappers of `ffi`.
+// The text system and the painters use the safe wrappers of `ffi`.
+#[cfg(target_os = "linux")]
+mod gles;
+#[cfg(target_os = "linux")]
+pub use gles::{GlesError, render_offscreen_gles};
 #[cfg(target_os = "linux")]
 mod paint;
 #[cfg(target_os = "linux")]

@@ -73,7 +73,7 @@ On a Mac, use Docker Desktop. On Apple silicon, the container is aarch64 Linux.
 2. Run the fast checks: `scripts/linux/run-in-container.sh check`.
 3. Run the native checks: `scripts/linux/run-in-container.sh native`.
 
-The native checks run each test alone in [scripts/linux/headless-session.sh](scripts/linux/headless-session.sh). That script starts a D-Bus session bus, the AT-SPI registry, a headless sway compositor, and Xvfb. The checks run on Wayland and on X11.
+The native checks run each test alone in [scripts/linux/headless-session.sh](scripts/linux/headless-session.sh). That script starts a D-Bus session bus, the AT-SPI registry, a headless sway compositor, and Xvfb. The checks run on Wayland and on X11, with the GLES painter and with the Cairo painter.
 
 To run one command in a headless session, use `scripts/linux/run-in-container.sh -- COMMAND`. For example:
 

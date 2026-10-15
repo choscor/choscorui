@@ -6,7 +6,9 @@
 //! list from there when it paints.
 
 use super::types::{Error, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent};
-use choscorui_core::{CursorShape, DisplayList, DrawRegions, Point, Rect, Size, WindowGeometry};
+use choscorui_core::{
+    CursorShape, DisplayList, DrawRegions, Image, Point, Rect, Size, WindowGeometry,
+};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -278,6 +280,18 @@ impl Window {
         });
         drop(paint);
         self.surface.request_paint();
+    }
+
+    /// Renders the display list of the window with Cairo, at its content
+    /// size and backing scale, as straight-alpha RGBA8. Both painters use
+    /// it, so a capture never reads GPU memory.
+    pub fn capture(&self) -> Result<Image, Error> {
+        if self.shared.closed.get() {
+            return Err(Error::Closed);
+        }
+        let list = Rc::clone(&self.shared.paint.borrow().list);
+        crate::render_offscreen(&list, self.shared.size.get(), self.shared.scale.get())
+            .map_err(Error::Capture)
     }
 
     /// The logical region of the most recent display-list change.

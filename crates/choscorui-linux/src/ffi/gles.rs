@@ -39,7 +39,6 @@ libraries! {
             fn glBlendFunc(sfactor: GlEnum, dfactor: GlEnum);
             fn glClearColor(red: GlFloat, green: GlFloat, blue: GlFloat, alpha: GlFloat);
             fn glClear(mask: GlBitfield);
-            fn glFinish();
             fn glCreateShader(kind: GlEnum) -> GlUint;
             fn glShaderSource(
                 shader: GlUint,
@@ -70,7 +69,6 @@ libraries! {
             fn glUseProgram(program: GlUint);
             fn glGetUniformLocation(program: GlUint, name: *const CChar) -> GlInt;
             fn glUniform1i(location: GlInt, v0: GlInt);
-            fn glUniform1f(location: GlInt, v0: GlFloat);
             fn glUniform2f(location: GlInt, v0: GlFloat, v1: GlFloat);
             fn glUniform4f(location: GlInt, v0: GlFloat, v1: GlFloat, v2: GlFloat, v3: GlFloat);
             fn glUniformMatrix3fv(
@@ -328,12 +326,6 @@ impl Gl {
         unsafe { (self.lib.glClear)(GL_COLOR_BUFFER_BIT) };
     }
 
-    /// Waits until the GPU finishes the commands.
-    pub(crate) fn finish(&self) {
-        // SAFETY: the call waits for the context.
-        unsafe { (self.lib.glFinish)() }
-    }
-
     /// The info log of a shader or a program.
     fn info_log(
         &self,
@@ -348,9 +340,19 @@ impl Gl {
         let mut written = 0;
         // SAFETY: the buffer has `buffer.len()` chars, and the call writes
         // at most that many.
-        unsafe { log(name, sizei(buffer.len()), &raw mut written, buffer.as_mut_ptr()) };
+        unsafe {
+            log(
+                name,
+                sizei(buffer.len()),
+                &raw mut written,
+                buffer.as_mut_ptr(),
+            )
+        };
         let written = usize::try_from(written).unwrap_or(0).min(buffer.len());
-        let bytes: Vec<u8> = buffer[..written].iter().map(|c| c.0.to_ne_bytes()[0]).collect();
+        let bytes: Vec<u8> = buffer[..written]
+            .iter()
+            .map(|c| c.0.to_ne_bytes()[0])
+            .collect();
         String::from_utf8_lossy(&bytes).into_owned()
     }
 
@@ -370,11 +372,7 @@ impl Gl {
         // SAFETY: the call writes one integer to the local.
         unsafe { (self.lib.glGetShaderiv)(shader, GL_COMPILE_STATUS, &raw mut status) };
         if status == 0 {
-            let log = self.info_log(
-                shader,
-                self.lib.glGetShaderiv,
-                self.lib.glGetShaderInfoLog,
-            );
+            let log = self.info_log(shader, self.lib.glGetShaderiv, self.lib.glGetShaderInfoLog);
             // SAFETY: the shader is unused.
             unsafe { (self.lib.glDeleteShader)(shader) };
             return Err(log);
@@ -441,11 +439,6 @@ impl Gl {
     pub(crate) fn set_int(&self, uniform: Uniform, value: i32) {
         // SAFETY: the call sets a uniform of the current program.
         unsafe { (self.lib.glUniform1i)(uniform.0, value) }
-    }
-
-    pub(crate) fn set_float(&self, uniform: Uniform, value: f32) {
-        // SAFETY: the call sets a uniform of the current program.
-        unsafe { (self.lib.glUniform1f)(uniform.0, value) }
     }
 
     pub(crate) fn set_vec2(&self, uniform: Uniform, [x, y]: [f32; 2]) {

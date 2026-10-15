@@ -16,6 +16,7 @@ use super::types::{Error, Modifiers, WindowEvent};
 use crate::ffi::libc::{self, Ready, Watch};
 use crate::ffi::wayland::sys::Interface;
 use crate::ffi::wayland::{self as wl, Arg, Connection, Event, ObjectId, Proxy};
+use crate::gles;
 use crate::{InputEvent, LinuxInput, WaylandConnection, WaylandGlobal};
 use choscorui_core::{CursorShape, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit};
 use shm::Buffers;
@@ -134,6 +135,8 @@ pub(crate) struct Client {
     pending_tokens: RefCell<Vec<Proxy>>,
     /// Set when the compositor closed the connection.
     lost: Cell<bool>,
+    /// The GLES painter, or `None` when windows paint with Cairo.
+    gles: RefCell<Option<Rc<gles::Device>>>,
 }
 
 // Event opcodes.
@@ -271,6 +274,7 @@ impl Client {
             ),
             pending_tokens: RefCell::new(Vec::new()),
             lost: Cell::new(false),
+            gles: RefCell::new(None),
         });
         client
             .routes
@@ -284,6 +288,11 @@ impl Client {
             client.handle_events();
         }
         client.check_requirements()?;
+        if !gles::cairo_requested() {
+            // Shaders compile now, so a driver failure shows before a
+            // window opens. Without the GLES painter, windows use Cairo.
+            *client.gles.borrow_mut() = gles::Device::wayland(&client.connection).ok();
+        }
         Ok(client)
     }
 
@@ -399,6 +408,15 @@ impl Client {
             "xdg_system_bell_v1" => globals.system_bell = Some(proxy),
             _ => {}
         }
+    }
+
+    /// The GLES painter, unless it is not available or a GPU failure
+    /// switched the process to Cairo.
+    pub(crate) fn gles(&self) -> Option<Rc<gles::Device>> {
+        if gles::failed() {
+            return None;
+        }
+        self.gles.borrow().clone()
     }
 
     /// Creates a window. It maps on `show`.

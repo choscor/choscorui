@@ -254,3 +254,17 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Messages.** The first TIFF decode sets null libtiff error and warning handlers for the process. Thus, libtiff writes nothing to standard error.
 - **Threads.** Each decode makes its own decoder objects, so decode and encode work on any thread.
 - **Tests.** `tests/codecs.rs` decodes a fixture of each format and damaged data. It also hides libtiff with `CHOSCORUI_TEST_HIDE_LIB` in a child process.
+
+## Linux GLES painter
+
+`src/ffi/egl.rs` and `src/ffi/gles.rs` load libEGL, libwayland-egl, and libGLESv2 with `libraries!`. The painter in `src/gles/` uses only their safe types.
+
+- **Extensions.** `eglSwapBuffersWithDamageKHR` and `eglSwapBuffersWithDamageEXT` come from `eglGetProcAddress`. `lookup_functions!` declares them, and the binding check compares each one with its header typedef.
+- **Ownership.** `EglContext` and `EglSurface` hold their display, and the display holds the `wl_display` connection. Thus, EGL objects close before the display terminates, and the display terminates before the connection closes.
+- **Window surfaces.** `EglSurface` holds its `wl_surface` proxy and destroys the EGL surface before the `wl_egl_window`. A window releases its EGL surface before it destroys its Wayland objects.
+- **Slices.** Each `Gl` method checks that a slice holds the whole texture rectangle or the whole vertex range. Uploads and reads set an alignment of 1, and the painter never binds a pixel buffer object.
+- **Vertex arrays.** `glVertexAttribPointer` runs only while a vertex array and its buffer are bound. Thus, its pointer is a buffer offset, and GL reads no client memory through it.
+- **Context.** GL calls go to the context that is current on the thread. The renderer runs only after `eglMakeCurrent` succeeds for its context.
+- **Callbacks.** EGL and OpenGL ES call no function of the crate, so this boundary has no callback.
+- **Failures.** A failed EGL call returns an `EglFailure` with the `eglGetError` code. A failed swap or a lost context switches the window to Cairo.
+- **Tests.** `gles_parity_smoke.rs` compares GLES renders with the software renderer and with Cairo. `window_smoke.rs` checks the painter of each `CHOSCORUI_PAINTER` value.

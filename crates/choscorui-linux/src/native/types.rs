@@ -35,6 +35,8 @@ pub enum Error {
     UnsupportedFormat,
     /// A drag can start only while a pointer event is handled.
     NoDragEvent,
+    /// The Cairo painter could not render a capture.
+    Capture(crate::CairoError),
 }
 
 impl fmt::Display for Error {
@@ -54,6 +56,7 @@ impl fmt::Display for Error {
             Self::NoDragEvent => {
                 f.write_str("a drag can only start while handling a pointer event")
             }
+            Self::Capture(error) => write!(f, "the capture failed: {error}"),
         }
     }
 }
