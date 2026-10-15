@@ -47,6 +47,8 @@ opaque_types! {
     pub(crate) XcbShmQueryVersionReply = "xcb_shm_query_version_reply_t";
     /// `xcb_randr_get_monitors_reply_t`.
     pub(crate) XcbRandrGetMonitorsReply = "xcb_randr_get_monitors_reply_t";
+    /// `xcb_randr_query_version_reply_t`.
+    pub(crate) XcbRandrQueryVersionReply = "xcb_randr_query_version_reply_t";
     /// `xcb_render_query_pict_formats_reply_t`.
     pub(crate) XcbRenderQueryPictFormatsReply = "xcb_render_query_pict_formats_reply_t";
     /// `xcb_get_selection_owner_reply_t`.
@@ -156,6 +158,11 @@ ffi_struct! {
 
     /// `xcb_randr_get_monitors_cookie_t`.
     pub(crate) struct XcbRandrGetMonitorsCookie = "xcb_randr_get_monitors_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_randr_query_version_cookie_t`.
+    pub(crate) struct XcbRandrQueryVersionCookie = "xcb_randr_query_version_cookie_t" {
         pub(crate) sequence: CUint,
     }
 
@@ -585,7 +592,7 @@ libraries! {
         }
     }
 
-    /// libxcb-randr: the monitors of the screen.
+    /// libxcb-randr: the monitors of the screen and their changes.
     pub(crate) struct XcbRandr {
         library: "libxcb-randr",
         sonames: ["libxcb-randr.so.0"],
@@ -603,6 +610,21 @@ libraries! {
                 cookie: XcbRandrGetMonitorsCookie,
                 e: ErrorOut,
             ) -> *mut XcbRandrGetMonitorsReply;
+            fn xcb_randr_query_version(
+                c: *mut XcbConnection,
+                major_version: u32,
+                minor_version: u32,
+            ) -> XcbRandrQueryVersionCookie;
+            fn xcb_randr_query_version_reply(
+                c: *mut XcbConnection,
+                cookie: XcbRandrQueryVersionCookie,
+                e: ErrorOut,
+            ) -> *mut XcbRandrQueryVersionReply;
+            fn xcb_randr_select_input(
+                c: *mut XcbConnection,
+                window: u32,
+                enable: u16,
+            ) -> XcbVoidCookie;
         }
     }
 
@@ -800,6 +822,11 @@ c_consts! {
     pub(crate) const XCB_GRAB_MODE_ASYNC: u8 = 1;
     pub(crate) const XCB_GRAB_STATUS_SUCCESS: u8 = 0;
     pub(crate) const XCB_GET_PROPERTY_TYPE_ANY: u32 = 0;
+    pub(crate) const XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE: u16 = 1;
+    pub(crate) const XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE: u16 = 2;
+    pub(crate) const XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE: u16 = 4;
+    pub(crate) const XCB_RANDR_SCREEN_CHANGE_NOTIFY: u8 = 0;
+    pub(crate) const XCB_RANDR_NOTIFY: u8 = 1;
 }
 
 /// The constants and enum values, for the binding check.
@@ -846,6 +873,7 @@ pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
         XcbInputXiQueryDeviceCookie::layout(),
         XcbShmQueryVersionCookie::layout(),
         XcbRandrGetMonitorsCookie::layout(),
+        XcbRandrQueryVersionCookie::layout(),
         XcbRenderQueryPictFormatsCookie::layout(),
         XcbGetSelectionOwnerCookie::layout(),
         XcbGetAtomNameCookie::layout(),
@@ -1810,6 +1838,29 @@ impl Connection {
         let reply =
             unsafe { (randr.xcb_randr_get_monitors_reply)(self.raw, cookie, std::ptr::null_mut()) };
         take_reply(reply)
+    }
+
+    /// Asks for RandR 1.5 and selects the events of screen, CRTC, and
+    /// output changes on the root window. Returns false without RandR.
+    pub(crate) fn randr_select_changes(&self) -> bool {
+        let Ok(randr) = XcbRandr::get() else {
+            return false;
+        };
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe { (randr.xcb_randr_query_version)(self.raw, 1, 5) };
+        // SAFETY: the cookie is of this connection.
+        let reply = unsafe {
+            (randr.xcb_randr_query_version_reply)(self.raw, cookie, std::ptr::null_mut())
+        };
+        if take_reply(reply).is_none() {
+            return false;
+        }
+        let mask = XCB_RANDR_NOTIFY_MASK_SCREEN_CHANGE
+            | XCB_RANDR_NOTIFY_MASK_CRTC_CHANGE
+            | XCB_RANDR_NOTIFY_MASK_OUTPUT_CHANGE;
+        // SAFETY: the request has no pointers.
+        unsafe { (randr.xcb_randr_select_input)(self.raw, self.screen.root, mask) };
+        true
     }
 
     // RENDER

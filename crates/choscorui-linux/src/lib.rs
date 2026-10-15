@@ -20,6 +20,9 @@ mod imaging;
 mod input;
 mod wayland;
 mod x11;
+// The X11 client uses the scale policy; the tests run on every host.
+#[cfg(any(target_os = "linux", test))]
+mod x11_scale;
 
 pub use backend::*;
 pub use clipboard::*;

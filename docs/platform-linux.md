@@ -61,7 +61,7 @@ The X11 client needs only the core protocol. It uses these extensions when the s
 | XKB | The keymap, the modifier state, detectable auto-repeat, and the bell | No keymap and no XKB bell |
 | XInput 2.2 | Pointer events and smooth scroll valuators | Core pointer events |
 | MIT-SHM | Shared images for the paint | `PutImage` in parts |
-| RandR | The rectangles of the monitors | The root window is the only screen |
+| RandR | The rectangles and the physical sizes of the monitors, and their change events | The root window is the only screen, with the physical size of the screen |
 | RENDER | Cursors from images | The arrow shows |
 | XTEST | `Window::simulate_pointer`, for tests | The call fails |
 
@@ -217,7 +217,7 @@ With the GLES painter, an X11 window paints through EGL on a connection of its o
 - **Wayland.** A Wayland client cannot read or set the position of its window. `geometry` gives the content size, the maximized state, and the full-screen state, and its origin is always zero. `set_geometry` applies the size and the two states, and it ignores the origin.
 - **X11.** `geometry` reads the position with `TranslateCoordinates`, removes `_NET_FRAME_EXTENTS`, and reads `_NET_WM_STATE`. `set_geometry` configures the window. Before the window shows, it writes `_NET_WM_STATE`. After that, it sends client messages to the window manager.
 
-`Application::screens` gives the logical rectangles of the screens. On Wayland, they come from `zxdg_output_manager_v1`, or else from the mode and the scale of each output. On X11, they are the RandR monitors, or the root window without RandR.
+`Application::screens` gives the logical rectangles of the screens. On Wayland, they come from `zxdg_output_manager_v1`, or else from the mode and the scale of each output. On X11, they are the RandR monitors, or the root window without RandR. Each rectangle is in the scale of its monitor.
 
 ## Backend selection
 
@@ -272,7 +272,14 @@ On Linux, `Application::new` connects to the X server of `DISPLAY` when the sele
 - **Windows.** Each window has `WM_DELETE_WINDOW`, `_NET_WM_NAME`, `WM_NAME`, `WM_CLASS` from the application id, and `_NET_WM_PID`. `WM_NORMAL_HINTS` holds the minimum size and north-west gravity. The window manager draws the frame, so `has_server_decorations` is true.
 - **Events.** `WM_DELETE_WINDOW` gives `Closing`. `ConfigureNotify` gives `Resized`, and the first `MapNotify` gives `Resized` and activates the window. Focus events give `Focused`, and `VisibilityNotify` gives `Occluded`.
 - **Activation.** A window that maps sends `_NET_ACTIVE_WINDOW` to the window manager. When no window manager runs, as on Xvfb, the window takes the input focus itself.
-- **Scale.** The scale is `Xft.dpi` over 96, from `RESOURCE_MANAGER` on the root window. A change of the property gives `ScaleChanged` and `Resized`, and the window keeps its logical size.
+- **Scale.** X11 has no standard scale property. The scale of a window is the first of these values that applies:
+  - `Xft.dpi` over 96, from `RESOURCE_MANAGER` on the root window. This value applies to all monitors.
+  - The physical scale of the RandR monitor that holds the largest part of the window. When no monitor holds a part of it, the primary monitor applies.
+  - 1.
+- **Physical scale.** The DPI of a monitor is its width in pixels over its RandR width in inches. The scale is the DPI over 96, rounded to the nearest multiple of 0.25, and at least 1. A monitor without a physical size, or with more than 480 DPI, has no physical scale. Without RandR, the root window with the physical size of the screen is the only monitor.
+- **Scale order.** `Xft.dpi` comes before the physical scale. The settings daemons of the desktops write the scale that the user selects to `Xft.dpi`. A physical size is only an approximate value, and some monitors give a wrong size.
+- **Scale changes.** A new window has the scale of the primary monitor. When the window maps or moves, it gets the scale of its monitor. A change of `Xft.dpi` or of the RandR monitors also applies the rules again. A new scale gives `ScaleChanged` and then `Resized`, and the window keeps its logical size.
+- **Stable scale.** A new scale changes the pixel size of the window, and the window can then have a different monitor. Thus, the window gets the new scale only when the monitor of the resized window has that scale.
 - **Keyboard.** xkbcommon-x11 reads the keymap and the state of the core keyboard. XKB state events update the modifiers. With detectable auto-repeat, a held key arrives as repeated presses, and the keyboard does not repeat keys itself.
 - **Pointer.** XInput 2.2 gives the pointer events of the master devices. A scroll valuator gives `WheelUnit::Points`: one increment is 15 points. The wheel buttons 4 to 7 give `WheelUnit::Lines` when the server does not emulate them from a valuator. Without XInput 2.2, core events give the same events.
 - **Window manager requests.** `begin_move` and `begin_resize` send `_NET_WM_MOVERESIZE`. `show_window_menu` sends `_GTK_SHOW_WINDOW_MENU`, which some window managers ignore. `minimize` sends `WM_CHANGE_STATE` with `IconicState`.
@@ -761,7 +768,7 @@ The session has these parts:
 
 | Test | What it checks |
 | --- | --- |
-| [`window_smoke.rs`](../crates/choscorui-linux/tests/window_smoke.rs) | Windows open, paint, and close. The painter follows `CHOSCORUI_PAINTER`. The X11 geometry round-trips. |
+| [`window_smoke.rs`](../crates/choscorui-linux/tests/window_smoke.rs) | Windows open, paint, and close. The painter follows `CHOSCORUI_PAINTER`. The X11 geometry round-trips. On a private Xvfb, the X11 scale follows the physical size, and then `Xft.dpi`. |
 | [`clipboard_smoke.rs`](../crates/choscorui-linux/tests/clipboard_smoke.rs) | The clipboard with a second process, INCR on X11, and drags between two windows |
 | [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. The XIM test needs an XIM server in `XMODIFIERS`. |
 | [`lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) | Window churn, timers, posted work, and the footprint |
