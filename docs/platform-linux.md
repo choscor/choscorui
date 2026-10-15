@@ -50,8 +50,7 @@ The compositor must have `wl_compositor` version 4 or later, `wl_shm`, `xdg_wm_b
 | `xdg_system_bell_v1` | The [alert sound](#alert-sound) | libcanberra plays the sound |
 | `zxdg_output_manager_v1` | Logical screen rectangles | The rectangles come from the output mode and scale |
 | `zxdg_exporter_v2` | The parent window of portal dialogs | Portal dialogs have no parent window |
-
-The client also binds `zwp_pointer_gestures_v1`, but it sends no `Gesture` events. See [Limitations](#limitations).
+| `zwp_pointer_gestures_v1` | Touchpad pinches as [`Gesture` events](#wayland) | The windows send no `Gesture` events |
 
 ### X11 extensions
 
@@ -145,7 +144,7 @@ A panic in a C callback does not unwind into the C library. The callback writes 
 | `Occluded(bool)` | X11 only: the window became fully hidden, or partly visible again. |
 | `Drag(DragEvent)` | A drag over the content. See [Clipboard and drag and drop](#clipboard-and-drag-and-drop). |
 | `DragEnded(DragOperation)` | A drag that the window started has ended. |
-| `Gesture { event, modifiers }` | The type has it, but the Linux backend does not send it. |
+| `Gesture { event, modifiers }` | Wayland only: a touchpad pinch over the content, as `GestureEvent::Magnify` about the pointer. See [Wayland](#wayland). |
 
 In `Modifiers`, `control` is Ctrl, `option` is Alt, and `command` is the Super key. `capabilities().keyboard` is `KeyConvention::Pc`, so the controls run a `command` shortcut with Ctrl.
 
@@ -250,6 +249,9 @@ The facade maps a selection failure, a missing protocol, and a library that does
 - **Scale.** With `wp_fractional_scale_v1` and `wp_viewporter`, the scale is the preferred fractional scale. Else it is the `preferred_buffer_scale` of `wl_surface` version 6. Else it is the largest scale of the outputs of the window.
 - **Activation.** When a window shows, it asks for the focus through `xdg_activation_v1`. The first window uses the token of `XDG_ACTIVATION_TOKEN`. A later window uses a new token with the serial of the latest button press.
 - **Portal parent.** Each window exports its toplevel with `zxdg_exporter_v2`. The handle gives the parent `wayland:HANDLE` of portal dialogs.
+- **Gestures.** With `zwp_pointer_gestures_v1`, the seat pointer gets a `zwp_pointer_gesture_pinch_v1`. Each pinch update gives `GestureEvent::Magnify` at the pointer position.
+- **Gesture scale.** The protocol gives the scale since the start of the pinch. The event scale is the change since the previous update, as on macOS. Thus, the product of the event scales is the scale of the pinch.
+- **Ignored gestures.** An update without a change of scale gives no event. The end or the cancel of a pinch gives no event, and the backend ignores swipe and hold gestures.
 - **Fake input.** `Window::simulate_pointer` returns `Error::MissingProtocol`, because Wayland has no protocol for fake input of a client.
 
 ### Wayland cursors
@@ -473,7 +475,7 @@ Notifications follow these rules:
 - `take_appearance_changed` returns `true` one time after a setting changed.
 - `system_appearance` is `Supported` when the portal answers.
 
-The facade does not apply these values itself. Read them, and give the result to your token closure, as on macOS. [theming.md](theming.md) describes how `ThemeResolver` applies the preferences.
+The facade does not apply the color and accessibility values itself. Read them, and give the result to your token closure, as on macOS. The facade applies the font name. See [Text](#text). [theming.md](theming.md) describes how `ThemeResolver` applies the preferences.
 
 ## Settings storage
 
@@ -488,7 +490,10 @@ The facade does not apply these values itself. Read them, and give the result to
 
 `LinuxTextShaper` shapes text with HarfBuzz on FreeType faces, and fontconfig chooses the faces. It implements the `TextShaper` contract of core.
 
-- `system-ui` is the family that `set_desktop_font` gives, or else `sans-serif`. The backend does not call `set_desktop_font`. Give it `SystemAppearance::font_name` to use the desktop font.
+- `system-ui` is the family that `set_desktop_font` gives, or else `sans-serif`. The family of `Inter 10` is `Inter`: the size and the style words go.
+- `NativeServices::update_desktop_font` gives `SystemAppearance::font_name` to `set_desktop_font`. The facade calls it at the start and after each native event, so a `SettingChanged` signal changes `system-ui`.
+- After a font change, only text that lays out again uses the new family.
+- The settings portal also runs in X11 sessions, so the backend does not read the XSETTINGS `Gtk/FontName`. Without the portal, `system-ui` is `sans-serif`.
 - Each grapheme cluster uses the first face that has all its characters.
 - `available_font_families` lists the fontconfig families, without hidden families.
 - `text_shaping_support` is `Supported` when FreeType, HarfBuzz, and fontconfig load. Without them, the facade measures text with estimated metrics.
@@ -736,8 +741,8 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 - **X11 painting.** X11 windows paint with Cairo only, so `gpu_painting` is `Unsupported` there.
 - **Drawn decorations.** The drawn title bar has no shadow and no resize band outside the window.
 - **Long menus.** A menu of the menu bar shows inside the window, so a menu that is longer than the window is cut off.
-- **Gestures and occlusion.** The backend sends no `Gesture` events. Wayland windows send no `Occluded` events.
-- **Desktop font.** `system-ui` is `sans-serif` until the application calls `set_desktop_font`.
+- **Gestures.** X11 has no portable gesture protocol, so X11 windows send no `Gesture` events. Wayland windows send only pinches. The tests do not use a real touchpad.
+- **Occlusion.** Wayland windows send no `Occluded` events.
 - **Timing budgets.** No Linux reference machine is named, so the Linux bench has no timing budgets. [performance.md](performance.md#linux-budgets) gives the details.
 
 ## Tests
