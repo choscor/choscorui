@@ -25,7 +25,8 @@ use std::sync::{Mutex, RwLock};
 /// The family of `system-ui` when the backend reads no desktop font.
 const DEFAULT_UI_FAMILY: &str = "sans-serif";
 
-/// The desktop font family, from the settings portal or XSETTINGS.
+/// The desktop font family: the `font-name` of the settings portal,
+/// which the services give through `set_desktop_font`.
 static DESKTOP_FAMILY: RwLock<Option<String>> = RwLock::new(None);
 
 /// Sets the family of `system-ui` from a desktop font name such as

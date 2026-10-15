@@ -254,6 +254,19 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Threads.** All Wayland calls run on the UI thread that owns the `Application`.
 - **Tests.** The binding check compiles each declaration, struct, and constant against the headers. `tests/window_smoke.rs` opens, paints, and closes windows on sway.
 
+## Linux text (FreeType, HarfBuzz, fontconfig)
+
+`src/ffi/freetype.rs`, `src/ffi/harfbuzz.rs`, and `src/ffi/fontconfig.rs` load libfreetype, libharfbuzz, and libfontconfig through `libraries!`. The text system in `src/text/` and the glyph painter in `src/paint/glyphs.rs` use only their safe types.
+
+- **FreeType library.** The process has one `FT_Library`, which `FT_Init_FreeType` makes at the first use. A mutex, the FreeType lock, serializes each call that makes or frees a face.
+- **`FT_Face`.** `FtFace` owns one reference, from `FT_New_Face`, and its drop calls `FT_Done_Face` under the FreeType lock. `into_raw` gives the reference to Cairo, and the `cairo font face destroy` callback releases it.
+- **`hb_font`.** `hb_ft_font_create_referenced` takes its own face reference, so the `FtFace` can drop first. A sized `HbFont` is a sub-font that holds its parent. The drop of an `HbFont` holds the FreeType lock, because the last font of a face calls `FT_Done_Face`.
+- **`hb_buffer`.** Each shape call makes one `HbBuffer` and destroys it on drop. HarfBuzz copies the text. The shaper copies the glyph infos and positions before the buffer changes.
+- **`FcPattern` and `FcFontSet`.** `Pattern`, `FontSet`, and `ObjectSet` destroy their object on drop. A match keeps its pattern in an `OwnedPattern`, because the character set of the match lives in that pattern. The strings of a pattern are copied at once.
+- **Threads.** `FcInit` runs one time for the process, and fontconfig is safe to read from any thread. Faces, HarfBuzz fonts, font chains, and Cairo font faces are in caches for each thread, so these objects stay on one thread.
+- **Callbacks.** FreeType, HarfBuzz, and fontconfig call no Rust code. The only callback of this boundary is the Cairo face release in [Linux Wayland and text](#linux-wayland-and-text).
+- **Tests.** The binding check compiles each declaration, struct, and constant against the headers. `tests/text_shaping.rs` shapes, wraps, and falls back with the fonts of the CI image, and the test threads run at the same time. `tests/hidden_freetype.rs` hides libfreetype in a child process. Then shaping reports `Unsupported`, and the painter draws all but the text.
+
 ## Linux D-Bus
 
 `src/ffi/dbus/` loads libdbus-1 through `libraries!`. The safe `Connection` type owns one private connection for the thread that made it.
