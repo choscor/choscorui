@@ -15,6 +15,8 @@
 
 # Local screenshots (all PNG files)
 *.[pP][nN][gG]
+# Codec test fixtures are not screenshots.
+!crates/choscorui-linux/tests/fixtures/*.png
 
 # Local Claude Code state
 .claude/settings.local.json
