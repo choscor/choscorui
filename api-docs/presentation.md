@@ -57,6 +57,17 @@ pub fn new<M, N>(title: impl IntoLive<TextContent, M>, message: impl IntoLive<Te
 
 An alert with `title`, `message`, and `buttons` that shows while `presented` is true.
 
+#### `AlertDialog::window`
+
+```rust
+pub fn window<M, N>(title: impl IntoLive<TextContent, M>, message: impl IntoLive<TextContent, N>, buttons: impl Items<DialogButton>) -> Self
+```
+
+An alert with `title`, `message`, and `buttons` that fills its
+node, as the whole content of an alert window. It is open from
+the start, and it reports a choice like the modal alert; the
+window closes on `OpenChanged(false)`.
+
 ## `Announcer`
 
 struct in `choscorui::prelude::Announcer`

@@ -285,6 +285,14 @@ pub fn builtins() -> Vec<(&'static str, TreeFactory)> {
             Box::new(TitleBar::new("Notes", TitleBarHandle::new()))
         }),
         ("file-dialog", file_dialog),
+        ("alert-window", |_| {
+            let buttons = vec![
+                DialogButton::new("Cancel", DialogButtonRole::Reject),
+                DialogButton::new("Delete", DialogButtonRole::Destructive),
+            ];
+            let alert = AlertDialog::new("Delete file?", "This cannot be undone.", buttons);
+            Box::new(alert.window())
+        }),
     ]
 }
 

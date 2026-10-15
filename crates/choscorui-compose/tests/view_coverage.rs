@@ -32,6 +32,7 @@ const VIEWS: &[(&str, ViewName)] = &[
     ("accordion", type_name::<Accordion>),
     ("alert", type_name::<Alert>),
     ("alert-dialog", type_name::<AlertDialog>),
+    ("alert-window", type_name::<AlertDialog>),
     ("aspect-ratio", type_name::<AspectRatio>),
     ("attachment", type_name::<Attachment>),
     ("avatar", type_name::<Avatar>),

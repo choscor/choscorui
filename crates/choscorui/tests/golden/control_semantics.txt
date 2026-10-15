@@ -684,6 +684,18 @@ file-dialog Rtl: role Dialog name "Open File" value None state SemanticState { d
   part 7 in None: Checkbox "Show hidden files" value None desc "" [checked=false] [Activate]
   part 8 in None: Button "Cancel" value None desc "" [] [Activate]
   part 9 in None: Button "Open" value None desc "" [disabled] []
+alert-window Ltr: role Dialog name "Delete file?" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, modal: true } actions [Dismiss]
+  part 0 in None: Button "Cancel" value None desc "" [focused] [Activate]
+  part 1 in None: Button "Delete" value None desc "" [] [Activate]
+  open:
+  part 0 in None: Button "Cancel" value None desc "" [focused] [Activate]
+  part 1 in None: Button "Delete" value None desc "" [] [Activate]
+alert-window Rtl: role Dialog name "Delete file?" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false, modal: true } actions [Dismiss]
+  part 0 in None: Button "Delete" value None desc "" [] [Activate]
+  part 1 in None: Button "Cancel" value None desc "" [focused] [Activate]
+  open:
+  part 0 in None: Button "Delete" value None desc "" [] [Activate]
+  part 1 in None: Button "Cancel" value None desc "" [focused] [Activate]
 dialog with buttons: role Button name "Edit" value None desc "" state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }
   open:
   part 0 in None: Button "Cancel" value None desc "" [] [Activate]

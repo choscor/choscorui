@@ -2574,10 +2574,30 @@ locale of the environment.
 `HostedAlertDialog::with_detail` sets the informative text of a hosted
 alert.
 
+**In an alert window.** `AlertDialog::window` makes a `HostedAlertDialog`
+that is the whole content of its own modal window. A backend uses it on a
+desktop without an alert service.
+
+- The alert is open from the start. It measures the size of its panel.
+  The panel fills the node, with no scrim.
+- The node takes the keyboard focus. The window is the modal surface, so
+  the host keeps no modal node.
+- The keys and the messages are those of the hosted alert. Tab after the
+  last button lets the focus leave the node.
+- Focus that enters from the keyboard goes to the first button, or to the
+  last button with Shift+Tab.
+- A disabled alert window stays open. A `Dismiss` event only releases a
+  pressed button.
+- The window host maps `ItemActivated(index)` to the response of that
+  button and `Dismissed` to a cancel. It closes the window on
+  `OpenChanged(false)`.
+
 **As a view.** `AlertDialog::new(title, message, buttons, presented)` mounts
 a `HostedAlertDialog` that is open while the `Binding<bool>` is true.
 `.detail(text)` adds the informative text. The chosen button reports its
 index through `.on_item`, and Escape runs `.on_dismiss`.
+`AlertDialog::window(title, message, buttons)` mounts the alert as the
+content of an alert window.
 
 ### ColorPicker and FontDialog
 

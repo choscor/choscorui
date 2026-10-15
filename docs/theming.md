@@ -406,6 +406,7 @@ tokens and recipes change it:
   `border`, and muted roles.
 - A drawn file dialog (`FileDialog`) takes the recipes of the input,
   list, select, checkbox, and button controls.
+- A drawn alert (`AlertDialog::window`) takes the `AlertDialog` recipe.
 
 [controls.md](controls.md#titlebar-and-windowframe) gives the slot values.
 

@@ -103,6 +103,8 @@ file-dialog (inside)
 file-dialog (inside)
 file-dialog (inside)
 file-dialog (inside)
+alert-window
+alert-window (inside)
 switch
 toggle
 toggle-group
@@ -181,6 +183,8 @@ column-browser
 toolbar
 dock
 # backward
+alert-window
+alert-window (inside)
 file-dialog
 file-dialog (inside)
 file-dialog (inside)
@@ -278,6 +282,8 @@ select
 toggle-group
 toggle
 switch
+alert-window
+alert-window (inside)
 file-dialog
 file-dialog (inside)
 file-dialog (inside)
@@ -353,8 +359,6 @@ pagination (inside)
 pagination (inside)
 breadcrumb
 breadcrumb (inside)
-command
-dialog
 # every hosted control Rtl
 # forward
 switch
@@ -454,6 +458,8 @@ file-dialog (inside)
 file-dialog (inside)
 file-dialog (inside)
 file-dialog (inside)
+alert-window
+alert-window (inside)
 switch
 toggle
 toggle-group
@@ -532,6 +538,8 @@ column-browser
 toolbar
 dock
 # backward
+alert-window
+alert-window (inside)
 file-dialog
 file-dialog (inside)
 file-dialog (inside)
@@ -629,6 +637,8 @@ select
 toggle-group
 toggle
 switch
+alert-window
+alert-window (inside)
 file-dialog
 file-dialog (inside)
 file-dialog (inside)
@@ -704,5 +714,3 @@ pagination (inside)
 pagination (inside)
 breadcrumb
 breadcrumb (inside)
-command
-dialog
