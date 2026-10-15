@@ -410,7 +410,8 @@ impl Scene {
     /// Moves items by a scene-space delta (applied in each parent's
     /// space), skipping items whose ancestor is also being moved.
     pub fn move_by(&mut self, ids: &[SceneItemId], dx: f64, dy: f64) {
-        let set: BTreeSet<_> = ids.iter().copied().collect();
+        let mut set = BTreeSet::new();
+        set.extend(ids.iter().copied());
         for id in ids {
             let mut ancestor = self.parent(*id);
             let mut nested = false;
@@ -672,8 +673,18 @@ impl Scene {
     }
 
     fn sort_siblings(&self, ids: &mut [SceneItemId]) {
-        // Stable: equal z keeps insertion order.
-        ids.sort_by_key(|id| self.nodes[id].item.z);
+        // Stable: equal z keeps insertion order. The (z, position) pairs
+        // sort with one lookup for each item, and with the code that sorts
+        // the draw regions. The offset keeps the order of z as a `u64`.
+        let mut keys: Vec<(u64, u32)> = (ids.iter().enumerate())
+            .map(|(index, id)| {
+                let z = i64::from(self.nodes[id].item.z) - i64::from(i32::MIN);
+                (z.cast_unsigned(), index as u32)
+            })
+            .collect();
+        keys.sort_unstable();
+        let sorted: Vec<SceneItemId> = keys.iter().map(|(_, index)| ids[*index as usize]).collect();
+        ids.copy_from_slice(&sorted);
     }
 
     /// All items in paint order (back to front).

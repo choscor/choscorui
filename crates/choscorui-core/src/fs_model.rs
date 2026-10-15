@@ -4,14 +4,14 @@
 //! listing against the old one by name, keeping item keys (and therefore
 //! selection and expansion) for entries that still exist.
 
+use crate::order::stable_order;
 use crate::{
     BasicCollator, Collator, ItemData, ItemKey, ItemModel, ModelChange, ModelError, Role,
     TreeStore, Value,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const FS_COLUMN_NAME: usize = 0;
@@ -78,15 +78,19 @@ pub enum DirectoryState {
 
 type Listing = Result<Vec<FileEntry>, String>;
 type Waker = Arc<dyn Fn() + Send + Sync>;
+/// Listings that the worker threads finished, in arrival order.
+type Arrivals = Mutex<Vec<(Option<ItemKey>, u64, Listing)>>;
 
 pub struct FileSystemModel {
     root: PathBuf,
     store: TreeStore<FileEntry>,
-    states: HashMap<Option<ItemKey>, DirectoryState>,
-    /// Request generation per directory; stale listings are dropped.
-    generations: HashMap<Option<ItemKey>, u64>,
-    sender: Sender<(Option<ItemKey>, u64, Listing)>,
-    receiver: Receiver<(Option<ItemKey>, u64, Listing)>,
+    /// The state of each requested directory, and the generation of its
+    /// last request. A listing of an older generation is dropped, and a
+    /// directory with no entry is unloaded.
+    states: HashMap<Option<ItemKey>, (DirectoryState, u64)>,
+    /// The workers hold a weak reference, so a listing that ends after
+    /// the model is gone neither stays nor wakes the event loop.
+    arrivals: Arc<Arrivals>,
     waker: Option<Waker>,
     show_hidden: bool,
 }
@@ -96,16 +100,11 @@ impl FileSystemModel {
     ///
     /// [`fetch_more`]: crate::EditableModel::fetch_more
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        let (sender, receiver) = channel();
-        let mut states = HashMap::new();
-        states.insert(None, DirectoryState::Unloaded);
         Self {
             root: root.into(),
             store: TreeStore::new(4),
-            states,
-            generations: HashMap::new(),
-            sender,
-            receiver,
+            states: HashMap::new(),
+            arrivals: Arc::default(),
             waker: None,
             show_hidden: false,
         }
@@ -128,8 +127,7 @@ impl FileSystemModel {
     pub fn state(&self, directory: Option<ItemKey>) -> DirectoryState {
         self.states
             .get(&directory)
-            .cloned()
-            .unwrap_or(DirectoryState::Unloaded)
+            .map_or(DirectoryState::Unloaded, |(state, _)| state.clone())
     }
 
     fn directory_path(&self, directory: Option<ItemKey>) -> Option<PathBuf> {
@@ -148,18 +146,21 @@ impl FileSystemModel {
         let path = self
             .directory_path(directory)
             .ok_or(ModelError::MissingItem)?;
-        let generation = self.generations.entry(directory).or_default();
+        let (state, generation) = self
+            .states
+            .entry(directory)
+            .or_insert((DirectoryState::Unloaded, 0));
+        *state = DirectoryState::Loading;
         *generation += 1;
         let generation = *generation;
-        self.states.insert(directory, DirectoryState::Loading);
-        let sender = self.sender.clone();
+        let arrivals = Arc::downgrade(&self.arrivals);
         let waker = self.waker.clone();
         let show_hidden = self.show_hidden;
         std::thread::Builder::new()
             .name("choscorui-fs-list".into())
             .spawn(move || {
                 let listing = list_directory(&path, show_hidden);
-                if sender.send((directory, generation, listing)).is_ok()
+                if deliver(&arrivals, (directory, generation, listing))
                     && let Some(waker) = waker
                 {
                     waker();
@@ -171,22 +172,24 @@ impl FileSystemModel {
 
     /// Merges finished listings. Returns how many directories changed.
     pub fn poll(&mut self) -> usize {
+        let arrived =
+            std::mem::take(&mut *self.arrivals.lock().unwrap_or_else(PoisonError::into_inner));
         let mut merged = 0;
-        while let Ok((directory, generation, listing)) = self.receiver.try_recv() {
-            if self.generations.get(&directory) != Some(&generation)
+        for (directory, generation, listing) in arrived {
+            let current = self.states.get(&directory).map(|(_, current)| *current);
+            if current != Some(generation)
                 || directory.is_some_and(|key| self.store.get(key).is_none())
             {
                 continue;
             }
-            match listing {
+            let state = match listing {
                 Ok(entries) => {
                     self.merge(directory, entries);
-                    self.states.insert(directory, DirectoryState::Loaded);
+                    DirectoryState::Loaded
                 }
-                Err(error) => {
-                    self.states.insert(directory, DirectoryState::Failed(error));
-                }
-            }
+                Err(error) => DirectoryState::Failed(error),
+            };
+            self.states.insert(directory, (state, generation));
             merged += 1;
         }
         merged
@@ -202,7 +205,7 @@ impl FileSystemModel {
             let loading = self
                 .states
                 .values()
-                .any(|state| *state == DirectoryState::Loading);
+                .any(|(state, _)| *state == DirectoryState::Loading);
             if !loading || std::time::Instant::now() >= deadline {
                 return merged;
             }
@@ -210,37 +213,38 @@ impl FileSystemModel {
         }
     }
 
-    fn merge(&mut self, directory: Option<ItemKey>, mut entries: Vec<FileEntry>) {
+    fn merge(&mut self, directory: Option<ItemKey>, entries: Vec<FileEntry>) {
         let collator = BasicCollator;
-        entries.sort_by(|a, b| {
+        let order = stable_order(entries.len(), &|a, b| {
+            let (a, b) = (&entries[a], &entries[b]);
             b.is_dir
                 .cmp(&a.is_dir)
                 .then_with(|| collator.compare(&a.name, &b.name))
         });
-        let existing: HashMap<String, ItemKey> = (0..self.store.row_count(directory))
+        let mut slots: Vec<Option<FileEntry>> = entries.into_iter().map(Some).collect();
+        let entries: Vec<FileEntry> = (order.into_iter())
+            .filter_map(|index| slots[index].take())
+            .collect();
+        let mut existing: HashMap<String, ItemKey> = (0..self.store.row_count(directory))
             .filter_map(|row| self.store.key(directory, row))
             .filter_map(|key| self.store.get(key).map(|entry| (entry.name.clone(), key)))
             .collect();
-        let incoming: HashMap<&str, &FileEntry> = entries
+        // Each listed entry takes its old key; the keys left are gone.
+        let kept: Vec<Option<ItemKey>> = entries
             .iter()
-            .map(|entry| (entry.name.as_str(), entry))
+            .map(|entry| existing.remove(&entry.name))
             .collect();
-        let gone: Vec<ItemKey> = existing
-            .iter()
-            .filter(|(name, _)| !incoming.contains_key(name.as_str()))
-            .map(|(_, key)| *key)
-            .collect();
+        let gone: Vec<ItemKey> = existing.into_values().collect();
         if !gone.is_empty() {
             for key in &gone {
                 self.forget(*key);
             }
             let _ = self.store.remove(&gone);
         }
-        for (row, entry) in entries.into_iter().enumerate() {
-            match existing.get(&entry.name) {
-                Some(&key) => {
-                    let current = self.store.get(key).cloned();
-                    if current.as_ref() != Some(&entry) {
+        for (row, (entry, kept)) in entries.into_iter().zip(kept).enumerate() {
+            match kept {
+                Some(key) => {
+                    if self.store.get(key) != Some(&entry) {
                         let _ = self
                             .store
                             .update(key, vec![Role::Display, Role::Sort], |old| *old = entry);
@@ -250,11 +254,8 @@ impl FileSystemModel {
                     }
                 }
                 None => {
-                    if let Ok(keys) = self.store.insert(directory, row, [entry]) {
-                        for key in keys {
-                            self.states.insert(Some(key), DirectoryState::Unloaded);
-                        }
-                    }
+                    // A new directory has no state yet: it is unloaded.
+                    let _ = self.store.insert(directory, row, [entry]);
                 }
             }
         }
@@ -264,13 +265,24 @@ impl FileSystemModel {
         let mut pending = vec![key];
         while let Some(current) = pending.pop() {
             self.states.remove(&Some(current));
-            self.generations.remove(&Some(current));
             pending.extend(
                 (0..self.store.row_count(Some(current)))
                     .filter_map(|row| self.store.key(Some(current), row)),
             );
         }
     }
+}
+
+/// Queues a finished listing. False when the model is gone.
+fn deliver(arrivals: &Weak<Arrivals>, arrival: (Option<ItemKey>, u64, Listing)) -> bool {
+    let Some(arrivals) = arrivals.upgrade() else {
+        return false;
+    };
+    arrivals
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(arrival);
+    true
 }
 
 fn list_directory(path: &Path, show_hidden: bool) -> Listing {

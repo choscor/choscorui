@@ -3,6 +3,7 @@
 //! grapheme geometry. Measurement, hit testing, selection, and drawing all
 //! read that one object, so what is measured is exactly what is painted.
 
+use crate::order::stable_order;
 use crate::{Color, DisplayList, DisplayListError, Point, Rect, Size};
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{Hash, Hasher};
@@ -452,9 +453,9 @@ impl TextLayout {
                 };
                 spans.push((edge, edge + 4.0));
             }
-            spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let order = stable_order(spans.len(), &|a, b| spans[a].0.total_cmp(&spans[b].0));
             let mut merged: Vec<(f64, f64)> = Vec::new();
-            for (left, right) in spans {
+            for (left, right) in order.into_iter().map(|index| spans[index]) {
                 match merged.last_mut() {
                     Some(last) if left <= last.1 + 0.5 => last.1 = last.1.max(right),
                     _ => merged.push((left, right)),

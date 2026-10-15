@@ -1301,7 +1301,7 @@ impl ControlHost {
             .filter(|node| modal.is_none_or(|modal| tree.is_within(*node, modal)))
             .filter_map(|node| Some((tree_path(tree, node)?, node)))
             .collect();
-        owners.sort();
+        crate::order::sort_by(&mut owners, Ord::cmp);
         owners.into_iter().any(|(_, node)| {
             self.deliver(
                 tree,
@@ -1387,7 +1387,7 @@ impl ControlHost {
             .filter(|(_, control)| is_active(control.as_ref(), time))
             .filter_map(|(node, _)| Some((tree_path(tree, *node)?, *node)))
             .collect();
-        layered.sort();
+        crate::order::sort_by(&mut layered, Ord::cmp);
         layered.into_iter().map(|(_, node)| node).collect()
     }
 
