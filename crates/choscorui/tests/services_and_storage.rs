@@ -395,3 +395,164 @@ fn stored_state_without_a_storage_is_plain_state() {
     assert!(plain.find("count 1").is_some());
     assert_eq!(plain.take_errors(), []);
 }
+
+#[cfg(target_os = "linux")]
+#[path = "../../choscorui-linux/tests/support/mod.rs"]
+#[allow(dead_code, reason = "the facade tests use a part of the shared fakes")]
+mod support;
+
+/// The facade `Services` over the Linux desktop services, against fakes
+/// of the portal, the notification server, and the status notifier
+/// watcher on a private `dbus-daemon`. The fakes are the test support of
+/// `choscorui-linux`.
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::support::bus::TestBus;
+    use super::support::notifications::FakeNotifications;
+    use super::support::portal::{FakePortal, PortalScript};
+    use super::support::watcher::FakeWatcher;
+    use super::support::{in_child, pump_until, run_child};
+    use choscorui::Condition;
+    use choscorui::core::{Service, SettingValue, SettingsSchema, Support, user_settings_path};
+    use choscorui::platform::services::{DesktopError, NativeServices, ServiceOptions};
+    use choscorui::prelude::*;
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+    use std::rc::Rc;
+
+    const APP_ID: &str = "org.choscorui.FacadeServicesTest";
+
+    /// The native services on `bus`, and the facade services over them.
+    fn services(bus: &TestBus) -> (Rc<NativeServices>, Services) {
+        let native = Rc::new(NativeServices::with_connection(
+            Some(bus.connect()),
+            ServiceOptions {
+                app_id: APP_ID.to_owned(),
+                flatpak: false,
+            },
+        ));
+        let services = Services::new(native.clone());
+        (native, services)
+    }
+
+    #[test]
+    fn notifications_post_and_a_click_reaches_the_listeners() {
+        let bus = TestBus::start();
+        let server = FakeNotifications::start(bus.address());
+        let (native, services) = services(&bus);
+        assert_eq!(services.capabilities().notifications, Support::Supported);
+        assert_eq!(
+            services.notification_permission(),
+            Ok(NotificationPermission::Granted)
+        );
+        let notification = SystemNotification::new("build", "Build", "Done");
+        assert_eq!(
+            services.post_notification(&notification),
+            Ok(NotificationDelivery::Posted)
+        );
+        let notify = server.service.wait_for("Notify");
+        assert_eq!(notify.arg(0).as_str(), Some(APP_ID));
+        assert_eq!(notify.arg(3).as_str(), Some("Build"));
+        assert_eq!(notify.arg(4).as_str(), Some("Done"));
+
+        let heard = Rc::new(RefCell::new(Vec::new()));
+        let listener: DesktopListener = {
+            let heard = heard.clone();
+            Rc::new(move |event: &DesktopEvent| heard.borrow_mut().push(event.clone()))
+        };
+        services.listen(&listener);
+        server.invoke(1, "default");
+        let connection = native.connection().unwrap();
+        pump_until(&[connection], || {
+            services.poll();
+            (!heard.borrow().is_empty()).then_some(())
+        });
+        assert_eq!(
+            *heard.borrow(),
+            [DesktopEvent::NotificationActivated {
+                identifier: "build".to_owned(),
+                action: "default".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_status_item_without_a_watcher_names_its_condition() {
+        let bus = TestBus::start();
+        let (_native, services) = services(&bus);
+        let condition = Condition::StatusNotifierHost;
+        assert_eq!(
+            services.capabilities().status_items,
+            Support::Conditional(condition)
+        );
+        assert_eq!(
+            services.set_status_item(Some(StatusItemSpec::new("Choscor"))),
+            Err(ServiceError::Unavailable {
+                service: Service::StatusItem,
+                condition,
+            })
+        );
+        assert_eq!(services.status_item(), None);
+    }
+
+    #[test]
+    fn a_status_item_shows_when_a_host_watches() {
+        let bus = TestBus::start();
+        let watcher = FakeWatcher::start(bus.address(), true);
+        let (native, services) = services(&bus);
+        assert_eq!(services.capabilities().status_items, Support::Supported);
+        let item = StatusItemSpec::new("Choscor").tooltip("Ready");
+        services.set_status_item(Some(item.clone())).unwrap();
+        assert_eq!(services.status_item(), Some(item));
+        let register = watcher.service.wait_for("RegisterStatusNotifierItem");
+        assert_eq!(
+            register.arg(0).as_str(),
+            native.status_item_name().as_deref()
+        );
+        services.set_status_item(None).unwrap();
+        assert_eq!(services.status_item(), None);
+    }
+
+    #[test]
+    fn urls_open_through_the_portal() {
+        let bus = TestBus::start();
+        let portal = FakePortal::start(bus.address(), PortalScript::default());
+        let (native, services) = services(&bus);
+        assert_eq!(services.capabilities().open_urls, Support::Supported);
+        native.open_url("https://example.com/a?b=c").unwrap();
+        let call = portal.service.wait_for("OpenURI");
+        assert_eq!(call.arg(1).as_str(), Some("https://example.com/a?b=c"));
+        assert_eq!(native.open_url("not a url"), Err(DesktopError::InvalidUrl));
+        assert_eq!(
+            services.url_handler("not a url"),
+            Err(ServiceError::InvalidUrl)
+        );
+    }
+
+    /// The settings of an application id go under `XDG_CONFIG_HOME`, and
+    /// a stored value reaches that file.
+    #[test]
+    fn the_settings_path_follows_xdg_config_home() {
+        if in_child() {
+            let config = PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap());
+            let path = user_settings_path(APP_ID).unwrap();
+            assert_eq!(path, config.join(APP_ID).join("settings.txt"));
+            let storage = Storage::open(SettingsSchema::new(1), path.clone());
+            storage
+                .update(|settings| settings.set("window.width", SettingValue::Integer(640)))
+                .unwrap();
+            assert!(storage.save().unwrap());
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(text.contains("window.width"), "{text}");
+            return;
+        }
+        let config =
+            std::env::temp_dir().join(format!("choscorui-facade-xdg-{}", std::process::id()));
+        let value = config.display().to_string();
+        run_child(
+            "linux::the_settings_path_follows_xdg_config_home",
+            &[("XDG_CONFIG_HOME", Some(value.as_str()))],
+        );
+        std::fs::remove_dir_all(&config).unwrap();
+    }
+}

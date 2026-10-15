@@ -782,6 +782,6 @@ The session has these parts:
 
 The `native` job also opens the gallery, runs the gallery autopilot on each display server with each painter, and runs the bench. Without a display server, it checks that the application reports `Unsupported`.
 
-[`services.rs`](../crates/choscorui-linux/tests/services.rs) runs the desktop services against test fakes of the portal, the notification server, and the status watcher. [`codecs.rs`](../crates/choscorui-linux/tests/codecs.rs) and [`text_shaping.rs`](../crates/choscorui-linux/tests/text_shaping.rs) need no display server.
+[`services.rs`](../crates/choscorui-linux/tests/services.rs) runs the desktop services against test fakes of the portal, the notification server, and the status watcher. The Linux part of [`services_and_storage.rs`](../crates/choscorui/tests/services_and_storage.rs) runs the facade `Services` against the same fakes. [`codecs.rs`](../crates/choscorui-linux/tests/codecs.rs) and [`text_shaping.rs`](../crates/choscorui-linux/tests/text_shaping.rs) need no display server. [`render_parity.rs`](../crates/choscorui/tests/render_parity.rs) compares the offscreen Cairo painter with the software renderer, also without a display server.
 
 The tests do not verify a real input method, a screen reader, GNOME or KDE, real GPU drivers, or HiDPI monitors.
