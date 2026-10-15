@@ -6,16 +6,17 @@ use choscorui_controls::{
     AlertDialog, Button, ButtonGroup, Calendar, Checkbox, ColorPicker, ColumnBrowser, ComboItem,
     Combobox, CommandId, CommandLink, CustomControl, DateTimeEdit, DateTimeKind, DecimalSpinBox,
     Dial, DialogButton, DialogButtonRole, DockArea, DockLayout, DockPanel, DockTarget,
-    DropdownMenu, FontChooser, GroupBox, HeaderColumn, HeaderView, IntegerRange, ItemView,
-    KeySequenceEdit, Label, ListEntry, MenuItem, NumberBase, NumericDisplay, PanelId, Progress,
-    RadioGroup, Resizable, ScrollArea, ScrollBar, ScrollOrientation, Select, Separator,
+    DropdownMenu, FileDialog, FontChooser, GroupBox, HeaderColumn, HeaderView, IntegerRange,
+    ItemView, KeySequenceEdit, Label, ListEntry, MenuItem, NumberBase, NumericDisplay, PanelId,
+    Progress, RadioGroup, Resizable, ScrollArea, ScrollBar, ScrollOrientation, Select, Separator,
     SeparatorOrientation, SheetSide, SizeGrip, Slider, SliderOrientation, SpinBox,
     SplitOrientation, StackedContainer, StatusBar, Tabs, TextEditor, TextField, TextItemDelegate,
-    ToolBox, ToolButton, Toolbar, ToolbarItem,
+    TitleBar, TitleBarHandle, ToolBox, ToolButton, Toolbar, ToolbarItem,
 };
 use choscorui_core::{
-    CivilDate, CivilDateTime, CivilTime, Color, ItemKey, ItemShape, ItemStyle, Locale, Point, Rect,
-    Scene, SceneItem, ScrollViewport, SemanticRole, Size, StringListModel, Tree, TreeStore,
+    CivilDate, CivilDateTime, CivilTime, Color, FileDialogKind, ItemKey, ItemShape, ItemStyle,
+    Locale, Localizer, Point, Rect, Scene, SceneItem, ScrollViewport, SemanticRole, Size,
+    StringListModel, Tree, TreeStore,
 };
 
 /// Builds a control and any nodes it refers to in `tree`.
@@ -280,5 +281,31 @@ pub fn builtins() -> Vec<(&'static str, TreeFactory)> {
         }),
         ("text-editor", |_| Box::new(TextEditor::new("Notes", "Hi"))),
         ("canvas", canvas),
+        ("title-bar", |_| {
+            Box::new(TitleBar::new("Notes", TitleBarHandle::new()))
+        }),
+        ("file-dialog", file_dialog),
+        ("alert-window", |_| {
+            let buttons = vec![
+                DialogButton::new("Cancel", DialogButtonRole::Reject),
+                DialogButton::new("Delete", DialogButtonRole::Destructive),
+            ];
+            let alert = AlertDialog::new("Delete file?", "This cannot be undone.", buttons);
+            Box::new(alert.window())
+        }),
     ]
+}
+
+/// The directory of files that the file dialog samples show. The path is
+/// relative, so that it is the same from the controls and the facade
+/// crates.
+pub const FILES: &str = "../choscorui-controls/tests/catalog/files";
+
+/// A file dialog over [`FILES`], with its listing loaded.
+fn file_dialog(_: &mut Tree) -> Box<dyn CustomControl> {
+    let types = vec!["txt".to_owned(), "md".to_owned()];
+    let mut dialog = FileDialog::new(FileDialogKind::Open, FILES, Localizer::builtin())
+        .with_allowed_types(&types, Localizer::builtin());
+    let _ = dialog.wait(std::time::Duration::from_secs(10));
+    Box::new(dialog)
 }

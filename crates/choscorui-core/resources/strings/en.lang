@@ -87,6 +87,33 @@ choscorui.color.saturation = Saturation
 choscorui.color.brightness = Brightness
 choscorui.color.opacity = Opacity
 
+# Window decorations and the drawn file dialog.
+choscorui.titlebar.close = Close
+choscorui.titlebar.maximize = Maximize
+choscorui.titlebar.restore = Restore
+choscorui.titlebar.minimize = Minimize
+choscorui.file_dialog.open = Open
+choscorui.file_dialog.save = Save
+choscorui.file_dialog.select = Select
+choscorui.file_dialog.title.open = Open File
+choscorui.file_dialog.title.open_many = Open Files
+choscorui.file_dialog.title.directory = Select Folder
+choscorui.file_dialog.title.save = Save File
+choscorui.file_dialog.location = Location
+choscorui.file_dialog.parent = Parent folder
+choscorui.file_dialog.files = Files
+choscorui.file_dialog.name = Name
+choscorui.file_dialog.filter = File type
+choscorui.file_dialog.all_files = All files
+choscorui.file_dialog.hidden = Show hidden files
+choscorui.file_dialog.folder = Folder
+choscorui.file_dialog.empty = This folder is empty
+choscorui.file_dialog.loading = Loading…
+choscorui.file_dialog.failed = This folder cannot be read
+choscorui.file_dialog.replace = Replace
+choscorui.file_dialog.replace.title = “{name}” already exists
+choscorui.file_dialog.replace.message = Replacing it overwrites its contents.
+
 # Conditions of the backend capabilities.
 choscorui.condition.app_bundle = Needs an app bundle with a bundle identifier
 choscorui.condition.status_notifier_host = Needs a status notifier host

@@ -29,9 +29,8 @@ pub(super) fn resolve(query: &StyleQuery, tokens: &DesignTokens) -> ResolvedStyl
         | ToggleGroup | Field | Kbd => form::resolve(&cx),
         AlertDialog | Dialog | Sheet | Drawer | Popover | Tooltip | HoverCard | Menu | Menubar
         | Command => overlay::resolve(&cx),
-        Tabs | Breadcrumb | Pagination | NavigationMenu | Sidebar | Toolbar | StatusBar | Dock => {
-            navigation::resolve(&cx)
-        }
+        Tabs | Breadcrumb | Pagination | NavigationMenu | Sidebar | Toolbar | StatusBar | Dock
+        | TitleBar => navigation::resolve(&cx),
         Table | Card | Badge | Avatar | Chart | Calendar | Carousel | ListView | Dial
         | NumericDisplay | ColorPicker => data::resolve(&cx),
         Alert | Toast | Progress | Skeleton | Spinner | Empty => feedback::resolve(&cx),

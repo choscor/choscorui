@@ -80,6 +80,7 @@ const GROUPS: &[(&str, &[ControlKind])] = {
                 Toolbar,
                 StatusBar,
                 Dock,
+                TitleBar,
             ],
         ),
         (

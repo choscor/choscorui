@@ -21,10 +21,10 @@ use crate::{
     ValidationState,
 };
 use choscorui_core::{
-    Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Icon, Key,
-    KeyEvent, Locale, Localizer, Measured, NodeId, Path, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticNode, SemanticParts, SemanticRange, SemanticRole, SemanticState, Size,
-    TextStyle, Tree, TreeError,
+    Color, ColorRole, DesignTokens, EventPhase, EventReply, FontSlant, FontWeight, Icon,
+    InputModality, Key, KeyEvent, Locale, Localizer, Measured, NodeId, Path, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRange, SemanticRole,
+    SemanticState, Size, TextStyle, Tree, TreeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1328,7 +1328,27 @@ impl AlertDialog {
             focus: 0,
             parts: Parts::default(),
             motion_ms: 0,
+            window: false,
         }
+    }
+
+    /// The alert as the whole content of its own modal window, for a
+    /// desktop that has no alert service. The panel fills the bounds of
+    /// the node, and it is open from the start. The host closes the
+    /// window when the alert reports `OpenChanged(false)`.
+    pub fn window(self) -> HostedAlertDialog {
+        let (order, _) = order_dialog_buttons(&self.buttons, false);
+        let focus = self
+            .buttons
+            .iter()
+            .position(|button| button.role == DialogButtonRole::Accept)
+            .or_else(|| order.first().copied())
+            .unwrap_or(0);
+        let mut alert = self.hosted();
+        alert.window = true;
+        alert.focus = focus;
+        alert.reveal.set(true, f64::NEG_INFINITY);
+        alert
     }
 
     pub fn semantics(&self) -> SemanticNode {
@@ -1360,6 +1380,9 @@ impl AlertDialog {
 /// - A button reports `ItemActivated(index into buttons)` and closes the
 ///   alert. A dismissal reports `Dismissed`. Each close also reports
 ///   `OpenChanged(false)`. A press outside the panel does nothing.
+/// - The alert of [`AlertDialog::window`] is the content of an alert
+///   window instead: the panel fills the node, with no scrim, and the
+///   node takes the focus.
 pub struct HostedAlertDialog {
     alert: AlertDialog,
     reveal: Reveal,
@@ -1372,6 +1395,9 @@ pub struct HostedAlertDialog {
     /// The hovered and pressed buttons.
     parts: Parts,
     motion_ms: u32,
+    /// True for the content of an alert window, from
+    /// [`AlertDialog::window`].
+    window: bool,
 }
 
 impl HostedAlertDialog {
@@ -1443,7 +1469,9 @@ impl HostedAlertDialog {
             .map(|(index, _)| *index)
     }
 
-    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) {
+    /// Handles `key`. Returns false for a Tab that leaves the last
+    /// button of an alert window, so that the focus moves on.
+    fn key(&mut self, cx: &mut ControlContext<'_>, key: Key) -> bool {
         let command = cx.modifiers().command;
         match key {
             Key::Tab if !self.buttons.is_empty() => {
@@ -1455,10 +1483,18 @@ impl HostedAlertDialog {
                     .iter()
                     .position(|index| *index == self.focus)
                     .unwrap_or(0);
-                let next = if cx.modifiers().shift {
-                    (current + count - 1) % count
+                let back = cx.modifiers().shift;
+                // A modal panel keeps the focus; an alert window lets it
+                // go after its last button.
+                let next = if self.window {
+                    crate::hosted::tab_stop(current, count, back)
+                } else if back {
+                    Some((current + count - 1) % count)
                 } else {
-                    (current + 1) % count
+                    Some((current + 1) % count)
+                };
+                let Some(next) = next else {
+                    return false;
                 };
                 self.focus = order[next];
                 cx.request_paint();
@@ -1484,6 +1520,7 @@ impl HostedAlertDialog {
             }
             _ => {}
         }
+        true
     }
 
     fn pointer(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) {
@@ -1531,14 +1568,27 @@ impl HostedAlertDialog {
 }
 
 impl CustomControl for HostedAlertDialog {
+    /// No size for a modal panel; the panel size for an alert window.
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
-        Measured::new(cx.constraints.constrain(Size::new(0.0, 0.0)))
+        if !self.window {
+            return Measured::new(cx.constraints.constrain(Size::new(0.0, 0.0)));
+        }
+        let available = cx.constraints.max;
+        let size = self.alert.measure(available, cx.styles, cx.tokens, cx.text);
+        Measured::new(cx.constraints.constrain(size))
     }
 
-    fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
+    fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
         self.viewport = cx.viewport;
         let root = cx.style(self.alert.query(Slot::Root));
         self.motion_ms = root.motion_ms;
+        if self.window {
+            self.panel = bounds;
+            self.buttons = self
+                .alert
+                .button_rects(bounds, cx.styles, cx.tokens, cx.text, cx.rtl());
+            return;
+        }
         // The panel keeps a margin of 4 spacing units from the window edges.
         let margin = cx.tokens.spacing * 4.0;
         let available = Size::new(
@@ -1568,25 +1618,54 @@ impl CustomControl for HostedAlertDialog {
                 self.pointer(cx, event);
                 return EventReply::Continue;
             }
-            ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => self.key(cx, *key),
+            ControlEvent::Key(KeyEvent::Down { key, repeat: false }) => {
+                if !self.key(cx, *key) {
+                    return EventReply::Continue;
+                }
+            }
             ControlEvent::Key(_) => {}
+            // Keyboard focus that enters an alert window goes to its first
+            // button, or to its last one with Shift+Tab.
+            ControlEvent::FocusChanged(true)
+                if self.window && cx.input_modality() == InputModality::Keyboard =>
+            {
+                let (order, _) = order_dialog_buttons(&self.alert.buttons, false);
+                let edge = if cx.modifiers().shift {
+                    order.last()
+                } else {
+                    order.first()
+                };
+                if let Some(index) = edge {
+                    self.focus = *index;
+                }
+                cx.request_paint();
+                return EventReply::Continue;
+            }
             // The host sends `Dismiss` to an open alert that it disables.
+            // An alert window stays open and releases its pressed button.
+            ControlEvent::Dismiss if self.window => self.pointer(cx, event),
             ControlEvent::Dismiss => self.dismiss(cx),
             _ => return EventReply::Continue,
         }
         EventReply::Stop
     }
 
-    fn paint(&self, _cx: &mut PaintContext<'_>) {
-        // The node takes no space; the panel paints above every control.
+    /// Paints the panel of an alert window. A modal panel paints above
+    /// every control instead, and its node takes no space.
+    fn paint(&self, cx: &mut PaintContext<'_>) {
+        if self.window {
+            let host = cx.state;
+            self.alert.paint(&mut cx.at(self.panel));
+            self.paint_buttons(cx, host);
+        }
     }
 
     fn overlay(&self) -> Option<Rect> {
-        self.reveal.open.then_some(self.viewport)
+        (self.reveal.open && !self.window).then_some(self.viewport)
     }
 
     fn modal(&self) -> bool {
-        self.reveal.open
+        self.reveal.open && !self.window
     }
 
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
@@ -1649,13 +1728,18 @@ impl CustomControl for HostedAlertDialog {
         true
     }
 
+    /// An alert window takes the focus while it is open.
     fn focusable(&self) -> bool {
-        false
+        self.window && self.reveal.open
     }
 
+    /// Disabling closes a modal panel. An alert window stays open, and
+    /// only forgets its pressed button.
     fn set_enabled(&mut self, enabled: bool) {
         if !enabled {
-            self.reveal = Reveal::default();
+            if !self.window {
+                self.reveal = Reveal::default();
+            }
             self.parts.clear();
         }
     }

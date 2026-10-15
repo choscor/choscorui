@@ -77,11 +77,14 @@ to a control. [`Field`](#field-and-fieldtext) and the compose
 | Popups and dialogs | [`InputDialog`](#alertdialog-and-inputdialog) | One validated value. |
 | Popups and dialogs | [`ColorPicker`](#colorpicker-and-fontdialog) | Color model with HSV, hex, and alpha. |
 | Popups and dialogs | [`FontDialog`](#colorpicker-and-fontdialog) | Font family, size, weight, and slant. |
+| Popups and dialogs | [`FileDialog`](#filedialog) | Drawn file chooser for a desktop without a file chooser service. |
 | Window chrome | [`Toolbar`](#toolbar) | Toolbar with roving focus and overflow. |
 | Window chrome | [`StatusBar`](#statusbar) | Status text, timed messages, and sections. |
 | Window chrome | [`DockLayout`](#docklayout) | Dockable panels around a central area. |
 | Window chrome | [`FocusFrame`](#focusframe-and-sizegrip) | Focus ring outside the focused node. |
 | Window chrome | [`SizeGrip`](#focusframe-and-sizegrip) | Window resize grip. |
+| Window chrome | [`TitleBar`](#titlebar-and-windowframe) | Drawn title bar of a window without server-side decorations. |
+| Window chrome | [`WindowFrame`](#titlebar-and-windowframe) | Hit test and frame of a window with client-side decorations. |
 | Canvas | [`CanvasView`](#canvasview) | Interactive view of a `Scene`. |
 | Validators | [`NumberInput`](#numberinput-inputmask-and-dateinput) | Locale-aware number validation. |
 | Validators | [`InputMask`](#numberinput-inputmask-and-dateinput) | Fixed-format text mask. |
@@ -189,6 +192,8 @@ changes as `ControlMessage` values:
 | `DateTimeEdit` | `Changed(Date)` for a date, `Changed(Text)` for a time or a date and time | the same kind |
 | `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
+| `TitleBar` | `Activated` after each request that it queues | - |
+| `FileDialog` | `Activated` on accept, `Dismissed` on cancel | `Text` as the name of a save dialog |
 | `ColorPicker` | `Changed(Text)` with the hex value, then `Changed(Channels)` with the hue, saturation, value, and alpha; `Activated` on Enter | `Text` with a hex value |
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu, `ItemActivated(index)` for an overflowed embedded control | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
@@ -2635,10 +2640,30 @@ locale of the environment.
 `HostedAlertDialog::with_detail` sets the informative text of a hosted
 alert.
 
+**In an alert window.** `AlertDialog::window` makes a `HostedAlertDialog`
+that is the whole content of its own modal window. A backend uses it on a
+desktop without an alert service.
+
+- The alert is open from the start. It measures the size of its panel.
+  The panel fills the node, with no scrim.
+- The node takes the keyboard focus. The window is the modal surface, so
+  the host keeps no modal node.
+- The keys and the messages are those of the hosted alert. Tab after the
+  last button lets the focus leave the node.
+- Focus that enters from the keyboard goes to the first button, or to the
+  last button with Shift+Tab.
+- A disabled alert window stays open. A `Dismiss` event only releases a
+  pressed button.
+- The window host maps `ItemActivated(index)` to the response of that
+  button and `Dismissed` to a cancel. It closes the window on
+  `OpenChanged(false)`.
+
 **As a view.** `AlertDialog::new(title, message, buttons, presented)` mounts
 a `HostedAlertDialog` that is open while the `Binding<bool>` is true.
 `.detail(text)` adds the informative text. The chosen button reports its
 index through `.on_item`, and Escape runs `.on_dismiss`.
+`AlertDialog::window(title, message, buttons)` mounts the alert as the
+content of an alert window.
 
 ### ColorPicker and FontDialog
 
@@ -2730,6 +2755,118 @@ user. It also runs when the hex text stays the same, for example for a new
 hue of a gray.
 
 [dialogs.rs](../crates/choscorui-controls/tests/dialogs.rs) pins this behavior.
+
+### FileDialog
+
+`FileDialog` is the file chooser that the toolkit draws. A backend shows
+it in a dialog window on a desktop without a file chooser service. It
+lists one directory of a core `FileSystemModel`.
+
+- **Kinds.** `FileDialog::new(kind, directory, strings)` takes a
+  `FileDialogKind`. `Open` returns one file and `OpenMany` returns one or
+  more files.
+- `Directory` lists only directories and returns one directory. `Save`
+  returns the path of the typed name in the shown directory.
+- `from_request` takes the kind, the title, the allowed types, and the
+  suggested name of a `FileDialogRequest`.
+- `with_title` and `with_prompt` replace the built-in title and the label
+  of the accept button.
+- **Listing.** The list shows directories first, then files, each group
+  by name. A listing thread reads the directory, so a large directory
+  does not block input.
+- While the listing loads, the deadline of the dialog is due every 50 ms.
+  Each timer merges a finished listing. `with_waker` gives the model a
+  waker for the event loop.
+- `wait` blocks until the listing is ready, so that the first frame shows
+  the files. `poll` merges a finished listing without the host.
+- **Filters.** `with_allowed_types` takes extensions without the dot. The
+  first filter shows all the allowed types, and one filter follows for
+  each type.
+- Without types, one filter shows every file. Directories always show.
+  The checkbox shows or hides the hidden files.
+- **Focus order.** Tab moves through the location field, the list, the
+  name field of a save dialog, and the filter. Then it moves to the
+  checkbox, Cancel, and the accept button.
+- Shift+Tab moves back. Tab after the last stop lets the focus leave the
+  dialog.
+- **List keys.** ArrowUp, ArrowDown, Home, End, PageUp, and PageDown move
+  the current row. Typed characters go to the first row whose name starts
+  with them.
+- In an `OpenMany` dialog, Shift extends the selection from the anchor.
+  Space adds or removes the current row, and Command+A or Control+A
+  selects all the files.
+- Enter on a directory row opens it. Enter on a file row accepts it. A
+  double click does the same.
+- Backspace in the list goes to the parent directory. Alt+Up does the
+  same from any stop.
+- **Other keys.** Escape cancels. Enter in the location field opens the
+  typed directory. A relative path starts at the shown directory.
+- In an open dialog, Enter on the path of a file in the location field
+  accepts that file. Enter in the name field runs the accept button.
+- On the filter, ArrowUp and ArrowDown change the filter. Space on the
+  filter, the checkbox, or a button runs it on the key release.
+- **Accept.** An open dialog accepts the selected files. With no selected
+  file, it opens the current directory row.
+- A directory dialog accepts the selected directory, or the shown
+  directory when nothing is selected.
+- A save dialog opens a directory of the typed name. When a file of that
+  name exists, an alert asks before the dialog replaces it.
+- In the alert, Cancel has the focus first, and Enter never runs Replace.
+  Escape closes the alert, and the dialog stays open.
+- A file row of a save dialog copies its name into the name field.
+- **Outcome.** The dialog writes `FileDialogOutcome::Selected(paths)` or
+  `FileDialogOutcome::Cancelled` to its `FileDialogResult`. `result`
+  gives a handle that shares the value.
+- An accept also reports `Activated`, and a cancel reports `Dismissed`.
+- **Look.** The parts take the recipes of the controls that they look
+  like. Only the rows in view paint.
+- Right-to-left layouts mirror the layout. The directory rows show a
+  chevron that points in the reading direction.
+
+| Part | Kind and slot | Value |
+| --- | --- | --- |
+| Title | `Dialog` `Title` | the dialog title |
+| Parent button | `Button` `Root` | ghost icon-sm button with an up arrow |
+| Location and name fields | `Input` `Root` | the input box |
+| List frame | `Table` `Group`, `ListView` `Root` | 1 pt `border`, radius md; the list focus ring |
+| Row | `ListView` `Item` | the list view row; selected, highlighted while current, hovered |
+| Size and chevron | `ListView` `Indicator` | `muted-foreground` |
+| Status line | `Dialog` `Description` | sm `muted-foreground` text while the list is empty |
+| Filter | `NativeSelect` `Root`, `Icon` | the native select |
+| Hidden-files checkbox | `Checkbox` `Root`, `Label` | the checkbox |
+| Cancel and accept | `Button` `Root` | outline and default buttons; accept is disabled while it cannot run |
+| Overwrite alert | `AlertDialog` | the alert dialog panel over its scrim |
+
+| Field | `FileDialog::semantics` |
+| --- | --- |
+| Role | `Dialog` (AXGroup) |
+| Name / value | title / - |
+| State | busy while the listing loads |
+| Actions | `Dismiss`, `Focus` |
+
+The dialog publishes parts in focus order. The parts are the parent
+`Button`, the location `TextField`, the `List`, and the name `TextField`
+of a save dialog.
+
+- The `PopUpButton` filter has the filter text as its value. The
+  `Checkbox` shows the hidden-files state. The `Button` parts are Cancel
+  and accept.
+- The list is a collection with the count of all the rows. Each row in
+  view is a `ListItem` part with its absolute index.
+- A row part is selected when the row is selected. Its description is
+  "Folder" or the file size.
+- The part of the focused stop is the focused part. In the list, the
+  current row is the focused part.
+- The open overwrite alert is a modal `Dialog` part with a `Button` part
+  for each button.
+
+**As a view.** `FileDialog::new(request, directory, outcome)` of
+`choscorui-compose` mounts the dialog with the texts of the environment
+locale. Accept and cancel write the outcome to a
+`Binding<Option<FileDialogOutcome>>`.
+
+[file_dialog.rs](../crates/choscorui-controls/tests/file_dialog.rs) pins
+this behavior.
 
 ### Toolbar
 
@@ -2853,6 +2990,79 @@ timed message, call `request_message` in `.with_env`, and clear the state
 that asks for it in `.on_dismiss`.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
+
+### TitleBar and WindowFrame
+
+A window without server-side decorations draws its own frame. `TitleBar`
+draws the title and the window buttons, and `WindowFrame` finds the part
+of the window under a point.
+
+- **Requests.** `TitleBar::new(title, handle)` puts `TitleBarRequest`
+  values in its `TitleBarHandle`. The backend takes them with
+  `take_requests` and runs them.
+- Each request also reports `Activated`. A host that reads messages
+  knows when to take the requests.
+- A primary press and a drag past the drag threshold on the title request
+  `Move`. A double click requests `ToggleMaximize`.
+- A secondary press requests `ShowWindowMenu` at the pointer.
+- A window button requests `Minimize`, `ToggleMaximize`, or `Close` when
+  the press and the release land on it.
+- **Window state.** The backend sets the title, the maximized state, and
+  the active state through the handle. The bar shows each change at its
+  next timer.
+- A maximized window shows Restore in place of Maximize.
+  `with_buttons` keeps only some buttons, for example only Close for a
+  dialog window.
+- **Keys.** Each window button is a tab stop. Enter, or Space on its
+  release, runs the focused button.
+- Shift+F10 or the Menu key requests the window menu at the bar.
+- **Layout.** The buttons sit at the end of the bar, with Close last.
+  Right-to-left layouts mirror the row, so the buttons sit at the left.
+- `TitleBar::height` gives the bar height, and `TitleBar::button_rects`
+  gives the button rectangles from the recipe.
+- **Hit test.** `WindowFrame::new(frame, title_bar, buttons)` takes the
+  visible window, the title bar, and the button rectangles.
+  `with_resize_edges(outer, inner)` adds the resize band.
+- `region(point)` returns a `WindowRegion`. A point is `Outside`, on the
+  resize band of a `ResizeEdge`, on a window button, on the title bar, or
+  in the client area.
+- The resize band wins over the other regions. A corner reaches one band
+  width along its two sides.
+- A maximized frame has no resize band. `WindowRegion::press_request`
+  gives the `Resize` request that a primary press in the band starts.
+- `ResizeEdge` names physical edges. Right-to-left layouts do not mirror
+  them.
+- **Look.** `paint` uses the `TitleBar` recipe. The focused state of the
+  `Title` slot is the active window, and the checked state is the
+  maximized window.
+- `WindowFrame::paint` draws the background, the border, and the shadow
+  of the window from the `Panel` slot. Paint it before the content.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bar | `Root` | 40 pt high, `background` fill, 1 pt `border` below, top corners radius lg (square while maximized), padding 6 pt, 4 pt gap |
+| Title | `Title` | sm semibold text: `foreground` in the active window, `muted-foreground` in an inactive window |
+| Minimize, maximize | `Action` | 28 pt ghost icon-sm button |
+| Close | `Close` | 28 pt ghost icon-sm button; on hover a `destructive` tint (10% light, 20% dark) and `destructive` text |
+| Window frame | `Panel` | `background` fill, 1 pt `border`, radius lg; shadow xl while active, md while inactive; no radius or shadow while maximized |
+
+| Field | `TitleBar::semantics` |
+| --- | --- |
+| Role | `Toolbar` (AXToolbar) |
+| Name / value | title / - |
+| State | - |
+| Actions | `ShowMenu`, `Focus` |
+
+The title bar publishes a `Button` part for each window button. The names
+are the built-in `choscorui.titlebar.minimize`, `choscorui.titlebar.maximize`
+or `choscorui.titlebar.restore`, and `choscorui.titlebar.close` messages.
+The focused button is the focused part.
+
+**As a view.** `TitleBar::new(title, handle)` of `choscorui-compose`
+mounts the bar. Take the requests from the handle in `.on_activate`.
+
+[chrome.rs](../crates/choscorui-controls/tests/chrome.rs) pins this
+behavior.
 
 ### DockLayout
 

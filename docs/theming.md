@@ -397,6 +397,19 @@ directly, and tokens do not change them:
 - drag images from other applications
 - the window title bar and its buttons
 
+A desktop can lack some of these services, for example a window manager
+without server-side decorations. The toolkit then draws the part, and the
+tokens and recipes change it:
+
+- The `TitleBar` recipe styles a drawn title bar and its window frame.
+  The recipe has no reference counterpart, so it takes the `background`,
+  `border`, and muted roles.
+- A drawn file dialog (`FileDialog`) takes the recipes of the input,
+  list, select, checkbox, and button controls.
+- A drawn alert (`AlertDialog::window`) takes the `AlertDialog` recipe.
+
+[controls.md](controls.md#titlebar-and-windowframe) gives the slot values.
+
 ## Customization recipes
 
 Each snippet in this part comes from a test in

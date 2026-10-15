@@ -85,6 +85,33 @@ choscorui.color.saturation = Độ bão hòa
 choscorui.color.brightness = Độ sáng
 choscorui.color.opacity = Độ mờ đục
 
+# Trang trí cửa sổ và hộp thoại tệp do bộ công cụ vẽ.
+choscorui.titlebar.close = Đóng
+choscorui.titlebar.maximize = Phóng to
+choscorui.titlebar.restore = Khôi phục
+choscorui.titlebar.minimize = Thu nhỏ
+choscorui.file_dialog.open = Mở
+choscorui.file_dialog.save = Lưu
+choscorui.file_dialog.select = Chọn
+choscorui.file_dialog.title.open = Mở tệp
+choscorui.file_dialog.title.open_many = Mở các tệp
+choscorui.file_dialog.title.directory = Chọn thư mục
+choscorui.file_dialog.title.save = Lưu tệp
+choscorui.file_dialog.location = Vị trí
+choscorui.file_dialog.parent = Thư mục cha
+choscorui.file_dialog.files = Tệp
+choscorui.file_dialog.name = Tên
+choscorui.file_dialog.filter = Loại tệp
+choscorui.file_dialog.all_files = Mọi tệp
+choscorui.file_dialog.hidden = Hiện tệp ẩn
+choscorui.file_dialog.folder = Thư mục
+choscorui.file_dialog.empty = Thư mục này trống
+choscorui.file_dialog.loading = Đang tải…
+choscorui.file_dialog.failed = Không đọc được thư mục này
+choscorui.file_dialog.replace = Thay thế
+choscorui.file_dialog.replace.title = “{name}” đã tồn tại
+choscorui.file_dialog.replace.message = Thay thế sẽ ghi đè nội dung của nó.
+
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói
 choscorui.condition.status_notifier_host = Cần một máy chủ thông báo trạng thái

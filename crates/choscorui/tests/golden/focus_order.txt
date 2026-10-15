@@ -94,6 +94,17 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+alert-window
+alert-window (inside)
 switch
 toggle
 toggle-group
@@ -171,12 +182,18 @@ header-view
 column-browser
 toolbar
 dock
-color-picker
-decimal-spin-box
-scroll-bar
-key-sequence-edit
-text-editor
 # backward
+alert-window
+alert-window (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 canvas (inside)
 canvas (inside)
@@ -265,6 +282,17 @@ select
 toggle-group
 toggle
 switch
+alert-window
+alert-window (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 text-editor
 key-sequence-edit
@@ -331,22 +359,6 @@ pagination (inside)
 pagination (inside)
 breadcrumb
 breadcrumb (inside)
-command
-dialog
-hover-card
-popover
-menubar
-context-menu
-range-slider
-range-slider (inside)
-date-picker
-input-otp
-textarea
-input-group
-input
-select
-toggle-group
-toggle
 # every hosted control Rtl
 # forward
 switch
@@ -437,6 +449,17 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+alert-window
+alert-window (inside)
 switch
 toggle
 toggle-group
@@ -514,12 +537,18 @@ header-view
 column-browser
 toolbar
 dock
-color-picker
-decimal-spin-box
-scroll-bar
-key-sequence-edit
-text-editor
 # backward
+alert-window
+alert-window (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 canvas (inside)
 canvas (inside)
@@ -608,6 +637,17 @@ select
 toggle-group
 toggle
 switch
+alert-window
+alert-window (inside)
+file-dialog
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+file-dialog (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 text-editor
 key-sequence-edit
@@ -674,19 +714,3 @@ pagination (inside)
 pagination (inside)
 breadcrumb
 breadcrumb (inside)
-command
-dialog
-hover-card
-popover
-menubar
-context-menu
-range-slider
-range-slider (inside)
-date-picker
-input-otp
-textarea
-input-group
-input
-select
-toggle-group
-toggle

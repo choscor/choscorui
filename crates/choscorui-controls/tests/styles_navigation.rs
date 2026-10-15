@@ -647,3 +647,81 @@ fn dock_matches_its_reference_table() {
         );
     }
 }
+
+#[test]
+fn title_bar_matches_its_reference_table() {
+    for tokens in schemes() {
+        let query = |slot| StyleQuery::new(ControlKind::TitleBar, slot);
+        let lg = tokens.radius(RadiusScale::Lg);
+        let bar = get(&tokens, query(Slot::Root));
+        assert_eq!(
+            (bg(&bar), bar.border, bar.border_width, bar.border_sides),
+            (
+                tokens.color(ColorRole::Background),
+                tokens.color(ColorRole::Border),
+                1.0,
+                Sides::BOTTOM
+            )
+        );
+        assert_eq!(
+            (bar.min_height, bar.padding, bar.gap),
+            (40.0, Edges::axes(6.0, 6.0), 4.0)
+        );
+        let top = Corners {
+            top_start: lg,
+            top_end: lg,
+            bottom_end: 0.0,
+            bottom_start: 0.0,
+        };
+        assert_eq!(bar.radius, top);
+        let maximized = get(&tokens, query(Slot::Root).state(VisualState::CHECKED));
+        assert_eq!(maximized.radius, Corners::all(0.0));
+        let active = get(&tokens, query(Slot::Title).state(VisualState::FOCUSED));
+        text(
+            &tokens,
+            &active,
+            ColorRole::Foreground,
+            TextSize::Sm,
+            FontWeight::SEMIBOLD,
+        );
+        let inactive = get(&tokens, query(Slot::Title));
+        text(
+            &tokens,
+            &inactive,
+            ColorRole::MutedForeground,
+            TextSize::Sm,
+            FontWeight::SEMIBOLD,
+        );
+        for slot in [Slot::Action, Slot::Close] {
+            let rest = get(&tokens, query(slot));
+            assert_eq!(
+                (rest.min_width, rest.min_height, bg(&rest)),
+                (28.0, 28.0, Color::TRANSPARENT)
+            );
+        }
+        let close = get(&tokens, query(Slot::Close).state(VisualState::HOVERED));
+        let destructive = tokens.color(ColorRole::Destructive);
+        assert_eq!(
+            (bg(&close), close.foreground),
+            (destructive.with_alpha(pick(&tokens, 0.1, 0.2)), destructive)
+        );
+        let frame = get(&tokens, query(Slot::Panel).state(VisualState::FOCUSED));
+        assert_eq!(
+            (bg(&frame), frame.border, frame.radius, frame.shadow),
+            (
+                tokens.color(ColorRole::Background),
+                tokens.color(ColorRole::Border),
+                Corners::all(lg),
+                tokens.shadow(ShadowScale::Xl)
+            )
+        );
+        let inactive = get(&tokens, query(Slot::Panel));
+        assert_eq!(inactive.shadow, tokens.shadow(ShadowScale::Md));
+        let state = VisualState::FOCUSED.with(VisualState::CHECKED);
+        let maximized = get(&tokens, query(Slot::Panel).state(state));
+        assert_eq!(
+            (maximized.radius, maximized.shadow),
+            (Corners::all(0.0), ShadowLayers::NONE)
+        );
+    }
+}

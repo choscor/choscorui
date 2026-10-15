@@ -612,6 +612,44 @@ pub fn new<M>(name: impl IntoLive<TextContent, M>, value: Binding<String>) -> Se
 
 A multiline input named `name` that edits `value`.
 
+## `TitleBar`
+
+type alias in `choscorui::prelude::TitleBar`
+
+```rust
+pub type TitleBar = Configured<TitleBar>;
+```
+
+The title bar of a window that draws its own frame: the title and the
+minimize, maximize, and close buttons. The bar puts each window
+request in `handle` and then reports `Activated`, so `.on_activate`
+takes the requests with [`TitleBarHandle::take_requests`](controls--structs.md#titlebarhandletake_requests). The window
+sets the maximized and active states through the handle.
+
+#### Examples
+
+```rust
+let handle = TitleBarHandle::new();
+let requests = handle.clone();
+let bar = TitleBar::new("Notes", handle).on_activate(move || {
+    for request in requests.take_requests() {
+        println!("{request:?}");
+    }
+});
+```
+
+Modifiers: every [`ViewExt`](modifiers.md#viewext) method applies to this view.
+
+### Methods
+
+#### `TitleBar::new`
+
+```rust
+pub fn new<M>(title: impl IntoLive<TextContent, M>, handle: TitleBarHandle) -> Self
+```
+
+A title bar that shows `title` and shares the window state through `handle`.
+
 ## `Toggle`
 
 type alias in `choscorui::prelude::Toggle`

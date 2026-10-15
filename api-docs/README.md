@@ -177,6 +177,9 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`TextEditor`](controls--type-aliases-2.md#texteditor) type alias: A multiline plain-text editor that edits `value`.
 - [`TextField`](controls--type-aliases-2.md#textfield) type alias: A single-line text field that edits `value`.
 - [`Textarea`](controls--type-aliases-2.md#textarea) type alias: A multiline text input that edits `value`.
+- [`TitleBar`](controls--type-aliases-2.md#titlebar) type alias: The title bar of a window that draws its own frame: the title and the minimize, maximize, and close buttons.
+- [`TitleBarHandle`](controls--structs.md#titlebarhandle) struct: The state that a window shares with its `TitleBar`: the title, the maximized and active flags, and the queue of requests.
+- [`TitleBarRequest`](controls--enums.md#titlebarrequest) enum: What a title bar asks the backend to do with its window.
 - [`Toggle`](controls--type-aliases-2.md#toggle) type alias: A button that stays on or off and edits `on`.
 - [`ToggleGroup`](controls--type-aliases-2.md#togglegroup) type alias: A row of toggles.
 - [`ToolBox`](controls--type-aliases-2.md#toolbox) type alias: Pages under stacked headers, with one page open; `open` edits the index of the open page.
@@ -190,6 +193,8 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`ContextMenu`](presentation.md#contextmenu) type alias: An area that opens `items` at the pointer on a secondary click.
 - [`Dialog`](presentation.md#dialog) type alias: A trigger button with a modal panel; `open` edits whether it shows.
 - [`DropdownMenu`](presentation.md#dropdownmenu) type alias: A button named `name` that opens a menu of `items`.
+- [`FileDialog`](presentation.md#filedialog) type alias: A file dialog that the toolkit draws, for `request`, that starts in `directory`.
+- [`FileDialogOutcome`](presentation.md#filedialogoutcome) enum: What a file dialog gives back to its host.
 - [`FontDialog`](presentation.md#fontdialog) struct: A font dialog that edits `style`: a family combobox, a size field, bold and italic toggles, and a preview of `sample` in the chosen style.
 - [`InputDialog`](presentation.md#inputdialog) struct: A modal dialog for one validated value.
 - [`MenuChoice`](presentation.md#menuchoice) struct: One row of a menu that a view presents: an action, a checkbox or radio row, a submenu, or a separator.

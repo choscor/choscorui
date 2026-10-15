@@ -20,7 +20,7 @@ fn every_kind_has_a_reference_table() {
     // Each kind has a `<kind>_matches_its_reference_table` test in a
     // `styles_<group>.rs` file. A new kind needs a table in
     // `docs/controls.md` and a test before this count changes.
-    assert_eq!(ControlKind::ALL.len(), 71);
+    assert_eq!(ControlKind::ALL.len(), 72);
 }
 
 #[test]

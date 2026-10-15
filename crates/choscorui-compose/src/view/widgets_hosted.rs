@@ -327,6 +327,22 @@ impl Configured<controls::HostedAlertDialog> {
         .open(presented)
     }
 
+    /// An alert with `title`, `message`, and `buttons` that fills its
+    /// node, as the whole content of an alert window. It is open from
+    /// the start, and it reports a choice like the modal alert; the
+    /// window closes on `OpenChanged(false)`.
+    pub fn window<M, N>(
+        title: impl IntoLive<TextContent, M>,
+        message: impl IntoLive<TextContent, N>,
+        buttons: impl Items<DialogButton>,
+    ) -> Self {
+        let (title, message) = (label(title), label(message));
+        Configured::custom(ControlKind::AlertDialog, move |env| {
+            controls::AlertDialog::new(text(&title, env), text(&message, env), buttons.items(env))
+                .window()
+        })
+    }
+
     /// Informative text under the message.
     #[must_use]
     pub fn detail<M>(self, detail: impl IntoLive<TextContent, M>) -> Self {

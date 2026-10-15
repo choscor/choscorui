@@ -80,6 +80,7 @@ pub enum ControlKind {
     SizeGrip,
     Canvas,
     TextEditor,
+    TitleBar,
 }
 ```
 
@@ -141,3 +142,32 @@ pub const fn name(self) -> &'static str
 ```
 
 Stable kebab-case name, used by golden files and docs.
+
+## `TitleBarRequest`
+
+enum in `choscorui::controls::TitleBarRequest`
+
+```rust
+pub enum TitleBarRequest {
+    Move,
+    Resize(ResizeEdge),
+    Minimize,
+    ToggleMaximize,
+    Close,
+    ShowWindowMenu(Point),
+}
+```
+
+What a title bar asks the backend to do with its window.
+
+### Variants
+
+- `Move`: Start an interactive move with the pointer, for example
+  `xdg_toplevel.move`.
+- `Resize(ResizeEdge)`: Start an interactive resize from `edge`, for example
+  `xdg_toplevel.resize`.
+- `Minimize`
+- `ToggleMaximize`: Maximize the window, or restore it when it is maximized.
+- `Close`
+- `ShowWindowMenu(Point)`: Show the window menu of the system at this point in window
+  coordinates, for example `xdg_toplevel.show_window_menu`.
