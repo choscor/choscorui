@@ -276,9 +276,10 @@ fn decode_moz_url(bytes: &[u8]) -> Option<String> {
         _ => (true, bytes),
     };
     let units: Vec<u16> = body
-        .chunks_exact(2)
-        .map(|pair| {
-            let pair = [pair[0], pair[1]];
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| {
             if little {
                 u16::from_le_bytes(pair)
             } else {

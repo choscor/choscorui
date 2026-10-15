@@ -5,7 +5,10 @@
 #
 # The session has a D-Bus session bus, the AT-SPI registry, a headless
 # sway compositor with one 1280x800 output, and Xvfb on :99 with RandR.
-# The command gets WAYLAND_DISPLAY and DISPLAY. CHOSCORUI_BACKEND picks
+# A virtual keyboard and pointer give the sway seat input devices; the
+# command writes to the FIFO in CHOSCORUI_VIRTUAL_INPUT to drive them (see
+# virtual-input/virtual-input.c). The command gets WAYLAND_DISPLAY and
+# DISPLAY. CHOSCORUI_BACKEND picks
 # the display server that the toolkit uses. The script returns the exit
 # status of the command and stops the session.
 set -eu
@@ -57,6 +60,7 @@ output HEADLESS-1 resolution 1280x800 position 0 0
 default_border none
 # Windows float, so each window keeps the size that it asks for.
 for_window [app_id=".*"] floating enable
+for_window [title=".*"] floating enable
 CONF
 WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
     WAYLAND_DISPLAY= DISPLAY= \
@@ -87,6 +91,30 @@ fi
 
 export WAYLAND_DISPLAY="$socket"
 export DISPLAY=:99
+# The IPC socket of sway, for swaymsg.
+SWAYSOCK=$(find "$runtime" -maxdepth 1 -name 'sway-ipc.*.sock' | head -n 1)
+export SWAYSOCK
+
+# Build and start the virtual input helper.
+helper_src=$(cd "$(dirname "$0")/virtual-input" && pwd)
+for protocol in virtual-keyboard-unstable-v1 wlr-virtual-pointer-unstable-v1; do
+    wayland-scanner client-header "$helper_src/$protocol.xml" "$runtime/$protocol-client-protocol.h"
+    wayland-scanner private-code "$helper_src/$protocol.xml" "$runtime/$protocol-protocol.c"
+done
+cc -O1 -Wall -Werror -I"$runtime" -o "$runtime/virtual-input" \
+    "$helper_src/virtual-input.c" "$runtime"/*-protocol.c \
+    $(pkg-config --cflags --libs wayland-client xkbcommon)
+export CHOSCORUI_VIRTUAL_INPUT="$runtime/virtual-input.fifo"
+mkfifo "$CHOSCORUI_VIRTUAL_INPUT"
+"$runtime/virtual-input" "$CHOSCORUI_VIRTUAL_INPUT" &
+pids+=($!)
+# Wait until the seat has the keyboard and the pointer.
+for _ in $(seq 50); do
+    if swaymsg -t get_inputs 2>/dev/null | grep -q '"type": "keyboard"'; then
+        break
+    fi
+    sleep 0.1
+done
 status=0
 "$@" || status=$?
 exit "$status"

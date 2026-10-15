@@ -108,6 +108,35 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 - `claim(mime_types)` takes ownership of the selection with the given types. An empty list returns `ClipboardError::EmptySource`.
 - `owns_selection` tells you if the application owns the selection. `ownership_lost` clears the ownership when another client claims the selection.
 
+## Clipboard and drag and drop
+
+`Application::clipboard()` gives a `SystemClipboard` for the selection of the display server. `SystemClipboard::temporary()` gives a private board that no other process sees. The API is the same as the macOS `Clipboard`: `write_text`, `read_text`, `write`, `formats`, and `read`. The name is different because `Clipboard` is the state machine above.
+
+Each `DragItem` uses these MIME types:
+
+| Format | Offered types | Also read |
+| --- | --- | --- |
+| `Text` | `text/plain;charset=utf-8`, `text/plain`, and `UTF8_STRING` | |
+| `Files` | `text/uri-list` with `file://` URIs | |
+| `Image` | `image/png` | JPEG, TIFF, GIF, WebP, and HEIF, converted to PNG |
+| `Url` | `text/x-moz-url`, and `text/uri-list` when there are no files | |
+| `Custom(name)` | none | |
+
+- Custom data stays in the process. Other processes never see it.
+- Text with a NUL character, and a relative file path, return `Error::InvalidClipboardText`. An image that is not PNG, and a custom name that is not valid, return `Error::UnsupportedFormat`.
+- While the application owns the selection, it reads its own data. It does not ask the display server.
+- A read from another client stops after 2 seconds without data.
+
+On Wayland, `wl_data_device` carries the selection and the drags. The compositor accepts a selection only from a client with recent input. Thus the backend sends the serial of the last key, button, or focus event. `clipboard` and `drag_and_drop` are `Supported` when the compositor has `wl_data_device_manager`.
+
+`Window::accept_drops(formats, operations)` makes a window a drop target. `Window::begin_drag(items, allowed, preview)` starts a drag:
+
+- Call `begin_drag` while the left button is down on the window. Otherwise it returns `Error::NoDragEvent`, because the drag needs the serial of that press.
+- The center of `preview` follows the pointer.
+- The target window gets `WindowEvent::Drag` events. The source window gets `WindowEvent::DragEnded` with the operation.
+- Wayland has copy and move actions, but no link action.
+- The modifiers follow the PC convention: Ctrl copies, Shift moves, and Ctrl+Shift links. Without a modifier, a drag in the same application moves, and a drag from another application copies.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:
@@ -136,7 +165,7 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 - Native event loops
 - Windows on the screen and painting
 - Text shaping and fonts
-- Clipboard and drag-and-drop data transfer
+- Clipboard and drag-and-drop data transfer on X11
 - Input method composition
 - Accessibility
 - Desktop portals

@@ -203,25 +203,24 @@ impl Client {
     /// the offer is gone, the type is missing, or the data does not
     /// arrive within the timeout.
     pub(crate) fn receive(&self, id: ObjectId, mime: &str) -> Option<Vec<u8>> {
-        {
-            let data = self.data.borrow();
-            let offer = data.offers.get(&id)?;
-            if data.machine.read(mime).is_err() && data.selection == Some(id) {
-                return None;
-            }
-            let (read_end, write_end) = libc::pipe().ok()?;
-            offer
-                .proxy
-                .request(
-                    OFFER_RECEIVE,
-                    &[Arg::Str(Some(mime)), Arg::Fd(write_end.as_fd())],
-                )
-                .ok()?;
-            drop(write_end);
-            drop(data);
-            self.flush();
-            return read_all(&read_end);
+        let data = self.data.borrow();
+        let offer = data.offers.get(&id)?;
+        if data.machine.read(mime).is_err() && data.selection == Some(id) {
+            return None;
         }
+        let (read_end, write_end) = libc::pipe().ok()?;
+        offer
+            .proxy
+            .request(
+                OFFER_RECEIVE,
+                &[Arg::Str(Some(mime)), Arg::Fd(write_end.as_fd())],
+            )
+            .ok()?;
+        // The other client holds its own copy of the write end now.
+        drop(write_end);
+        drop(data);
+        self.flush();
+        read_all(&read_end)
     }
 
     fn create_source(&self, mimes: &[String], allowed: Option<u32>) -> Result<Proxy, Error> {
