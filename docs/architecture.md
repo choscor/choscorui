@@ -36,7 +36,7 @@ The facade also has `App`, the view-based entry point, on every target. `App` op
 
 The rest of the facade (`App`, `Scene`, `AppContext`) is the same code on every target.
 
-**Portable descriptions.** The descriptions that an application gives are platform-independent data in `choscorui-core`. They are `WindowOptions`, the menu model (`MenuBarModel`, `MenuSpec`, `MenuEntry`), and the service requests (`SystemNotification`, `StatusItemSpec`, `FileDialogRequest`). `Services` checks the capability before it calls the `ServiceBackend` of the backend. It returns `ServiceError` when the backend does not have the service. `choscorui-compose` lowers `CommandMenu` views to the menu model, with a generated id for each row. A backend maps the descriptions to native objects through its FFI.
+**Portable descriptions.** The descriptions that an application gives are platform-independent data in `choscorui-core`. They are `WindowOptions`, the menu model (`MenuBarModel`, `MenuSpec`, `MenuEntry`), the service requests (`SystemNotification`, `StatusItemSpec`, `FileDialogRequest`), and the alert contract (`AlertSpec`, `AlertResponse`, `DialogError`). `Services` checks the capability before it calls the `ServiceBackend` of the backend. It returns `ServiceError` when the backend does not have the service. `choscorui-compose` lowers `CommandMenu` views to the menu model, with a generated id for each row. A backend maps the descriptions to native objects through its FFI.
 
 The crate root also re-exports a set of common types directly, and the aliases `Node` (for `NodeId`) and `Theme` (for `DesignTokens`).
 
