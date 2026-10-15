@@ -1,4 +1,5 @@
-//! Click counting and scroll conversion, for both display servers.
+//! Click counting, scroll conversion, and pinch conversion, for both
+//! display servers.
 
 use choscorui_core::{Point, PointerButton};
 use std::time::{Duration, Instant};
@@ -43,6 +44,42 @@ impl ClickCounter {
     }
 }
 
+/// Converts the cumulative scale of a touchpad pinch into the scale
+/// change of each event. `GestureEvent::Magnify` carries the change since
+/// the previous event, as on macOS, where it is one plus the AppKit
+/// magnification. The Wayland pinch reports the scale since the start of
+/// the gesture.
+#[derive(Default)]
+pub(crate) struct PinchScale {
+    /// The cumulative scale of the previous event, while a pinch is active.
+    last: Option<f64>,
+}
+
+impl PinchScale {
+    /// Starts a pinch at scale 1.
+    pub(crate) fn begin(&mut self) {
+        self.last = Some(1.0);
+    }
+
+    /// The scale change of an update with the cumulative `scale`. Returns
+    /// `None` outside a pinch, for an invalid scale, and when the scale
+    /// did not change.
+    pub(crate) fn update(&mut self, scale: f64) -> Option<f64> {
+        let last = self.last?;
+        if !scale.is_finite() || scale <= 0.0 {
+            return None;
+        }
+        self.last = Some(scale);
+        let change = scale / last;
+        (change.is_finite() && change != 1.0).then_some(change)
+    }
+
+    /// Ends or cancels the pinch. The changes already sent stay.
+    pub(crate) fn end(&mut self) {
+        self.last = None;
+    }
+}
+
 /// The core button of a Linux input button code (`BTN_*`).
 pub(crate) fn button(code: u32) -> PointerButton {
     match code {
@@ -73,6 +110,35 @@ mod tests {
         let late = soon + Duration::from_secs(1);
         assert_eq!(counter.press(late, far, PointerButton::Primary), 1);
         assert_eq!(counter.press(late, far, PointerButton::Secondary), 1);
+    }
+
+    #[test]
+    fn pinch_scales_become_changes_since_the_previous_event() {
+        let mut pinch = PinchScale::default();
+        assert_eq!(pinch.update(1.5), None, "no pinch is active");
+        pinch.begin();
+        assert_eq!(pinch.update(1.25), Some(1.25));
+        assert_eq!(pinch.update(1.25), None, "the scale did not change");
+        assert_eq!(pinch.update(2.5), Some(2.0));
+        assert_eq!(pinch.update(1.25), Some(0.5));
+        assert_eq!(pinch.update(0.0), None);
+        assert_eq!(pinch.update(f64::NAN), None);
+        assert_eq!(pinch.update(0.625), Some(0.5));
+        pinch.end();
+        assert_eq!(pinch.update(2.0), None, "the pinch ended");
+    }
+
+    #[test]
+    fn pinch_changes_multiply_to_the_cumulative_scale() {
+        let mut pinch = PinchScale::default();
+        pinch.begin();
+        let total: f64 = [1.1, 1.3, 0.9, 1.7]
+            .into_iter()
+            .filter_map(|scale| pinch.update(scale))
+            .product();
+        assert!((total - 1.7).abs() < 1e-12);
+        pinch.begin();
+        assert_eq!(pinch.update(0.5), Some(0.5), "a new pinch starts at 1");
     }
 
     #[test]

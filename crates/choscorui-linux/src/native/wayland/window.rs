@@ -787,7 +787,7 @@ impl WaylandWindow {
         let size = self.shared.size.get();
         let origin = self.shared.origin();
         let scale = (self.scale(), origin);
-        let result = device.paint_window(window, &list, scale, (width, height), region, || {
+        let result = device.paint_window_at(window, &list, scale, (width, height), region, || {
             self.frame_requests(client, &mut self.inner.borrow_mut(), size)
         });
         drop(slot);

@@ -128,7 +128,7 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-linux
 
-`choscorui-linux` is the Linux backend. It is in development; [platform-linux.md](platform-linux.md) lists what works. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. These compile on every host. On Linux, it also has the native backend: `Application`, `Window`, and `Poster` on Wayland, the image codecs, and the AT-SPI accessibility bridge. It loads each system library at run time with `dlopen`. All of its `unsafe` code is in `src/ffi/`.
+`choscorui-linux` is the Linux backend; [platform-linux.md](platform-linux.md) describes it. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. These compile on every host. On Linux, it also has the native backend. That is `Application`, `Window`, and `Poster` on Wayland and X11, and the painters and the text system. It also has the image codecs, the desktop services, and the AT-SPI accessibility bridge. It loads each system library at run time with `dlopen`. All of its `unsafe` code is in `src/ffi/`.
 
 Dependencies: `choscorui-core` only.
 

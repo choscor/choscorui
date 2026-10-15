@@ -14,14 +14,16 @@ pub(crate) use data::Contents;
 pub(crate) use window::WaylandWindow;
 
 use super::keyboard::{Keyboard, RepeatInfo};
-use super::pointer::{self, ClickCounter};
+use super::pointer::{self, ClickCounter, PinchScale};
 use super::types::{Error, Modifiers, WindowEvent};
 use crate::ffi::libc::{self, Ready, Watch};
 use crate::ffi::wayland::sys::Interface;
 use crate::ffi::wayland::{self as wl, Arg, Connection, Event, ObjectId, Proxy};
 use crate::gles;
 use crate::{InputEvent, LinuxInput, WaylandConnection, WaylandGlobal};
-use choscorui_core::{CursorShape, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit};
+use choscorui_core::{
+    CursorShape, GestureEvent, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit,
+};
 use shm::Buffers;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -35,6 +37,7 @@ pub(crate) enum Role {
     WmBase,
     Seat,
     Pointer,
+    Pinch,
     Keyboard,
     Output,
     XdgOutput(ObjectId),
@@ -111,6 +114,9 @@ struct Axis {
 
 struct Seat {
     pointer: Option<Proxy>,
+    /// The pinch gesture of `pointer`, with `zwp_pointer_gestures_v1`.
+    pinch: Option<Proxy>,
+    pinch_scale: PinchScale,
     keyboard_proxy: Option<Proxy>,
     input: LinuxInput,
     keyboard: Keyboard,
@@ -189,6 +195,10 @@ const POINTER_FRAME: u16 = 5;
 const POINTER_AXIS_DISCRETE: u16 = 8;
 const POINTER_AXIS_VALUE120: u16 = 9;
 const POINTER_SET_CURSOR: u16 = 0;
+const POINTER_GESTURES_GET_PINCH: u16 = 1;
+const PINCH_BEGIN: u16 = 0;
+const PINCH_UPDATE: u16 = 1;
+const PINCH_END: u16 = 2;
 const BELL_RING: u16 = 1;
 const SURFACE_ATTACH: u16 = 1;
 const SURFACE_DAMAGE: u16 = 2;
@@ -296,6 +306,8 @@ impl Client {
             outputs: RefCell::new(Vec::new()),
             seat: RefCell::new(Seat {
                 pointer: None,
+                pinch: None,
+                pinch_scale: PinchScale::default(),
                 keyboard_proxy: None,
                 input: LinuxInput::new(),
                 keyboard: Keyboard::new().map_err(Error::Library)?,
@@ -939,6 +951,7 @@ impl Client {
                 self.seat_capabilities(event.arg(0).uint());
             }
             Role::Pointer => self.pointer_event(&event),
+            Role::Pinch => self.pinch_event(&event),
             Role::Keyboard => self.keyboard_event(&mut event),
             Role::Output => self.output_event(&event),
             Role::DataDevice => self.data_device_event(&mut event),
@@ -1092,7 +1105,26 @@ impl Client {
             if let Some(proxy) = &seat.pointer {
                 routes.insert(proxy.id(), Role::Pointer);
             }
+            seat.pinch = globals
+                .pointer_gestures
+                .as_ref()
+                .zip(seat.pointer.as_ref())
+                .and_then(|(gestures, pointer)| {
+                    gestures
+                        .request(
+                            POINTER_GESTURES_GET_PINCH,
+                            &[Arg::NewId, Arg::Object(Some(pointer))],
+                        )
+                        .ok()
+                        .flatten()
+                });
+            if let Some(proxy) = &seat.pinch {
+                routes.insert(proxy.id(), Role::Pinch);
+            }
         } else if !pointer {
+            // The pinch belongs to the pointer, so it goes first.
+            seat.pinch = None;
+            seat.pinch_scale.end();
             seat.cursor_device = None;
             seat.pointer = None;
             seat.pointer_focus = None;
@@ -1294,6 +1326,37 @@ impl Client {
         }
     }
 
+    /// Sends a touchpad pinch as `GestureEvent::Magnify` about the
+    /// pointer. Each event carries the scale change since the previous
+    /// one, as on macOS.
+    fn pinch_event(&self, event: &Event) {
+        let (scale, position) = {
+            let mut seat = self.seat.borrow_mut();
+            match event.opcode {
+                PINCH_BEGIN => {
+                    seat.pinch_scale.begin();
+                    return;
+                }
+                PINCH_UPDATE => (seat.pinch_scale.update(event.arg(3).fixed()), seat.position),
+                PINCH_END => {
+                    seat.pinch_scale.end();
+                    return;
+                }
+                _ => return,
+            }
+        };
+        let Some(scale) = scale else {
+            return;
+        };
+        let modifiers = self.modifiers();
+        if let Some(window) = self.pointer_window() {
+            window.shared.push(WindowEvent::Gesture {
+                event: GestureEvent::Magnify { position, scale },
+                modifiers,
+            });
+        }
+    }
+
     /// Sends the scroll of a pointer frame: lines for wheel detents,
     /// points for smooth scrolling. Positive deltas scroll down and
     /// right, as on macOS.
@@ -1448,6 +1511,97 @@ fn fill_surface(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Needs a compositor with `zwp_pointer_gestures_v1`: it runs only
+    /// with `CHOSCORUI_RUN_LINUX_SMOKE=1` in
+    /// `scripts/linux/headless-session.sh`. The virtual pointer of the
+    /// session cannot pinch, so the test feeds pinch events to the client
+    /// through the route of the seat's pinch object.
+    #[test]
+    fn wayland_session_pinch_becomes_magnify_gestures() {
+        if std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_err()
+            || std::env::var_os("WAYLAND_DISPLAY").is_none()
+        {
+            return;
+        }
+        let client = Client::connect().unwrap();
+        let pinch = client
+            .seat
+            .borrow()
+            .pinch
+            .as_ref()
+            .map(Proxy::id)
+            .expect("the seat pointer has a pinch gesture");
+        let shared = super::super::window::WindowShared::new(
+            "pinch",
+            Size::new(200.0, 100.0),
+            Size::new(0.0, 0.0),
+            super::super::types::Painter::Cairo,
+        );
+        let window = client
+            .create_window(shared, "org.choscorui.PinchTest")
+            .unwrap();
+        {
+            let mut seat = client.seat.borrow_mut();
+            seat.pointer_focus = Some(Rc::downgrade(&window));
+            seat.position = Point::new(40.0, 30.0);
+        }
+        let surface = window.surface.id();
+        let update = |scale| Event {
+            object: pinch,
+            opcode: PINCH_UPDATE,
+            args: vec![
+                wl::Value::Uint(0),
+                wl::Value::Fixed(0.0),
+                wl::Value::Fixed(0.0),
+                wl::Value::Fixed(scale),
+                wl::Value::Fixed(0.0),
+            ],
+        };
+        client.handle(Event {
+            object: pinch,
+            opcode: PINCH_BEGIN,
+            args: vec![
+                wl::Value::Uint(1),
+                wl::Value::Uint(0),
+                wl::Value::Object(Some(surface)),
+                wl::Value::Uint(2),
+            ],
+        });
+        client.handle(update(1.5));
+        client.handle(update(0.75));
+        client.handle(Event {
+            object: pinch,
+            opcode: PINCH_END,
+            args: vec![wl::Value::Uint(2), wl::Value::Uint(0), wl::Value::Int(0)],
+        });
+        // An update after the end belongs to no pinch.
+        client.handle(update(2.0));
+        let gestures: Vec<GestureEvent> = window
+            .shared
+            .events
+            .borrow_mut()
+            .drain(..)
+            .filter_map(|event| match event {
+                WindowEvent::Gesture { event, .. } => Some(event),
+                _ => None,
+            })
+            .collect();
+        let position = Point::new(40.0, 30.0);
+        assert_eq!(
+            gestures,
+            [
+                GestureEvent::Magnify {
+                    position,
+                    scale: 1.5
+                },
+                GestureEvent::Magnify {
+                    position,
+                    scale: 0.5
+                },
+            ]
+        );
+    }
 
     /// Needs a compositor: it runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1`
     /// in `scripts/linux/headless-session.sh`.

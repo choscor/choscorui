@@ -52,7 +52,7 @@ pub trait NativeAccess {
     /// window `id`. It runs a nested event loop until the popup closes.
     /// Returns the chosen command, which also waits in the menu's
     /// `take_activations`. Returns None when the user dismisses the
-    /// menu, or when the display server cannot show popups (X11).
+    /// menu, or when the popup does not open.
     fn show_context_menu(
         &mut self,
         id: WindowId,
@@ -186,6 +186,9 @@ impl Platform {
             services.set_clipboard(Some(Box::new(Selection(application.clipboard()))));
         }
         services.open_launch_arguments(std::env::args_os().skip(1));
+        // `system-ui` is the desktop interface font, when the portal
+        // reports one.
+        services.update_desktop_font();
         if let Some(bus) = services.connection() {
             application.attach_bus(bus.clone());
         }
@@ -285,6 +288,7 @@ impl Platform {
             std::thread::sleep(timeout);
         }
         self.services.set_active(self.application.is_active());
+        self.services.update_desktop_font();
         self.services
             .set_has_visible_windows(self.application.has_visible_windows());
         // Portal dialogs open over the focused window.

@@ -9,8 +9,9 @@ mod support;
 use choscorui_core::{
     Condition, DesktopEvent, FileDialogKind, FileDialogRequest, MenuCommandId, MenuEntry,
     MenuItemState, MenuSpec, Service, ServiceBackend, ServiceError, StatusItemSpec, Support,
-    SystemNotification, user_settings_path,
+    SystemNotification, TextShaper, TextStyle, user_settings_path,
 };
+use choscorui_linux::LinuxTextShaper;
 use choscorui_linux::dbus::{Connection, Error, Message, Value};
 use choscorui_linux::services::{
     FileDialogResponse, NativeServices, NotificationRoute, ServiceOptions,
@@ -359,6 +360,54 @@ fn the_appearance_follows_the_portal_settings() {
     });
     assert!(services.take_appearance_changed());
     assert!(!services.take_appearance_changed());
+}
+
+/// True when `system-ui` gives "iiii" and "WWWW" the same width, as a
+/// monospace family does.
+fn system_ui_is_monospace() -> bool {
+    let style = TextStyle::new("system-ui", 12.0);
+    let width = |text| {
+        LinuxTextShaper
+            .shape(text, &style, None)
+            .unwrap()
+            .size()
+            .width
+    };
+    (width("iiii") - width("WWWW")).abs() < 1e-6
+}
+
+#[test]
+fn system_ui_follows_the_desktop_font_name() {
+    let bus = TestBus::start();
+    let mut settings = settings();
+    settings.retain(|(_, key, _)| key != "font-name");
+    settings.push((
+        "org.gnome.desktop.interface".into(),
+        "font-name".into(),
+        Value::from("Liberation Mono 11"),
+    ));
+    let portal = FakePortal::start(
+        bus.address(),
+        PortalScript {
+            settings: Some(settings),
+            ..PortalScript::default()
+        },
+    );
+    let services = services(&bus, false);
+    assert!(services.update_desktop_font());
+    assert!(!services.update_desktop_font(), "the font did not change");
+    assert!(system_ui_is_monospace());
+
+    portal.change_setting(
+        "org.gnome.desktop.interface",
+        "font-name",
+        Value::from("DejaVu Sans Bold 10"),
+    );
+    let connection = services.connection().unwrap();
+    pump_until(&[connection], || {
+        services.update_desktop_font().then_some(())
+    });
+    assert!(!system_ui_is_monospace());
 }
 
 #[test]

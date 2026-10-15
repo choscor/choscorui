@@ -1,5 +1,5 @@
-//! The declarations of libX11 for XIM, and a safe input method on its
-//! own Xlib connection.
+//! The declarations of libX11 for XIM, a safe input method on its own
+//! Xlib connection, and the Xlib connection of the EGL display.
 //!
 //! The X11 backend reads its events through xcb. XIM needs Xlib: the
 //! input method protocol and its text conversions live there. So the
@@ -118,6 +118,7 @@ libraries! {
             fn XOpenDisplay(name: *const CChar) -> *mut XDisplay;
             fn XCloseDisplay(display: *mut XDisplay) -> CInt;
             fn XConnectionNumber(display: *mut XDisplay) -> CInt;
+            fn XDefaultScreen(display: *mut XDisplay) -> CInt;
             fn XPending(display: *mut XDisplay) -> CInt;
             fn XNextEvent(display: *mut XDisplay, event: *mut XEvent) -> CInt;
             fn XFlush(display: *mut XDisplay) -> CInt;
@@ -307,6 +308,41 @@ callback! {
     fn preedit_caret(_ic: *mut XicRec, _client_data: *mut CChar, _data: *mut CChar)
         [boundary "XIM preedit caret", fallback ()]
     {
+    }
+}
+
+/// An Xlib connection of its own to the server of `DISPLAY`, for the
+/// EGL display when EGL has no XCB platform.
+pub(crate) struct XlibDisplay {
+    lib: &'static Xlib,
+    raw: *mut XDisplay,
+}
+
+impl XlibDisplay {
+    /// Opens the connection. Returns None without libX11 or when the
+    /// server refuses.
+    pub(crate) fn open() -> Option<Self> {
+        let lib = Xlib::get().ok()?;
+        // SAFETY: null opens the display of `DISPLAY`.
+        let raw = unsafe { (lib.XOpenDisplay)(std::ptr::null()) };
+        (!raw.is_null()).then_some(Self { lib, raw })
+    }
+
+    pub(in crate::ffi) fn raw(&self) -> *mut XDisplay {
+        self.raw
+    }
+
+    /// The number of the default screen.
+    pub(in crate::ffi) fn default_screen(&self) -> CInt {
+        // SAFETY: the display is open.
+        unsafe { (self.lib.XDefaultScreen)(self.raw) }
+    }
+}
+
+impl Drop for XlibDisplay {
+    fn drop(&mut self) {
+        // SAFETY: this is the only close of the display.
+        unsafe { (self.lib.XCloseDisplay)(self.raw) };
     }
 }
 

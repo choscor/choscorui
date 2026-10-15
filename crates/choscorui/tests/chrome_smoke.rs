@@ -2,15 +2,17 @@
 //! keyboard and pointer of `scripts/linux/headless-session.sh`: the
 //! in-window menu bar, its shortcuts and keys, a context menu in a popup,
 //! and, with `CHOSCORUI_DECORATIONS=client`, the title bar and the frame
-//! around the content. It runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1` on
-//! Wayland.
+//! around the content. On X11, XTEST drives the pointer cases of the
+//! context menu. It runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1`.
 
 #[cfg(target_os = "linux")]
 fn main() {
-    if std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_ok_and(|value| value == "1")
-        && choscorui::capabilities().backend == "wayland"
-    {
-        smoke::run();
+    if std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_ok_and(|value| value == "1") {
+        match choscorui::capabilities().backend {
+            "wayland" => smoke::run(),
+            "x11" => smoke::run_x11(),
+            _ => return,
+        }
         println!("chrome smoke: ok");
     }
 }
@@ -20,8 +22,11 @@ fn main() {}
 
 #[cfg(target_os = "linux")]
 mod smoke {
-    use choscorui::core::{MenuCommandId, MenuEntry, MenuItemState, MenuSpec, Point, Rect};
-    use choscorui::platform::{ContextMenu, NativeAccess};
+    use choscorui::controls::{ControlKind, Slot, StyleQuery, Styles};
+    use choscorui::core::{
+        DesignTokens, MenuCommandId, MenuEntry, MenuItemState, MenuSpec, Point, Rect,
+    };
+    use choscorui::platform::{ContextMenu, NativeAccess, Timer};
     use choscorui::prelude::*;
     use std::process::Command;
     use std::time::{Duration, Instant};
@@ -176,6 +181,81 @@ mod smoke {
             running.show_context_menu(window, &long, at),
             Some(MenuCommandId(60))
         );
+    }
+
+    /// The context menu on X11. Xvfb runs no window manager, and XTEST
+    /// has no virtual keyboard here, so the pointer chooses the row.
+    pub fn run_x11() {
+        let app = App::new();
+        let mut running = app
+            .window(WindowOptions::new("Chrome", 400.0, 300.0), || {
+                Text::new("content")
+            })
+            .start()
+            .expect("the app must start");
+        let window = running.windows()[0];
+        pump_until(&mut running, |running| {
+            running.native_window(window).unwrap().is_visible()
+        });
+        pump(&mut running, Duration::from_millis(300));
+        let origin = running
+            .native_window(window)
+            .unwrap()
+            .geometry()
+            .frame
+            .origin;
+        let command =
+            |id, title: &str| MenuEntry::command(MenuCommandId(id), MenuItemState::new(title));
+        let menu = ContextMenu::new(MenuSpec::new(
+            "Edit",
+            vec![command(1, "Alpha"), command(2, "Beta")],
+        ))
+        .unwrap();
+        let at = Point::new(50.0, 80.0);
+        // The popup opens below the point. The second row starts after
+        // the panel inset and the first row of the `Menu` recipe.
+        let styles = Styles::new();
+        let tokens = DesignTokens::light();
+        let style = |slot| styles.resolve(&tokens, StyleQuery::new(ControlKind::Menu, slot));
+        let (item, panel) = (style(Slot::Item), style(Slot::Root));
+        let row = item
+            .min_height
+            .max(item.text.line_height + item.padding.vertical());
+        let beta = Point::new(
+            origin.x + at.x + 20.0,
+            origin.y + at.y + 1.0 + panel.padding.block_start + row * 1.5,
+        );
+
+        // A click on the second row chooses it.
+        let input = click_later(&running, beta);
+        let chosen = running.show_context_menu(window, &menu, at);
+        drop(input);
+        assert_eq!(chosen, Some(MenuCommandId(2)));
+        assert_eq!(menu.take_activations(), vec![MenuCommandId(2)]);
+
+        // A click outside the popup closes it without a choice.
+        let input = click_later(&running, Point::new(1000.0, 700.0));
+        assert_eq!(running.show_context_menu(window, &menu, at), None);
+        drop(input);
+        assert!(menu.take_activations().is_empty());
+        assert!(running.pump(), "the window stays open");
+    }
+
+    /// Clicks at `point` on the screen through XTEST after the popup
+    /// opens. A hidden window at the screen origin sends the input, so
+    /// its content points are screen points. The returned timer must
+    /// live until the click.
+    fn click_later(running: &AppContext, point: Point) -> Timer {
+        let application = running.native_application();
+        let sender = application
+            .create_window(WindowOptions::new("Input", 10.0, 10.0))
+            .unwrap();
+        application
+            .schedule_once(Duration::from_millis(500), move || {
+                sender.simulate_pointer(point, Some(true)).unwrap();
+                sender.simulate_pointer(point, Some(false)).unwrap();
+            })
+            .unwrap()
     }
 
     /// The drawn title bar moves the window and closes it. The frame
