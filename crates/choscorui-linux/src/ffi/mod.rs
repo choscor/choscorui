@@ -19,8 +19,10 @@ pub(crate) mod codecs;
 mod ctype;
 mod ctypes;
 pub(crate) mod dl;
+pub(crate) mod egl;
 pub(crate) mod fontconfig;
 pub(crate) mod freetype;
+pub(crate) mod gles;
 pub(crate) mod harfbuzz;
 pub(crate) mod libc;
 pub(crate) mod wayland;
@@ -51,6 +53,10 @@ pub(crate) fn declarations() -> (
         harfbuzz::HarfBuzz::check_items(),
         fontconfig::Fontconfig::check_items(),
         cairo::sys::Cairo::check_items(),
+        egl::Egl::check_items(),
+        egl::EglExtensions::check_items(),
+        egl::WaylandEgl::check_items(),
+        gles::GlesV2::check_items(),
     ];
     libraries.extend(codecs::check_items());
     let mut structs = vec![
@@ -82,6 +88,8 @@ pub(crate) fn declarations() -> (
         fontconfig::FcResult::constants(),
         fontconfig::FcMatchKind::constants(),
         cairo::sys::constants(),
+        egl::constants(),
+        gles::constants(),
     ]
     .into_iter()
     .flatten()
