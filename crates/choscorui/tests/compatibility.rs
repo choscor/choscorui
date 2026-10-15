@@ -687,15 +687,17 @@ fn hosted_controls() {
     for (name, control) in hosted_variants() {
         controls.push((name, control, &[LayoutDirection::Ltr]));
     }
+    // The drawn file dialog lists the fixed directory of the catalog.
+    let both: &[LayoutDirection] = &[LayoutDirection::Ltr, LayoutDirection::Rtl];
+    controls.push(("file-dialog".to_owned(), builtin("file-dialog"), both));
     for (name, control, directions) in controls {
         let mut control = Some(control);
         for direction in directions {
             let control = control.take().unwrap_or_else(|| {
-                let (_, factory) = catalog::catalog()
+                catalog::catalog()
                     .into_iter()
                     .find(|(id, _)| *id == name)
-                    .unwrap();
-                factory()
+                    .map_or_else(|| builtin(&name), |(_, factory)| factory())
             });
             let (tree, host, node) = mount_hosted(|_| control, &themes, &styles, *direction);
             writeln!(out, "# {name} {direction:?}").unwrap();
@@ -712,6 +714,15 @@ fn hosted_controls() {
         }
     }
     golden("hosted_controls", &out);
+}
+
+/// The built-in control `name` of the catalog.
+fn builtin(name: &str) -> Box<dyn CustomControl> {
+    let (_, factory) = catalog::builtins()
+        .into_iter()
+        .find(|(id, _)| *id == name)
+        .unwrap();
+    factory(&mut Tree::new(rect(0.0, 0.0, 800.0, 600.0)))
 }
 
 /// Tab moves through every hosted control in tree order, and through the

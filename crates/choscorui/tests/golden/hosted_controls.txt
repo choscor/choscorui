@@ -1623,3 +1623,76 @@ PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, he
 FillRoundedRect { rect: Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 32.0, height: 32.0 } }, radius: 9999.0, color: Color { red: 245, green: 245, blue: 245, alpha: 255 } }
 DrawText { baseline: Point { x: 18.299999999999997, y: 30.9 }, text: "AL", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
 PopClip
+# file-dialog Ltr
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 560.0, height: 420.0 } }
+semantics SemanticNode { role: Dialog, name: "Open File", description: "", value: None, state: SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false }, relations: [], actions: [Dismiss, Focus], text: None }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 560.0, height: 420.0 } })
+DrawText { baseline: Point { x: 26.0, y: 39.6 }, text: "Open File", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 37.333333333333336, y: 72.0 }), LineTo(Point { x: 42.0, y: 67.33333333333333 }), LineTo(Point { x: 46.666666666666664, y: 72.0 })] }, paint: Solid(Color { red: 10, green: 10, blue: 10, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 42.0, y: 76.66666666666667 }), LineTo(Point { x: 42.0, y: 67.33333333333333 })] }, paint: Solid(Color { red: 10, green: 10, blue: 10, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawShadow { rect: Rect { origin: Point { x: 66.0, y: 54.0 }, size: Size { width: 488.0, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 66.5, y: 54.5 }, size: Size { width: 487.0, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+PushClip(Rect { origin: Point { x: 76.0, y: 58.0 }, size: Size { width: 468.0, height: 28.0 } })
+DrawText { baseline: Point { x: 76.0, y: 76.9 }, text: "../choscorui-controls/tests/catalog/files", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 102.5 }, size: Size { width: 527.0, height: 215.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+PushClip(Rect { origin: Point { x: 30.0, y: 106.0 }, size: Size { width: 520.0, height: 208.0 } })
+StrokePath { path: Path { elements: [MoveTo(Point { x: 532.0, y: 126.0 }), LineTo(Point { x: 536.0, y: 122.0 }), LineTo(Point { x: 532.0, y: 118.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawText { baseline: Point { x: 38.0, y: 126.9 }, text: "Documents", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 511.2, y: 158.9 }, text: "15 B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+DrawText { baseline: Point { x: 38.0, y: 158.9 }, text: "readme.txt", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 511.2, y: 190.9 }, text: "26 B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+DrawText { baseline: Point { x: 38.0, y: 190.9 }, text: "report.md", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 330.0 }, size: Size { width: 126.70000000000002, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 330.5 }, size: Size { width: 125.70000000000002, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 36.0, y: 352.9 }, text: "*.txt, *.md", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 130.70000000000002, y: 346.0 }), LineTo(Point { x: 134.70000000000002, y: 350.0 }), LineTo(Point { x: 138.70000000000002, y: 346.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawShadow { rect: Rect { origin: Point { x: 164.70000000000002, y: 340.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 4.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 165.20000000000002, y: 340.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 188.70000000000002, y: 352.9 }, text: "Show hidden files", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawShadow { rect: Rect { origin: Point { x: 429.0, y: 378.0 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+FillRoundedRect { rect: Rect { origin: Point { x: 429.0, y: 378.0 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 429.5, y: 378.5 }, size: Size { width: 65.2, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 439.0, y: 400.9 }, text: "Cancel", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PushOpacity(0.5)
+FillRoundedRect { rect: Rect { origin: Point { x: 503.2, y: 378.0 }, size: Size { width: 50.800000000000004, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 513.2, y: 400.9 }, text: "Open", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+PopOpacity
+PopClip
+# file-dialog Rtl
+bounds Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 560.0, height: 420.0 } }
+PushClip(Rect { origin: Point { x: 10.0, y: 10.0 }, size: Size { width: 560.0, height: 420.0 } })
+DrawText { baseline: Point { x: 474.8, y: 39.6 }, text: "Open File", font_family: "system-ui", font_size: 16.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 533.3333333333334, y: 72.0 }), LineTo(Point { x: 538.0, y: 67.33333333333333 }), LineTo(Point { x: 542.6666666666666, y: 72.0 })] }, paint: Solid(Color { red: 10, green: 10, blue: 10, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 538.0, y: 76.66666666666667 }), LineTo(Point { x: 538.0, y: 67.33333333333333 })] }, paint: Solid(Color { red: 10, green: 10, blue: 10, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawShadow { rect: Rect { origin: Point { x: 26.0, y: 54.0 }, size: Size { width: 488.0, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 54.5 }, size: Size { width: 487.0, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+PushClip(Rect { origin: Point { x: 36.0, y: 58.0 }, size: Size { width: 468.0, height: 28.0 } })
+DrawText { baseline: Point { x: 188.29999999999995, y: 76.9 }, text: "../choscorui-controls/tests/catalog/files", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+StrokeRoundedRect { rect: Rect { origin: Point { x: 26.5, y: 102.5 }, size: Size { width: 527.0, height: 215.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+PushClip(Rect { origin: Point { x: 30.0, y: 106.0 }, size: Size { width: 520.0, height: 208.0 } })
+StrokePath { path: Path { elements: [MoveTo(Point { x: 48.0, y: 126.0 }), LineTo(Point { x: 44.0, y: 122.0 }), LineTo(Point { x: 48.0, y: 118.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawText { baseline: Point { x: 472.7, y: 126.9 }, text: "Documents", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 38.0, y: 158.9 }, text: "15 B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+DrawText { baseline: Point { x: 465.0, y: 158.9 }, text: "readme.txt", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawText { baseline: Point { x: 38.0, y: 190.9 }, text: "26 B", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+DrawText { baseline: Point { x: 472.7, y: 190.9 }, text: "report.md", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PopClip
+DrawShadow { rect: Rect { origin: Point { x: 427.29999999999995, y: 330.0 }, size: Size { width: 126.70000000000002, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 427.79999999999995, y: 330.5 }, size: Size { width: 125.70000000000002, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 459.29999999999995, y: 352.9 }, text: "*.txt, *.md", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+StrokePath { path: Path { elements: [MoveTo(Point { x: 441.29999999999995, y: 346.0 }), LineTo(Point { x: 445.29999999999995, y: 350.0 }), LineTo(Point { x: 449.29999999999995, y: 346.0 })] }, paint: Solid(Color { red: 115, green: 115, blue: 115, alpha: 255 }), style: StrokeStyle { width: 1.3333333333333333, cap: Round, join: Round, dash: [] } }
+DrawShadow { rect: Rect { origin: Point { x: 399.29999999999995, y: 340.0 }, size: Size { width: 16.0, height: 16.0 } }, radius: 4.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 399.79999999999995, y: 340.5 }, size: Size { width: 15.0, height: 15.0 } }, radius: 3.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 260.4, y: 352.9 }, text: "Show hidden files", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+DrawShadow { rect: Rect { origin: Point { x: 84.80000000000001, y: 378.0 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, shadow: Shadow { offset: Point { x: 0.0, y: 1.0 }, blur: 2.0, spread: 0.0, color: Color { red: 0, green: 0, blue: 0, alpha: 13 }, inset: false } }
+FillRoundedRect { rect: Rect { origin: Point { x: 84.80000000000001, y: 378.0 }, size: Size { width: 66.2, height: 36.0 } }, radius: 8.0, color: Color { red: 255, green: 255, blue: 255, alpha: 255 } }
+StrokeRoundedRect { rect: Rect { origin: Point { x: 85.30000000000001, y: 378.5 }, size: Size { width: 65.2, height: 35.0 } }, radius: 7.5, color: Color { red: 229, green: 229, blue: 229, alpha: 255 }, width: 1.0 }
+DrawText { baseline: Point { x: 94.80000000000001, y: 400.9 }, text: "Cancel", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+PushOpacity(0.5)
+FillRoundedRect { rect: Rect { origin: Point { x: 26.0, y: 378.0 }, size: Size { width: 50.800000000000004, height: 36.0 } }, radius: 8.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+DrawText { baseline: Point { x: 36.0, y: 400.9 }, text: "Open", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 250, green: 250, blue: 250, alpha: 255 } }
+PopOpacity
+PopClip

@@ -2826,6 +2826,9 @@ lists one directory of a core `FileSystemModel`.
   like. Only the rows in view paint.
 - Right-to-left layouts mirror the layout. The directory rows show a
   chevron that points in the reading direction.
+- The `hosted_controls.txt` golden file pins the display list of an
+  open dialog over the `files` directory of the catalog, in both
+  directions.
 
 | Part | Kind and slot | Value |
 | --- | --- | --- |
