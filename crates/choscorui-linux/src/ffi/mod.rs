@@ -11,6 +11,7 @@
 mod macros;
 
 pub(crate) mod cairo;
+pub(crate) mod canberra;
 
 #[cfg(test)]
 mod checks;
@@ -54,6 +55,7 @@ pub(crate) fn declarations() -> (
         harfbuzz::HarfBuzz::check_items(),
         fontconfig::Fontconfig::check_items(),
         cairo::sys::Cairo::check_items(),
+        canberra::Canberra::check_items(),
         db::DBusLib::check_items(),
     ];
     libraries.extend(codecs::check_items());
