@@ -24,7 +24,7 @@ The release gallery links only `libc`, `libm`, and `libgcc_s` (`ldd target/relea
 | libEGL, libGLESv2, libwayland-egl | `libEGL.so.1`, `libGLESv2.so.2`, `libwayland-egl.so.1` | The [GLES painter](#painters). X11 does not use libwayland-egl. | Windows paint with Cairo |
 | libwayland-cursor | `libwayland-cursor.so.0` | Xcursor themes on Wayland | Without `wp_cursor_shape_v1`, only custom cursor images show |
 | libxkbcommon-x11 | `libxkbcommon-x11.so.0` | The X11 keymap from XKB | The X11 keyboard has no keymap |
-| libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-randr, libxcb-render, libxcb-cursor | `.so.1` for xcb-xkb, `.so.0` for the others | The [X11 extensions](#x11-extensions) | The client uses the fallback of each extension |
+| libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-present, libxcb-randr, libxcb-render, libxcb-cursor | `.so.1` for xcb-xkb, `.so.0` for the others | The [X11 extensions](#x11-extensions) | The client uses the fallback of each extension |
 | libX11 | `libX11.so.6` | XIM input methods, and the EGL display on X11 without `EGL_EXT_platform_xcb` | No input method on X11 |
 | libxcb-xtest | `libxcb-xtest.so.0` | `Window::simulate_pointer`, for tests | The call returns `Error::Library` |
 | libdbus-1 | `libdbus-1.so.3` | [Desktop services](#desktop-integration) and [accessibility](#accessibility) | No D-Bus services and no AT-SPI bridge |
@@ -59,8 +59,9 @@ The X11 client needs only the core protocol. It uses these extensions when the s
 | Extension | Use | Without it |
 | --- | --- | --- |
 | XKB | The keymap, the modifier state, detectable auto-repeat, and the bell | No keymap and no XKB bell |
-| XInput 2.2 | Pointer events and smooth scroll valuators | Core pointer events |
+| XInput 2.2 | Pointer events, smooth scroll valuators, and [touch](#touch) events | Core pointer events, and no touch events |
 | MIT-SHM | Shared images for the paint | `PutImage` in parts |
+| Present | The pace of the Cairo paints. See [X11 painting](#x11-painting). | A Cairo paint starts at once when the shared image is free |
 | RandR | The rectangles and the physical sizes of the monitors, and their change events | The root window is the only screen, with the physical size of the screen |
 | RENDER | Cursors from images | The arrow shows |
 | XTEST | `Window::simulate_pointer`, for tests | The call fails |
@@ -159,6 +160,18 @@ Wheel events have two units:
 
 Positive deltas scroll down and to the right, as on macOS.
 
+### Touch
+
+Core has no touch event type, and macOS has no touch screens. Thus, a touch screen acts as the pointer. One platform-neutral function maps the touch points to pointer events for both display servers:
+
+- The first touch point that goes down gives `PointerEvent::Down` with `PointerButton::Primary`. Its motion gives `Move`, and its release gives `Up`.
+- Other touch points that go down while it is down have no effect. A touch point that goes down after the release becomes the primary touch point.
+- A cancel of the touch sequence, or the loss of the touch device, gives `Up` at the latest position.
+- `details.kind` is `PointerKind::Touch`. `details.click_count` counts the taps as it counts the clicks of the mouse.
+- A touch does not start a drag, because `begin_drag` needs a pressed mouse button.
+
+On Wayland, each event of `wl_touch` applies at once, so `frame` needs no action. A touch-down serial moves, resizes, and activates windows, and grabs popups, as a button press does. On X11, the server sends no emulated pointer events to a client that selects the touch events. Thus, each touch arrives one time. While a popup grabs the pointer, the touches arrive as core pointer events of the grab.
+
 ### Painters
 
 `set_display_list` with an identical display list schedules no paint. A changed list paints only the region whose drawing changed. `Window::painter()` returns the painter of the window:
@@ -180,7 +193,7 @@ Positive deltas scroll down and to the right, as on macOS.
 
 #### GLES frames
 
-- The swap interval is 0. On Wayland, the `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo. On X11, a window paints when its content changes or an `Expose` event arrives.
+- The swap interval is 0. On Wayland, the `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo. On X11, a GLES window paints when its content changes or an `Expose` event arrives. [X11 painting](#x11-painting) tells why Present does not pace it.
 - On Wayland, the window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
 - With `EGL_EXT_buffer_age`, a paint repaints the damage of each frame since the back buffer was on the screen. Without it, a paint repaints the whole window.
 - With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the display server.
@@ -200,6 +213,16 @@ The painter draws each command in the order of the display list, as the Cairo pa
 #### X11 painting
 
 With the GLES painter, an X11 window paints through EGL on a connection of its own. The EGL requests and errors then stay out of the event loop. With Cairo, the window paints into a client-side image and sends only the pending region. It uses MIT-SHM when the server shares memory with the client. A shared image stays busy until its completion event. Otherwise `PutImage` sends the pixels in parts that fit the maximum request length.
+
+When the server has Present and libxcb-present loads, `PresentFrames` paces the Cairo paints, as `FrameScheduler` paces the Wayland frames:
+
+- After a Cairo paint, the window sends a Present `NotifyMSC` request for the next vertical blank. It selects `PresentCompleteNotify` on the window before its first request.
+- At most one frame is outstanding. The next Cairo paint waits for the completion event with the serial of the frame.
+- The server handles the requests of a connection in order. Thus, the completion comes after the server copied the paint to the window.
+- The first request has the target 0, so its completion comes at once with the current counter. Each later request has the target that follows the latest completion.
+- A completion with another serial or another kind has no effect. A Present error turns the pacing off, and the windows paint at once again.
+
+Present does not pace the GLES paints. EGL sends the swap on its own connection, so the server does not order the swap before a request of the client. A completion then does not tell that the swap is on the window. Mesa also presents the swap in a different way for each driver. With DRI3, Mesa uses Present on its own connection. Without DRI3, as on Xvfb, the software driver sends the pixels with `PutImage`.
 
 ### Other window operations
 
@@ -235,10 +258,10 @@ The facade maps a selection failure, a missing protocol, and a library that does
 
 | Feature | Wayland | X11 |
 | --- | --- | --- |
-| Frame callbacks | Available | Unavailable: X11 uses expose and presentation events |
+| Frame callbacks | Available | Depends on Present |
 | Clipboard | Depends on `wl_data_device` | Available |
 | Input method | Depends on `text-input-v3` | Depends on XIM |
-| Touch | Depends on the `wl_touch` seat capability | Depends on XInput2 |
+| Touch | Depends on the `wl_touch` seat capability | Depends on XInput 2.2 |
 | Tablet | Depends on `tablet-v2` | Depends on XInput2 |
 | Gestures | Depends on `pointer-gestures-v1` | Unavailable: core X11 has no portable gesture protocol |
 | Drag and drop | Depends on `wl_data_device` | Depends on XDND |
@@ -250,6 +273,7 @@ The facade maps a selection failure, a missing protocol, and a library that does
 - **Scale.** With `wp_fractional_scale_v1` and `wp_viewporter`, the scale is the preferred fractional scale. Else it is the `preferred_buffer_scale` of `wl_surface` version 6. Else it is the largest scale of the outputs of the window.
 - **Activation.** When a window shows, it asks for the focus through `xdg_activation_v1`. The first window uses the token of `XDG_ACTIVATION_TOKEN`. A later window uses a new token with the serial of the latest button press.
 - **Portal parent.** Each window exports its toplevel with `zxdg_exporter_v2`. The handle gives the parent `wayland:HANDLE` of portal dialogs.
+- **Touch.** When the seat has the `wl_touch` capability, the client gets the `wl_touch` of the seat. [Touch](#touch) tells how its events become pointer events.
 - **Gestures.** With `zwp_pointer_gestures_v1`, the seat pointer gets a `zwp_pointer_gesture_pinch_v1`. Each pinch update gives `GestureEvent::Magnify` at the pointer position.
 - **Gesture scale.** The protocol gives the scale since the start of the pinch. The event scale is the change since the previous update, as on macOS. Thus, the product of the event scales is the scale of the pinch.
 - **Ignored gestures.** An update without a change of scale gives no event. The end or the cancel of a pinch gives no event, and the backend ignores swipe and hold gestures.
@@ -282,6 +306,7 @@ On Linux, `Application::new` connects to the X server of `DISPLAY` when the sele
 - **Stable scale.** A new scale changes the pixel size of the window, and the window can then have a different monitor. Thus, the window gets the new scale only when the monitor of the resized window has that scale.
 - **Keyboard.** xkbcommon-x11 reads the keymap and the state of the core keyboard. XKB state events update the modifiers. With detectable auto-repeat, a held key arrives as repeated presses, and the keyboard does not repeat keys itself.
 - **Pointer.** XInput 2.2 gives the pointer events of the master devices. A scroll valuator gives `WheelUnit::Points`: one increment is 15 points. The wheel buttons 4 to 7 give `WheelUnit::Lines` when the server does not emulate them from a valuator. Without XInput 2.2, core events give the same events.
+- **Touch.** Each window also selects `XI_TouchBegin`, `XI_TouchUpdate`, and `XI_TouchEnd` of the master devices. [Touch](#touch) tells how they become pointer events.
 - **Window manager requests.** `begin_move` and `begin_resize` send `_NET_WM_MOVERESIZE`. `show_window_menu` sends `_GTK_SHOW_WINDOW_MENU`, which some window managers ignore. `minimize` sends `WM_CHANGE_STATE` with `IconicState`.
 - **Cursors.** A cursor comes from the cursor theme through xcb-cursor, or else from the core cursor font. A custom image becomes a RENDER cursor. Without RENDER, the arrow shows.
 - **Portal parent.** The parent of portal dialogs is `x11:XID`, with the window id in hexadecimal.
@@ -719,6 +744,12 @@ stateDiagram-v2
 
 `FrameScheduler` keeps at most one frame callback outstanding. `request` returns `FrameError::AlreadyPending` while a callback is outstanding. `presented` accepts only the token of the outstanding callback and returns `FrameError::UnknownCallback` for a stale token.
 
+`PresentFrames` keeps at most one X11 Present frame outstanding, on a `FrameScheduler`:
+
+- `request` returns an `MscRequest` with the serial and the target counter of the `NotifyMSC` request. It returns `FrameError::AlreadyPending` while a frame is outstanding.
+- `complete(serial, msc)` ends the frame with that serial and keeps the counter. It returns `FrameError::UnknownSerial` for another serial.
+- `cancel` drops the outstanding frame when its completion cannot come.
+
 ### X11 lifecycle
 
 `X11Window` models the X11 window:
@@ -727,7 +758,7 @@ stateDiagram-v2
 2. Call `create(width, height)`. A size of 0 is an error.
 3. Call `map`.
 
-`configure_notify(width, height, scale)` applies the new size and scale at once. X11 has no configure acknowledgement and no frame callback.
+`configure_notify(width, height, scale)` applies the new size and scale at once. X11 has no configure acknowledgement. `PresentFrames` paces the frames.
 
 ### Seat input
 
@@ -751,6 +782,7 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 
 - **Wayland position.** A Wayland client cannot read or set its window position. `geometry` has a zero origin, and AT-SPI screen coordinates are relative to the window.
 - **Gestures.** X11 has no portable gesture protocol, so X11 windows send no `Gesture` events. Wayland windows send only pinches. The tests do not use a real touchpad.
+- **Touch.** The touch points act only as one pointer, so the controls get no multi-touch input. The unit tests check the mapping, and the binding check checks the declarations. No test uses a touch screen, because the virtual pointer of sway has no touch, and XTEST cannot make XInput 2 touches.
 - **Occlusion.** Wayland windows send no `Occluded` events.
 - **Timing budgets.** No Linux reference machine is named, so the Linux bench has no timing budgets. [performance.md](performance.md#linux-budgets) gives the details.
 

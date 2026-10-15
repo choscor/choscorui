@@ -1,9 +1,10 @@
 //! The Wayland and X11 backend of ChoscorUI.
 //!
 //! The protocol state machines (`select_backend`, `WaylandSurface`,
-//! `FrameScheduler`, `X11Window`, `LinuxInput`, and `Clipboard`) are
-//! platform-neutral and compile on every host. The native backend
-//! compiles only for Linux. All of its `unsafe` code is in `ffi`.
+//! `FrameScheduler`, `PresentFrames`, `X11Window`, `LinuxInput`, and
+//! `Clipboard`) are platform-neutral and compile on every host. The
+//! native backend compiles only for Linux. All of its `unsafe` code is in
+//! `ffi`.
 //!
 //! On Linux, `decode_image` and `encode_png` convert between encoded
 //! images and `choscorui_core::Image` with the system codec libraries.
@@ -23,6 +24,10 @@ mod x11;
 // The X11 client uses the scale policy; the tests run on every host.
 #[cfg(any(target_os = "linux", test))]
 mod x11_scale;
+// Both display servers map touch to the pointer; the tests run on every
+// host.
+#[cfg(any(target_os = "linux", test))]
+mod touch;
 
 pub use backend::*;
 pub use clipboard::*;

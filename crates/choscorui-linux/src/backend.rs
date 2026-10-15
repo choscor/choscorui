@@ -59,10 +59,10 @@ impl LinuxCapabilities {
                 drag_and_drop: Capability::ProtocolDependent("wl_data_device"),
             },
             BackendKind::X11 => Self {
-                frame_callbacks: Capability::Unavailable("X11 uses expose/presentation events"),
+                frame_callbacks: Capability::ProtocolDependent("Present"),
                 clipboard: Capability::Available,
                 ime: Capability::ProtocolDependent("XIM"),
-                touch: Capability::ProtocolDependent("XInput2"),
+                touch: Capability::ProtocolDependent("XInput 2.2"),
                 tablet: Capability::ProtocolDependent("XInput2"),
                 gestures: Capability::Unavailable("no portable core X11 gesture protocol"),
                 drag_and_drop: Capability::ProtocolDependent("XDND"),

@@ -45,6 +45,8 @@ opaque_types! {
     pub(crate) XcbInputXiQueryDeviceReply = "xcb_input_xi_query_device_reply_t";
     /// `xcb_shm_query_version_reply_t`.
     pub(crate) XcbShmQueryVersionReply = "xcb_shm_query_version_reply_t";
+    /// `xcb_present_query_version_reply_t`.
+    pub(crate) XcbPresentQueryVersionReply = "xcb_present_query_version_reply_t";
     /// `xcb_randr_get_monitors_reply_t`.
     pub(crate) XcbRandrGetMonitorsReply = "xcb_randr_get_monitors_reply_t";
     /// `xcb_randr_query_version_reply_t`.
@@ -153,6 +155,11 @@ ffi_struct! {
 
     /// `xcb_shm_query_version_cookie_t`.
     pub(crate) struct XcbShmQueryVersionCookie = "xcb_shm_query_version_cookie_t" {
+        pub(crate) sequence: CUint,
+    }
+
+    /// `xcb_present_query_version_cookie_t`.
+    pub(crate) struct XcbPresentQueryVersionCookie = "xcb_present_query_version_cookie_t" {
         pub(crate) sequence: CUint,
     }
 
@@ -592,6 +599,41 @@ libraries! {
         }
     }
 
+    /// libxcb-present: the completion events that pace the X11 frames.
+    pub(crate) struct XcbPresent {
+        library: "libxcb-present",
+        sonames: ["libxcb-present.so.0"],
+        headers: ["xcb/present.h"],
+        pkg_config: "xcb-present",
+        package: "libxcb-present-dev",
+        functions {
+            fn xcb_present_query_version(
+                c: *mut XcbConnection,
+                major_version: u32,
+                minor_version: u32,
+            ) -> XcbPresentQueryVersionCookie;
+            fn xcb_present_query_version_reply(
+                c: *mut XcbConnection,
+                cookie: XcbPresentQueryVersionCookie,
+                e: ErrorOut,
+            ) -> *mut XcbPresentQueryVersionReply;
+            fn xcb_present_select_input(
+                c: *mut XcbConnection,
+                eid: u32,
+                window: u32,
+                event_mask: u32,
+            ) -> XcbVoidCookie;
+            fn xcb_present_notify_msc(
+                c: *mut XcbConnection,
+                window: u32,
+                serial: u32,
+                target_msc: u64,
+                divisor: u64,
+                remainder: u64,
+            ) -> XcbVoidCookie;
+        }
+    }
+
     /// libxcb-randr: the monitors of the screen and their changes.
     pub(crate) struct XcbRandr {
         library: "libxcb-randr",
@@ -801,17 +843,26 @@ c_consts! {
     pub(crate) const XCB_INPUT_XI_EVENT_MASK_MOTION: u32 = 64;
     pub(crate) const XCB_INPUT_XI_EVENT_MASK_ENTER: u32 = 128;
     pub(crate) const XCB_INPUT_XI_EVENT_MASK_LEAVE: u32 = 256;
+    pub(crate) const XCB_INPUT_XI_EVENT_MASK_TOUCH_BEGIN: u32 = 262_144;
+    pub(crate) const XCB_INPUT_XI_EVENT_MASK_TOUCH_UPDATE: u32 = 524_288;
+    pub(crate) const XCB_INPUT_XI_EVENT_MASK_TOUCH_END: u32 = 1_048_576;
     pub(crate) const XCB_INPUT_DEVICE_CHANGED: u16 = 1;
     pub(crate) const XCB_INPUT_BUTTON_PRESS: u16 = 4;
     pub(crate) const XCB_INPUT_BUTTON_RELEASE: u16 = 5;
     pub(crate) const XCB_INPUT_MOTION: u16 = 6;
     pub(crate) const XCB_INPUT_ENTER: u16 = 7;
     pub(crate) const XCB_INPUT_LEAVE: u16 = 8;
+    pub(crate) const XCB_INPUT_TOUCH_BEGIN: u16 = 18;
+    pub(crate) const XCB_INPUT_TOUCH_UPDATE: u16 = 19;
+    pub(crate) const XCB_INPUT_TOUCH_END: u16 = 20;
     pub(crate) const XCB_INPUT_DEVICE_CLASS_TYPE_VALUATOR: u16 = 2;
     pub(crate) const XCB_INPUT_DEVICE_CLASS_TYPE_SCROLL: u16 = 3;
     pub(crate) const XCB_INPUT_SCROLL_TYPE_VERTICAL: u16 = 1;
     pub(crate) const XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED: u32 = 65536;
     pub(crate) const XCB_SHM_COMPLETION: u8 = 0;
+    pub(crate) const XCB_PRESENT_EVENT_MASK_COMPLETE_NOTIFY: u32 = 2;
+    pub(crate) const XCB_PRESENT_COMPLETE_NOTIFY: u16 = 1;
+    pub(crate) const XCB_PRESENT_COMPLETE_KIND_NOTIFY_MSC: u8 = 1;
     pub(crate) const XCB_RENDER_PICT_TYPE_DIRECT: u8 = 1;
     pub(crate) const XCB_SELECTION_CLEAR: u8 = 29;
     pub(crate) const XCB_SELECTION_REQUEST: u8 = 30;
@@ -846,6 +897,7 @@ pub(crate) fn check_items() -> Vec<super::checks::LibraryItems> {
         XcbXkb::check_items(),
         XcbInput::check_items(),
         XcbShm::check_items(),
+        XcbPresent::check_items(),
         XcbRandr::check_items(),
         XcbRender::check_items(),
         XcbCursor::check_items(),
@@ -872,6 +924,7 @@ pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
         XcbInputXiQueryVersionCookie::layout(),
         XcbInputXiQueryDeviceCookie::layout(),
         XcbShmQueryVersionCookie::layout(),
+        XcbPresentQueryVersionCookie::layout(),
         XcbRandrGetMonitorsCookie::layout(),
         XcbRandrQueryVersionCookie::layout(),
         XcbRenderQueryPictFormatsCookie::layout(),
@@ -915,6 +968,14 @@ impl Bytes {
             self.u8(offset + 2),
             self.u8(offset + 3),
         ])
+    }
+
+    pub(crate) fn u64(&self, offset: usize) -> u64 {
+        let mut value = [0u8; 8];
+        for (index, byte) in value.iter_mut().enumerate() {
+            *byte = self.u8(offset + index);
+        }
+        u64::from_ne_bytes(value)
     }
 
     /// A 16.16 fixed-point value.
@@ -1825,6 +1886,48 @@ impl Connection {
                 0,
             )
         };
+    }
+
+    // Present
+
+    /// True when the server has Present 1.0 or later and libxcb-present
+    /// loads. Call it only when the server lists the extension.
+    pub(crate) fn present_available(&self) -> bool {
+        let Ok(present) = XcbPresent::get() else {
+            return false;
+        };
+        // SAFETY: the request has no pointers.
+        let cookie = unsafe { (present.xcb_present_query_version)(self.raw, 1, 0) };
+        // SAFETY: the cookie is of this connection.
+        let reply = unsafe {
+            (present.xcb_present_query_version_reply)(self.raw, cookie, std::ptr::null_mut())
+        };
+        take_reply(reply).is_some()
+    }
+
+    /// Selects the `PresentCompleteNotify` events of `window` with the
+    /// event id `event`.
+    pub(crate) fn present_select_complete(&self, event: u32, window: u32) {
+        if let Ok(present) = XcbPresent::get() {
+            // SAFETY: the request has no pointers.
+            unsafe {
+                (present.xcb_present_select_input)(
+                    self.raw,
+                    event,
+                    window,
+                    XCB_PRESENT_EVENT_MASK_COMPLETE_NOTIFY,
+                )
+            };
+        }
+    }
+
+    /// Asks for a `PresentCompleteNotify` event with `serial` when the
+    /// MSC of `window` reaches `target_msc`.
+    pub(crate) fn present_notify_msc(&self, window: u32, serial: u32, target_msc: u64) {
+        if let Ok(present) = XcbPresent::get() {
+            // SAFETY: the request has no pointers.
+            unsafe { (present.xcb_present_notify_msc)(self.raw, window, serial, target_msc, 0, 0) };
+        }
     }
 
     // RandR

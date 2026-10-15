@@ -8,6 +8,7 @@
 mod data;
 mod shm;
 mod text_input;
+mod touch;
 mod window;
 
 pub(crate) use data::Contents;
@@ -20,6 +21,7 @@ use crate::ffi::libc::{self, Ready, Watch};
 use crate::ffi::wayland::sys::Interface;
 use crate::ffi::wayland::{self as wl, Arg, Connection, Event, ObjectId, Proxy};
 use crate::gles;
+use crate::touch::TouchPointer;
 use crate::{InputEvent, LinuxInput, WaylandConnection, WaylandGlobal};
 use choscorui_core::{
     CursorShape, GestureEvent, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit,
@@ -39,6 +41,7 @@ pub(crate) enum Role {
     Pointer,
     Pinch,
     Keyboard,
+    Touch,
     Output,
     XdgOutput(ObjectId),
     Surface(Weak<WaylandWindow>),
@@ -118,6 +121,11 @@ struct Seat {
     pinch: Option<Proxy>,
     pinch_scale: PinchScale,
     keyboard_proxy: Option<Proxy>,
+    touch_proxy: Option<Proxy>,
+    /// The primary touch point, which acts as the pointer.
+    touch: TouchPointer,
+    /// The window of the primary touch point.
+    touch_focus: Option<Weak<WaylandWindow>>,
     input: LinuxInput,
     keyboard: Keyboard,
     pointer_focus: Option<Weak<WaylandWindow>>,
@@ -309,6 +317,9 @@ impl Client {
                 pinch: None,
                 pinch_scale: PinchScale::default(),
                 keyboard_proxy: None,
+                touch_proxy: None,
+                touch: TouchPointer::default(),
+                touch_focus: None,
                 input: LinuxInput::new(),
                 keyboard: Keyboard::new().map_err(Error::Library)?,
                 pointer_focus: None,
@@ -532,6 +543,9 @@ impl Client {
         };
         if gone(&seat.pointer_focus) {
             seat.pointer_focus = None;
+        }
+        if gone(&seat.touch_focus) {
+            seat.touch_focus = None;
         }
         if gone(&seat.keyboard_focus) {
             seat.keyboard_focus = None;
@@ -953,6 +967,7 @@ impl Client {
             Role::Pointer => self.pointer_event(&event),
             Role::Pinch => self.pinch_event(&event),
             Role::Keyboard => self.keyboard_event(&mut event),
+            Role::Touch => self.touch_event(&event),
             Role::Output => self.output_event(&event),
             Role::DataDevice => self.data_device_event(&mut event),
             Role::DataOffer => self.data_offer_event(&event),
@@ -1142,6 +1157,9 @@ impl Client {
             seat.keyboard_focus = None;
             seat.keyboard.release_all();
         }
+        drop(routes);
+        drop(seat);
+        self.update_touch(seat_proxy, touch);
     }
 
     fn output_event(&self, event: &Event) {
