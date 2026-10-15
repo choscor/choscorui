@@ -2,10 +2,10 @@
 //! shown in an `xdg_popup` next to a point of a window.
 
 use super::chrome::{command_states, menu_items};
-use super::shortcut_modifiers;
+use super::{NativeWindow, shortcut_modifiers};
 use crate::{AppContext, WindowId};
 use choscorui_compose::view::{DropdownMenu, ViewHost};
-use choscorui_core::{KeyConvention, MenuCommandId, Point, Rect, Size};
+use choscorui_core::{KeyConvention, MenuCommandId, Point, PointerEvent, Rect, Size};
 use choscorui_linux::{ContextMenu, Window, WindowEvent};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -68,7 +68,11 @@ pub(super) fn show(
     present(&mut host, &popup, context.elapsed().as_secs_f64());
     while chosen.get().is_none() && !dismissed.get() && !popup.is_closed() {
         context.platform.wait(FRAME_WAIT);
-        if !deliver(&popup, &mut host) || context.index(id).is_none() {
+        let Some(index) = context.index(id) else {
+            break;
+        };
+        let open = deliver(&popup, &mut host);
+        if !redirect(&mut context.windows[index].native, &mut host) || !open {
             break;
         }
         present(&mut host, &popup, context.elapsed().as_secs_f64());
@@ -101,6 +105,32 @@ fn deliver(popup: &Window, host: &mut ViewHost) -> bool {
         }
     }
     true
+}
+
+/// Takes the parent's events while the popup is open. Keys go to the
+/// menu, because a compositor can keep the keyboard focus on the parent
+/// during the grab. A press in the parent closes the menu. The other
+/// events wait for the next delivery to the parent. Returns false when
+/// the menu must close.
+fn redirect(parent: &mut NativeWindow, host: &mut ViewHost) -> bool {
+    let mut open = true;
+    for event in parent.window.take_events() {
+        match event {
+            WindowEvent::Key { event, modifiers } => {
+                host.key(event, shortcut_modifiers(modifiers));
+            }
+            WindowEvent::Pointer {
+                event: PointerEvent::Down { .. },
+                ..
+            } => open = false,
+            WindowEvent::Closing => {
+                parent.waiting.push(event);
+                open = false;
+            }
+            event => parent.waiting.push(event),
+        }
+    }
+    open
 }
 
 fn present(host: &mut ViewHost, popup: &Window, now: f64) {

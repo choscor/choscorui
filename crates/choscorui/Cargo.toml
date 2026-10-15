@@ -36,6 +36,11 @@ path = "tests/app_smoke.rs"
 harness = false
 
 [[test]]
+name = "chrome_smoke"
+path = "tests/chrome_smoke.rs"
+harness = false
+
+[[test]]
 name = "metal_parity_smoke"
 path = "tests/metal_parity_smoke.rs"
 harness = false

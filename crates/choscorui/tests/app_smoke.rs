@@ -30,10 +30,10 @@ fn main() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod smoke {
     use choscorui::compose::view::StorageError;
+    use choscorui::core::MenuShortcutModifiers;
     #[cfg(target_os = "macos")]
     use choscorui::core::Service;
     use choscorui::core::{Point, Rect, SemanticAction, Size, WindowGeometry};
-    use choscorui::core::MenuShortcutModifiers;
     use choscorui::platform::NativeAccess;
     use choscorui::prelude::*;
     use std::cell::RefCell;

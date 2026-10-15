@@ -148,6 +148,7 @@ impl Platform {
         Ok(NativeWindow {
             window,
             chrome: None,
+            waiting: Vec::new(),
         })
     }
 
@@ -225,6 +226,8 @@ fn composition(event: ImeEvent) -> CompositionEvent {
 pub(crate) struct NativeWindow {
     window: Window,
     chrome: Option<Chrome>,
+    /// Events that arrived while a popup ran its loop.
+    waiting: Vec<WindowEvent>,
 }
 
 impl NativeWindow {
@@ -240,7 +243,9 @@ impl NativeWindow {
     /// asked to close, and its new focus state, if it changed.
     pub(crate) fn deliver(&mut self, host: &mut ViewHost) -> (bool, Option<bool>) {
         let (mut closing, mut focus) = (false, None);
-        for event in self.window.take_events() {
+        let mut events = std::mem::take(&mut self.waiting);
+        events.extend(self.window.take_events());
+        for event in events {
             match event {
                 WindowEvent::Closing => closing = true,
                 WindowEvent::Focused(focused) => {

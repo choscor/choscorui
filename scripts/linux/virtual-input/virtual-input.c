@@ -10,7 +10,8 @@
  *
  *   move X Y          moves the pointer
  *   button CODE 0|1   releases or presses a button
- *   key CODE 0|1      releases or presses a key
+ *   key CODE 0|1      releases or presses a key, and sends the modifier
+ *                     state that follows, so Ctrl and Alt chords work
  *   wheel DY          scrolls DY wheel steps (positive is down)
  */
 #define _GNU_SOURCE
@@ -32,6 +33,8 @@
 static struct wl_seat *seat;
 static struct zwp_virtual_keyboard_manager_v1 *keyboard_manager;
 static struct zwlr_virtual_pointer_manager_v1 *pointer_manager;
+/* The state of the keymap, for the modifiers that the keys change. */
+static struct xkb_state *key_state;
 
 static void global(void *data, struct wl_registry *registry, uint32_t name,
                    const char *interface, uint32_t version) {
@@ -62,7 +65,7 @@ static uint32_t now_ms(void) {
     return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
-/* Sends the default US keymap to the keyboard. */
+/* Sends the default US keymap to the keyboard, and keeps its state. */
 static int send_keymap(struct zwp_virtual_keyboard_v1 *keyboard) {
     struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (!context) {
@@ -75,9 +78,11 @@ static int send_keymap(struct zwp_virtual_keyboard_v1 *keyboard) {
         return -1;
     }
     char *text = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
+    key_state = xkb_state_new(keymap);
     xkb_keymap_unref(keymap);
     xkb_context_unref(context);
-    if (!text) {
+    if (!text || !key_state) {
+        free(text);
         return -1;
     }
     size_t size = strlen(text) + 1;
@@ -104,6 +109,13 @@ static void run(const char *line, struct zwp_virtual_keyboard_v1 *keyboard,
         zwlr_virtual_pointer_v1_frame(pointer);
     } else if (sscanf(line, "key %u %u", &a, &b) == 2) {
         zwp_virtual_keyboard_v1_key(keyboard, now_ms(), a, b);
+        /* XKB key codes are evdev codes plus 8. */
+        xkb_state_update_key(key_state, a + 8, b ? XKB_KEY_DOWN : XKB_KEY_UP);
+        zwp_virtual_keyboard_v1_modifiers(
+            keyboard, xkb_state_serialize_mods(key_state, XKB_STATE_MODS_DEPRESSED),
+            xkb_state_serialize_mods(key_state, XKB_STATE_MODS_LATCHED),
+            xkb_state_serialize_mods(key_state, XKB_STATE_MODS_LOCKED),
+            xkb_state_serialize_layout(key_state, XKB_STATE_LAYOUT_EFFECTIVE));
     } else if (sscanf(line, "wheel %lf", &value) == 1) {
         zwlr_virtual_pointer_v1_axis_source(pointer, 0);
         zwlr_virtual_pointer_v1_axis_discrete(pointer, now_ms(), 0,
