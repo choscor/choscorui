@@ -5,9 +5,11 @@
 //! `routes` maps the id to the role of the object, so `handle` sends the
 //! event to its seat, output, or window.
 
+mod data;
 mod shm;
 mod window;
 
+pub(crate) use data::Contents;
 pub(crate) use window::WaylandWindow;
 
 use super::keyboard::{Keyboard, RepeatInfo};
@@ -41,6 +43,9 @@ pub(crate) enum Role {
     FractionalScale(Weak<WaylandWindow>),
     Frame(Weak<WaylandWindow>),
     ActivationToken(Weak<WaylandWindow>),
+    DataDevice,
+    DataOffer,
+    DataSource,
 }
 
 /// The globals that the client binds.
@@ -107,6 +112,9 @@ struct Seat {
     keyboard_focus: Option<Weak<WaylandWindow>>,
     position: Point,
     enter_serial: u32,
+    /// The serial of the latest keyboard focus, key, or button event,
+    /// for the selection.
+    input_serial: u32,
     /// The serial of the latest button press, for move, resize, and
     /// activation.
     press_serial: Option<u32>,
@@ -134,6 +142,8 @@ pub(crate) struct Client {
     pending_tokens: RefCell<Vec<Proxy>>,
     /// Set when the compositor closed the connection.
     lost: Cell<bool>,
+    /// The clipboard and drag-and-drop state.
+    data: RefCell<data::DataState>,
 }
 
 // Event opcodes.
@@ -257,6 +267,7 @@ impl Client {
                 keyboard_focus: None,
                 position: Point::new(0.0, 0.0),
                 enter_serial: 0,
+                input_serial: 0,
                 press_serial: None,
                 pressed: 0,
                 clicks: ClickCounter::default(),
@@ -271,6 +282,7 @@ impl Client {
             ),
             pending_tokens: RefCell::new(Vec::new()),
             lost: Cell::new(false),
+            data: RefCell::new(data::DataState::default()),
         });
         client
             .routes
@@ -398,6 +410,10 @@ impl Client {
             "xdg_wm_dialog_v1" => globals.wm_dialog = Some(proxy),
             "xdg_system_bell_v1" => globals.system_bell = Some(proxy),
             _ => {}
+        }
+        drop((state, globals, routes));
+        if matches!(interface, "wl_seat" | "wl_data_device_manager") {
+            self.ensure_data_device();
         }
     }
 
@@ -534,44 +550,8 @@ impl Client {
                     _ => return,
                 },
             };
-            let everything = Rect::new(
-                Point::new(0.0, 0.0),
-                Size::new(f64::from(image.width()), f64::from(image.height())),
-            );
-            if let Some(buffer) = buffers.acquire(shm, image.width(), image.height(), everything) {
-                // Straight RGBA to premultiplied ARGB32 in native order.
-                for (target, source) in buffer
-                    .memory
-                    .bytes_mut()
-                    .as_chunks_mut::<4>()
-                    .0
-                    .iter_mut()
-                    .zip(image.pixels().as_chunks::<4>().0)
-                {
-                    let alpha = u16::from(source[3]);
-                    let scale = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;
-                    target.copy_from_slice(&[
-                        scale(source[2]),
-                        scale(source[1]),
-                        scale(source[0]),
-                        source[3],
-                    ]);
-                }
-                let _ = surface.request(
-                    1,
-                    &[Arg::Object(Some(&buffer.proxy)), Arg::Int(0), Arg::Int(0)],
-                );
-                let _ = surface.request(
-                    9,
-                    &[
-                        Arg::Int(0),
-                        Arg::Int(0),
-                        Arg::Int(i32::MAX),
-                        Arg::Int(i32::MAX),
-                    ],
-                );
-                let _ = surface.request(6, &[]);
-            }
+            fill_surface(&surface, &mut buffers, shm, image);
+            let _ = surface.request(6, &[]);
             let _ = pointer.request(
                 POINTER_SET_CURSOR,
                 &[
@@ -762,6 +742,9 @@ impl Client {
             Role::Pointer => self.pointer_event(&event),
             Role::Keyboard => self.keyboard_event(&mut event),
             Role::Output => self.output_event(&event),
+            Role::DataDevice => self.data_device_event(&mut event),
+            Role::DataOffer => self.data_offer_event(&event),
+            Role::DataSource => self.data_source_event(&mut event),
             Role::XdgOutput(output) => {
                 let mut outputs = self.outputs.borrow_mut();
                 let Some(output) = outputs
@@ -864,9 +847,12 @@ impl Client {
                 return;
             }
         }
-        if let Some((_, buffers)) = &mut self.seat.borrow_mut().cursor_surface {
-            buffers.release(event.object);
+        if let Some((_, buffers)) = &mut self.seat.borrow_mut().cursor_surface
+            && buffers.release(event.object)
+        {
+            return;
         }
+        self.release_drag_buffer(event.object);
     }
 
     fn seat_capabilities(&self, capabilities: u32) {
@@ -1016,6 +1002,7 @@ impl Client {
                         })
                         .is_ok();
                     let position = seat.position;
+                    seat.input_serial = serial;
                     let count = if pressed {
                         seat.press_serial = Some(serial);
                         seat.pressed += 1;
@@ -1138,7 +1125,9 @@ impl Client {
                     .arg(1)
                     .object()
                     .and_then(|surface| self.window_of(surface));
-                self.seat.borrow_mut().keyboard_focus = window.as_ref().map(Rc::downgrade);
+                let mut seat = self.seat.borrow_mut();
+                seat.input_serial = event.arg(0).uint();
+                seat.keyboard_focus = window.as_ref().map(Rc::downgrade);
             }
             KEYBOARD_LEAVE => {
                 let mut seat = self.seat.borrow_mut();
@@ -1149,6 +1138,7 @@ impl Client {
                 let code = event.arg(2).uint();
                 let pressed = event.arg(3).uint() == 1;
                 let mut seat = self.seat.borrow_mut();
+                seat.input_serial = event.arg(0).uint();
                 if seat
                     .input
                     .dispatch(InputEvent::Key { code, pressed })
@@ -1182,4 +1172,51 @@ impl Client {
             _ => {}
         }
     }
+}
+
+/// Attaches `image` to `surface` in a shm buffer, without a commit.
+fn fill_surface(
+    surface: &Proxy,
+    buffers: &mut Buffers,
+    shm: &Proxy,
+    image: &choscorui_core::Image,
+) {
+    let everything = Rect::new(
+        Point::new(0.0, 0.0),
+        Size::new(f64::from(image.width()), f64::from(image.height())),
+    );
+    let Some(buffer) = buffers.acquire(shm, image.width(), image.height(), everything) else {
+        return;
+    };
+    // Straight RGBA to premultiplied ARGB32 in native order.
+    for (target, source) in buffer
+        .memory
+        .bytes_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(image.pixels().as_chunks::<4>().0)
+    {
+        let alpha = u16::from(source[3]);
+        let scale = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;
+        target.copy_from_slice(&[
+            scale(source[2]),
+            scale(source[1]),
+            scale(source[0]),
+            source[3],
+        ]);
+    }
+    let _ = surface.request(
+        1,
+        &[Arg::Object(Some(&buffer.proxy)), Arg::Int(0), Arg::Int(0)],
+    );
+    let _ = surface.request(
+        9,
+        &[
+            Arg::Int(0),
+            Arg::Int(0),
+            Arg::Int(i32::MAX),
+            Arg::Int(i32::MAX),
+        ],
+    );
 }

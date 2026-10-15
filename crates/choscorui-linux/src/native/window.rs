@@ -5,8 +5,12 @@
 //! trait. It queues events in the shared state, and it reads the display
 //! list from there when it paints.
 
+use super::transfer::{self, Payload};
 use super::types::{Error, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent};
-use choscorui_core::{CursorShape, DisplayList, DrawRegions, Point, Rect, Size, WindowGeometry};
+use choscorui_core::{
+    CursorShape, DisplayList, DragFormat, DragItem, DragOperations, DrawRegions, Image, Point,
+    Rect, Size, WindowGeometry,
+};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -40,6 +44,20 @@ pub(crate) trait Surface {
     fn minimize(&self);
     /// True when the display server draws the title bar and the frame.
     fn server_decorations(&self) -> bool;
+    /// Starts a drag of `payload` from the press that is in progress.
+    fn begin_drag(
+        &self,
+        payload: Payload,
+        allowed: DragOperations,
+        preview: Option<&Image>,
+    ) -> Result<(), Error>;
+}
+
+/// The formats and operations that a window takes from drags.
+#[derive(Default)]
+pub(crate) struct DropTarget {
+    pub(crate) formats: Vec<DragFormat>,
+    pub(crate) operations: DragOperations,
 }
 
 /// The paint state of a window.
@@ -72,6 +90,7 @@ pub(crate) struct WindowShared {
     pub(crate) text_input: RefCell<TextInputState>,
     pub(crate) events: RefCell<VecDeque<WindowEvent>>,
     pub(crate) paint: RefCell<PaintState>,
+    pub(crate) drop_target: RefCell<DropTarget>,
 }
 
 impl WindowShared {
@@ -97,6 +116,7 @@ impl WindowShared {
                 first_paint: None,
                 last_paint: None,
             }),
+            drop_target: RefCell::new(DropTarget::default()),
         })
     }
 
@@ -359,5 +379,40 @@ impl Window {
     /// Minimizes the window.
     pub fn minimize(&self) {
         self.surface.minimize();
+    }
+
+    /// Makes the content a drop target for `formats`. An empty list or no
+    /// operations stops accepting drops. Route the resulting
+    /// [`WindowEvent::Drag`] events through [`choscorui_core::DropRouter`].
+    pub fn accept_drops(
+        &self,
+        formats: &[DragFormat],
+        operations: DragOperations,
+    ) -> Result<(), Error> {
+        if !formats.iter().all(transfer::supported) {
+            return Err(Error::UnsupportedFormat);
+        }
+        *self.shared.drop_target.borrow_mut() = super::window::DropTarget {
+            formats: formats.to_vec(),
+            operations,
+        };
+        Ok(())
+    }
+
+    /// Starts dragging `items` from the content. Call it while handling
+    /// the pointer-down or pointer-move of the left button that began the
+    /// gesture. The center of `preview` follows the pointer. The window
+    /// gets [`WindowEvent::DragEnded`] when the drag ends.
+    pub fn begin_drag(
+        &self,
+        items: &[DragItem],
+        allowed: DragOperations,
+        preview: Option<&Image>,
+    ) -> Result<(), Error> {
+        if items.is_empty() || allowed.is_empty() {
+            return Err(Error::UnsupportedFormat);
+        }
+        let payload = transfer::encode(items)?;
+        self.surface.begin_drag(payload, allowed, preview)
     }
 }

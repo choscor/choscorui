@@ -744,4 +744,14 @@ impl Surface for WaylandWindow {
     fn server_decorations(&self) -> bool {
         self.inner.borrow().server_side
     }
+
+    fn begin_drag(
+        &self,
+        payload: crate::native::transfer::Payload,
+        allowed: choscorui_core::DragOperations,
+        preview: Option<&choscorui_core::Image>,
+    ) -> Result<(), Error> {
+        let client = self.client.upgrade().ok_or(Error::Closed)?;
+        client.begin_drag(self, payload, allowed, preview)
+    }
 }

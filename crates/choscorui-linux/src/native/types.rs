@@ -35,6 +35,11 @@ pub enum Error {
     UnsupportedFormat,
     /// A drag can start only while a pointer event is handled.
     NoDragEvent,
+    /// The clipboard text contains a NUL character, or a file path is
+    /// not absolute.
+    InvalidClipboardText,
+    /// The display server has no clipboard, or it refused the write.
+    ClipboardWriteFailed,
 }
 
 impl fmt::Display for Error {
@@ -53,6 +58,12 @@ impl fmt::Display for Error {
             Self::UnsupportedFormat => f.write_str("the drag or clipboard format is not supported"),
             Self::NoDragEvent => {
                 f.write_str("a drag can only start while handling a pointer event")
+            }
+            Self::InvalidClipboardText => {
+                f.write_str("the clipboard text or a file path of it is invalid")
+            }
+            Self::ClipboardWriteFailed => {
+                f.write_str("the display server refused the clipboard write")
             }
         }
     }

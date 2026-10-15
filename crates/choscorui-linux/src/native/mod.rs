@@ -6,14 +6,17 @@
 //! display socket, the eventfd of `Poster`, and the timerfd of the
 //! earliest timer. It then handles what arrived.
 
+mod clipboard;
 mod event_loop;
 mod keyboard;
 mod paint;
 mod pointer;
+mod transfer;
 mod types;
 mod wayland;
 mod window;
 
+pub use clipboard::SystemClipboard;
 pub use event_loop::{PostError, Poster, Timer};
 pub use types::{
     Error, ImeEvent, Modifiers, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent,
@@ -55,6 +58,7 @@ fn selection_error(error: BackendSelectionError) -> Error {
 }
 
 /// The connected display server.
+#[derive(Clone)]
 enum Display {
     Wayland(Rc<wayland::Client>),
 }
@@ -92,6 +96,46 @@ impl Display {
     fn kind(&self) -> BackendKind {
         match self {
             Self::Wayland(_) => BackendKind::Wayland,
+        }
+    }
+
+    /// True when the server has a clipboard and drag and drop.
+    fn has_data_transfer(&self) -> bool {
+        match self {
+            Self::Wayland(client) => client.has_data_device(),
+        }
+    }
+
+    fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
+        match self {
+            Self::Wayland(client) => client.set_selection(payload),
+        }
+    }
+
+    fn selection_formats(&self) -> Vec<choscorui_core::DragFormat> {
+        match self {
+            Self::Wayland(client) => match client.selection() {
+                wayland::Contents::Empty => Vec::new(),
+                wayland::Contents::Local(payload) => payload.formats(),
+                wayland::Contents::Remote(id, mimes) => {
+                    transfer::formats(&mimes, &mut |mime| client.receive(id, mime))
+                }
+            },
+        }
+    }
+
+    fn read_selection(
+        &self,
+        formats: &[choscorui_core::DragFormat],
+    ) -> Vec<choscorui_core::DragItem> {
+        match self {
+            Self::Wayland(client) => match client.selection() {
+                wayland::Contents::Empty => Vec::new(),
+                wayland::Contents::Local(payload) => payload.read(formats),
+                wayland::Contents::Remote(id, mimes) => {
+                    transfer::read(formats, &mimes, &mut |mime| client.receive(id, mime))
+                }
+            },
         }
     }
 }
@@ -276,6 +320,11 @@ impl Application {
         self.posted.stop();
     }
 
+    /// The clipboard of the display server.
+    pub fn clipboard(&self) -> SystemClipboard {
+        SystemClipboard::general(self.display.clone())
+    }
+
     /// The logical rectangles of the screens.
     pub fn screens(&self) -> Vec<Rect> {
         match &self.display {
@@ -313,5 +362,9 @@ fn probe() -> BackendCapabilities {
     capabilities.text_shaping = crate::text_shaping_support();
     capabilities.image_codecs = crate::image_codecs_support();
     capabilities.keyboard = KeyConvention::Pc;
+    if display.has_data_transfer() {
+        capabilities.clipboard = Support::Supported;
+        capabilities.drag_and_drop = Support::Supported;
+    }
     capabilities
 }

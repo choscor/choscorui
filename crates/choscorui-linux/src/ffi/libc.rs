@@ -1,5 +1,6 @@
 //! The C library calls of the event loop and the shared memory buffers,
-//! with safe wrappers: `poll`, `eventfd`, `timerfd`, and `memfd` mappings.
+//! with safe wrappers: `poll`, `eventfd`, `timerfd`, `memfd` mappings, and
+//! the pipes of clipboard and drag-and-drop transfers.
 
 use super::ctypes::{CChar, CInt, CLong, CUint, c_void};
 use std::io;
@@ -48,15 +49,17 @@ super::macros::c_consts! {
     const IPC_PRIVATE: CInt = 0;
     const IPC_CREAT: CInt = 0o1000;
     const IPC_RMID: CInt = 0;
+    const O_CLOEXEC: CInt = 0o2000000;
     const EINTR: CInt = 4;
     const EAGAIN: CInt = 11;
 }
 
 super::macros::libc_functions! {
-    headers: ["poll.h", "unistd.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h"];
+    headers: ["poll.h", "unistd.h", "fcntl.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h"];
     fn poll(fds: *mut PollFd, count: u64, timeout: CInt) -> CInt;
     fn read(fd: CInt, buffer: *mut c_void, count: usize) -> isize;
     fn write(fd: CInt, buffer: *const c_void, count: usize) -> isize;
+    fn pipe2(fds: *mut CInt, flags: CInt) -> CInt;
     fn eventfd(initial: CUint, flags: CInt) -> CInt;
     fn timerfd_create(clock: CInt, flags: CInt) -> CInt;
     fn timerfd_settime(fd: CInt, flags: CInt, new: *const Itimerspec, old: *mut Itimerspec) -> CInt;
@@ -172,6 +175,18 @@ pub(crate) fn write_fd(fd: BorrowedFd<'_>, data: &[u8]) -> io::Result<usize> {
             return Err(error);
         }
     }
+}
+
+/// A close-on-exec pipe: the read end, then the write end.
+pub(crate) fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
+    let mut fds: [CInt; 2] = [-1, -1];
+    // SAFETY: `fds` has room for the two descriptors of the call.
+    check(unsafe { pipe2(fds.as_mut_ptr(), O_CLOEXEC) })?;
+    // SAFETY: the call returned a new read end that nothing else owns.
+    let read = unsafe { OwnedFd::from_raw_fd(fds[0]) };
+    // SAFETY: the call returned a new write end that nothing else owns.
+    let write = unsafe { OwnedFd::from_raw_fd(fds[1]) };
+    Ok((read, write))
 }
 
 /// True when `error` means that a non-blocking descriptor has no data.
