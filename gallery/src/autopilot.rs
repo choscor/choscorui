@@ -27,7 +27,7 @@ use choscorui::core::{
     BaseColor, Key, KeyEvent, Locale, Localizer, NodeId, Point, PointerButton, PointerEvent,
     SemanticAction, SemanticNode, StatusItemSpec, Support, WheelUnit, WindowGeometry,
 };
-use choscorui::{AppContext, WindowId};
+use choscorui::{AppContext, KeyConvention, WindowId};
 use std::time::{Duration, Instant};
 
 /// The most semantic nodes that paging through the 100k records may add.
@@ -378,11 +378,18 @@ fn search_records(host: &mut ViewHost) -> Option<(usize, usize, usize, usize)> {
 fn exercise_canvas(host: &mut ViewHost) -> Option<(Option<String>, bool, usize, usize)> {
     let canvas = canvas_node(host)?;
     let bounds = host.tree().bounds(canvas)?;
-    let command = ShortcutModifiers {
-        command: true,
-        ..ShortcutModifiers::default()
+    // The physical key of `command`: Command on a Mac, Ctrl on a PC.
+    let command = match host.key_convention() {
+        KeyConvention::Mac => ShortcutModifiers {
+            command: true,
+            ..ShortcutModifiers::default()
+        },
+        _ => ShortcutModifiers {
+            control: true,
+            ..ShortcutModifiers::default()
+        },
     };
-    // Command and the wheel zoom about the pointer: e^(-0.01 dy).
+    // Command (Ctrl) and the wheel zoom about the pointer: e^(-0.01 dy).
     let doubling = Point::new(0.0, -100.0 * std::f64::consts::LN_2);
     wheel(host, bounds.origin, doubling, command);
     // Pan so item 0 sits 100 points inside the canvas.
