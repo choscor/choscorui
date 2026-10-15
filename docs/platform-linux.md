@@ -135,7 +135,17 @@ On Wayland, `wl_data_device` carries the selection and the drags. The compositor
 - The center of `preview` follows the pointer.
 - The target window gets `WindowEvent::Drag` events. The source window gets `WindowEvent::DragEnded` with the operation.
 - Wayland has copy and move actions, but no link action.
+- X11 has copy, move, and link actions. The pointer shows no preview.
 - The modifiers follow the PC convention: Ctrl copies, Shift moves, and Ctrl+Shift links. Without a modifier, a drag in the same application moves, and a drag from another application copies.
+
+On X11, the selections of the ICCCM carry the clipboard, and XDND version 5 carries the drags. `clipboard` and `drag_and_drop` are always `Supported` on X11.
+
+- **Clipboard.** A hidden window owns `CLIPBOARD`. It answers `TARGETS`, `TIMESTAMP`, `MULTIPLE`, each MIME type, `UTF8_STRING`, and `TEXT`. It also answers `STRING` with Latin-1 text. `SelectionClear` ends the ownership.
+- **Reads.** A read asks the owner to convert the selection into a property of the hidden window. While it waits, the client answers requests for its own selections and keeps the other events for the event loop. When the other owner offers only `STRING`, the text reads as `text/plain`.
+- **Large data.** Data larger than 256 KiB, or than a quarter of the maximum request length, goes with INCR in chunks. Reads accept INCR too. Each step of a read stops after 2 seconds without data.
+- **Drop targets.** Each window has `XdndAware`. At the first `XdndPosition`, the window decides if it takes the drag, and sends `Enter`. Each `XdndStatus` asks for all positions. On `XdndDrop`, the window reads `XdndSelection` at the time of the drop, and sends `XdndFinished`.
+- **Drag sources.** `begin_drag` needs the left button down on the window. The hidden window owns `XdndSelection` and holds `XdndTypeList` and `XdndActionList`. The client grabs the pointer and sends the messages to the aware window under it. It sends one position at a time, and waits for the status. The source gets `DragEnded` on `XdndFinished`, or `DragOperation::None` after 5 seconds without it.
+- **Tests.** `Window::simulate_pointer` is hidden test support. On X11 it moves the pointer and presses or releases the left button through XTEST. On Wayland it returns `Error::MissingProtocol`.
 
 ## Input methods
 
@@ -154,6 +164,15 @@ The changes of the input method come in a group that ends with `done`. Each grou
 - New marked text gives `SetMarkedText`. When the input method clears its marked text without a commit, the event has empty text.
 
 `input_methods` is `Supported` when the compositor has `zwp_text_input_manager_v3`.
+
+On X11, XIM connects the window to the input method, on-the-spot:
+
+1. The client opens the input method of `XMODIFIERS` on a second Xlib connection. It uses the input method only when it takes preedit callbacks. The local input method of Xlib does not, so without `XMODIFIERS` there is no input method. Keys then type their text through xkbcommon and compose.
+2. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
+3. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
+4. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
+
+XIM has no surrounding text, so the X11 backend does not send `text`. `input_methods` is `Supported` on X11 when such an input method opens.
 
 ## Wayland cursors
 
@@ -177,7 +196,7 @@ The facade queues these `DesktopEvent`s on the Linux services:
 
 `Application::beep()` plays the alert sound of the controls. It uses the first source that works:
 
-1. On Wayland, `xdg_system_bell_v1` rings the bell for the focused window.
+1. On Wayland, `xdg_system_bell_v1` rings the bell for the focused window. On X11, the XKB bell of the core keyboard rings for the focused window.
 2. The libcanberra event sound `bell` plays from the sound theme.
 3. Else, the application makes no sound.
 
@@ -248,8 +267,6 @@ The painter draws each command in the order of the display list, as the Cairo pa
 - Native event loops
 - Windows on the screen and painting
 - Text shaping and fonts
-- Clipboard and drag-and-drop data transfer on X11
-- Input method composition on X11
 - Accessibility
 - Desktop portals
 - The `choscorui::platform` module and capability values for Linux

@@ -51,6 +51,9 @@ pub(crate) trait Surface {
         allowed: DragOperations,
         preview: Option<&Image>,
     ) -> Result<(), Error>;
+    /// Test support: moves the pointer to `position` and, with `button`,
+    /// presses or releases the left button.
+    fn simulate_pointer(&self, position: Point, button: Option<bool>) -> Result<(), Error>;
 }
 
 /// The formats and operations that a window takes from drags.
@@ -430,5 +433,16 @@ impl Window {
         }
         let payload = transfer::encode(items)?;
         self.surface.begin_drag(payload, allowed, preview)
+    }
+
+    /// Test support: moves the pointer to `position` in the content and,
+    /// with `button`, presses (`true`) or releases (`false`) the left
+    /// button. It uses XTEST on X11; Wayland has no such protocol.
+    #[doc(hidden)]
+    pub fn simulate_pointer(&self, position: Point, button: Option<bool>) -> Result<(), Error> {
+        if self.shared.closed.get() {
+            return Err(Error::Closed);
+        }
+        self.surface.simulate_pointer(position, button)
     }
 }

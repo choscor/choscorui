@@ -74,6 +74,77 @@ fn focused_window(application: &Application) -> Window {
     window
 }
 
+/// Runs the test `name` in a second process, and serves the selection
+/// while it runs. Returns the lines that it printed after `CLIPBOARD `.
+fn run_child(application: &Application, name: &str) -> Vec<String> {
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env(CHILD, "1")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // The application serves the data while the child reads it.
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(Instant::now() < deadline, "the child did not finish");
+        application
+            .dispatch_next_event(Duration::from_millis(10))
+            .unwrap();
+    };
+    let lines: Vec<String> = BufReader::new(child.stdout.take().unwrap())
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|line| line.strip_prefix("CLIPBOARD ").map(str::to_owned))
+        .collect();
+    assert!(status.success(), "{lines:?}");
+    lines
+}
+
+/// Text of about 1.5 MB: larger than one X11 request, so it goes through
+/// INCR, and larger than a pipe buffer on Wayland.
+fn large_text() -> String {
+    (0..100_000)
+        .map(|line| format!("dòng {line:06}\n"))
+        .collect()
+}
+
+#[test]
+fn a_second_process_reads_large_text() {
+    if !enabled() || std::env::var_os(CHILD).is_some() {
+        return;
+    }
+    let application = Application::new().unwrap();
+    let _window = focused_window(&application);
+    let clipboard = application.clipboard();
+    let text = large_text();
+    clipboard.write_text(&text).unwrap();
+    let lines = run_child(&application, "child_reads_large_text");
+    assert_eq!(
+        lines,
+        vec![format!("{} {}", text.len(), text == large_text())]
+    );
+}
+
+/// The second process of the test above. It prints the length of the
+/// text that it read, and whether the text is the expected one.
+#[test]
+fn child_reads_large_text() {
+    if std::env::var_os(CHILD).is_none() {
+        return;
+    }
+    let application = Application::new().unwrap();
+    let _window = focused_window(&application);
+    let text = application
+        .clipboard()
+        .read_text()
+        .unwrap()
+        .unwrap_or_default();
+    println!("CLIPBOARD {} {}", text.len(), text == large_text());
+}
+
 #[test]
 fn a_second_process_reads_the_standard_formats_but_not_private_data() {
     if !enabled() || std::env::var_os(CHILD).is_some() {
@@ -97,29 +168,7 @@ fn a_second_process_reads_the_standard_formats_but_not_private_data() {
             },
         ]
     );
-    let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "child_reads_the_selection", "--nocapture"])
-        .env(CHILD, "1")
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    // The application serves the data while the child reads it.
-    let deadline = Instant::now() + Duration::from_secs(20);
-    let status = loop {
-        if let Some(status) = child.try_wait().unwrap() {
-            break status;
-        }
-        assert!(Instant::now() < deadline, "the child did not finish");
-        application
-            .dispatch_next_event(Duration::from_millis(10))
-            .unwrap();
-    };
-    let lines: Vec<String> = BufReader::new(child.stdout.take().unwrap())
-        .lines()
-        .map_while(Result::ok)
-        .filter_map(|line| line.strip_prefix("CLIPBOARD ").map(str::to_owned))
-        .collect();
-    assert!(status.success(), "{lines:?}");
+    let lines = run_child(&application, "child_reads_the_selection");
     let expected_formats = vec![
         DragFormat::Text,
         DragFormat::Files,
@@ -259,7 +308,7 @@ fn pump_for(
 
 #[test]
 fn a_drag_between_two_windows_drops_the_items_and_ends() {
-    use choscorui_core::{DragEvent, DragOperation, DragOperations, PointerEvent};
+    use choscorui_core::{DragOperations, PointerEvent};
     use choscorui_linux::WindowEvent;
     if !enabled() || std::env::var("CHOSCORUI_BACKEND").is_ok_and(|backend| backend == "x11") {
         return;
@@ -319,13 +368,9 @@ fn a_drag_between_two_windows_drops_the_items_and_ends() {
             Duration::from_millis(20),
         );
     }
-    let custom = DragItem::Custom {
-        format: "row-keys".into(),
-        bytes: vec![1, 2, 3],
-    };
     source
         .begin_drag(
-            &[DragItem::Text("dragged".into()), custom.clone()],
+            &dragged_items(),
             DragOperations::ALL,
             Some(&Image::from_rgba8(2, 2, [0, 0, 255, 255].repeat(4)).unwrap()),
         )
@@ -353,6 +398,25 @@ fn a_drag_between_two_windows_drops_the_items_and_ends() {
             Duration::from_millis(20),
         );
     }
+    assert_dropped(&events);
+}
+
+/// The items of a drag between two windows of the application.
+fn dragged_items() -> Vec<DragItem> {
+    vec![
+        DragItem::Text("dragged".into()),
+        DragItem::Custom {
+            format: "row-keys".into(),
+            bytes: vec![1, 2, 3],
+        },
+    ]
+}
+
+/// Checks that the target (`events[1]`) got the drag and the items, and
+/// that the source (`events[0]`) got the end of the drag.
+fn assert_dropped(events: &[Vec<choscorui_linux::WindowEvent>; 2]) {
+    use choscorui_core::{DragEvent, DragOperation};
+    use choscorui_linux::WindowEvent;
     let drags: Vec<&DragEvent> = events[1]
         .iter()
         .filter_map(|event| match event {
@@ -370,7 +434,7 @@ fn a_drag_between_two_windows_drops_the_items_and_ends() {
     else {
         panic!("no drop: {drags:?}");
     };
-    assert_eq!(items, &vec![DragItem::Text("dragged".into()), custom]);
+    assert_eq!(items, &dragged_items());
     // Within one application, a drag without modifiers moves.
     assert_eq!(*operation, DragOperation::Move);
     assert!(
@@ -378,4 +442,107 @@ fn a_drag_between_two_windows_drops_the_items_and_ends() {
             .iter()
             .any(|event| matches!(event, WindowEvent::DragEnded(DragOperation::Move)))
     );
+}
+
+/// Waits until `window` has an event that `found` matches.
+fn pump_until(
+    application: &Application,
+    windows: &[&Window],
+    events: &mut [Vec<choscorui_linux::WindowEvent>; 2],
+    index: usize,
+    found: impl Fn(&choscorui_linux::WindowEvent) -> bool,
+) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !events[index].iter().any(&found) {
+        assert!(Instant::now() < deadline, "no event: {events:?}");
+        pump_for(application, windows, events, Duration::from_millis(20));
+    }
+}
+
+/// The same drag on X11, with XTEST for the pointer. Without a window
+/// manager, the windows stay where the application puts them.
+#[test]
+fn a_drag_between_two_x11_windows_drops_the_items_and_ends() {
+    use choscorui_core::{DragOperations, Point, PointerEvent, Rect, Size, WindowGeometry};
+    use choscorui_linux::WindowEvent;
+    if !enabled() || !std::env::var("CHOSCORUI_BACKEND").is_ok_and(|backend| backend == "x11") {
+        return;
+    }
+    let application = Application::new().unwrap();
+    let mut windows = Vec::new();
+    for (title, x) in [("Drag source", 0.0), ("Drop target", 300.0)] {
+        let window = application
+            .create_window(WindowOptions::new(title, 200.0, 150.0))
+            .unwrap();
+        window
+            .set_geometry(&WindowGeometry {
+                frame: Rect::new(Point::new(x, 0.0), Size::new(200.0, 150.0)),
+                zoomed: false,
+                full_screen: false,
+            })
+            .unwrap();
+        windows.push(window);
+    }
+    let (source, target) = (&windows[0], &windows[1]);
+    target
+        .accept_drops(
+            &[DragFormat::Text, DragFormat::Custom("row-keys".into())],
+            DragOperations::ALL,
+        )
+        .unwrap();
+    assert!(matches!(
+        source.begin_drag(&items(), DragOperations::ALL, None),
+        Err(Error::NoDragEvent)
+    ));
+    source.show();
+    target.show();
+    let windows = [source, target];
+    let mut events = [Vec::new(), Vec::new()];
+    pump_for(
+        &application,
+        &windows,
+        &mut events,
+        Duration::from_millis(300),
+    );
+    source
+        .simulate_pointer(Point::new(50.0, 50.0), None)
+        .unwrap();
+    pump_for(
+        &application,
+        &windows,
+        &mut events,
+        Duration::from_millis(50),
+    );
+    source
+        .simulate_pointer(Point::new(50.0, 50.0), Some(true))
+        .unwrap();
+    pump_until(&application, &windows, &mut events, 0, |event| {
+        matches!(
+            event,
+            WindowEvent::Pointer {
+                event: PointerEvent::Down { .. },
+                ..
+            }
+        )
+    });
+    source
+        .begin_drag(&dragged_items(), DragOperations::ALL, None)
+        .unwrap();
+    // Positions in the source window; the target starts at x = 300.
+    for x in [100.0, 250.0, 350.0, 380.0] {
+        source.simulate_pointer(Point::new(x, 60.0), None).unwrap();
+        pump_for(
+            &application,
+            &windows,
+            &mut events,
+            Duration::from_millis(100),
+        );
+    }
+    source
+        .simulate_pointer(Point::new(380.0, 60.0), Some(false))
+        .unwrap();
+    pump_until(&application, &windows, &mut events, 0, |event| {
+        matches!(event, WindowEvent::DragEnded(_))
+    });
+    assert_dropped(&events);
 }

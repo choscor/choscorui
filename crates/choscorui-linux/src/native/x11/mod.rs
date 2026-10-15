@@ -7,9 +7,13 @@
 //! scroll valuators; without it, core events stand in. The scale is
 //! `Xft.dpi` over 96, from the resource database on the root window.
 
+mod dnd;
+mod ime;
 mod protocol;
+mod selection;
 mod window;
 
+pub(crate) use selection::Contents;
 pub(crate) use window::X11Surface;
 
 use super::keyboard::{Keyboard, RepeatInfo};
@@ -35,7 +39,7 @@ use choscorui_core::{
 };
 use protocol::{Button, POINTS_PER_SCROLL_INCREMENT, Scrolling};
 use std::cell::{Cell, OnceCell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
@@ -133,6 +137,8 @@ struct Seat {
     device: u16,
     clicks: ClickCounter,
     scrolling: Scrolling,
+    /// True while the left button is down, which a drag needs.
+    left_down: bool,
 }
 
 /// A connection to an X server and its windows.
@@ -150,6 +156,19 @@ pub(crate) struct Client {
     argb_format: OnceCell<Option<u32>>,
     /// Set when the connection failed.
     lost: Cell<bool>,
+    transfer_atoms: selection::TransferAtoms,
+    /// The hidden window that owns the selections and receives their data.
+    selection_window: u32,
+    selections: RefCell<selection::Selections>,
+    dnd: RefCell<dnd::DndState>,
+    atom_ids: RefCell<HashMap<String, u32>>,
+    atom_names: RefCell<HashMap<u32, String>>,
+    /// The events that arrived during a nested wait, for the loop.
+    deferred: RefCell<VecDeque<Bytes>>,
+    /// The server time of the latest input or property event.
+    time: Cell<u32>,
+    /// The XIM input method, when one takes preedit callbacks.
+    ime: RefCell<Option<ime::Ime>>,
 }
 
 /// The X pointer of the virtual core pointer, before any XInput event.
@@ -232,6 +251,15 @@ impl Client {
             &[XCB_EVENT_MASK_PROPERTY_CHANGE],
         );
         let scale = read_scale(&connection);
+        let transfer_atoms = selection::TransferAtoms::intern(&connection);
+        let selection_window = connection.generate_id();
+        connection.create_window(
+            selection_window,
+            connection.root(),
+            (1, 1),
+            XCB_CW_EVENT_MASK,
+            &[XCB_EVENT_MASK_PROPERTY_CHANGE],
+        );
         let mut input = LinuxInput::new();
         input.update_seat(true, true, false);
         connection.flush();
@@ -257,10 +285,20 @@ impl Client {
                 device: VIRTUAL_CORE_POINTER,
                 clicks: ClickCounter::default(),
                 scrolling,
+                left_down: false,
             }),
             cursors: RefCell::new(HashMap::new()),
             argb_format: OnceCell::new(),
             lost: Cell::new(false),
+            transfer_atoms,
+            selection_window,
+            selections: RefCell::new(selection::Selections::default()),
+            dnd: RefCell::new(dnd::DndState::default()),
+            atom_ids: RefCell::new(HashMap::new()),
+            atom_names: RefCell::new(HashMap::new()),
+            deferred: RefCell::new(VecDeque::new()),
+            time: Cell::new(0),
+            ime: RefCell::new(ime::Ime::open()),
         }))
     }
 
@@ -279,6 +317,7 @@ impl Client {
     }
 
     pub(crate) fn forget_window(&self, id: u32) {
+        self.ime_forget(id);
         self.windows.borrow_mut().retain(|window| window.id != id);
         let mut seat = self.seat.borrow_mut();
         let gone = |focus: &Option<Weak<X11Surface>>| {
@@ -321,6 +360,24 @@ impl Client {
 
     pub(crate) fn pointer_device(&self) -> u16 {
         self.seat.borrow().device
+    }
+
+    /// Rings the XKB bell of the core keyboard for the focused window.
+    /// Returns false when the server has no XKB.
+    pub(crate) fn ring_bell(&self) -> bool {
+        if self.extensions.xkb_event.is_none() {
+            return false;
+        }
+        let window = self
+            .seat
+            .borrow()
+            .keyboard_focus
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map_or(0, |window| window.id);
+        let rung = self.connection.xkb_bell(window);
+        self.connection.flush();
+        rung
     }
 
     /// Sends a client message to the window manager.
@@ -467,9 +524,10 @@ impl Client {
         timeout: Option<Duration>,
     ) -> Result<Vec<Ready>, Error> {
         self.check()?;
-        while let Some(event) = self.connection.poll_event() {
-            self.handle(&event);
-        }
+        self.handle_all();
+        // The filter of a key can read input method events into the Xlib
+        // queue, where the descriptor no longer shows them.
+        self.ime_dispatch();
         self.paint();
         self.connection.flush();
         let mut queued = false;
@@ -477,13 +535,15 @@ impl Client {
             self.handle(&event);
             queued = true;
         }
+        queued |= self.handle_deferred();
         self.check()?;
-        let timeout = if queued {
-            Some(Duration::ZERO)
-        } else {
-            timeout
+        let timeout = match (queued, self.expire_drag()) {
+            (true, _) => Some(Duration::ZERO),
+            (false, Some(left)) => Some(timeout.map_or(left, |timeout| timeout.min(left))),
+            (false, None) => timeout,
         };
-        let mut watches = Vec::with_capacity(extra.len() + 1);
+        let method = self.input_method();
+        let mut watches = Vec::with_capacity(extra.len() + 2);
         watches.push(Watch {
             fd: self.connection.fd(),
             read: true,
@@ -494,13 +554,48 @@ impl Client {
             read: watch.read,
             write: watch.write,
         }));
+        if let Some(method) = &method {
+            watches.push(Watch {
+                fd: method.fd(),
+                read: true,
+                write: false,
+            });
+        }
         let ready =
             libc::wait(&watches, timeout).map_err(|error| Error::Connection(error.to_string()))?;
-        while let Some(event) = self.connection.poll_event() {
+        drop(watches);
+        drop(method);
+        self.ime_dispatch();
+        self.handle_all();
+        self.expire_drag();
+        self.check()?;
+        Ok(ready[1..=extra.len()].to_vec())
+    }
+
+    /// Handles the events that arrived, and those that a nested wait kept.
+    fn handle_all(&self) {
+        loop {
+            self.handle_deferred();
+            let Some(event) = self.connection.poll_event() else {
+                break;
+            };
             self.handle(&event);
         }
-        self.check()?;
-        Ok(ready[1..].to_vec())
+        self.handle_deferred();
+    }
+
+    /// Handles the events that a nested wait kept. Returns true when there
+    /// were any.
+    fn handle_deferred(&self) -> bool {
+        let mut handled = false;
+        loop {
+            let event = self.deferred.borrow_mut().pop_front();
+            let Some(event) = event else {
+                return handled;
+            };
+            self.handle(&event);
+            handled = true;
+        }
     }
 
     /// Fails when the connection broke. The first failure sends
@@ -523,6 +618,10 @@ impl Client {
         let kind = event.u8(0) & 0x7f;
         if kind == 0 {
             self.error(event);
+            return;
+        }
+        self.note_time(kind, event);
+        if self.selection_event(event) {
             return;
         }
         if Some(kind) == self.extensions.xkb_event {
@@ -600,6 +699,7 @@ impl Client {
                     self.rescale();
                 }
             }
+            XCB_CLIENT_MESSAGE if event.u8(1) == 32 && self.dnd_message(event) => {}
             XCB_CLIENT_MESSAGE => {
                 let protocols = event.u8(1) == 32
                     && event.u32(8) == self.atoms.wm_protocols
@@ -613,6 +713,52 @@ impl Client {
             }
             _ => {}
         }
+    }
+
+    /// Keeps the server time of an input or property event.
+    fn note_time(&self, kind: u8, event: &Bytes) {
+        let time = match kind {
+            XCB_KEY_PRESS..=XCB_LEAVE_NOTIFY => event.u32(4),
+            XCB_PROPERTY_NOTIFY => event.u32(12),
+            XCB_GE_GENERIC if self.extensions.xinput == Some(event.u8(1)) => event.u32(12),
+            _ => return,
+        };
+        if time != 0 {
+            self.time.set(time);
+        }
+    }
+
+    /// Test support: moves the pointer to `position` of `window` and,
+    /// with `button`, presses or releases the left button, through XTEST.
+    pub(crate) fn simulate_pointer(
+        &self,
+        window: u32,
+        position: Point,
+        button: Option<bool>,
+    ) -> Result<(), Error> {
+        let connection = &self.connection;
+        let scale = self.scale.get();
+        let (x, y) = connection
+            .translate(window, connection.root())
+            .ok_or(Error::Closed)?;
+        let x = f64::from(x) + (position.x * scale).round();
+        let y = f64::from(y) + (position.y * scale).round();
+        let point = (x as i16, y as i16);
+        connection
+            .fake_input(XCB_MOTION_NOTIFY, 0, point)
+            .map_err(Error::Library)?;
+        if let Some(pressed) = button {
+            let kind = if pressed {
+                XCB_BUTTON_PRESS
+            } else {
+                XCB_BUTTON_RELEASE
+            };
+            connection
+                .fake_input(kind, 1, point)
+                .map_err(Error::Library)?;
+        }
+        connection.flush();
+        Ok(())
     }
 
     /// Handles an error of a request. A failed MIT-SHM request turns
@@ -660,7 +806,21 @@ impl Client {
     }
 
     fn key(&self, event: &Bytes, pressed: bool) {
-        let code = u32::from(event.u8(1));
+        let window = self
+            .seat
+            .borrow()
+            .keyboard_focus
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map_or(event.u32(12), |window| window.id);
+        if self.ime_filter(window, event, pressed) {
+            return;
+        }
+        self.key_code(u32::from(event.u8(1)), pressed, window);
+    }
+
+    /// Handles a key of `id`, or of the window with the keyboard focus.
+    fn key_code(&self, code: u32, pressed: bool, id: u32) {
         let mut seat = self.seat.borrow_mut();
         let repeat = pressed
             && self.extensions.detectable_repeat
@@ -681,7 +841,7 @@ impl Client {
             .keyboard_focus
             .as_ref()
             .and_then(Weak::upgrade)
-            .or_else(|| self.window(event.u32(12)));
+            .or_else(|| self.window(id));
         drop(seat);
         if let Some(window) = window {
             for event in events {
@@ -709,6 +869,7 @@ impl Client {
         if window.shared.focused.replace(focused) != focused {
             window.shared.push(WindowEvent::Focused(focused));
         }
+        self.ime_focus(id, focused);
     }
 
     fn set_root(&self, x: i32, y: i32) {
@@ -762,6 +923,9 @@ impl Client {
     }
 
     fn motion(&self, id: u32, pixels: (f64, f64)) {
+        if self.drag_motion() {
+            return;
+        }
         let Some((window, position)) = self.pointer_target(id, pixels) else {
             return;
         };
@@ -785,6 +949,12 @@ impl Client {
     }
 
     fn button(&self, id: u32, number: u32, pressed: bool, pixels: (f64, f64)) {
+        if number == 1 {
+            self.seat.borrow_mut().left_down = pressed;
+            if !pressed && self.drag_release() {
+                return;
+            }
+        }
         let Some((window, position)) = self.pointer_target(id, pixels) else {
             return;
         };

@@ -104,7 +104,7 @@ impl Display {
     fn has_data_transfer(&self) -> bool {
         match self {
             Self::Wayland(client) => client.has_data_device(),
-            Self::X11(_) => false,
+            Self::X11(_) => true,
         }
     }
 
@@ -112,14 +112,14 @@ impl Display {
     fn has_input_methods(&self) -> bool {
         match self {
             Self::Wayland(client) => client.has_text_input(),
-            Self::X11(_) => false,
+            Self::X11(client) => client.has_input_method(),
         }
     }
 
     fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
         match self {
             Self::Wayland(client) => client.set_selection(payload),
-            Self::X11(_) => Err(Error::ClipboardWriteFailed),
+            Self::X11(client) => client.set_selection(payload),
         }
     }
 
@@ -132,7 +132,13 @@ impl Display {
                     transfer::formats(&mimes, &mut |mime| client.receive(id, mime))
                 }
             },
-            Self::X11(_) => Vec::new(),
+            Self::X11(client) => match client.selection() {
+                x11::Contents::Empty => Vec::new(),
+                x11::Contents::Local(payload) => payload.formats(),
+                x11::Contents::Remote(mimes) => {
+                    transfer::formats(&mimes, &mut |mime| client.receive(mime))
+                }
+            },
         }
     }
 
@@ -148,7 +154,13 @@ impl Display {
                     transfer::read(formats, &mimes, &mut |mime| client.receive(id, mime))
                 }
             },
-            Self::X11(_) => Vec::new(),
+            Self::X11(client) => match client.selection() {
+                x11::Contents::Empty => Vec::new(),
+                x11::Contents::Local(payload) => payload.read(formats),
+                x11::Contents::Remote(mimes) => {
+                    transfer::read(formats, &mimes, &mut |mime| client.receive(mime))
+                }
+            },
         }
     }
 
@@ -286,7 +298,7 @@ impl Application {
     pub fn beep(&self) {
         let rung = match &self.display {
             Display::Wayland(client) => client.ring_bell(),
-            Display::X11(_) => false,
+            Display::X11(client) => client.ring_bell(),
         };
         if !rung {
             crate::ffi::canberra::play_bell();

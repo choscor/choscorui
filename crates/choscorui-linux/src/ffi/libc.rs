@@ -52,10 +52,11 @@ super::macros::c_consts! {
     const O_CLOEXEC: CInt = 0o2000000;
     const EINTR: CInt = 4;
     const EAGAIN: CInt = 11;
+    const LC_CTYPE: CInt = 0;
 }
 
 super::macros::libc_functions! {
-    headers: ["stdlib.h", "poll.h", "unistd.h", "fcntl.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h"];
+    headers: ["stdlib.h", "poll.h", "unistd.h", "fcntl.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h", "locale.h"];
     fn free(pointer: *mut c_void);
     fn poll(fds: *mut PollFd, count: u64, timeout: CInt) -> CInt;
     fn read(fd: CInt, buffer: *mut c_void, count: usize) -> isize;
@@ -72,6 +73,7 @@ super::macros::libc_functions! {
     fn shmat(id: CInt, address: *const c_void, flags: CInt) -> *mut c_void;
     fn shmdt(address: *const c_void) -> CInt;
     fn shmctl(id: CInt, command: CInt, buffer: *mut ShmidDs) -> CInt;
+    fn setlocale(category: CInt, locale: *const CChar) -> *mut CChar;
 }
 
 super::macros::opaque_types! {
@@ -200,6 +202,36 @@ pub(crate) fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     // SAFETY: the call returned a new write end that nothing else owns.
     let write = unsafe { OwnedFd::from_raw_fd(fds[1]) };
     Ok((read, write))
+}
+
+/// The `LC_CTYPE` locale, or None when the call fails.
+fn ctype_locale(locale: Option<&std::ffi::CStr>) -> Option<std::ffi::CString> {
+    let locale = locale.map_or(std::ptr::null(), |locale| locale.as_ptr().cast::<CChar>());
+    // SAFETY: `locale` is null, which only queries, or a C string.
+    let name = unsafe { setlocale(LC_CTYPE, locale) };
+    if name.is_null() {
+        return None;
+    }
+    // SAFETY: the C library returns a C string that stays valid until the
+    // next call, and the copy happens before it.
+    Some(unsafe { std::ffi::CStr::from_ptr(name.cast()) }.to_owned())
+}
+
+/// Calls `f` with a UTF-8 `LC_CTYPE`: the one of the environment when it
+/// is UTF-8, or else `C.UTF-8`. Restores the locale after the call.
+/// Returns None when no UTF-8 locale is available.
+pub(crate) fn with_utf8_ctype<T>(f: impl FnOnce() -> T) -> Option<T> {
+    let previous = ctype_locale(None)?;
+    let utf8 = |name: &std::ffi::CStr| {
+        let name = name.to_string_lossy().to_ascii_lowercase();
+        name.contains("utf-8") || name.contains("utf8")
+    };
+    let applied = [c"", c"C.UTF-8"]
+        .into_iter()
+        .any(|candidate| ctype_locale(Some(candidate)).is_some_and(|name| utf8(&name)));
+    let result = applied.then(f);
+    ctype_locale(Some(&previous));
+    result
 }
 
 /// True when `error` means that a non-blocking descriptor has no data.

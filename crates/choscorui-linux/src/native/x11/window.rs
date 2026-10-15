@@ -230,6 +230,8 @@ impl X11Surface {
             }),
         });
         surface.set_properties(client, app_id);
+        client.make_aware(id);
+        *surface.shared.parent_handle.borrow_mut() = Some(format!("x11:{id:x}"));
         if let Some(cursor) = client.cursor(&CursorShape::Arrow) {
             connection.change_window_attributes(id, XCB_CW_CURSOR, &[cursor]);
         }
@@ -751,8 +753,9 @@ impl Surface for X11Surface {
     }
 
     fn text_input_changed(&self) {
-        // The X11 backend has no input method connection yet; keys type
-        // their text through xkbcommon and compose.
+        if let Some(client) = self.client() {
+            client.text_input_changed(self);
+        }
     }
 
     fn close(&self) {
@@ -848,13 +851,20 @@ impl Surface for X11Surface {
         true
     }
 
+    /// Starts an XDND drag. The pointer shows no preview image.
     fn begin_drag(
         &self,
-        _payload: crate::native::transfer::Payload,
-        _allowed: choscorui_core::DragOperations,
+        payload: crate::native::transfer::Payload,
+        allowed: choscorui_core::DragOperations,
         _preview: Option<&choscorui_core::Image>,
     ) -> Result<(), Error> {
-        Err(Error::UnsupportedFormat)
+        let client = self.client().ok_or(Error::Closed)?;
+        client.begin_drag(self, payload, allowed)
+    }
+
+    fn simulate_pointer(&self, position: Point, button: Option<bool>) -> Result<(), Error> {
+        let client = self.client().ok_or(Error::Closed)?;
+        client.simulate_pointer(self.id, position, button)
     }
 }
 
