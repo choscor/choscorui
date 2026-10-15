@@ -31,7 +31,7 @@ esac
 
 tty=()
 [ -t 0 ] && tty=(-it)
-exec docker run --rm "${tty[@]}" \
+exec docker run --rm ${tty[@]+"${tty[@]}"} \
     -v "$root:/work" \
     -v choscorui-linux-target:/work/target \
     -v choscorui-linux-cargo:/usr/local/cargo/registry \
