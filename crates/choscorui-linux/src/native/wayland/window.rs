@@ -30,6 +30,7 @@ const XDG_SURFACE_SET_WINDOW_GEOMETRY: u16 = 3;
 const XDG_SURFACE_ACK_CONFIGURE: u16 = 4;
 // xdg_toplevel requests.
 const TOPLEVEL_DESTROY: u16 = 0;
+const TOPLEVEL_SET_PARENT: u16 = 1;
 const TOPLEVEL_SET_TITLE: u16 = 2;
 const TOPLEVEL_SET_APP_ID: u16 = 3;
 const TOPLEVEL_SHOW_WINDOW_MENU: u16 = 4;
@@ -49,6 +50,10 @@ const STATE_ACTIVATED: u32 = 4;
 const DECORATION_DESTROY: u16 = 0;
 const DECORATION_SET_MODE: u16 = 1;
 const MODE_SERVER_SIDE: u32 = 2;
+// xdg_wm_dialog_v1 and xdg_dialog_v1.
+const WM_DIALOG_GET_XDG_DIALOG: u16 = 1;
+const DIALOG_DESTROY: u16 = 0;
+const DIALOG_SET_MODAL: u16 = 1;
 // wp_viewport.
 const VIEWPORT_SET_DESTINATION: u16 = 2;
 
@@ -95,6 +100,8 @@ pub(crate) struct WaylandWindow {
     /// The `zxdg_exported_v2` of the toplevel, for the parent of portal
     /// dialogs.
     pub(crate) exported: RefCell<Option<Proxy>>,
+    /// The `xdg_dialog_v1` of a modal dialog window.
+    dialog: RefCell<Option<Proxy>>,
     viewport: RefCell<Option<Proxy>>,
     pub(crate) inner: RefCell<Inner>,
     /// Set by `request_paint`; the loop paints at the next frame.
@@ -199,6 +206,7 @@ impl WaylandWindow {
             decoration: RefCell::new(decoration),
             fractional: RefCell::new(fractional),
             exported: RefCell::new(None),
+            dialog: RefCell::new(None),
             viewport: RefCell::new(viewport),
             inner: RefCell::new(Inner {
                 protocol,
@@ -564,6 +572,9 @@ impl WaylandWindow {
         if let Some(decoration) = self.decoration.borrow_mut().take() {
             let _ = decoration.destroy(DECORATION_DESTROY, &[]);
         }
+        if let Some(dialog) = self.dialog.borrow_mut().take() {
+            let _ = dialog.destroy(DIALOG_DESTROY, &[]);
+        }
         if let Some(toplevel) = self.toplevel.borrow_mut().take() {
             let _ = toplevel.destroy(TOPLEVEL_DESTROY, &[]);
         }
@@ -748,6 +759,41 @@ impl Surface for WaylandWindow {
 
     fn server_decorations(&self) -> bool {
         self.inner.borrow().server_side
+    }
+
+    fn set_modal_parent(&self, parent: &Rc<WindowShared>) {
+        let Some(client) = self.client.upgrade() else {
+            return;
+        };
+        let parent = client
+            .windows
+            .borrow()
+            .iter()
+            .find(|window| Rc::ptr_eq(&window.shared, parent))
+            .cloned();
+        let toplevel = self.toplevel.borrow();
+        let Some(toplevel) = toplevel.as_ref() else {
+            return;
+        };
+        if let Some(parent) = parent
+            && let Some(parent) = &*parent.toplevel.borrow()
+        {
+            let _ = toplevel.request(TOPLEVEL_SET_PARENT, &[Arg::Object(Some(parent))]);
+        }
+        let globals = client.globals.borrow();
+        let mut dialog = self.dialog.borrow_mut();
+        if let (Some(manager), None) = (&globals.wm_dialog, dialog.as_ref()) {
+            *dialog = manager
+                .request(
+                    WM_DIALOG_GET_XDG_DIALOG,
+                    &[Arg::NewId, Arg::Object(Some(toplevel))],
+                )
+                .ok()
+                .flatten();
+            if let Some(dialog) = dialog.as_ref() {
+                let _ = dialog.request(DIALOG_SET_MODAL, &[]);
+            }
+        }
     }
 
     fn begin_drag(

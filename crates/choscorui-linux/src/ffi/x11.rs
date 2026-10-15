@@ -622,6 +622,7 @@ c_consts! {
     pub(crate) const XCB_ATOM_WM_NORMAL_HINTS: u32 = 40;
     pub(crate) const XCB_ATOM_WM_SIZE_HINTS: u32 = 41;
     pub(crate) const XCB_ATOM_WM_CLASS: u32 = 67;
+    pub(crate) const XCB_ATOM_WM_TRANSIENT_FOR: u32 = 68;
     pub(crate) const XCB_CONFIG_WINDOW_X: u16 = 1;
     pub(crate) const XCB_CONFIG_WINDOW_Y: u16 = 2;
     pub(crate) const XCB_CONFIG_WINDOW_WIDTH: u16 = 4;

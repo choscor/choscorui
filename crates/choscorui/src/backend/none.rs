@@ -38,6 +38,15 @@ impl Platform {
         Ok(Self)
     }
 
+    /// The application state that drawn dialogs use. Without a backend, nothing shows dialogs.
+    pub(crate) fn attach(
+        &self,
+        _runtime: &choscorui_compose::Runtime,
+        _env: &choscorui_compose::view::Env,
+        _tokens: &choscorui_compose::view::Live<choscorui_core::DesignTokens>,
+    ) {
+    }
+
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
         Rc::new(EstimatedText)
     }

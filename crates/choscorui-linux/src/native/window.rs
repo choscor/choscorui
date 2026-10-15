@@ -44,6 +44,9 @@ pub(crate) trait Surface {
     fn minimize(&self);
     /// True when the display server draws the title bar and the frame.
     fn server_decorations(&self) -> bool;
+    /// Makes the window a modal dialog of `parent`: transient for it, and
+    /// modal where the display server supports it.
+    fn set_modal_parent(&self, parent: &Rc<WindowShared>);
     /// Starts a drag of `payload` from the press that is in progress.
     fn begin_drag(
         &self,
@@ -94,6 +97,11 @@ pub(crate) struct WindowShared {
     /// The handle of the window for the parent of portal dialogs, such as
     /// `wayland:HANDLE` or `x11:XID`.
     pub(crate) parent_handle: RefCell<Option<String>>,
+    /// True while a modal window of the application is open: the window
+    /// then drops its input events.
+    pub(crate) blocked: Cell<bool>,
+    /// True once the window is the modal dialog of another window.
+    pub(crate) has_parent: Cell<bool>,
 }
 
 impl WindowShared {
@@ -121,10 +129,26 @@ impl WindowShared {
             }),
             drop_target: RefCell::new(DropTarget::default()),
             parent_handle: RefCell::new(None),
+            blocked: Cell::new(false),
+            has_parent: Cell::new(false),
         })
     }
 
+    /// Queues `event`. A blocked window drops pointer, key, text, and
+    /// drag input.
     pub(crate) fn push(&self, event: WindowEvent) {
+        let input = matches!(
+            event,
+            WindowEvent::Pointer { .. }
+                | WindowEvent::Key { .. }
+                | WindowEvent::Gesture { .. }
+                | WindowEvent::Text { .. }
+                | WindowEvent::Ime(_)
+                | WindowEvent::Drag(_)
+        );
+        if input && self.blocked.get() {
+            return;
+        }
         self.events.borrow_mut().push_back(event);
     }
 
@@ -212,6 +236,16 @@ impl Window {
     /// The events since the last call, oldest first.
     pub fn take_events(&self) -> Vec<WindowEvent> {
         self.shared.events.borrow_mut().drain(..).collect()
+    }
+
+    /// Makes the window a modal dialog of `parent`: transient for it, and
+    /// modal where the display server supports it (`xdg_dialog_v1` on
+    /// Wayland, `_NET_WM_STATE_MODAL` on X11). Call it before `show`.
+    pub fn set_modal_parent(&self, parent: &Window) {
+        if !self.shared.closed.get() && !parent.shared.closed.get() {
+            self.surface.set_modal_parent(&parent.shared);
+            self.shared.has_parent.set(true);
+        }
     }
 
     pub fn show(&self) {

@@ -2,12 +2,14 @@
 //! interface.
 
 use crate::{AppContext, AppError, WindowId};
-use choscorui_compose::view::ViewHost;
+use choscorui_compose::Runtime;
+use choscorui_compose::view::{Env, Live, ViewHost};
 use choscorui_controls::{EstimatedText, ShapedText, ShortcutModifiers, TextMeasure};
 use choscorui_core::{
-    AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DisplayList,
-    Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback, Rect, SemanticChange,
-    SemanticEntry, ServiceError, Services, Size, Support, WindowGeometry, WindowOptions,
+    AnnouncementPriority, BackendCapabilities, CompositionEvent, CursorShape, DesignTokens,
+    DisplayList, Feedback, MenuBarModel, MenuCommandId, MenuError, NoFeedback, Rect,
+    SemanticChange, SemanticEntry, ServiceError, Services, Size, Support, WindowGeometry,
+    WindowOptions,
 };
 use choscorui_linux::services::{NativeServices, ServiceOptions, TextClipboard};
 use choscorui_linux::{
@@ -19,6 +21,8 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+mod modal;
+
 static SHAPER: LinuxTextShaper = LinuxTextShaper;
 
 /// The backend for Linux: `choscorui-linux` in full, and native access
@@ -26,6 +30,8 @@ static SHAPER: LinuxTextShaper = LinuxTextShaper;
 /// portable; prefer the services and capabilities of the prelude.
 pub mod platform {
     pub use super::NativeAccess;
+    pub use super::modal::{DrawnDialogs, ModalDriver, ModalTurn};
+    pub use choscorui_core::{AlertButton, AlertResponse, AlertSpec, AlertStyle, DialogError};
     pub use choscorui_linux::*;
 }
 
@@ -66,7 +72,8 @@ pub(crate) fn capabilities() -> BackendCapabilities {
     capabilities.status_items = services.status_items;
     capabilities.open_urls = services.open_urls;
     capabilities.system_appearance = services.system_appearance;
-    capabilities.native_dialogs = services.native_dialogs;
+    // Without a portal, the toolkit draws the file dialog.
+    capabilities.native_dialogs = Support::Supported;
     capabilities
 }
 
@@ -88,8 +95,9 @@ fn app_error(error: Error) -> AppError {
 
 /// The Wayland or X11 application and its desktop services.
 pub(crate) struct Platform {
-    application: Application,
+    application: Rc<Application>,
     services: Rc<NativeServices>,
+    modal: Rc<modal::Modal>,
 }
 
 /// The text clipboard of the services: the selection of the display
@@ -113,7 +121,7 @@ impl TextClipboard for Selection {
 
 impl Platform {
     pub(crate) fn new(id: Option<&str>) -> Result<Self, AppError> {
-        let application = Application::new().map_err(app_error)?;
+        let application = Rc::new(Application::new().map_err(app_error)?);
         if let Some(id) = id {
             application.set_app_id(id);
         }
@@ -125,15 +133,28 @@ impl Platform {
         if let Some(bus) = services.connection() {
             application.attach_bus(bus.clone());
         }
+        let modal = Rc::new(modal::Modal::new(application.clone(), Self::text_measure()));
+        services.set_file_dialog_fallback(Some(modal::file_dialog_fallback(&modal)));
         Ok(Self {
             application,
             services: Rc::new(services),
+            modal,
         })
+    }
+
+    /// Gives the drawn dialogs the runtime, the environment, and the
+    /// tokens of the application.
+    pub(crate) fn attach(&self, runtime: &Runtime, env: &Env, tokens: &Live<DesignTokens>) {
+        self.modal.attach(runtime, env, tokens);
     }
 
     /// The text measurer of the windows: HarfBuzz shaping, or estimated
     /// metrics when FreeType, HarfBuzz, or fontconfig does not load.
     pub(crate) fn text(&self) -> Rc<dyn TextMeasure> {
+        Self::text_measure()
+    }
+
+    fn text_measure() -> Rc<dyn TextMeasure> {
         if choscorui_linux::text_shaping_support().is_supported() {
             Rc::new(ShapedText::new(&SHAPER))
         } else {
