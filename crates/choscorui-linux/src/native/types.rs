@@ -159,3 +159,17 @@ pub struct PaintTiming {
     /// The time from the start of the paint to `finished`.
     pub duration: std::time::Duration,
 }
+
+/// An edge or corner for an interactive resize, as `xdg_toplevel`
+/// numbers them.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResizeEdge {
+    Top = 1,
+    Bottom = 2,
+    Left = 4,
+    TopLeft = 5,
+    BottomLeft = 6,
+    Right = 8,
+    TopRight = 9,
+    BottomRight = 10,
+}

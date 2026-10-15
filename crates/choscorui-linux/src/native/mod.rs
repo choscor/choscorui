@@ -15,8 +15,9 @@ mod wayland;
 mod window;
 
 pub use event_loop::{PostError, Poster, Timer};
-pub use types::{Error, ImeEvent, Modifiers, PaintTiming, Painter, TextInputState, WindowEvent};
-pub use wayland::ResizeEdge;
+pub use types::{
+    Error, ImeEvent, Modifiers, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent,
+};
 pub use window::Window;
 
 use crate::ffi::libc::Watch;

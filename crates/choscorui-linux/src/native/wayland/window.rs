@@ -9,7 +9,7 @@ use super::shm::Buffers;
 use super::{Client, Role};
 use crate::ffi::wayland::{Arg, ObjectId, Proxy};
 use crate::native::paint::{self, Pixels};
-use crate::native::types::{Error, WindowEvent};
+use crate::native::types::{Error, ResizeEdge, WindowEvent};
 use crate::native::window::{Surface, WindowShared};
 use crate::{FrameScheduler, FrameToken, WaylandSurface};
 use choscorui_core::{CursorShape, Point, Rect, Size, WindowGeometry};
@@ -51,20 +51,6 @@ const DECORATION_SET_MODE: u16 = 1;
 const MODE_SERVER_SIDE: u32 = 2;
 // wp_viewport.
 const VIEWPORT_SET_DESTINATION: u16 = 2;
-
-/// An edge or corner for an interactive resize, as `xdg_toplevel`
-/// numbers them.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ResizeEdge {
-    Top = 1,
-    Bottom = 2,
-    Left = 4,
-    TopLeft = 5,
-    BottomLeft = 6,
-    Right = 8,
-    TopRight = 9,
-    BottomRight = 10,
-}
 
 /// A size and states from `xdg_toplevel.configure`, waiting for the
 /// `xdg_surface.configure` that applies them.
@@ -261,8 +247,8 @@ impl WaylandWindow {
             height,
             ..PendingConfigure::default()
         };
-        for state in states.chunks_exact(4) {
-            match u32::from_ne_bytes([state[0], state[1], state[2], state[3]]) {
+        for state in states.as_chunks::<4>().0 {
+            match u32::from_ne_bytes(*state) {
                 STATE_MAXIMIZED => pending.maximized = true,
                 STATE_FULLSCREEN => pending.full_screen = true,
                 STATE_ACTIVATED => pending.activated = true,
@@ -563,74 +549,6 @@ impl WaylandWindow {
         Some((serial, client))
     }
 
-    /// Starts an interactive move, from a pointer press on a client-side
-    /// title bar.
-    pub(crate) fn begin_move(&self) {
-        let Some((serial, client)) = self.press_serial() else {
-            return;
-        };
-        let seat = client.globals.borrow();
-        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
-            let _ = toplevel.request(TOPLEVEL_MOVE, &[Arg::Object(Some(seat)), Arg::Uint(serial)]);
-        }
-    }
-
-    pub(crate) fn begin_resize(&self, edge: ResizeEdge) {
-        let Some((serial, client)) = self.press_serial() else {
-            return;
-        };
-        let seat = client.globals.borrow();
-        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
-            let _ = toplevel.request(
-                TOPLEVEL_RESIZE,
-                &[
-                    Arg::Object(Some(seat)),
-                    Arg::Uint(serial),
-                    Arg::Uint(edge as u32),
-                ],
-            );
-        }
-    }
-
-    pub(crate) fn show_window_menu(&self, position: Point) {
-        let Some((serial, client)) = self.press_serial() else {
-            return;
-        };
-        let seat = client.globals.borrow();
-        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
-            let _ = toplevel.request(
-                TOPLEVEL_SHOW_WINDOW_MENU,
-                &[
-                    Arg::Object(Some(seat)),
-                    Arg::Uint(serial),
-                    Arg::Int(position.x.round() as i32),
-                    Arg::Int(position.y.round() as i32),
-                ],
-            );
-        }
-    }
-
-    pub(crate) fn set_maximized(&self, maximized: bool) {
-        if let Some(toplevel) = &*self.toplevel.borrow() {
-            let opcode = if maximized {
-                TOPLEVEL_SET_MAXIMIZED
-            } else {
-                TOPLEVEL_UNSET_MAXIMIZED
-            };
-            let _ = toplevel.request(opcode, &[]);
-        }
-    }
-
-    pub(crate) fn minimize(&self) {
-        if let Some(toplevel) = &*self.toplevel.borrow() {
-            let _ = toplevel.request(TOPLEVEL_SET_MINIMIZED, &[]);
-        }
-    }
-
-    pub(crate) fn is_maximized(&self) -> bool {
-        self.inner.borrow().maximized
-    }
-
     /// Destroys the native objects in protocol order.
     fn destroy(&self) {
         if let Some(client) = self.client.upgrade() {
@@ -757,5 +675,73 @@ impl Surface for WaylandWindow {
 
     fn close(&self) {
         self.destroy();
+    }
+
+    /// Starts an interactive move, from a pointer press on a client-side
+    /// title bar.
+    fn begin_move(&self) {
+        let Some((serial, client)) = self.press_serial() else {
+            return;
+        };
+        let seat = client.globals.borrow();
+        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
+            let _ = toplevel.request(TOPLEVEL_MOVE, &[Arg::Object(Some(seat)), Arg::Uint(serial)]);
+        }
+    }
+
+    fn begin_resize(&self, edge: ResizeEdge) {
+        let Some((serial, client)) = self.press_serial() else {
+            return;
+        };
+        let seat = client.globals.borrow();
+        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
+            let _ = toplevel.request(
+                TOPLEVEL_RESIZE,
+                &[
+                    Arg::Object(Some(seat)),
+                    Arg::Uint(serial),
+                    Arg::Uint(edge as u32),
+                ],
+            );
+        }
+    }
+
+    fn show_window_menu(&self, position: Point) {
+        let Some((serial, client)) = self.press_serial() else {
+            return;
+        };
+        let seat = client.globals.borrow();
+        if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
+            let _ = toplevel.request(
+                TOPLEVEL_SHOW_WINDOW_MENU,
+                &[
+                    Arg::Object(Some(seat)),
+                    Arg::Uint(serial),
+                    Arg::Int(position.x.round() as i32),
+                    Arg::Int(position.y.round() as i32),
+                ],
+            );
+        }
+    }
+
+    fn set_maximized(&self, maximized: bool) {
+        if let Some(toplevel) = &*self.toplevel.borrow() {
+            let opcode = if maximized {
+                TOPLEVEL_SET_MAXIMIZED
+            } else {
+                TOPLEVEL_UNSET_MAXIMIZED
+            };
+            let _ = toplevel.request(opcode, &[]);
+        }
+    }
+
+    fn minimize(&self) {
+        if let Some(toplevel) = &*self.toplevel.borrow() {
+            let _ = toplevel.request(TOPLEVEL_SET_MINIMIZED, &[]);
+        }
+    }
+
+    fn server_decorations(&self) -> bool {
+        self.inner.borrow().server_side
     }
 }

@@ -54,9 +54,14 @@ pub(crate) fn declarations() -> (
         wl::WlArgument::layout(),
     ];
     structs.extend(codecs::layouts());
-    let constants = [libc::constants(), wl::constants(), codecs::constants(), xkb::constants()]
-        .into_iter()
-        .flatten()
-        .collect();
+    let constants = [
+        libc::constants(),
+        wl::constants(),
+        codecs::constants(),
+        xkb::constants(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     (libraries, structs, constants)
 }

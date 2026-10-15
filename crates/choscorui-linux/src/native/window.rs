@@ -5,7 +5,7 @@
 //! trait. It queues events in the shared state, and it reads the display
 //! list from there when it paints.
 
-use super::types::{Error, PaintTiming, Painter, TextInputState, WindowEvent};
+use super::types::{Error, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent};
 use choscorui_core::{CursorShape, DisplayList, DrawRegions, Point, Rect, Size, WindowGeometry};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -29,6 +29,17 @@ pub(crate) trait Surface {
     fn text_input_changed(&self);
     /// Destroys the native window.
     fn close(&self);
+    /// Starts an interactive move after a press on a client-side title
+    /// bar.
+    fn begin_move(&self);
+    /// Starts an interactive resize from `edge`.
+    fn begin_resize(&self, edge: ResizeEdge);
+    /// Shows the window manager's window menu at `position`.
+    fn show_window_menu(&self, position: Point);
+    fn set_maximized(&self, maximized: bool);
+    fn minimize(&self);
+    /// True when the display server draws the title bar and the frame.
+    fn server_decorations(&self) -> bool;
 }
 
 /// The paint state of a window.
@@ -313,5 +324,40 @@ impl Window {
         }
         self.surface.set_geometry(geometry);
         Ok(())
+    }
+
+    /// True when the window manager or compositor draws the title bar
+    /// and the frame. When false, the application draws them with the
+    /// title bar control and calls the methods below.
+    pub fn has_server_decorations(&self) -> bool {
+        self.surface.server_decorations()
+    }
+
+    /// Starts an interactive move. Call it while a press on the
+    /// client-side title bar is handled.
+    pub fn begin_move(&self) {
+        self.surface.begin_move();
+    }
+
+    /// Starts an interactive resize from `edge`, while a press is
+    /// handled.
+    pub fn begin_resize(&self, edge: ResizeEdge) {
+        self.surface.begin_resize(edge);
+    }
+
+    /// Shows the window menu of the window manager at `position`, in
+    /// logical window coordinates.
+    pub fn show_window_menu(&self, position: Point) {
+        self.surface.show_window_menu(position);
+    }
+
+    /// Maximizes or restores the window.
+    pub fn set_maximized(&self, maximized: bool) {
+        self.surface.set_maximized(maximized);
+    }
+
+    /// Minimizes the window.
+    pub fn minimize(&self) {
+        self.surface.minimize();
     }
 }

@@ -299,7 +299,9 @@ impl Connection {
         } else {
             // SAFETY: libwayland returns the interface of the object that
             // the error names, which is one of the static tables.
-            let name = unsafe { CStr::from_ptr((*interface).name.cast()) };
+            let interface = unsafe { &*interface };
+            // SAFETY: the tables hold NUL-terminated name literals.
+            let name = unsafe { CStr::from_ptr(interface.name.cast()) };
             format!(
                 "protocol error {protocol} on {}@{id}",
                 name.to_string_lossy()
@@ -431,11 +433,26 @@ fn signature_since(signature: &CStr) -> u32 {
     digits.parse().unwrap_or(1)
 }
 
-/// Owned C data that the marshalled arguments point into.
-#[derive(Default)]
+/// The `length` elements at `pointer`, or an empty slice for a null
+/// pointer or a zero length, as the tables and libwayland pass them.
+///
+/// # Safety
+///
+/// A non-null `pointer` points to `length` initialized elements that stay
+/// valid and unchanged for `'a`.
+pub(crate) unsafe fn table<'a, T>(pointer: *const T, length: usize) -> &'a [T] {
+    if pointer.is_null() || length == 0 {
+        return &[];
+    }
+    // SAFETY: the caller guarantees `length` elements at `pointer`.
+    unsafe { std::slice::from_raw_parts(pointer, length) }
+}
+
+/// Owned C data that the marshalled arguments point into. `arrays` has
+/// room for every argument, so it never moves its elements.
 struct Keep {
     strings: Vec<CString>,
-    arrays: Vec<Box<WlArray>>,
+    arrays: Vec<WlArray>,
 }
 
 impl Proxy {
@@ -459,7 +476,8 @@ impl Proxy {
         }
         // SAFETY: the methods table has `method_count` entries and is a
         // static of the hand-written tables.
-        Ok(unsafe { &*self.interface.c.methods.add(usize::from(opcode)) })
+        let methods = unsafe { table(self.interface.c.methods, count) };
+        Ok(&methods[usize::from(opcode)])
     }
 
     fn bad(&self, opcode: u16, reason: &'static str) -> WaylandError {
@@ -525,11 +543,15 @@ impl Proxy {
         if expanded.len() != kinds.len() {
             return Err(self.bad(opcode, "wrong number of arguments"));
         }
-        let mut keep = Keep::default();
+        let mut keep = Keep {
+            strings: Vec::new(),
+            arrays: Vec::with_capacity(kinds.len()),
+        };
         let mut wire = Vec::with_capacity(kinds.len());
+        // SAFETY: the types table has one entry per argument.
+        let types = unsafe { table(message.types, kinds.len()) };
         for (index, (arg, &(kind, nullable))) in expanded.iter().zip(&kinds).enumerate() {
-            // SAFETY: the types table has one entry per argument.
-            let typed = unsafe { *message.types.add(index) };
+            let typed = types[index];
             let value = match (kind, arg) {
                 (b'i', Arg::Int(value)) => WlArgument { i: *value },
                 (b'u', Arg::Uint(value)) => WlArgument { u: *value },
@@ -571,14 +593,15 @@ impl Proxy {
                 }
                 (b'n', Arg::Bind(..)) if typed.is_null() => WlArgument { n: 0 },
                 (b'a', Arg::Array(bytes)) => {
-                    let mut array = Box::new(WlArray {
+                    keep.arrays.push(WlArray {
                         size: bytes.len(),
                         alloc: bytes.len(),
                         data: bytes.as_ptr().cast_mut().cast::<c_void>(),
                     });
-                    let pointer: *mut WlArray = &raw mut *array;
-                    keep.arrays.push(array);
-                    WlArgument { a: pointer }
+                    let Some(array) = keep.arrays.last_mut() else {
+                        return Err(self.bad(opcode, "an array did not keep"));
+                    };
+                    WlArgument { a: &raw mut *array }
                 }
                 (b'h', Arg::Fd(fd)) => WlArgument { h: fd.as_raw_fd() },
                 _ => return Err(self.bad(opcode, "an argument does not match the signature")),
@@ -705,9 +728,13 @@ unsafe fn decode(display: &Rc<Display>, message: &WlMessage, args: *mut WlArgume
     // SAFETY: the tables hold NUL-terminated signature literals.
     let signature = unsafe { CStr::from_ptr(message.signature.cast()) };
     let mut values = Vec::new();
-    for (index, (kind, _)) in signature_args(signature).into_iter().enumerate() {
-        // SAFETY: the caller guarantees an argument for each entry.
-        let arg = unsafe { *args.add(index) };
+    let kinds = signature_args(signature);
+    // SAFETY: the caller guarantees an argument for each entry.
+    let args = unsafe { table(args, kinds.len()) };
+    // SAFETY: the types table has one entry per argument.
+    let types = unsafe { table(message.types, kinds.len()) };
+    for (index, (kind, _)) in kinds.into_iter().enumerate() {
+        let arg = args[index];
         let value = match kind {
             b'i' => {
                 // SAFETY: the signature names the field that libwayland
@@ -747,8 +774,7 @@ unsafe fn decode(display: &Rc<Display>, message: &WlMessage, args: *mut WlArgume
             b'n' => {
                 // SAFETY: as above; libwayland passes the new proxy.
                 let pointer = unsafe { arg.o };
-                // SAFETY: the types table has one entry per argument.
-                let typed = unsafe { *message.types.add(index) };
+                let typed = types[index];
                 if pointer.is_null() || typed.is_null() {
                     Value::Object(None)
                 } else {
@@ -774,8 +800,7 @@ unsafe fn decode(display: &Rc<Display>, message: &WlMessage, args: *mut WlArgume
                         Vec::new()
                     } else {
                         // SAFETY: the array holds `size` bytes at `data`.
-                        unsafe { std::slice::from_raw_parts(array.data.cast::<u8>(), array.size) }
-                            .to_vec()
+                        unsafe { table(array.data.cast::<u8>(), array.size) }.to_vec()
                     }
                 })
             }

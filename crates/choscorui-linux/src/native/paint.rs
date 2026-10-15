@@ -22,8 +22,8 @@ pub(crate) fn paint(list: &DisplayList, pixels: &mut Pixels<'_>, scale: f64, reg
         .chunks_mut(pixels.stride)
         .take(pixels.height as usize)
     {
-        for pixel in row[..pixels.width as usize * 4].chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
+        for pixel in row[..pixels.width as usize * 4].as_chunks_mut::<4>().0 {
+            *pixel = [0xff, 0xff, 0xff, 0xff];
         }
     }
 }

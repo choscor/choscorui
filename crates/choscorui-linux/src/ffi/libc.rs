@@ -314,10 +314,6 @@ impl Mapping {
         Self::map(fd, length, false)
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.length
-    }
-
     pub(crate) fn bytes(&self) -> &[u8] {
         // SAFETY: the mapping is valid for `length` bytes until `drop`.
         // Another process may write to the memory; the bytes are plain
@@ -364,14 +360,6 @@ impl SharedMemory {
         check(unsafe { ftruncate(fd.as_raw_fd(), size) })?;
         let mapping = Mapping::map(fd.as_fd(), length, true)?;
         Ok(Self { fd, mapping })
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        self.mapping.len()
-    }
-
-    pub(crate) fn bytes(&self) -> &[u8] {
-        self.mapping.bytes()
     }
 
     pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
@@ -491,7 +479,9 @@ mod tests {
     fn shared_memory_is_writable() {
         let mut memory = SharedMemory::new(c"choscorui-test", 4096).unwrap();
         memory.bytes_mut()[10] = 7;
-        assert_eq!(memory.bytes()[10], 7);
-        assert_eq!(memory.len(), 4096);
+        assert_eq!(memory.bytes_mut().len(), 4096);
+        // A second mapping of the same file sees the write.
+        let mapping = Mapping::read_only(memory.as_fd(), 4096).unwrap();
+        assert_eq!(mapping.bytes()[10], 7);
     }
 }

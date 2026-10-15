@@ -8,7 +8,6 @@
 mod shm;
 mod window;
 
-pub use window::ResizeEdge;
 pub(crate) use window::WaylandWindow;
 
 use super::keyboard::{Keyboard, RepeatInfo};
@@ -308,15 +307,6 @@ impl Client {
             .map_err(|_| Error::MissingProtocol("xdg_wm_base"))
     }
 
-    /// The display socket, for the loop.
-    pub(crate) fn fd(&self) -> std::os::fd::BorrowedFd<'_> {
-        self.connection.fd()
-    }
-
-    pub(crate) fn has(&self, protocol: fn(&Globals) -> bool) -> bool {
-        protocol(&self.globals.borrow())
-    }
-
     fn bind(&self, name: u32, interface: &str, version: u32) {
         let Some((table, highest)) = wanted(interface) else {
             return;
@@ -553,8 +543,10 @@ impl Client {
                 for (target, source) in buffer
                     .memory
                     .bytes_mut()
-                    .chunks_exact_mut(4)
-                    .zip(image.pixels().chunks_exact(4))
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(image.pixels().as_chunks::<4>().0)
                 {
                     let alpha = u16::from(source[3]);
                     let scale = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;

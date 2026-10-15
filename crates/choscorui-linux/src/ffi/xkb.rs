@@ -171,7 +171,6 @@ c_consts! {
     pub(crate) const KEY_DELETE: u32 = 0xffff => "XKB_KEY_Delete";
     pub(crate) const KEY_F1: u32 = 0xffbe => "XKB_KEY_F1";
     pub(crate) const KEY_F20: u32 = 0xffd1 => "XKB_KEY_F20";
-    pub(crate) const KEY_NOSYMBOL: u32 = 0 => "XKB_KEY_NoSymbol";
 }
 
 /// The enum values, for the binding check.

@@ -8,6 +8,7 @@
 
 use crate::ffi::wayland::protocols;
 use crate::ffi::wayland::sys::{Interface, WlMessage};
+use crate::ffi::wayland::table;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::path::{Path, PathBuf};
@@ -180,10 +181,12 @@ fn table_messages(
     destructors: Option<&[bool]>,
 ) -> Vec<XmlMessage> {
     let count = usize::try_from(count).unwrap_or(0);
-    (0..count)
-        .map(|index| {
-            // SAFETY: a table holds `count` messages.
-            let message = unsafe { &*messages.add(index) };
+    // SAFETY: a table holds `count` messages.
+    let messages = unsafe { table(messages, count) };
+    messages
+        .iter()
+        .enumerate()
+        .map(|(index, message)| {
             // SAFETY: the tables hold NUL-terminated literals.
             let name = unsafe { CStr::from_ptr(message.name.cast()) };
             // SAFETY: as above.
@@ -193,10 +196,11 @@ fn table_messages(
                 .chars()
                 .filter(|c| c.is_ascii_alphabetic())
                 .count();
-            let types = (0..arguments)
-                .map(|argument| {
-                    // SAFETY: the types table has one entry per argument.
-                    let typed = unsafe { *message.types.add(argument) };
+            // SAFETY: the types table has one entry per argument.
+            let types = unsafe { table(message.types, arguments) };
+            let types = types
+                .iter()
+                .map(|&typed| {
                     (!typed.is_null()).then(|| {
                         // SAFETY: a non-null type is a static table.
                         let interface = unsafe { &*typed.cast::<Interface>() };
