@@ -3038,6 +3038,8 @@ of the window under a point.
   maximized window.
 - `WindowFrame::paint` draws the background, the border, and the shadow
   of the window from the `Panel` slot. Paint it before the content.
+- The `decorations.txt` golden file pins the display list of the bar in
+  both directions: active, inactive, maximized, and a dialog bar.
 
 | Part | Slot | Value |
 | --- | --- | --- |

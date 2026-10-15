@@ -2,6 +2,7 @@
 //! parts. A key step and the semantics read after it must not scale with
 //! the model, and the published entries stay bounded by the view.
 
+use crate::platform::Shaper;
 use crate::scenarios::ms;
 use crate::stats::Results;
 use choscorui_compose::Runtime;
@@ -11,11 +12,10 @@ use choscorui_core::{
     Catalog, Color, DesignTokens, ItemShape, ItemStyle, Key, KeyEvent, Locale, Rect, Scene,
     SceneItem, SemanticAction, SemanticRole, Size, StringListModel,
 };
-use choscorui_macos::CoreTextShaper;
 use std::rc::Rc;
 use std::time::Instant;
 
-static SHAPER: CoreTextShaper = CoreTextShaper;
+static SHAPER: Shaper = Shaper;
 
 /// The commands, list rows, and canvas items of the large models.
 const COMMANDS: usize = 10_000;

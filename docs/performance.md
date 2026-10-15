@@ -4,15 +4,16 @@ This document describes the benchmark harness, the release budgets, the profilin
 
 ## Benchmark harness
 
-`choscorui-bench` ([`tools/bench`](../tools/bench/src/main.rs)) runs the reference scenarios on real AppKit windows. It runs on macOS only.
+`choscorui-bench` ([`tools/bench`](../tools/bench/src/main.rs)) runs the reference scenarios on real native windows. On macOS, it uses `choscorui-macos` and AppKit windows. On Linux, it uses `choscorui-linux` and Wayland or X11 windows. The `platform` module of the bench holds the code of each OS, and the scenarios are the same on both.
 
 The harness measures these values:
 
-- **Frame cost.** Each `present_ms` sample starts at the input and ends when the painter finished the frame (`Window::last_paint`). With Metal, this is the `GPUEndTime` of the command buffer, which the completed handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application. For `resize`, the input is the `setContentSize:` call, so the sample includes the AppKit frame change.
-- **Display latency.** Each `display_ms` sample starts at the input and ends when the frame is on the display (`Window::last_display`), from the `presentedTime` of the drawable. The report includes it, but it has no budget. `missed_display` counts frames that did not reach the display in one second.
+- **Frame cost.** Each `present_ms` sample starts at the input and ends when the painter finished the frame (`Window::last_paint`). With Metal, this is the `GPUEndTime` of the command buffer, which the completed handler reports. With Core Graphics, it is the end of the `drawRect:` replay. The harness does not use a "done" flag from the application. For `resize`, the input is the `set_content_size` call, so the sample includes the frame change of the window system. On Linux, the sample ends at the end of the GLES or Cairo paint.
+- **Display latency.** Each `display_ms` sample starts at the input and ends when the frame is on the display (`Window::last_display`), from the `presentedTime` of the drawable. The report includes it, but it has no budget. `missed_display` counts frames that did not reach the display in one second. The Linux windows do not report the display time, so the Linux report has no `display_ms` and a note.
 - **Startup.** Each startup sample is a separate process. The gallery (with `CHOSCORUI_GALLERY_REPORT_FIRST_FRAME=1`) and a stress-workload child process report the time from process entry to the end of the first frame. The gallery reads `Window::first_paint`, because its event loop can end after a later frame. The driver also records the time from spawn to report.
-- **Allocations.** The bench uses `choscorui_macos::CountingAllocator` as its global allocator. It counts each Rust heap allocation and reallocation, and `allocation_count` reads the count. `scroll.allocations_per_frame` is the change of the count in each scroll frame. The kernel does not count allocations, and `malloc_zone_statistics` gives only the blocks in use. Thus, the count comes from the allocator.
-- **Resources.** `choscorui_macos::process_usage` reads the process usage. CPU time comes from `getrusage`. Memory footprint and wakeups come from `proc_pid_rusage`.
+- **Allocations.** The bench uses the `CountingAllocator` of the backend crate as its global allocator. It counts each Rust heap allocation and reallocation, and `allocation_count` reads the count. `scroll.allocations_per_frame` is the change of the count in each scroll frame. The kernel does not count allocations, and `malloc_zone_statistics` gives only the blocks in use. Thus, the count comes from the allocator.
+- **Resources.** The `process_usage` function of the backend crate reads the process usage. CPU time comes from `getrusage`. On macOS, the memory footprint and the wakeups come from `proc_pid_rusage`.
+- **Linux resources.** The footprint is the sum of `RssAnon`, `RssShmem`, and `VmSwap` in `/proc/self/status`. The wakeups are the voluntary and involuntary context switches of all threads, from `getrusage`.
 
 ### Scenarios
 
@@ -33,7 +34,7 @@ For each sampled metric, the report gives the median, the p95, the maximum, the 
 
 ### Run the benchmarks
 
-> **Caution:** The benchmark windows are foreground AppKit windows. Do not run the benchmark at the same time as a smoke test or the gallery.
+> **Caution:** The benchmark windows are foreground native windows. Do not run the benchmark at the same time as a smoke test or the gallery.
 
 1. Build the release binaries with `cargo build --release -p choscorui-gallery -p choscorui-bench`.
    The release profile uses whole-program LTO, one codegen unit, and no symbol table. Compose, the controls, and the gallery are optimized for size, because each view type compiles its own mount. Core and the backend keep full optimization. This keeps the gallery inside its size budget.
@@ -46,11 +47,21 @@ The driver accepts these options:
 | --- | --- |
 | `--quick` | Runs shorter workloads, for development. |
 | `--only scroll,document` | Runs only the named scenarios. An unknown name exits with status 2. |
-| `--screen <index>` | Opens the benchmark window on the screen at `<index>` of `screen_visible_frames`, where 0 is the main screen. Use the screen with the highest refresh rate. |
+| `--screen <index>` | Opens the benchmark window on the screen at `<index>`, where 0 is the main screen. On macOS, the screens come from `screen_visible_frames`. On Linux, they come from `Application::screens`, and Wayland ignores the position. Use the screen with the highest refresh rate. |
 | `--out <path>` | Writes the report to `<path>`. |
 | `--check bench/budgets.txt` | Compares the metrics with the budgets and exits with status 1 when a budget fails. |
 
 Each run prints a machine manifest and the metrics. It writes the same report and every raw sample to `target/bench/results-<unix time>.txt`, or to the `--out` path. Raw results stay out of the source tree.
+
+### Run the benchmarks on Linux
+
+The Linux bench needs a Wayland or X11 session. In the CI image, [headless-session.sh](../scripts/linux/headless-session.sh) gives one. `CHOSCORUI_BACKEND` selects the display server, and `CHOSCORUI_PAINTER=cairo` selects the Cairo painter.
+
+1. Build the release binaries with `cargo build --release -p choscorui-gallery -p choscorui-bench`.
+2. Run `CHOSCORUI_BACKEND=wayland scripts/linux/headless-session.sh target/release/choscorui-bench --check bench/budgets-linux.txt`.
+3. Run the same command with `CHOSCORUI_BACKEND=x11`.
+
+On a Mac, run each step in the container with `scripts/linux/run-in-container.sh -- COMMAND`. Step 1 does not need a session. The Linux manifest reads `/proc/cpuinfo`, `/proc/meminfo`, `/etc/os-release`, and `uname`. It also records the display server and the `CHOSCORUI_PAINTER` value.
 ## Reference machine
 
 The budgets apply to this machine. Results from other hardware need their own manifest.
@@ -124,6 +135,27 @@ On 2026-10-14 the maintainers decided that the budgets measure the frame cost, t
 
 When AppKit reports that a window is occluded, the window does not draw. Thus `resize.missed_present` can count frames when another window covers the benchmark window.
 
+### Linux budgets
+
+[`bench/budgets-linux.txt`](../bench/budgets-linux.txt) holds the release budgets for Linux. The `linux-native` CI job runs the full bench on Wayland and on X11 with this file. The file holds only keys that do not depend on the speed of the machine:
+
+- `windows.leaked_native_windows` and each `*.missed_present` key, with a budget of 0
+- `idle.paints`, `idle.cpu_percent`, and `idle.wakeups_per_sec`, with the limits of macOS
+- the correctness counters of the startup, resize, document, scroll, views, and semantics scenarios, with the limits of macOS
+- `size.choscorui-gallery_mib`, the size of the release gallery
+
+The file has no timing budget. A Linux timing budget needs baselines from a Linux reference machine that this document names. This document names no Linux reference machine. Thus, the Linux bench reports the timings, but `--check` does not compare them. The CI container is not a reference machine, and its timings are not baselines.
+
+On Linux, `windows.leaked_native_windows` is the change of `Application::window_count`. The count includes each window that the backend did not destroy.
+
+One size limit applies to the x86_64 and aarch64 runners. The limit is the x86_64 size plus 2 %, because the x86_64 gallery is larger. These measurements come from release builds in the CI image:
+
+| Metric | x86_64 | aarch64 | Budget |
+| --- | --- | --- | --- |
+| `size.choscorui-gallery_mib` | 5.349 MiB | 4.524 MiB | ≤ 5.46 |
+
+A change that goes above the limit can raise it, with the reason in the change.
+
 ### How `--check` enforces the budgets
 
 1. The driver reads the budget file before it runs a scenario.
@@ -132,7 +164,7 @@ When AppKit reports that a window is occluded, the window does not draw. Thus `r
 4. A budget for a scenario that did not run is a `SKIP`.
 5. The driver exits with status 1 when there is at least one `FAIL`.
 
-Run `target/release/choscorui-bench --check bench/budgets.txt` on the reference machine before a release. [releasing.md](releasing.md) gives the release steps.
+Run `target/release/choscorui-bench --check bench/budgets.txt` on the reference machine before a release. CI runs the Linux check with `bench/budgets-linux.txt`. [releasing.md](releasing.md) gives the release steps.
 
 ### Re-measure and change budgets
 
@@ -208,5 +240,13 @@ After the rounds, the test makes these checks:
 - **Metal surfaces.** A closed Metal window keeps no texture and shows a frame of one pixel (`Window::metal_usage`). After the drop of the churn windows, no surface of them remains, and no frame waits for a handler without a window (`Application::metal_usage`).
 - **Footprint floor.** The lowest footprint of the last rounds is less than 16 MiB above the lowest footprint of the first rounds.
 - **Panics.** No posted task or timer panicked.
+
+The Linux lifetime smoke test runs in a headless session, on Wayland and on X11:
+
+```sh
+CHOSCORUI_RUN_LINUX_SMOKE=1 scripts/linux/headless-session.sh cargo test -p choscorui-linux --test lifetime_smoke -- --test-threads=1
+```
+
+[`tests/lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) runs the window churn, the resize and theme storm, the worker wakeups, and the timer churn of the macOS test. It waits for each resize event, because an X11 server reports the new size later. After each churn, `Application::window_count` is back at its value before the churn. The test then checks the footprint floor and the panic counts as the macOS test does. A close of the main window releases the last native window.
 
 The benchmark `idle`, `document`, and `windows` scenarios measure memory under load.

@@ -38,7 +38,7 @@ macOS supplies these libraries, and they load dynamically. The Xcode and macOS S
 
 The Linux release binaries link only `libc`, `libm`, and `libgcc_s` (`ldd target/release/choscorui-gallery`). The backend loads the other libraries at run time with `dlopen`:
 
-- **Display:** libwayland-client, libwayland-cursor, libwayland-egl, libxkbcommon, libxkbcommon-x11, libxcb and its extensions, libX11, and libX11-xcb.
+- **Display:** libwayland-client, libwayland-cursor, libwayland-egl, libxkbcommon, libxkbcommon-x11, libxcb and its extensions, and libX11.
 - **Painting and text:** libEGL, libGLESv2, libcairo, libfreetype, libharfbuzz, and libfontconfig.
 - **Desktop and sound:** libdbus-1 and libcanberra.
 - **Images:** libpng16, libturbojpeg, libgif, libtiff, libwebp, and libheif.

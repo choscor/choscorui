@@ -305,7 +305,7 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Shared memory.** `SysvSegment` creates a private System V segment and marks it for removal at once. The server attaches it read-only. The client changes the image only after the completion event of the latest `ShmPutImage`.
 - **Threads.** All X11 calls run on the UI thread that owns the `Application`.
 - **XTEST.** libxcb-xtest loads only when a test calls `Window::simulate_pointer`. Without it, the call returns `Error::Library`.
-- **XIM.** `src/ffi/xlib.rs` loads libX11 for the input method, on a second connection from `XOpenDisplay`. The preedit start, draw, done, and caret callbacks use `callback!`. A panic returns the fallback: -1 from start, and nothing from the others. The callbacks only queue owned `PreeditChange` values on the thread, and the client reads them after each call into Xlib. The client data of a callback is the window id, not a pointer. A box in `InputContext` holds the callback structures while the context lives. `InputContext` destroys its context on drop, and `InputMethod` closes the input method and the display after the last context. `XOpenIM` runs with a UTF-8 `LC_CTYPE`, which `setlocale` sets for the call and then restores. The XIM value names are string macros, which the binding check cannot compare, so `src/ffi/xlib.rs` spells them out.
+- **XIM.** `src/ffi/xlib.rs` loads libX11 for the input method, on a second connection from `XOpenDisplay`. The preedit start, draw, done, and caret callbacks use `callback!`. A panic returns the fallback: -1 from start, and nothing from the others. The callbacks only queue owned `PreeditChange` values on the thread, and the client reads them after each call into Xlib. The client data of a callback is the window id, not a pointer. A box in `InputContext` holds the callback structures while the context lives. `InputContext` destroys its context on drop, and `InputMethod` closes the input method and the display after the last context. `XOpenIM` runs with a UTF-8 `LC_CTYPE`, which `setlocale` sets for the call and then restores. A mutex serializes these locale changes. The binding calls `XInitThreads` once before the first Xlib call, because windows on other threads can open input methods at the same time. The XIM value names are string macros, which the binding check cannot compare, so `src/ffi/xlib.rs` spells them out.
 - **Tests.** The binding check compiles each declaration and constant against the headers. `tests/window_smoke.rs` opens, paints, and closes a window on Xvfb, and round-trips the geometry of a window that does not show. `tests/clipboard_smoke.rs` reads the clipboard from a second process, with INCR for large text, and drags between two windows with XTEST. In `tests/ime_smoke.rs`, the XIM test runs only with an XIM server in `XMODIFIERS`, which the CI image does not have.
 
 ## Linux GLES painter
@@ -332,3 +332,14 @@ The AT-SPI bridge in `src/atspi/` of `choscorui-linux` has no `unsafe` code. It 
 - **Ownership.** The handler holds the model of the windows, not the connection. Thus, the connection and the handler make no reference cycle.
 - **Threads.** The event loop of the UI thread serves the connection. The handler and `publish` run on that thread, and they never run at the same time.
 - **Tests.** `tests/atspi_smoke.rs` calls the objects from a second connection under `at-spi2-registryd`.
+
+## Linux process usage and the counting allocator
+
+`src/ffi/process.rs` declares `getrusage` of the C library with `libc_functions!`. It also holds `CountingAllocator`, because its `GlobalAlloc` implementation is `unsafe`.
+
+- **Calls.** `process_usage` calls `getrusage` with `RUSAGE_SELF` and a `struct rusage` that `ffi_struct!` declares. The binding check compares that layout with `sys/resource.h`.
+- **Files.** The memory sizes come from `/proc/self/status`, which `src/process.rs` reads and parses outside `ffi`.
+- **Allocator.** Each method of `CountingAllocator` adds to an atomic count and forwards its arguments to `System` without change.
+- **Callbacks.** The C library calls no Rust code, so this boundary has no callback.
+- **Threads.** Any thread can call these functions. The count is an atomic value, and the calls keep no state.
+- **Tests.** The unit tests parse a status text and read the usage of the test process. `lifetime_smoke` reads the footprint, and the bench reads the count in each scroll frame.

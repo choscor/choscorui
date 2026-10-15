@@ -108,23 +108,73 @@ fn capabilities_describe_the_running_backend() {
             choscorui::Support::Conditional(_) | choscorui::Support::Supported
         ));
     } else if cfg!(target_os = "linux") && std::env::var_os("CHOSCORUI_RUN_LINUX_SMOKE").is_some() {
-        // Inside the headless session, the backend follows
-        // CHOSCORUI_BACKEND and Wayland is the default.
-        let expected = match std::env::var("CHOSCORUI_BACKEND").as_deref() {
-            Ok("x11") => "x11",
-            _ => "wayland",
-        };
-        assert_eq!(capabilities.backend, expected);
-        assert!(capabilities.multiple_windows.is_supported());
-        assert_eq!(capabilities.keyboard, choscorui::KeyConvention::Pc);
-        // The session runs the AT-SPI registry and its bus.
-        assert!(capabilities.accessibility.is_supported());
+        linux_session(&capabilities);
     } else {
         assert_eq!(
             capabilities,
             choscorui::BackendCapabilities::none("headless")
         );
     }
+}
+
+/// The capabilities table of `docs/platform-linux.md`, in the headless
+/// session of `scripts/linux/headless-session.sh`. The session runs sway,
+/// Xvfb, Mesa, and the AT-SPI registry. The desktop services can be
+/// absent, so those fields take one of the two values of their rule.
+fn linux_session(capabilities: &choscorui::BackendCapabilities) {
+    use choscorui::{Condition, KeyConvention, Support};
+    // The backend follows CHOSCORUI_BACKEND, and Wayland is the default.
+    let wayland = std::env::var("CHOSCORUI_BACKEND").as_deref() != Ok("x11");
+    assert_eq!(
+        capabilities.backend,
+        if wayland { "wayland" } else { "x11" }
+    );
+    assert_eq!(capabilities.keyboard, KeyConvention::Pc);
+    for (name, support) in [
+        ("multiple_windows", capabilities.multiple_windows),
+        ("native_menus", capabilities.native_menus),
+        ("native_dialogs", capabilities.native_dialogs),
+        ("clipboard", capabilities.clipboard),
+        ("drag_and_drop", capabilities.drag_and_drop),
+        ("accessibility", capabilities.accessibility),
+        ("open_urls", capabilities.open_urls),
+        ("text_shaping", capabilities.text_shaping),
+        ("image_codecs", capabilities.image_codecs),
+    ] {
+        assert_eq!(support, Support::Supported, "{name}");
+    }
+    // sway has text-input-v3 and xdg_popup. On X11, an input method
+    // opens only through XMODIFIERS, and popups are Wayland only.
+    if wayland {
+        assert_eq!(capabilities.input_methods, Support::Supported);
+        assert_eq!(capabilities.context_menus, Support::Supported);
+    } else {
+        if std::env::var_os("XMODIFIERS").is_none() {
+            assert_eq!(capabilities.input_methods, Support::Unsupported);
+        }
+        assert_eq!(capabilities.context_menus, Support::Unsupported);
+    }
+    // Mesa paints with GLES on Wayland and on Xvfb, unless the
+    // environment selects Cairo.
+    let cairo = std::env::var("CHOSCORUI_PAINTER").is_ok_and(|painter| painter == "cairo");
+    let gpu = if !cairo {
+        Support::Supported
+    } else {
+        Support::Unsupported
+    };
+    assert_eq!(capabilities.gpu_painting, gpu);
+    assert!(matches!(
+        capabilities.notifications,
+        Support::Supported | Support::Unsupported
+    ));
+    assert!(matches!(
+        capabilities.status_items,
+        Support::Supported | Support::Conditional(Condition::StatusNotifierHost)
+    ));
+    assert!(matches!(
+        capabilities.system_appearance,
+        Support::Supported | Support::Unsupported
+    ));
 }
 
 #[test]

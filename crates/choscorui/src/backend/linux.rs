@@ -94,6 +94,11 @@ pub(crate) fn capabilities() -> BackendCapabilities {
     // The services are probed once, on a connection of their own.
     static SERVICES: OnceLock<BackendCapabilities> = OnceLock::new();
     let mut capabilities = choscorui_linux::capabilities();
+    // Without a display server the application cannot start, so it
+    // reports no service either.
+    if !capabilities.multiple_windows.is_supported() {
+        return capabilities;
+    }
     let services = *SERVICES.get_or_init(|| {
         let probe = NativeServices::new(ServiceOptions::new(""));
         probe.set_base_capabilities(BackendCapabilities::none("linux"));
@@ -107,9 +112,7 @@ pub(crate) fn capabilities() -> BackendCapabilities {
     capabilities.native_dialogs = Support::Supported;
     // The accessibility bus can start or stop at any time, so each call
     // asks again.
-    if capabilities.multiple_windows.is_supported() {
-        capabilities.accessibility = choscorui_linux::atspi::accessibility_support();
-    }
+    capabilities.accessibility = choscorui_linux::atspi::accessibility_support();
     capabilities
 }
 

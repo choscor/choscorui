@@ -1,20 +1,37 @@
-//! Process resource usage, which `choscorui-macos` reads from the
+//! Process resource usage, which the platform module reads from the
 //! kernel, and the machine manifest recorded with every result.
 
-use choscorui_macos::{ProcessUsage, process_usage};
+use crate::platform;
 use std::process::Command;
+use std::time::Duration;
+
+/// The resource usage of this process at one time, on each OS.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Usage {
+    /// User plus system CPU time.
+    pub cpu: Duration,
+    /// The peak resident size in bytes.
+    pub peak_rss: u64,
+    /// The resident size in bytes.
+    pub resident: u64,
+    /// The memory that only this process holds, in bytes.
+    pub footprint: u64,
+    /// The wakeups of the process threads.
+    pub wakeups: u64,
+}
 
 /// The resource usage of this process, or zeros when the kernel does not
 /// report it.
-pub fn usage() -> ProcessUsage {
-    process_usage().unwrap_or_default()
+pub fn usage() -> Usage {
+    platform::usage()
 }
 
 pub fn mib(bytes: u64) -> f64 {
     bytes as f64 / (1024.0 * 1024.0)
 }
 
-fn command(program: &str, args: &[&str]) -> String {
+/// The trimmed standard output of a program, or `unknown`.
+pub fn command(program: &str, args: &[&str]) -> String {
     Command::new(program)
         .args(args)
         .output()
@@ -26,35 +43,10 @@ fn command(program: &str, args: &[&str]) -> String {
 
 /// `key=value` lines describing the machine, OS, toolchain, and build.
 pub fn manifest() -> Vec<(String, String)> {
-    let memory = command("sysctl", &["-n", "hw.memsize"])
-        .parse::<u64>()
-        .map(|bytes| format!("{} GiB", bytes / (1 << 30)))
-        .unwrap_or_else(|_| "unknown".into());
-    let power = command("pmset", &["-g", "batt"])
-        .lines()
-        .next()
-        .and_then(|line| line.split('\'').nth(1))
-        .unwrap_or("unknown")
-        .to_owned();
     let dirty = !command("git", &["status", "--porcelain", "--untracked-files=no"]).is_empty();
     let revision = command("git", &["rev-parse", "--short", "HEAD"]);
-    vec![
-        (
-            "machine.model".into(),
-            command("sysctl", &["-n", "hw.model"]),
-        ),
-        (
-            "machine.cpu".into(),
-            command("sysctl", &["-n", "machdep.cpu.brand_string"]),
-        ),
-        ("machine.memory".into(), memory),
-        ("machine.arch".into(), std::env::consts::ARCH.into()),
-        ("machine.power".into(), power),
-        (
-            "os.version".into(),
-            command("sw_vers", &["-productVersion"]),
-        ),
-        ("os.build".into(), command("sw_vers", &["-buildVersion"])),
+    let mut lines = platform::machine();
+    lines.extend([
         ("rust.version".into(), command("rustc", &["-V"])),
         (
             "git.revision".into(),
@@ -72,5 +64,6 @@ pub fn manifest() -> Vec<(String, String)> {
                 "release".into()
             },
         ),
-    ]
+    ]);
+    lines
 }

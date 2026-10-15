@@ -8,9 +8,10 @@ This guide tells how to build a desktop application with ChoscorUI. You describe
 | --- | --- | --- |
 | macOS | 15 or later, Apple silicon or Intel | `sw_vers -productVersion` |
 | Xcode Command Line Tools | a release with the macOS 15 SDK | `xcode-select --install` |
+| Linux | A Wayland compositor or an X11 server, and the system libraries of [platform-linux.md](platform-linux.md#requirements) | `echo $WAYLAND_DISPLAY $DISPLAY` |
 | Rust | 1.88 or later, edition 2024 | `rustup toolchain install 1.88` |
 
-The toolkit links only system frameworks and one Rust crate, `unicode-segmentation`. The application API is the same on every operating system. On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. [platform-macos.md](platform-macos.md) describes the supported backend.
+The toolkit uses only system libraries and one Rust crate, `unicode-segmentation`. The application API is the same on every operating system. On a target without a backend, `App::start` and `App::run` return `AppError::Unsupported`. [platform-macos.md](platform-macos.md) and [platform-linux.md](platform-linux.md) describe the backends.
 
 To run the gallery, use these commands from the repository root:
 
@@ -37,7 +38,7 @@ Depend only on `choscorui`. The other crates are internal and can change in any 
 | `choscorui::core` | Geometry, text, models, themes, semantics, settings, locale, and resources |
 | `choscorui::controls` | The controls that the views host, and the hosted control types |
 | `choscorui::compose` | The view runtime, reactive state, and state machines |
-| `choscorui::platform` | The backend of the current operating system, for code that the portable API does not cover. On macOS it is `choscorui-macos` and the `NativeAccess` trait. Code that uses it is not portable |
+| `choscorui::platform` | The backend of the current operating system, for code that the portable API does not cover. On macOS it is `choscorui-macos` and the `NativeAccess` trait. On Linux it is `choscorui-linux` with the `NativeAccess` and `DrawnDialogs` traits. Code that uses it is not portable |
 | `choscorui::capabilities()` | What the current backend supports |
 
 [versioning.md](versioning.md) tells which parts are stable.
@@ -546,15 +547,15 @@ Windows share the runtime, so a `Property` from `App::runtime` updates every win
 
 `App::on_error(handler)` gets each `ViewError`. The first argument is the `WindowId` of the window that reported it. It is `None` for an error of the application, for example a settings file that did not load.
 
-`choscorui::platform::NativeAccess` gives the native application, window, and menu of an `AppContext` on macOS. Use it only for features that the portable API does not have.
+`choscorui::platform::NativeAccess` gives the native application, window, and menu of an `AppContext` on macOS and Linux. Use it only for features that the portable API does not have.
 
 ### Threads and timers
 
 The UI types work only on the main thread. They are not `Send`.
 
-- **Work from other threads.** On macOS, call `Application::poster` on `NativeAccess::native_application` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
+- **Work from other threads.** On macOS and Linux, call `Application::poster` on `NativeAccess::native_application` to get a `Poster`, which is `Send`. Call `Poster::post` with a closure, and the main loop runs it.
 - **Timers.** `Application::schedule_once` and `Application::schedule_repeating` return a `Timer`. When you drop the `Timer`, the timer stops.
-- **Panics.** A panic in a posted task, a timer, or a menu callback does not unwind into AppKit. The toolkit counts each such panic.
+- **Panics.** A panic in a posted task, a timer, or a native callback does not unwind into the system libraries. The toolkit counts the panics of posted tasks, timers, and menu callbacks.
 
 [architecture.md](architecture.md#threading-model) gives the full threading model.
 
@@ -638,7 +639,7 @@ fn load(path: PathBuf) -> Result<Settings, SettingsError> {
 }
 ```
 
-- `user_settings_path(app_id)` returns the path of the settings file. The `app_id` is a reverse-DNS identifier, for example `com.example.editor`. [platform-macos.md](platform-macos.md) gives the location on macOS.
+- `user_settings_path(app_id)` returns the path of the settings file. The `app_id` is a reverse-DNS identifier, for example `com.example.editor`. [platform-macos.md](platform-macos.md#settings-storage) and [platform-linux.md](platform-linux.md#settings-storage) give the location on each system.
 - A key uses ASCII letters, digits, `.`, `_`, `-`, and `/`. `is_valid_setting_key` checks a key.
 - A value is a `SettingValue`: `Bool`, `Integer`, `Float`, `Text`, `List`, or `Rect`.
 - `Settings::to_text` does not write a value that is equal to its default. Thus a changed default reaches the existing users.
