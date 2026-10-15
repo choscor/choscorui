@@ -186,6 +186,9 @@ impl Platform {
             services.set_clipboard(Some(Box::new(Selection(application.clipboard()))));
         }
         services.open_launch_arguments(std::env::args_os().skip(1));
+        // `system-ui` is the desktop interface font, when the portal
+        // reports one.
+        services.update_desktop_font();
         if let Some(bus) = services.connection() {
             application.attach_bus(bus.clone());
         }
@@ -285,6 +288,7 @@ impl Platform {
             std::thread::sleep(timeout);
         }
         self.services.set_active(self.application.is_active());
+        self.services.update_desktop_font();
         self.services
             .set_has_visible_windows(self.application.has_visible_windows());
         // Portal dialogs open over the focused window.

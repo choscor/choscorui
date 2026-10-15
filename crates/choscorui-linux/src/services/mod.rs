@@ -112,6 +112,9 @@ pub struct NativeServices {
     notifier: Option<Notifier>,
     status_item: RefCell<Option<StatusItem>>,
     appearance: Option<AppearanceWatch>,
+    /// The font name that `update_desktop_font` gave `system-ui`, after
+    /// its first call.
+    desktop_font: RefCell<Option<Option<String>>>,
     application: Option<ApplicationService>,
     events: EventQueue,
     visible_windows: Rc<Cell<bool>>,
@@ -157,6 +160,7 @@ impl NativeServices {
             notifier: None,
             status_item: RefCell::default(),
             appearance: None,
+            desktop_font: RefCell::default(),
             application: None,
             events: Rc::clone(&events),
             visible_windows: Rc::clone(&visible_windows),
@@ -305,6 +309,22 @@ impl NativeServices {
         if let (Some(appearance), Some(connection)) = (&self.appearance, &self.connection) {
             appearance.reload(connection);
         }
+    }
+
+    /// Gives `system-ui` the interface font of the appearance settings,
+    /// such as `Inter 10`, through `set_desktop_font`. Without a font
+    /// name, `system-ui` is `sans-serif`. Returns true when the font
+    /// changed since the previous call. Text that lays out after the
+    /// change uses the new family.
+    pub fn update_desktop_font(&self) -> bool {
+        let font = self.appearance().font_name;
+        let mut applied = self.desktop_font.borrow_mut();
+        if applied.as_ref() == Some(&font) {
+            return false;
+        }
+        crate::set_desktop_font(font.as_deref());
+        *applied = Some(font);
+        true
     }
 
     /// Shows or hides the status item.
