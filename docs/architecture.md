@@ -31,6 +31,7 @@ The facade also has `App`, the view-based entry point, on every target. `App` op
 **Backend selection.** The private `backend` module is the only place in the facade that reads the target OS. It selects one implementation of the crate-private `Platform`, `NativeWindow`, and `NativeMenu` types:
 
 - On macOS, `backend/macos.rs` wraps `choscorui-macos`.
+- On Linux, `backend/linux.rs` wraps `choscorui-linux`. Its `capabilities()` probes the display server. Without a display server, it returns `BackendCapabilities::none("headless")`, and `App::start` returns `AppError::Unsupported`.
 - On other targets, `backend/none.rs` keeps windows and menus in memory. Its `capabilities()` returns `BackendCapabilities::none("headless")`. `App::start` examines `multiple_windows` and returns `AppError::Unsupported` before a window opens.
 
 The rest of the facade (`App`, `Scene`, `AppContext`) is the same code on every target.
@@ -125,9 +126,9 @@ Dependencies: `choscorui-core` only.
 
 ### choscorui-linux
 
-`choscorui-linux` is not a supported backend. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. It has no native bindings. See [platform-linux.md](platform-linux.md).
+`choscorui-linux` is the Linux backend. It is in development; [platform-linux.md](platform-linux.md) lists what works. It contains state machines for the Wayland and X11 window lifecycles, backend selection (`select_backend`), seat input, frame scheduling, and clipboard ownership. These compile on every host. On Linux, it also has the native backend: `Application`, `Window`, and `Poster` on Wayland, and the image codecs. It loads each system library at run time with `dlopen`. All of its `unsafe` code is in `src/ffi/`.
 
-Dependencies: none.
+Dependencies: `choscorui-core` only.
 
 ### Gallery and tools
 
@@ -148,12 +149,12 @@ The benchmark depends directly on `choscorui-core`, `choscorui-controls`, `chosc
 - `choscorui-core` is the lowest layer.
 - `choscorui-controls`, `choscorui-render`, `choscorui-macos`, `choscorui-windows`, and `choscorui-linux` can depend only on `choscorui-core`.
 - `choscorui-compose` can depend only on core and controls. Its views configure and mount controls.
-- The facade can depend only on core, controls, compose, and macos.
+- The facade can depend only on core, controls, compose, macos, and linux.
 - No library crate depends on the gallery.
 - `choscorui-api-docs` depends on no library crate.
 - The workspace crates have no dependency cycles.
 
-The graph shows the dependencies that the `Cargo.toml` files declare. A dotted arrow is a target-specific (macOS) dependency.
+The graph shows the dependencies that the `Cargo.toml` files declare. A dotted arrow is a target-specific (macOS or Linux) dependency.
 
 ```mermaid
 flowchart BT
@@ -173,10 +174,12 @@ flowchart BT
     render --> core
     macos --> core
     windows --> core
+    linux --> core
     facade --> core
     facade --> controls
     facade --> compose
     facade -.-> macos
+    facade -.-> linux
     gallery --> facade
     bench -.-> controls
     bench -.-> compose

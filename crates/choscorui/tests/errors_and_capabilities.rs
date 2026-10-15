@@ -107,6 +107,16 @@ fn capabilities_describe_the_running_backend() {
             capabilities.notifications,
             choscorui::Support::Conditional(_) | choscorui::Support::Supported
         ));
+    } else if cfg!(target_os = "linux") && std::env::var_os("CHOSCORUI_RUN_LINUX_SMOKE").is_some() {
+        // Inside the headless session, the backend follows
+        // CHOSCORUI_BACKEND and Wayland is the default.
+        let expected = match std::env::var("CHOSCORUI_BACKEND").as_deref() {
+            Ok("x11") => "x11",
+            _ => "wayland",
+        };
+        assert_eq!(capabilities.backend, expected);
+        assert!(capabilities.multiple_windows.is_supported());
+        assert_eq!(capabilities.keyboard, choscorui::KeyConvention::Pc);
     } else {
         assert_eq!(
             capabilities,

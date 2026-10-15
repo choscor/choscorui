@@ -78,7 +78,7 @@ from = "linux"
 may_depend_on = ["core"]
 [[rule.dependencies]]
 from = "facade"
-may_depend_on = ["core", "controls", "compose", "macos"]
+may_depend_on = ["core", "controls", "compose", "macos", "linux"]
 
 [[rule]]
 id = "libraries-do-not-depend-on-gallery"

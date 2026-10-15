@@ -34,7 +34,7 @@ pub(crate) struct Platform;
 impl Platform {
     /// The headless platform. `App::start` does not get here, because
     /// the capabilities show that the platform cannot show windows.
-    pub(crate) fn new() -> Result<Self, AppError> {
+    pub(crate) fn new(_id: Option<&str>) -> Result<Self, AppError> {
         Ok(Self)
     }
 

@@ -80,7 +80,7 @@ pub(crate) struct Platform {
 }
 
 impl Platform {
-    pub(crate) fn new() -> Result<Self, AppError> {
+    pub(crate) fn new(_id: Option<&str>) -> Result<Self, AppError> {
         Ok(Self {
             application: Application::new().map_err(app_error)?,
         })

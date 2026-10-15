@@ -1,10 +1,17 @@
 //! Opens view-based windows through `App` and drives them: a counter,
-//! the command menus, and window restore. It opens AppKit windows, so it
-//! runs only with `CHOSCORUI_RUN_MACOS_SMOKE=1`.
+//! the command menus, and window restore. It opens native windows, so it
+//! runs only with `CHOSCORUI_RUN_MACOS_SMOKE=1` on macOS and
+//! `CHOSCORUI_RUN_LINUX_SMOKE=1` on Linux (inside
+//! `scripts/linux/headless-session.sh`).
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn main() {
-    if std::env::var_os("CHOSCORUI_RUN_MACOS_SMOKE").is_none() {
+    let gate = if cfg!(target_os = "macos") {
+        "CHOSCORUI_RUN_MACOS_SMOKE"
+    } else {
+        "CHOSCORUI_RUN_LINUX_SMOKE"
+    };
+    if std::env::var_os(gate).is_none() {
         return;
     }
     let settings = std::env::temp_dir().join(format!(
@@ -13,6 +20,7 @@ fn main() {
     ));
     let _ = std::fs::remove_file(&settings);
     smoke::counter(&settings);
+    #[cfg(target_os = "macos")]
     smoke::commands(&settings);
     smoke::restore(&settings);
     smoke::recovery_and_services(&settings);
@@ -20,11 +28,15 @@ fn main() {
     println!("app smoke: ok");
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod smoke {
     use choscorui::compose::view::StorageError;
-    use choscorui::core::{Point, Rect, SemanticAction, Service, Size, WindowGeometry};
-    use choscorui::platform::{MenuShortcutModifiers, NativeAccess};
+    #[cfg(target_os = "macos")]
+    use choscorui::core::Service;
+    use choscorui::core::{Point, Rect, SemanticAction, Size, WindowGeometry};
+    #[cfg(target_os = "macos")]
+    use choscorui::platform::MenuShortcutModifiers;
+    use choscorui::platform::NativeAccess;
     use choscorui::prelude::*;
     use std::cell::RefCell;
     use std::path::Path;
@@ -72,6 +84,7 @@ mod smoke {
     /// A declared command menu installs; choosing an item runs its
     /// closure; live labels and check marks update the menu; a shortcut
     /// runs its item; a panicking action is counted and stays usable.
+    #[cfg(target_os = "macos")]
     pub fn commands(settings: &Path) {
         let app = App::new().settings_path(settings);
         let runtime = app.runtime().clone();
@@ -199,9 +212,12 @@ mod smoke {
         (opened, closed)
     }
 
+    /// True when the frames match. Wayland clients cannot read or set
+    /// their position, so there only the sizes must match.
     fn near(a: Rect, b: Rect) -> bool {
-        (a.origin.x - b.origin.x).abs() < 1.0
-            && (a.origin.y - b.origin.y).abs() < 1.0
+        let positioned = choscorui::capabilities().backend != "wayland";
+        (!positioned
+            || ((a.origin.x - b.origin.x).abs() < 1.0 && (a.origin.y - b.origin.y).abs() < 1.0))
             && (a.size.width - b.size.width).abs() < 1.0
             && (a.size.height - b.size.height).abs() < 1.0
     }
@@ -233,22 +249,27 @@ mod smoke {
             errors.borrow()
         );
         let services = running.services().clone();
-        let posted = services.post_notification(&SystemNotification::new(
-            "com.choscor.smoke",
-            "Smoke",
-            "app smoke",
-        ));
-        if !choscorui::capabilities().notifications.is_supported() {
-            assert!(
-                matches!(
-                    posted,
-                    Err(ServiceError::Unavailable {
-                        service: Service::Notifications,
-                        ..
-                    })
-                ),
-                "{posted:?}"
-            );
+        // The Linux desktop services land with the D-Bus bridge
+        // (milestone M4).
+        #[cfg(target_os = "macos")]
+        {
+            let posted = services.post_notification(&SystemNotification::new(
+                "com.choscor.smoke",
+                "Smoke",
+                "app smoke",
+            ));
+            if !choscorui::capabilities().notifications.is_supported() {
+                assert!(
+                    matches!(
+                        posted,
+                        Err(ServiceError::Unavailable {
+                            service: Service::Notifications,
+                            ..
+                        })
+                    ),
+                    "{posted:?}"
+                );
+            }
         }
         if std::env::var_os("CHOSCORUI_RUN_MACOS_CLIPBOARD").is_some() {
             services.set_clipboard_text("choscorui app smoke").unwrap();
@@ -267,7 +288,7 @@ mod smoke {
     /// A window with `restore_geometry` reopens at its saved frame, and a
     /// frame off every screen moves onto one.
     pub fn restore(settings: &Path) {
-        let screens = choscorui::platform::screen_visible_frames().unwrap();
+        let screens = screens();
         let main = screens[0];
         let placed = Rect::new(
             Point::new(main.origin.x + 40.0, main.origin.y + 60.0),
@@ -287,7 +308,19 @@ mod smoke {
             "{fitted:?} is on no screen of {screens:?}"
         );
     }
+
+    #[cfg(target_os = "macos")]
+    fn screens() -> Vec<Rect> {
+        choscorui::platform::screen_visible_frames().unwrap()
+    }
+
+    /// The screens of the display server.
+    #[cfg(target_os = "linux")]
+    fn screens() -> Vec<Rect> {
+        let running = App::new().start().expect("the app must start");
+        running.native_application().screens()
+    }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn main() {}

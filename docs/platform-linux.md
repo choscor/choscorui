@@ -1,8 +1,13 @@
 # Linux backend
 
-Not supported. The crate compiles and has tested contracts.
+In development. The backend opens and paints windows on Wayland. The full rewrite of this document comes with the last milestone of the [Linux backend spec](specs/2026-10-15-linux-backend.md).
 
-The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. On Linux, it also decodes and encodes images with the system codec libraries. The facade does not use it. On Linux, `choscorui::platform` does not exist, and `choscorui::capabilities()` returns `Unsupported` for every capability. Its `keyboard` field is `KeyConvention::Pc`.
+The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. On Linux, it also has the native backend, and the facade uses it through `backend/linux.rs`:
+
+- `Application`, `Window`, and `Poster` on Wayland: windows, keyboard and pointer input, scale, and timers.
+- Image decoding and encoding with the system codec libraries.
+
+`choscorui::capabilities()` reports `backend: "wayland"` and `multiple_windows: Supported` when a compositor accepts the connection. Without a display server, it returns `BackendCapabilities::none("headless")`. The `keyboard` field is always `KeyConvention::Pc`. The other capabilities are `Unsupported` until their milestone lands.
 
 The state machines compile and run on every host. [`tests/protocol_contracts.rs`](../crates/choscorui-linux/tests/protocol_contracts.rs) pins each rule in this document.
 

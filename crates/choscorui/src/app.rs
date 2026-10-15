@@ -451,7 +451,7 @@ impl App {
         if windows != Support::Supported {
             return Err(AppError::Unsupported);
         }
-        let platform = Platform::new()?;
+        let platform = Platform::new(self.id.as_deref())?;
         let path = self.settings_path.or_else(|| {
             self.id
                 .as_deref()

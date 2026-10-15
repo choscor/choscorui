@@ -9,6 +9,7 @@ dependencies = [
  "choscorui-compose",
  "choscorui-controls",
  "choscorui-core",
+ "choscorui-linux",
  "choscorui-macos",
  "choscorui-render",
 ]
