@@ -240,8 +240,14 @@ event. It removes control characters and the private-use characters of
 function keys. The [macOS backend](../crates/choscorui-macos/src/ime.rs)
 contains the full routing.
 
-> **Note:** automated tests send marked text through the native view. They do
-> not use a real input method.
+On Linux, the backend gives the same `ImeEvent` values. Wayland uses
+`zwp_text_input_v3`, and X11 uses XIM. The surrounding text and the caret
+rectangle come from `TextInputState`. Thus, `TextInputState` also has the
+`active` flag and the `text` of the focused control.
+[platform-linux.md](platform-linux.md) gives the protocol details.
+
+> **Note:** automated tests send marked text through the native view, or
+> through a test input method on Linux. They do not use a real input method.
 
 ## Rich text
 
