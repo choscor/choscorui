@@ -8,9 +8,9 @@ use choscorui::compose::view::{
 };
 use choscorui::controls::{
     self, ButtonGroupMember, ButtonVariant, CommandId, ControlMessage, ControlSize, ControlValue,
-    Orientation, Shortcut, ShortcutModifiers, ToolButtonMenu, shortcut_text,
+    Orientation, Shortcut, ShortcutModifiers, ToolButtonMenu, shortcut_label, shortcut_text,
 };
-use choscorui::core::{ColorRole, Icon, Key, Space, TextPreset};
+use choscorui::core::{ColorRole, Icon, Key, KeyConvention, Space, TextPreset};
 
 /// A small muted line whose catalog string follows state.
 fn readout(text: Localized) -> impl View {
@@ -339,8 +339,8 @@ pub fn button_group(_: &PageCx) -> AnyView {
     ButtonGroupPage.into_any()
 }
 
-/// `shortcut_text` for a few shortcuts.
-fn examples() -> String {
+/// A few shortcuts, as `text` gives them.
+fn examples(text: impl Fn(Shortcut) -> String) -> String {
     let all = ShortcutModifiers {
         shift: true,
         control: true,
@@ -365,8 +365,13 @@ fn examples() -> String {
             modifiers: ShortcutModifiers::default(),
         },
     ]
-    .map(shortcut_text)
+    .map(text)
     .join("   ")
+}
+
+/// The labels of the examples on a PC keyboard.
+fn pc_examples() -> String {
+    examples(|shortcut| shortcut_label(shortcut, KeyConvention::Pc))
 }
 
 /// Records a shortcut of up to two chords.
@@ -393,8 +398,13 @@ impl View for KeySequencePage {
                 })
                 .frame(Frame::new().width(320.0)),
             readout(t!("key-sequence.last", change = last)),
-            caption(t!("key-sequence.examples", examples = examples()))
-                .accessibility_label(examples()),
+            caption(t!(
+                "key-sequence.examples",
+                examples = examples(shortcut_text)
+            ))
+            .accessibility_label(examples(shortcut_text)),
+            caption(t!("key-sequence.labels", examples = pc_examples()))
+                .accessibility_label(pc_examples()),
             section(
                 t!("key-sequence.disabled"),
                 KeySequenceEdit::new(

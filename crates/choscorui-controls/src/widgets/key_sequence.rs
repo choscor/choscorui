@@ -7,9 +7,9 @@ use crate::form::input::default_width;
 use crate::style::{Content, ControlKind, PaintContext, Slot, StyleQuery, TextAlign, VisualState};
 use crate::{Shortcut, ShortcutModifiers};
 use choscorui_core::{
-    Catalog, EventPhase, EventReply, Icon, Key, KeyEvent, Locale, Localizer, Measured,
-    PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole, SemanticState,
-    Size,
+    Catalog, EventPhase, EventReply, Icon, Key, KeyConvention, KeyEvent, Locale, Localizer,
+    Measured, PointerButton, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticRole,
+    SemanticState, Size,
 };
 
 /// The pause after a chord, in seconds, that commits a shorter sequence
@@ -38,6 +38,9 @@ pub struct KeySequenceEdit {
     clear_button: bool,
     /// The layout direction of a hosted field, from `arrange`.
     rtl: bool,
+    /// The keyboard conventions of the labels of a hosted field, from
+    /// `arrange`.
+    key_convention: KeyConvention,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,6 +66,7 @@ impl KeySequenceEdit {
             deadline: None,
             clear_button: false,
             rtl: false,
+            key_convention: KeyConvention::Mac,
         }
     }
 
@@ -157,12 +161,13 @@ impl KeySequenceEdit {
             .join(", ")
     }
 
-    /// The text of the sequence in the language of `strings`: the key
-    /// names, such as Space, are localized.
+    /// The label of the sequence in the language of `strings`: the key
+    /// names, such as Space, are localized. The labels follow the keyboard
+    /// conventions of the host.
     fn localized_text(&self, strings: &Localizer) -> String {
         self.committed
             .iter()
-            .map(|shortcut| compose_text(*shortcut, Some(strings)))
+            .map(|shortcut| compose_label(*shortcut, self.key_convention, Some(strings)))
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -218,7 +223,7 @@ impl KeySequenceEdit {
             let height = cap.min_height.min(inner.size.height);
             let y = inner.origin.y + (inner.size.height - height) / 2.0;
             for chord in chords {
-                let text = compose_text(*chord, Some(cx.strings));
+                let text = compose_label(*chord, cx.key_convention, Some(cx.strings));
                 let width = Content::label(&text).size(&cap, cx.text).width;
                 let left = if cx.rtl { x - width } else { x };
                 let rect = Rect::from_xywh(left, y, width, height);
@@ -293,6 +298,7 @@ impl CustomControl for KeySequenceEdit {
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, _bounds: Rect) {
         self.rtl = cx.rtl();
+        self.key_convention = cx.key_convention;
     }
 
     fn event(&mut self, cx: &mut ControlContext<'_>, event: &ControlEvent) -> EventReply {
@@ -420,6 +426,25 @@ impl CustomControl for KeySequenceEdit {
     }
 }
 
+/// The PC name of each named key.
+const PC_KEY_NAMES: [(Key, &str); 15] = [
+    (Key::Enter, "Enter"),
+    (Key::Tab, "Tab"),
+    (Key::Space, "Space"),
+    (Key::Escape, "Esc"),
+    (Key::Backspace, "Backspace"),
+    (Key::Delete, "Delete"),
+    (Key::ArrowUp, "Up"),
+    (Key::ArrowDown, "Down"),
+    (Key::ArrowLeft, "Left"),
+    (Key::ArrowRight, "Right"),
+    (Key::Home, "Home"),
+    (Key::End, "End"),
+    (Key::PageUp, "Page Up"),
+    (Key::PageDown, "Page Down"),
+    (Key::ContextMenu, "Menu"),
+];
+
 /// The modifier glyphs in canonical order.
 const MODIFIER_GLYPHS: [char; 4] = ['⌃', '⌥', '⇧', '⌘'];
 
@@ -454,6 +479,82 @@ const KEY_MESSAGES: [(Key, &str); 2] = [
 /// reads in each language.
 pub fn shortcut_text(shortcut: Shortcut) -> String {
     compose_text(shortcut, None)
+}
+
+/// The label of `shortcut` that people read on `convention`. On `Mac` it
+/// is the text of [`shortcut_text`], such as `⇧⌘S`. On `Pc` it is words
+/// joined by `+`, such as `Ctrl+Shift+S` or `Alt+F4`: `command` is Ctrl,
+/// and `control` is Super.
+///
+/// # Examples
+///
+/// ```
+/// use choscorui_controls::{Shortcut, ShortcutModifiers, shortcut_label};
+/// use choscorui_core::{Key, KeyConvention};
+///
+/// let save = Shortcut {
+///     key: Key::Character('s'),
+///     modifiers: ShortcutModifiers { command: true, ..ShortcutModifiers::default() },
+/// };
+/// assert_eq!(shortcut_label(save, KeyConvention::Mac), "⌘S");
+/// assert_eq!(shortcut_label(save, KeyConvention::Pc), "Ctrl+S");
+/// ```
+pub fn shortcut_label(shortcut: Shortcut, convention: KeyConvention) -> String {
+    compose_label(shortcut, convention, None)
+}
+
+/// The shortcut text `text` as people read it on `convention`. On `Pc`, a
+/// text that [`shortcut_text`] makes, such as `⇧⌘S` or `⌘K, ⌘S`, changes
+/// to its PC label. Other text stays the same.
+pub(crate) fn display_shortcut(text: &str, convention: KeyConvention) -> std::borrow::Cow<'_, str> {
+    match parse_sequence(text) {
+        Some(chords) if convention == KeyConvention::Pc && !chords.is_empty() => chords
+            .iter()
+            .map(|chord| shortcut_label(*chord, convention))
+            .collect::<Vec<_>>()
+            .join(", ")
+            .into(),
+        _ => text.into(),
+    }
+}
+
+/// The label of `shortcut` on `convention`, with the localized key names
+/// of `strings` when it is given.
+fn compose_label(
+    shortcut: Shortcut,
+    convention: KeyConvention,
+    strings: Option<&Localizer>,
+) -> String {
+    match convention {
+        KeyConvention::Mac => compose_text(shortcut, strings),
+        KeyConvention::Pc => pc_label(shortcut, strings),
+    }
+}
+
+/// The modifier words and the key name, joined by `+`.
+fn pc_label(shortcut: Shortcut, strings: Option<&Localizer>) -> String {
+    // Ctrl is `command`, and Super is `control`.
+    let modifiers = shortcut.modifiers;
+    let mut words: Vec<String> = [
+        (modifiers.command, "Ctrl"),
+        (modifiers.control, "Super"),
+        (modifiers.option, "Alt"),
+        (modifiers.shift, "Shift"),
+    ]
+    .into_iter()
+    .filter(|(held, _)| *held)
+    .map(|(_, word)| word.to_owned())
+    .collect();
+    let named = PC_KEY_NAMES.iter().find(|(key, _)| *key == shortcut.key);
+    let message = KEY_MESSAGES.iter().find(|(key, _)| *key == shortcut.key);
+    words.push(match (shortcut.key, named, message.zip(strings)) {
+        (Key::Character(character), _, _) => character.to_uppercase().collect(),
+        (Key::F(number), _, _) => format!("F{number}"),
+        (_, _, Some(((_, id), strings))) => strings.message(id, &[]),
+        (_, Some((_, name)), None) => (*name).to_owned(),
+        (other, None, None) => format!("{other:?}"),
+    });
+    words.join("+")
 }
 
 /// The modifier glyphs, then the key name: the localized name from

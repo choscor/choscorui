@@ -31,7 +31,8 @@ mod key_sequence;
 mod overlay_scroll_bar;
 mod tool_buttons;
 pub use button_group::{ButtonGroup, ButtonGroupMember, HostedButtonGroup};
-pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_text};
+pub(crate) use key_sequence::display_shortcut;
+pub use key_sequence::{KeySequenceChange, KeySequenceEdit, shortcut_label, shortcut_text};
 pub use overlay_scroll_bar::{OverlayScrollBar, OverlayScrollReply};
 pub use tool_buttons::{
     CommandLink, HostedCommandLink, HostedToolButton, ToolButton, ToolButtonAction, ToolButtonMenu,

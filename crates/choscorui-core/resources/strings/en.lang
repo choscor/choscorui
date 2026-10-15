@@ -89,3 +89,4 @@ choscorui.color.opacity = Opacity
 
 # Conditions of the backend capabilities.
 choscorui.condition.app_bundle = Needs an app bundle with a bundle identifier
+choscorui.condition.status_notifier_host = Needs a status notifier host

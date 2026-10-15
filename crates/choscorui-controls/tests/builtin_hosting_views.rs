@@ -1218,6 +1218,7 @@ fn arrange(control: &mut dyn CustomControl, bounds: Rect, direction: LayoutDirec
         tokens: &tokens,
         styles: &styles,
         text: &EstimatedText,
+        key_convention: choscorui_core::KeyConvention::Mac,
     };
     control.arrange(&cx, bounds);
 }

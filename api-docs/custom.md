@@ -397,13 +397,23 @@ pub fn is_focused(&self) -> bool
 
 True when the control's node has the keyboard focus.
 
+#### `ControlContext::key_convention`
+
+```rust
+pub fn key_convention(&self) -> KeyConvention
+```
+
+The keyboard conventions of the window, which choose the editing
+keys of a text control.
+
 #### `ControlContext::modifiers`
 
 ```rust
 pub fn modifiers(&self) -> ShortcutModifiers
 ```
 
-The modifier keys held during the event.
+The modifier keys held during the event, in the names that
+[`ShortcutModifiers::logical`](app--structs.md#shortcutmodifierslogical) gives.
 
 #### `ControlContext::node`
 
@@ -412,6 +422,16 @@ pub fn node(&self) -> NodeId
 ```
 
 The node of the control that gets the event.
+
+#### `ControlContext::opens_context_menu`
+
+```rust
+pub fn opens_context_menu(&self, button: PointerButton) -> bool
+```
+
+True when a press of `button` opens a context menu: the secondary
+button, or the primary button with Control on
+`KeyConvention::Mac`.
 
 #### `ControlContext::phase`
 
@@ -966,6 +986,7 @@ pub struct MeasureContext<'a> {
     pub tokens: &'a DesignTokens,
     pub styles: &'a Styles,
     pub text: &'a dyn TextMeasure,
+    pub key_convention: KeyConvention,
 }
 ```
 
@@ -979,6 +1000,8 @@ What a control reads while it measures or arranges.
 - `tokens`
 - `styles`
 - `text`
+- `key_convention`: The keyboard conventions of the window, for the width of a
+  shortcut label.
 
 ### Methods
 
@@ -1022,6 +1045,7 @@ pub struct PaintContext<'a> {
     pub state: VisualState,
     pub time: f64,
     pub strings: &'a Localizer,
+    pub key_convention: KeyConvention,
     /* private fields */
 }
 ```
@@ -1043,6 +1067,8 @@ state.
 - `time`: Monotonic time in seconds, for running animations.
 - `strings`: The messages of the window locale, for the built-in text that a
   control paints.
+- `key_convention`: The keyboard conventions of the window, for the shortcut labels
+  that a control paints.
 
 ### Methods
 
@@ -1095,6 +1121,14 @@ pub fn icon(&mut self, rect: Rect, icon: Icon, style: &ResolvedStyle)
 
 Draws an icon centered in `rect` in the style's icon size and color.
 
+#### `PaintContext::key_convention`
+
+```rust
+pub fn key_convention(self, key_convention: KeyConvention) -> Self
+```
+
+Sets the keyboard conventions of the shortcut labels.
+
 #### `PaintContext::label`
 
 ```rust
@@ -1119,7 +1153,7 @@ pub fn new(list: &'a mut DisplayList, bounds: Rect, tokens: &'a DesignTokens, st
 
 A context that paints into `list` inside `bounds`, left-to-right,
 with no visual state, at time zero, with the built-in English
-messages.
+messages, and with `KeyConvention::Mac` shortcut labels.
 
 #### `PaintContext::paint_box`
 

@@ -52,6 +52,7 @@ fn overlay_scroll_bar_sits_at_the_edge_hovers_drags_and_pages() {
             tokens: &tokens,
             styles: &styles,
             text: &EstimatedText,
+            key_convention: choscorui_core::KeyConvention::Mac,
         };
         let mut bar = OverlayScrollBar::new(ScrollOrientation::Vertical);
         bar.arrange(&cx, viewport);

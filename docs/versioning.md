@@ -32,6 +32,8 @@ The crates define no Cargo features, so all code is always built. A new feature 
 - `Unsupported`
 - `Conditional(condition)`: the feature is available when the condition is true. `Condition` is a `#[non_exhaustive]` enum, for example `Condition::AppBundle`. `Condition::message` gives its text in the user's language.
 
+The `keyboard` field is a `KeyConvention`, `Mac` or `Pc`, not a `Support` value. `KeyConvention` has two variants, and it is not `#[non_exhaustive]`.
+
 Query capabilities, not the OS version or `cfg!(target_os)`. For example, on macOS, `notifications` is `Conditional` until the binary runs from an app bundle. `BackendCapabilities` is `#[non_exhaustive]`, so a new capability is not a breaking change. In tests, construct one with `BackendCapabilities::none`.
 
 [platform-macos.md](platform-macos.md) lists the values on macOS.
@@ -53,6 +55,8 @@ On a target without a backend, `App::start` and `App::run` return `AppError::Uns
 `control_semantics.txt` and `focus_order.txt` start with fixed scenes of a few controls. Then they record every hosted control: the catalog and the built-in controls in [builtins.rs](../crates/choscorui-controls/tests/catalog/builtins.rs). For each control, `control_semantics.txt` records the role, name, value, state, and actions, in both directions. `focus_order.txt` records the forward and backward Tab order through all of them, in both directions. Then `control_semantics.txt` records controls in states that the catalog samples do not show, from [semantic_states.rs](../crates/choscorui/tests/compatibility/semantic_states.rs). Examples are a checked menu item, a disabled menu item, an open submenu, a sorted column, and today in a calendar. Each of these controls has the focus, opens if it can, and then receives its keys. Then it records a group box view, with its members as children of the `Group` node. At the end, `control_semantics.txt` records a button with a tooltip, in both directions. It records the description of the button, and the `Tooltip` node with its `DescribedBy` relation while the tooltip shows.
 
 `views.txt` records views that the compose `ViewHost` mounts without a window, with `EstimatedText`. For `padding` then `background`, and for the reverse order, it records the bounds of each node and the display list. It also records the bounds of each node of a stack and of a `Form`, under the `en` and `ar` locales.
+
+`key_conventions.txt` records the same keys and labels on `KeyConvention::Mac` and on `KeyConvention::Pc`. It records the shortcut labels of an open context menu and of a shortcut field. It also records the value and the selection of an input and a text area after each editing key.
 
 The `painted_<group>.txt` files pin the default recipe of each `ControlKind`, with one file for each recipe group. For each kind, variant, size, and slot, the general slot painter paints a box, an icon, and a label. The file records the `rest` paint, and each key state that paints differently. A list names the states that paint the same as `rest`. A size shows only if it paints differently from `default`. Slots with equal styles in all cases share one record.
 

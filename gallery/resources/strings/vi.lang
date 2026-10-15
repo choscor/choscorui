@@ -365,6 +365,7 @@ key-sequence.cleared = Đã xoá
 key-sequence.committed = Đã lưu
 key-sequence.last = Thay đổi cuối: {change}
 key-sequence.examples = Ví dụ shortcut_text: {examples}
+key-sequence.labels = Ví dụ shortcut_label trên bàn phím PC: {examples}
 key-sequence.disabled = Đã tắt
 key-sequence.locked = Khóa màn hình (cố định)
 slider.readout = {name}: {value}

@@ -239,6 +239,8 @@ The source for posted work and timers is [runloop.rs](../crates/choscorui-macos/
 
 An application asks `choscorui::capabilities()` what the backend supports. It does not check the OS version or `cfg!(target_os)`. The function returns a `BackendCapabilities` struct with one `Support` value for each feature. A `Support` value is `Supported`, `Unsupported`, or `Conditional(condition)`. A `Condition` is an enum, and `Condition::message` gives its text from the built-in catalog in the user's language.
 
+The `keyboard` field is a `KeyConvention`, `Mac` or `Pc`. The facade gives it to the view host of each window. The controls then select the shortcut key, the editing keys, and the shortcut labels. [controls.md](controls.md#shared-rules) gives the rules. `BackendCapabilities::none` reports `Pc`.
+
 `BackendCapabilities` has the attribute `#[non_exhaustive]`, so a minor release can add a field. [versioning.md](versioning.md) gives the stability rules, and [platform-macos.md](platform-macos.md) gives the macOS values.
 
 ## Dependency rule

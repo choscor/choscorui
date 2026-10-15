@@ -212,6 +212,7 @@ impl AppContext {
             self.text.clone(),
         );
         host.set_feedback(self.platform.feedback());
+        host.set_key_convention(crate::capabilities().keyboard);
         host.mount(root());
         native.show();
         let id = WindowId(self.next_window);

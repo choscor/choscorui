@@ -3,7 +3,7 @@ use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use crate::{Accepted, InputFilter, InputText, ShortcutModifiers, ValidationError};
 use choscorui_core::Localizer;
 use choscorui_core::{
-    CompositionEvent, Dirty, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
+    CompositionEvent, Dirty, KeyConvention, KeyEvent, NodeId, PointerButton, PointerEvent, Rect,
     SemanticAction as CoreSemanticAction, SemanticNode, SemanticRole, SemanticState, SemanticText,
     Size, TextBuffer, TextInputInfo, TextMotion, Tree, TreeError,
 };
@@ -27,8 +27,10 @@ pub enum TextFieldInput {
     UnmarkMarkedText,
     CancelMarkedText,
     /// A key with the held modifiers, through the shared editing key
-    /// map: Option moves and deletes by word, Command to the start or
-    /// end, and Shift extends the selection.
+    /// map of [`TextField::set_key_convention`]. On `Mac`, Option moves
+    /// and deletes by word, and Command to the start or end. On `Pc`,
+    /// Ctrl moves and deletes by word, and Home and End go to the start
+    /// or end. Shift extends the selection.
     Key {
         event: KeyEvent,
         modifiers: ShortcutModifiers,
@@ -163,6 +165,8 @@ pub struct TextField {
     /// True when a hosted edit reports no message, for a control that
     /// reports its own value, such as a spin box.
     quiet: bool,
+    /// The editing key map. A control host sets it with each event.
+    key_convention: KeyConvention,
 }
 
 impl TextField {
@@ -183,7 +187,15 @@ impl TextField {
             filter: InputFilter::new(),
             pointer: HostedPointer::default(),
             quiet: false,
+            key_convention: KeyConvention::Mac,
         }
+    }
+
+    /// Sets the editing key map of [`TextFieldInput::Key`]. A new field
+    /// uses [`KeyConvention::Mac`]. In a control host, the field takes the
+    /// conventions of the host with each event.
+    pub fn set_key_convention(&mut self, key_convention: KeyConvention) {
+        self.key_convention = key_convention;
     }
 
     /// Lets the user type, paste, and set only what `filter` accepts.
@@ -471,38 +483,40 @@ impl TextField {
             TextFieldInput::Key {
                 event: KeyEvent::Down { key, repeat },
                 modifiers,
-            } if self.composition.is_none() => match editing_key(key, modifiers) {
-                Some(EditingKey::Move { motion, extend }) => {
-                    self.buffer.move_caret(line_motion(motion), extend);
-                }
-                // A mask keeps its literals, so a delete goes through
-                // the filter.
-                Some(EditingKey::Delete(motion)) if self.filter.mask().is_some() => {
-                    let selection = self.buffer.selection();
-                    let range = if selection.is_empty() {
-                        let caret = self.buffer.caret();
+            } if self.composition.is_none() => {
+                match editing_key(key, modifiers, self.key_convention) {
+                    Some(EditingKey::Move { motion, extend }) => {
+                        self.buffer.move_caret(line_motion(motion), extend);
+                    }
+                    // A mask keeps its literals, so a delete goes through
+                    // the filter.
+                    Some(EditingKey::Delete(motion)) if self.filter.mask().is_some() => {
+                        let selection = self.buffer.selection();
+                        let range = if selection.is_empty() {
+                            let caret = self.buffer.caret();
+                            let target = self.buffer.motion_target(line_motion(motion));
+                            caret.min(target)..caret.max(target)
+                        } else {
+                            selection
+                        };
+                        if !range.is_empty() {
+                            self.edit(range, "");
+                        }
+                    }
+                    Some(EditingKey::Delete(motion)) => {
                         let target = self.buffer.motion_target(line_motion(motion));
-                        caret.min(target)..caret.max(target)
-                    } else {
-                        selection
-                    };
-                    if !range.is_empty() {
-                        self.edit(range, "");
+                        let _ = self.buffer.delete_to(target);
                     }
-                }
-                Some(EditingKey::Delete(motion)) => {
-                    let target = self.buffer.motion_target(line_motion(motion));
-                    let _ = self.buffer.delete_to(target);
-                }
-                Some(EditingKey::Enter) if !repeat => {
-                    if self.validation == ValidationState::Valid {
-                        committed = true;
-                    } else {
-                        commit_rejected = true;
+                    Some(EditingKey::Enter) if !repeat => {
+                        if self.validation == ValidationState::Valid {
+                            committed = true;
+                        } else {
+                            commit_rejected = true;
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             TextFieldInput::Key { .. } => {}
         }
         let edited = self.buffer.as_str() != before_value;
@@ -869,6 +883,7 @@ impl TextField {
         use crate::ControlEvent;
         use choscorui_core::EventReply;
         let modifiers = cx.modifiers();
+        self.key_convention = cx.key_convention();
         match event {
             ControlEvent::Pointer(PointerEvent::Down {
                 position,
@@ -889,7 +904,7 @@ impl TextField {
             }
             ControlEvent::Key(KeyEvent::Down { key, repeat }) if cx.is_focused() => {
                 // One line of text keeps no Tab: Tab moves the focus.
-                let editing = editing_key(*key, modifiers);
+                let editing = editing_key(*key, modifiers, self.key_convention);
                 if !matches!(editing, None | Some(EditingKey::Tab)) {
                     let event = KeyEvent::Down {
                         key: *key,

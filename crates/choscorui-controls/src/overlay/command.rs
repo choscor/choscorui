@@ -11,9 +11,9 @@ use crate::style::{
 };
 use crate::text_field::TextField;
 use choscorui_core::{
-    EventPhase, EventReply, Icon, Key, KeyEvent, Localizer, Measured, PointerButton, PointerEvent,
-    Rect, SemanticAction, SemanticCollection, SemanticNode, SemanticParts, SemanticRole, Size,
-    TextInputInfo, WheelUnit, fold_for_search,
+    EventPhase, EventReply, Icon, Key, KeyConvention, KeyEvent, Localizer, Measured, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticCollection, SemanticNode, SemanticParts,
+    SemanticRole, Size, TextInputInfo, WheelUnit, fold_for_search,
 };
 
 /// The tallest the list grows before it scrolls, in points.
@@ -24,7 +24,9 @@ const LIST_MAX_HEIGHT: f64 = 300.0;
 pub struct CommandItem {
     pub label: String,
     pub icon: Option<Icon>,
-    /// Display text such as "⌘P", at the end of the row.
+    /// Display text such as "⌘P", at the end of the row. On
+    /// [`KeyConvention::Pc`], a text that [`shortcut_text`](crate::shortcut_text)
+    /// makes shows as its PC label, such as "Ctrl+P".
     pub shortcut: Option<String>,
     pub enabled: bool,
 }
@@ -115,6 +117,8 @@ pub struct Command {
     scroll: f64,
     metrics: Metrics,
     viewport: Rect,
+    /// The keyboard conventions of the shortcut labels, from `arrange`.
+    key_convention: KeyConvention,
     panel: Rect,
     input: Rect,
     text: Rect,
@@ -148,6 +152,7 @@ impl Command {
             scroll: 0.0,
             metrics: Metrics::default(),
             viewport: Rect::default(),
+            key_convention: KeyConvention::Mac,
             panel: Rect::default(),
             input: Rect::default(),
             text: Rect::default(),
@@ -666,7 +671,8 @@ impl Command {
                             );
                         }
                         let keys = item.shortcut.as_deref().unwrap_or_default();
-                        cx.label_and_trailing(text, &item.label, &style, keys, &shortcut);
+                        let keys = crate::widgets::display_shortcut(keys, cx.key_convention);
+                        cx.label_and_trailing(text, &item.label, &style, &keys, &shortcut);
                     });
                 }
             }
@@ -699,6 +705,7 @@ impl CustomControl for Command {
             self.top = None;
         }
         self.viewport = cx.viewport;
+        self.key_convention = cx.key_convention;
         let root = cx.style(self.style_query(Slot::Root, VisualState::NONE));
         self.motion_ms = cx
             .style(self.style_query(Slot::Overlay, VisualState::NONE))
@@ -893,7 +900,9 @@ impl CustomControl for Command {
                         enabled,
                     );
                     if let Some(shortcut) = &item.shortcut {
-                        part.node.description.clone_from(shortcut);
+                        part.node.description =
+                            crate::widgets::display_shortcut(shortcut, self.key_convention)
+                                .into_owned();
                     }
                     part.node.state.selected = Some(self.highlighted == Some(index));
                     part.item(index);

@@ -21,6 +21,9 @@ pub enum Support {
 pub enum Condition {
     /// The binary runs from an app bundle with a bundle identifier.
     AppBundle,
+    /// A status notifier host runs: a desktop service that shows status
+    /// items, such as an `org.kde.StatusNotifierWatcher` on Linux.
+    StatusNotifierHost,
 }
 
 impl Condition {
@@ -28,6 +31,7 @@ impl Condition {
     pub fn message_id(self) -> &'static str {
         match self {
             Self::AppBundle => "choscorui.condition.app_bundle",
+            Self::StatusNotifierHost => "choscorui.condition.status_notifier_host",
         }
     }
 
@@ -49,6 +53,18 @@ impl Support {
     pub fn is_supported(self) -> bool {
         self == Self::Supported
     }
+}
+
+/// The keyboard conventions of a platform: which key runs shortcuts, the
+/// keys that edit text, and how a shortcut label looks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum KeyConvention {
+    /// Command runs shortcuts, Option moves by word, and labels use
+    /// glyphs such as `⇧⌘S`.
+    Mac,
+    /// Ctrl runs shortcuts and moves by word, Home and End go to the line
+    /// ends, and labels use words such as `Ctrl+Shift+S`.
+    Pc,
 }
 
 /// What the running backend can do. New fields may be added in minor
@@ -76,10 +92,13 @@ pub struct BackendCapabilities {
     pub image_codecs: Support,
     /// GPU-accelerated painting (as opposed to CPU rasterization).
     pub gpu_painting: Support,
+    /// The keyboard conventions that controls follow.
+    pub keyboard: KeyConvention,
 }
 
 impl BackendCapabilities {
-    /// A backend that supports nothing; backends enable what they provide.
+    /// A backend that supports nothing, with the [`KeyConvention::Pc`]
+    /// keyboard; backends enable what they provide.
     pub fn none(backend: &'static str) -> Self {
         Self {
             backend,
@@ -98,6 +117,7 @@ impl BackendCapabilities {
             text_shaping: Support::Unsupported,
             image_codecs: Support::Unsupported,
             gpu_painting: Support::Unsupported,
+            keyboard: KeyConvention::Pc,
         }
     }
 }

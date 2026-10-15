@@ -684,6 +684,7 @@ fn arrange(control: &mut HostedResizable, bounds: Rect) {
         tokens: &tokens,
         styles: &styles,
         text: &EstimatedText,
+        key_convention: choscorui_core::KeyConvention::Mac,
     };
     control.arrange(&cx, bounds);
 }

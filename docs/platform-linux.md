@@ -2,7 +2,7 @@
 
 Not supported. The crate compiles and has tested contracts.
 
-The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. It has no native calls, and the facade does not use it. On Linux, `choscorui::platform` does not exist, and `choscorui::capabilities()` returns `Unsupported` for every capability.
+The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. It has no native calls, and the facade does not use it. On Linux, `choscorui::platform` does not exist, and `choscorui::capabilities()` returns `Unsupported` for every capability. Its `keyboard` field is `KeyConvention::Pc`.
 
 The state machines compile and run on every host. [`tests/protocol_contracts.rs`](../crates/choscorui-linux/tests/protocol_contracts.rs) pins each rule in this document.
 

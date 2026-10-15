@@ -87,3 +87,4 @@ choscorui.color.opacity = Độ mờ đục
 
 # Điều kiện của các khả năng của backend.
 choscorui.condition.app_bundle = Cần một gói ứng dụng có mã định danh gói
+choscorui.condition.status_notifier_host = Cần một máy chủ thông báo trạng thái

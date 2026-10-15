@@ -10,9 +10,9 @@ use crate::style::{
 };
 use crate::{CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    DesignTokens, EventPhase, EventReply, Icon, Key, KeyEvent, LayoutDirection, Localizer,
-    Measured, Point, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole,
-    SemanticState, Size,
+    DesignTokens, EventPhase, EventReply, Icon, Key, KeyConvention, KeyEvent, LayoutDirection,
+    Localizer, Measured, Point, PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts,
+    SemanticRole, SemanticState, Size,
 };
 
 /// How an action shows its command's checked state.
@@ -33,7 +33,9 @@ pub enum MenuItem {
         label: String,
         command: CommandId,
         /// Display text such as "⌘C"; matching is done by the command
-        /// registry.
+        /// registry. On [`KeyConvention::Pc`], a text that
+        /// [`shortcut_text`](crate::shortcut_text) makes shows as its PC
+        /// label, such as "Ctrl+C".
         shortcut: Option<String>,
         variant: MenuItemVariant,
         check: MenuCheck,
@@ -169,6 +171,8 @@ pub struct DropdownMenu {
     metrics: MenuMetrics,
     /// Whether submenus open toward the left.
     rtl: bool,
+    /// The keyboard conventions of the shortcut labels.
+    key_convention: KeyConvention,
     /// The characters typed within the type-ahead time.
     typed: TypeAhead,
 }
@@ -186,6 +190,7 @@ impl DropdownMenu {
             path: vec![None],
             metrics: MenuMetrics::resolve(&Styles::new(), &DesignTokens::light()),
             rtl: false,
+            key_convention: KeyConvention::Mac,
             typed: TypeAhead::default(),
         }
     }
@@ -194,6 +199,12 @@ impl DropdownMenu {
     /// ArrowLeft opens a submenu and ArrowRight closes one.
     pub fn set_direction(&mut self, direction: LayoutDirection) {
         self.rtl = direction == LayoutDirection::Rtl;
+    }
+
+    /// Shows the shortcut labels in the words of `key_convention`. A new
+    /// menu uses [`KeyConvention::Mac`].
+    pub fn set_key_convention(&mut self, key_convention: KeyConvention) {
+        self.key_convention = key_convention;
     }
 
     /// Reads the row heights and the panel inset from `styles`.
@@ -504,7 +515,8 @@ impl DropdownMenu {
                 ..
             } = item
             {
-                part.node.description.clone_from(shortcut);
+                part.node.description =
+                    crate::widgets::display_shortcut(shortcut, self.key_convention).into_owned();
             }
             part.node.state = SemanticState {
                 disabled: !enabled,
@@ -633,7 +645,8 @@ impl DropdownMenu {
                             text = trim_start(rest, style.gap, cx.rtl);
                         }
                         let keys = shortcut.as_deref().unwrap_or_default();
-                        cx.label_and_trailing(text, label, &style, keys, &shortcut_style);
+                        let keys = crate::widgets::display_shortcut(keys, cx.key_convention);
+                        cx.label_and_trailing(text, label, &style, &keys, &shortcut_style);
                     });
                 }
                 MenuItem::Submenu { label, .. } => {
