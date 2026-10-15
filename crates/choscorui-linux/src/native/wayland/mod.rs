@@ -1223,6 +1223,10 @@ impl Client {
                 let mut seat = self.seat.borrow_mut();
                 seat.pointer_focus = None;
                 seat.clicks.reset();
+                // The compositor can take the pointer while a button is
+                // down, as in a move or a resize. The release then goes
+                // to no surface of the client.
+                seat.pressed = 0;
             }
             POINTER_MOTION => {
                 let surface = Point::new(event.arg(1).fixed(), event.arg(2).fixed());
