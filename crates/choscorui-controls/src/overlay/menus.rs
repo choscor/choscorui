@@ -10,7 +10,7 @@ use crate::{CommandId, CommandState, Shortcut};
 use choscorui_core::{
     EventPhase, EventReply, Key, KeyEvent, Localizer, Measured, Path, Point, PointerButton,
     PointerEvent, Rect, SemanticAction, SemanticNode, SemanticParts, SemanticRole, Size,
-    StrokeStyle,
+    StrokeStyle, menu_mnemonic,
 };
 
 /// An area that opens a menu at the pointer on a secondary click or a
@@ -416,6 +416,21 @@ impl Menubar {
                 Key::Enter | Key::Space | Key::ArrowDown => {
                     self.open_at(cx, self.current, true);
                     EventReply::Stop
+                }
+                // A mnemonic, with or without Alt, opens its menu.
+                Key::Character(character) => {
+                    let wanted = character.to_lowercase().next();
+                    match self
+                        .menus
+                        .iter()
+                        .position(|menu| menu_mnemonic(&menu.title) == wanted)
+                    {
+                        Some(index) => {
+                            self.open_at(cx, index, true);
+                            EventReply::Stop
+                        }
+                        None => EventReply::Continue,
+                    }
                 }
                 _ => EventReply::Continue,
             };

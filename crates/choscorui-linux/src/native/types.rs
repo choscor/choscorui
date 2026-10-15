@@ -42,6 +42,8 @@ pub enum Error {
     ClipboardWriteFailed,
     /// The Cairo painter could not render a capture.
     Capture(crate::CairoError),
+    /// The display server cannot show a popup next to this window.
+    PopupUnavailable,
 }
 
 impl fmt::Display for Error {
@@ -68,6 +70,9 @@ impl fmt::Display for Error {
                 f.write_str("the display server refused the clipboard write")
             }
             Self::Capture(error) => write!(f, "the capture failed: {error}"),
+            Self::PopupUnavailable => {
+                f.write_str("the display server cannot show a popup next to this window")
+            }
         }
     }
 }

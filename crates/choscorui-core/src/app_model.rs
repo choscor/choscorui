@@ -230,6 +230,24 @@ impl MenuBarModel {
         }
     }
 
+    /// The first command, in menu order, whose shortcut is `shortcut`.
+    /// The keys match without regard to case.
+    pub fn command_for_shortcut(&self, shortcut: &MenuShortcut) -> Option<MenuCommandId> {
+        self.menus
+            .iter()
+            .find_map(|menu| shortcut_in(&menu.entries, shortcut))
+    }
+
+    /// The first menu, in menu bar order, whose [`menu_mnemonic`] is
+    /// `key`, without regard to case. Alt with that key opens the menu of
+    /// an in-window menu bar.
+    pub fn menu_for_mnemonic(&self, key: char) -> Option<usize> {
+        let key = key.to_lowercase().next()?;
+        self.menus
+            .iter()
+            .position(|menu| menu_mnemonic(&menu.title) == Some(key))
+    }
+
     /// The first command, in menu order, whose title is `title`.
     pub fn find(&self, title: &str) -> Option<MenuCommandId> {
         let mut found = None;
@@ -292,6 +310,30 @@ fn find_in(entries: &[MenuEntry], title: &str) -> Option<MenuCommandId> {
         MenuEntry::Command { command, state } if state.title == title => Some(*command),
         MenuEntry::Submenu { entries, .. } => find_in(entries, title),
         _ => None,
+    })
+}
+
+/// The mnemonic of a menu titled `title`: its first letter or digit, in
+/// lowercase.
+pub fn menu_mnemonic(title: &str) -> Option<char> {
+    title
+        .chars()
+        .find(|c| c.is_alphanumeric())
+        .and_then(|c| c.to_lowercase().next())
+}
+
+fn shortcut_in(entries: &[MenuEntry], wanted: &MenuShortcut) -> Option<MenuCommandId> {
+    entries.iter().find_map(|entry| match entry {
+        MenuEntry::Command { command, state } => state
+            .shortcut
+            .as_ref()
+            .filter(|shortcut| {
+                shortcut.modifiers == wanted.modifiers
+                    && shortcut.key.to_lowercase() == wanted.key.to_lowercase()
+            })
+            .map(|_| *command),
+        MenuEntry::Submenu { entries, .. } => shortcut_in(entries, wanted),
+        MenuEntry::Separator => None,
     })
 }
 

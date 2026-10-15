@@ -163,6 +163,7 @@ its text with `Condition::message`.
 | `choscorui.list.no_results` | | No results (an item view with no matching row) |
 | `choscorui.date_picker.count` | `count` (plural) | {count} dates (the trigger of a date picker with more than one date) |
 | `choscorui.titlebar.minimize`, `.maximize`, `.restore`, `.close` | | Minimize, Maximize, Restore, and Close (the window buttons of a title bar) |
+| `choscorui.menubar.name` | | Menu bar (the accessible name of the menu bar that a Linux window draws) |
 | `choscorui.file_dialog.title.open`, `.open_many`, `.directory`, `.save` | | Open File, Open Files, Select Folder, and Save File (the title of a file dialog of each kind) |
 | `choscorui.file_dialog.open`, `.select`, `.save` | | Open, Select, and Save (the accept button of a file dialog) |
 | `choscorui.file_dialog.location`, `.parent`, `.files`, `.name`, `.filter`, `.hidden` | | Location, Parent folder, Files, Name, File type, and Show hidden files (the parts of a file dialog) |

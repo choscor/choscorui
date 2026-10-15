@@ -70,10 +70,10 @@ pub struct AppContext {
     storage: Storage,
     tokens: Live<DesignTokens>,
     /// The tokens that the windows have now.
-    current: DesignTokens,
+    pub(crate) current: DesignTokens,
     retheme: Rc<Cell<bool>>,
     _theme_subscription: Subscription,
-    text: Rc<dyn TextMeasure>,
+    pub(crate) text: Rc<dyn TextMeasure>,
     pub(crate) windows: Vec<AppWindow>,
     next_window: u64,
     active: Option<WindowId>,
@@ -214,7 +214,7 @@ impl AppContext {
         );
         host.set_feedback(self.platform.feedback());
         host.set_key_convention(crate::capabilities().keyboard);
-        host.mount(root());
+        host.mount(self.platform.frame(&mut native, root(), &self.runtime));
         native.show();
         let id = WindowId(self.next_window);
         self.next_window += 1;
@@ -481,7 +481,7 @@ impl AppContext {
         }
     }
 
-    fn index(&self, id: WindowId) -> Option<usize> {
+    pub(crate) fn index(&self, id: WindowId) -> Option<usize> {
         self.windows.iter().position(|entry| entry.id == id)
     }
 
@@ -547,6 +547,8 @@ impl AppContext {
         for id in self.windows() {
             self.deliver(id);
         }
+        // An in-window menu bar queues its commands while it handles input.
+        self.run_commands();
         self.env.services().poll();
         if let Some(tick) = self.on_tick.clone() {
             tick(self);

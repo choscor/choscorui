@@ -50,6 +50,7 @@ pub(crate) enum Role {
     DataOffer,
     DataSource,
     TextInput,
+    Popup(Weak<WaylandWindow>),
 }
 
 /// The globals that the client binds.
@@ -177,6 +178,8 @@ const SURFACE_PREFERRED_BUFFER_SCALE: u16 = 2;
 const XDG_SURFACE_CONFIGURE: u16 = 0;
 const TOPLEVEL_CONFIGURE: u16 = 0;
 const TOPLEVEL_CLOSE: u16 = 1;
+const POPUP_CONFIGURE: u16 = 0;
+const POPUP_DONE: u16 = 1;
 const POINTER_ENTER: u16 = 0;
 const POINTER_LEAVE: u16 = 1;
 const POINTER_MOTION: u16 = 2;
@@ -482,6 +485,20 @@ impl Client {
         Ok(window)
     }
 
+    /// Creates a popup of `parent` next to `anchor`. It grabs the input
+    /// with the serial of the latest press or key.
+    pub(crate) fn create_popup(
+        self: &Rc<Self>,
+        shared: Rc<super::window::WindowShared>,
+        parent: &WaylandWindow,
+        anchor: Rect,
+    ) -> Result<Rc<WaylandWindow>, Error> {
+        let serial = Some(self.seat.borrow().input_serial).filter(|&serial| serial != 0);
+        let popup = WaylandWindow::new_popup(self, shared, parent, anchor, serial)?;
+        self.windows.borrow_mut().push(Rc::clone(&popup));
+        Ok(popup)
+    }
+
     pub(crate) fn window_of(&self, surface: ObjectId) -> Option<Rc<WaylandWindow>> {
         self.windows
             .borrow()
@@ -510,8 +527,13 @@ impl Client {
         }
     }
 
+    /// The number of open windows, without the popups.
     pub(crate) fn window_count(&self) -> usize {
-        self.windows.borrow().len()
+        self.windows
+            .borrow()
+            .iter()
+            .filter(|window| !window.is_popup())
+            .count()
     }
 
     pub(crate) fn output_scale(&self, output: ObjectId) -> Option<i32> {
@@ -981,6 +1003,18 @@ impl Client {
                         );
                     }
                     TOPLEVEL_CLOSE => window.shared.push(WindowEvent::Closing),
+                    _ => {}
+                }
+            }
+            Role::Popup(window) => {
+                let Some(window) = window.upgrade() else {
+                    return;
+                };
+                match event.opcode {
+                    POPUP_CONFIGURE => {
+                        window.popup_configure(event.arg(2).int(), event.arg(3).int());
+                    }
+                    POPUP_DONE => window.shared.push(WindowEvent::Closing),
                     _ => {}
                 }
             }

@@ -3884,6 +3884,9 @@ Both controls own a `DropdownMenu` and the states of its commands. The
   reading order, and wrap. Home and End go to the ends.
 - Enter, Space, ArrowDown, or a press opens the menu of a title 4 pt below
   it. A press on the open title closes it.
+- While no menu is open, a letter or a digit opens the first menu with
+  that mnemonic. The mnemonic is the first letter or digit of the title
+  (`menu_mnemonic`). Alt can be held.
 - While a menu is open, ArrowLeft and ArrowRight at the root open the next
   title in reading order. Hover on another title opens its menu.
 - In both controls, the arrow toward the end of the line opens a highlighted
