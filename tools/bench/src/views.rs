@@ -1,6 +1,7 @@
 //! The view-update scenario: one state change in a large view tree. The
 //! work and the number of changed nodes must not grow with the tree.
 
+use crate::platform::{self, Application, Shaper, Window};
 use crate::scenarios::{Config, DisplayLatency, ms, present, settle};
 use crate::stats::Results;
 use choscorui_compose::view::{
@@ -9,11 +10,10 @@ use choscorui_compose::view::{
 use choscorui_compose::{Property, Runtime};
 use choscorui_controls::ShapedText;
 use choscorui_core::{Catalog, DesignTokens, Locale, Size, Space};
-use choscorui_macos::{Application, CoreTextShaper, Window};
 use std::rc::Rc;
 use std::time::Instant;
 
-static SHAPER: CoreTextShaper = CoreTextShaper;
+static SHAPER: Shaper = Shaper;
 
 /// The tree size that the dirty count of the large tree is compared with.
 const SMALL_ROWS: usize = 1_000;
@@ -85,7 +85,7 @@ pub fn views(app: &Application, window: &mut Window, config: &Config, results: &
     let mut display = DisplayLatency::default();
     for step in 0..config.view_updates {
         let paints = window.paint_count();
-        let displays = window.display_count();
+        let displays = platform::display_count(window);
         let started = Instant::now();
         dirty.push(change(&mut host, &values, step) as f64);
         window.set_display_list(host.paint());

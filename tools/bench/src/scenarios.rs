@@ -1,10 +1,13 @@
-//! Reference scenarios from docs/BENCHMARKS.md, driven on real AppKit
-//! windows. Every `present_ms` sample ends when the painter finished the
-//! frame (`Window::last_paint`): the GPU end time with Metal, or the end
-//! of `drawRect:` with Core Graphics. Not at an app-side "done" marker.
-//! `display_ms` samples end when the frame reached the display
-//! (`Window::last_display`); the bench reports them without a budget.
+//! Reference scenarios from docs/performance.md, driven on real native
+//! windows through `platform`. Every `present_ms` sample ends when the
+//! painter finished the frame (`Window::last_paint`). Not at an app-side
+//! "done" marker. On macOS, `display_ms` samples end when the frame
+//! reached the display (`Window::last_display`); the bench reports them
+//! without a budget.
 
+use crate::platform::{
+    self, Application, PaintTiming, Shaper, Window, WindowEvent, allocation_count,
+};
 use crate::stats::Results;
 use crate::sys::{self, mib};
 use crate::workspace::Workspace;
@@ -14,11 +17,7 @@ use choscorui_controls::{
 };
 use choscorui_core::{
     Color, ColorRole, DesignTokens, DisplayList, Point, Rect, Size, TextLayoutCache, TextStyle,
-    ThemeInvalidation, ThemeResolver, Tree,
-};
-use choscorui_macos::allocation_count;
-use choscorui_macos::{
-    Application, CoreTextShaper, PaintTiming, Window, WindowEvent, WindowOptions,
+    ThemeInvalidation, ThemeResolver, Tree, WindowOptions,
 };
 use std::time::{Duration, Instant};
 
@@ -76,9 +75,29 @@ pub fn present(app: &Application, window: &Window, before: usize) -> Option<Pain
         if window.paint_count() > before {
             return window.last_paint();
         }
-        app.pump_once(Duration::from_millis(1));
+        platform::pump(app, Duration::from_millis(1));
     }
     None
+}
+
+/// Runs the native loop until the window reports a new size, or the
+/// timeout expires. Some display servers report the size at once.
+fn configure(app: &Application, window: &mut Window) -> Option<Size> {
+    let deadline = Instant::now() + PRESENT_TIMEOUT;
+    loop {
+        let configured = window
+            .take_events()
+            .into_iter()
+            .rev()
+            .find_map(|event| match event {
+                WindowEvent::Resized { size, .. } => Some(size),
+                _ => None,
+            });
+        if configured.is_some() || Instant::now() >= deadline {
+            return configured;
+        }
+        platform::pump(app, Duration::from_millis(1));
+    }
 }
 
 /// Latency from an input to the display, for one scenario.
@@ -92,22 +111,29 @@ impl DisplayLatency {
     /// Runs the native loop until the window shows a frame newer than
     /// `before` (a `display_count`), and records the time from `started`.
     pub fn record(&mut self, app: &Application, window: &Window, before: usize, started: Instant) {
+        if !platform::DISPLAY_TIMING {
+            return;
+        }
         let deadline = Instant::now() + PRESENT_TIMEOUT;
         while Instant::now() < deadline {
-            if window.display_count() > before
-                && let Some(shown) = window.last_display()
+            if platform::display_count(window) > before
+                && let Some(shown) = platform::last_display(window)
             {
                 self.samples
                     .push(ms(shown.saturating_duration_since(started)));
                 return;
             }
-            app.pump_once(Duration::from_millis(1));
+            platform::pump(app, Duration::from_millis(1));
         }
         self.missed += 1;
     }
 
-    /// Adds `<scenario>.display_ms` and `<scenario>.missed_display`.
+    /// Adds `<scenario>.display_ms` and `<scenario>.missed_display`, when
+    /// the windows report the display time.
     pub fn report(self, results: &mut Results, scenario: &str) {
+        if !platform::DISPLAY_TIMING {
+            return;
+        }
         results.samples(&format!("{scenario}.display_ms"), self.samples);
         results.metric(format!("{scenario}.missed_display"), self.missed as f64);
     }
@@ -117,7 +143,7 @@ impl DisplayLatency {
 pub fn settle(app: &Application, window: &mut Window, duration: Duration) {
     let deadline = Instant::now() + duration;
     while Instant::now() < deadline {
-        app.pump_once(Duration::from_millis(5));
+        platform::pump(app, Duration::from_millis(5));
         window.take_events();
     }
 }
@@ -128,7 +154,7 @@ pub fn idle(app: &Application, window: &mut Window, config: &Config, results: &m
     let before = sys::usage();
     let started = Instant::now();
     while started.elapsed() < config.idle {
-        app.dispatch_next_event(Duration::from_millis(250));
+        platform::wait(app, Duration::from_millis(250));
         window.take_events();
     }
     let wall = started.elapsed();
@@ -140,10 +166,7 @@ pub fn idle(app: &Application, window: &mut Window, config: &Config, results: &m
     results.metric("idle.paints", (window.paint_count() - paints) as f64);
     results.metric(
         "idle.wakeups_per_sec",
-        (after.idle_wakeups + after.interrupt_wakeups
-            - before.idle_wakeups
-            - before.interrupt_wakeups) as f64
-            / wall.as_secs_f64(),
+        after.wakeups.saturating_sub(before.wakeups) as f64 / wall.as_secs_f64(),
     );
     results.metric("idle.footprint_mib.before", mib(before.footprint));
     results.metric("idle.footprint_mib.after", mib(after.footprint));
@@ -167,21 +190,13 @@ pub fn resize(
     for step in 0..config.resize_transitions {
         let requested = sizes[step % 2];
         let paints = window.paint_count();
-        let displays = window.display_count();
+        let displays = platform::display_count(window);
         let started = Instant::now();
         if window.set_content_size(requested).is_err() {
             missed_configure += 1;
             continue;
         }
-        let configured = window
-            .take_events()
-            .into_iter()
-            .rev()
-            .find_map(|event| match event {
-                WindowEvent::Resized { size, .. } => Some(size),
-                _ => None,
-            });
-        let Some(size) = configured else {
+        let Some(size) = configure(app, window) else {
             missed_configure += 1;
             continue;
         };
@@ -237,7 +252,7 @@ pub fn scroll(
     for direction in [1.0, -1.0] {
         for _ in 0..steps {
             let paints = window.paint_count();
-            let displays = window.display_count();
+            let displays = platform::display_count(window);
             let allocated = allocation_count();
             let started = Instant::now();
             if !workspace.wheel(at, 0.0, step * direction, false) {
@@ -347,7 +362,7 @@ pub fn theme(app: &Application, window: &mut Window, config: &Config, results: &
     for switch in 0..config.theme_switches {
         let light = switch % 2 == 0;
         let paints = window.paint_count();
-        let displays = window.display_count();
+        let displays = platform::display_count(window);
         let started = Instant::now();
         let tokens = if light {
             DesignTokens::light()
@@ -431,7 +446,7 @@ pub fn document(app: &Application, window: &mut Window, config: &Config, results
     let mut cache = TextLayoutCache::new(4096, 128 << 20);
     let started = Instant::now();
     let mut layout = cache
-        .layout_paragraphs(&CoreTextShaper, &editor.layout_text(), &style, Some(width))
+        .layout_paragraphs(&Shaper, &editor.layout_text(), &style, Some(width))
         .expect("document must shape");
     results.metric("document.initial_shape_ms", ms(started.elapsed()));
     // Type in the middle of the document, where every edit reflows the
@@ -484,7 +499,7 @@ pub fn document(app: &Application, window: &mut Window, config: &Config, results
             .unwrap();
         let shaping = Instant::now();
         layout = cache
-            .layout_paragraphs(&CoreTextShaper, &editor.layout_text(), &style, Some(width))
+            .layout_paragraphs(&Shaper, &editor.layout_text(), &style, Some(width))
             .expect("document must shape");
         shape.push(ms(shaping.elapsed()));
         if editor.caret() != expected || editor.caret_rect(&layout).is_none() {
@@ -538,7 +553,7 @@ pub fn windows(app: &Application, config: &Config, results: &mut Results) {
                 Color::rgba8(20, 20, 20, 255),
             );
             window.set_display_list(list.clone());
-            window.show();
+            platform::show(&mut window);
             match present(app, &window, 0) {
                 Some(paint) => first_frame.push(ms(paint.finished - started)),
                 None => missed += 1,
@@ -561,11 +576,11 @@ pub fn windows(app: &Application, config: &Config, results: &mut Results) {
             }
         }
         for (mut window, _) in open {
-            window.close();
+            platform::close(&mut window);
         }
         let deadline = Instant::now() + Duration::from_millis(500);
         while Instant::now() < deadline {
-            app.pump_once(Duration::from_millis(5));
+            platform::pump(app, Duration::from_millis(5));
         }
     }
     results.samples("windows.first_frame_ms", first_frame);
@@ -578,7 +593,7 @@ pub fn windows(app: &Application, config: &Config, results: &mut Results) {
     let before = sys::usage();
     let started = Instant::now();
     while started.elapsed() < Duration::from_secs(2) {
-        app.dispatch_next_event(Duration::from_millis(250));
+        platform::wait(app, Duration::from_millis(250));
     }
     results.metric(
         "windows.idle_cpu_percent_after_close",
@@ -588,7 +603,7 @@ pub fn windows(app: &Application, config: &Config, results: &mut Results) {
 
 /// Child-process body for the stress-workload startup scenario.
 pub fn startup_stress_child(entered: Instant) {
-    let app = Application::new().expect("AppKit must initialize");
+    let app = platform::application();
     let size = Size::new(1200.0, 800.0);
     let mut window = app
         .create_window(WindowOptions::new(
@@ -599,8 +614,8 @@ pub fn startup_stress_child(entered: Instant) {
         .expect("window creation must succeed");
     let mut workspace = Workspace::new(size);
     window.set_display_list(workspace.paint());
-    window.show();
-    app.activate();
+    platform::show(&mut window);
+    platform::activate(&app);
     match present(&app, &window, 0) {
         Some(paint) => println!("first_frame_us={}", (paint.finished - entered).as_micros()),
         None => println!("first_frame_us=missed"),
