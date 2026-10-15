@@ -16,6 +16,9 @@ mod checks;
 mod ctype;
 mod ctypes;
 pub(crate) mod dl;
+pub(crate) mod fontconfig;
+pub(crate) mod freetype;
+pub(crate) mod harfbuzz;
 pub(crate) mod libc;
 pub(crate) mod wayland;
 
@@ -39,6 +42,9 @@ pub(crate) fn declarations() -> (
         dl::check_items(),
         libc::check_items(),
         wl::WaylandClient::check_items(),
+        freetype::FreeType::check_items(),
+        harfbuzz::HarfBuzz::check_items(),
+        fontconfig::Fontconfig::check_items(),
     ];
     let structs = vec![
         libc::PollFd::layout(),
@@ -48,10 +54,23 @@ pub(crate) fn declarations() -> (
         wl::WlInterface::layout(),
         wl::WlArray::layout(),
         wl::WlArgument::layout(),
+        harfbuzz::HbGlyphInfo::layout(),
+        harfbuzz::HbGlyphPosition::layout(),
+        harfbuzz::HbFontExtents::layout(),
+        fontconfig::FcFontSet::layout(),
     ];
-    let constants = [libc::constants(), wl::constants()]
-        .into_iter()
-        .flatten()
-        .collect();
+    let constants = [
+        libc::constants(),
+        wl::constants(),
+        freetype::constants(),
+        harfbuzz::HbDirection::constants(),
+        harfbuzz::HbClusterLevel::constants(),
+        fontconfig::constants(),
+        fontconfig::FcResult::constants(),
+        fontconfig::FcMatchKind::constants(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     (libraries, structs, constants)
 }

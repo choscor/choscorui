@@ -29,3 +29,9 @@ pub use x11::*;
 mod ffi;
 #[cfg(target_os = "linux")]
 pub use ffi::LoadError;
+
+// The text system uses the safe wrappers of `ffi`.
+#[cfg(target_os = "linux")]
+mod text;
+#[cfg(target_os = "linux")]
+pub use text::{LinuxTextShaper, available_font_families, set_desktop_font, text_shaping_support};
